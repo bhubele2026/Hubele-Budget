@@ -1,36 +1,589 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: H2 Family Budget API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: dashboard
+  - name: transactions
+  - name: debts
+  - name: recurring
+  - name: budget
+  - name: mapping
+  - name: settings
+  - name: import
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
           content:
             application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Dashboard summary
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardSummary" }
+
+  /transactions:
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string }
+        - in: query
+          name: to
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
               schema:
-                $ref: "#/components/schemas/HealthStatus"
+                type: array
+                items: { $ref: "#/components/schemas/Transaction" }
+    post:
+      operationId: createTransaction
+      tags: [transactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransactionInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+  /transactions/{id}:
+    patch:
+      operationId: updateTransaction
+      tags: [transactions]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransactionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+    delete:
+      operationId: deleteTransaction
+      tags: [transactions]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+
+  /debts:
+    get:
+      operationId: listDebts
+      tags: [debts]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Debt" }
+    post:
+      operationId: createDebt
+      tags: [debts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DebtInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Debt" }
+  /debts/{id}:
+    patch:
+      operationId: updateDebt
+      tags: [debts]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DebtInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Debt" }
+    delete:
+      operationId: deleteDebt
+      tags: [debts]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+
+  /recurring-items:
+    get:
+      operationId: listRecurringItems
+      tags: [recurring]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RecurringItem" }
+    post:
+      operationId: createRecurringItem
+      tags: [recurring]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecurringItemInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecurringItem" }
+  /recurring-items/{id}:
+    patch:
+      operationId: updateRecurringItem
+      tags: [recurring]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecurringItemInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecurringItem" }
+    delete:
+      operationId: deleteRecurringItem
+      tags: [recurring]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+
+  /budget/categories:
+    get:
+      operationId: listCategories
+      tags: [budget]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Category" }
+    post:
+      operationId: createCategory
+      tags: [budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CategoryInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Category" }
+  /budget/categories/{id}:
+    delete:
+      operationId: deleteCategory
+      tags: [budget]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+
+  /budget/months/{monthStart}:
+    get:
+      operationId: getBudgetMonth
+      tags: [budget]
+      parameters:
+        - in: path
+          name: monthStart
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BudgetMonthDetail" }
+
+  /budget/lines:
+    post:
+      operationId: upsertBudgetLine
+      tags: [budget]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BudgetLineInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BudgetLine" }
+
+  /mapping-rules:
+    get:
+      operationId: listMappingRules
+      tags: [mapping]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MappingRule" }
+    post:
+      operationId: createMappingRule
+      tags: [mapping]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MappingRuleInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MappingRule" }
+  /mapping-rules/{id}:
+    delete:
+      operationId: deleteMappingRule
+      tags: [mapping]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+    put:
+      operationId: updateSettings
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+
+  /import/workbook:
+    post:
+      operationId: importWorkbook
+      tags: [import]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportSummary" }
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
-        status:
-          type: string
-      required:
-        - status
+        status: { type: string }
 
+    Transaction:
+      type: object
+      required: [id, occurredOn, description, amount, forecastFlag, weeklyAllowance, monthlyAllowance, unplannedAllowance, reimbursable, reimbursed]
+      properties:
+        id: { type: string }
+        occurredOn: { type: string }
+        description: { type: string }
+        amount: { type: string }
+        account: { type: ["string", "null"] }
+        categoryId: { type: ["string", "null"] }
+        forecastFlag: { type: boolean }
+        weeklyAllowance: { type: boolean }
+        monthlyAllowance: { type: boolean }
+        unplannedAllowance: { type: boolean }
+        reimbursable: { type: boolean }
+        reimbursed: { type: boolean }
+        notes: { type: ["string", "null"] }
+    TransactionInput:
+      type: object
+      required: [occurredOn, description, amount]
+      properties:
+        occurredOn: { type: string }
+        description: { type: string }
+        amount: { type: string }
+        account: { type: ["string", "null"] }
+        categoryId: { type: ["string", "null"] }
+        forecastFlag: { type: boolean }
+        weeklyAllowance: { type: boolean }
+        monthlyAllowance: { type: boolean }
+        unplannedAllowance: { type: boolean }
+        reimbursable: { type: boolean }
+        reimbursed: { type: boolean }
+        notes: { type: ["string", "null"] }
+
+    Debt:
+      type: object
+      required: [id, name, balance, apr, minPayment, payment]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        balance: { type: string }
+        apr: { type: string }
+        minPayment: { type: string }
+        payment: { type: string }
+        type: { type: ["string", "null"] }
+    DebtInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        balance: { type: string }
+        apr: { type: string }
+        minPayment: { type: string }
+        payment: { type: string }
+        type: { type: ["string", "null"] }
+
+    RecurringItem:
+      type: object
+      required: [id, name, kind, amount, frequency, active]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { type: string }
+        amount: { type: string }
+        frequency: { type: string }
+        dayOfMonth: { type: ["integer", "null"] }
+        anchorDate: { type: ["string", "null"] }
+        active: { type: string }
+        categoryId: { type: ["string", "null"] }
+    RecurringItemInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        kind: { type: string }
+        amount: { type: string }
+        frequency: { type: string }
+        dayOfMonth: { type: ["integer", "null"] }
+        anchorDate: { type: ["string", "null"] }
+        active: { type: string }
+        categoryId: { type: ["string", "null"] }
+
+    Category:
+      type: object
+      required: [id, name, kind, sortOrder]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { type: string }
+        sortOrder: { type: integer }
+    CategoryInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        kind: { type: string }
+        sortOrder: { type: integer }
+
+    BudgetLine:
+      type: object
+      required: [id, monthStart, categoryId, plannedAmount]
+      properties:
+        id: { type: string }
+        monthStart: { type: string }
+        categoryId: { type: string }
+        plannedAmount: { type: string }
+        note: { type: ["string", "null"] }
+    BudgetLineInput:
+      type: object
+      required: [monthStart, categoryId, plannedAmount]
+      properties:
+        monthStart: { type: string }
+        categoryId: { type: string }
+        plannedAmount: { type: string }
+        note: { type: ["string", "null"] }
+    BudgetMonthDetail:
+      type: object
+      required: [monthStart, lines]
+      properties:
+        monthStart: { type: string }
+        note: { type: ["string", "null"] }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/BudgetLineWithActual" }
+    BudgetLineWithActual:
+      type: object
+      required: [categoryId, categoryName, plannedAmount, actualAmount]
+      properties:
+        id: { type: ["string", "null"] }
+        categoryId: { type: string }
+        categoryName: { type: string }
+        plannedAmount: { type: string }
+        actualAmount: { type: string }
+
+    MappingRule:
+      type: object
+      required: [id, pattern, matchType, priority]
+      properties:
+        id: { type: string }
+        pattern: { type: string }
+        matchType: { type: string }
+        categoryId: { type: ["string", "null"] }
+        priority: { type: integer }
+    MappingRuleInput:
+      type: object
+      required: [pattern]
+      properties:
+        pattern: { type: string }
+        matchType: { type: string }
+        categoryId: { type: ["string", "null"] }
+        priority: { type: integer }
+
+    Settings:
+      type: object
+      required: [weeklyAllowanceAmount, monthlyAllowanceAmount, unplannedAllowanceAmount]
+      properties:
+        weeklyAllowanceAmount: { type: string }
+        monthlyAllowanceAmount: { type: string }
+        unplannedAllowanceAmount: { type: string }
+        primaryAccount: { type: ["string", "null"] }
+    SettingsInput:
+      type: object
+      properties:
+        weeklyAllowanceAmount: { type: string }
+        monthlyAllowanceAmount: { type: string }
+        unplannedAllowanceAmount: { type: string }
+        primaryAccount: { type: ["string", "null"] }
+
+    DashboardSummary:
+      type: object
+      required: [totalDebt, monthlyIncome, monthlySpend, netCashflow, debtCount, transactionCount, recentTransactions, topCategories, upcomingBills]
+      properties:
+        totalDebt: { type: string }
+        monthlyIncome: { type: string }
+        monthlySpend: { type: string }
+        netCashflow: { type: string }
+        debtCount: { type: integer }
+        transactionCount: { type: integer }
+        recentTransactions:
+          type: array
+          items: { $ref: "#/components/schemas/Transaction" }
+        topCategories:
+          type: array
+          items:
+            type: object
+            required: [categoryName, total]
+            properties:
+              categoryName: { type: string }
+              total: { type: string }
+        upcomingBills:
+          type: array
+          items: { $ref: "#/components/schemas/RecurringItem" }
+
+    ImportSummary:
+      type: object
+      required: [batchId, counts]
+      properties:
+        batchId: { type: string }
+        counts:
+          type: object
+          additionalProperties:
+            type: integer

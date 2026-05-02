@@ -1,2 +1,25 @@
 export * from "./generated/api";
-export * from "./generated/types";
+export type {
+  BudgetLine,
+  BudgetLineInput,
+  BudgetLineWithActual,
+  BudgetMonthDetail,
+  Category,
+  CategoryInput,
+  DashboardSummary,
+  DashboardSummaryTopCategoriesItem,
+  Debt,
+  DebtInput,
+  HealthStatus,
+  ImportSummary,
+  ImportSummaryCounts,
+  ListTransactionsParams,
+  MappingRule,
+  MappingRuleInput,
+  RecurringItem,
+  RecurringItemInput,
+  Settings,
+  SettingsInput,
+  Transaction,
+  TransactionInput,
+} from "./generated/types";

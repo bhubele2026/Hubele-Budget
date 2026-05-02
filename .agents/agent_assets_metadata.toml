@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "4myQjEfFlao7Vm9VmQsS2"
+uri = "file://artifacts/h2budget/public/logo.png"
+type = "image"
+title = "minimal ledger logo mark"
