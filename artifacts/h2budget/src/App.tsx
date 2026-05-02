@@ -17,6 +17,8 @@ import { AppLayout } from "./components/layout";
 import LandingPage from "./pages/landing";
 import { SignInPage, SignUpPage } from "./pages/auth";
 import DashboardPage from "./pages/dashboard";
+import ForecastPage from "./pages/forecast";
+import ReportsPage from "./pages/reports";
 import DebtsPage from "./pages/debts";
 import TransactionsPage from "./pages/transactions";
 import RecurringPage from "./pages/recurring";
@@ -100,6 +102,8 @@ function ProtectedShell() {
         <AppLayout>
           <Switch>
             <Route path="/dashboard" component={DashboardPage} />
+            <Route path="/forecast" component={ForecastPage} />
+            <Route path="/reports" component={ReportsPage} />
             <Route path="/transactions" component={TransactionsPage} />
             <Route path="/debts" component={DebtsPage} />
             <Route path="/recurring" component={RecurringPage} />

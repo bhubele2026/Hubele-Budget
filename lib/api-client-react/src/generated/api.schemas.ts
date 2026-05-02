@@ -192,6 +192,81 @@ export interface DashboardSummary {
   upcomingBills: RecurringItem[];
 }
 
+export interface ForecastEvent {
+  date: string;
+  itemId: string;
+  label: string;
+  kind: string;
+  amount: number;
+}
+
+export interface ForecastResolution {
+  id: string;
+  /** @nullable */
+  recurringItemId?: string | null;
+  /** @nullable */
+  occurrenceDate?: string | null;
+  status: string;
+  /** @nullable */
+  matchedTxnId?: string | null;
+  /** @nullable */
+  txnDate?: string | null;
+  /** @nullable */
+  txnDescription?: string | null;
+  /** @nullable */
+  txnAmount?: string | null;
+  /** @nullable */
+  txnForecastFlag?: boolean | null;
+}
+
+export interface ForecastResolutionInput {
+  /** @nullable */
+  recurringItemId?: string | null;
+  /** @nullable */
+  occurrenceDate?: string | null;
+  status: string;
+  /** @nullable */
+  matchedTxnId?: string | null;
+}
+
+export interface ForecastClosedMonth {
+  id: string;
+  monthKey: string;
+}
+
+export interface ForecastSettings {
+  daysAhead: number;
+  startingBalance: string;
+}
+
+export interface ForecastSettingsInput {
+  daysAhead?: number;
+  startingBalance?: string;
+}
+
+export interface ForecastBundle {
+  fromDate: string;
+  toDate: string;
+  events: ForecastEvent[];
+  transactions: Transaction[];
+  resolutions: ForecastResolution[];
+  closedMonths: string[];
+  settings: ForecastSettings;
+}
+
+export interface DashboardBudget {
+  id: string;
+  bucket: string;
+  periodKey: string;
+  amount: string;
+}
+
+export interface DashboardBudgetInput {
+  bucket: string;
+  periodKey: string;
+  amount: string;
+}
+
 export type ImportSummaryCounts = { [key: string]: number };
 
 export interface ImportSummary {
@@ -203,6 +278,19 @@ export type ListTransactionsParams = {
   from?: string;
   to?: string;
   limit?: number;
+};
+
+export type GetForecastParams = {
+  days?: number;
+};
+
+export type CloseForecastMonthBody = {
+  monthKey: string;
+};
+
+export type ListDashboardBudgetsParams = {
+  bucket?: string;
+  periodKey?: string;
 };
 
 export type ImportWorkbookBody = {

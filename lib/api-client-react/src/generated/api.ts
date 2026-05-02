@@ -22,12 +22,23 @@ import type {
   BudgetMonthDetail,
   Category,
   CategoryInput,
+  CloseForecastMonthBody,
+  DashboardBudget,
+  DashboardBudgetInput,
   DashboardSummary,
   Debt,
   DebtInput,
+  ForecastBundle,
+  ForecastClosedMonth,
+  ForecastResolution,
+  ForecastResolutionInput,
+  ForecastSettings,
+  ForecastSettingsInput,
+  GetForecastParams,
   HealthStatus,
   ImportSummary,
   ImportWorkbookBody,
+  ListDashboardBudgetsParams,
   ListTransactionsParams,
   MappingRule,
   MappingRuleInput,
@@ -1888,6 +1899,732 @@ export const useUpdateSettings = <
   TContext
 > => {
   return useMutation(getUpdateSettingsMutationOptions(options));
+};
+
+export const getGetForecastUrl = (params?: GetForecastParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/forecast?${stringifiedParams}`
+    : `/api/forecast`;
+};
+
+export const getForecast = async (
+  params?: GetForecastParams,
+  options?: RequestInit,
+): Promise<ForecastBundle> => {
+  return customFetch<ForecastBundle>(getGetForecastUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetForecastQueryKey = (params?: GetForecastParams) => {
+  return [`/api/forecast`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetForecastQueryOptions = <
+  TData = Awaited<ReturnType<typeof getForecast>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetForecastParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForecast>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetForecastQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getForecast>>> = ({
+    signal,
+  }) => getForecast(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getForecast>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetForecastQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getForecast>>
+>;
+export type GetForecastQueryError = ErrorType<unknown>;
+
+export function useGetForecast<
+  TData = Awaited<ReturnType<typeof getForecast>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetForecastParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForecast>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetForecastQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getGetForecastSettingsUrl = () => {
+  return `/api/forecast/settings`;
+};
+
+export const getForecastSettings = async (
+  options?: RequestInit,
+): Promise<ForecastSettings> => {
+  return customFetch<ForecastSettings>(getGetForecastSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetForecastSettingsQueryKey = () => {
+  return [`/api/forecast/settings`] as const;
+};
+
+export const getGetForecastSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getForecastSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetForecastSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getForecastSettings>>
+  > = ({ signal }) => getForecastSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetForecastSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getForecastSettings>>
+>;
+export type GetForecastSettingsQueryError = ErrorType<unknown>;
+
+export function useGetForecastSettings<
+  TData = Awaited<ReturnType<typeof getForecastSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetForecastSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getUpdateForecastSettingsUrl = () => {
+  return `/api/forecast/settings`;
+};
+
+export const updateForecastSettings = async (
+  forecastSettingsInput: ForecastSettingsInput,
+  options?: RequestInit,
+): Promise<ForecastSettings> => {
+  return customFetch<ForecastSettings>(getUpdateForecastSettingsUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(forecastSettingsInput),
+  });
+};
+
+export const getUpdateForecastSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateForecastSettings>>,
+    TError,
+    { data: BodyType<ForecastSettingsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateForecastSettings>>,
+  TError,
+  { data: BodyType<ForecastSettingsInput> },
+  TContext
+> => {
+  const mutationKey = ["updateForecastSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateForecastSettings>>,
+    { data: BodyType<ForecastSettingsInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateForecastSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateForecastSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateForecastSettings>>
+>;
+export type UpdateForecastSettingsMutationBody =
+  BodyType<ForecastSettingsInput>;
+export type UpdateForecastSettingsMutationError = ErrorType<unknown>;
+
+export const useUpdateForecastSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateForecastSettings>>,
+    TError,
+    { data: BodyType<ForecastSettingsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateForecastSettings>>,
+  TError,
+  { data: BodyType<ForecastSettingsInput> },
+  TContext
+> => {
+  return useMutation(getUpdateForecastSettingsMutationOptions(options));
+};
+
+export const getUpsertForecastResolutionUrl = () => {
+  return `/api/forecast/resolutions`;
+};
+
+export const upsertForecastResolution = async (
+  forecastResolutionInput: ForecastResolutionInput,
+  options?: RequestInit,
+): Promise<ForecastResolution> => {
+  return customFetch<ForecastResolution>(getUpsertForecastResolutionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(forecastResolutionInput),
+  });
+};
+
+export const getUpsertForecastResolutionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertForecastResolution>>,
+    TError,
+    { data: BodyType<ForecastResolutionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof upsertForecastResolution>>,
+  TError,
+  { data: BodyType<ForecastResolutionInput> },
+  TContext
+> => {
+  const mutationKey = ["upsertForecastResolution"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof upsertForecastResolution>>,
+    { data: BodyType<ForecastResolutionInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return upsertForecastResolution(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpsertForecastResolutionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof upsertForecastResolution>>
+>;
+export type UpsertForecastResolutionMutationBody =
+  BodyType<ForecastResolutionInput>;
+export type UpsertForecastResolutionMutationError = ErrorType<unknown>;
+
+export const useUpsertForecastResolution = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertForecastResolution>>,
+    TError,
+    { data: BodyType<ForecastResolutionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof upsertForecastResolution>>,
+  TError,
+  { data: BodyType<ForecastResolutionInput> },
+  TContext
+> => {
+  return useMutation(getUpsertForecastResolutionMutationOptions(options));
+};
+
+export const getDeleteForecastResolutionUrl = (id: string) => {
+  return `/api/forecast/resolutions/${id}`;
+};
+
+export const deleteForecastResolution = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteForecastResolutionUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteForecastResolutionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteForecastResolution>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteForecastResolution>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deleteForecastResolution"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteForecastResolution>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteForecastResolution(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteForecastResolutionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteForecastResolution>>
+>;
+
+export type DeleteForecastResolutionMutationError = ErrorType<unknown>;
+
+export const useDeleteForecastResolution = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteForecastResolution>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteForecastResolution>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeleteForecastResolutionMutationOptions(options));
+};
+
+export const getCloseForecastMonthUrl = () => {
+  return `/api/forecast/closed-months`;
+};
+
+export const closeForecastMonth = async (
+  closeForecastMonthBody: CloseForecastMonthBody,
+  options?: RequestInit,
+): Promise<ForecastClosedMonth> => {
+  return customFetch<ForecastClosedMonth>(getCloseForecastMonthUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(closeForecastMonthBody),
+  });
+};
+
+export const getCloseForecastMonthMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof closeForecastMonth>>,
+    TError,
+    { data: BodyType<CloseForecastMonthBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof closeForecastMonth>>,
+  TError,
+  { data: BodyType<CloseForecastMonthBody> },
+  TContext
+> => {
+  const mutationKey = ["closeForecastMonth"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof closeForecastMonth>>,
+    { data: BodyType<CloseForecastMonthBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return closeForecastMonth(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CloseForecastMonthMutationResult = NonNullable<
+  Awaited<ReturnType<typeof closeForecastMonth>>
+>;
+export type CloseForecastMonthMutationBody = BodyType<CloseForecastMonthBody>;
+export type CloseForecastMonthMutationError = ErrorType<unknown>;
+
+export const useCloseForecastMonth = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof closeForecastMonth>>,
+    TError,
+    { data: BodyType<CloseForecastMonthBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof closeForecastMonth>>,
+  TError,
+  { data: BodyType<CloseForecastMonthBody> },
+  TContext
+> => {
+  return useMutation(getCloseForecastMonthMutationOptions(options));
+};
+
+export const getReopenForecastMonthUrl = (monthKey: string) => {
+  return `/api/forecast/closed-months/${monthKey}`;
+};
+
+export const reopenForecastMonth = async (
+  monthKey: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getReopenForecastMonthUrl(monthKey), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getReopenForecastMonthMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reopenForecastMonth>>,
+    TError,
+    { monthKey: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reopenForecastMonth>>,
+  TError,
+  { monthKey: string },
+  TContext
+> => {
+  const mutationKey = ["reopenForecastMonth"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reopenForecastMonth>>,
+    { monthKey: string }
+  > = (props) => {
+    const { monthKey } = props ?? {};
+
+    return reopenForecastMonth(monthKey, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReopenForecastMonthMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reopenForecastMonth>>
+>;
+
+export type ReopenForecastMonthMutationError = ErrorType<unknown>;
+
+export const useReopenForecastMonth = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reopenForecastMonth>>,
+    TError,
+    { monthKey: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reopenForecastMonth>>,
+  TError,
+  { monthKey: string },
+  TContext
+> => {
+  return useMutation(getReopenForecastMonthMutationOptions(options));
+};
+
+export const getListDashboardBudgetsUrl = (
+  params?: ListDashboardBudgetsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/dashboard-budgets?${stringifiedParams}`
+    : `/api/dashboard-budgets`;
+};
+
+export const listDashboardBudgets = async (
+  params?: ListDashboardBudgetsParams,
+  options?: RequestInit,
+): Promise<DashboardBudget[]> => {
+  return customFetch<DashboardBudget[]>(getListDashboardBudgetsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListDashboardBudgetsQueryKey = (
+  params?: ListDashboardBudgetsParams,
+) => {
+  return [`/api/dashboard-budgets`, ...(params ? [params] : [])] as const;
+};
+
+export const getListDashboardBudgetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDashboardBudgets>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListDashboardBudgetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDashboardBudgets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListDashboardBudgetsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listDashboardBudgets>>
+  > = ({ signal }) =>
+    listDashboardBudgets(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDashboardBudgets>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDashboardBudgetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDashboardBudgets>>
+>;
+export type ListDashboardBudgetsQueryError = ErrorType<unknown>;
+
+export function useListDashboardBudgets<
+  TData = Awaited<ReturnType<typeof listDashboardBudgets>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListDashboardBudgetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDashboardBudgets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDashboardBudgetsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getUpsertDashboardBudgetUrl = () => {
+  return `/api/dashboard-budgets`;
+};
+
+export const upsertDashboardBudget = async (
+  dashboardBudgetInput: DashboardBudgetInput,
+  options?: RequestInit,
+): Promise<DashboardBudget> => {
+  return customFetch<DashboardBudget>(getUpsertDashboardBudgetUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(dashboardBudgetInput),
+  });
+};
+
+export const getUpsertDashboardBudgetMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertDashboardBudget>>,
+    TError,
+    { data: BodyType<DashboardBudgetInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof upsertDashboardBudget>>,
+  TError,
+  { data: BodyType<DashboardBudgetInput> },
+  TContext
+> => {
+  const mutationKey = ["upsertDashboardBudget"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof upsertDashboardBudget>>,
+    { data: BodyType<DashboardBudgetInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return upsertDashboardBudget(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpsertDashboardBudgetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof upsertDashboardBudget>>
+>;
+export type UpsertDashboardBudgetMutationBody = BodyType<DashboardBudgetInput>;
+export type UpsertDashboardBudgetMutationError = ErrorType<unknown>;
+
+export const useUpsertDashboardBudget = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertDashboardBudget>>,
+    TError,
+    { data: BodyType<DashboardBudgetInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof upsertDashboardBudget>>,
+  TError,
+  { data: BodyType<DashboardBudgetInput> },
+  TContext
+> => {
+  return useMutation(getUpsertDashboardBudgetMutationOptions(options));
 };
 
 export const getImportWorkbookUrl = () => {

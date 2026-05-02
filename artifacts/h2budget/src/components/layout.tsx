@@ -1,22 +1,26 @@
 import { Link, useLocation } from "wouter";
 import { UserButton } from "@clerk/react";
-import { 
-  LayoutDashboard, 
-  Receipt, 
-  CreditCard, 
-  CalendarDays, 
-  PieChart, 
-  Settings, 
-  GitMerge
+import {
+  LayoutDashboard,
+  Receipt,
+  CreditCard,
+  CalendarDays,
+  PieChart,
+  Settings,
+  GitMerge,
+  TrendingUp,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Forecast", href: "/forecast", icon: TrendingUp },
   { name: "Transactions", href: "/transactions", icon: Receipt },
   { name: "Debts", href: "/debts", icon: CreditCard },
   { name: "Recurring", href: "/recurring", icon: CalendarDays },
   { name: "Budget", href: "/budget", icon: PieChart },
+  { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Mapping Rules", href: "/mapping-rules", icon: GitMerge },
   { name: "Settings", href: "/settings", icon: Settings },
 ];

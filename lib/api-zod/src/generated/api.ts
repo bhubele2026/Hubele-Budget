@@ -335,6 +335,138 @@ export const UpdateSettingsResponse = zod.object({
   primaryAccount: zod.string().nullish(),
 });
 
+export const GetForecastQueryParams = zod.object({
+  days: zod.coerce.number().optional(),
+});
+
+export const GetForecastResponse = zod.object({
+  fromDate: zod.string(),
+  toDate: zod.string(),
+  events: zod.array(
+    zod.object({
+      date: zod.string(),
+      itemId: zod.string(),
+      label: zod.string(),
+      kind: zod.string(),
+      amount: zod.number(),
+    }),
+  ),
+  transactions: zod.array(
+    zod.object({
+      id: zod.string(),
+      occurredOn: zod.string(),
+      description: zod.string(),
+      amount: zod.string(),
+      account: zod.string().nullish(),
+      categoryId: zod.string().nullish(),
+      forecastFlag: zod.boolean(),
+      weeklyAllowance: zod.boolean(),
+      monthlyAllowance: zod.boolean(),
+      unplannedAllowance: zod.boolean(),
+      reimbursable: zod.boolean(),
+      reimbursed: zod.boolean(),
+      notes: zod.string().nullish(),
+    }),
+  ),
+  resolutions: zod.array(
+    zod.object({
+      id: zod.string(),
+      recurringItemId: zod.string().nullish(),
+      occurrenceDate: zod.string().nullish(),
+      status: zod.string(),
+      matchedTxnId: zod.string().nullish(),
+      txnDate: zod.string().nullish(),
+      txnDescription: zod.string().nullish(),
+      txnAmount: zod.string().nullish(),
+      txnForecastFlag: zod.boolean().nullish(),
+    }),
+  ),
+  closedMonths: zod.array(zod.string()),
+  settings: zod.object({
+    daysAhead: zod.number(),
+    startingBalance: zod.string(),
+  }),
+});
+
+export const GetForecastSettingsResponse = zod.object({
+  daysAhead: zod.number(),
+  startingBalance: zod.string(),
+});
+
+export const UpdateForecastSettingsBody = zod.object({
+  daysAhead: zod.number().optional(),
+  startingBalance: zod.string().optional(),
+});
+
+export const UpdateForecastSettingsResponse = zod.object({
+  daysAhead: zod.number(),
+  startingBalance: zod.string(),
+});
+
+export const UpsertForecastResolutionBody = zod.object({
+  recurringItemId: zod.string().nullish(),
+  occurrenceDate: zod.string().nullish(),
+  status: zod.string(),
+  matchedTxnId: zod.string().nullish(),
+});
+
+export const UpsertForecastResolutionResponse = zod.object({
+  id: zod.string(),
+  recurringItemId: zod.string().nullish(),
+  occurrenceDate: zod.string().nullish(),
+  status: zod.string(),
+  matchedTxnId: zod.string().nullish(),
+  txnDate: zod.string().nullish(),
+  txnDescription: zod.string().nullish(),
+  txnAmount: zod.string().nullish(),
+  txnForecastFlag: zod.boolean().nullish(),
+});
+
+export const DeleteForecastResolutionParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const CloseForecastMonthBody = zod.object({
+  monthKey: zod.string(),
+});
+
+export const CloseForecastMonthResponse = zod.object({
+  id: zod.string(),
+  monthKey: zod.string(),
+});
+
+export const ReopenForecastMonthParams = zod.object({
+  monthKey: zod.coerce.string(),
+});
+
+export const ListDashboardBudgetsQueryParams = zod.object({
+  bucket: zod.coerce.string().optional(),
+  periodKey: zod.coerce.string().optional(),
+});
+
+export const ListDashboardBudgetsResponseItem = zod.object({
+  id: zod.string(),
+  bucket: zod.string(),
+  periodKey: zod.string(),
+  amount: zod.string(),
+});
+export const ListDashboardBudgetsResponse = zod.array(
+  ListDashboardBudgetsResponseItem,
+);
+
+export const UpsertDashboardBudgetBody = zod.object({
+  bucket: zod.string(),
+  periodKey: zod.string(),
+  amount: zod.string(),
+});
+
+export const UpsertDashboardBudgetResponse = zod.object({
+  id: zod.string(),
+  bucket: zod.string(),
+  periodKey: zod.string(),
+  amount: zod.string(),
+});
+
 export const ImportWorkbookBody = zod.object({
   file: zod.instanceof(File),
 });

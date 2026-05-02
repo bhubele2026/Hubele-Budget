@@ -23,7 +23,7 @@ Currently hosts the **H2 Family Budget** application — a personal/family budge
 ## Artifacts
 
 - `artifacts/api-server` — Express API at `/api/*`. Auth via Clerk middleware + per-request `requireAuth` (auto-inserts `profiles` row).
-- `artifacts/h2budget` — H2 Family Budget web UI. Pages: `/`, `/sign-in`, `/sign-up`, `/dashboard`, `/transactions`, `/debts`, `/recurring`, `/budget`, `/mapping-rules`, `/settings`.
+- `artifacts/h2budget` — H2 Family Budget web UI. Pages: `/`, `/sign-in`, `/sign-up`, `/dashboard` (cards + allowance buckets + reimbursables), `/forecast` (event/txn triage + monthly closeout), `/transactions`, `/debts`, `/recurring`, `/budget`, `/reports` (cashflow, budget vs actual, category mix), `/mapping-rules`, `/settings`. Phase 2 added tables `forecast_resolutions`, `forecast_closed_months`, `forecast_settings`, `dashboard_budgets` and endpoints `/forecast`, `/forecast/settings`, `/forecast/resolutions`, `/forecast/closed-months`, `/dashboard-budgets`. Phase 3 (avalanche/debt-payoff coupling) deferred.
 - `artifacts/mockup-sandbox` — design sandbox for component variants.
 
 ## Domain Conventions

@@ -16,6 +16,8 @@ tags:
   - name: mapping
   - name: settings
   - name: import
+  - name: forecast
+  - name: dashboard-budgets
 paths:
   /healthz:
     get:
@@ -355,6 +357,138 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Settings" }
 
+  /forecast:
+    get:
+      operationId: getForecast
+      tags: [forecast]
+      parameters:
+        - in: query
+          name: days
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ForecastBundle" }
+
+  /forecast/settings:
+    get:
+      operationId: getForecastSettings
+      tags: [forecast]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ForecastSettings" }
+    put:
+      operationId: updateForecastSettings
+      tags: [forecast]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ForecastSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ForecastSettings" }
+
+  /forecast/resolutions:
+    post:
+      operationId: upsertForecastResolution
+      tags: [forecast]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ForecastResolutionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ForecastResolution" }
+  /forecast/resolutions/{id}:
+    delete:
+      operationId: deleteForecastResolution
+      tags: [forecast]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+
+  /forecast/closed-months:
+    post:
+      operationId: closeForecastMonth
+      tags: [forecast]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monthKey]
+              properties:
+                monthKey: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ForecastClosedMonth" }
+  /forecast/closed-months/{monthKey}:
+    delete:
+      operationId: reopenForecastMonth
+      tags: [forecast]
+      parameters:
+        - in: path
+          name: monthKey
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+
+  /dashboard-budgets:
+    get:
+      operationId: listDashboardBudgets
+      tags: [dashboard-budgets]
+      parameters:
+        - in: query
+          name: bucket
+          schema: { type: string }
+        - in: query
+          name: periodKey
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DashboardBudget" }
+    put:
+      operationId: upsertDashboardBudget
+      tags: [dashboard-budgets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DashboardBudgetInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardBudget" }
+
   /import/workbook:
     post:
       operationId: importWorkbook
@@ -577,6 +711,89 @@ components:
         upcomingBills:
           type: array
           items: { $ref: "#/components/schemas/RecurringItem" }
+
+    ForecastEvent:
+      type: object
+      required: [date, itemId, label, kind, amount]
+      properties:
+        date: { type: string }
+        itemId: { type: string }
+        label: { type: string }
+        kind: { type: string }
+        amount: { type: number }
+    ForecastResolution:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        recurringItemId: { type: ["string", "null"] }
+        occurrenceDate: { type: ["string", "null"] }
+        status: { type: string }
+        matchedTxnId: { type: ["string", "null"] }
+        txnDate: { type: ["string", "null"] }
+        txnDescription: { type: ["string", "null"] }
+        txnAmount: { type: ["string", "null"] }
+        txnForecastFlag: { type: ["boolean", "null"] }
+    ForecastResolutionInput:
+      type: object
+      required: [status]
+      properties:
+        recurringItemId: { type: ["string", "null"] }
+        occurrenceDate: { type: ["string", "null"] }
+        status: { type: string }
+        matchedTxnId: { type: ["string", "null"] }
+    ForecastClosedMonth:
+      type: object
+      required: [id, monthKey]
+      properties:
+        id: { type: string }
+        monthKey: { type: string }
+    ForecastSettings:
+      type: object
+      required: [daysAhead, startingBalance]
+      properties:
+        daysAhead: { type: integer }
+        startingBalance: { type: string }
+    ForecastSettingsInput:
+      type: object
+      properties:
+        daysAhead: { type: integer }
+        startingBalance: { type: string }
+    ForecastBundle:
+      type: object
+      required: [events, transactions, resolutions, closedMonths, settings, fromDate, toDate]
+      properties:
+        fromDate: { type: string }
+        toDate: { type: string }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/ForecastEvent" }
+        transactions:
+          type: array
+          items: { $ref: "#/components/schemas/Transaction" }
+        resolutions:
+          type: array
+          items: { $ref: "#/components/schemas/ForecastResolution" }
+        closedMonths:
+          type: array
+          items: { type: string }
+        settings: { $ref: "#/components/schemas/ForecastSettings" }
+
+    DashboardBudget:
+      type: object
+      required: [id, bucket, periodKey, amount]
+      properties:
+        id: { type: string }
+        bucket: { type: string }
+        periodKey: { type: string }
+        amount: { type: string }
+    DashboardBudgetInput:
+      type: object
+      required: [bucket, periodKey, amount]
+      properties:
+        bucket: { type: string }
+        periodKey: { type: string }
+        amount: { type: string }
 
     ImportSummary:
       type: object

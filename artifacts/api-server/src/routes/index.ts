@@ -8,6 +8,8 @@ import budgetRouter from "./budget";
 import mappingRouter from "./mapping";
 import settingsRouter from "./settings";
 import importRouter from "./import";
+import forecastRouter from "./forecast";
+import dashboardBudgetsRouter from "./dashboardBudgets";
 
 const router: IRouter = Router();
 
@@ -20,5 +22,7 @@ router.use(budgetRouter);
 router.use(mappingRouter);
 router.use(settingsRouter);
 router.use(importRouter);
+router.use(forecastRouter);
+router.use(dashboardBudgetsRouter);
 
 export default router;

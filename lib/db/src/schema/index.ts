@@ -178,6 +178,57 @@ export const importBatchesTable = pgTable("import_batches", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const forecastResolutionsTable = pgTable(
+  "forecast_resolutions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    recurringItemId: uuid("recurring_item_id"),
+    occurrenceDate: date("occurrence_date"),
+    status: text("status").notNull(),
+    matchedTxnId: uuid("matched_txn_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("forecast_resolutions_user_idx").on(t.userId),
+  }),
+);
+
+export const forecastClosedMonthsTable = pgTable(
+  "forecast_closed_months",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    monthKey: text("month_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    userMonthUq: uniqueIndex("forecast_closed_months_uq").on(t.userId, t.monthKey),
+  }),
+);
+
+export const forecastSettingsTable = pgTable("forecast_settings", {
+  userId: text("user_id").primaryKey(),
+  daysAhead: integer("days_ahead").notNull().default(90),
+  startingBalance: numeric("starting_balance", { precision: 12, scale: 2 }).notNull().default("0"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const dashboardBudgetsTable = pgTable(
+  "dashboard_budgets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    bucket: text("bucket").notNull(),
+    periodKey: text("period_key").notNull(),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull().default("0"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    uq: uniqueIndex("dashboard_budgets_uq").on(t.userId, t.bucket, t.periodKey),
+  }),
+);
+
 export const insertDebtSchema = createInsertSchema(debtsTable).omit({
   id: true, userId: true, createdAt: true, updatedAt: true,
 });
@@ -209,3 +260,7 @@ export type Transaction = typeof transactionsTable.$inferSelect;
 export type MappingRule = typeof mappingRulesTable.$inferSelect;
 export type Settings = typeof settingsTable.$inferSelect;
 export type ImportBatch = typeof importBatchesTable.$inferSelect;
+export type ForecastResolution = typeof forecastResolutionsTable.$inferSelect;
+export type ForecastClosedMonth = typeof forecastClosedMonthsTable.$inferSelect;
+export type ForecastSettings = typeof forecastSettingsTable.$inferSelect;
+export type DashboardBudget = typeof dashboardBudgetsTable.$inferSelect;
