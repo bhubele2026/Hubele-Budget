@@ -17,6 +17,8 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AvalancheSettings,
+  AvalancheSettingsInput,
   BudgetLine,
   BudgetLineInput,
   BudgetMonthDetail,
@@ -46,6 +48,7 @@ import type {
   RecurringItemInput,
   Settings,
   SettingsInput,
+  SyncMinimumsResult,
   Transaction,
   TransactionInput,
 } from "./api.schemas";
@@ -674,6 +677,230 @@ export const useCreateDebt = <
   TContext
 > => {
   return useMutation(getCreateDebtMutationOptions(options));
+};
+
+export const getSyncDebtMinimumsUrl = () => {
+  return `/api/debts/sync-minimums`;
+};
+
+export const syncDebtMinimums = async (
+  options?: RequestInit,
+): Promise<SyncMinimumsResult> => {
+  return customFetch<SyncMinimumsResult>(getSyncDebtMinimumsUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSyncDebtMinimumsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof syncDebtMinimums>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof syncDebtMinimums>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["syncDebtMinimums"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof syncDebtMinimums>>,
+    void
+  > = () => {
+    return syncDebtMinimums(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SyncDebtMinimumsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof syncDebtMinimums>>
+>;
+
+export type SyncDebtMinimumsMutationError = ErrorType<unknown>;
+
+export const useSyncDebtMinimums = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof syncDebtMinimums>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof syncDebtMinimums>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSyncDebtMinimumsMutationOptions(options));
+};
+
+export const getGetAvalancheSettingsUrl = () => {
+  return `/api/avalanche/settings`;
+};
+
+export const getAvalancheSettings = async (
+  options?: RequestInit,
+): Promise<AvalancheSettings> => {
+  return customFetch<AvalancheSettings>(getGetAvalancheSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAvalancheSettingsQueryKey = () => {
+  return [`/api/avalanche/settings`] as const;
+};
+
+export const getGetAvalancheSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAvalancheSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAvalancheSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAvalancheSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAvalancheSettings>>
+  > = ({ signal }) => getAvalancheSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAvalancheSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAvalancheSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAvalancheSettings>>
+>;
+export type GetAvalancheSettingsQueryError = ErrorType<unknown>;
+
+export function useGetAvalancheSettings<
+  TData = Awaited<ReturnType<typeof getAvalancheSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAvalancheSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAvalancheSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getUpdateAvalancheSettingsUrl = () => {
+  return `/api/avalanche/settings`;
+};
+
+export const updateAvalancheSettings = async (
+  avalancheSettingsInput: AvalancheSettingsInput,
+  options?: RequestInit,
+): Promise<AvalancheSettings> => {
+  return customFetch<AvalancheSettings>(getUpdateAvalancheSettingsUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(avalancheSettingsInput),
+  });
+};
+
+export const getUpdateAvalancheSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAvalancheSettings>>,
+    TError,
+    { data: BodyType<AvalancheSettingsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAvalancheSettings>>,
+  TError,
+  { data: BodyType<AvalancheSettingsInput> },
+  TContext
+> => {
+  const mutationKey = ["updateAvalancheSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAvalancheSettings>>,
+    { data: BodyType<AvalancheSettingsInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateAvalancheSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAvalancheSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAvalancheSettings>>
+>;
+export type UpdateAvalancheSettingsMutationBody =
+  BodyType<AvalancheSettingsInput>;
+export type UpdateAvalancheSettingsMutationError = ErrorType<unknown>;
+
+export const useUpdateAvalancheSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAvalancheSettings>>,
+    TError,
+    { data: BodyType<AvalancheSettingsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAvalancheSettings>>,
+  TError,
+  { data: BodyType<AvalancheSettingsInput> },
+  TContext
+> => {
+  return useMutation(getUpdateAvalancheSettingsMutationOptions(options));
 };
 
 export const getUpdateDebtUrl = (id: string) => {

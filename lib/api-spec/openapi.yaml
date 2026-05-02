@@ -136,6 +136,40 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Debt" }
+  /debts/sync-minimums:
+    post:
+      operationId: syncDebtMinimums
+      tags: [debts]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyncMinimumsResult" }
+  /avalanche/settings:
+    get:
+      operationId: getAvalancheSettings
+      tags: [avalanche]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvalancheSettings" }
+    put:
+      operationId: updateAvalancheSettings
+      tags: [avalanche]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AvalancheSettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvalancheSettings" }
   /debts/{id}:
     patch:
       operationId: updateDebt
@@ -555,7 +589,7 @@ components:
 
     Debt:
       type: object
-      required: [id, name, balance, apr, minPayment, payment]
+      required: [id, name, balance, apr, minPayment, payment, status, sortOrder]
       properties:
         id: { type: string }
         name: { type: string }
@@ -564,16 +598,58 @@ components:
         minPayment: { type: string }
         payment: { type: string }
         type: { type: ["string", "null"] }
+        status: { type: string }
+        sortOrder: { type: integer }
+        dueDay: { type: ["integer", "null"] }
+        statementDay: { type: ["integer", "null"] }
+        notes: { type: ["string", "null"] }
+        lastBalanceUpdate: { type: ["string", "null"] }
     DebtInput:
       type: object
-      required: [name]
       properties:
-        name: { type: string }
+        name: { type: string, minLength: 1 }
         balance: { type: string }
         apr: { type: string }
         minPayment: { type: string }
         payment: { type: string }
         type: { type: ["string", "null"] }
+        status: { type: string }
+        sortOrder: { type: integer }
+        dueDay: { type: ["integer", "null"] }
+        statementDay: { type: ["integer", "null"] }
+        notes: { type: ["string", "null"] }
+        lastBalanceUpdate: { type: ["string", "null"] }
+    AvalancheSettings:
+      type: object
+      required: [strategy, extraSource, manualExtra, budgetMode]
+      properties:
+        strategy: { type: string, enum: [avalanche, snowball] }
+        extraSource: { type: string, enum: [budget_net, budget_line, manual] }
+        extraBudgetCategoryId: { type: ["string", "null"] }
+        manualExtra: { type: string }
+        budgetMode: { type: string, enum: [budgeted, actual] }
+    AvalancheSettingsInput:
+      type: object
+      properties:
+        strategy: { type: string, enum: [avalanche, snowball] }
+        extraSource: { type: string, enum: [budget_net, budget_line, manual] }
+        extraBudgetCategoryId: { type: ["string", "null"] }
+        manualExtra: { type: string }
+        budgetMode: { type: string, enum: [budgeted, actual] }
+    SyncMinimumsResult:
+      type: object
+      required: [updated]
+      properties:
+        updated:
+          type: array
+          items:
+            type: object
+            required: [id, name, oldMin, newMin]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              oldMin: { type: string }
+              newMin: { type: string }
 
     RecurringItem:
       type: object

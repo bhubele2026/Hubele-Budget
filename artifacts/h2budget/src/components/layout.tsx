@@ -10,6 +10,7 @@ import {
   GitMerge,
   TrendingUp,
   BarChart3,
+  Flame,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,7 @@ const navItems = [
   { name: "Forecast", href: "/forecast", icon: TrendingUp },
   { name: "Transactions", href: "/transactions", icon: Receipt },
   { name: "Debts", href: "/debts", icon: CreditCard },
+  { name: "Avalanche", href: "/avalanche", icon: Flame },
   { name: "Recurring", href: "/recurring", icon: CalendarDays },
   { name: "Budget", href: "/budget", icon: PieChart },
   { name: "Reports", href: "/reports", icon: BarChart3 },

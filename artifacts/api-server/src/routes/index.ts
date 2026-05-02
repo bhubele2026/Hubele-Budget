@@ -10,6 +10,7 @@ import settingsRouter from "./settings";
 import importRouter from "./import";
 import forecastRouter from "./forecast";
 import dashboardBudgetsRouter from "./dashboardBudgets";
+import avalancheRouter from "./avalanche";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(settingsRouter);
 router.use(importRouter);
 router.use(forecastRouter);
 router.use(dashboardBudgetsRouter);
+router.use(avalancheRouter);
 
 export default router;

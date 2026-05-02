@@ -147,16 +147,63 @@ export const ListDebtsResponseItem = zod.object({
   minPayment: zod.string(),
   payment: zod.string(),
   type: zod.string().nullish(),
+  status: zod.string(),
+  sortOrder: zod.number(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
 });
 export const ListDebtsResponse = zod.array(ListDebtsResponseItem);
 
 export const CreateDebtBody = zod.object({
-  name: zod.string(),
+  name: zod.string().min(1).optional(),
   balance: zod.string().optional(),
   apr: zod.string().optional(),
   minPayment: zod.string().optional(),
   payment: zod.string().optional(),
   type: zod.string().nullish(),
+  status: zod.string().optional(),
+  sortOrder: zod.number().optional(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
+});
+
+export const SyncDebtMinimumsResponse = zod.object({
+  updated: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      oldMin: zod.string(),
+      newMin: zod.string(),
+    }),
+  ),
+});
+
+export const GetAvalancheSettingsResponse = zod.object({
+  strategy: zod.enum(["avalanche", "snowball"]),
+  extraSource: zod.enum(["budget_net", "budget_line", "manual"]),
+  extraBudgetCategoryId: zod.string().nullish(),
+  manualExtra: zod.string(),
+  budgetMode: zod.enum(["budgeted", "actual"]),
+});
+
+export const UpdateAvalancheSettingsBody = zod.object({
+  strategy: zod.enum(["avalanche", "snowball"]).optional(),
+  extraSource: zod.enum(["budget_net", "budget_line", "manual"]).optional(),
+  extraBudgetCategoryId: zod.string().nullish(),
+  manualExtra: zod.string().optional(),
+  budgetMode: zod.enum(["budgeted", "actual"]).optional(),
+});
+
+export const UpdateAvalancheSettingsResponse = zod.object({
+  strategy: zod.enum(["avalanche", "snowball"]),
+  extraSource: zod.enum(["budget_net", "budget_line", "manual"]),
+  extraBudgetCategoryId: zod.string().nullish(),
+  manualExtra: zod.string(),
+  budgetMode: zod.enum(["budgeted", "actual"]),
 });
 
 export const UpdateDebtParams = zod.object({
@@ -164,12 +211,18 @@ export const UpdateDebtParams = zod.object({
 });
 
 export const UpdateDebtBody = zod.object({
-  name: zod.string(),
+  name: zod.string().min(1).optional(),
   balance: zod.string().optional(),
   apr: zod.string().optional(),
   minPayment: zod.string().optional(),
   payment: zod.string().optional(),
   type: zod.string().nullish(),
+  status: zod.string().optional(),
+  sortOrder: zod.number().optional(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
 });
 
 export const UpdateDebtResponse = zod.object({
@@ -180,6 +233,12 @@ export const UpdateDebtResponse = zod.object({
   minPayment: zod.string(),
   payment: zod.string(),
   type: zod.string().nullish(),
+  status: zod.string(),
+  sortOrder: zod.number(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
 });
 
 export const DeleteDebtParams = zod.object({

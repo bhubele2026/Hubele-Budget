@@ -6,6 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./avalancheSettings";
+export * from "./avalancheSettingsBudgetMode";
+export * from "./avalancheSettingsExtraSource";
+export * from "./avalancheSettingsInput";
+export * from "./avalancheSettingsInputBudgetMode";
+export * from "./avalancheSettingsInputExtraSource";
+export * from "./avalancheSettingsInputStrategy";
+export * from "./avalancheSettingsStrategy";
 export * from "./budgetLine";
 export * from "./budgetLineInput";
 export * from "./budgetLineWithActual";
@@ -39,5 +47,7 @@ export * from "./recurringItem";
 export * from "./recurringItemInput";
 export * from "./settings";
 export * from "./settingsInput";
+export * from "./syncMinimumsResult";
+export * from "./syncMinimumsResultUpdatedItem";
 export * from "./transaction";
 export * from "./transactionInput";

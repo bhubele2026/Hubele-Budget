@@ -28,10 +28,16 @@ export const debtsTable = pgTable(
     userId: text("user_id").notNull(),
     name: text("name").notNull(),
     balance: numeric("balance", { precision: 12, scale: 2 }).notNull().default("0"),
-    apr: numeric("apr", { precision: 6, scale: 3 }).notNull().default("0"),
+    apr: numeric("apr", { precision: 6, scale: 4 }).notNull().default("0"),
     minPayment: numeric("min_payment", { precision: 12, scale: 2 }).notNull().default("0"),
     payment: numeric("payment", { precision: 12, scale: 2 }).notNull().default("0"),
     type: text("type"),
+    status: text("status").notNull().default("active"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    dueDay: integer("due_day"),
+    statementDay: integer("statement_day"),
+    notes: text("notes"),
+    lastBalanceUpdate: timestamp("last_balance_update", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -39,6 +45,16 @@ export const debtsTable = pgTable(
     userIdx: index("debts_user_idx").on(t.userId),
   }),
 );
+
+export const avalancheSettingsTable = pgTable("avalanche_settings", {
+  userId: text("user_id").primaryKey(),
+  strategy: text("strategy").notNull().default("avalanche"),
+  extraSource: text("extra_source").notNull().default("manual"),
+  extraBudgetCategoryId: uuid("extra_budget_category_id"),
+  manualExtra: numeric("manual_extra", { precision: 12, scale: 2 }).notNull().default("0"),
+  budgetMode: text("budget_mode").notNull().default("budgeted"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
 
 export const budgetCategoriesTable = pgTable(
   "budget_categories",

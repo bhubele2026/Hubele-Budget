@@ -55,16 +55,116 @@ export interface Debt {
   payment: string;
   /** @nullable */
   type?: string | null;
+  status: string;
+  sortOrder: number;
+  /** @nullable */
+  dueDay?: number | null;
+  /** @nullable */
+  statementDay?: number | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  lastBalanceUpdate?: string | null;
 }
 
 export interface DebtInput {
-  name: string;
+  /** @minLength 1 */
+  name?: string;
   balance?: string;
   apr?: string;
   minPayment?: string;
   payment?: string;
   /** @nullable */
   type?: string | null;
+  status?: string;
+  sortOrder?: number;
+  /** @nullable */
+  dueDay?: number | null;
+  /** @nullable */
+  statementDay?: number | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  lastBalanceUpdate?: string | null;
+}
+
+export type AvalancheSettingsStrategy =
+  (typeof AvalancheSettingsStrategy)[keyof typeof AvalancheSettingsStrategy];
+
+export const AvalancheSettingsStrategy = {
+  avalanche: "avalanche",
+  snowball: "snowball",
+} as const;
+
+export type AvalancheSettingsExtraSource =
+  (typeof AvalancheSettingsExtraSource)[keyof typeof AvalancheSettingsExtraSource];
+
+export const AvalancheSettingsExtraSource = {
+  budget_net: "budget_net",
+  budget_line: "budget_line",
+  manual: "manual",
+} as const;
+
+export type AvalancheSettingsBudgetMode =
+  (typeof AvalancheSettingsBudgetMode)[keyof typeof AvalancheSettingsBudgetMode];
+
+export const AvalancheSettingsBudgetMode = {
+  budgeted: "budgeted",
+  actual: "actual",
+} as const;
+
+export interface AvalancheSettings {
+  strategy: AvalancheSettingsStrategy;
+  extraSource: AvalancheSettingsExtraSource;
+  /** @nullable */
+  extraBudgetCategoryId?: string | null;
+  manualExtra: string;
+  budgetMode: AvalancheSettingsBudgetMode;
+}
+
+export type AvalancheSettingsInputStrategy =
+  (typeof AvalancheSettingsInputStrategy)[keyof typeof AvalancheSettingsInputStrategy];
+
+export const AvalancheSettingsInputStrategy = {
+  avalanche: "avalanche",
+  snowball: "snowball",
+} as const;
+
+export type AvalancheSettingsInputExtraSource =
+  (typeof AvalancheSettingsInputExtraSource)[keyof typeof AvalancheSettingsInputExtraSource];
+
+export const AvalancheSettingsInputExtraSource = {
+  budget_net: "budget_net",
+  budget_line: "budget_line",
+  manual: "manual",
+} as const;
+
+export type AvalancheSettingsInputBudgetMode =
+  (typeof AvalancheSettingsInputBudgetMode)[keyof typeof AvalancheSettingsInputBudgetMode];
+
+export const AvalancheSettingsInputBudgetMode = {
+  budgeted: "budgeted",
+  actual: "actual",
+} as const;
+
+export interface AvalancheSettingsInput {
+  strategy?: AvalancheSettingsInputStrategy;
+  extraSource?: AvalancheSettingsInputExtraSource;
+  /** @nullable */
+  extraBudgetCategoryId?: string | null;
+  manualExtra?: string;
+  budgetMode?: AvalancheSettingsInputBudgetMode;
+}
+
+export type SyncMinimumsResultUpdatedItem = {
+  id: string;
+  name: string;
+  oldMin: string;
+  newMin: string;
+};
+
+export interface SyncMinimumsResult {
+  updated: SyncMinimumsResultUpdatedItem[];
 }
 
 export interface RecurringItem {

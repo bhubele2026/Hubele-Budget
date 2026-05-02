@@ -15,4 +15,14 @@ export interface Debt {
   payment: string;
   /** @nullable */
   type?: string | null;
+  status: string;
+  sortOrder: number;
+  /** @nullable */
+  dueDay?: number | null;
+  /** @nullable */
+  statementDay?: number | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  lastBalanceUpdate?: string | null;
 }

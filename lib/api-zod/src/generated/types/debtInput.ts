@@ -7,11 +7,22 @@
  */
 
 export interface DebtInput {
-  name: string;
+  /** @minLength 1 */
+  name?: string;
   balance?: string;
   apr?: string;
   minPayment?: string;
   payment?: string;
   /** @nullable */
   type?: string | null;
+  status?: string;
+  sortOrder?: number;
+  /** @nullable */
+  dueDay?: number | null;
+  /** @nullable */
+  statementDay?: number | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  lastBalanceUpdate?: string | null;
 }

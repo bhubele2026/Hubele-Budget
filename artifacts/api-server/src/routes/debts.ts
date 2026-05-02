@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { and, eq, asc } from "drizzle-orm";
-import { db, debtsTable } from "@workspace/db";
+import { and, desc, eq, asc, gte, sql } from "drizzle-orm";
+import { db, debtsTable, transactionsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   CreateDebtBody,
@@ -11,12 +11,20 @@ import {
 
 const router: IRouter = Router();
 
+function normalize<T extends Record<string, unknown>>(input: T): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...input };
+  if (typeof out.lastBalanceUpdate === "string") {
+    out.lastBalanceUpdate = new Date(out.lastBalanceUpdate as string);
+  }
+  return out;
+}
+
 router.get("/debts", requireAuth, async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(debtsTable)
     .where(eq(debtsTable.userId, req.userId!))
-    .orderBy(asc(debtsTable.name));
+    .orderBy(asc(debtsTable.sortOrder), desc(debtsTable.apr), asc(debtsTable.name));
   res.json(rows);
 });
 
@@ -26,11 +34,64 @@ router.post("/debts", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const [{ maxOrder }] = await db
+    .select({ maxOrder: sql<number>`coalesce(max(${debtsTable.sortOrder}), 0)` })
+    .from(debtsTable)
+    .where(eq(debtsTable.userId, req.userId!));
+  const values = normalize({ ...parsed.data, userId: req.userId! });
+  if (values.sortOrder == null) values.sortOrder = (maxOrder ?? 0) + 1;
   const [row] = await db
     .insert(debtsTable)
-    .values({ ...parsed.data, userId: req.userId! })
+    .values(values as typeof debtsTable.$inferInsert)
     .returning();
   res.status(201).json(row);
+});
+
+router.post("/debts/sync-minimums", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
+  const debts = await db
+    .select()
+    .from(debtsTable)
+    .where(eq(debtsTable.userId, userId));
+  const since = new Date();
+  since.setDate(since.getDate() - 90);
+  const sinceISO = since.toISOString().slice(0, 10);
+  const txns = await db
+    .select()
+    .from(transactionsTable)
+    .where(
+      and(
+        eq(transactionsTable.userId, userId),
+        gte(transactionsTable.occurredOn, sinceISO),
+      ),
+    );
+  const updated: { id: string; name: string; oldMin: string; newMin: string }[] = [];
+  for (const d of debts) {
+    if (d.status !== "active") continue;
+    const needle = d.name.toLowerCase();
+    const matches = txns.filter((t) => {
+      const desc = (t.description ?? "").toLowerCase();
+      const amt = Number(t.amount);
+      return amt < 0 && desc.includes(needle);
+    });
+    if (matches.length === 0) continue;
+    matches.sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
+    const recent = Math.abs(Number(matches[0].amount));
+    const oldMin = Number(d.minPayment);
+    if (Math.abs(recent - oldMin) < 0.01) continue;
+    const newMinStr = recent.toFixed(2);
+    await db
+      .update(debtsTable)
+      .set({ minPayment: newMinStr, updatedAt: new Date() })
+      .where(and(eq(debtsTable.id, d.id), eq(debtsTable.userId, userId)));
+    updated.push({
+      id: d.id,
+      name: d.name,
+      oldMin: oldMin.toFixed(2),
+      newMin: newMinStr,
+    });
+  }
+  res.json({ updated });
 });
 
 router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
@@ -46,9 +107,9 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
   }
   const [row] = await db
     .update(debtsTable)
-    .set({ ...parsed.data, updatedAt: new Date() })
+    .set({ ...normalize(parsed.data), updatedAt: new Date() })
     .where(
-      and(eq(debtsTable.id, params.data.id), eq(debtsTable.userId, req.userId!)),
+      and(eq(debtsTable.id, String(params.data.id)), eq(debtsTable.userId, req.userId!)),
     )
     .returning();
   if (!row) {
@@ -67,7 +128,7 @@ router.delete("/debts/:id", requireAuth, async (req, res): Promise<void> => {
   await db
     .delete(debtsTable)
     .where(
-      and(eq(debtsTable.id, params.data.id), eq(debtsTable.userId, req.userId!)),
+      and(eq(debtsTable.id, String(params.data.id)), eq(debtsTable.userId, req.userId!)),
     );
   res.sendStatus(204);
 });
