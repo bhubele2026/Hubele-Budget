@@ -10,4 +10,5 @@ export type ListTransactionsParams = {
   from?: string;
   to?: string;
   limit?: number;
+  source?: string;
 };

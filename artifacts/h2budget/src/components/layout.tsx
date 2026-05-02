@@ -18,6 +18,7 @@ const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Forecast", href: "/forecast", icon: TrendingUp },
   { name: "Transactions", href: "/transactions", icon: Receipt },
+  { name: "Amex Daily", href: "/amex", icon: CreditCard },
   { name: "Debts", href: "/debts", icon: CreditCard },
   { name: "Avalanche", href: "/avalanche", icon: Flame },
   { name: "Recurring", href: "/recurring", icon: CalendarDays },

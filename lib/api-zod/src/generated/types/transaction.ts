@@ -23,4 +23,7 @@ export interface Transaction {
   reimbursed: boolean;
   /** @nullable */
   notes?: string | null;
+  source: string;
+  /** @nullable */
+  member?: string | null;
 }

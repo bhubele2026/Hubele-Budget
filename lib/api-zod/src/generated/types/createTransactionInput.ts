@@ -6,11 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface TransactionInput {
-  occurredOn?: string;
+export interface CreateTransactionInput {
+  occurredOn: string;
   /** @minLength 1 */
-  description?: string;
-  amount?: string;
+  description: string;
+  amount: string;
   /** @nullable */
   account?: string | null;
   /** @nullable */

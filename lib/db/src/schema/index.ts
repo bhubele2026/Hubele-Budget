@@ -139,10 +139,13 @@ export const transactionsTable = pgTable(
     reimbursed: boolean("reimbursed").notNull().default(false),
     importBatchId: uuid("import_batch_id"),
     notes: text("notes"),
+    source: text("source").notNull().default("manual"),
+    member: text("member"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
     userIdx: index("transactions_user_idx").on(t.userId, t.occurredOn),
+    sourceIdx: index("transactions_user_source_idx").on(t.userId, t.source),
   }),
 );
 

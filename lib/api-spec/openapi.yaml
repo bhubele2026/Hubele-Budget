@@ -57,6 +57,9 @@ paths:
         - in: query
           name: limit
           schema: { type: integer }
+        - in: query
+          name: source
+          schema: { type: string }
       responses:
         "200":
           description: OK
@@ -72,7 +75,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/TransactionInput" }
+            schema: { $ref: "#/components/schemas/CreateTransactionInput" }
       responses:
         "201":
           description: Created
@@ -555,7 +558,7 @@ components:
 
     Transaction:
       type: object
-      required: [id, occurredOn, description, amount, forecastFlag, weeklyAllowance, monthlyAllowance, unplannedAllowance, reimbursable, reimbursed]
+      required: [id, occurredOn, description, amount, forecastFlag, weeklyAllowance, monthlyAllowance, unplannedAllowance, reimbursable, reimbursed, source]
       properties:
         id: { type: string }
         occurredOn: { type: string }
@@ -570,12 +573,14 @@ components:
         reimbursable: { type: boolean }
         reimbursed: { type: boolean }
         notes: { type: ["string", "null"] }
-    TransactionInput:
+        source: { type: string }
+        member: { type: ["string", "null"] }
+    CreateTransactionInput:
       type: object
       required: [occurredOn, description, amount]
       properties:
         occurredOn: { type: string }
-        description: { type: string }
+        description: { type: string, minLength: 1 }
         amount: { type: string }
         account: { type: ["string", "null"] }
         categoryId: { type: ["string", "null"] }
@@ -586,6 +591,25 @@ components:
         reimbursable: { type: boolean }
         reimbursed: { type: boolean }
         notes: { type: ["string", "null"] }
+        source: { type: string }
+        member: { type: ["string", "null"] }
+    TransactionInput:
+      type: object
+      properties:
+        occurredOn: { type: string }
+        description: { type: string, minLength: 1 }
+        amount: { type: string }
+        account: { type: ["string", "null"] }
+        categoryId: { type: ["string", "null"] }
+        forecastFlag: { type: boolean }
+        weeklyAllowance: { type: boolean }
+        monthlyAllowance: { type: boolean }
+        unplannedAllowance: { type: boolean }
+        reimbursable: { type: boolean }
+        reimbursed: { type: boolean }
+        notes: { type: ["string", "null"] }
+        source: { type: string }
+        member: { type: ["string", "null"] }
 
     Debt:
       type: object

@@ -26,10 +26,14 @@ export interface Transaction {
   reimbursed: boolean;
   /** @nullable */
   notes?: string | null;
+  source: string;
+  /** @nullable */
+  member?: string | null;
 }
 
-export interface TransactionInput {
+export interface CreateTransactionInput {
   occurredOn: string;
+  /** @minLength 1 */
   description: string;
   amount: string;
   /** @nullable */
@@ -44,6 +48,31 @@ export interface TransactionInput {
   reimbursed?: boolean;
   /** @nullable */
   notes?: string | null;
+  source?: string;
+  /** @nullable */
+  member?: string | null;
+}
+
+export interface TransactionInput {
+  occurredOn?: string;
+  /** @minLength 1 */
+  description?: string;
+  amount?: string;
+  /** @nullable */
+  account?: string | null;
+  /** @nullable */
+  categoryId?: string | null;
+  forecastFlag?: boolean;
+  weeklyAllowance?: boolean;
+  monthlyAllowance?: boolean;
+  unplannedAllowance?: boolean;
+  reimbursable?: boolean;
+  reimbursed?: boolean;
+  /** @nullable */
+  notes?: string | null;
+  source?: string;
+  /** @nullable */
+  member?: string | null;
 }
 
 export interface Debt {
@@ -378,6 +407,7 @@ export type ListTransactionsParams = {
   from?: string;
   to?: string;
   limit?: number;
+  source?: string;
 };
 
 export type GetForecastParams = {

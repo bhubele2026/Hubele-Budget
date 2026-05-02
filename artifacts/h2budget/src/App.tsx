@@ -21,6 +21,7 @@ import ForecastPage from "./pages/forecast";
 import ReportsPage from "./pages/reports";
 import DebtsPage from "./pages/debts";
 import AvalanchePage from "./pages/avalanche";
+import AmexPage from "./pages/amex";
 import TransactionsPage from "./pages/transactions";
 import RecurringPage from "./pages/recurring";
 import BudgetPage from "./pages/budget";
@@ -106,6 +107,7 @@ function ProtectedShell() {
             <Route path="/forecast" component={ForecastPage} />
             <Route path="/reports" component={ReportsPage} />
             <Route path="/transactions" component={TransactionsPage} />
+            <Route path="/amex" component={AmexPage} />
             <Route path="/debts" component={DebtsPage} />
             <Route path="/avalanche" component={AvalanchePage} />
             <Route path="/recurring" component={RecurringPage} />

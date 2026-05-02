@@ -10,6 +10,8 @@ import {
   ListTransactionsQueryParams,
 } from "@workspace/api-zod";
 
+void UpdateTransactionBody;
+
 const router: IRouter = Router();
 
 router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
@@ -21,6 +23,7 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   const conds = [eq(transactionsTable.userId, req.userId!)];
   if (q.data.from) conds.push(gte(transactionsTable.occurredOn, q.data.from));
   if (q.data.to) conds.push(lte(transactionsTable.occurredOn, q.data.to));
+  if (q.data.source) conds.push(eq(transactionsTable.source, q.data.source));
   const rows = await db
     .select()
     .from(transactionsTable)

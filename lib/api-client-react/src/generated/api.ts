@@ -25,6 +25,7 @@ import type {
   Category,
   CategoryInput,
   CloseForecastMonthBody,
+  CreateTransactionInput,
   DashboardBudget,
   DashboardBudgetInput,
   DashboardSummary,
@@ -307,14 +308,14 @@ export const getCreateTransactionUrl = () => {
 };
 
 export const createTransaction = async (
-  transactionInput: TransactionInput,
+  createTransactionInput: CreateTransactionInput,
   options?: RequestInit,
 ): Promise<Transaction> => {
   return customFetch<Transaction>(getCreateTransactionUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(transactionInput),
+    body: JSON.stringify(createTransactionInput),
   });
 };
 
@@ -325,14 +326,14 @@ export const getCreateTransactionMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createTransaction>>,
     TError,
-    { data: BodyType<TransactionInput> },
+    { data: BodyType<CreateTransactionInput> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof createTransaction>>,
   TError,
-  { data: BodyType<TransactionInput> },
+  { data: BodyType<CreateTransactionInput> },
   TContext
 > => {
   const mutationKey = ["createTransaction"];
@@ -346,7 +347,7 @@ export const getCreateTransactionMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof createTransaction>>,
-    { data: BodyType<TransactionInput> }
+    { data: BodyType<CreateTransactionInput> }
   > = (props) => {
     const { data } = props ?? {};
 
@@ -359,7 +360,7 @@ export const getCreateTransactionMutationOptions = <
 export type CreateTransactionMutationResult = NonNullable<
   Awaited<ReturnType<typeof createTransaction>>
 >;
-export type CreateTransactionMutationBody = BodyType<TransactionInput>;
+export type CreateTransactionMutationBody = BodyType<CreateTransactionInput>;
 export type CreateTransactionMutationError = ErrorType<unknown>;
 
 export const useCreateTransaction = <
@@ -369,14 +370,14 @@ export const useCreateTransaction = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createTransaction>>,
     TError,
-    { data: BodyType<TransactionInput> },
+    { data: BodyType<CreateTransactionInput> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof createTransaction>>,
   TError,
-  { data: BodyType<TransactionInput> },
+  { data: BodyType<CreateTransactionInput> },
   TContext
 > => {
   return useMutation(getCreateTransactionMutationOptions(options));

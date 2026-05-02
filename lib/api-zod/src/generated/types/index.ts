@@ -21,6 +21,7 @@ export * from "./budgetMonthDetail";
 export * from "./category";
 export * from "./categoryInput";
 export * from "./closeForecastMonthBody";
+export * from "./createTransactionInput";
 export * from "./dashboardBudget";
 export * from "./dashboardBudgetInput";
 export * from "./dashboardSummary";

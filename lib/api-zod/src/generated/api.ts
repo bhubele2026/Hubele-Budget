@@ -39,6 +39,8 @@ export const GetDashboardResponse = zod.object({
       reimbursable: zod.boolean(),
       reimbursed: zod.boolean(),
       notes: zod.string().nullish(),
+      source: zod.string(),
+      member: zod.string().nullish(),
     }),
   ),
   topCategories: zod.array(
@@ -66,6 +68,7 @@ export const ListTransactionsQueryParams = zod.object({
   from: zod.coerce.string().optional(),
   to: zod.coerce.string().optional(),
   limit: zod.coerce.number().optional(),
+  source: zod.coerce.string().optional(),
 });
 
 export const ListTransactionsResponseItem = zod.object({
@@ -82,12 +85,14 @@ export const ListTransactionsResponseItem = zod.object({
   reimbursable: zod.boolean(),
   reimbursed: zod.boolean(),
   notes: zod.string().nullish(),
+  source: zod.string(),
+  member: zod.string().nullish(),
 });
 export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem);
 
 export const CreateTransactionBody = zod.object({
   occurredOn: zod.string(),
-  description: zod.string(),
+  description: zod.string().min(1),
   amount: zod.string(),
   account: zod.string().nullish(),
   categoryId: zod.string().nullish(),
@@ -98,6 +103,8 @@ export const CreateTransactionBody = zod.object({
   reimbursable: zod.boolean().optional(),
   reimbursed: zod.boolean().optional(),
   notes: zod.string().nullish(),
+  source: zod.string().optional(),
+  member: zod.string().nullish(),
 });
 
 export const UpdateTransactionParams = zod.object({
@@ -105,9 +112,9 @@ export const UpdateTransactionParams = zod.object({
 });
 
 export const UpdateTransactionBody = zod.object({
-  occurredOn: zod.string(),
-  description: zod.string(),
-  amount: zod.string(),
+  occurredOn: zod.string().optional(),
+  description: zod.string().min(1).optional(),
+  amount: zod.string().optional(),
   account: zod.string().nullish(),
   categoryId: zod.string().nullish(),
   forecastFlag: zod.boolean().optional(),
@@ -117,6 +124,8 @@ export const UpdateTransactionBody = zod.object({
   reimbursable: zod.boolean().optional(),
   reimbursed: zod.boolean().optional(),
   notes: zod.string().nullish(),
+  source: zod.string().optional(),
+  member: zod.string().nullish(),
 });
 
 export const UpdateTransactionResponse = zod.object({
@@ -133,6 +142,8 @@ export const UpdateTransactionResponse = zod.object({
   reimbursable: zod.boolean(),
   reimbursed: zod.boolean(),
   notes: zod.string().nullish(),
+  source: zod.string(),
+  member: zod.string().nullish(),
 });
 
 export const DeleteTransactionParams = zod.object({
@@ -425,6 +436,8 @@ export const GetForecastResponse = zod.object({
       reimbursable: zod.boolean(),
       reimbursed: zod.boolean(),
       notes: zod.string().nullish(),
+      source: zod.string(),
+      member: zod.string().nullish(),
     }),
   ),
   resolutions: zod.array(
