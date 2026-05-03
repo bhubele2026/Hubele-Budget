@@ -65,24 +65,9 @@ export const SEED_CATEGORIES: SeedCategory[] = [
   { groupName: "Kids & Pets", kind: "expense", sourceKind: "manual", name: "Camp K9 (Pet Boarding)", planned: "0", note: "Use only when traveling" },
   { groupName: "Kids & Pets", kind: "expense", sourceKind: "manual", name: "Vet / Pet Other", planned: "0", note: "Buffer" },
 
-  // Debt — Minimum Payments (top 16 active debts by APR, seeded as auto_debts placeholders;
-  // a later task will replace this seed with a live pull from the Debts module).
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Ashley Furniture / Synchrony (34.99%)", planned: "33.00", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Mattress Firm / Synchrony Home (34.99%)", planned: "129.00", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Best Buy / Citi (29.99%)", planned: "29.00", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Capital One Platinum (28.74%)", planned: "200.00", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Amex Delta SkyMiles Gold (28.49%)", planned: "205.87", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Menards Big Card (28.49%)", planned: "92.00", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Amex Platinum POT (28.49%)", planned: "40.00", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Affirm — Best Buy Dec (28.32%)", planned: "151.01", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Affirm — Best Buy Feb (28.17%)", planned: "72.54", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Capital One Quicksilver (28.24%)", planned: "38.00", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Discover (27.99%)", planned: "80.00", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Credit One Bank (27.99%)", planned: "8.25", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "PayPal Credit — Brad / Synchrony (27.49%)", planned: "44.00", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "PayPal Credit — Hannah / Synchrony (27.49%)", planned: "99.00", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Affirm — Shady Rays (26.97%)", planned: "19.11", note: "Live from Debt Tracker" },
-  { groupName: "Debt — Minimum Payments", kind: "expense", sourceKind: "auto_debts", name: "Amex Blue Cash Preferred (26.49%)", planned: "40.00", note: "Live from Debt Tracker" },
+  // Debt — Minimum Payments: rows are generated live from the Debts tracker on
+  // every GET /budget/months/:monthStart (see syncAutoDebtCategories). No seed
+  // rows here — adding/removing/editing a debt updates this group automatically.
 
   // Avalanche — Extra to Highest APR
   { groupName: "Avalanche — Extra to Highest APR", kind: "expense", sourceKind: "manual", name: "Avalanche extra", planned: "2225.00", note: "Tag transactions with category 'Avalanche extra' to feed Actual" },

@@ -76,10 +76,12 @@ export const budgetCategoriesTable = pgTable(
     groupName: text("group_name").notNull().default("Other"),
     sourceKind: text("source_kind").notNull().default("manual"),
     sortOrder: integer("sort_order").notNull().default(0),
+    debtId: uuid("debt_id").references(() => debtsTable.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
     userNameUnique: uniqueIndex("budget_categories_user_name_uq").on(t.userId, t.name),
+    userDebtUnique: uniqueIndex("budget_categories_user_debt_uq").on(t.userId, t.debtId),
   }),
 );
 

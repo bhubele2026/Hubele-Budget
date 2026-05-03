@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, sql, asc, desc, lt, inArray } from "drizzle-orm";
+import { and, eq, sql, asc, desc, lt, inArray, isNull, notInArray } from "drizzle-orm";
 import {
   db,
   budgetCategoriesTable,
@@ -28,6 +28,174 @@ import {
 } from "../lib/mappingSeed";
 
 const router: IRouter = Router();
+
+const DEBT_GROUP = "Debt — Minimum Payments";
+const DEBT_GROUP_BASE_SORT =
+  (SEED_GROUP_ORDER.indexOf(DEBT_GROUP) >= 0
+    ? SEED_GROUP_ORDER.indexOf(DEBT_GROUP)
+    : 99) * 100;
+
+// Keep budget_categories with sourceKind='auto_debts' in sync with the user's
+// active rows in the Debts tracker, and keep the budget line for each one
+// updated to the debt's current minimum payment for the requested month.
+// Also backfills `category_id` on existing "Payment — <debt name>" transactions
+// so the budget's Actual column reflects payments made to each debt.
+async function syncAutoDebtCategories(
+  userId: string,
+  monthStart: string,
+): Promise<void> {
+  const debts = await db
+    .select()
+    .from(debtsTable)
+    .where(
+      and(eq(debtsTable.userId, userId), eq(debtsTable.status, "active")),
+    )
+    .orderBy(desc(debtsTable.apr), asc(debtsTable.name));
+
+  const activeIds = debts.map((d) => d.id);
+
+  // 1. Drop stale auto_debts categories: legacy placeholder/seed rows with no
+  //    debt link, plus any whose linked debt is no longer active/exists.
+  await db
+    .delete(budgetCategoriesTable)
+    .where(
+      and(
+        eq(budgetCategoriesTable.userId, userId),
+        eq(budgetCategoriesTable.sourceKind, "auto_debts"),
+        isNull(budgetCategoriesTable.debtId),
+      ),
+    );
+  if (activeIds.length > 0) {
+    await db
+      .delete(budgetCategoriesTable)
+      .where(
+        and(
+          eq(budgetCategoriesTable.userId, userId),
+          eq(budgetCategoriesTable.sourceKind, "auto_debts"),
+          notInArray(budgetCategoriesTable.debtId, activeIds),
+        ),
+      );
+  } else {
+    await db
+      .delete(budgetCategoriesTable)
+      .where(
+        and(
+          eq(budgetCategoriesTable.userId, userId),
+          eq(budgetCategoriesTable.sourceKind, "auto_debts"),
+        ),
+      );
+  }
+
+  if (debts.length === 0) return;
+
+  // 2. Ensure the budget month row exists so we can attach lines to it.
+  await db
+    .insert(budgetMonthsTable)
+    .values({ userId, monthStart })
+    .onConflictDoNothing();
+
+  // 3. Upsert one auto_debts category per active debt and the matching line
+  //    for the requested month with planned = debt.minPayment.
+  const existingCats = await db
+    .select()
+    .from(budgetCategoriesTable)
+    .where(
+      and(
+        eq(budgetCategoriesTable.userId, userId),
+        eq(budgetCategoriesTable.sourceKind, "auto_debts"),
+      ),
+    );
+  const catByDebtId = new Map(existingCats.map((c) => [c.debtId!, c]));
+
+  for (let i = 0; i < debts.length; i++) {
+    const d = debts[i]!;
+    const sortOrder = DEBT_GROUP_BASE_SORT + i;
+    let catId: string;
+    const cur = catByDebtId.get(d.id);
+    if (!cur) {
+      const [row] = await db
+        .insert(budgetCategoriesTable)
+        .values({
+          userId,
+          name: d.name,
+          kind: "expense",
+          groupName: DEBT_GROUP,
+          sourceKind: "auto_debts",
+          sortOrder,
+          debtId: d.id,
+        })
+        .onConflictDoNothing({
+          target: [budgetCategoriesTable.userId, budgetCategoriesTable.debtId],
+        })
+        .returning();
+      if (!row) {
+        // Re-read in case of a concurrent insert.
+        const [existing] = await db
+          .select()
+          .from(budgetCategoriesTable)
+          .where(
+            and(
+              eq(budgetCategoriesTable.userId, userId),
+              eq(budgetCategoriesTable.debtId, d.id),
+            ),
+          );
+        if (!existing) continue;
+        catId = existing.id;
+      } else {
+        catId = row.id;
+      }
+    } else {
+      catId = cur.id;
+      if (
+        cur.name !== d.name ||
+        cur.sortOrder !== sortOrder ||
+        cur.groupName !== DEBT_GROUP ||
+        cur.kind !== "expense"
+      ) {
+        await db
+          .update(budgetCategoriesTable)
+          .set({
+            name: d.name,
+            sortOrder,
+            groupName: DEBT_GROUP,
+            kind: "expense",
+          })
+          .where(eq(budgetCategoriesTable.id, cur.id));
+      }
+    }
+
+    await db
+      .insert(budgetLinesTable)
+      .values({
+        userId,
+        monthStart,
+        categoryId: catId,
+        plannedAmount: d.minPayment,
+        note: "Auto-pulled from Debt Tracker",
+      })
+      .onConflictDoUpdate({
+        target: [
+          budgetLinesTable.userId,
+          budgetLinesTable.monthStart,
+          budgetLinesTable.categoryId,
+        ],
+        set: { plannedAmount: d.minPayment },
+      });
+
+    // Backfill categoryId on payment transactions created by /debts/:id/payments
+    // so the budget's Actual column shows what's been paid this month.
+    await db
+      .update(transactionsTable)
+      .set({ categoryId: catId })
+      .where(
+        and(
+          eq(transactionsTable.userId, userId),
+          isNull(transactionsTable.categoryId),
+          sql`${transactionsTable.description} LIKE ${`Payment — ${d.name}%`}`,
+        ),
+      );
+  }
+}
 
 router.get("/budget/categories", requireAuth, async (req, res): Promise<void> => {
   const rows = await db
@@ -244,6 +412,11 @@ router.get(
       return;
     }
     const monthStart = params.data.monthStart;
+
+    // Pull the live Debts tracker into auto_debts categories/lines for this
+    // month before reading anything back. Each call ensures the budget rows
+    // match the current Debts state (adds, removes, renames, min changes).
+    await syncAutoDebtCategories(req.userId!, monthStart);
 
     const [month] = await db
       .select()
