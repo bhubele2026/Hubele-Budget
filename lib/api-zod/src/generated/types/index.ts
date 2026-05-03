@@ -8,6 +8,7 @@
 
 export * from "./avalancheExtra";
 export * from "./avalancheExtraBreakdown";
+export * from "./avalancheExtraMode";
 export * from "./avalancheExtraSource";
 export * from "./avalancheSettings";
 export * from "./avalancheSettingsBudgetMode";

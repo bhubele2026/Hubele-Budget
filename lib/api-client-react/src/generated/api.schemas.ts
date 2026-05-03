@@ -242,19 +242,32 @@ export const AvalancheExtraSource = {
   manual: "manual",
 } as const;
 
+export type AvalancheExtraMode =
+  (typeof AvalancheExtraMode)[keyof typeof AvalancheExtraMode];
+
+export const AvalancheExtraMode = {
+  budgeted: "budgeted",
+  actual: "actual",
+} as const;
+
 export type AvalancheExtraBreakdown = {
   income?: string;
   expenses?: string;
+  plannedIncome?: string;
+  plannedExpenses?: string;
   /** @nullable */
   categoryId?: string | null;
   /** @nullable */
   categoryName?: string | null;
+  planned?: string;
+  actual?: string;
 };
 
 export interface AvalancheExtra {
   source: AvalancheExtraSource;
   amount: string;
   monthStart: string;
+  mode?: AvalancheExtraMode;
   breakdown?: AvalancheExtraBreakdown;
 }
 

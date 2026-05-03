@@ -245,12 +245,17 @@ export const GetAvalancheExtraResponse = zod.object({
   source: zod.enum(["budget_net", "budget_line", "manual"]),
   amount: zod.string(),
   monthStart: zod.string(),
+  mode: zod.enum(["budgeted", "actual"]).optional(),
   breakdown: zod
     .object({
       income: zod.string().optional(),
       expenses: zod.string().optional(),
+      plannedIncome: zod.string().optional(),
+      plannedExpenses: zod.string().optional(),
       categoryId: zod.string().nullish(),
       categoryName: zod.string().nullish(),
+      planned: zod.string().optional(),
+      actual: zod.string().optional(),
     })
     .optional(),
 });

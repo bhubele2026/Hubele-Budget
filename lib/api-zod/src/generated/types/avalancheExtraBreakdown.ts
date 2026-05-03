@@ -9,8 +9,12 @@
 export type AvalancheExtraBreakdown = {
   income?: string;
   expenses?: string;
+  plannedIncome?: string;
+  plannedExpenses?: string;
   /** @nullable */
   categoryId?: string | null;
   /** @nullable */
   categoryName?: string | null;
+  planned?: string;
+  actual?: string;
 };

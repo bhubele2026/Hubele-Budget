@@ -6,11 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AvalancheExtraBreakdown } from "./avalancheExtraBreakdown";
+import type { AvalancheExtraMode } from "./avalancheExtraMode";
 import type { AvalancheExtraSource } from "./avalancheExtraSource";
 
 export interface AvalancheExtra {
   source: AvalancheExtraSource;
   amount: string;
   monthStart: string;
+  mode?: AvalancheExtraMode;
   breakdown?: AvalancheExtraBreakdown;
 }

@@ -487,23 +487,47 @@ export default function AvalanchePage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Uses planned amount of "
-                  {resolvedExtra?.breakdown?.categoryName ?? "—"}" for{" "}
-                  {resolvedExtra?.monthStart?.slice(0, 7) ?? "this month"}.
+                <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                  <div>
+                    Uses{" "}
+                    {resolvedExtra?.mode === "actual" ? "actual" : "planned"}{" "}
+                    amount of "
+                    {resolvedExtra?.breakdown?.categoryName ?? "—"}" for{" "}
+                    {resolvedExtra?.monthStart?.slice(0, 7) ?? "this month"}.
+                  </div>
+                  {resolvedExtra?.breakdown?.planned != null && (
+                    <div className="flex justify-between">
+                      <span>Planned</span>
+                      <span className="tabular-nums text-foreground">
+                        {fmtMoney(Number(resolvedExtra.breakdown.planned))}
+                      </span>
+                    </div>
+                  )}
+                  {resolvedExtra?.breakdown?.actual != null && (
+                    <div className="flex justify-between">
+                      <span>Actual</span>
+                      <span className="tabular-nums text-foreground">
+                        {fmtMoney(Number(resolvedExtra.breakdown.actual))}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
             {settings?.extraSource === "budget_net" && (
               <div className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground space-y-0.5">
                 <div className="flex justify-between">
-                  <span>Planned income</span>
+                  <span>
+                    {resolvedExtra?.mode === "actual" ? "Actual" : "Planned"} income
+                  </span>
                   <span className="tabular-nums text-foreground">
                     {fmtMoney(Number(resolvedExtra?.breakdown?.income ?? 0))}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span>− Planned expenses</span>
+                  <span>
+                    − {resolvedExtra?.mode === "actual" ? "Actual" : "Planned"} expenses
+                  </span>
                   <span className="tabular-nums text-foreground">
                     {fmtMoney(Number(resolvedExtra?.breakdown?.expenses ?? 0))}
                   </span>
@@ -514,6 +538,14 @@ export default function AvalanchePage() {
                     {fmtMoney(resolvedExtraAmount)}
                   </span>
                 </div>
+                {resolvedExtra?.mode === "actual" &&
+                  resolvedExtra?.breakdown?.plannedIncome != null && (
+                    <div className="text-[10px] text-muted-foreground/80 pt-1">
+                      Plan: {fmtMoney(Number(resolvedExtra.breakdown.plannedIncome))} in
+                      {" / "}
+                      {fmtMoney(Number(resolvedExtra.breakdown.plannedExpenses ?? 0))} out
+                    </div>
+                  )}
               </div>
             )}
             <div>

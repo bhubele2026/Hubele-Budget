@@ -701,13 +701,18 @@ components:
         source: { type: string, enum: [budget_net, budget_line, manual] }
         amount: { type: string }
         monthStart: { type: string }
+        mode: { type: string, enum: [budgeted, actual] }
         breakdown:
           type: object
           properties:
             income: { type: string }
             expenses: { type: string }
+            plannedIncome: { type: string }
+            plannedExpenses: { type: string }
             categoryId: { type: ["string", "null"] }
             categoryName: { type: ["string", "null"] }
+            planned: { type: string }
+            actual: { type: string }
     DebtPaymentInput:
       type: object
       required: [amount, occurredOn]
