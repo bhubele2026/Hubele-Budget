@@ -8,7 +8,8 @@ import {
   getGetBudgetMonthQueryKey,
   type Transaction,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { customFetch } from "@workspace/api-client-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -132,6 +133,17 @@ export default function AmexPage() {
   const { data: txns, isLoading } = useListTransactions(queryParams);
   const { data: categories } = useListCategories();
   const { data: debts } = useListDebts();
+  // Server-provided Amex anchor: fallback used when the Amex debt row is
+  // missing or renamed.
+  const { data: amexAnchorResp, isLoading: amexAnchorLoading } = useQuery<{
+    amexEndingBalance: number | null;
+    asOf: string;
+    source: "debt" | "anchor" | "computed" | "missing";
+  }>({
+    queryKey: ["/api/amex/anchor"],
+    queryFn: () => customFetch("/api/amex/anchor", { method: "GET" }),
+    staleTime: 60_000,
+  });
   const updateTx = useUpdateTransaction();
   const weeklyLabels = useWeeklyBucketLabels();
 
@@ -257,16 +269,34 @@ export default function AmexPage() {
   }, [debts, amexPlaidAccountIds]);
 
   const endingBalance = useMemo(() => {
-    if (!amexDebt) {
-      // No linked Amex debt — we have no opening-balance anchor and the
-      // server query is scoped, so we can't honestly compute a running
-      // sum here. Fail loudly in the UI rather than show a misleading
-      // number.
-      return { value: null as number | null, source: "missing" as const };
+    // Prefer the linked Amex debt; otherwise fall back to the server-
+    // provided anchor. Only declare "missing" when neither source has a
+    // usable balance AND the server fallback has finished loading — this
+    // avoids a flicker of "Unavailable" between debt/transaction load and
+    // anchor resolution.
+    let anchor: number | null = null;
+    let resolvedSource: "debt" | "anchor" | "computed" = "debt";
+    if (amexDebt) {
+      anchor = parseSigned(amexDebt.balance);
+      resolvedSource = "debt";
+    } else if (
+      amexAnchorResp &&
+      amexAnchorResp.amexEndingBalance !== null &&
+      amexAnchorResp.source !== "missing"
+    ) {
+      anchor = amexAnchorResp.amexEndingBalance;
+      resolvedSource =
+        amexAnchorResp.source === "debt" ? "anchor" : amexAnchorResp.source;
     }
-    const anchor = parseSigned(amexDebt.balance);
+    if (anchor === null) {
+      const loading = amexAnchorLoading || amexAnchorResp === undefined;
+      return {
+        value: null as number | null,
+        source: (loading ? "loading" : "missing") as "loading" | "missing",
+      };
+    }
     const cmp = compareMonth(selectedMonth, currentMonth);
-    if (cmp === 0) return { value: anchor, source: "debt" as const };
+    if (cmp === 0) return { value: anchor, source: resolvedSource };
     let bal = anchor;
     if (cmp < 0) {
       // Past month: undo every month after selectedMonth, up to and
@@ -288,15 +318,23 @@ export default function AmexPage() {
         cursor = shiftMonth(cursor, 1);
       }
     }
-    return { value: bal, source: "debt" as const };
-  }, [amexDebt, netChangeByMonth, selectedMonth, currentMonth]);
+    return { value: bal, source: resolvedSource };
+  }, [amexDebt, amexAnchorResp, amexAnchorLoading, netChangeByMonth, selectedMonth, currentMonth]);
 
   // Trailing 12-month ending-balance series, anchored at the current
   // month's known Amex debt balance and rolled month-by-month using the
   // same net-change math as `endingBalance` above.
   const balanceTrend = useMemo<TrendPoint[]>(() => {
-    if (!amexDebt) return [];
-    const anchor = parseSigned(amexDebt.balance);
+    let anchor: number | null = null;
+    if (amexDebt) anchor = parseSigned(amexDebt.balance);
+    else if (
+      amexAnchorResp &&
+      amexAnchorResp.amexEndingBalance !== null &&
+      amexAnchorResp.source !== "missing"
+    ) {
+      anchor = amexAnchorResp.amexEndingBalance;
+    }
+    if (anchor === null) return [];
     // Compute the ending balance for any given month by rolling from the
     // currentMonth anchor.
     const balanceAt = (mk: MonthKey): number => {
@@ -333,7 +371,7 @@ export default function AmexPage() {
       });
     }
     return points;
-  }, [amexDebt, netChangeByMonth, selectedMonth, currentMonth]);
+  }, [amexDebt, amexAnchorResp, netChangeByMonth, selectedMonth, currentMonth]);
 
   // Bulk selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -804,6 +842,8 @@ export default function AmexPage() {
               hint="Link an Amex debt in Debts to see the balance."
               testId="stat-ending-balance"
             />
+          ) : endingBalance.source === "loading" ? (
+            <Skeleton className="h-[88px] w-full" data-testid="stat-ending-balance-loading" />
           ) : (
             <StatChip
               label="Ending balance"
