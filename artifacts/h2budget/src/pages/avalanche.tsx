@@ -428,10 +428,17 @@ export default function AvalanchePage() {
   const roomLeft = availableMoney - manualExtra;
   const overBudget = roomLeft < 0;
 
-  // Progress: paid-down vs original total balance. Without a history snapshot
-  // we currently have only the live balance, so progress reads 0% until that
-  // snapshot lands. Use original = current as a safe placeholder.
-  const originalTotal = totalBalance;
+  // Progress: paid-down vs the per-debt `originalBalance` anchor captured
+  // at create / first Plaid sync (and backfilled for older debts from the
+  // peak of recorded balance history). Falls back to current balance when
+  // no anchor exists, which produces 0% rather than NaN.
+  const activeRawDebts = (debts ?? []).filter(
+    (d) => (d.status ?? "active") === "active",
+  );
+  const originalTotal = activeRawDebts.reduce((s, d) => {
+    const orig = d.originalBalance != null ? Number(d.originalBalance) : Number(d.balance);
+    return s + (Number.isFinite(orig) ? orig : 0);
+  }, 0);
   const paidDown = Math.max(0, originalTotal - totalBalance);
   const progressPct = originalTotal > 0 ? (paidDown / originalTotal) * 100 : 0;
 

@@ -1143,6 +1143,7 @@ components:
         id: { type: string }
         name: { type: string }
         balance: { type: string }
+        originalBalance: { type: ["string", "null"] }
         apr: { type: string }
         minPayment: { type: string }
         payment: { type: string }

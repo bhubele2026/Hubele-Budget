@@ -145,6 +145,23 @@ export declare const debtsTable: import("drizzle-orm/pg-core").PgTableWithColumn
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        originalBalance: import("drizzle-orm/pg-core").PgColumn<{
+            name: "original_balance";
+            tableName: "debts";
+            dataType: "string";
+            columnType: "PgNumeric";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         apr: import("drizzle-orm/pg-core").PgColumn<{
             name: "apr";
             tableName: "debts";
@@ -3180,6 +3197,7 @@ export declare const dashboardBudgetsTable: import("drizzle-orm/pg-core").PgTabl
 export declare const insertDebtSchema: import("zod/v4").ZodObject<{
     name: import("zod/v4").ZodString;
     balance: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
+    originalBalance: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     apr: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     minPayment: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     payment: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;

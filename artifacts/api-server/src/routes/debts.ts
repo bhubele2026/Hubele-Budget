@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, asc, gte, sql, inArray } from "drizzle-orm";
+import { and, desc, eq, asc, gte, sql, inArray, isNull } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -195,6 +195,13 @@ async function applyLiabilityToDebt(
     patch.balance = acct.liabilityBalance;
     patch.balanceSource = "plaid";
     patch.lastBalanceUpdate = new Date();
+    // Anchor the original balance the first time we ever see one for this
+    // debt so the avalanche progress bar has a stable denominator. We never
+    // overwrite an existing anchor — the original is by definition the
+    // highest known balance at adoption time.
+    if (debt.originalBalance == null) {
+      patch.originalBalance = acct.liabilityBalance;
+    }
   }
   if (allowApr && acct.liabilityApr != null) {
     validateAprDecimal(acct.liabilityApr);
@@ -329,6 +336,46 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
     await recordBalanceSnapshot(userId, d.id, d.balance);
   }
 
+  // Backfill `originalBalance` for any debts that pre-date the column.
+  // The original is the highest balance we've ever seen for the debt —
+  // falling back to the current balance if no history exists. This makes
+  // the avalanche progress bar show real paid-down progress immediately
+  // for users who created their debts before this anchor existed.
+  const needsBackfill = rows.filter((d) => d.originalBalance == null);
+  if (needsBackfill.length > 0) {
+    const ids = needsBackfill.map((d) => d.id);
+    const peakRows = await db
+      .select({
+        debtId: debtBalanceHistoryTable.debtId,
+        peak: sql<string>`max(${debtBalanceHistoryTable.balance})`,
+      })
+      .from(debtBalanceHistoryTable)
+      .where(
+        and(
+          eq(debtBalanceHistoryTable.userId, userId),
+          inArray(debtBalanceHistoryTable.debtId, ids),
+        ),
+      )
+      .groupBy(debtBalanceHistoryTable.debtId);
+    const peakById = new Map(peakRows.map((r) => [r.debtId, r.peak]));
+    for (const d of needsBackfill) {
+      const peak = Number(peakById.get(d.id) ?? 0);
+      const cur = Number(d.balance);
+      const original = Math.max(peak, cur).toFixed(2);
+      await db
+        .update(debtsTable)
+        .set({ originalBalance: original })
+        .where(
+          and(
+            eq(debtsTable.id, d.id),
+            eq(debtsTable.userId, userId),
+            isNull(debtsTable.originalBalance),
+          ),
+        );
+      d.originalBalance = original;
+    }
+  }
+
   const accountIds = rows
     .map((r) => r.plaidAccountId)
     .filter((v): v is string => !!v);
@@ -357,6 +404,11 @@ router.post("/debts", requireAuth, async (req, res): Promise<void> => {
     throw e;
   }
   if (values.sortOrder == null) values.sortOrder = (maxOrder ?? 0) + 1;
+  // Anchor original balance at create so /avalanche can show real
+  // paid-down progress from day one.
+  if (values.originalBalance == null && values.balance != null) {
+    values.originalBalance = values.balance;
+  }
   const [row] = await db
     .insert(debtsTable)
     .values(values as typeof debtsTable.$inferInsert)
@@ -469,6 +521,24 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
   }
   if (changed(parsed.data.balance, current.balance)) {
     await recordBalanceSnapshot(req.userId!, row.id, row.balance);
+    // If a manual edit pushes the balance above the recorded original
+    // (or no original anchor exists yet), bump the anchor so progress
+    // never goes negative.
+    const newBal = Number(row.balance);
+    const orig = row.originalBalance == null ? null : Number(row.originalBalance);
+    if (orig == null || newBal > orig) {
+      const next = newBal.toFixed(2);
+      await db
+        .update(debtsTable)
+        .set({ originalBalance: next })
+        .where(
+          and(
+            eq(debtsTable.id, row.id),
+            eq(debtsTable.userId, req.userId!),
+          ),
+        );
+      row.originalBalance = next;
+    }
   }
   const accountIds = row.plaidAccountId ? [row.plaidAccountId] : [];
   const { accountById, itemById } = await loadAccountContext(req.userId!, accountIds);

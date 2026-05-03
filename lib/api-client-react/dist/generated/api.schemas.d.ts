@@ -178,6 +178,8 @@ export interface Debt {
     id: string;
     name: string;
     balance: string;
+    /** @nullable */
+    originalBalance?: string | null;
     apr: string;
     minPayment: string;
     payment: string;

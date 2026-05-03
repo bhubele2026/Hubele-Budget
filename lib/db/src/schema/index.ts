@@ -29,6 +29,7 @@ export const debtsTable = pgTable(
     userId: text("user_id").notNull(),
     name: text("name").notNull(),
     balance: numeric("balance", { precision: 12, scale: 2 }).notNull().default("0"),
+    originalBalance: numeric("original_balance", { precision: 12, scale: 2 }),
     apr: numeric("apr", { precision: 6, scale: 4 }).notNull().default("0"),
     minPayment: numeric("min_payment", { precision: 12, scale: 2 }).notNull().default("0"),
     payment: numeric("payment", { precision: 12, scale: 2 }).notNull().default("0"),
