@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -6,6 +6,9 @@ import {
   useCreateRecurringItem,
   useUpdateRecurringItem,
   useDeleteRecurringItem,
+  useListDebts,
+  useGetAvalancheSettings,
+  useGetAvalancheExtra,
   getListRecurringItemsQueryKey,
   getGetBillsSummaryQueryKey,
   getGetForecastQueryKey,
@@ -15,6 +18,8 @@ import {
   type BillsSummaryRow,
   type BillsDebtMinRow,
 } from "@workspace/api-client-react";
+import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
+import { computePayoffsByDebt } from "@/lib/forecastDebts";
 import { Lock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -171,6 +176,9 @@ function toFormState(item: RecurringItem): FormState {
 
 export default function BillsPage() {
   const { data: summary, isLoading } = useGetBillsSummary();
+  const { data: debts } = useListDebts();
+  const { data: avaSettings } = useGetAvalancheSettings();
+  const { data: resolvedExtra } = useGetAvalancheExtra();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -284,6 +292,40 @@ export default function BillsPage() {
     );
   };
 
+  // Run the same avalanche simulation the Forecast uses so Bills hides debt
+  // minimum rows whose next due date is past the avalanche-predicted payoff
+  // month. Keeps Bills and Forecast in agreement on which debts are still alive.
+  const strategy: Strategy = (avaSettings?.strategy as Strategy) ?? "avalanche";
+  const extraPerMonth = useMemo(() => {
+    const r = Number(resolvedExtra?.amount);
+    if (Number.isFinite(r)) return r;
+    return Number(avaSettings?.manualExtra ?? 0) || 0;
+  }, [resolvedExtra?.amount, avaSettings?.manualExtra]);
+
+  const payoffsByDebt = useMemo(() => {
+    const simDebts: SimDebt[] = (debts ?? []).map((d) => ({
+      id: d.id,
+      name: d.name,
+      apr: Number(d.apr),
+      balance: Number(d.balance),
+      minPayment: Number(d.minPayment),
+      status: d.status,
+    }));
+    const sim = simulate({ debts: simDebts, extraPerMonth, strategy });
+    return computePayoffsByDebt(sim);
+  }, [debts, extraPerMonth, strategy]);
+
+  const allDebtMinRows = summary?.debtMins ?? [];
+  const debtMinRows = useMemo(() => {
+    return allDebtMinRows.filter((row) => {
+      const payoff = payoffsByDebt.get(row.debtId);
+      if (!payoff) return true;
+      if (!row.nextOccurrence) return true;
+      const nextYM = row.nextOccurrence.slice(0, 7);
+      return nextYM <= payoff.payoffYM;
+    });
+  }, [allDebtMinRows, payoffsByDebt]);
+
   if (isLoading || !summary) {
     return (
       <div className="space-y-4">
@@ -295,13 +337,16 @@ export default function BillsPage() {
 
   const incomeRows = summary.income;
   const billRows = summary.bills;
-  const debtMinRows = summary.debtMins ?? [];
   const incomeMonthly = Number(summary.monthly.income) || 0;
   const billsMonthly = Number(summary.monthly.bills) || 0;
-  const debtMin = Number(summary.monthly.debtMin) || 0;
-  const totalOutflow = Number(summary.monthly.totalOutflow) || 0;
-  const net = Number(summary.monthly.net) || 0;
   const activeCount = summary.monthly.active;
+
+  const debtMin = debtMinRows.reduce(
+    (s, r) => s + Math.abs(Number(r.amount) || 0),
+    0,
+  );
+  const totalOutflow = billsMonthly + debtMin;
+  const net = incomeMonthly - totalOutflow;
 
   return (
     <div className="space-y-6">

@@ -141,7 +141,14 @@ export function filterEventsByPayoff(
 ): CashEvent[] {
   const out: CashEvent[] = [];
   for (const ev of events) {
-    const debtId = links.get(ev.itemId);
+    // Synthetic debt-minimum events emitted by the server use an itemId of
+    // the form `debt:<debtId>` (see expandDebtMin). Treat that as a direct
+    // pointer to the debt so the payoff cutoff applies even when no
+    // recurring item is linked. Otherwise fall back to the recurring-item
+    // → debt link map.
+    const debtId = ev.itemId.startsWith("debt:")
+      ? ev.itemId.slice("debt:".length)
+      : links.get(ev.itemId);
     if (!debtId) {
       out.push(ev);
       continue;
