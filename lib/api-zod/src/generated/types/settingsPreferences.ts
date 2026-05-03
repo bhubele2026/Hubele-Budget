@@ -5,8 +5,10 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { DaysSinceTracker } from "./daysSinceTracker";
 import type { WeeklyBucketLabels } from "./weeklyBucketLabels";
 
 export interface SettingsPreferences {
   weeklyBucketLabels?: WeeklyBucketLabels;
+  daysSinceTrackers?: DaysSinceTracker[];
 }

@@ -8,10 +8,16 @@ import {
   useGetAvalancheExtra,
   useListRecurringItems,
   useGetForecast,
+  useGetSettings,
   type Transaction,
   type ForecastBundle,
   type RecurringItem,
 } from "@workspace/api-client-react";
+import {
+  DEFAULT_DAYS_SINCE_TRACKERS,
+  makeMatcher,
+  type DaysSinceTracker,
+} from "@/lib/daysSinceTrackers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -289,6 +295,12 @@ export default function ReportsPage() {
   const { data: avExtra } = useGetAvalancheExtra();
   const { data: recurringItems } = useListRecurringItems();
   const { data: forecast } = useGetForecast({ days: 90 });
+  const { data: settings } = useGetSettings();
+  const daysSinceTrackers = useMemo<DaysSinceTracker[]>(() => {
+    const stored = (settings?.preferences as { daysSinceTrackers?: DaysSinceTracker[] } | null)
+      ?.daysSinceTrackers;
+    return Array.isArray(stored) ? stored : [...DEFAULT_DAYS_SINCE_TRACKERS];
+  }, [settings]);
 
   const catNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -457,6 +469,7 @@ export default function ReportsPage() {
             catNameById={catNameById}
             today={today}
             budgetTimeline={budgetTimeline}
+            trackers={daysSinceTrackers}
           />
         </TabsContent>
       </Tabs>
@@ -1814,37 +1827,23 @@ function BehaviorSection({
   catNameById,
   today,
   budgetTimeline,
+  trackers,
 }: {
   txns: Transaction[];
   yearTxns: Transaction[];
   catNameById: Map<string, string>;
   today: Date;
   budgetTimeline: (import("@workspace/api-client-react").BudgetMonthDetail | undefined)[];
+  trackers: DaysSinceTracker[];
 }) {
-  const matchByCat = (needle: string) => (t: Transaction) => {
-    const cat = (t.categoryId ? catNameById.get(t.categoryId) ?? "" : "").toLowerCase();
-    const desc = (t.description ?? "").toLowerCase();
-    return Number(t.amount) < 0 && (cat.includes(needle) || desc.includes(needle));
-  };
-
-  const daysSinceDining = useMemo(
-    () => daysSinceLast(yearTxns, matchByCat("dining"), today),
-    [yearTxns, today, catNameById],
-  );
-  const daysSinceAmazon = useMemo(
-    () => daysSinceLast(yearTxns, (t) => Number(t.amount) < 0 && (t.description ?? "").toLowerCase().includes("amazon"), today),
-    [yearTxns, today],
-  );
-  const daysSinceCoffee = useMemo(
+  const trackerTiles = useMemo(
     () =>
-      daysSinceLast(
-        yearTxns,
-        (t) =>
-          Number(t.amount) < 0 &&
-          /(starbucks|coffee|cafe|dunkin)/i.test(t.description ?? ""),
-        today,
-      ),
-    [yearTxns, today],
+      trackers.map((tr) => ({
+        id: tr.id,
+        label: tr.label,
+        days: daysSinceLast(yearTxns, makeMatcher(tr, catNameById), today),
+      })),
+    [trackers, yearTxns, today, catNameById],
   );
 
   const dayOfMonth = useMemo(() => spendByDayOfMonth(txns), [txns]);
@@ -1883,11 +1882,20 @@ function BehaviorSection({
         blurb="The streaks, the spikes, and the spending-shaped fingerprint of your month."
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <DaysSinceTile label="Dining out" days={daysSinceDining} />
-        <DaysSinceTile label="Amazon" days={daysSinceAmazon} />
-        <DaysSinceTile label="Coffee shop" days={daysSinceCoffee} />
-      </div>
+      {trackerTiles.length === 0 ? (
+        <Card className="rounded-2xl border-dashed">
+          <CardContent className="p-5 text-center text-sm text-muted-foreground">
+            No "days since" trackers configured. Add some on the{" "}
+            <a href="/settings" className="text-primary underline">Settings</a> page.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {trackerTiles.map((t) => (
+            <DaysSinceTile key={t.id} label={t.label} days={t.days} />
+          ))}
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-4">
         <StreakCard

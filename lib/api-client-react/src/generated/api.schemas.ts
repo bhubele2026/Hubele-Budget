@@ -623,8 +623,24 @@ export interface WeeklyBucketLabels {
   misc?: string;
 }
 
+export type DaysSinceTrackerMatchType =
+  (typeof DaysSinceTrackerMatchType)[keyof typeof DaysSinceTrackerMatchType];
+
+export const DaysSinceTrackerMatchType = {
+  category: "category",
+  keyword: "keyword",
+} as const;
+
+export interface DaysSinceTracker {
+  id: string;
+  label: string;
+  matchType: DaysSinceTrackerMatchType;
+  matchValue: string;
+}
+
 export interface SettingsPreferences {
   weeklyBucketLabels?: WeeklyBucketLabels;
+  daysSinceTrackers?: DaysSinceTracker[];
 }
 
 export interface Settings {

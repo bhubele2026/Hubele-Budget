@@ -46,6 +46,8 @@ export * from "./dashboardBudget";
 export * from "./dashboardBudgetInput";
 export * from "./dashboardSummary";
 export * from "./dashboardSummaryTopCategoriesItem";
+export * from "./daysSinceTracker";
+export * from "./daysSinceTrackerMatchType";
 export * from "./debt";
 export * from "./debtAprSource";
 export * from "./debtBalanceSource";

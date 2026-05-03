@@ -1211,10 +1211,21 @@ components:
         dining: { type: string }
         entertainment: { type: string }
         misc: { type: string }
+    DaysSinceTracker:
+      type: object
+      required: [id, label, matchType, matchValue]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        matchType: { type: string, enum: [category, keyword] }
+        matchValue: { type: string }
     SettingsPreferences:
       type: object
       properties:
         weeklyBucketLabels: { $ref: "#/components/schemas/WeeklyBucketLabels" }
+        daysSinceTrackers:
+          type: array
+          items: { $ref: "#/components/schemas/DaysSinceTracker" }
     Settings:
       type: object
       required: [weeklyAllowanceAmount, monthlyAllowanceAmount, unplannedAllowanceAmount]

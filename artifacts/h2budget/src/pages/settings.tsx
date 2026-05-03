@@ -7,6 +7,7 @@ import {
   useListPlaidItems,
   useDeletePlaidItem,
   useSyncPlaidTransactions,
+  useListCategories,
   getListPlaidItemsQueryKey,
   getListTransactionsQueryKey,
 } from "@workspace/api-client-react";
@@ -21,9 +22,21 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { UploadCloud, Download, RefreshCw, Trash2, Building2 } from "lucide-react";
+import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus } from "lucide-react";
 import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import {
+  DEFAULT_DAYS_SINCE_TRACKERS,
+  newTrackerId,
+  type DaysSinceTracker,
+} from "@/lib/daysSinceTrackers";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const settingsSchema = z.object({
   weeklyAllowanceAmount: z.string().min(1),
@@ -98,6 +111,10 @@ export default function SettingsPage() {
   const [bucketLabels, setBucketLabels] = useState<Record<string, string>>(
     () => ({ ...DEFAULT_WEEKLY_BUCKET_LABELS }),
   );
+  const [trackers, setTrackers] = useState<DaysSinceTracker[]>(
+    () => [...DEFAULT_DAYS_SINCE_TRACKERS],
+  );
+  const { data: categories } = useListCategories();
 
   useEffect(() => {
     if (settings) {
@@ -108,6 +125,11 @@ export default function SettingsPage() {
         primaryAccount: settings.primaryAccount || "",
       });
       setBucketLabels(resolveWeeklyBucketLabels(settings));
+      const stored = (settings.preferences as { daysSinceTrackers?: DaysSinceTracker[] } | null)
+        ?.daysSinceTrackers;
+      setTrackers(
+        Array.isArray(stored) ? stored : [...DEFAULT_DAYS_SINCE_TRACKERS],
+      );
     }
   }, [settings, form]);
 
@@ -143,6 +165,50 @@ export default function SettingsPage() {
 
   const resetBucketLabels = () => {
     setBucketLabels({ ...DEFAULT_WEEKLY_BUCKET_LABELS });
+  };
+
+  const saveTrackers = () => {
+    const cleaned = trackers
+      .map((t) => ({
+        ...t,
+        label: t.label.trim(),
+        matchValue: t.matchValue.trim(),
+      }))
+      .filter((t) => t.label && t.matchValue);
+    const nextPreferences = {
+      ...(settings?.preferences ?? {}),
+      daysSinceTrackers: cleaned,
+    };
+    updateSettings.mutate(
+      { data: { preferences: nextPreferences } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+          toast({ title: "Behavior trackers saved" });
+        },
+      },
+    );
+  };
+
+  const addTracker = () => {
+    setTrackers((prev) => [
+      ...prev,
+      { id: newTrackerId(), label: "", matchType: "keyword", matchValue: "" },
+    ]);
+  };
+
+  const removeTracker = (id: string) => {
+    setTrackers((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const updateTracker = (id: string, patch: Partial<DaysSinceTracker>) => {
+    setTrackers((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+    );
+  };
+
+  const resetTrackers = () => {
+    setTrackers([...DEFAULT_DAYS_SINCE_TRACKERS]);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -318,6 +384,100 @@ export default function SettingsPage() {
               Save Bucket Names
             </Button>
             <Button type="button" variant="outline" onClick={resetBucketLabels}>
+              Reset to defaults
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Behavior Trackers</CardTitle>
+          <CardDescription>
+            Pick the "days since last…" tiles you want on the Reports → Behavior
+            tab. Match by category name or by a keyword in the description
+            (separate keywords with <code>|</code> for an "or" match,
+            e.g. <code>starbucks|coffee|cafe</code>).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {trackers.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No trackers yet. Add one to start tracking a habit.
+            </p>
+          )}
+          {trackers.map((t) => (
+            <div
+              key={t.id}
+              className="grid grid-cols-1 md:grid-cols-[1fr_140px_1fr_auto] gap-2 items-end rounded-md border border-border bg-muted/20 p-3"
+              data-testid={`tracker-row-${t.id}`}
+            >
+              <div className="space-y-1">
+                <Label className="text-xs uppercase tracking-widest text-muted-foreground">
+                  Tile label
+                </Label>
+                <Input
+                  value={t.label}
+                  placeholder="e.g. Takeout"
+                  onChange={(e) => updateTracker(t.id, { label: e.target.value })}
+                  data-testid={`input-tracker-label-${t.id}`}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs uppercase tracking-widest text-muted-foreground">
+                  Match by
+                </Label>
+                <Select
+                  value={t.matchType}
+                  onValueChange={(v) =>
+                    updateTracker(t.id, { matchType: v as "category" | "keyword" })
+                  }
+                >
+                  <SelectTrigger data-testid={`select-tracker-type-${t.id}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="keyword">Keyword</SelectItem>
+                    <SelectItem value="category">Category</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs uppercase tracking-widest text-muted-foreground">
+                  {t.matchType === "category" ? "Category name contains" : "Description contains"}
+                </Label>
+                <Input
+                  value={t.matchValue}
+                  placeholder={t.matchType === "category" ? "dining" : "amazon"}
+                  list={t.matchType === "category" ? "tracker-category-suggestions" : undefined}
+                  onChange={(e) => updateTracker(t.id, { matchValue: e.target.value })}
+                  data-testid={`input-tracker-value-${t.id}`}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => removeTracker(t.id)}
+                data-testid={`button-remove-tracker-${t.id}`}
+              >
+                <Trash2 className="w-4 h-4 text-destructive" />
+              </Button>
+            </div>
+          ))}
+          <datalist id="tracker-category-suggestions">
+            {(categories ?? []).map((c) => (
+              <option key={c.id} value={c.name} />
+            ))}
+          </datalist>
+          <div className="flex items-center gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={addTracker} data-testid="button-add-tracker">
+              <Plus className="w-4 h-4 mr-1.5" /> Add tracker
+            </Button>
+            <Button onClick={saveTrackers} disabled={updateSettings.isPending} data-testid="button-save-trackers">
+              Save Trackers
+            </Button>
+            <Button type="button" variant="ghost" onClick={resetTrackers}>
               Reset to defaults
             </Button>
           </div>

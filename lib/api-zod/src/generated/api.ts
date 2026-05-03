@@ -793,6 +793,16 @@ export const GetSettingsResponse = zod.object({
             misc: zod.string().optional(),
           })
           .optional(),
+        daysSinceTrackers: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              label: zod.string(),
+              matchType: zod.enum(["category", "keyword"]),
+              matchValue: zod.string(),
+            }),
+          )
+          .optional(),
       }),
       zod.null(),
     ])
@@ -815,6 +825,16 @@ export const UpdateSettingsBody = zod.object({
             misc: zod.string().optional(),
           })
           .optional(),
+        daysSinceTrackers: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              label: zod.string(),
+              matchType: zod.enum(["category", "keyword"]),
+              matchValue: zod.string(),
+            }),
+          )
+          .optional(),
       }),
       zod.null(),
     ])
@@ -836,6 +856,16 @@ export const UpdateSettingsResponse = zod.object({
             entertainment: zod.string().optional(),
             misc: zod.string().optional(),
           })
+          .optional(),
+        daysSinceTrackers: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              label: zod.string(),
+              matchType: zod.enum(["category", "keyword"]),
+              matchValue: zod.string(),
+            }),
+          )
           .optional(),
       }),
       zod.null(),
