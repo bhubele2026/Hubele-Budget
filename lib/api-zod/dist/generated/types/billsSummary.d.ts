@@ -5,11 +5,19 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+<<<<<<< HEAD
+=======
+import type { BillsDebtMinRow } from "./billsDebtMinRow";
+>>>>>>> 38afff6 (Bills: locked Debt minimums + per-debt Plaid sync alignment)
 import type { BillsSummaryMonthly } from "./billsSummaryMonthly";
 import type { BillsSummaryRow } from "./billsSummaryRow";
 export interface BillsSummary {
     income: BillsSummaryRow[];
     bills: BillsSummaryRow[];
+<<<<<<< HEAD
+=======
+    debtMins: BillsDebtMinRow[];
+>>>>>>> 38afff6 (Bills: locked Debt minimums + per-debt Plaid sync alignment)
     monthly: BillsSummaryMonthly;
 }
 //# sourceMappingURL=billsSummary.d.ts.map

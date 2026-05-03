@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetBillsSummary,
@@ -13,7 +13,9 @@ import {
   type RecurringItem,
   type RecurringItemInput,
   type BillsSummaryRow,
+  type BillsDebtMinRow,
 } from "@workspace/api-client-react";
+import { Lock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -171,6 +173,7 @@ export default function BillsPage() {
   const { data: summary, isLoading } = useGetBillsSummary();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   const createItem = useCreateRecurringItem();
   const updateItem = useUpdateRecurringItem();
@@ -292,6 +295,7 @@ export default function BillsPage() {
 
   const incomeRows = summary.income;
   const billRows = summary.bills;
+  const debtMinRows = summary.debtMins ?? [];
   const incomeMonthly = Number(summary.monthly.income) || 0;
   const billsMonthly = Number(summary.monthly.bills) || 0;
   const debtMin = Number(summary.monthly.debtMin) || 0;
@@ -335,6 +339,13 @@ export default function BillsPage() {
             onToggleActive={onToggleActive}
             togglingId={updateItem.isPending ? togglingId : null}
           />
+          {debtMinRows.length > 0 ? (
+            <DebtMinimumsCard
+              rows={debtMinRows}
+              total={debtMin}
+              onOpen={(debtId) => setLocation(`/avalanche?focus=${debtId}`)}
+            />
+          ) : null}
         </div>
 
         <div className="space-y-4">
@@ -687,6 +698,91 @@ function BillGroupCard({
             })}
           </ul>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function DebtMinimumsCard({
+  rows,
+  total,
+  onOpen,
+}: {
+  rows: BillsDebtMinRow[];
+  total: number;
+  onOpen: (debtId: string) => void;
+}) {
+  return (
+    <Card data-testid="card-debt-minimums">
+      <CardContent className="p-0">
+        <div className="px-5 py-4 flex items-center justify-between border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
+              <Lock className="w-4 h-4 text-muted-foreground" />
+            </div>
+            <div>
+              <div className="text-base font-serif font-semibold text-foreground">
+                Debt minimums
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {rows.length} item{rows.length === 1 ? "" : "s"} · synced from Debts ·
+                edit on Avalanche
+              </div>
+            </div>
+          </div>
+          <div className="text-base font-serif font-semibold tabular-nums text-destructive">
+            −{formatCurrency(total)}
+          </div>
+        </div>
+        <ul className="divide-y divide-border">
+          {rows.map((r) => {
+            const pill = formatDatePill(r.nextOccurrence ?? null);
+            const min = Number(r.minPayment) || 0;
+            const amt = Math.abs(Number(r.amount) || 0);
+            return (
+              <li
+                key={r.debtId}
+                className="px-5 py-3 flex items-center gap-4 hover:bg-muted/40 cursor-pointer transition-colors"
+                onClick={() => onOpen(r.debtId)}
+                data-testid={`row-debt-min-${r.debtId}`}
+              >
+                <div className="w-12 shrink-0 text-center">
+                  {pill ? (
+                    <>
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                        {pill.month}
+                      </div>
+                      <div className="text-lg font-serif font-semibold text-foreground leading-tight">
+                        {pill.day}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      —
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate text-foreground">
+                    {r.debtName} minimum
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    linked to {r.debtName} · min {formatCurrency(min)}/mo · stops at
+                    payoff
+                    {r.source === "plaid" ? " · synced from Plaid" : ""}
+                  </div>
+                </div>
+                <div className="text-sm font-semibold tabular-nums text-destructive">
+                  −{formatCurrency(amt)}
+                </div>
+                <Lock
+                  className="w-4 h-4 text-muted-foreground"
+                  aria-label="Locked — managed by Debts"
+                />
+              </li>
+            );
+          })}
+        </ul>
       </CardContent>
     </Card>
   );

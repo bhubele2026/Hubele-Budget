@@ -3,6 +3,7 @@ import { and, eq, lt } from "drizzle-orm";
 import { db, recurringItemsTable, debtsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { expandItem, fmtISO } from "../lib/cashSignal";
+import { buildDebtMinSchedule } from "../lib/debtMinSchedule";
 
 const router: IRouter = Router();
 
@@ -73,6 +74,15 @@ router.get("/bills/summary", requireAuth, async (req, res): Promise<void> => {
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
+  // Build debt-min rows + figure out which recurring items are linked to a
+  // debt (so we suppress them from the regular bills list to avoid double
+  // counting the same payment in bills + debt minimums).
+  const { rows: debtMinRows, suppressedRecurringIds } = buildDebtMinSchedule(
+    debts,
+    items,
+    today,
+  );
+
   const incomeRows: unknown[] = [];
   const billRows: unknown[] = [];
   let incomeTotal = 0;
@@ -81,6 +91,7 @@ router.get("/bills/summary", requireAuth, async (req, res): Promise<void> => {
 
   const sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name));
   for (const item of sortedItems) {
+    if (suppressedRecurringIds.has(item.id)) continue;
     const monthlyAmount = monthlyAmountAbs(item, monthStart, monthEnd);
     const row = {
       item,
@@ -96,17 +107,19 @@ router.get("/bills/summary", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  let debtMin = 0;
-  for (const d of debts) {
-    if (d.status && d.status !== "active") continue;
-    debtMin += Math.abs(Number(d.minPayment) || 0);
-  }
+  // debtMin total is exactly the sum of the locked debt-minimum rows so the
+  // summary stays consistent with what the Bills page renders.
+  const debtMin = debtMinRows.reduce(
+    (s, r) => s + Math.abs(Number(r.amount) || 0),
+    0,
+  );
   const totalOutflow = billsTotal + debtMin;
   const net = incomeTotal - totalOutflow;
 
   res.json({
     income: incomeRows,
     bills: billRows,
+    debtMins: debtMinRows,
     monthly: {
       income: fixed2(incomeTotal),
       bills: fixed2(billsTotal),

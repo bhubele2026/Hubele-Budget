@@ -5,11 +5,13 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { BillsDebtMinRow } from "./billsDebtMinRow";
 import type { BillsSummaryMonthly } from "./billsSummaryMonthly";
 import type { BillsSummaryRow } from "./billsSummaryRow";
 
 export interface BillsSummary {
   income: BillsSummaryRow[];
   bills: BillsSummaryRow[];
+  debtMins: BillsDebtMinRow[];
   monthly: BillsSummaryMonthly;
 }

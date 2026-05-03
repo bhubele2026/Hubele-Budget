@@ -1104,9 +1104,22 @@ components:
         active: { type: integer }
         monthStart: { type: string }
         monthEnd: { type: string }
+    BillsDebtMinRow:
+      type: object
+      required: [debtId, debtName, amount, minPayment, source, locked]
+      properties:
+        debtId: { type: string }
+        debtName: { type: string }
+        amount: { type: string }
+        minPayment: { type: string }
+        nextOccurrence: { type: ["string", "null"] }
+        source: { type: string, enum: [plaid, manual] }
+        locked: { type: boolean }
+        linkedRecurringId: { type: ["string", "null"] }
+        dueDay: { type: ["integer", "null"] }
     BillsSummary:
       type: object
-      required: [income, bills, monthly]
+      required: [income, bills, debtMins, monthly]
       properties:
         income:
           type: array
@@ -1114,6 +1127,9 @@ components:
         bills:
           type: array
           items: { $ref: "#/components/schemas/BillsSummaryRow" }
+        debtMins:
+          type: array
+          items: { $ref: "#/components/schemas/BillsDebtMinRow" }
         monthly: { $ref: "#/components/schemas/BillsSummaryMonthly" }
 
     Category:

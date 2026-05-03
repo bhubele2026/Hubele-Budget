@@ -19,6 +19,8 @@ export * from "./avalancheSettingsInputStrategy";
 export * from "./avalancheSettingsStrategy";
 export * from "./bankSnapshot";
 export * from "./bankSnapshotSource";
+export * from "./billsDebtMinRow";
+export * from "./billsDebtMinRowSource";
 export * from "./billsSummary";
 export * from "./billsSummaryMonthly";
 export * from "./billsSummaryRow";

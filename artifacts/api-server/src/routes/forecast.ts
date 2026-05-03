@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import {
   db,
+  debtsTable,
   recurringItemsTable,
   transactionsTable,
   forecastResolutionsTable,
@@ -18,6 +19,10 @@ import {
   addDays,
   type CashEvent,
 } from "../lib/cashSignal";
+import {
+  buildDebtMinSchedule,
+  expandDebtMin,
+} from "../lib/debtMinSchedule";
 import { plaid } from "../lib/plaid";
 import { archiveExpiredOneTime } from "./bills";
 
@@ -104,8 +109,28 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     .from(recurringItemsTable)
     .where(eq(recurringItemsTable.userId, userId));
 
+  const debtsList = await db
+    .select()
+    .from(debtsTable)
+    .where(eq(debtsTable.userId, userId));
+
+  // Same series as Bills: linked recurring items represent the debt's
+  // minimum; for unlinked active debts we synthesize monthly events so the
+  // forecast doesn't miss known obligations and never double-counts them.
+  const linkedRecurringByDebt = new Map<string, typeof recurring[number]>();
+  for (const r of recurring) {
+    if (r.debtId && r.active === "true" && !linkedRecurringByDebt.has(r.debtId)) {
+      linkedRecurringByDebt.set(r.debtId, r);
+    }
+  }
+
   const events: CashEvent[] = [];
   for (const item of recurring) events.push(...expandItem(item, from, to));
+  for (const d of debtsList) {
+    events.push(
+      ...expandDebtMin(d, linkedRecurringByDebt.get(d.id) ?? null, from, to),
+    );
+  }
   events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   const txns = await db

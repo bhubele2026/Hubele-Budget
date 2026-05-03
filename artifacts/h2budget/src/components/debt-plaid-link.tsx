@@ -7,6 +7,9 @@ import {
   useRefreshDebtFromPlaid,
   getListDebtsQueryKey,
   getListPlaidLiabilityAccountsQueryKey,
+  getGetBillsSummaryQueryKey,
+  getGetForecastQueryKey,
+  getGetDashboardQueryKey,
   listPlaidLiabilityAccounts,
 } from "@workspace/api-client-react";
 import type { Debt, PlaidLiabilityAccount } from "@workspace/api-client-react";
@@ -114,10 +117,16 @@ export function DebtPlaidActions({ debt }: { debt: Debt }) {
   const qc = useQueryClient();
   const { toast } = useToast();
 
+  const invalidateDebtConsumers = () => {
+    qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+  };
   const refresh = useRefreshDebtFromPlaid({
     mutation: {
       onSuccess: () => {
-        qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
+        invalidateDebtConsumers();
         toast({ title: "Refreshed from Plaid" });
       },
       onError: (err) =>
@@ -131,7 +140,7 @@ export function DebtPlaidActions({ debt }: { debt: Debt }) {
   const unlink = useUnlinkDebtFromPlaid({
     mutation: {
       onSuccess: () => {
-        qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
+        invalidateDebtConsumers();
         qc.invalidateQueries({ queryKey: getListPlaidLiabilityAccountsQueryKey() });
         toast({ title: "Unlinked from Plaid" });
       },
@@ -222,6 +231,9 @@ function PlaidAccountPicker({
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
         qc.invalidateQueries({ queryKey: getListPlaidLiabilityAccountsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
         toast({ title: "Linked to Plaid" });
         onOpenChange(false);
       },

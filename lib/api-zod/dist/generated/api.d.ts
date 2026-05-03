@@ -4032,6 +4032,37 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         nextOccurrence: string | null;
         monthlyAmount: string;
     }>, "many">;
+    debtMins: zod.ZodArray<zod.ZodObject<{
+        debtId: zod.ZodString;
+        debtName: zod.ZodString;
+        amount: zod.ZodString;
+        minPayment: zod.ZodString;
+        nextOccurrence: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        source: zod.ZodEnum<["plaid", "manual"]>;
+        locked: zod.ZodBoolean;
+        linkedRecurringId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        dueDay: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    }, "strip", zod.ZodTypeAny, {
+        amount: string;
+        source: "plaid" | "manual";
+        debtId: string;
+        minPayment: string;
+        debtName: string;
+        locked: boolean;
+        dueDay?: number | null | undefined;
+        nextOccurrence?: string | null | undefined;
+        linkedRecurringId?: string | null | undefined;
+    }, {
+        amount: string;
+        source: "plaid" | "manual";
+        debtId: string;
+        minPayment: string;
+        debtName: string;
+        locked: boolean;
+        dueDay?: number | null | undefined;
+        nextOccurrence?: string | null | undefined;
+        linkedRecurringId?: string | null | undefined;
+    }>, "many">;
     monthly: zod.ZodObject<{
         income: zod.ZodString;
         bills: zod.ZodString;
@@ -4093,6 +4124,17 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         nextOccurrence: string | null;
         monthlyAmount: string;
     }[];
+    debtMins: {
+        amount: string;
+        source: "plaid" | "manual";
+        debtId: string;
+        minPayment: string;
+        debtName: string;
+        locked: boolean;
+        dueDay?: number | null | undefined;
+        nextOccurrence?: string | null | undefined;
+        linkedRecurringId?: string | null | undefined;
+    }[];
     monthly: {
         active: number;
         monthStart: string;
@@ -4135,6 +4177,17 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         };
         nextOccurrence: string | null;
         monthlyAmount: string;
+    }[];
+    debtMins: {
+        amount: string;
+        source: "plaid" | "manual";
+        debtId: string;
+        minPayment: string;
+        debtName: string;
+        locked: boolean;
+        dueDay?: number | null | undefined;
+        nextOccurrence?: string | null | undefined;
+        linkedRecurringId?: string | null | undefined;
     }[];
     monthly: {
         active: number;

@@ -480,9 +480,33 @@ export interface BillsSummaryMonthly {
   monthEnd: string;
 }
 
+export type BillsDebtMinRowSource =
+  (typeof BillsDebtMinRowSource)[keyof typeof BillsDebtMinRowSource];
+
+export const BillsDebtMinRowSource = {
+  plaid: "plaid",
+  manual: "manual",
+} as const;
+
+export interface BillsDebtMinRow {
+  debtId: string;
+  debtName: string;
+  amount: string;
+  minPayment: string;
+  /** @nullable */
+  nextOccurrence?: string | null;
+  source: BillsDebtMinRowSource;
+  locked: boolean;
+  /** @nullable */
+  linkedRecurringId?: string | null;
+  /** @nullable */
+  dueDay?: number | null;
+}
+
 export interface BillsSummary {
   income: BillsSummaryRow[];
   bills: BillsSummaryRow[];
+  debtMins: BillsDebtMinRow[];
   monthly: BillsSummaryMonthly;
 }
 

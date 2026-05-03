@@ -1293,6 +1293,19 @@ export const GetBillsSummaryResponse = zod.object({
       monthlyAmount: zod.string(),
     }),
   ),
+  debtMins: zod.array(
+    zod.object({
+      debtId: zod.string(),
+      debtName: zod.string(),
+      amount: zod.string(),
+      minPayment: zod.string(),
+      nextOccurrence: zod.string().nullish(),
+      source: zod.enum(["plaid", "manual"]),
+      locked: zod.boolean(),
+      linkedRecurringId: zod.string().nullish(),
+      dueDay: zod.number().nullish(),
+    }),
+  ),
   monthly: zod.object({
     income: zod.string(),
     bills: zod.string(),

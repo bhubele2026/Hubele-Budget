@@ -1,6 +1,7 @@
 import { and, eq, gte, lte } from "drizzle-orm";
 import {
   db,
+  debtsTable,
   recurringItemsTable,
   transactionsTable,
   forecastResolutionsTable,
@@ -232,8 +233,33 @@ export async function computeCashSignal(
     .select()
     .from(recurringItemsTable)
     .where(eq(recurringItemsTable.userId, userId));
+  const debtsList = await db
+    .select()
+    .from(debtsTable)
+    .where(eq(debtsTable.userId, userId));
+  const linkedRecurringByDebt = new Map<string, RecurringRow>();
+  for (const r of recurring) {
+    if (r.debtId && r.active === "true" && !linkedRecurringByDebt.has(r.debtId)) {
+      linkedRecurringByDebt.set(r.debtId, r);
+    }
+  }
   const events: CashEvent[] = [];
   for (const item of recurring) events.push(...expandItem(item, expandStart, to));
+  // Inject monthly debt-min events for active debts WITHOUT a linked
+  // recurring item — same series the Bills page renders for "Debt
+  // minimums", so the projection never double-counts and never misses an
+  // obligation that was synced via Plaid liabilities.
+  const { expandDebtMin } = await import("./debtMinSchedule");
+  for (const d of debtsList) {
+    events.push(
+      ...expandDebtMin(
+        d,
+        linkedRecurringByDebt.get(d.id) ?? null,
+        expandStart,
+        to,
+      ),
+    );
+  }
 
   // Pull future-anchored checking transactions (forecast_flag and reflecting bank movement after snapshot)
   const txns = await db
