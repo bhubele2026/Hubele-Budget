@@ -51,7 +51,6 @@ import {
   monthsIfMinOnly,
   interestIfMinOnly,
   dailyInterest,
-  findExtraForPayoff,
   fmtMoney,
   fmtMoneyCompact,
   fmtMonth,
@@ -76,6 +75,10 @@ import {
   DebtLastSynced,
   DebtPlaidSource,
 } from "@/components/debt-plaid-link";
+
+const MANUAL_EXTRA_CAP = 5000;
+const MAX_DISPLAY_INTEREST = 1_000_000;
+const MAX_UNDERWATER_VISIBLE = 5;
 
 function debtToSim(d: Debt): SimDebt {
   return {
@@ -206,8 +209,21 @@ export default function AvalanchePage() {
   }, [highlightedDebtId]);
 
   const strategy: Strategy = (settings?.strategy as Strategy) ?? "avalanche";
-  const manualExtra = Number(settings?.manualExtra ?? 0);
-  const resolvedExtraAmount = Number(resolvedExtra?.amount ?? manualExtra);
+  const clampManual = (n: number) =>
+    Number.isFinite(n) ? Math.max(0, Math.min(MANUAL_EXTRA_CAP, n)) : 0;
+  const rawManualExtra = Number(settings?.manualExtra ?? 0);
+  const manualExtra = clampManual(rawManualExtra);
+  const rawResolvedExtraAmount = Number(resolvedExtra?.amount ?? manualExtra);
+  // When the source is manual, the API echoes the raw saved manualExtra back
+  // as `resolvedExtra.amount`. Clamp it here too so a stale > $5k value can't
+  // drive the headline or the simulation past the cap.
+  const isManualSource =
+    (resolvedExtra?.source ?? settings?.extraSource ?? "manual") === "manual";
+  const resolvedExtraAmount = isManualSource
+    ? clampManual(rawResolvedExtraAmount)
+    : Number.isFinite(rawResolvedExtraAmount)
+      ? Math.max(0, rawResolvedExtraAmount)
+      : 0;
   const totalExtra = resolvedExtraAmount + whatIf;
 
   const simDebts: SimDebt[] = useMemo(
@@ -312,19 +328,11 @@ export default function AvalanchePage() {
     }
   };
 
-  // Slider ceiling = max( real money available this month, extra needed to
-  // pay every debt off in 12 months ). The first anchors the slider to the
-  // user's real budget headroom; the second guarantees the slider can always
-  // reach a meaningful payoff target even if the budget is loose.
+  // Slider is hard-capped at $5k/mo regardless of budget headroom — keeps the
+  // control useful for real-life planning. `manualExtra` is already clamped on
+  // read above, so the slider value is guaranteed to be within range.
   const availableMoney = Number(resolvedExtra?.availableMoney ?? 0);
-  const extraForPayoff = useMemo(
-    () => findExtraForPayoff(simDebts, strategy, 12) ?? 0,
-    [simDebts, strategy],
-  );
-  const budgetCap = useMemo(() => {
-    const base = Math.max(availableMoney, extraForPayoff, manualExtra, 500);
-    return Math.ceil(base / 25) * 25;
-  }, [availableMoney, extraForPayoff, manualExtra]);
+  const budgetCap = MANUAL_EXTRA_CAP;
   const roomLeft = availableMoney - manualExtra;
   const overBudget = roomLeft < 0;
 
@@ -340,7 +348,7 @@ export default function AvalanchePage() {
   const next3 = sortedActive.slice(0, 3);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {killedBanner && (
         <div className="relative flex items-center gap-3 rounded-lg border border-emerald-300/60 bg-gradient-to-r from-emerald-50 to-amber-50 p-4 text-emerald-900 dark:border-emerald-700/60 dark:from-emerald-950/40 dark:to-amber-950/40 dark:text-emerald-100 animate-in fade-in slide-in-from-top-2">
           <PartyPopper className="h-6 w-6 shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -406,7 +414,9 @@ export default function AvalanchePage() {
         <div className="border-t border-border mt-5" />
       </div>
 
-      {/* Stat strip */}
+      {/* Stat strip + underwater + progress — kept tight so the top of the
+          page reads as one connected section instead of disjoint slabs. */}
+      <div className="space-y-3">
       <div className="grid grid-cols-2 md:grid-cols-4">
         <StatStripCell label="Total debt" value={fmtMoneyCompact(totalBalance)} />
         <StatStripCell
@@ -431,23 +441,63 @@ export default function AvalanchePage() {
           valueClassName="text-destructive"
         />
       </div>
-      {sim.ranOutOfTime && sim.underwater.length > 0 && (
-        <div
-          className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"
-          data-testid="banner-underwater"
-        >
-          <strong>Underwater:</strong> the minimum payment doesn't cover monthly
-          interest on{" "}
-          {sim.underwater.map((u, i) => (
-            <span key={u.id}>
-              {i > 0 && ", "}
-              <strong>{u.name}</strong> ({fmtMoney(u.monthlyInterest)} interest
-              vs {fmtMoney(u.minPayment)} min)
-            </span>
-          ))}
-          . Raise the minimum or add extra to start making progress.
-        </div>
-      )}
+      {sim.ranOutOfTime && sim.underwater.length > 0 && (() => {
+        const sanitized = sim.underwater.map((u) => {
+          const interestOk =
+            Number.isFinite(u.monthlyInterest) &&
+            u.monthlyInterest >= 0 &&
+            u.monthlyInterest <= MAX_DISPLAY_INTEREST;
+          const minOk = Number.isFinite(u.minPayment) && u.minPayment > 0;
+          let coverage: number | null = null;
+          if (interestOk && minOk && u.monthlyInterest > 0) {
+            coverage = Math.max(
+              0,
+              Math.min(100, (u.minPayment / u.monthlyInterest) * 100),
+            );
+          }
+          return { ...u, interestOk, minOk, coverage };
+        });
+        const sorted = [...sanitized].sort((a, b) => {
+          const ax = a.coverage ?? -1;
+          const bx = b.coverage ?? -1;
+          return ax - bx;
+        });
+        const visible = sorted.slice(0, MAX_UNDERWATER_VISIBLE);
+        const moreCount = sorted.length - visible.length;
+        return (
+          <div
+            className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
+            data-testid="banner-underwater"
+          >
+            <div className="font-medium">
+              {sorted.length === 1
+                ? "1 debt is underwater"
+                : `${sorted.length} debts are underwater`}{" "}
+              <span className="font-normal text-destructive/80">
+                — minimum payments don't cover monthly interest.
+              </span>
+            </div>
+            <ul className="mt-1.5 space-y-0.5 text-[13px] leading-snug text-destructive/90">
+              {visible.map((u) => {
+                const minLabel = u.minOk ? fmtMoney(u.minPayment) : "—";
+                const coverageLabel =
+                  u.coverage !== null ? `~${Math.round(u.coverage)}%` : "—";
+                return (
+                  <li key={u.id} className="flex items-baseline gap-1.5">
+                    <span className="font-medium text-destructive">{u.name}</span>
+                    <span className="text-destructive/80">
+                      min {minLabel} covers {coverageLabel} of interest
+                    </span>
+                  </li>
+                );
+              })}
+              {moreCount > 0 && (
+                <li className="text-destructive/70">+{moreCount} more</li>
+              )}
+            </ul>
+          </div>
+        );
+      })()}
 
       {/* Progress row */}
       <div>
@@ -461,6 +511,7 @@ export default function AvalanchePage() {
             style={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }}
           />
         </div>
+      </div>
       </div>
 
       {/* Two cards: Extra per month + Strategy */}
