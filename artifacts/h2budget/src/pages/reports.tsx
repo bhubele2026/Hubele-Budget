@@ -217,15 +217,18 @@ function ChartCard({
   title,
   caption,
   empty,
+  hideWhenEmpty,
   children,
   height = 320,
 }: {
   title: string;
   caption?: string;
   empty?: string | null;
+  hideWhenEmpty?: boolean;
   children: React.ReactNode;
   height?: number;
 }) {
+  if (empty && hideWhenEmpty) return null;
   return (
     <Card className="rounded-2xl">
       <CardHeader className="pb-2">
@@ -734,6 +737,7 @@ function DebtSection({
             ? "All clear — no history yet. The projection below shows where you're headed."
             : null
         }
+        hideWhenEmpty
         height={220}
       >
         <ResponsiveContainer width="100%" height="100%">
@@ -776,6 +780,7 @@ function DebtSection({
         empty={
           activeDebts.length === 0 ? "All clear — no active debts to project." : null
         }
+        hideWhenEmpty
         height={340}
       >
         <ResponsiveContainer width="100%" height="100%">
@@ -831,6 +836,7 @@ function DebtSection({
           title="Snowball waterfall"
           caption="Freed-up minimums roll into the next debt as each one falls."
           empty={waterfall.length === 0 ? "All clear — no projected payoffs in this window." : null}
+          hideWhenEmpty
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={waterfall} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -849,6 +855,7 @@ function DebtSection({
           title="Interest vs principal"
           caption="Stacked monthly payment split. The interest slice should shrink as smaller debts die."
           empty={ipBars.length === 0 ? "All clear — no projection to draw yet." : null}
+          hideWhenEmpty
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={ipBars} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -870,6 +877,7 @@ function DebtSection({
           title="Debts killed — milestone timeline"
           caption="Projected payoff date for every debt, in order."
           empty={killed.length === 0 ? "All clear — no projected payoffs yet." : null}
+          hideWhenEmpty
           height={Math.max(220, 60 + killed.length * 40)}
         >
           <div className="relative h-full overflow-y-auto pr-1">
@@ -902,6 +910,7 @@ function DebtSection({
           title="Per-debt months remaining"
           caption="How long each balance has left at your current plan. Shorter = closer to done."
           empty={progress.length === 0 ? "All clear — no active debts on the books." : null}
+          hideWhenEmpty
           height={Math.max(220, 40 + progress.length * 36)}
         >
           <div className="space-y-3 h-full overflow-y-auto pr-1">
@@ -1156,6 +1165,7 @@ function CashFlowSection({
             : "The classic line — income up top, expense below."
         }
         empty={series.length === 0 ? "All clear — no transactions in this window." : null}
+        hideWhenEmpty
       >
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={seriesWithPrev} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -1204,6 +1214,7 @@ function CashFlowSection({
             : "Bars = net per period. The line = running cumulative net."
         }
         empty={series.length === 0 ? "All clear — no transactions in this window." : null}
+        hideWhenEmpty
       >
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={seriesWithPrev} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -1265,6 +1276,7 @@ function CashFlowSection({
           title="Forecast balance (next 90 days)"
           caption="Projected cash balance from your forecast settings."
           empty={forecastSeries.length === 0 ? "All clear — no forecast data yet." : null}
+          hideWhenEmpty
         >
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={forecastSeries} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -1297,6 +1309,7 @@ function CashFlowSection({
           title="Money flow this month"
           caption="Income sources → spending categories → savings/spent."
           empty={flowBars.length === 0 ? "All clear — no transactions yet." : null}
+          hideWhenEmpty
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={flowBars} margin={{ top: 10, right: 16, bottom: 24, left: 0 }} layout="vertical">
@@ -1321,6 +1334,7 @@ function CashFlowSection({
           title="Rolling 30-day burn rate"
           caption="Average daily spending — the smoothed signal under the noise."
           empty={burn.length === 0 ? "All clear — no spending data yet." : null}
+          hideWhenEmpty
         >
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={burn} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -1460,6 +1474,7 @@ function SpendingSection({
           title="Top categories"
           caption="The slice-pie of your spend in this window."
           empty={top8.length === 0 ? "All clear — no spending in this window." : null}
+          hideWhenEmpty
         >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -1478,6 +1493,7 @@ function SpendingSection({
           title="Reimbursable vs personal"
           caption="On Amex: how much of the spend will come back vs. the true personal cost."
           empty={reimDonut.length === 0 ? "All clear — no Amex spend tagged yet." : null}
+          hideWhenEmpty
         >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -1501,6 +1517,7 @@ function SpendingSection({
             ? "All clear — no spending in the last 12 weeks."
             : null
         }
+        hideWhenEmpty
         height={180}
       >
         <div className="flex items-start gap-1 h-full overflow-x-auto pb-2">
@@ -1538,6 +1555,7 @@ function SpendingSection({
           title="Day of week"
           caption="Average spend per weekday — exposes a Friday damage pattern."
           empty={dow.every((d) => d.avg === 0) ? "All clear — no spending data yet." : null}
+          hideWhenEmpty
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={dow} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -1558,6 +1576,7 @@ function SpendingSection({
           title="Top merchants"
           caption="Where your dollars actually land. Top 10 by total."
           empty={merchants.length === 0 ? "All clear — no merchants tracked yet." : null}
+          hideWhenEmpty
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={merchants} layout="vertical" margin={{ top: 10, right: 16, bottom: 0, left: 0 }}>
@@ -1575,6 +1594,7 @@ function SpendingSection({
         title="Category trends — last 6 months"
         caption="One sparkline per top category. Watch for upward creep."
         empty={trends.length === 0 ? "All clear — no category spending yet." : null}
+        hideWhenEmpty
         height={260}
       >
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 h-full">
@@ -1718,6 +1738,7 @@ function BudgetSection({
         title={`Budgeted vs Actual — ${monthStart.slice(0, 7)}`}
         caption="The classic side-by-side; biggest planned categories first."
         empty={barData.length === 0 ? "All clear — no budget set for this month." : null}
+        hideWhenEmpty
       >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={barData} margin={{ top: 10, right: 16, bottom: 60, left: 0 }}>
@@ -1736,6 +1757,7 @@ function BudgetSection({
         title="Variance — under vs over"
         caption="Bars that point right are over budget (bad). Left = under (good)."
         empty={variance.length === 0 ? "All clear — nothing to compare yet." : null}
+        hideWhenEmpty
         height={Math.max(260, 30 + variance.length * 22)}
       >
         <ResponsiveContainer width="100%" height="100%">
@@ -1758,6 +1780,7 @@ function BudgetSection({
         title="Total burn-down"
         caption="Cumulative planned vs actual through the month — see if the household is pacing over."
         empty={burndown.length === 0 ? "All clear — no budget set for this month." : null}
+        hideWhenEmpty
       >
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={burndown} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -1780,6 +1803,7 @@ function BudgetSection({
             ? "All clear — no budget set for this month."
             : null
         }
+        hideWhenEmpty
         height={320}
       >
         <ResponsiveContainer width="100%" height="100%">
@@ -1835,6 +1859,7 @@ function BudgetSection({
         title="6-month consistency"
         caption="Cells colored by % of budget used. Green = on plan. Red = blew it. Empty = no budget set that month."
         empty={consistency.length === 0 ? "All clear — set a budget across recent months to compare." : null}
+        hideWhenEmpty
         height={Math.max(220, 60 + consistency.length * 28)}
       >
         <div className="overflow-y-auto pr-1 h-full">
@@ -2052,6 +2077,7 @@ function BehaviorSection({
               ? "All clear — no spending in this window."
               : null
         }
+        hideWhenEmpty
         height={280}
       >
         {clock && (
@@ -2076,6 +2102,7 @@ function BehaviorSection({
           title="Spend by day of month"
           caption="Which days money tends to leave — payday, mid-month creep, end-of-month splurges."
           empty={dayOfMonth.every((d) => d.amount === 0) ? "All clear — no spending data yet." : null}
+          hideWhenEmpty
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={dayOfMonth} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -2096,6 +2123,7 @@ function BehaviorSection({
           title="Money personality radar"
           caption="The shape of where your dollars go (relative, not absolute)."
           empty={radar.every((r) => r.value === 0) ? "All clear — no spending data yet." : null}
+          hideWhenEmpty
         >
           <ResponsiveContainer width="100%" height="100%">
             <RadarChart data={radar}>
