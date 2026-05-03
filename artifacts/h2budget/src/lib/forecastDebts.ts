@@ -156,6 +156,49 @@ export function filterEventsByPayoff(
   return out;
 }
 
+export type PayoffTransition = {
+  debtId: string;
+  debtName: string;
+  freedAmount: number;
+  payoffYM: string;
+  payoffDate: Date;
+};
+
+/**
+ * For each payoff month, list the debts paid off and the recurring monthly
+ * cash that frees up afterward (sum of linked recurring item amounts).
+ */
+export function computePayoffTransitions(
+  links: Map<string, string>,
+  payoffs: Map<string, PayoffInfo>,
+  recurring: RecurringLite[],
+): Map<string, PayoffTransition[]> {
+  const sumByDebt = new Map<string, number>();
+  for (const r of recurring) {
+    if (!isActiveRecurring(r) || r.kind === "income") continue;
+    const debtId = links.get(r.id);
+    if (!debtId) continue;
+    const amt = Math.abs(Number(r.amount) || 0);
+    if (amt <= 0) continue;
+    sumByDebt.set(debtId, (sumByDebt.get(debtId) ?? 0) + amt);
+  }
+  const out = new Map<string, PayoffTransition[]>();
+  for (const [debtId, p] of payoffs.entries()) {
+    const freed = sumByDebt.get(debtId) ?? 0;
+    if (freed <= 0) continue;
+    const arr = out.get(p.payoffYM) ?? [];
+    arr.push({
+      debtId,
+      debtName: p.debtName,
+      freedAmount: freed,
+      payoffYM: p.payoffYM,
+      payoffDate: p.payoffDate,
+    });
+    out.set(p.payoffYM, arr);
+  }
+  return out;
+}
+
 /** Build a per-recurring-item lookup of payoff info, for badge rendering. */
 export function payoffByRecurringItem(
   links: Map<string, string>,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetForecast,
@@ -73,7 +73,9 @@ import {
   computePayoffsByDebt,
   filterEventsByPayoff,
   payoffByRecurringItem,
+  computePayoffTransitions,
   type PayoffInfo,
+  type PayoffTransition,
   type DebtLite,
   type RecurringLite,
 } from "@/lib/forecastDebts";
@@ -87,6 +89,7 @@ import {
   PartyPopper,
   Inbox as InboxIcon,
   Flame,
+  Sparkles,
 } from "lucide-react";
 import {
   Tooltip,
@@ -256,6 +259,48 @@ function InboxCardView({
   );
 }
 
+function nextMonthLabel(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  if (!y || !m) return "";
+  const d = new Date(y, m, 1);
+  return fmtMonth(d);
+}
+
+function CashFreedBanner({ transition }: { transition: PayoffTransition }) {
+  return (
+    <div
+      data-testid={`cash-freed-${transition.debtId}`}
+      className="p-4 flex items-center justify-between gap-3 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border-l-4 border-orange-400 dark:border-orange-700"
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <Badge
+          variant="outline"
+          className="bg-orange-100 text-orange-900 border-orange-300 dark:bg-orange-900/40 dark:text-orange-100 dark:border-orange-800 gap-1"
+        >
+          <Sparkles className="h-3 w-3" />
+          Cash Freed
+        </Badge>
+        <div className="min-w-0">
+          <div className="font-medium text-sm truncate text-orange-950 dark:text-orange-100">
+            {transition.debtName} is gone
+          </div>
+          <div className="text-xs text-orange-800/80 dark:text-orange-200/80">
+            starting {nextMonthLabel(transition.payoffYM)}
+          </div>
+        </div>
+      </div>
+      <div className="text-right">
+        <div className="font-semibold tabular-nums text-orange-900 dark:text-orange-100">
+          +{formatCurrency(transition.freedAmount)}/mo
+        </div>
+        <div className="text-[10px] uppercase tracking-wide text-orange-800/70 dark:text-orange-200/70">
+          freed up
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PlanDropRow({
   row,
   onSelect,
@@ -404,6 +449,15 @@ export default function ForecastPage() {
   const payoffsByItem = useMemo(
     () => payoffByRecurringItem(debtLinks, payoffsByDebt),
     [debtLinks, payoffsByDebt],
+  );
+  const payoffTransitionsByMonth = useMemo(
+    () =>
+      computePayoffTransitions(
+        debtLinks,
+        payoffsByDebt,
+        (recurringItems ?? []) as RecurringLite[],
+      ),
+    [debtLinks, payoffsByDebt, recurringItems],
   );
 
   const register = useMemo(() => {
@@ -819,15 +873,39 @@ export default function ForecastPage() {
                       Nothing planned in this window.
                     </div>
                   )}
-                  {planRows.map((row, i) => (
-                    <PlanDropRow
-                      key={`${row.itemId}-${row.date}-${i}`}
-                      row={row}
-                      onSelect={onSelectPlan}
-                      activeDragId={activeDragId}
-                      payoff={payoffsByItem.get(row.itemId)}
-                    />
-                  ))}
+                  {(() => {
+                    const out: ReactNode[] = [];
+                    const shownTransitions = new Set<string>();
+                    for (let i = 0; i < planRows.length; i++) {
+                      const row = planRows[i];
+                      out.push(
+                        <PlanDropRow
+                          key={`${row.itemId}-${row.date}-${i}`}
+                          row={row}
+                          onSelect={onSelectPlan}
+                          activeDragId={activeDragId}
+                          payoff={payoffsByItem.get(row.itemId)}
+                        />,
+                      );
+                      const currentYM = row.date.slice(0, 7);
+                      const nextYM = planRows[i + 1]?.date.slice(0, 7);
+                      if (nextYM !== currentYM) {
+                        const transitions =
+                          payoffTransitionsByMonth.get(currentYM) ?? [];
+                        for (const t of transitions) {
+                          if (shownTransitions.has(t.debtId)) continue;
+                          shownTransitions.add(t.debtId);
+                          out.push(
+                            <CashFreedBanner
+                              key={`freed-${t.debtId}`}
+                              transition={t}
+                            />,
+                          );
+                        }
+                      }
+                    }
+                    return out;
+                  })()}
                 </div>
               </CardContent>
             </Card>
