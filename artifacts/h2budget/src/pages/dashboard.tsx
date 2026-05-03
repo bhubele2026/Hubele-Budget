@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import {
   useGetDashboard,
   useGetBudgetMonth,
+  useGetForecast,
   useListTransactions,
   useListDashboardBudgets,
   useUpsertDashboardBudget,
@@ -13,6 +14,8 @@ import {
   getListTransactionsQueryKey,
   type Transaction,
 } from "@workspace/api-client-react";
+import { computeBalanceAtEndOf } from "@/lib/accountBalance";
+import { monthKeyFromISO, type MonthKey } from "@/components/account-page";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -865,10 +868,12 @@ function MonthlySnapshot({
   today,
   totalDebt,
   activeDebtCount,
+  chaseEndingBalance,
 }: {
   today: Date;
   totalDebt: string;
   activeDebtCount: number;
+  chaseEndingBalance: (monthStart: string) => number | null;
 }) {
   const currentMonthStart = useMemo(
     () => fmtMonthStart(new Date(today.getFullYear(), today.getMonth(), 1)),
@@ -993,7 +998,7 @@ function MonthlySnapshot({
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card data-testid="tile-total-owed">
           <CardContent className="p-5">
             <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
@@ -1006,6 +1011,44 @@ function MonthlySnapshot({
               {activeDebtCount} active{" "}
               {activeDebtCount === 1 ? "debt" : "debts"}
             </div>
+          </CardContent>
+        </Card>
+        <Card data-testid="tile-chase-ending-balance">
+          <CardContent className="p-5">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+              Chase ending balance
+            </div>
+            {(() => {
+              const bal = chaseEndingBalance(monthStart);
+              if (bal === null) {
+                return (
+                  <>
+                    <div className="text-3xl font-serif font-bold tabular-nums mt-1 text-muted-foreground">
+                      —
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Link Chase checking to see this
+                    </div>
+                  </>
+                );
+              }
+              return (
+                <>
+                  <div
+                    className={cn(
+                      "text-3xl font-serif font-bold tabular-nums mt-1",
+                      bal < 0 && "text-destructive",
+                    )}
+                    data-testid="text-chase-ending-balance"
+                  >
+                    {formatCurrency(bal)}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    end of {shortMonth}
+                  </div>
+                </>
+              );
+            })()}
           </CardContent>
         </Card>
         <Card data-testid="tile-net-month">
@@ -1193,7 +1236,60 @@ export default function DashboardPage() {
     return fmtISO(start);
   }, [today]);
   const { data, isLoading } = useGetDashboard();
+  const { data: forecastData } = useGetForecast();
   const { data: monthTxns } = useListTransactions({ from: monthlyFromISO, limit: 5000 });
+  // Pull all Chase activity so end-of-month balances roll correctly between
+  // the bank snapshot's anchor month and any past month displayed in the
+  // dashboard's monthly snapshot.
+  const { data: allTxns } = useListTransactions({ limit: 5000 });
+
+  const bankSnapshot = forecastData?.bankSnapshot ?? null;
+  const chasePlaidAccountId = useMemo(() => {
+    if (!bankSnapshot?.accountId) return null;
+    const acct = (forecastData?.plaidCheckingAccounts ?? []).find(
+      (a) => a.id === bankSnapshot.accountId,
+    );
+    return acct?.accountId ?? null;
+  }, [bankSnapshot?.accountId, forecastData?.plaidCheckingAccounts]);
+
+  const chaseTransactions = useMemo(() => {
+    const all = allTxns ?? [];
+    if (chasePlaidAccountId) {
+      return all.filter((t) => t.plaidAccountId === chasePlaidAccountId);
+    }
+    return all.filter((t) => !t.plaidAccountId);
+  }, [allTxns, chasePlaidAccountId]);
+
+  const chaseNetChangeByMonth = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of chaseTransactions) {
+      const mk = monthKeyFromISO(t.occurredOn);
+      const k = `${mk.year}-${mk.month}`;
+      m.set(k, (m.get(k) ?? 0) + (Number(t.amount) || 0));
+    }
+    return m;
+  }, [chaseTransactions]);
+
+  const chaseAnchorBalance = bankSnapshot
+    ? Number(bankSnapshot.balance) || 0
+    : null;
+  const chaseAnchorMonth = useMemo<MonthKey | null>(() => {
+    if (!bankSnapshot?.at) return null;
+    return monthKeyFromISO(bankSnapshot.at);
+  }, [bankSnapshot?.at]);
+
+  const chaseEndingBalance = useMemo(() => {
+    return (monthStart: string): number | null => {
+      if (chaseAnchorBalance === null || chaseAnchorMonth === null) return null;
+      const target = monthKeyFromISO(monthStart);
+      return computeBalanceAtEndOf({
+        anchorBalance: chaseAnchorBalance,
+        anchorMonth: chaseAnchorMonth,
+        netChangeByMonth: chaseNetChangeByMonth,
+        target,
+      });
+    };
+  }, [chaseAnchorBalance, chaseAnchorMonth, chaseNetChangeByMonth]);
   // All-time reimbursables — no date window, server filters by reimbursable=true.
   const { data: reimbTxns, isLoading: reimbLoading } = useListTransactions({
     reimbursable: true,
@@ -1221,6 +1317,7 @@ export default function DashboardPage() {
           today={today}
           totalDebt={data.totalDebt}
           activeDebtCount={data.activeDebtCount}
+          chaseEndingBalance={chaseEndingBalance}
         />
       </div>
 
