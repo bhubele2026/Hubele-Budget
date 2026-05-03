@@ -37,7 +37,9 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   ArrowRight,
+  Pause,
   Pencil,
+  Play,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -177,6 +179,7 @@ export default function BillsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<RecurringItem | null>(null);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
@@ -237,6 +240,32 @@ export default function BillsPage() {
     }
   };
 
+  const onToggleActive = (item: RecurringItem) => {
+    const nextActive = !isActive(item);
+    setTogglingId(item.id);
+    const payload: RecurringItemInput = {
+      name: item.name,
+      kind: item.kind,
+      amount: item.amount,
+      frequency: item.frequency,
+      active: nextActive ? "true" : "false",
+      dayOfMonth: item.dayOfMonth ?? null,
+      anchorDate: item.anchorDate ?? null,
+    };
+    updateItem.mutate(
+      { id: item.id, data: payload },
+      {
+        onSuccess: () => {
+          invalidateAll();
+          toast({ title: nextActive ? "Resumed" : "Paused" });
+        },
+        onSettled: () => {
+          setTogglingId((cur) => (cur === item.id ? null : cur));
+        },
+      },
+    );
+  };
+
   const onDelete = () => {
     if (!editing) return;
     if (!confirm(`Delete "${editing.name}"?`)) return;
@@ -294,6 +323,8 @@ export default function BillsPage() {
             tone="income"
             rows={incomeRows}
             onEdit={openEdit}
+            onToggleActive={onToggleActive}
+            togglingId={updateItem.isPending ? togglingId : null}
           />
           <BillGroupCard
             title="Bills & Expenses"
@@ -301,6 +332,8 @@ export default function BillsPage() {
             tone="bill"
             rows={billRows}
             onEdit={openEdit}
+            onToggleActive={onToggleActive}
+            togglingId={updateItem.isPending ? togglingId : null}
           />
         </div>
 
@@ -535,12 +568,16 @@ function BillGroupCard({
   tone,
   rows,
   onEdit,
+  onToggleActive,
+  togglingId,
 }: {
   title: string;
   total: number;
   tone: "income" | "bill";
   rows: BillsSummaryRow[];
   onEdit: (item: RecurringItem) => void;
+  onToggleActive: (item: RecurringItem) => void;
+  togglingId: string | null;
 }) {
   const Icon = tone === "income" ? ArrowUpCircle : ArrowDownCircle;
   const tint = tone === "income" ? "text-emerald-700" : "text-destructive";
@@ -616,6 +653,24 @@ function BillGroupCard({
                     {sign}
                     {formatCurrency(amt)}
                   </div>
+                  <button
+                    type="button"
+                    className="p-1.5 rounded hover:bg-background disabled:opacity-50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleActive(item);
+                    }}
+                    disabled={togglingId === item.id}
+                    aria-label={active ? `Pause ${item.name}` : `Resume ${item.name}`}
+                    title={active ? "Pause" : "Resume"}
+                    data-testid={`button-toggle-active-${item.id}`}
+                  >
+                    {active ? (
+                      <Pause className="w-4 h-4 text-muted-foreground" />
+                    ) : (
+                      <Play className="w-4 h-4 text-muted-foreground" />
+                    )}
+                  </button>
                   <button
                     type="button"
                     className="p-1.5 rounded hover:bg-background"
