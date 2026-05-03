@@ -34,6 +34,7 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { Search, Check, ChevronsUpDown, CreditCard } from "lucide-react";
+import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, cn } from "@/lib/utils";
 
@@ -59,6 +60,21 @@ function ymd(d: Date) {
 
 function parseAbs(amount: string) {
   return Math.abs(parseFloat(amount) || 0);
+}
+
+function defaultWeeklyBucketFor(categoryName: string): typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket] {
+  const n = categoryName.toLowerCase();
+  if (n.includes("grocer")) return TransactionWeeklyBucket.groceries;
+  if (n.includes("dining") || n.includes("restaurant") || n.includes("food")) return TransactionWeeklyBucket.dining;
+  if (n.includes("entertain")) return TransactionWeeklyBucket.entertainment;
+  return TransactionWeeklyBucket.misc;
+}
+
+function currentBucket(t: Pick<Transaction, "weeklyAllowance" | "monthlyAllowance" | "unplannedAllowance">): "" | "weekly" | "monthly" | "unplanned" {
+  if (t.weeklyAllowance) return "weekly";
+  if (t.monthlyAllowance) return "monthly";
+  if (t.unplannedAllowance) return "unplanned";
+  return "";
 }
 
 function formatDayHeader(iso: string) {
@@ -213,6 +229,38 @@ export default function AmexPage() {
     }
   };
 
+  const setRowBucket = async (
+    t: Transaction,
+    bucket: "" | "weekly" | "monthly" | "unplanned",
+    weeklyBucket?: typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket] | null,
+  ) => {
+    let wb: typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket] | null | undefined = null;
+    if (bucket === "weekly") {
+      wb =
+        weeklyBucket ??
+        t.weeklyBucket ??
+        defaultWeeklyBucketFor(categoryById.get(t.categoryId ?? "") ?? "");
+    }
+    try {
+      await updateTx.mutateAsync({
+        id: t.id,
+        data: {
+          weeklyAllowance: bucket === "weekly",
+          monthlyAllowance: bucket === "monthly",
+          unplannedAllowance: bucket === "unplanned",
+          weeklyBucket: wb,
+        },
+      });
+      invalidateTxns();
+    } catch (e) {
+      toast({
+        title: "Couldn't update bucket",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const setRowSource = async (id: string, source: string) => {
     try {
       await updateTx.mutateAsync({ id, data: { source } });
@@ -221,6 +269,65 @@ export default function AmexPage() {
       toast({
         title: "Couldn't update source",
         description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const bulkSetBucket = async (
+    bucket: "" | "weekly" | "monthly" | "unplanned",
+    weeklyBucket?: typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket],
+  ) => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const byId = new Map(filtered.map((t) => [t.id, t] as const));
+    const CONCURRENCY = 6;
+    const results: { id: string; ok: boolean; err?: string }[] = [];
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < ids.length) {
+        const i = cursor++;
+        const id = ids[i];
+        const t = byId.get(id);
+        if (!t) {
+          results.push({ id, ok: false, err: "missing" });
+          continue;
+        }
+        let wb: typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket] | null = null;
+        if (bucket === "weekly") {
+          wb =
+            weeklyBucket ??
+            t.weeklyBucket ??
+            defaultWeeklyBucketFor(categoryById.get(t.categoryId ?? "") ?? "");
+        }
+        try {
+          await updateTx.mutateAsync({
+            id,
+            data: {
+              weeklyAllowance: bucket === "weekly",
+              monthlyAllowance: bucket === "monthly",
+              unplannedAllowance: bucket === "unplanned",
+              weeklyBucket: wb,
+            },
+          });
+          results.push({ id, ok: true });
+        } catch (e) {
+          results.push({ id, ok: false, err: (e as Error).message });
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
+    );
+    invalidateTxns();
+    const okCount = results.filter((r) => r.ok).length;
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length === 0) {
+      toast({ title: `Tagged ${okCount} transaction${okCount === 1 ? "" : "s"}` });
+    } else {
+      toast({
+        title: `Tagged ${okCount}, ${failed.length} failed`,
+        description: failed[0].err,
         variant: "destructive",
       });
     }
@@ -388,6 +495,21 @@ export default function AmexPage() {
             categories={categories ?? []}
             onPick={bulkSetCategory}
           />
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-blue-900 mr-1">Bucket:</span>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("")}>
+              —
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("weekly")}>
+              Weekly
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("monthly")}>
+              Monthly
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("unplanned")}>
+              Unplanned
+            </Button>
+          </div>
           <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
             Clear
           </Button>
@@ -481,6 +603,38 @@ export default function AmexPage() {
                               <SelectItem value="import">import</SelectItem>
                             </SelectContent>
                           </Select>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1">
+                            <Select
+                              value={currentBucket(t) || "none"}
+                              onValueChange={(v) => setRowBucket(t, v === "none" ? "" : (v as "weekly" | "monthly" | "unplanned"))}
+                            >
+                              <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">—</SelectItem>
+                                <SelectItem value="weekly">Weekly</SelectItem>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                                <SelectItem value="unplanned">Unplanned</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {t.weeklyAllowance && (
+                              <Select
+                                value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}
+                                onValueChange={(v) =>
+                                  setRowBucket(t, "weekly", v as typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket])
+                                }
+                              >
+                                <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value={TransactionWeeklyBucket.groceries}>Groceries</SelectItem>
+                                  <SelectItem value={TransactionWeeklyBucket.dining}>Dining</SelectItem>
+                                  <SelectItem value={TransactionWeeklyBucket.entertainment}>Entertainment</SelectItem>
+                                  <SelectItem value={TransactionWeeklyBucket.misc}>Misc</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2 text-right font-mono tabular-nums whitespace-nowrap">
                           {formatCurrency(parseAbs(t.amount))}

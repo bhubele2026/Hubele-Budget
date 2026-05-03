@@ -34,6 +34,15 @@ export const GetDashboardResponse = zod.object({
       categoryId: zod.string().nullish(),
       forecastFlag: zod.boolean(),
       weeklyAllowance: zod.boolean(),
+      weeklyBucket: zod
+        .union([
+          zod.literal("groceries"),
+          zod.literal("dining"),
+          zod.literal("entertainment"),
+          zod.literal("misc"),
+          zod.literal(null),
+        ])
+        .nullish(),
       monthlyAllowance: zod.boolean(),
       unplannedAllowance: zod.boolean(),
       reimbursable: zod.boolean(),
@@ -80,6 +89,15 @@ export const ListTransactionsResponseItem = zod.object({
   categoryId: zod.string().nullish(),
   forecastFlag: zod.boolean(),
   weeklyAllowance: zod.boolean(),
+  weeklyBucket: zod
+    .union([
+      zod.literal("groceries"),
+      zod.literal("dining"),
+      zod.literal("entertainment"),
+      zod.literal("misc"),
+      zod.literal(null),
+    ])
+    .nullish(),
   monthlyAllowance: zod.boolean(),
   unplannedAllowance: zod.boolean(),
   reimbursable: zod.boolean(),
@@ -98,6 +116,15 @@ export const CreateTransactionBody = zod.object({
   categoryId: zod.string().nullish(),
   forecastFlag: zod.boolean().optional(),
   weeklyAllowance: zod.boolean().optional(),
+  weeklyBucket: zod
+    .union([
+      zod.literal("groceries"),
+      zod.literal("dining"),
+      zod.literal("entertainment"),
+      zod.literal("misc"),
+      zod.literal(null),
+    ])
+    .nullish(),
   monthlyAllowance: zod.boolean().optional(),
   unplannedAllowance: zod.boolean().optional(),
   reimbursable: zod.boolean().optional(),
@@ -119,6 +146,15 @@ export const UpdateTransactionBody = zod.object({
   categoryId: zod.string().nullish(),
   forecastFlag: zod.boolean().optional(),
   weeklyAllowance: zod.boolean().optional(),
+  weeklyBucket: zod
+    .union([
+      zod.literal("groceries"),
+      zod.literal("dining"),
+      zod.literal("entertainment"),
+      zod.literal("misc"),
+      zod.literal(null),
+    ])
+    .nullish(),
   monthlyAllowance: zod.boolean().optional(),
   unplannedAllowance: zod.boolean().optional(),
   reimbursable: zod.boolean().optional(),
@@ -137,6 +173,15 @@ export const UpdateTransactionResponse = zod.object({
   categoryId: zod.string().nullish(),
   forecastFlag: zod.boolean(),
   weeklyAllowance: zod.boolean(),
+  weeklyBucket: zod
+    .union([
+      zod.literal("groceries"),
+      zod.literal("dining"),
+      zod.literal("entertainment"),
+      zod.literal("misc"),
+      zod.literal(null),
+    ])
+    .nullish(),
   monthlyAllowance: zod.boolean(),
   unplannedAllowance: zod.boolean(),
   reimbursable: zod.boolean(),
@@ -459,6 +504,15 @@ export const GetForecastResponse = zod.object({
       categoryId: zod.string().nullish(),
       forecastFlag: zod.boolean(),
       weeklyAllowance: zod.boolean(),
+      weeklyBucket: zod
+        .union([
+          zod.literal("groceries"),
+          zod.literal("dining"),
+          zod.literal("entertainment"),
+          zod.literal("misc"),
+          zod.literal(null),
+        ])
+        .nullish(),
       monthlyAllowance: zod.boolean(),
       unplannedAllowance: zod.boolean(),
       reimbursable: zod.boolean(),

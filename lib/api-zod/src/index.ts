@@ -22,4 +22,5 @@ export type {
   SettingsInput,
   Transaction,
   TransactionInput,
+  TransactionWeeklyBucket,
 } from "./generated/types";

@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { TransactionWeeklyBucket } from "./transactionWeeklyBucket";
 
 export interface Transaction {
   id: string;
@@ -17,6 +18,8 @@ export interface Transaction {
   categoryId?: string | null;
   forecastFlag: boolean;
   weeklyAllowance: boolean;
+  /** @nullable */
+  weeklyBucket?: TransactionWeeklyBucket;
   monthlyAllowance: boolean;
   unplannedAllowance: boolean;
   reimbursable: boolean;

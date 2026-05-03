@@ -133,6 +133,7 @@ export const transactionsTable = pgTable(
     categoryId: uuid("category_id"),
     forecastFlag: boolean("forecast_flag").notNull().default(false),
     weeklyAllowance: boolean("weekly_allowance").notNull().default(false),
+    weeklyBucket: text("weekly_bucket"),
     monthlyAllowance: boolean("monthly_allowance").notNull().default(false),
     unplannedAllowance: boolean("unplanned_allowance").notNull().default(false),
     reimbursable: boolean("reimbursable").notNull().default(false),

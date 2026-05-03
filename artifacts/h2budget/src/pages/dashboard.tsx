@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import {
   useGetDashboard,
   useListTransactions,
   useListDashboardBudgets,
   useUpsertDashboardBudget,
   getListDashboardBudgetsQueryKey,
+  type Transaction,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -14,59 +16,60 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Edit2, Wallet, TrendingUp, TrendingDown, Receipt } from "lucide-react";
+import { ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardKillOrder } from "@/components/dashboard-kill-order";
 
+const SUB_BUCKETS = ["groceries", "dining", "entertainment", "misc"] as const;
+type SubBucket = (typeof SUB_BUCKETS)[number];
+const SUB_LABEL: Record<SubBucket, string> = {
+  groceries: "Groceries",
+  dining: "Dining",
+  entertainment: "Entertainment",
+  misc: "Misc",
+};
+
 function startOfWeek(d: Date): Date {
-  const day = d.getDay();
-  const sunday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - day);
-  return sunday;
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - x.getDay());
+  return x;
+}
+
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
 }
 
 function fmtISO(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function AllowanceCard(props: {
-  title: string;
-  bucket: "weekly" | "monthly" | "unplanned";
-  periodKey: string;
-  spent: number;
-  icon: React.ReactNode;
-}) {
+function expenseAmount(t: Transaction): number {
+  const a = Number(t.amount) || 0;
+  return a < 0 ? -a : 0;
+}
+
+function useBudgetEditor(bucket: "weekly" | "monthly" | "unplanned", periodKey: string) {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { data: budgets } = useListDashboardBudgets({
-    bucket: props.bucket,
-    periodKey: props.periodKey,
-  });
+  const { data: budgets } = useListDashboardBudgets({ bucket, periodKey });
   const upsert = useUpsertDashboardBudget();
-
   const saved = Number(budgets?.[0]?.amount ?? 0);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
-  const remaining = Math.max(0, saved - props.spent);
-  const pct = saved > 0 ? Math.min(100, (props.spent / saved) * 100) : 0;
-  const overspent = saved > 0 && props.spent > saved;
-
-  const handleSave = () => {
+  const beginEdit = () => {
+    setDraft(saved ? String(saved) : "");
+    setEditing(true);
+  };
+  const save = () => {
     upsert.mutate(
-      {
-        data: {
-          bucket: props.bucket,
-          periodKey: props.periodKey,
-          amount: draft || "0",
-        },
-      },
+      { data: { bucket, periodKey, amount: draft || "0" } },
       {
         onSuccess: () => {
           qc.invalidateQueries({
-            queryKey: getListDashboardBudgetsQueryKey({
-              bucket: props.bucket,
-              periodKey: props.periodKey,
-            }),
+            queryKey: getListDashboardBudgetsQueryKey({ bucket, periodKey }),
           });
           setEditing(false);
           toast({ title: "Budget updated" });
@@ -74,64 +77,244 @@ function AllowanceCard(props: {
       },
     );
   };
+  return { saved, editing, draft, setDraft, beginEdit, save, setEditing, isPending: upsert.isPending };
+}
+
+function CapInline({
+  saved,
+  editing,
+  draft,
+  setDraft,
+  beginEdit,
+  save,
+  setEditing,
+  isPending,
+}: ReturnType<typeof useBudgetEditor>) {
+  if (editing) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <Input
+          type="number"
+          step="0.01"
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="h-8 w-28 inline-block"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            if (e.key === "Escape") setEditing(false);
+          }}
+        />
+        <Button size="sm" onClick={save} disabled={isPending}>
+          Save
+        </Button>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="text-3xl md:text-4xl font-serif font-light text-muted-foreground hover:text-foreground transition-colors"
+      onClick={beginEdit}
+      title="Click to edit cap"
+    >
+      / {formatCurrency(saved)}
+    </button>
+  );
+}
+
+function LifeThisWeek({
+  transactions,
+  today,
+}: {
+  transactions: Transaction[];
+  today: Date;
+}) {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const weekStart = useMemo(
+    () => addDays(startOfWeek(today), weekOffset * 7),
+    [today, weekOffset],
+  );
+  const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
+  const periodKey = fmtISO(weekStart);
+
+  const editor = useBudgetEditor("weekly", periodKey);
+
+  const { totals, total } = useMemo(() => {
+    const t: Record<SubBucket, number> = { groceries: 0, dining: 0, entertainment: 0, misc: 0 };
+    let sum = 0;
+    const startIso = fmtISO(weekStart);
+    const endIso = fmtISO(weekEnd);
+    for (const tx of transactions) {
+      if (!tx.weeklyAllowance) continue;
+      if (tx.occurredOn < startIso || tx.occurredOn > endIso) continue;
+      const amt = expenseAmount(tx);
+      const bucket = (tx.weeklyBucket as SubBucket | null | undefined) ?? "misc";
+      if (SUB_BUCKETS.includes(bucket)) t[bucket] += amt;
+      else t.misc += amt;
+      sum += amt;
+    }
+    return { totals: t, total: sum };
+  }, [transactions, weekStart, weekEnd]);
+
+  const cap = editor.saved;
+  const remaining = Math.max(0, cap - total);
+  const pct = cap > 0 ? Math.min(100, (total / cap) * 100) : 0;
+  const overspent = cap > 0 && total > cap;
+
+  const isCurrentWeek = weekOffset === 0;
+  const dayOfWeek = isCurrentWeek
+    ? Math.min(7, Math.max(1, today.getDay() + 1))
+    : 7;
+
+  const rangeLabel = `${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   return (
-    <Card>
-      <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-        <div className="flex items-center gap-2">
-          {props.icon}
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            {props.title}
-          </CardTitle>
-        </div>
-        {!editing && (
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={() => {
-              setDraft(String(saved));
-              setEditing(true);
-            }}
-          >
-            <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {editing ? (
-          <div className="flex gap-2 items-center">
-            <Input
-              type="number"
-              step="0.01"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              className="h-8"
-              autoFocus
-            />
-            <Button size="sm" onClick={handleSave} disabled={upsert.isPending}>
-              Save
-            </Button>
+    <section>
+      <div className="flex items-end justify-between mb-2">
+        <div>
+          <div className="text-[11px] uppercase tracking-widest text-amber-700 font-medium">
+            WEEKLY {formatCurrency(cap)}
           </div>
-        ) : (
-          <>
-            <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-bold tabular-nums">
-                {formatCurrency(remaining)}
+          <h2 className="text-2xl font-serif font-bold text-foreground">Life this week</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setWeekOffset((w) => w - 1)}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-xs uppercase tracking-widest text-muted-foreground min-w-[110px] text-center">
+            {rangeLabel}
+          </span>
+          <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setWeekOffset((w) => w + 1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div className="flex items-baseline gap-2">
+              <span className={`text-4xl md:text-5xl font-serif font-bold tabular-nums ${overspent ? "text-destructive" : "text-foreground"}`}>
+                {formatCurrency(total)}
               </span>
-              <span className="text-xs text-muted-foreground">
-                of {formatCurrency(saved)}
+              <CapInline {...editor} />
+            </div>
+            <div className="text-xs text-muted-foreground tabular-nums">
+              {formatCurrency(remaining)} left · day {dayOfWeek} of 7
+            </div>
+          </div>
+          <Progress value={pct} className={overspent ? "[&>div]:bg-destructive" : ""} />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t">
+            {SUB_BUCKETS.map((b) => (
+              <div key={b}>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  {SUB_LABEL[b]}
+                </div>
+                <div className="text-lg font-serif font-semibold tabular-nums">
+                  {formatCurrency(totals[b])}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="text-xs text-muted-foreground border-t pt-3">
+            Tag any other Amex charge as "weekly" on the{" "}
+            <Link href="/amex" className="text-amber-700 underline">Amex page</Link> to add it to Misc.
+          </div>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+function MonthlyLikeSection({
+  title,
+  bucket,
+  transactions,
+  today,
+  monthKey,
+}: {
+  title: string;
+  bucket: "monthly" | "unplanned";
+  transactions: Transaction[];
+  today: Date;
+  monthKey: string;
+}) {
+  const editor = useBudgetEditor(bucket, monthKey);
+
+  const { total, recent } = useMemo(() => {
+    const filtered = transactions.filter((t) =>
+      bucket === "monthly" ? t.monthlyAllowance : t.unplannedAllowance,
+    );
+    const sum = filtered.reduce((s, t) => s + expenseAmount(t), 0);
+    const sorted = [...filtered].sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1)).slice(0, 8);
+    return { total: sum, recent: sorted };
+  }, [transactions, bucket]);
+
+  const cap = editor.saved;
+  const overspent = cap > 0 && total > cap;
+  const pct = cap > 0 ? Math.min(100, (total / cap) * 100) : 0;
+  const monthLabel = today.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+
+  return (
+    <section>
+      <div className="flex items-end justify-between mb-2">
+        <div>
+          <div className="text-[11px] uppercase tracking-widest text-amber-700 font-medium">
+            {bucket === "monthly" ? "MONTHLY BUDGET" : "UNPLANNED BUDGET"}
+          </div>
+          <h2 className="text-2xl font-serif font-bold text-foreground">{title}</h2>
+        </div>
+        <div className="text-xs uppercase tracking-widest text-muted-foreground">{monthLabel}</div>
+      </div>
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div className="flex items-baseline gap-2">
+              <span className={`text-4xl md:text-5xl font-serif font-bold tabular-nums ${overspent ? "text-destructive" : "text-foreground"}`}>
+                {formatCurrency(total)}
               </span>
+              <CapInline {...editor} />
             </div>
-            <Progress value={pct} className={overspent ? "[&>div]:bg-destructive" : ""} />
-            <div className="text-xs text-muted-foreground">
-              {formatCurrency(props.spent)} spent
-              {overspent && <span className="text-destructive ml-1">· over budget</span>}
+            <div className="text-xs text-muted-foreground tabular-nums">
+              {cap > 0 ? null : <span>Click budget to set amount · </span>}
+              day {today.getDate()} of {daysInMonth}
             </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+          </div>
+          {cap > 0 && <Progress value={pct} className={overspent ? "[&>div]:bg-destructive" : ""} />}
+          <div className="border-t pt-3">
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+              Recent ({recent.length})
+            </div>
+            {recent.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-2">
+                Nothing tagged yet. Tag charges as "{bucket}" on the{" "}
+                <Link href="/amex" className="text-amber-700 underline">Amex page</Link>.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {recent.map((t) => {
+                  const amt = Number(t.amount) || 0;
+                  return (
+                    <div key={t.id} className="flex items-center justify-between gap-3 text-sm">
+                      <div className="flex items-baseline gap-3 min-w-0">
+                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground w-12 shrink-0">
+                          {new Date(t.occurredOn + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </span>
+                        <span className="truncate">{t.description}</span>
+                      </div>
+                      <span className={`tabular-nums font-mono ${amt < 0 ? "text-destructive" : "text-foreground"}`}>
+                        {amt < 0 ? "-" : ""}{formatCurrency(Math.abs(amt))}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </section>
   );
 }
 
@@ -141,47 +324,29 @@ export default function DashboardPage() {
     () => fmtISO(new Date(today.getFullYear(), today.getMonth(), 1)),
     [today],
   );
-  const weekStartISO = useMemo(() => fmtISO(startOfWeek(today)), [today]);
   const monthKey = useMemo(
     () => `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`,
     [today],
   );
+  // Pull a wider window so prev/next week navigation has data.
+  const fromISO = useMemo(() => {
+    const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    return fmtISO(start);
+  }, [today]);
 
   const { data, isLoading } = useGetDashboard();
-  const { data: monthTxns } = useListTransactions({
-    from: monthStartISO,
-    limit: 1000,
-  });
+  const { data: txns } = useListTransactions({ from: fromISO, limit: 1000 });
+  const { data: monthTxns } = useListTransactions({ from: monthStartISO, limit: 1000 });
 
-  const { weeklySpent, monthlySpent, unplannedSpent, reimbursables } = useMemo(() => {
-    const txns = monthTxns ?? [];
-    const weekStartDate = startOfWeek(today);
-    let w = 0,
-      m = 0,
-      u = 0;
-    const reim: typeof txns = [];
-    for (const t of txns) {
-      const amt = Number(t.amount) || 0;
-      const expense = amt < 0 ? -amt : 0;
-      if (t.weeklyAllowance && new Date(t.occurredOn) >= weekStartDate) w += expense;
-      if (t.monthlyAllowance) m += expense;
-      if (t.unplannedAllowance) u += expense;
-      if (t.reimbursable && !t.reimbursed) reim.push(t);
-    }
-    return {
-      weeklySpent: w,
-      monthlySpent: m,
-      unplannedSpent: u,
-      reimbursables: reim,
-    };
-  }, [monthTxns, today]);
+  const allTxns = txns ?? [];
+  const monthlyTagged = useMemo(() => monthTxns ?? [], [monthTxns]);
 
+  const reimbursables = useMemo(
+    () => monthlyTagged.filter((t) => t.reimbursable && !t.reimbursed),
+    [monthlyTagged],
+  );
   const reimbursableTotal = useMemo(
-    () =>
-      reimbursables.reduce((s, t) => {
-        const amt = Number(t.amount) || 0;
-        return s + (amt < 0 ? -amt : 0);
-      }, 0),
+    () => reimbursables.reduce((s, t) => s + expenseAmount(t), 0),
     [reimbursables],
   );
 
@@ -189,14 +354,8 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-serif font-bold text-foreground">Dashboard</h1>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2"><Skeleton className="h-4 w-24" /></CardHeader>
-              <CardContent><Skeleton className="h-8 w-32" /></CardContent>
-            </Card>
-          ))}
-        </div>
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-40 w-full" />
       </div>
     );
   }
@@ -211,6 +370,22 @@ export default function DashboardPage() {
           Your family's financial snapshot.
         </p>
       </div>
+
+      <LifeThisWeek transactions={allTxns} today={today} />
+      <MonthlyLikeSection
+        title="Monthly spending"
+        bucket="monthly"
+        transactions={monthlyTagged}
+        today={today}
+        monthKey={monthKey}
+      />
+      <MonthlyLikeSection
+        title="Unplanned spending"
+        bucket="unplanned"
+        transactions={monthlyTagged}
+        today={today}
+        monthKey={monthKey}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -258,33 +433,6 @@ export default function DashboardPage() {
       </div>
 
       <DashboardKillOrder />
-
-      <div>
-        <h2 className="text-lg font-serif font-semibold mb-3 text-foreground">Allowance Buckets</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <AllowanceCard
-            title="Weekly"
-            bucket="weekly"
-            periodKey={weekStartISO}
-            spent={weeklySpent}
-            icon={<Wallet className="w-4 h-4 text-muted-foreground" />}
-          />
-          <AllowanceCard
-            title="Monthly"
-            bucket="monthly"
-            periodKey={monthKey}
-            spent={monthlySpent}
-            icon={<TrendingUp className="w-4 h-4 text-muted-foreground" />}
-          />
-          <AllowanceCard
-            title="Unplanned"
-            bucket="unplanned"
-            periodKey={monthKey}
-            spent={unplannedSpent}
-            icon={<TrendingDown className="w-4 h-4 text-muted-foreground" />}
-          />
-        </div>
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">

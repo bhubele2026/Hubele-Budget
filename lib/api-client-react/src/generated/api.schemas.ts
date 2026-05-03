@@ -9,6 +9,20 @@ export interface HealthStatus {
   status: string;
 }
 
+/**
+ * @nullable
+ */
+export type TransactionWeeklyBucket =
+  | (typeof TransactionWeeklyBucket)[keyof typeof TransactionWeeklyBucket]
+  | null;
+
+export const TransactionWeeklyBucket = {
+  groceries: "groceries",
+  dining: "dining",
+  entertainment: "entertainment",
+  misc: "misc",
+} as const;
+
 export interface Transaction {
   id: string;
   occurredOn: string;
@@ -20,6 +34,8 @@ export interface Transaction {
   categoryId?: string | null;
   forecastFlag: boolean;
   weeklyAllowance: boolean;
+  /** @nullable */
+  weeklyBucket?: TransactionWeeklyBucket;
   monthlyAllowance: boolean;
   unplannedAllowance: boolean;
   reimbursable: boolean;
@@ -30,6 +46,20 @@ export interface Transaction {
   /** @nullable */
   member?: string | null;
 }
+
+/**
+ * @nullable
+ */
+export type CreateTransactionInputWeeklyBucket =
+  | (typeof CreateTransactionInputWeeklyBucket)[keyof typeof CreateTransactionInputWeeklyBucket]
+  | null;
+
+export const CreateTransactionInputWeeklyBucket = {
+  groceries: "groceries",
+  dining: "dining",
+  entertainment: "entertainment",
+  misc: "misc",
+} as const;
 
 export interface CreateTransactionInput {
   occurredOn: string;
@@ -42,6 +72,8 @@ export interface CreateTransactionInput {
   categoryId?: string | null;
   forecastFlag?: boolean;
   weeklyAllowance?: boolean;
+  /** @nullable */
+  weeklyBucket?: CreateTransactionInputWeeklyBucket;
   monthlyAllowance?: boolean;
   unplannedAllowance?: boolean;
   reimbursable?: boolean;
@@ -52,6 +84,20 @@ export interface CreateTransactionInput {
   /** @nullable */
   member?: string | null;
 }
+
+/**
+ * @nullable
+ */
+export type TransactionInputWeeklyBucket =
+  | (typeof TransactionInputWeeklyBucket)[keyof typeof TransactionInputWeeklyBucket]
+  | null;
+
+export const TransactionInputWeeklyBucket = {
+  groceries: "groceries",
+  dining: "dining",
+  entertainment: "entertainment",
+  misc: "misc",
+} as const;
 
 export interface TransactionInput {
   occurredOn?: string;
@@ -64,6 +110,8 @@ export interface TransactionInput {
   categoryId?: string | null;
   forecastFlag?: boolean;
   weeklyAllowance?: boolean;
+  /** @nullable */
+  weeklyBucket?: TransactionInputWeeklyBucket;
   monthlyAllowance?: boolean;
   unplannedAllowance?: boolean;
   reimbursable?: boolean;
