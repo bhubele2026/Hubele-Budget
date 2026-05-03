@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -28,9 +29,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Wand2, Check } from "lucide-react";
+import { Wand2, Check, CreditCard, Landmark } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
+import { CategoryPicker } from "@/components/category-picker";
 
 type RuleSeed = {
   txnId: string;
@@ -39,7 +41,11 @@ type RuleSeed = {
 };
 
 export default function ReviewPage() {
-  const { data: txns, isLoading } = useListTransactions({ uncategorized: true, limit: 500 });
+  const { data: txns, isLoading } = useListTransactions({
+    uncategorized: true,
+    excludeTransfers: true,
+    limit: 5000,
+  });
   const { data: categories, isLoading: catsLoading } = useListCategories();
   const updateTxn = useUpdateTransaction();
   const createRule = useCreateMappingRule();
@@ -54,12 +60,13 @@ export default function ReviewPage() {
   const [ruleMatchType, setRuleMatchType] = useState("contains");
   const [ruleApplyExisting, setRuleApplyExisting] = useState(true);
 
+  const queue = txns ?? [];
+
   const filtered = useMemo(() => {
-    const list = txns ?? [];
-    if (!search.trim()) return list;
+    if (!search.trim()) return queue;
     const q = search.toLowerCase();
-    return list.filter((t) => (t.description || "").toLowerCase().includes(q));
-  }, [txns, search]);
+    return queue.filter((t) => (t.description || "").toLowerCase().includes(q));
+  }, [queue, search]);
 
   const allSelected = filtered.length > 0 && filtered.every((t) => selected.has(t.id));
 
@@ -84,20 +91,39 @@ export default function ReviewPage() {
     qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
   };
 
-  const assignOne = (txnId: string, categoryId: string) => {
-    updateTxn.mutate(
-      { id: txnId, data: { categoryId } },
-      {
-        onSuccess: () => {
-          invalidate();
-          setSelected((prev) => {
-            const next = new Set(prev);
-            next.delete(txnId);
-            return next;
-          });
+  const assignOne = async (
+    txnId: string,
+    categoryId: string | null,
+    rememberPattern?: string | null,
+  ) => {
+    if (!categoryId) return;
+    try {
+      await updateTxn.mutateAsync({
+        id: txnId,
+        data: {
+          categoryId,
+          ...(rememberPattern ? { rememberPattern } : {}),
         },
-      },
-    );
+      });
+      invalidate();
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(txnId);
+        return next;
+      });
+      toast({
+        title: rememberPattern ? "Categorized & remembered" : "Categorized",
+        description: rememberPattern
+          ? `Future "${rememberPattern}" transactions will auto-categorize.`
+          : undefined,
+      });
+    } catch (e) {
+      toast({
+        title: "Couldn't categorize",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleBulkAssign = async () => {
@@ -143,9 +169,9 @@ export default function ReviewPage() {
       });
       qc.invalidateQueries({ queryKey: getListMappingRulesQueryKey() });
 
-      if (ruleApplyExisting && txns) {
+      if (ruleApplyExisting && queue) {
         const p = rulePattern.toLowerCase();
-        const matches = txns.filter((t) => {
+        const matches = queue.filter((t) => {
           const d = (t.description || "").toLowerCase();
           if (ruleMatchType === "exact") return d === p;
           if (ruleMatchType === "starts_with") return d.startsWith(p);
@@ -186,12 +212,35 @@ export default function ReviewPage() {
     );
   }
 
+  const sourceMeta = (source: string | null | undefined) => {
+    const s = (source || "").toLowerCase();
+    if (s.includes("amex")) {
+      return {
+        label: "Amex",
+        icon: CreditCard,
+        className: "border-blue-200 text-blue-700 bg-blue-50",
+      } as const;
+    }
+    if (s.startsWith("plaid")) {
+      return {
+        label: s.replace("plaid:", "") || "Bank",
+        icon: Landmark,
+        className: "border-emerald-200 text-emerald-700 bg-emerald-50",
+      } as const;
+    }
+    return {
+      label: s || "manual",
+      icon: Landmark,
+      className: "border-slate-200 text-slate-700 bg-slate-50",
+    } as const;
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-serif font-bold text-foreground">Review</h1>
-        <p className="text-muted-foreground mt-1">
-          {filtered.length} uncategorized transaction{filtered.length === 1 ? "" : "s"} waiting for a category.
+        <p className="text-muted-foreground mt-1" data-testid="text-review-count">
+          {queue.length} uncategorized transaction{queue.length === 1 ? "" : "s"} waiting for a category — every source, newest first.
         </p>
       </div>
 
@@ -242,17 +291,21 @@ export default function ReviewPage() {
             <div className="col-span-2">Date</div>
             <div className="col-span-4">Description</div>
             <div className="col-span-2 text-right">Amount</div>
-            <div className="col-span-3 text-right">Actions</div>
+            <div className="col-span-3 text-right">Category</div>
           </div>
           <div className="divide-y divide-border">
             {filtered.length === 0 && (
-              <div className="p-8 text-center text-muted-foreground">
-                Nothing to review — every transaction has a category. Nice.
+              <div className="p-8 text-center text-muted-foreground" data-testid="text-empty-state">
+                {queue.length === 0
+                  ? "Nothing to review — every transaction has a category. Nice."
+                  : "No uncategorized transactions match your search."}
               </div>
             )}
             {filtered.map((t) => {
               const amt = parseFloat(t.amount);
               const isExpense = amt < 0;
+              const meta = sourceMeta(t.source);
+              const Icon = meta.icon;
               return (
                 <div
                   key={t.id}
@@ -269,8 +322,16 @@ export default function ReviewPage() {
                   <div className="col-span-2 text-sm">{t.occurredOn}</div>
                   <div className="col-span-4 text-sm">
                     <div className="font-medium truncate">{t.description}</div>
-                    <div className="text-xs text-muted-foreground capitalize">
-                      {t.source?.replace("plaid:", "")}
+                    <div className="mt-1 flex items-center gap-2">
+                      <Badge variant="outline" className={`text-[10px] ${meta.className}`}>
+                        <Icon className="w-3 h-3 mr-1" />
+                        {meta.label}
+                      </Badge>
+                      {t.member && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {t.member}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div
@@ -279,24 +340,13 @@ export default function ReviewPage() {
                     {formatCurrency(t.amount)}
                   </div>
                   <div className="col-span-3 flex items-center justify-end gap-2">
-                    <Select
-                      value=""
-                      onValueChange={(v) => assignOne(t.id, v)}
-                    >
-                      <SelectTrigger
-                        className="h-8 w-40 text-xs"
-                        data-testid={`select-assign-${t.id}`}
-                      >
-                        <SelectValue placeholder="Assign category..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(categories ?? []).map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <CategoryPicker
+                      value={t.categoryId ?? null}
+                      categories={categories ?? []}
+                      description={t.description ?? ""}
+                      onChange={(catId, pattern) => assignOne(t.id, catId, pattern)}
+                      testId={`picker-${t.id}`}
+                    />
                     <Button
                       variant="ghost"
                       size="icon"

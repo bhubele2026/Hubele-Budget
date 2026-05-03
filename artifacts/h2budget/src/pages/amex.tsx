@@ -33,7 +33,8 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { Search, Check, ChevronsUpDown, CreditCard } from "lucide-react";
+import { Search, CreditCard } from "lucide-react";
+import { CategoryPicker } from "@/components/category-picker";
 import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -766,99 +767,6 @@ function StatChip({
         {formatCurrency(value)}
       </div>
     </div>
-  );
-}
-
-function defaultRememberPattern(description: string): string {
-  // First two whitespace-separated tokens are usually the merchant name
-  // (e.g. "TRADER JOE'S #123" → "TRADER JOE'S"). We trim noisy trailing
-  // store IDs by stopping at the first '#' or numeric tail, and clamp
-  // length so the rule stays specific without being overly narrow.
-  const cleaned = description.replace(/[#*].*$/, "").trim();
-  const tokens = cleaned.split(/\s+/).filter(Boolean);
-  const head = tokens.slice(0, 2).join(" ");
-  return (head || cleaned).slice(0, 40);
-}
-
-function CategoryPicker({
-  value,
-  categories,
-  description,
-  onChange,
-}: {
-  value: string | null;
-  categories: { id: string; name: string }[];
-  description?: string;
-  onChange: (id: string | null, rememberPattern?: string | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [remember, setRemember] = useState(true);
-  const current = value
-    ? categories.find((c) => c.id === value)?.name ?? "Unknown"
-    : "Uncategorized";
-  const pattern = description ? defaultRememberPattern(description) : "";
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          className="h-7 text-xs w-52 justify-between font-normal"
-          data-testid="button-category-picker"
-        >
-          <span className="truncate">{current}</span>
-          <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search…" />
-          <CommandList>
-            <CommandEmpty>No category</CommandEmpty>
-            <CommandGroup>
-              <CommandItem
-                onSelect={() => {
-                  onChange(null);
-                  setOpen(false);
-                }}
-              >
-                <Check
-                  className={cn("mr-2 h-3 w-3", value === null ? "opacity-100" : "opacity-0")}
-                />
-                Uncategorized
-              </CommandItem>
-              {categories.map((c) => (
-                <CommandItem
-                  key={c.id}
-                  onSelect={() => {
-                    onChange(c.id, remember && pattern ? pattern : null);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn("mr-2 h-3 w-3", value === c.id ? "opacity-100" : "opacity-0")}
-                  />
-                  {c.name}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-          {pattern && (
-            <div className="border-t px-2 py-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-              <Checkbox
-                checked={remember}
-                onCheckedChange={(v) => setRemember(!!v)}
-                id="remember-rule"
-                data-testid="checkbox-remember-rule"
-              />
-              <label htmlFor="remember-rule" className="cursor-pointer">
-                Remember <span className="font-mono">"{pattern}"</span>
-              </label>
-            </div>
-          )}
-        </Command>
-      </PopoverContent>
-    </Popover>
   );
 }
 

@@ -88,6 +88,7 @@ export const ListTransactionsQueryParams = zod.object({
   limit: zod.coerce.number().optional(),
   source: zod.coerce.string().optional(),
   uncategorized: zod.coerce.boolean().optional(),
+  excludeTransfers: zod.coerce.boolean().optional(),
   search: zod.coerce.string().optional(),
   minAmount: zod.coerce.string().optional(),
   maxAmount: zod.coerce.string().optional(),

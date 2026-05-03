@@ -32,6 +32,9 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   if (q.data.uncategorized === true) {
     conds.push(isNull(transactionsTable.categoryId));
   }
+  if (q.data.excludeTransfers === true) {
+    conds.push(eq(transactionsTable.isTransfer, false));
+  }
   if (q.data.categoryId) {
     conds.push(eq(transactionsTable.categoryId, q.data.categoryId));
   }

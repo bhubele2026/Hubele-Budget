@@ -64,6 +64,9 @@ paths:
           name: uncategorized
           schema: { type: boolean }
         - in: query
+          name: excludeTransfers
+          schema: { type: boolean }
+        - in: query
           name: search
           schema: { type: string }
         - in: query

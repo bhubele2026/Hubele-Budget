@@ -33,7 +33,13 @@ const navItems = [
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const { data: uncategorized } = useListTransactions({ uncategorized: true, limit: 100 });
+  // Match the Review page query exactly (server-side excludeTransfers) so
+  // the badge count is the true number of items the user will see there.
+  const { data: uncategorized } = useListTransactions({
+    uncategorized: true,
+    excludeTransfers: true,
+    limit: 5000,
+  });
   const reviewCount = uncategorized?.length ?? 0;
 
   return (
