@@ -150,6 +150,7 @@ export const transactionsTable = pgTable(
     notes: text("notes"),
     source: text("source").notNull().default("manual"),
     member: text("member"),
+    owedBy: text("owed_by"),
     plaidTransactionId: text("plaid_transaction_id"),
     plaidAccountId: text("plaid_account_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

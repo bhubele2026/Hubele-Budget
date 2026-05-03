@@ -30,6 +30,8 @@ export interface Transaction {
   /** @nullable */
   member?: string | null;
   /** @nullable */
+  owedBy?: string | null;
+  /** @nullable */
   plaidTransactionId?: string | null;
   /** @nullable */
   plaidAccountId?: string | null;

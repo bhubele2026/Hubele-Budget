@@ -29,4 +29,6 @@ export interface CreateTransactionInput {
   source?: string;
   /** @nullable */
   member?: string | null;
+  /** @nullable */
+  owedBy?: string | null;
 }

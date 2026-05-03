@@ -46,6 +46,8 @@ export interface Transaction {
   /** @nullable */
   member?: string | null;
   /** @nullable */
+  owedBy?: string | null;
+  /** @nullable */
   plaidTransactionId?: string | null;
   /** @nullable */
   plaidAccountId?: string | null;
@@ -87,6 +89,8 @@ export interface CreateTransactionInput {
   source?: string;
   /** @nullable */
   member?: string | null;
+  /** @nullable */
+  owedBy?: string | null;
 }
 
 /**
@@ -125,6 +129,8 @@ export interface TransactionInput {
   source?: string;
   /** @nullable */
   member?: string | null;
+  /** @nullable */
+  owedBy?: string | null;
 }
 
 export interface Debt {

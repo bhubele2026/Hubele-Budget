@@ -280,6 +280,22 @@ export default function AmexPage() {
     }
   };
 
+  const setRowOwedBy = async (t: Transaction, raw: string) => {
+    const trimmed = raw.trim();
+    const next: string | null = trimmed.length === 0 ? null : trimmed;
+    if ((t.owedBy ?? null) === next) return;
+    try {
+      await updateTx.mutateAsync({ id: t.id, data: { owedBy: next } });
+      invalidateTxns();
+    } catch (e) {
+      toast({
+        title: "Couldn't update owed by",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const onBubbleToggle = (t: Transaction, bucket: BucketKey, next: boolean) => {
     if (bucket === "reimbursable") {
       setRowReimbursable(t, next);
@@ -615,6 +631,28 @@ export default function AmexPage() {
                         </td>
                         <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
                           {t.member ?? "—"}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <Input
+                            key={t.owedBy ?? ""}
+                            defaultValue={t.owedBy ?? ""}
+                            placeholder="Owed by…"
+                            aria-label={`Owed by for ${t.description}`}
+                            className="h-7 w-32 text-xs"
+                            onBlur={(e) => {
+                              if ((e.currentTarget.value.trim() || null) !== (t.owedBy ?? null)) {
+                                setRowOwedBy(t, e.currentTarget.value);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                (e.currentTarget as HTMLInputElement).blur();
+                              } else if (e.key === "Escape") {
+                                (e.currentTarget as HTMLInputElement).value = t.owedBy ?? "";
+                                (e.currentTarget as HTMLInputElement).blur();
+                              }
+                            }}
+                          />
                         </td>
                         <td className="px-3 py-2">
                           <CategoryPicker

@@ -734,6 +734,7 @@ components:
         notes: { type: ["string", "null"] }
         source: { type: string }
         member: { type: ["string", "null"] }
+        owedBy: { type: ["string", "null"] }
         plaidTransactionId: { type: ["string", "null"] }
         plaidAccountId: { type: ["string", "null"] }
     CreateTransactionInput:
@@ -755,6 +756,7 @@ components:
         notes: { type: ["string", "null"] }
         source: { type: string }
         member: { type: ["string", "null"] }
+        owedBy: { type: ["string", "null"] }
     TransactionInput:
       type: object
       properties:
@@ -773,6 +775,7 @@ components:
         notes: { type: ["string", "null"] }
         source: { type: string }
         member: { type: ["string", "null"] }
+        owedBy: { type: ["string", "null"] }
 
     Debt:
       type: object

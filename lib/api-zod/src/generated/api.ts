@@ -50,6 +50,7 @@ export const GetDashboardResponse = zod.object({
       notes: zod.string().nullish(),
       source: zod.string(),
       member: zod.string().nullish(),
+      owedBy: zod.string().nullish(),
       plaidTransactionId: zod.string().nullish(),
       plaidAccountId: zod.string().nullish(),
     }),
@@ -113,6 +114,7 @@ export const ListTransactionsResponseItem = zod.object({
   notes: zod.string().nullish(),
   source: zod.string(),
   member: zod.string().nullish(),
+  owedBy: zod.string().nullish(),
   plaidTransactionId: zod.string().nullish(),
   plaidAccountId: zod.string().nullish(),
 });
@@ -142,6 +144,7 @@ export const CreateTransactionBody = zod.object({
   notes: zod.string().nullish(),
   source: zod.string().optional(),
   member: zod.string().nullish(),
+  owedBy: zod.string().nullish(),
 });
 
 export const UpdateTransactionParams = zod.object({
@@ -172,6 +175,7 @@ export const UpdateTransactionBody = zod.object({
   notes: zod.string().nullish(),
   source: zod.string().optional(),
   member: zod.string().nullish(),
+  owedBy: zod.string().nullish(),
 });
 
 export const UpdateTransactionResponse = zod.object({
@@ -199,6 +203,7 @@ export const UpdateTransactionResponse = zod.object({
   notes: zod.string().nullish(),
   source: zod.string(),
   member: zod.string().nullish(),
+  owedBy: zod.string().nullish(),
   plaidTransactionId: zod.string().nullish(),
   plaidAccountId: zod.string().nullish(),
 });
@@ -643,6 +648,7 @@ export const GetForecastResponse = zod.object({
       notes: zod.string().nullish(),
       source: zod.string(),
       member: zod.string().nullish(),
+      owedBy: zod.string().nullish(),
       plaidTransactionId: zod.string().nullish(),
       plaidAccountId: zod.string().nullish(),
     }),
