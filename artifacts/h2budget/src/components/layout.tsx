@@ -11,12 +11,15 @@ import {
   TrendingUp,
   BarChart3,
   Flame,
+  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useListTransactions } from "@workspace/api-client-react";
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Forecast", href: "/forecast", icon: TrendingUp },
+  { name: "Review", href: "/review", icon: Inbox, badge: "review" as const },
   { name: "Transactions", href: "/transactions", icon: Receipt },
   { name: "Amex Daily", href: "/amex", icon: CreditCard },
   { name: "Debts", href: "/debts", icon: CreditCard },
@@ -30,6 +33,8 @@ const navItems = [
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const { data: uncategorized } = useListTransactions({ uncategorized: true, limit: 100 });
+  const reviewCount = uncategorized?.length ?? 0;
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
@@ -50,7 +55,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     : "text-sidebar-foreground hover:bg-sidebar-accent"
                 )}>
                   <item.icon className="w-4 h-4" />
-                  {item.name}
+                  <span className="flex-1">{item.name}</span>
+                  {item.badge === "review" && reviewCount > 0 && (
+                    <span
+                      className={cn(
+                        "ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold",
+                        isActive
+                          ? "bg-sidebar-primary-foreground text-sidebar-primary"
+                          : "bg-primary text-primary-foreground",
+                      )}
+                      data-testid="badge-review-count"
+                    >
+                      {reviewCount > 99 ? "99+" : reviewCount}
+                    </span>
+                  )}
                 </span>
               </Link>
             );

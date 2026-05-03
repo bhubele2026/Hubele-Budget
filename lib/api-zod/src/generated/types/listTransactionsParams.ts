@@ -11,4 +11,9 @@ export type ListTransactionsParams = {
   to?: string;
   limit?: number;
   source?: string;
+  uncategorized?: boolean;
+  search?: string;
+  minAmount?: string;
+  maxAmount?: string;
+  categoryId?: string;
 };

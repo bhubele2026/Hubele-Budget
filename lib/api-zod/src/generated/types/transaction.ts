@@ -29,4 +29,8 @@ export interface Transaction {
   source: string;
   /** @nullable */
   member?: string | null;
+  /** @nullable */
+  plaidTransactionId?: string | null;
+  /** @nullable */
+  plaidAccountId?: string | null;
 }

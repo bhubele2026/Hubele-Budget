@@ -142,11 +142,55 @@ export const transactionsTable = pgTable(
     notes: text("notes"),
     source: text("source").notNull().default("manual"),
     member: text("member"),
+    plaidTransactionId: text("plaid_transaction_id"),
+    plaidAccountId: text("plaid_account_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
     userIdx: index("transactions_user_idx").on(t.userId, t.occurredOn),
     sourceIdx: index("transactions_user_source_idx").on(t.userId, t.source),
+    plaidTxnUq: uniqueIndex("transactions_plaid_txn_uq").on(t.plaidTransactionId),
+  }),
+);
+
+export const plaidItemsTable = pgTable(
+  "plaid_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    itemId: text("item_id").notNull(),
+    accessToken: text("access_token").notNull(),
+    institutionId: text("institution_id"),
+    institutionName: text("institution_name"),
+    institutionSlug: text("institution_slug").notNull().default("bank"),
+    cursor: text("cursor"),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    lastSyncError: text("last_sync_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    itemUq: uniqueIndex("plaid_items_item_uq").on(t.itemId),
+    userIdx: index("plaid_items_user_idx").on(t.userId),
+  }),
+);
+
+export const plaidAccountsTable = pgTable(
+  "plaid_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    itemId: uuid("item_id").notNull(),
+    accountId: text("account_id").notNull(),
+    name: text("name"),
+    officialName: text("official_name"),
+    mask: text("mask"),
+    type: text("type"),
+    subtype: text("subtype"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    accountUq: uniqueIndex("plaid_accounts_account_uq").on(t.accountId),
+    userIdx: index("plaid_accounts_user_idx").on(t.userId),
   }),
 );
 

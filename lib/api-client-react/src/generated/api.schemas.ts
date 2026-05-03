@@ -45,6 +45,10 @@ export interface Transaction {
   source: string;
   /** @nullable */
   member?: string | null;
+  /** @nullable */
+  plaidTransactionId?: string | null;
+  /** @nullable */
+  plaidAccountId?: string | null;
 }
 
 /**
@@ -517,11 +521,80 @@ export interface ImportSummary {
   counts: ImportSummaryCounts;
 }
 
+export interface PlaidLinkToken {
+  linkToken: string;
+  expiration: string;
+}
+
+export interface PlaidExchangeInput {
+  publicToken: string;
+  /** @nullable */
+  institutionId?: string | null;
+  /** @nullable */
+  institutionName?: string | null;
+}
+
+export interface PlaidAccount {
+  id: string;
+  accountId: string;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  officialName?: string | null;
+  /** @nullable */
+  mask?: string | null;
+  /** @nullable */
+  type?: string | null;
+  /** @nullable */
+  subtype?: string | null;
+}
+
+export interface PlaidItemDetail {
+  id: string;
+  itemId: string;
+  /** @nullable */
+  institutionId?: string | null;
+  /** @nullable */
+  institutionName?: string | null;
+  institutionSlug: string;
+  /** @nullable */
+  lastSyncedAt?: string | null;
+  /** @nullable */
+  lastSyncError?: string | null;
+  accounts: PlaidAccount[];
+}
+
+export interface PlaidSyncInput {
+  /** @nullable */
+  itemId?: string | null;
+}
+
+export type PlaidSyncResultItemsItem = {
+  itemId: string;
+  /** @nullable */
+  institutionName?: string | null;
+  added: number;
+  modified: number;
+  removed: number;
+  autoCategorized: number;
+  /** @nullable */
+  error?: string | null;
+};
+
+export interface PlaidSyncResult {
+  items: PlaidSyncResultItemsItem[];
+}
+
 export type ListTransactionsParams = {
   from?: string;
   to?: string;
   limit?: number;
   source?: string;
+  uncategorized?: boolean;
+  search?: string;
+  minAmount?: string;
+  maxAmount?: string;
+  categoryId?: string;
 };
 
 export type GetForecastParams = {

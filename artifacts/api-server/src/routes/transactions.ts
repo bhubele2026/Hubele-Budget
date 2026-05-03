@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, lte, isNull, ilike, sql } from "drizzle-orm";
 import { db, transactionsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -24,6 +24,25 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   if (q.data.from) conds.push(gte(transactionsTable.occurredOn, q.data.from));
   if (q.data.to) conds.push(lte(transactionsTable.occurredOn, q.data.to));
   if (q.data.source) conds.push(eq(transactionsTable.source, q.data.source));
+  if (q.data.uncategorized === true) {
+    conds.push(isNull(transactionsTable.categoryId));
+  }
+  if (q.data.categoryId) {
+    conds.push(eq(transactionsTable.categoryId, q.data.categoryId));
+  }
+  if (q.data.search) {
+    conds.push(ilike(transactionsTable.description, `%${q.data.search}%`));
+  }
+  if (q.data.minAmount) {
+    conds.push(
+      sql`abs(${transactionsTable.amount}) >= ${q.data.minAmount}`,
+    );
+  }
+  if (q.data.maxAmount) {
+    conds.push(
+      sql`abs(${transactionsTable.amount}) <= ${q.data.maxAmount}`,
+    );
+  }
   const rows = await db
     .select()
     .from(transactionsTable)

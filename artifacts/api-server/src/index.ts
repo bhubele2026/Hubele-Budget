@@ -1,5 +1,7 @@
+import cron from "node-cron";
 import app from "./app";
 import { logger } from "./lib/logger";
+import { syncAllForAllUsers } from "./lib/plaidSync";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +24,15 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
+    cron.schedule("0 * * * *", () => {
+      syncAllForAllUsers().catch((err) => {
+        logger.error({ err }, "Hourly Plaid sync failed");
+      });
+    });
+    logger.info("Plaid hourly sync scheduled");
+  } else {
+    logger.warn("Plaid credentials missing — scheduled sync disabled");
+  }
 });

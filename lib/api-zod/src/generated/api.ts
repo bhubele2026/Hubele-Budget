@@ -50,6 +50,8 @@ export const GetDashboardResponse = zod.object({
       notes: zod.string().nullish(),
       source: zod.string(),
       member: zod.string().nullish(),
+      plaidTransactionId: zod.string().nullish(),
+      plaidAccountId: zod.string().nullish(),
     }),
   ),
   topCategories: zod.array(
@@ -78,6 +80,11 @@ export const ListTransactionsQueryParams = zod.object({
   to: zod.coerce.string().optional(),
   limit: zod.coerce.number().optional(),
   source: zod.coerce.string().optional(),
+  uncategorized: zod.coerce.boolean().optional(),
+  search: zod.coerce.string().optional(),
+  minAmount: zod.coerce.string().optional(),
+  maxAmount: zod.coerce.string().optional(),
+  categoryId: zod.coerce.string().optional(),
 });
 
 export const ListTransactionsResponseItem = zod.object({
@@ -105,6 +112,8 @@ export const ListTransactionsResponseItem = zod.object({
   notes: zod.string().nullish(),
   source: zod.string(),
   member: zod.string().nullish(),
+  plaidTransactionId: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
 });
 export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem);
 
@@ -189,6 +198,8 @@ export const UpdateTransactionResponse = zod.object({
   notes: zod.string().nullish(),
   source: zod.string(),
   member: zod.string().nullish(),
+  plaidTransactionId: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
 });
 
 export const DeleteTransactionParams = zod.object({
@@ -570,6 +581,8 @@ export const GetForecastResponse = zod.object({
       notes: zod.string().nullish(),
       source: zod.string(),
       member: zod.string().nullish(),
+      plaidTransactionId: zod.string().nullish(),
+      plaidAccountId: zod.string().nullish(),
     }),
   ),
   resolutions: zod.array(
@@ -669,6 +682,82 @@ export const UpsertDashboardBudgetResponse = zod.object({
   bucket: zod.string(),
   periodKey: zod.string(),
   amount: zod.string(),
+});
+
+export const CreatePlaidLinkTokenResponse = zod.object({
+  linkToken: zod.string(),
+  expiration: zod.string(),
+});
+
+export const ExchangePlaidPublicTokenBody = zod.object({
+  publicToken: zod.string(),
+  institutionId: zod.string().nullish(),
+  institutionName: zod.string().nullish(),
+});
+
+export const ExchangePlaidPublicTokenResponse = zod.object({
+  id: zod.string(),
+  itemId: zod.string(),
+  institutionId: zod.string().nullish(),
+  institutionName: zod.string().nullish(),
+  institutionSlug: zod.string(),
+  lastSyncedAt: zod.string().nullish(),
+  lastSyncError: zod.string().nullish(),
+  accounts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      name: zod.string().nullish(),
+      officialName: zod.string().nullish(),
+      mask: zod.string().nullish(),
+      type: zod.string().nullish(),
+      subtype: zod.string().nullish(),
+    }),
+  ),
+});
+
+export const ListPlaidItemsResponseItem = zod.object({
+  id: zod.string(),
+  itemId: zod.string(),
+  institutionId: zod.string().nullish(),
+  institutionName: zod.string().nullish(),
+  institutionSlug: zod.string(),
+  lastSyncedAt: zod.string().nullish(),
+  lastSyncError: zod.string().nullish(),
+  accounts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      name: zod.string().nullish(),
+      officialName: zod.string().nullish(),
+      mask: zod.string().nullish(),
+      type: zod.string().nullish(),
+      subtype: zod.string().nullish(),
+    }),
+  ),
+});
+export const ListPlaidItemsResponse = zod.array(ListPlaidItemsResponseItem);
+
+export const DeletePlaidItemParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const SyncPlaidTransactionsBody = zod.object({
+  itemId: zod.string().nullish(),
+});
+
+export const SyncPlaidTransactionsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      itemId: zod.string(),
+      institutionName: zod.string().nullish(),
+      added: zod.number(),
+      modified: zod.number(),
+      removed: zod.number(),
+      autoCategorized: zod.number(),
+      error: zod.string().nullish(),
+    }),
+  ),
 });
 
 export const ImportWorkbookBody = zod.object({

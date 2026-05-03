@@ -60,6 +60,21 @@ paths:
         - in: query
           name: source
           schema: { type: string }
+        - in: query
+          name: uncategorized
+          schema: { type: boolean }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: minAmount
+          schema: { type: string }
+        - in: query
+          name: maxAmount
+          schema: { type: string }
+        - in: query
+          name: categoryId
+          schema: { type: string }
       responses:
         "200":
           description: OK
@@ -557,6 +572,70 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DashboardBudget" }
 
+  /plaid/link-token:
+    post:
+      operationId: createPlaidLinkToken
+      tags: [plaid]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlaidLinkToken" }
+  /plaid/exchange:
+    post:
+      operationId: exchangePlaidPublicToken
+      tags: [plaid]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlaidExchangeInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlaidItemDetail" }
+  /plaid/items:
+    get:
+      operationId: listPlaidItems
+      tags: [plaid]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PlaidItemDetail" }
+  /plaid/items/{id}:
+    delete:
+      operationId: deletePlaidItem
+      tags: [plaid]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+  /plaid/sync:
+    post:
+      operationId: syncPlaidTransactions
+      tags: [plaid]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlaidSyncInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlaidSyncResult" }
+
   /import/workbook:
     post:
       operationId: importWorkbook
@@ -607,6 +686,8 @@ components:
         notes: { type: ["string", "null"] }
         source: { type: string }
         member: { type: ["string", "null"] }
+        plaidTransactionId: { type: ["string", "null"] }
+        plaidAccountId: { type: ["string", "null"] }
     CreateTransactionInput:
       type: object
       required: [occurredOn, description, amount]
@@ -991,3 +1072,63 @@ components:
           type: object
           additionalProperties:
             type: integer
+
+    PlaidLinkToken:
+      type: object
+      required: [linkToken, expiration]
+      properties:
+        linkToken: { type: string }
+        expiration: { type: string }
+    PlaidExchangeInput:
+      type: object
+      required: [publicToken]
+      properties:
+        publicToken: { type: string }
+        institutionId: { type: ["string", "null"] }
+        institutionName: { type: ["string", "null"] }
+    PlaidAccount:
+      type: object
+      required: [id, accountId]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        name: { type: ["string", "null"] }
+        officialName: { type: ["string", "null"] }
+        mask: { type: ["string", "null"] }
+        type: { type: ["string", "null"] }
+        subtype: { type: ["string", "null"] }
+    PlaidItemDetail:
+      type: object
+      required: [id, itemId, institutionSlug, accounts]
+      properties:
+        id: { type: string }
+        itemId: { type: string }
+        institutionId: { type: ["string", "null"] }
+        institutionName: { type: ["string", "null"] }
+        institutionSlug: { type: string }
+        lastSyncedAt: { type: ["string", "null"] }
+        lastSyncError: { type: ["string", "null"] }
+        accounts:
+          type: array
+          items: { $ref: "#/components/schemas/PlaidAccount" }
+    PlaidSyncInput:
+      type: object
+      properties:
+        itemId: { type: ["string", "null"] }
+    PlaidSyncResult:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [itemId, added, modified, removed, autoCategorized]
+            properties:
+              itemId: { type: string }
+              institutionName: { type: ["string", "null"] }
+              added: { type: integer }
+              modified: { type: integer }
+              removed: { type: integer }
+              autoCategorized: { type: integer }
+              error: { type: ["string", "null"] }

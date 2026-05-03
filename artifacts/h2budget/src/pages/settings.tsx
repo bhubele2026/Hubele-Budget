@@ -1,5 +1,15 @@
 import { useState, useEffect } from "react";
-import { useGetSettings, useUpdateSettings, useImportWorkbook, getGetSettingsQueryKey } from "@workspace/api-client-react";
+import {
+  useGetSettings,
+  useUpdateSettings,
+  useImportWorkbook,
+  getGetSettingsQueryKey,
+  useListPlaidItems,
+  useDeletePlaidItem,
+  useSyncPlaidTransactions,
+  getListPlaidItemsQueryKey,
+  getListTransactionsQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +21,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { UploadCloud, Download } from "lucide-react";
+import { UploadCloud, Download, RefreshCw, Trash2, Building2 } from "lucide-react";
 import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
+import { PlaidLinkButton } from "@/components/plaid-link-button";
 
 const settingsSchema = z.object({
   weeklyAllowanceAmount: z.string().min(1),
@@ -27,8 +38,52 @@ export default function SettingsPage() {
   const { data: settings, isLoading } = useGetSettings();
   const updateSettings = useUpdateSettings();
   const importWorkbook = useImportWorkbook();
+  const { data: plaidItems } = useListPlaidItems();
+  const deletePlaidItem = useDeletePlaidItem();
+  const syncPlaid = useSyncPlaidTransactions();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const handleSync = (itemId?: string) => {
+    syncPlaid.mutate(
+      { data: itemId ? { itemId } : {} },
+      {
+        onSuccess: (res) => {
+          queryClient.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+          const totals = (res.items ?? []).reduce(
+            (acc, r) => {
+              acc.added += r.added ?? 0;
+              acc.modified += r.modified ?? 0;
+              acc.removed += r.removed ?? 0;
+              return acc;
+            },
+            { added: 0, modified: 0, removed: 0 },
+          );
+          toast({
+            title: "Sync complete",
+            description: `Added ${totals.added}, updated ${totals.modified}, removed ${totals.removed}.`,
+          });
+        },
+        onError: (err) => {
+          toast({ title: "Sync failed", description: String(err), variant: "destructive" });
+        },
+      },
+    );
+  };
+
+  const handleUnlink = (id: string, name: string | null | undefined) => {
+    if (!confirm(`Unlink ${name || "this institution"}? Already-synced transactions stay; new ones will stop.`)) return;
+    deletePlaidItem.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
+          toast({ title: "Account unlinked" });
+        },
+      },
+    );
+  };
 
   const form = useForm<SettingsFormValues>({
     resolver: zodResolver(settingsSchema),
@@ -152,6 +207,82 @@ export default function SettingsPage() {
               </div>
             </form>
           </Form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle>Linked Accounts</CardTitle>
+            <CardDescription>Connect your bank and credit card accounts via Plaid to auto-import transactions.</CardDescription>
+          </div>
+          <PlaidLinkButton />
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {(plaidItems ?? []).length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No accounts linked yet. Click "Link a Bank or Card" to get started.
+            </p>
+          )}
+          {(plaidItems ?? []).map((item) => {
+            const isSyncing = syncPlaid.isPending;
+            return (
+              <div
+                key={item.id}
+                className="rounded-md border border-border bg-muted/20 p-4"
+                data-testid={`plaid-item-${item.id}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <Building2 className="w-5 h-5 mt-0.5 text-muted-foreground" />
+                    <div>
+                      <div className="font-medium">{item.institutionName || "Linked institution"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {item.lastSyncedAt
+                          ? `Last synced ${new Date(item.lastSyncedAt).toLocaleString()}`
+                          : "Not yet synced"}
+                      </div>
+                      {item.lastSyncError && (
+                        <div className="text-xs text-destructive mt-1">{item.lastSyncError}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSync(item.id)}
+                      disabled={isSyncing}
+                      data-testid={`button-sync-${item.id}`}
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isSyncing ? "animate-spin" : ""}`} />
+                      Sync
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleUnlink(item.id, item.institutionName)}
+                      disabled={deletePlaidItem.isPending}
+                      data-testid={`button-unlink-${item.id}`}
+                    >
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+                {item.accounts.length > 0 && (
+                  <ul className="mt-3 ml-8 text-sm text-muted-foreground space-y-1">
+                    {item.accounts.map((a) => (
+                      <li key={a.id}>
+                        {a.name || a.officialName || "Account"}
+                        {a.mask ? ` ••${a.mask}` : ""}
+                        {a.subtype ? ` · ${a.subtype}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
 

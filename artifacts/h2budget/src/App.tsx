@@ -25,6 +25,7 @@ import AmexPage from "./pages/amex";
 import TransactionsPage from "./pages/transactions";
 import RecurringPage from "./pages/recurring";
 import BudgetPage from "./pages/budget";
+import ReviewPage from "./pages/review";
 import MappingRulesPage from "./pages/mapping-rules";
 import SettingsPage from "./pages/settings";
 import NotFound from "./pages/not-found";
@@ -112,6 +113,7 @@ function ProtectedShell() {
             <Route path="/avalanche" component={AvalanchePage} />
             <Route path="/recurring" component={RecurringPage} />
             <Route path="/budget" component={BudgetPage} />
+            <Route path="/review" component={ReviewPage} />
             <Route path="/mapping-rules" component={MappingRulesPage} />
             <Route path="/settings" component={SettingsPage} />
             <Route component={NotFound} />
