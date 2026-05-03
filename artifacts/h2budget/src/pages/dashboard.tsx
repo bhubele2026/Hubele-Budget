@@ -647,6 +647,32 @@ function ReimbursementsBox({
     }
   };
 
+  const bulkMarkPaid = async (payer: string | null) => {
+    const targets = payer
+      ? pending.filter((t) => ((t.owedBy ?? "").trim() || "Unassigned") === payer)
+      : pending;
+    if (targets.length === 0) return;
+    for (const t of targets) {
+      applyOptimistic(t.id, true);
+    }
+    try {
+      await Promise.all(
+        targets.map((t) => updateTx.mutateAsync({ id: t.id, data: { reimbursed: true } })),
+      );
+      qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      toast({
+        title: `Marked ${targets.length} item${targets.length === 1 ? "" : "s"} reimbursed`,
+      });
+    } catch (e) {
+      qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      toast({
+        title: "Some updates failed",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const owedByListId = "dashboard-owed-by-suggestions";
 
   const renderRow = (t: Transaction, reimbursed: boolean) => {
@@ -740,23 +766,37 @@ function ReimbursementsBox({
             {pendingByPayer.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {pendingByPayer.map(({ payer, total, count }) => (
-                  <span
+                  <button
                     key={payer}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs",
+                      "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs hover:ring-2 hover:ring-primary/40 transition-all cursor-pointer",
                       payer === "Unassigned"
                         ? "border-dashed text-muted-foreground"
                         : "bg-muted/40",
                     )}
-                    title={`${payer}: ${count} item${count === 1 ? "" : "s"}`}
+                    title={`Mark all ${count} item${count === 1 ? "" : "s"} from ${payer} as reimbursed`}
+                    onClick={() => bulkMarkPaid(payer)}
+                    data-testid={`bulk-reimburse-${payer}`}
                   >
                     <span className="font-medium">{payer}</span>
                     <span className="font-mono tabular-nums">
                       {formatCurrency(total)}
                     </span>
-                  </span>
+                  </button>
                 ))}
               </div>
+            )}
+            {pending.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => bulkMarkPaid(null)}
+                disabled={updateTx.isPending}
+                data-testid="bulk-reimburse-all"
+              >
+                Mark all {pending.length} as reimbursed
+              </Button>
             )}
           </div>
         )}

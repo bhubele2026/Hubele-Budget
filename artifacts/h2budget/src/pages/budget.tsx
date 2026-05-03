@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useSearch } from "wouter";
+import { useSearch, useLocation } from "wouter";
 import {
   useGetBudgetMonth,
   useUpsertBudgetLine,
@@ -50,6 +50,11 @@ import {
   PinOff,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 type SourceKind = "manual" | "auto_bills" | "auto_debts";
 
@@ -590,6 +595,7 @@ function BudgetLineRow({
   onTogglePin: (categoryId: string, currentlyPinned: boolean) => void;
   pinDisabled: boolean;
 }) {
+  const [, navigate] = useLocation();
   const planned = parseFloat(line.plannedAmount) || 0;
   const actual = parseFloat(line.actualAmount) || 0;
   const isIncome = line.kind === "income";
@@ -616,7 +622,14 @@ function BudgetLineRow({
     >
       <div className="col-span-12 md:col-span-5 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium truncate">{line.categoryName}</span>
+          <button
+            type="button"
+            className="font-medium truncate hover:underline decoration-dotted underline-offset-2 text-left"
+            title={`View ${line.categoryName} transactions`}
+            onClick={() => navigate(`/transactions?category=${encodeURIComponent(line.categoryName)}`)}
+          >
+            {line.categoryName}
+          </button>
           {sourceKind !== "manual" && <SourceBadge kind={sourceKind} />}
           {(line.sourceBreakdown ?? []).map((b) => (
             <Badge
@@ -727,7 +740,33 @@ function BudgetLineRow({
         )}
       </div>
       <div className="col-span-3 md:col-span-2 text-right font-mono text-sm">
-        {formatCurrency(line.actualAmount)}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              className="hover:underline decoration-dotted underline-offset-2 cursor-pointer tabular-nums"
+              title="View breakdown"
+            >
+              {formatCurrency(line.actualAmount)}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-3" align="end">
+            <div className="text-xs font-medium mb-2">Actuals breakdown</div>
+            {(line.sourceBreakdown ?? []).length === 0 ? (
+              <div className="text-xs text-muted-foreground">No transactions yet</div>
+            ) : (
+              <div className="space-y-1.5">
+                {(line.sourceBreakdown ?? []).map((b) => (
+                  <div key={b.source} className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">{b.source}</span>
+                    <span className="tabular-nums font-mono">
+                      {b.count} txn · {formatCurrency(b.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
       </div>
       <div
         className={cn(

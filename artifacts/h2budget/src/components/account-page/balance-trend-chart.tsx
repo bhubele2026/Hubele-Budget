@@ -22,7 +22,7 @@ export type TrendPoint = {
 export function BalanceTrendChart({
   caption,
   data,
-  color = "#2563eb",
+  color = "hsl(var(--chart-1))",
   valueLabel = "Ending balance",
   testId = "card-balance-trend",
 }: {
@@ -86,7 +86,7 @@ export function BalanceTrendChart({
                 dataKey="balance"
                 stroke={color}
                 strokeWidth={2}
-                dot={{ r: 2.5, stroke: color, fill: "#fff", strokeWidth: 1.5 }}
+                dot={{ r: 2.5, stroke: color, fill: "hsl(var(--background))", strokeWidth: 1.5 }}
                 activeDot={{ r: 4 }}
                 isAnimationActive={false}
               />
@@ -99,7 +99,7 @@ export function BalanceTrendChart({
                     y={p.balance}
                     r={5}
                     fill={color}
-                    stroke="#fff"
+                    stroke="hsl(var(--background))"
                     strokeWidth={2}
                     ifOverflow="extendDomain"
                   />

@@ -143,6 +143,39 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     // Initial sync (last 90 days come via /transactions/sync naturally)
     await syncPlaidItem(req.userId!, item!.id);
 
+    // Auto-create debts for newly linked credit/loan accounts (#44)
+    try {
+      const newAccts = await db
+        .select()
+        .from(plaidAccountsTable)
+        .where(eq(plaidAccountsTable.itemId, item!.id));
+      const existingDebts = await db
+        .select({ plaidAccountId: debtsTable.plaidAccountId })
+        .from(debtsTable)
+        .where(eq(debtsTable.userId, req.userId!));
+      const linkedAcctIds = new Set(
+        existingDebts.map((d) => d.plaidAccountId).filter(Boolean),
+      );
+      for (const acct of newAccts) {
+        if (linkedAcctIds.has(acct.id)) continue;
+        const t = (acct.type ?? "").toLowerCase();
+        const st = (acct.subtype ?? "").toLowerCase();
+        if (t !== "credit" && t !== "loan" && st !== "credit card") continue;
+        await db.insert(debtsTable).values({
+          userId: req.userId!,
+          name: acct.officialName || acct.name || `${resolvedName ?? "Plaid"} ${acct.mask ?? ""}`.trim(),
+          balance: "0",
+          apr: "0",
+          minPayment: "0",
+          status: "active",
+          plaidAccountId: acct.id,
+        });
+        req.log.info({ accountId: acct.accountId, name: acct.name }, "Auto-created debt from Plaid account");
+      }
+    } catch (e) {
+      req.log.warn({ err: e }, "Auto-create debts failed (non-fatal)");
+    }
+
     const accounts = await db
       .select()
       .from(plaidAccountsTable)
@@ -472,6 +505,38 @@ router.post(
     res.json({ removed });
   },
 );
+
+router.post("/plaid/webhook", async (req, res): Promise<void> => {
+  const { webhook_type, webhook_code, item_id } = req.body ?? {};
+  req.log.info({ webhook_type, webhook_code, item_id }, "Plaid webhook received");
+  if (!item_id) {
+    res.sendStatus(400);
+    return;
+  }
+  const items = await db
+    .select()
+    .from(plaidItemsTable)
+    .where(eq(plaidItemsTable.itemId, String(item_id)));
+  if (items.length === 0) {
+    res.sendStatus(404);
+    return;
+  }
+  const item = items[0];
+  if (
+    webhook_type === "TRANSACTIONS" &&
+    (webhook_code === "SYNC_UPDATES_AVAILABLE" ||
+      webhook_code === "DEFAULT_UPDATE" ||
+      webhook_code === "INITIAL_UPDATE" ||
+      webhook_code === "HISTORICAL_UPDATE")
+  ) {
+    try {
+      await syncPlaidItem(item.userId, item.id);
+    } catch (e) {
+      req.log.error({ err: e }, "Webhook-triggered sync failed");
+    }
+  }
+  res.sendStatus(200);
+});
 
 router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
   const { itemId } = req.body ?? {};

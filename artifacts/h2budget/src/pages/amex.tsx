@@ -62,7 +62,7 @@ import {
   type TrendPoint,
 } from "@/components/account-page";
 
-const AMEX_SOURCE = "amex";
+const AMEX_SOURCES = ["amex", "plaid:amex"];
 
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -96,7 +96,7 @@ export default function AmexPage() {
   const qc = useQueryClient();
 
   // Filters
-  const [sourceFilter, setSourceFilter] = useState<string>(AMEX_SOURCE);
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -126,7 +126,11 @@ export default function AmexPage() {
       from: monthFirstISO(earlier),
       to: monthLastISO(later),
     };
-    if (sourceFilter && sourceFilter !== "all") p.source = sourceFilter;
+    if (sourceFilter && sourceFilter !== "all") {
+      p.source = sourceFilter;
+    } else {
+      p.source = AMEX_SOURCES.join(",");
+    }
     return p;
   }, [sourceFilter, selectedMonth, currentMonth]);
 
@@ -476,6 +480,16 @@ export default function AmexPage() {
     }
     return points;
   }, [amexDebt, amexAnchorResp, netChangeByMonth, selectedMonth, currentMonth]);
+
+  const knownPayers = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of all) {
+      const v = (t.owedBy ?? "").trim();
+      if (v) set.add(v);
+    }
+    return Array.from(set).sort();
+  }, [all]);
+  const owedByListId = "amex-owed-by-suggestions";
 
   // Bulk selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -884,6 +898,41 @@ export default function AmexPage() {
     }
   };
 
+  const bulkSetReimbursable = async (next: boolean) => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const CONCURRENCY = 6;
+    const results: { id: string; ok: boolean; err?: string }[] = [];
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < ids.length) {
+        const i = cursor++;
+        const id = ids[i];
+        try {
+          await updateTx.mutateAsync({ id, data: { reimbursable: next } });
+          results.push({ id, ok: true });
+        } catch (e) {
+          results.push({ id, ok: false, err: (e as Error).message });
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
+    );
+    invalidateTxns();
+    const okCount = results.filter((r) => r.ok).length;
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length === 0) {
+      toast({ title: `${next ? "Marked" : "Unmarked"} ${okCount} as reimbursable` });
+    } else {
+      toast({
+        title: `${okCount} updated, ${failed.length} failed`,
+        description: failed[0].err,
+        variant: "destructive",
+      });
+    }
+  };
+
   // Smooth scroll to today on first load.
   const todayRef = useRef<HTMLDivElement | null>(null);
   const scrolledRef = useRef(false);
@@ -1176,10 +1225,11 @@ export default function AmexPage() {
           sourceFilter={sourceFilter}
           onSourceFilterChange={setSourceFilter}
           sourceOptions={[
-            { value: AMEX_SOURCE, label: "amex" },
+            { value: "all", label: "All Amex sources" },
+            { value: "amex", label: "amex" },
+            { value: "plaid:amex", label: "plaid:amex" },
             { value: "manual", label: "manual" },
             { value: "import", label: "import" },
-            { value: "all", label: "All sources" },
           ]}
           categoryFilter={categoryFilter}
           onCategoryFilterChange={setCategoryFilter}
@@ -1198,7 +1248,7 @@ export default function AmexPage() {
       <BalanceTrendChart
         caption="Ending balance · trailing 12 months"
         data={balanceTrend}
-        color="#2563eb"
+        color="hsl(var(--chart-1))"
         valueLabel="Ending balance"
       />
 
@@ -1228,6 +1278,15 @@ export default function AmexPage() {
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("unplanned")}>
               Unplanned
+            </Button>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-blue-900 mr-1">Reimb:</span>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetReimbursable(true)}>
+              Mark
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetReimbursable(false)}>
+              Unmark
             </Button>
           </div>
           <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
@@ -1298,6 +1357,7 @@ export default function AmexPage() {
                         key={t.owedBy ?? ""}
                         defaultValue={t.owedBy ?? ""}
                         placeholder="Owed by…"
+                        list={owedByListId}
                         aria-label={`Owed by for ${t.description}`}
                         className="h-7 w-32 text-xs"
                         onBlur={(e) => {
@@ -1328,7 +1388,7 @@ export default function AmexPage() {
                       >
                         <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={AMEX_SOURCE}>amex</SelectItem>
+                          <SelectItem value="amex">amex</SelectItem>
                           <SelectItem value="manual">manual</SelectItem>
                           <SelectItem value="import">import</SelectItem>
                         </SelectContent>
@@ -1403,6 +1463,7 @@ export default function AmexPage() {
                             key={t.owedBy ?? ""}
                             defaultValue={t.owedBy ?? ""}
                             placeholder="Owed by…"
+                            list={owedByListId}
                             aria-label={`Owed by for ${t.description}`}
                             className="h-7 w-32 text-xs"
                             onBlur={(e) => {
@@ -1447,7 +1508,7 @@ export default function AmexPage() {
                           >
                             <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value={AMEX_SOURCE}>amex</SelectItem>
+                              <SelectItem value="amex">amex</SelectItem>
                               <SelectItem value="manual">manual</SelectItem>
                               <SelectItem value="import">import</SelectItem>
                             </SelectContent>
@@ -1493,6 +1554,11 @@ export default function AmexPage() {
           </DayGroup>
         );
       })}
+      <datalist id={owedByListId}>
+        {knownPayers.map((p) => (
+          <option key={p} value={p} />
+        ))}
+      </datalist>
     </div>
   );
 }

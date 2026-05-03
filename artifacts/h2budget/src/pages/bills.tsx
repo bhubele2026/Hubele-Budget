@@ -315,6 +315,11 @@ export default function BillsPage() {
     return computePayoffsByDebt(sim);
   }, [debts, extraPerMonth, strategy]);
 
+  const archivedDebtsList = useMemo(
+    () => (debts ?? []).filter((d) => d.status === "archived"),
+    [debts],
+  );
+
   const allDebtMinRows = summary?.debtMins ?? [];
   const debtMinRows = useMemo(
     () => filterDebtMinRowsByPayoff(allDebtMinRows, payoffsByDebt),
@@ -386,6 +391,46 @@ export default function BillsPage() {
               onOpen={(debtId) => setLocation(`/avalanche?focus=${debtId}`)}
             />
           ) : null}
+          {archivedDebtsList.length > 0 && (
+            <Card data-testid="card-archived-debts">
+              <CardContent className="p-0">
+                <div className="px-5 py-4 flex items-center justify-between border-b border-border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
+                      <Lock className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <div className="text-base font-serif font-semibold text-muted-foreground">
+                        Archived debts
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {archivedDebtsList.length} paid off · manage on Avalanche
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <ul className="divide-y divide-border">
+                  {archivedDebtsList.map((d) => (
+                    <li
+                      key={d.id}
+                      className="px-5 py-3 flex items-center gap-4 opacity-60 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => setLocation(`/avalanche?focus=${d.id}`)}
+                      data-testid={`row-archived-debt-${d.id}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate text-muted-foreground line-through">
+                          {d.name}
+                        </div>
+                      </div>
+                      <div className="text-sm tabular-nums text-muted-foreground">
+                        {formatCurrency(d.balance)}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <div className="space-y-4">

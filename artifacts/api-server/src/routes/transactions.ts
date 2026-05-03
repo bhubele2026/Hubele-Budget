@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, gte, lte, isNull, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lte, isNull, ilike, sql, inArray } from "drizzle-orm";
 import {
   db,
   transactionsTable,
@@ -29,7 +29,14 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   const conds = [eq(transactionsTable.userId, req.userId!)];
   if (q.data.from) conds.push(gte(transactionsTable.occurredOn, q.data.from));
   if (q.data.to) conds.push(lte(transactionsTable.occurredOn, q.data.to));
-  if (q.data.source) conds.push(eq(transactionsTable.source, q.data.source));
+  if (q.data.source) {
+    const sources = q.data.source.split(",").map((s) => s.trim()).filter(Boolean);
+    if (sources.length === 1) {
+      conds.push(eq(transactionsTable.source, sources[0]));
+    } else if (sources.length > 1) {
+      conds.push(inArray(transactionsTable.source, sources));
+    }
+  }
   if (q.data.uncategorized === true) {
     conds.push(isNull(transactionsTable.categoryId));
   }

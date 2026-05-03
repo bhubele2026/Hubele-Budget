@@ -61,7 +61,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { isBankTxn } from "@/lib/forecastMatch";
+import { BucketBubbles, type BucketFlags, type BucketKey } from "@/components/bucket-bubbles";
 import { computeBalanceAtEndOf } from "@/lib/accountBalance";
+import { computeRunningBalances } from "@/lib/runningBalance";
 import {
   Command,
   CommandInput,
@@ -189,6 +191,19 @@ export default function TransactionsPage() {
   const [to, setTo] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const categoryUrlApplied = useRef(false);
+  useEffect(() => {
+    if (categoryUrlApplied.current || !categories?.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const catName = params.get("category");
+    if (catName) {
+      const match = categories.find((c) => c.name === catName);
+      if (match) {
+        setCategoryFilter(match.id);
+        categoryUrlApplied.current = true;
+      }
+    }
+  }, [categories]);
   const [memberFilter, setMemberFilter] = useState<string>("all");
 
   const categoryById = useMemo(() => {
@@ -316,6 +331,16 @@ export default function TransactionsPage() {
     }
     return points;
   }, [anchorBalance, balanceAtEndOf, selectedMonth]);
+
+  const runningBalanceMap = useMemo(() => {
+    if (endingBalance === null) return new Map<string, number>();
+    const sorted = [...monthScoped].sort((a, b) => {
+      if (a.occurredOn !== b.occurredOn)
+        return a.occurredOn < b.occurredOn ? 1 : -1;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
+    return computeRunningBalances(sorted, endingBalance);
+  }, [monthScoped, endingBalance]);
 
   // ---- Day grouping ----
   const groups = useMemo(() => {
@@ -979,10 +1004,30 @@ export default function TransactionsPage() {
                             <Inbox className="w-3 h-3 mr-1" /> Sent · pending in Forecast
                           </Badge>
                         )}
-                        {tx.weeklyAllowance && <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50">Weekly</Badge>}
-                        {tx.monthlyAllowance && <Badge variant="outline" className="text-xs border-indigo-200 text-indigo-700 bg-indigo-50">Monthly</Badge>}
-                        {tx.unplannedAllowance && <Badge variant="outline" className="text-xs border-amber-200 text-amber-700 bg-amber-50">Unplanned</Badge>}
-                        {tx.reimbursable && <Badge variant="outline" className="text-xs border-orange-200 text-orange-700 bg-orange-50">Reimbursable</Badge>}
+                        <BucketBubbles
+                          flags={{
+                            weekly: !!tx.weeklyAllowance,
+                            monthly: !!tx.monthlyAllowance,
+                            unplanned: !!tx.unplannedAllowance,
+                            reimbursable: !!tx.reimbursable,
+                          }}
+                          onToggle={(bucket: BucketKey, next: boolean) => {
+                            const data: Record<string, boolean> = {};
+                            if (bucket === "weekly") data.weeklyAllowance = next;
+                            else if (bucket === "monthly") data.monthlyAllowance = next;
+                            else if (bucket === "unplanned") data.unplannedAllowance = next;
+                            else if (bucket === "reimbursable") data.reimbursable = next;
+                            updateTx.mutate(
+                              { id: tx.id, data },
+                              {
+                                onSuccess: () => {
+                                  queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+                                },
+                              },
+                            );
+                          }}
+                          disabled={updateTx.isPending}
+                        />
                         {tx.reimbursed && <Badge variant="outline" className="text-xs border-green-200 text-green-700 bg-green-50">Reimbursed</Badge>}
                       </div>
                     </div>
@@ -998,6 +1043,11 @@ export default function TransactionsPage() {
                       >
                         {formatCurrency(tx.amount)}
                       </span>
+                      {runningBalanceMap.has(tx.id) && (
+                        <span className="text-[11px] tabular-nums text-muted-foreground">
+                          bal {formatCurrency(runningBalanceMap.get(tx.id)!)}
+                        </span>
+                      )}
                     </div>
                     <div className="flex gap-1 items-center">
                       {tx.forecastFlag ? (

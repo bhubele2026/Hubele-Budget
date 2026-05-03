@@ -1437,7 +1437,9 @@ export default function AvalanchePage() {
                     <tr key={m.monthIndex} className="border-t">
                       <td className="px-3 py-2">{fmtMonth(m.date)}</td>
                       <td className="px-3 py-2 text-muted-foreground">
-                        {m.activeTargetName ?? "—"}
+                        {m.targets.length > 1
+                          ? m.targets.map((t) => t.name).join(" → ")
+                          : m.activeTargetName ?? "—"}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {fmtMoney(m.totalInterest)}

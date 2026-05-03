@@ -334,6 +334,33 @@ export async function syncPlaidItem(
       }
     }
 
+    // Auto-refresh bank snapshot balance if a Plaid checking account is
+    // configured (#45). Keeps the forecast anchor fresh on every sync.
+    if (checkingPlaidAccountId && forecastSettings?.bankSnapshotAccountId) {
+      try {
+        const resp = await plaid().accountsBalanceGet({
+          access_token: item.accessToken,
+          options: { account_ids: [checkingPlaidAccountId] },
+        });
+        const acct = resp.data.accounts.find(
+          (a) => a.account_id === checkingPlaidAccountId,
+        );
+        const live = acct?.balances.available ?? acct?.balances.current;
+        if (live != null) {
+          await db
+            .update(forecastSettingsTable)
+            .set({
+              bankSnapshotBalance: Number(live).toFixed(2),
+              bankSnapshotAt: new Date(),
+              bankSnapshotSource: "plaid",
+            })
+            .where(eq(forecastSettingsTable.userId, userId));
+        }
+      } catch {
+        // Best-effort; don't break the sync.
+      }
+    }
+
     return {
       itemId: item.itemId,
       institutionName: item.institutionName,

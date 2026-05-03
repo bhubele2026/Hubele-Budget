@@ -117,6 +117,7 @@ import {
   CheckCircle2,
   AlertCircle,
   History,
+  CalendarDays,
 } from "lucide-react";
 import {
   Tooltip,
@@ -132,6 +133,7 @@ function statusBadge(s: string) {
     future: { label: "Upcoming", cls: "bg-muted text-muted-foreground" },
     matched: { label: "Matched", cls: "bg-primary/15 text-primary border-primary/30" },
     missed: { label: "Missed", cls: "bg-destructive/10 text-destructive border-destructive/30" },
+    rescheduled: { label: "Rescheduled", cls: "bg-violet-100 text-violet-900 border-violet-200" },
     ignored_unforecasted: { label: "Unplanned", cls: "bg-muted text-muted-foreground" },
     unplanned: { label: "Unplanned", cls: "bg-muted text-muted-foreground" },
   };
@@ -1580,8 +1582,8 @@ export default function ForecastPage() {
               >
                 <defs>
                   <linearGradient id="projectedBalanceGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f97316" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#f97316" stopOpacity={0.02} />
+                    <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
@@ -1614,7 +1616,7 @@ export default function ForecastPage() {
                 <Area
                   type="monotone"
                   dataKey="balance"
-                  stroke="#f97316"
+                  stroke="hsl(var(--chart-1))"
                   strokeWidth={2}
                   fill="url(#projectedBalanceGrad)"
                   name="Projected balance"
@@ -1982,6 +1984,57 @@ export default function ForecastPage() {
                               Undo
                             </Button>
                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {(() => {
+              const rescheduled = ((data?.resolutions ?? []) as Resolution[]).filter(
+                (r) => r.status === "rescheduled" && r.rescheduledTo && monthKey(r.rescheduledTo) === monthFilter,
+              );
+              if (rescheduled.length === 0) return null;
+              return (
+                <Card data-testid="rescheduled-bucket-panel">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <CalendarDays className="w-4 h-4 text-violet-600" />
+                      Rescheduled into {monthFilter}
+                      <Badge variant="outline" className="ml-1 text-[10px]">
+                        {rescheduled.length}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="divide-y divide-border">
+                      {rescheduled.map((r) => (
+                        <div
+                          key={r.id}
+                          className="p-4 flex items-center justify-between gap-3"
+                          data-testid={`rescheduled-row-${r.id}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {statusBadge("rescheduled")}
+                            <div className="min-w-0">
+                              <div className="font-medium text-sm truncate">
+                                {r.recurringItemId ?? "—"}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {r.occurrenceDate} → {formatDate(r.rescheduledTo!)}
+                              </div>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onUndo(r.id)}
+                            data-testid={`rescheduled-undo-${r.id}`}
+                          >
+                            Undo
+                          </Button>
                         </div>
                       ))}
                     </div>
