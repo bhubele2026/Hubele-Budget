@@ -12,14 +12,15 @@ export interface HealthStatus {
 /**
  * @nullable
  */
-export type TransactionWeeklyBucket = typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket] | null;
-
+export type TransactionWeeklyBucket =
+  | (typeof TransactionWeeklyBucket)[keyof typeof TransactionWeeklyBucket]
+  | null;
 
 export const TransactionWeeklyBucket = {
-  groceries: 'groceries',
-  dining: 'dining',
-  entertainment: 'entertainment',
-  misc: 'misc',
+  groceries: "groceries",
+  dining: "dining",
+  entertainment: "entertainment",
+  misc: "misc",
 } as const;
 
 export interface Transaction {
@@ -60,14 +61,15 @@ export interface Transaction {
 /**
  * @nullable
  */
-export type CreateTransactionInputWeeklyBucket = typeof CreateTransactionInputWeeklyBucket[keyof typeof CreateTransactionInputWeeklyBucket] | null;
-
+export type CreateTransactionInputWeeklyBucket =
+  | (typeof CreateTransactionInputWeeklyBucket)[keyof typeof CreateTransactionInputWeeklyBucket]
+  | null;
 
 export const CreateTransactionInputWeeklyBucket = {
-  groceries: 'groceries',
-  dining: 'dining',
-  entertainment: 'entertainment',
-  misc: 'misc',
+  groceries: "groceries",
+  dining: "dining",
+  entertainment: "entertainment",
+  misc: "misc",
 } as const;
 
 export interface CreateTransactionInput {
@@ -104,14 +106,15 @@ export interface CreateTransactionInput {
 /**
  * @nullable
  */
-export type TransactionInputWeeklyBucket = typeof TransactionInputWeeklyBucket[keyof typeof TransactionInputWeeklyBucket] | null;
-
+export type TransactionInputWeeklyBucket =
+  | (typeof TransactionInputWeeklyBucket)[keyof typeof TransactionInputWeeklyBucket]
+  | null;
 
 export const TransactionInputWeeklyBucket = {
-  groceries: 'groceries',
-  dining: 'dining',
-  entertainment: 'entertainment',
-  misc: 'misc',
+  groceries: "groceries",
+  dining: "dining",
+  entertainment: "entertainment",
+  misc: "misc",
 } as const;
 
 export interface TransactionInput {
@@ -155,28 +158,27 @@ Transactions and Amex pages.
   rememberPattern?: string | null;
 }
 
-export type DebtBalanceSource = typeof DebtBalanceSource[keyof typeof DebtBalanceSource];
-
+export type DebtBalanceSource =
+  (typeof DebtBalanceSource)[keyof typeof DebtBalanceSource];
 
 export const DebtBalanceSource = {
-  plaid: 'plaid',
-  manual: 'manual',
+  plaid: "plaid",
+  manual: "manual",
 } as const;
 
-export type DebtAprSource = typeof DebtAprSource[keyof typeof DebtAprSource];
-
+export type DebtAprSource = (typeof DebtAprSource)[keyof typeof DebtAprSource];
 
 export const DebtAprSource = {
-  plaid: 'plaid',
-  manual: 'manual',
+  plaid: "plaid",
+  manual: "manual",
 } as const;
 
-export type DebtMinPaymentSource = typeof DebtMinPaymentSource[keyof typeof DebtMinPaymentSource];
-
+export type DebtMinPaymentSource =
+  (typeof DebtMinPaymentSource)[keyof typeof DebtMinPaymentSource];
 
 export const DebtMinPaymentSource = {
-  plaid: 'plaid',
-  manual: 'manual',
+  plaid: "plaid",
+  manual: "manual",
 } as const;
 
 export interface DebtPlaidAccount {
@@ -295,29 +297,29 @@ export interface PlaidLiabilityAccount {
   linkedDebt?: PlaidLiabilityAccountLinkedDebt;
 }
 
-export type AvalancheSettingsStrategy = typeof AvalancheSettingsStrategy[keyof typeof AvalancheSettingsStrategy];
-
+export type AvalancheSettingsStrategy =
+  (typeof AvalancheSettingsStrategy)[keyof typeof AvalancheSettingsStrategy];
 
 export const AvalancheSettingsStrategy = {
-  avalanche: 'avalanche',
-  snowball: 'snowball',
+  avalanche: "avalanche",
+  snowball: "snowball",
 } as const;
 
-export type AvalancheSettingsExtraSource = typeof AvalancheSettingsExtraSource[keyof typeof AvalancheSettingsExtraSource];
-
+export type AvalancheSettingsExtraSource =
+  (typeof AvalancheSettingsExtraSource)[keyof typeof AvalancheSettingsExtraSource];
 
 export const AvalancheSettingsExtraSource = {
-  budget_net: 'budget_net',
-  budget_line: 'budget_line',
-  manual: 'manual',
+  budget_net: "budget_net",
+  budget_line: "budget_line",
+  manual: "manual",
 } as const;
 
-export type AvalancheSettingsBudgetMode = typeof AvalancheSettingsBudgetMode[keyof typeof AvalancheSettingsBudgetMode];
-
+export type AvalancheSettingsBudgetMode =
+  (typeof AvalancheSettingsBudgetMode)[keyof typeof AvalancheSettingsBudgetMode];
 
 export const AvalancheSettingsBudgetMode = {
-  budgeted: 'budgeted',
-  actual: 'actual',
+  budgeted: "budgeted",
+  actual: "actual",
 } as const;
 
 export interface AvalancheSettings {
@@ -329,29 +331,29 @@ export interface AvalancheSettings {
   budgetMode: AvalancheSettingsBudgetMode;
 }
 
-export type AvalancheSettingsInputStrategy = typeof AvalancheSettingsInputStrategy[keyof typeof AvalancheSettingsInputStrategy];
-
+export type AvalancheSettingsInputStrategy =
+  (typeof AvalancheSettingsInputStrategy)[keyof typeof AvalancheSettingsInputStrategy];
 
 export const AvalancheSettingsInputStrategy = {
-  avalanche: 'avalanche',
-  snowball: 'snowball',
+  avalanche: "avalanche",
+  snowball: "snowball",
 } as const;
 
-export type AvalancheSettingsInputExtraSource = typeof AvalancheSettingsInputExtraSource[keyof typeof AvalancheSettingsInputExtraSource];
-
+export type AvalancheSettingsInputExtraSource =
+  (typeof AvalancheSettingsInputExtraSource)[keyof typeof AvalancheSettingsInputExtraSource];
 
 export const AvalancheSettingsInputExtraSource = {
-  budget_net: 'budget_net',
-  budget_line: 'budget_line',
-  manual: 'manual',
+  budget_net: "budget_net",
+  budget_line: "budget_line",
+  manual: "manual",
 } as const;
 
-export type AvalancheSettingsInputBudgetMode = typeof AvalancheSettingsInputBudgetMode[keyof typeof AvalancheSettingsInputBudgetMode];
-
+export type AvalancheSettingsInputBudgetMode =
+  (typeof AvalancheSettingsInputBudgetMode)[keyof typeof AvalancheSettingsInputBudgetMode];
 
 export const AvalancheSettingsInputBudgetMode = {
-  budgeted: 'budgeted',
-  actual: 'actual',
+  budgeted: "budgeted",
+  actual: "actual",
 } as const;
 
 export interface AvalancheSettingsInput {
@@ -363,21 +365,21 @@ export interface AvalancheSettingsInput {
   budgetMode?: AvalancheSettingsInputBudgetMode;
 }
 
-export type AvalancheExtraSource = typeof AvalancheExtraSource[keyof typeof AvalancheExtraSource];
-
+export type AvalancheExtraSource =
+  (typeof AvalancheExtraSource)[keyof typeof AvalancheExtraSource];
 
 export const AvalancheExtraSource = {
-  budget_net: 'budget_net',
-  budget_line: 'budget_line',
-  manual: 'manual',
+  budget_net: "budget_net",
+  budget_line: "budget_line",
+  manual: "manual",
 } as const;
 
-export type AvalancheExtraMode = typeof AvalancheExtraMode[keyof typeof AvalancheExtraMode];
-
+export type AvalancheExtraMode =
+  (typeof AvalancheExtraMode)[keyof typeof AvalancheExtraMode];
 
 export const AvalancheExtraMode = {
-  budgeted: 'budgeted',
-  actual: 'actual',
+  budgeted: "budgeted",
+  actual: "actual",
 } as const;
 
 export type AvalancheExtraBreakdown = {
@@ -482,12 +484,12 @@ export interface BillsSummaryMonthly {
   monthEnd: string;
 }
 
-export type BillsDebtMinRowSource = typeof BillsDebtMinRowSource[keyof typeof BillsDebtMinRowSource];
-
+export type BillsDebtMinRowSource =
+  (typeof BillsDebtMinRowSource)[keyof typeof BillsDebtMinRowSource];
 
 export const BillsDebtMinRowSource = {
-  plaid: 'plaid',
-  manual: 'manual',
+  plaid: "plaid",
+  manual: "manual",
 } as const;
 
 export interface BillsDebtMinRow {
@@ -512,13 +514,13 @@ export interface BillsSummary {
   monthly: BillsSummaryMonthly;
 }
 
-export type CategorySourceKind = typeof CategorySourceKind[keyof typeof CategorySourceKind];
-
+export type CategorySourceKind =
+  (typeof CategorySourceKind)[keyof typeof CategorySourceKind];
 
 export const CategorySourceKind = {
-  manual: 'manual',
-  auto_bills: 'auto_bills',
-  auto_debts: 'auto_debts',
+  manual: "manual",
+  auto_bills: "auto_bills",
+  auto_debts: "auto_debts",
 } as const;
 
 export interface Category {
@@ -530,13 +532,13 @@ export interface Category {
   sortOrder: number;
 }
 
-export type CategoryInputSourceKind = typeof CategoryInputSourceKind[keyof typeof CategoryInputSourceKind];
-
+export type CategoryInputSourceKind =
+  (typeof CategoryInputSourceKind)[keyof typeof CategoryInputSourceKind];
 
 export const CategoryInputSourceKind = {
-  manual: 'manual',
-  auto_bills: 'auto_bills',
-  auto_debts: 'auto_debts',
+  manual: "manual",
+  auto_bills: "auto_bills",
+  auto_debts: "auto_debts",
 } as const;
 
 export interface CategoryInput {
@@ -564,22 +566,22 @@ export interface BudgetLineInput {
   note?: string | null;
 }
 
-export type BudgetLineWithActualSourceKind = typeof BudgetLineWithActualSourceKind[keyof typeof BudgetLineWithActualSourceKind];
-
+export type BudgetLineWithActualSourceKind =
+  (typeof BudgetLineWithActualSourceKind)[keyof typeof BudgetLineWithActualSourceKind];
 
 export const BudgetLineWithActualSourceKind = {
-  manual: 'manual',
-  auto_bills: 'auto_bills',
-  auto_debts: 'auto_debts',
+  manual: "manual",
+  auto_bills: "auto_bills",
+  auto_debts: "auto_debts",
 } as const;
 
-export type BudgetLineWithActualSourceBreakdownItemSource = typeof BudgetLineWithActualSourceBreakdownItemSource[keyof typeof BudgetLineWithActualSourceBreakdownItemSource];
-
+export type BudgetLineWithActualSourceBreakdownItemSource =
+  (typeof BudgetLineWithActualSourceBreakdownItemSource)[keyof typeof BudgetLineWithActualSourceBreakdownItemSource];
 
 export const BudgetLineWithActualSourceBreakdownItemSource = {
-  Bank: 'Bank',
-  Amex: 'Amex',
-  Other: 'Other',
+  Bank: "Bank",
+  Amex: "Amex",
+  Other: "Other",
 } as const;
 
 export type BudgetLineWithActualSourceBreakdownItem = {
@@ -680,12 +682,12 @@ export interface WeeklyBucketLabels {
   misc?: string;
 }
 
-export type DaysSinceTrackerMatchType = typeof DaysSinceTrackerMatchType[keyof typeof DaysSinceTrackerMatchType];
-
+export type DaysSinceTrackerMatchType =
+  (typeof DaysSinceTrackerMatchType)[keyof typeof DaysSinceTrackerMatchType];
 
 export const DaysSinceTrackerMatchType = {
-  category: 'category',
-  keyword: 'keyword',
+  category: "category",
+  keyword: "keyword",
 } as const;
 
 export interface DaysSinceTracker {
@@ -792,12 +794,12 @@ export interface ForecastSettingsInput {
   cashBuffer?: string;
 }
 
-export type BankSnapshotSource = typeof BankSnapshotSource[keyof typeof BankSnapshotSource];
-
+export type BankSnapshotSource =
+  (typeof BankSnapshotSource)[keyof typeof BankSnapshotSource];
 
 export const BankSnapshotSource = {
-  manual: 'manual',
-  plaid: 'plaid',
+  manual: "manual",
+  plaid: "plaid",
 } as const;
 
 export interface BankSnapshot {
@@ -825,14 +827,14 @@ export interface PlaidCheckingAccount {
   institutionName?: string | null;
 }
 
-export type CashSignalStatus = typeof CashSignalStatus[keyof typeof CashSignalStatus];
-
+export type CashSignalStatus =
+  (typeof CashSignalStatus)[keyof typeof CashSignalStatus];
 
 export const CashSignalStatus = {
-  ready: 'ready',
-  tight: 'tight',
-  not_yet: 'not_yet',
-  no_data: 'no_data',
+  ready: "ready",
+  tight: "tight",
+  not_yet: "not_yet",
+  no_data: "no_data",
 } as const;
 
 export type CashSignalDailyItem = {
@@ -882,7 +884,7 @@ export interface MonthSnapshot {
   closedAt?: string | null;
 }
 
-export type ForecastBundleMonthSnapshots = {[key: string]: MonthSnapshot};
+export type ForecastBundleMonthSnapshots = { [key: string]: MonthSnapshot };
 
 export interface ForecastBundle {
   fromDate: string;
@@ -919,7 +921,7 @@ export interface DashboardBudgetInput {
   amount: string;
 }
 
-export type ImportSummaryCounts = {[key: string]: number};
+export type ImportSummaryCounts = { [key: string]: number };
 
 export interface ImportSummary {
   batchId: string;
@@ -991,30 +993,30 @@ export interface PlaidSyncResult {
 }
 
 export type ListTransactionsParams = {
-from?: string;
-to?: string;
-limit?: number;
-source?: string;
-uncategorized?: boolean;
-excludeTransfers?: boolean;
-reimbursable?: boolean;
-search?: string;
-minAmount?: string;
-maxAmount?: string;
-categoryId?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  source?: string;
+  uncategorized?: boolean;
+  excludeTransfers?: boolean;
+  reimbursable?: boolean;
+  search?: string;
+  minAmount?: string;
+  maxAmount?: string;
+  categoryId?: string;
 };
 
 export type ListPlaidLiabilityAccountsParams = {
-refresh?: boolean;
+  refresh?: boolean;
 };
 
 export type GetForecastParams = {
-days?: number;
+  days?: number;
 };
 
 export type GetForecastCashSignalParams = {
-horizonDays?: number;
-fromDate?: string;
+  horizonDays?: number;
+  fromDate?: string;
 };
 
 export type CloseForecastMonthBody = {
@@ -1032,16 +1034,15 @@ export type CloseForecastMonthBody = {
 };
 
 export type ListDashboardBudgetsParams = {
-bucket?: string;
-periodKey?: string;
+  bucket?: string;
+  periodKey?: string;
 };
 
 export type DeleteDashboardBudgetParams = {
-bucket: string;
-periodKey: string;
+  bucket: string;
+  periodKey: string;
 };
 
 export type ImportWorkbookBody = {
   file: Blob;
 };
-
