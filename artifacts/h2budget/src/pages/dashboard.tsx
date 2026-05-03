@@ -130,12 +130,23 @@ function LifeThisWeek({
 }) {
   const SUB_LABEL = useWeeklyBucketLabels();
   const [weekOffset, setWeekOffset] = useState(0);
+  const currentWeekStart = useMemo(() => startOfWeek(today), [today]);
+  const earliestWeekStart = useMemo(
+    () => startOfWeek(new Date(2026, 3, 1)),
+    [],
+  );
+  const minOffset = useMemo(() => {
+    const ms = earliestWeekStart.getTime() - currentWeekStart.getTime();
+    return Math.round(ms / (7 * 24 * 60 * 60 * 1000));
+  }, [currentWeekStart, earliestWeekStart]);
   const weekStart = useMemo(
-    () => addDays(startOfWeek(today), weekOffset * 7),
-    [today, weekOffset],
+    () => addDays(currentWeekStart, weekOffset * 7),
+    [currentWeekStart, weekOffset],
   );
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
   const periodKey = fmtISO(weekStart);
+  const canGoBack = weekOffset > minOffset;
+  const canGoForward = weekOffset < 0;
 
   const editor = useBudgetEditor("weekly", periodKey);
 
@@ -182,13 +193,34 @@ function LifeThisWeek({
           <h2 className="text-2xl font-serif font-bold text-foreground">Life this week</h2>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setWeekOffset((w) => w - 1)}>
+          {!isCurrentWeek && (
+            <button
+              type="button"
+              onClick={() => setWeekOffset(0)}
+              className="text-[11px] uppercase tracking-widest text-amber-700 hover:underline"
+            >
+              This week
+            </button>
+          )}
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 rounded-full"
+            disabled={!canGoBack}
+            onClick={() => setWeekOffset((w) => Math.max(minOffset, w - 1))}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="text-xs uppercase tracking-widest text-muted-foreground min-w-[110px] text-center">
             {rangeLabel}
           </span>
-          <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setWeekOffset((w) => w + 1)}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 rounded-full"
+            disabled={!canGoForward}
+            onClick={() => setWeekOffset((w) => Math.min(0, w + 1))}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -260,13 +292,14 @@ function MonthlyLikeSection({
   bucket,
   transactions,
   today,
+  monthOffset,
 }: {
   title: string;
   bucket: "monthly" | "unplanned";
   transactions: Transaction[];
   today: Date;
+  monthOffset: number;
 }) {
-  const [monthOffset, setMonthOffset] = useState(0);
   const viewMonth = useMemo(
     () => new Date(today.getFullYear(), today.getMonth() + monthOffset, 1),
     [today, monthOffset],
@@ -298,7 +331,6 @@ function MonthlyLikeSection({
   const cap = editor.saved;
   const overspent = cap > 0 && total > cap;
   const pct = cap > 0 ? Math.min(100, (total / cap) * 100) : 0;
-  const monthLabel = viewMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
   const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
   const isCurrentMonth = monthOffset === 0;
   const dayOfMonth = isCurrentMonth ? today.getDate() : daysInMonth;
@@ -311,17 +343,6 @@ function MonthlyLikeSection({
             {bucket === "monthly" ? "MONTHLY BUDGET" : "UNPLANNED BUDGET"}
           </div>
           <h2 className="text-2xl font-serif font-bold text-foreground">{title}</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setMonthOffset((m) => m - 1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="text-xs uppercase tracking-widest text-muted-foreground min-w-[140px] text-center">
-            {monthLabel}
-          </span>
-          <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setMonthOffset((m) => m + 1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
         </div>
       </div>
       <Card>
@@ -341,7 +362,7 @@ function MonthlyLikeSection({
           {cap > 0 && <Progress value={pct} className={overspent ? "[&>div]:bg-destructive" : ""} />}
           <div className="border-t pt-3">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-              This month ({recent.length})
+              {isCurrentMonth ? "This month" : "Selected month"} ({recent.length})
             </div>
             {recent.length === 0 ? (
               <div className="text-sm text-muted-foreground py-2">
@@ -892,13 +913,68 @@ function SummaryCell({ label, value }: { label: string; value: number }) {
   );
 }
 
+function DashboardMonthlySections({
+  today,
+  transactions,
+}: {
+  today: Date;
+  transactions: Transaction[];
+}) {
+  const [monthOffset, setMonthOffset] = useState(0);
+  const viewMonth = useMemo(
+    () => new Date(today.getFullYear(), today.getMonth() + monthOffset, 1),
+    [today, monthOffset],
+  );
+  const monthLabel = viewMonth
+    .toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    .toUpperCase();
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 rounded-full"
+          onClick={() => setMonthOffset((m) => m - 1)}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span className="text-xs uppercase tracking-widest text-muted-foreground min-w-[140px] text-center">
+          {monthLabel}
+        </span>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 rounded-full"
+          onClick={() => setMonthOffset((m) => m + 1)}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+      <MonthlyLikeSection
+        title="Monthly spending"
+        bucket="monthly"
+        transactions={transactions}
+        today={today}
+        monthOffset={monthOffset}
+      />
+      <MonthlyLikeSection
+        title="Unplanned spending"
+        bucket="unplanned"
+        transactions={transactions}
+        today={today}
+        monthOffset={monthOffset}
+      />
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const today = useMemo(() => new Date(), []);
-  // Pull a wider window so prev/next week navigation has data.
-  const fromISO = useMemo(() => {
-    const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    return fmtISO(start);
-  }, [today]);
+  // Anchor weekly fetch to the April 2026 floor so the weekly cycler
+  // can reach every selectable past week, regardless of today's date.
+  const fromISO = useMemo(() => fmtISO(new Date(2026, 3, 1)), []);
   // Pull 12 months back so prev-month navigation in monthly sections has data.
   const monthlyFromISO = useMemo(() => {
     const start = new Date(today.getFullYear(), today.getMonth() - 12, 1);
@@ -944,17 +1020,9 @@ export default function DashboardPage() {
       </div>
 
       <LifeThisWeek transactions={allTxns} today={today} />
-      <MonthlyLikeSection
-        title="Monthly spending"
-        bucket="monthly"
-        transactions={monthlyTagged}
+      <DashboardMonthlySections
         today={today}
-      />
-      <MonthlyLikeSection
-        title="Unplanned spending"
-        bucket="unplanned"
         transactions={monthlyTagged}
-        today={today}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
