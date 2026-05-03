@@ -93,6 +93,61 @@ function debtToSim(d: Debt): SimDebt {
   };
 }
 
+function PayoffRing({
+  originalBalance,
+  balance,
+}: {
+  originalBalance: number | null;
+  balance: number;
+}) {
+  const orig = originalBalance != null && Number.isFinite(originalBalance) && originalBalance > 0
+    ? originalBalance
+    : 0;
+  const paid = orig > 0 ? Math.max(0, Math.min(orig, orig - balance)) : 0;
+  const pct = orig > 0 ? (paid / orig) * 100 : 0;
+  const size = 22;
+  const stroke = 3;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const dash = (pct / 100) * c;
+  const tip =
+    orig > 0
+      ? `${Math.round(pct)}% paid down — ${fmtMoney(paid)} of ${fmtMoney(orig)} (now ${fmtMoney(balance)})`
+      : `No original balance recorded yet — current ${fmtMoney(balance)}`;
+  return (
+    <span
+      className="inline-flex items-center"
+      title={tip}
+      aria-label={tip}
+      data-testid="payoff-ring"
+    >
+      <svg width={size} height={size} className="shrink-0">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={stroke}
+          className="text-muted/40"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          className="text-emerald-500 dark:text-emerald-400"
+          strokeDasharray={`${dash} ${c}`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </svg>
+    </span>
+  );
+}
+
 function aprToneClass(apr: number): string {
   if (apr >= 0.25) return "text-destructive";
   if (apr >= 0.15) return "text-amber-600 dark:text-amber-400";
@@ -1223,13 +1278,25 @@ export default function AvalanchePage() {
                         onClick={() => setDrillDown(d.id)}
                       >
                         <td className="px-3 py-2 font-medium">
-                          {isTarget && (
-                            <Badge className="mr-2" variant="default">
-                              Target
-                            </Badge>
-                          )}
-                          {d.name}
-                          <DebtPlaidSource debt={dbt} />
+                          <div className="flex items-center gap-2">
+                            <PayoffRing
+                              originalBalance={
+                                dbt.originalBalance != null
+                                  ? Number(dbt.originalBalance)
+                                  : null
+                              }
+                              balance={Number(dbt.balance)}
+                            />
+                            <div className="min-w-0">
+                              {isTarget && (
+                                <Badge className="mr-2" variant="default">
+                                  Target
+                                </Badge>
+                              )}
+                              {d.name}
+                              <DebtPlaidSource debt={dbt} />
+                            </div>
+                          </div>
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">{dbt.type ?? "—"}</td>
                         <td
