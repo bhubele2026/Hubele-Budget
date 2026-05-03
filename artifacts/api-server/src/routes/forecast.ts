@@ -133,7 +133,35 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   }
   events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
-  const txns = await db
+  // Forecast is Chase-checking-only. Resolve the configured checking
+  // account's external Plaid account_id (if any) so we can filter out
+  // any non-checking transactions/resolutions at read time — even if a
+  // legacy row still has `forecastFlag = true`.
+  let configuredCheckingExternalId: string | null = null;
+  if (settings.bankSnapshotAccountId) {
+    const [acct] = await db
+      .select({ accountId: plaidAccountsTable.accountId })
+      .from(plaidAccountsTable)
+      .where(eq(plaidAccountsTable.id, settings.bankSnapshotAccountId));
+    configuredCheckingExternalId = acct?.accountId ?? null;
+  }
+  const isBankRow = (
+    source: string | null | undefined,
+    plaidAccountId: string | null | undefined,
+  ): boolean => {
+    if (plaidAccountId) {
+      return (
+        configuredCheckingExternalId !== null &&
+        plaidAccountId === configuredCheckingExternalId
+      );
+    }
+    const s = (source ?? "manual").toLowerCase();
+    if (s === "amex" || s === "plaid:amex") return false;
+    if (s.startsWith("plaid:")) return false;
+    return true;
+  };
+
+  const txnsAll = await db
     .select()
     .from(transactionsTable)
     .where(
@@ -144,6 +172,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
         lte(transactionsTable.occurredOn, toISO),
       ),
     );
+  const txns = txnsAll.filter((t) => isBankRow(t.source, t.plaidAccountId));
 
   const resolutionRows = await db
     .select({
@@ -157,6 +186,8 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
       txnDescription: transactionsTable.description,
       txnAmount: transactionsTable.amount,
       txnForecastFlag: transactionsTable.forecastFlag,
+      txnSource: transactionsTable.source,
+      txnPlaidAccountId: transactionsTable.plaidAccountId,
     })
     .from(forecastResolutionsTable)
     .leftJoin(
@@ -165,9 +196,16 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     )
     .where(eq(forecastResolutionsTable.userId, userId));
 
-  const resolutions = resolutionRows.filter(
-    (r) => !r.matchedTxnId || r.txnForecastFlag !== false,
-  );
+  // Drop resolutions whose matched transaction isn't bank-checking, so
+  // legacy Amex matches no longer mark planned items as `matched` on
+  // the Forecast page.
+  const resolutions = resolutionRows
+    .filter((r) => !r.matchedTxnId || r.txnForecastFlag !== false)
+    .filter(
+      (r) =>
+        !r.matchedTxnId || isBankRow(r.txnSource, r.txnPlaidAccountId),
+    )
+    .map(({ txnSource: _s, txnPlaidAccountId: _p, ...rest }) => rest);
 
   const closedRows = await db
     .select()

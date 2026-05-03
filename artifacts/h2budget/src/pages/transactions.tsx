@@ -60,6 +60,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { isBankTxn } from "@/lib/forecastMatch";
 import {
   Command,
   CommandInput,
@@ -423,8 +424,34 @@ export default function TransactionsPage() {
     }
   };
 
+  // The configured Chase checking account's external Plaid account_id.
+  // Forecast is scoped to this single account, not to all depository
+  // accounts the user might have linked.
+  const checkingPlaidAccountIdSet = useMemo(() => {
+    const s = new Set<string>();
+    if (chasePlaidAccountId) s.add(chasePlaidAccountId);
+    return s;
+  }, [chasePlaidAccountId]);
+
+  // Forecast is bank-only. The Send-to-Forecast affordance is hidden for
+  // any non-checking (Amex / credit) row so we never flag credit-card
+  // activity into the cash projection.
+  const canSendToForecast = (tx: Transaction): boolean =>
+    isBankTxn(
+      { source: tx.source, plaidAccountId: tx.plaidAccountId ?? null },
+      checkingPlaidAccountIdSet,
+    );
+
   const handleToggleForecast = (tx: Transaction) => {
     const next = !tx.forecastFlag;
+    if (next && !canSendToForecast(tx)) {
+      toast({
+        title: "Forecast is bank-only",
+        description: "Only Chase checking transactions can be sent to Forecast.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (next && !tx.categoryId) {
       toast({
         title: "Categorize this transaction first",
@@ -518,18 +545,26 @@ export default function TransactionsPage() {
     const candidates = ids
       .map((id) => byId.get(id))
       .filter((t): t is Transaction => !!t && t.forecastFlag !== next);
-    const targets = next
-      ? candidates.filter((t) => !!t.categoryId)
+    // Forecast is Chase-checking-only — bulk-send must skip any
+    // non-checking (Amex / credit) rows that happen to be selected.
+    const bankEligible = next
+      ? candidates.filter((t) => canSendToForecast(t))
       : candidates;
-    const skippedUncat = next ? candidates.length - targets.length : 0;
+    const skippedNonBank = next ? candidates.length - bankEligible.length : 0;
+    const targets = next
+      ? bankEligible.filter((t) => !!t.categoryId)
+      : bankEligible;
+    const skippedUncat = next ? bankEligible.length - targets.length : 0;
     if (!targets.length) {
-      toast({
-        title: next
-          ? skippedUncat > 0
+      const reason =
+        next && skippedNonBank > 0 && skippedUncat === 0
+          ? "Only Chase checking transactions can be sent to Forecast."
+          : next && skippedUncat > 0
             ? "Categorize these first to send them to Forecast"
-            : "Selected items already in Forecast"
-          : "Selected items not in Forecast",
-      });
+            : next
+              ? "Selected items already in Forecast"
+              : "Selected items not in Forecast";
+      toast({ title: reason });
       return;
     }
     const CONCURRENCY = 6;
@@ -555,7 +590,10 @@ export default function TransactionsPage() {
     queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
     clearSelection();
     if (!failures.length) {
-      const suffix = skippedUncat > 0 ? ` · ${skippedUncat} skipped (uncategorized)` : "";
+      const parts: string[] = [];
+      if (skippedUncat > 0) parts.push(`${skippedUncat} uncategorized`);
+      if (skippedNonBank > 0) parts.push(`${skippedNonBank} non-checking`);
+      const suffix = parts.length ? ` · skipped ${parts.join(", ")}` : "";
       toast({
         title: next
           ? `Sent ${okCount} to Forecast${suffix}`
@@ -971,7 +1009,7 @@ export default function TransactionsPage() {
                           <Send className="w-3.5 h-3.5 mr-1.5" />
                           Remove
                         </Button>
-                      ) : tx.categoryId ? (
+                      ) : !canSendToForecast(tx) ? null : tx.categoryId ? (
                         <Button
                           variant="secondary"
                           size="sm"

@@ -1,4 +1,4 @@
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -6,6 +6,7 @@ import {
   transactionsTable,
   forecastResolutionsTable,
   forecastSettingsTable,
+  plaidAccountsTable,
 } from "@workspace/db";
 
 type Cadence =
@@ -261,8 +262,37 @@ export async function computeCashSignal(
     );
   }
 
+  // Resolve the configured Chase checking account's external Plaid
+  // account_id (if any). Forecast is bank-only and scoped to this single
+  // account — legacy `forecastFlag = true` rows on Amex / other
+  // depository accounts must be filtered out at read time.
+  let configuredCheckingExternalId: string | null = null;
+  if (settings?.bankSnapshotAccountId) {
+    const [acct] = await db
+      .select({ accountId: plaidAccountsTable.accountId })
+      .from(plaidAccountsTable)
+      .where(eq(plaidAccountsTable.id, settings.bankSnapshotAccountId));
+    configuredCheckingExternalId = acct?.accountId ?? null;
+  }
+  const isBankRow = (
+    source: string | null,
+    plaidAccountId: string | null,
+  ): boolean => {
+    if (plaidAccountId) {
+      return (
+        configuredCheckingExternalId !== null &&
+        plaidAccountId === configuredCheckingExternalId
+      );
+    }
+    // Manual rows (no plaidAccountId): exclude anything tagged as an
+    // explicit credit-card source.
+    const s = (source ?? "").toLowerCase();
+    if (s === "amex" || s.startsWith("plaid:")) return false;
+    return true;
+  };
+
   // Pull future-anchored checking transactions (forecast_flag and reflecting bank movement after snapshot)
-  const txns = await db
+  const txnsAll = await db
     .select()
     .from(transactionsTable)
     .where(
@@ -273,12 +303,51 @@ export async function computeCashSignal(
         lte(transactionsTable.occurredOn, toISO),
       ),
     );
+  const txns = txnsAll.filter((t) =>
+    isBankRow(t.source, t.plaidAccountId ?? null),
+  );
 
-  // Get matched-resolutions to suppress double-count of plan items already paid for by a txn
-  const resolutions = await db
+  // Get matched-resolutions to suppress double-count of plan items already paid for by a txn.
+  // Drop any resolution whose matched transaction is NOT a Chase
+  // checking row, so a legacy Amex match can't suppress a planned item
+  // from the projection. Validate the matched transaction's account
+  // *independently* of the projection window — a Chase match dated
+  // outside [anchor, to] still legitimately suppresses its plan item.
+  const resolutionsAll = await db
     .select()
     .from(forecastResolutionsTable)
     .where(eq(forecastResolutionsTable.userId, userId));
+  const matchedIds = Array.from(
+    new Set(
+      resolutionsAll
+        .map((r) => r.matchedTxnId)
+        .filter((x): x is string => !!x),
+    ),
+  );
+  const matchedTxnBankSet = new Set<string>();
+  if (matchedIds.length > 0) {
+    const matchedTxns = await db
+      .select({
+        id: transactionsTable.id,
+        source: transactionsTable.source,
+        plaidAccountId: transactionsTable.plaidAccountId,
+      })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.userId, userId),
+          inArray(transactionsTable.id, matchedIds),
+        ),
+      );
+    for (const t of matchedTxns) {
+      if (isBankRow(t.source, t.plaidAccountId ?? null)) {
+        matchedTxnBankSet.add(t.id);
+      }
+    }
+  }
+  const resolutions = resolutionsAll.filter(
+    (r) => !r.matchedTxnId || matchedTxnBankSet.has(r.matchedTxnId),
+  );
   const matchedPlanKeys = new Set<string>();
   const matchedTxnIds = new Set<string>();
   const rescheduledByKey = new Map<string, string>();

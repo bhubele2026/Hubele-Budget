@@ -641,12 +641,30 @@ export default function ForecastPage() {
     [debtLinks, payoffsByDebt, recurringItems],
   );
 
+  // Set containing only the configured Chase checking account's external
+  // Plaid `account_id` (if any). Used as a defensive client-side filter so
+  // only that one account's transactions can ever appear on Forecast —
+  // even if other depository accounts were linked, and even if a legacy
+  // row still has `forecastFlag = true`. The server already filters the
+  // same way; this is a belt-and-braces guard.
+  const checkingPlaidAccountIds = useMemo(() => {
+    const s = new Set<string>();
+    const snapshotRowId = data?.bankSnapshot?.accountId ?? null;
+    if (snapshotRowId) {
+      const acct = (data?.plaidCheckingAccounts ?? []).find(
+        (a) => a.id === snapshotRowId,
+      );
+      if (acct?.accountId) s.add(acct.accountId);
+    }
+    return s;
+  }, [data?.bankSnapshot?.accountId, data?.plaidCheckingAccounts]);
+
   const register = useMemo(() => {
     if (!data) return null;
     const rawEvents = (data.events ?? []) as CashEvent[];
     const events = filterEventsByPayoff(rawEvents, debtLinks, payoffsByDebt);
     const txns = ((data.transactions ?? []) as unknown as MatchTxn[]).filter(
-      (t) => t.forecastFlag,
+      (t) => t.forecastFlag && isBankTxn(t, checkingPlaidAccountIds),
     );
     const resolutions = (data.resolutions ?? []) as Resolution[];
     const snapshot = data.bankSnapshot ?? null;
@@ -707,35 +725,13 @@ export default function ForecastPage() {
       .map((b) => ({ id: `inbox:${b.txn.id}`, bank: b }));
   }, [register]);
 
-  // Set of Plaid account IDs (the Plaid `account_id` text, matching what's
-  // stored on transactions.plaidAccountId) that are checking/depository.
-  // Used to classify Plaid transactions as bank vs credit-card by account
-  // metadata, not by source-string heuristics.
-  const checkingPlaidAccountIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const a of data?.plaidCheckingAccounts ?? []) {
-      if (a.accountId) s.add(a.accountId);
-    }
-    return s;
-  }, [data?.plaidCheckingAccounts]);
-
-  const amexInbox = useMemo(
-    () =>
-      inbox.filter(
-        (c) => !isBankTxn(c.bank.txn, checkingPlaidAccountIds),
-      ),
-    [inbox, checkingPlaidAccountIds],
-  );
   // Bank inbox is scoped to the currently-selected month so counts and
-  // visible rows stay consistent.
+  // visible rows stay consistent. (All `inbox` rows are already
+  // bank-checking — non-bank txns are filtered out at register build time.)
   const bankInbox = useMemo(
     () =>
-      inbox.filter(
-        (c) =>
-          isBankTxn(c.bank.txn, checkingPlaidAccountIds) &&
-          monthKey(c.bank.date) === monthFilter,
-      ),
-    [inbox, monthFilter, checkingPlaidAccountIds],
+      inbox.filter((c) => monthKey(c.bank.date) === monthFilter),
+    [inbox, monthFilter],
   );
 
   // Bank rows already resolved (matched or marked unplanned) in the current
@@ -1076,7 +1072,7 @@ export default function ForecastPage() {
     if (row.status === "matched" || row.status === "missed") return;
     if (
       confirm(
-        `Mark "${row.label}" as missed for ${formatDate(row.date)}? You can drag an Amex card here to match instead.`,
+        `Mark "${row.label}" as missed for ${formatDate(row.date)}? You can drag a Chase checking transaction here to match instead.`,
       )
     ) {
       upsertResolution.mutate(
@@ -1870,55 +1866,6 @@ export default function ForecastPage() {
                       </div>
                     ))}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3 flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <InboxIcon className="w-4 h-4" />
-                  Amex activity to reconcile
-                </CardTitle>
-                <span className="text-xs text-muted-foreground">
-                  Drag a card onto a planned item below, or pick "Match to…"
-                </span>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {amexInbox.length === 0 ? (
-                  <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-                    Send an Amex charge from the Transactions page to start reconciling.
-                  </div>
-                ) : (
-                  amexInbox.map((card) => (
-                    <div key={card.id} className="flex items-stretch gap-2">
-                      <div className="flex-1">
-                        <InboxCardView
-                          card={card}
-                          categoryName={
-                            card.bank.txn.categoryId
-                              ? categoryById.get(card.bank.txn.categoryId) ?? null
-                              : null
-                          }
-                          onUnplanned={() => onMarkUnplannedTxn(card.bank.txn.id)}
-                          onMatchPick={(p) =>
-                            matchInboxToPlan(card.bank.txn.id, p)
-                          }
-                          planRows={planRows.filter(
-                            (r) => r.status === "pending_plan" || r.status === "future",
-                          )}
-                        />
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onRemoveFromForecast(card.bank.txn.id)}
-                        title="Remove from Forecast"
-                      >
-                        <X className="w-4 h-4 text-muted-foreground" />
-                      </Button>
-                    </div>
-                  ))
                 )}
               </CardContent>
             </Card>
