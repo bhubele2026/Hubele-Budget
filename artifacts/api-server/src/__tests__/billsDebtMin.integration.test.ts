@@ -75,7 +75,7 @@ async function getBills(): Promise<{
 }> {
   const r = await fetch(`${baseUrl}/bills/summary`);
   expect(r.status).toBe(200);
-  return r.json();
+  return (await r.json()) as Awaited<ReturnType<typeof getBills>>;
 }
 
 async function insertDebt(over: Partial<typeof debtsTable.$inferInsert> = {}) {

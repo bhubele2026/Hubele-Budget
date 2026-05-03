@@ -33,6 +33,8 @@ vi.mock("@workspace/api-client-react", () => {
     useListMembers: () => ({ data: membersData, isLoading: false }),
     useCreateInvitation: () => ({ mutate: vi.fn(), isPending: false }),
     useRevokeInvitation: () => ({ mutate: vi.fn(), isPending: false }),
+    useResendInvitation: () => ({ mutate: vi.fn(), isPending: false }),
+    useRemoveMember: () => ({ mutate: vi.fn(), isPending: false }),
     getListInvitationsQueryKey: () => ["/api/invitations"],
     getListMembersQueryKey: () => ["/api/members"],
   };

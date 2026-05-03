@@ -538,26 +538,21 @@ async function reconcileMay2026Amounts(userId: string): Promise<void> {
       );
 
     // Upsert avalanche manualExtra to the canonical $6,225.00 for this user.
-    const [existingAv] = await tx
-      .select()
-      .from(avalancheSettingsTable)
-      .where(eq(avalancheSettingsTable.userId, userId));
-    if (existingAv) {
-      await tx
-        .update(avalancheSettingsTable)
-        .set({
+    // Use ON CONFLICT to be safe against concurrent reconciles racing the
+    // initial INSERT (the dashboard fires multiple parallel month requests).
+    await tx
+      .insert(avalancheSettingsTable)
+      .values({
+        userId,
+        manualExtra: MAY_2026_AVALANCHE_MANUAL_EXTRA,
+      })
+      .onConflictDoUpdate({
+        target: avalancheSettingsTable.userId,
+        set: {
           manualExtra: MAY_2026_AVALANCHE_MANUAL_EXTRA,
           updatedAt: new Date(),
-        })
-        .where(eq(avalancheSettingsTable.userId, userId));
-    } else {
-      await tx
-        .insert(avalancheSettingsTable)
-        .values({
-          userId,
-          manualExtra: MAY_2026_AVALANCHE_MANUAL_EXTRA,
-        });
-    }
+        },
+      });
 
     const nextPrefs = { ...(prefs ?? {}), budgetMay2026AmountsV1: true };
     if (s) {

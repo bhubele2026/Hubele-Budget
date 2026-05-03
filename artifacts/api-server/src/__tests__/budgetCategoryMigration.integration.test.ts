@@ -111,7 +111,16 @@ describe("budget category v2 migration", () => {
     // Trigger migration via the endpoint.
     const res = await fetch(`${baseUrl}/budget/months/${MONTH}`);
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as {
+      groups: Array<{
+        groupName: string;
+        lines: Array<{
+          categoryName: string;
+          plannedAmount: string;
+          actualAmount: string;
+        }>;
+      }>;
+    };
 
     // Old categories should be gone.
     const remaining = await db
@@ -131,13 +140,15 @@ describe("budget category v2 migration", () => {
 
     // New "Utilities" category should exist with summed planned amount.
     const utilitiesGroup = body.groups.find(
-      (g: { groupName: string }) => g.groupName === "Housing & Utilities",
+      (g) => g.groupName === "Housing & Utilities",
     );
     expect(utilitiesGroup).toBeTruthy();
+    if (!utilitiesGroup) throw new Error("utilitiesGroup missing");
     const utilitiesLine = utilitiesGroup.lines.find(
-      (l: { categoryName: string }) => l.categoryName === "Utilities",
+      (l) => l.categoryName === "Utilities",
     );
     expect(utilitiesLine).toBeTruthy();
+    if (!utilitiesLine) throw new Error("utilitiesLine missing");
     // After the v2 migration sums the legacy lines (241 + 101.02 + 342 =
     // 684.02), the May 2026 canonical reconciliation (task #106) overrides
     // Utilities to the user's source-of-truth value of 774.24. The merged

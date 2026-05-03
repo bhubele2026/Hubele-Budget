@@ -40,6 +40,7 @@ vi.mock("@workspace/api-client-react", () => {
       return { data: [{ id: "stub", ...args, amount: "0" }] };
     },
     useUpsertDashboardBudget: () => ({ mutate: noop, isPending: false }),
+    useDeleteDashboardBudget: () => ({ mutate: noop, isPending: false }),
     useUpdateTransaction: () => ({ mutate: noop, mutateAsync: async () => undefined }),
     getListDashboardBudgetsQueryKey: (args: DashListArgs) => ["dash", args],
     getListTransactionsQueryKey: () => ["txns"],

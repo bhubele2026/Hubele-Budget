@@ -34,9 +34,15 @@ async function ensureSettings(userId: string) {
     .from(forecastSettingsTable)
     .where(eq(forecastSettingsTable.userId, userId));
   if (row) return row;
+  // Upsert to avoid PK collisions when parallel requests for the same fresh
+  // user race past the SELECT (mirrors the fix in avalanche.ts).
   const [created] = await db
     .insert(forecastSettingsTable)
     .values({ userId })
+    .onConflictDoUpdate({
+      target: forecastSettingsTable.userId,
+      set: { userId },
+    })
     .returning();
   return created;
 }

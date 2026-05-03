@@ -197,9 +197,17 @@ async function ensureSettings(userId: string) {
     .from(avalancheSettingsTable)
     .where(eq(avalancheSettingsTable.userId, userId));
   if (row) return row;
+  // Upsert (not bare insert) — multiple in-flight requests for the same
+  // fresh user can race past the SELECT and both attempt the INSERT,
+  // colliding on the user_id PK. ON CONFLICT keeps the existing row and
+  // returns it so both callers succeed.
   const [created] = await db
     .insert(avalancheSettingsTable)
     .values({ userId, ...DEFAULTS })
+    .onConflictDoUpdate({
+      target: avalancheSettingsTable.userId,
+      set: { updatedAt: new Date() },
+    })
     .returning();
   return created;
 }
