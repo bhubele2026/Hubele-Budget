@@ -607,22 +607,64 @@ export const GetForecastResponse = zod.object({
   settings: zod.object({
     daysAhead: zod.number(),
     startingBalance: zod.string(),
+    cashBuffer: zod.string(),
   }),
+  bankSnapshot: zod
+    .union([
+      zod.object({
+        balance: zod.string(),
+        at: zod.string(),
+        source: zod.enum(["manual", "plaid"]),
+        accountId: zod.string().nullish(),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  cashSignal: zod
+    .union([
+      zod.object({
+        bankToday: zod.string(),
+        lowestProjected: zod.string(),
+        lowestDate: zod.string().nullable(),
+        cashBuffer: zod.string(),
+        status: zod.enum(["ready", "tight", "not_yet", "no_data"]),
+        maxSafeExtra: zod.string(),
+        snapshotAt: zod.string().nullish(),
+        snapshotSource: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  plaidCheckingAccounts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      name: zod.string().nullish(),
+      mask: zod.string().nullish(),
+      subtype: zod.string().nullish(),
+      institutionName: zod.string().nullish(),
+    }),
+  ),
 });
 
 export const GetForecastSettingsResponse = zod.object({
   daysAhead: zod.number(),
   startingBalance: zod.string(),
+  cashBuffer: zod.string(),
 });
 
 export const UpdateForecastSettingsBody = zod.object({
   daysAhead: zod.number().optional(),
   startingBalance: zod.string().optional(),
+  cashBuffer: zod.string().optional(),
 });
 
 export const UpdateForecastSettingsResponse = zod.object({
   daysAhead: zod.number(),
   startingBalance: zod.string(),
+  cashBuffer: zod.string(),
 });
 
 export const UpsertForecastResolutionBody = zod.object({
@@ -646,6 +688,40 @@ export const UpsertForecastResolutionResponse = zod.object({
 
 export const DeleteForecastResolutionParams = zod.object({
   id: zod.coerce.string(),
+});
+
+export const SetForecastBankSnapshotBody = zod.object({
+  balance: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+});
+
+export const SetForecastBankSnapshotResponse = zod.object({
+  balance: zod.string(),
+  at: zod.string(),
+  source: zod.enum(["manual", "plaid"]),
+  accountId: zod.string().nullish(),
+  name: zod.string().nullish(),
+  mask: zod.string().nullish(),
+});
+
+export const RefreshForecastBankResponse = zod.object({
+  balance: zod.string(),
+  at: zod.string(),
+  source: zod.enum(["manual", "plaid"]),
+  accountId: zod.string().nullish(),
+  name: zod.string().nullish(),
+  mask: zod.string().nullish(),
+});
+
+export const GetForecastCashSignalResponse = zod.object({
+  bankToday: zod.string(),
+  lowestProjected: zod.string(),
+  lowestDate: zod.string().nullable(),
+  cashBuffer: zod.string(),
+  status: zod.enum(["ready", "tight", "not_yet", "no_data"]),
+  maxSafeExtra: zod.string(),
+  snapshotAt: zod.string().nullish(),
+  snapshotSource: zod.string().nullish(),
 });
 
 export const CloseForecastMonthBody = zod.object({

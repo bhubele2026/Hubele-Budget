@@ -9,4 +9,5 @@
 export interface ForecastSettingsInput {
   daysAhead?: number;
   startingBalance?: string;
+  cashBuffer?: string;
 }

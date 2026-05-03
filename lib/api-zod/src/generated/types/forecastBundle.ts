@@ -5,9 +5,12 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { BankSnapshot } from "./bankSnapshot";
+import type { CashSignal } from "./cashSignal";
 import type { ForecastEvent } from "./forecastEvent";
 import type { ForecastResolution } from "./forecastResolution";
 import type { ForecastSettings } from "./forecastSettings";
+import type { PlaidCheckingAccount } from "./plaidCheckingAccount";
 import type { Transaction } from "./transaction";
 
 export interface ForecastBundle {
@@ -18,4 +21,7 @@ export interface ForecastBundle {
   resolutions: ForecastResolution[];
   closedMonths: string[];
   settings: ForecastSettings;
+  bankSnapshot?: BankSnapshot | null;
+  cashSignal?: CashSignal | null;
+  plaidCheckingAccounts: PlaidCheckingAccount[];
 }

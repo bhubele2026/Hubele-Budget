@@ -20,9 +20,11 @@ import type {
   AvalancheExtra,
   AvalancheSettings,
   AvalancheSettingsInput,
+  BankSnapshot,
   BudgetLine,
   BudgetLineInput,
   BudgetMonthDetail,
+  CashSignal,
   Category,
   CategoryInput,
   CloseForecastMonthBody,
@@ -55,6 +57,7 @@ import type {
   PlaidSyncResult,
   RecurringItem,
   RecurringItemInput,
+  SetBankSnapshotInput,
   Settings,
   SettingsInput,
   SyncMinimumsResult,
@@ -2687,6 +2690,230 @@ export const useDeleteForecastResolution = <
 > => {
   return useMutation(getDeleteForecastResolutionMutationOptions(options));
 };
+
+export const getSetForecastBankSnapshotUrl = () => {
+  return `/api/forecast/bank-snapshot`;
+};
+
+export const setForecastBankSnapshot = async (
+  setBankSnapshotInput: SetBankSnapshotInput,
+  options?: RequestInit,
+): Promise<BankSnapshot> => {
+  return customFetch<BankSnapshot>(getSetForecastBankSnapshotUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setBankSnapshotInput),
+  });
+};
+
+export const getSetForecastBankSnapshotMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setForecastBankSnapshot>>,
+    TError,
+    { data: BodyType<SetBankSnapshotInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setForecastBankSnapshot>>,
+  TError,
+  { data: BodyType<SetBankSnapshotInput> },
+  TContext
+> => {
+  const mutationKey = ["setForecastBankSnapshot"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setForecastBankSnapshot>>,
+    { data: BodyType<SetBankSnapshotInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setForecastBankSnapshot(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetForecastBankSnapshotMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setForecastBankSnapshot>>
+>;
+export type SetForecastBankSnapshotMutationBody =
+  BodyType<SetBankSnapshotInput>;
+export type SetForecastBankSnapshotMutationError = ErrorType<unknown>;
+
+export const useSetForecastBankSnapshot = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setForecastBankSnapshot>>,
+    TError,
+    { data: BodyType<SetBankSnapshotInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setForecastBankSnapshot>>,
+  TError,
+  { data: BodyType<SetBankSnapshotInput> },
+  TContext
+> => {
+  return useMutation(getSetForecastBankSnapshotMutationOptions(options));
+};
+
+export const getRefreshForecastBankUrl = () => {
+  return `/api/forecast/refresh-bank`;
+};
+
+export const refreshForecastBank = async (
+  options?: RequestInit,
+): Promise<BankSnapshot> => {
+  return customFetch<BankSnapshot>(getRefreshForecastBankUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRefreshForecastBankMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof refreshForecastBank>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof refreshForecastBank>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["refreshForecastBank"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof refreshForecastBank>>,
+    void
+  > = () => {
+    return refreshForecastBank(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RefreshForecastBankMutationResult = NonNullable<
+  Awaited<ReturnType<typeof refreshForecastBank>>
+>;
+
+export type RefreshForecastBankMutationError = ErrorType<unknown>;
+
+export const useRefreshForecastBank = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof refreshForecastBank>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof refreshForecastBank>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getRefreshForecastBankMutationOptions(options));
+};
+
+export const getGetForecastCashSignalUrl = () => {
+  return `/api/forecast/cash-signal`;
+};
+
+export const getForecastCashSignal = async (
+  options?: RequestInit,
+): Promise<CashSignal> => {
+  return customFetch<CashSignal>(getGetForecastCashSignalUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetForecastCashSignalQueryKey = () => {
+  return [`/api/forecast/cash-signal`] as const;
+};
+
+export const getGetForecastCashSignalQueryOptions = <
+  TData = Awaited<ReturnType<typeof getForecastCashSignal>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastCashSignal>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetForecastCashSignalQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getForecastCashSignal>>
+  > = ({ signal }) => getForecastCashSignal({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastCashSignal>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetForecastCashSignalQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getForecastCashSignal>>
+>;
+export type GetForecastCashSignalQueryError = ErrorType<unknown>;
+
+export function useGetForecastCashSignal<
+  TData = Awaited<ReturnType<typeof getForecastCashSignal>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastCashSignal>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetForecastCashSignalQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 export const getCloseForecastMonthUrl = () => {
   return `/api/forecast/closed-months`;

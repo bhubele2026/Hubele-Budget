@@ -13,9 +13,13 @@ import {
   useListRecurringItems,
   useGetAvalancheSettings,
   useGetAvalancheExtra,
+  useSetForecastBankSnapshot,
+  useRefreshForecastBank,
   getGetForecastQueryKey,
+  getGetForecastCashSignalQueryKey,
   getListTransactionsQueryKey,
 } from "@workspace/api-client-react";
+import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,6 +94,9 @@ import {
   Inbox as InboxIcon,
   Flame,
   Sparkles,
+  RefreshCw,
+  Landmark,
+  TrendingDown,
 } from "lucide-react";
 import {
   Tooltip,
@@ -392,10 +399,15 @@ export default function ForecastPage() {
   const reopenMonth = useReopenForecastMonth();
   const updateSettings = useUpdateForecastSettings();
   const updateTxn = useUpdateTransaction();
+  const setBankSnapshot = useSetForecastBankSnapshot();
+  const refreshBank = useRefreshForecastBank();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draftDays, setDraftDays] = useState("90");
   const [draftBalance, setDraftBalance] = useState("0");
+  const [draftBuffer, setDraftBuffer] = useState("500");
+  const [snapshotOpen, setSnapshotOpen] = useState(false);
+  const [draftSnapshot, setDraftSnapshot] = useState("");
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [reconciledNow, setReconciledNow] = useState(false);
 
@@ -468,15 +480,21 @@ export default function ForecastPage() {
       (t) => t.forecastFlag,
     );
     const resolutions = (data.resolutions ?? []) as Resolution[];
+    const snapshot = data.bankSnapshot ?? null;
+    const startBalance = snapshot
+      ? Number(snapshot.balance) || 0
+      : Number(data.settings.startingBalance) || 0;
+    const snapshotISO = snapshot?.at ? snapshot.at.slice(0, 10) : null;
     return buildLineRegister({
       events,
       txns,
       resolutions,
       closedMonths,
-      startBalance: Number(data.settings.startingBalance) || 0,
+      startBalance,
       fromISO: data.fromDate,
       toISO: data.toDate,
       today,
+      snapshotISO,
     });
   }, [data, closedMonths, today, debtLinks, payoffsByDebt]);
 
@@ -558,6 +576,7 @@ export default function ForecastPage() {
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetForecastCashSignalQueryKey() });
     qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
   };
 
@@ -690,6 +709,7 @@ export default function ForecastPage() {
   const openSettings = () => {
     setDraftDays(String(data?.settings.daysAhead ?? 90));
     setDraftBalance(String(data?.settings.startingBalance ?? "0"));
+    setDraftBuffer(String(data?.settings.cashBuffer ?? "500"));
     setSettingsOpen(true);
   };
   const saveSettings = () => {
@@ -698,6 +718,7 @@ export default function ForecastPage() {
         data: {
           daysAhead: Number(draftDays) || 90,
           startingBalance: draftBalance,
+          cashBuffer: draftBuffer,
         },
       },
       {
@@ -708,6 +729,54 @@ export default function ForecastPage() {
         },
       },
     );
+  };
+
+  const openSnapshot = () => {
+    setDraftSnapshot(String(data?.bankSnapshot?.balance ?? ""));
+    setSnapshotOpen(true);
+  };
+  const saveSnapshot = () => {
+    setBankSnapshot.mutate(
+      { data: { balance: draftSnapshot } },
+      {
+        onSuccess: () => {
+          invalidate();
+          toast({ title: "Bank snapshot saved" });
+          setSnapshotOpen(false);
+        },
+      },
+    );
+  };
+  const onLinkChecking = (plaidAccountId: string) => {
+    setBankSnapshot.mutate(
+      { data: { plaidAccountId } },
+      {
+        onSuccess: () => {
+          invalidate();
+          toast({ title: "Linked checking account · pulled live balance" });
+        },
+        onError: (e) =>
+          toast({
+            title: "Couldn't link account",
+            description: (e as Error).message,
+            variant: "destructive",
+          }),
+      },
+    );
+  };
+  const onRefreshBank = () => {
+    refreshBank.mutate(undefined, {
+      onSuccess: () => {
+        invalidate();
+        toast({ title: "Bank balance refreshed" });
+      },
+      onError: (e) =>
+        toast({
+          title: "Refresh failed",
+          description: (e as Error).message,
+          variant: "destructive",
+        }),
+    });
   };
 
   if (isLoading || !data || !register) {
@@ -764,34 +833,101 @@ export default function ForecastPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Starting balance</CardTitle>
+        <Card data-testid="card-bank-snapshot">
+          <CardHeader className="pb-2 flex-row items-center justify-between">
+            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+              <Landmark className="w-4 h-4" /> Bank balance
+            </CardTitle>
+            {data.bankSnapshot && data.bankSnapshot.source === "plaid" && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={onRefreshBank}
+                disabled={refreshBank.isPending}
+                title="Refresh from Plaid"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${refreshBank.isPending ? "animate-spin" : ""}`}
+                />
+              </Button>
+            )}
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data.settings.startingBalance)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Forecast horizon</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.settings.daysAhead} days</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              {formatDate(data.fromDate)} → {formatDate(data.toDate)}
+          <CardContent className="space-y-2">
+            <div className="text-2xl font-bold tabular-nums">
+              {data.bankSnapshot
+                ? formatCurrency(data.bankSnapshot.balance)
+                : formatCurrency(data.settings.startingBalance)}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {data.bankSnapshot ? (
+                <>
+                  {data.bankSnapshot.source === "plaid" ? "Plaid" : "Manual"} ·{" "}
+                  {data.bankSnapshot.name ?? "Checking"}
+                  {data.bankSnapshot.mask ? ` ••${data.bankSnapshot.mask}` : ""} ·{" "}
+                  {formatDate(data.bankSnapshot.at.slice(0, 10))}
+                </>
+              ) : (
+                <>No snapshot — using starting balance</>
+              )}
+            </div>
+            <div className="flex gap-2 pt-1 flex-wrap">
+              <Button size="sm" variant="outline" onClick={openSnapshot}>
+                Set manually
+              </Button>
+              {data.plaidCheckingAccounts.length > 0 && (
+                <Select onValueChange={onLinkChecking}>
+                  <SelectTrigger className="h-8 w-44 text-xs">
+                    <SelectValue placeholder="Link checking…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {data.plaidCheckingAccounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.institutionName ?? a.name ?? "Bank"}
+                        {a.mask ? ` ••${a.mask}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card data-testid="card-lowest-projected">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Planned open items</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+              <TrendingDown className="w-4 h-4" /> Lowest projected balance
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{planRows.length}</div>
-            <div className="text-xs text-muted-foreground mt-1">awaiting reconciliation</div>
+            {data.cashSignal ? (
+              <>
+                <div
+                  className={`text-2xl font-bold tabular-nums ${
+                    Number(data.cashSignal.lowestProjected) <
+                    Number(data.cashSignal.cashBuffer)
+                      ? "text-destructive"
+                      : ""
+                  }`}
+                >
+                  {formatCurrency(data.cashSignal.lowestProjected)}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {data.cashSignal.lowestDate
+                    ? `on ${formatDate(data.cashSignal.lowestDate)}`
+                    : "today"}{" "}
+                  · buffer {formatCurrency(data.cashSignal.cashBuffer)}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-muted-foreground">No data</div>
+            )}
+            <div className="text-xs text-muted-foreground mt-1">
+              {data.settings.daysAhead}-day horizon
+            </div>
           </CardContent>
         </Card>
+        <AvalancheReadyCard />
       </div>
 
       <Tabs defaultValue="register" className="w-full">
@@ -1008,7 +1144,7 @@ export default function ForecastPage() {
               />
             </div>
             <div>
-              <Label htmlFor="bal">Starting balance</Label>
+              <Label htmlFor="bal">Starting balance (fallback when no bank snapshot)</Label>
               <Input
                 id="bal"
                 type="number"
@@ -1017,9 +1153,55 @@ export default function ForecastPage() {
                 onChange={(e) => setDraftBalance(e.target.value)}
               />
             </div>
+            <div>
+              <Label htmlFor="buf">Cash buffer</Label>
+              <Input
+                id="buf"
+                type="number"
+                step="0.01"
+                value={draftBuffer}
+                onChange={(e) => setDraftBuffer(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Floor under which "Avalanche Ready" turns red.
+              </p>
+            </div>
             <div className="flex justify-end pt-2">
               <Button onClick={saveSettings} disabled={updateSettings.isPending}>
                 Save
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={snapshotOpen} onOpenChange={setSnapshotOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set bank balance manually</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="snap">Current checking balance</Label>
+              <Input
+                id="snap"
+                type="number"
+                step="0.01"
+                value={draftSnapshot}
+                onChange={(e) => setDraftSnapshot(e.target.value)}
+                data-testid="input-snapshot"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Anchors the running balance to today. Past items won't shift it.
+              </p>
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button
+                onClick={saveSnapshot}
+                disabled={setBankSnapshot.isPending}
+                data-testid="button-save-snapshot"
+              >
+                Save snapshot
               </Button>
             </div>
           </div>

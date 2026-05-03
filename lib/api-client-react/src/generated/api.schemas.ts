@@ -488,11 +488,70 @@ export interface ForecastClosedMonth {
 export interface ForecastSettings {
   daysAhead: number;
   startingBalance: string;
+  cashBuffer: string;
 }
 
 export interface ForecastSettingsInput {
   daysAhead?: number;
   startingBalance?: string;
+  cashBuffer?: string;
+}
+
+export type BankSnapshotSource =
+  (typeof BankSnapshotSource)[keyof typeof BankSnapshotSource];
+
+export const BankSnapshotSource = {
+  manual: "manual",
+  plaid: "plaid",
+} as const;
+
+export interface BankSnapshot {
+  balance: string;
+  at: string;
+  source: BankSnapshotSource;
+  /** @nullable */
+  accountId?: string | null;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  mask?: string | null;
+}
+
+export interface PlaidCheckingAccount {
+  id: string;
+  accountId: string;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  mask?: string | null;
+  /** @nullable */
+  subtype?: string | null;
+  /** @nullable */
+  institutionName?: string | null;
+}
+
+export type CashSignalStatus =
+  (typeof CashSignalStatus)[keyof typeof CashSignalStatus];
+
+export const CashSignalStatus = {
+  ready: "ready",
+  tight: "tight",
+  not_yet: "not_yet",
+  no_data: "no_data",
+} as const;
+
+export interface CashSignal {
+  bankToday: string;
+  lowestProjected: string;
+  /** @nullable */
+  lowestDate: string | null;
+  cashBuffer: string;
+  status: CashSignalStatus;
+  maxSafeExtra: string;
+  /** @nullable */
+  snapshotAt?: string | null;
+  /** @nullable */
+  snapshotSource?: string | null;
 }
 
 export interface ForecastBundle {
@@ -503,6 +562,16 @@ export interface ForecastBundle {
   resolutions: ForecastResolution[];
   closedMonths: string[];
   settings: ForecastSettings;
+  bankSnapshot?: BankSnapshot | null;
+  cashSignal?: CashSignal | null;
+  plaidCheckingAccounts: PlaidCheckingAccount[];
+}
+
+export interface SetBankSnapshotInput {
+  /** @nullable */
+  balance?: string | null;
+  /** @nullable */
+  plaidAccountId?: string | null;
 }
 
 export interface DashboardBudget {

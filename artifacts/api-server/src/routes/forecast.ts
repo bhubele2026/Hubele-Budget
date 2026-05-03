@@ -7,167 +7,20 @@ import {
   forecastResolutionsTable,
   forecastClosedMonthsTable,
   forecastSettingsTable,
+  plaidItemsTable,
+  plaidAccountsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
+import {
+  computeCashSignal,
+  expandItem,
+  fmtISO,
+  addDays,
+  type CashEvent,
+} from "../lib/cashSignal";
+import { plaid } from "../lib/plaid";
 
 const router: IRouter = Router();
-
-type Cadence =
-  | "weekly"
-  | "biweekly"
-  | "semimonthly"
-  | "monthly"
-  | "quarterly"
-  | "annual"
-  | "onetime";
-
-type RecurringRow = typeof recurringItemsTable.$inferSelect;
-
-type CashEvent = {
-  date: string;
-  itemId: string;
-  label: string;
-  kind: "income" | "expense";
-  amount: number;
-};
-
-function parseISO(s: string): Date {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function fmtISO(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-}
-
-function addDays(d: Date, n: number): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
-}
-
-function addMonths(d: Date, n: number): Date {
-  const target = new Date(d.getFullYear(), d.getMonth() + n, 1);
-  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-  return new Date(target.getFullYear(), target.getMonth(), Math.min(d.getDate(), lastDay));
-}
-
-function setSafeDay(year: number, monthIdx: number, day: number): Date {
-  const lastDay = new Date(year, monthIdx + 1, 0).getDate();
-  return new Date(year, monthIdx, Math.min(day, lastDay));
-}
-
-function expandItem(item: RecurringRow, from: Date, to: Date): CashEvent[] {
-  if (item.active !== "true") return [];
-  const out: CashEvent[] = [];
-  const kind: "income" | "expense" = item.kind === "income" ? "income" : "expense";
-  const sign = kind === "income" ? 1 : -1;
-  const amt = Math.abs(Number(item.amount) || 0);
-  const anchor = item.anchorDate ? parseISO(item.anchorDate) : from;
-
-  const push = (d: Date) => {
-    if (d < from || d > to) return;
-    out.push({ date: fmtISO(d), itemId: item.id, label: item.name, kind, amount: sign * amt });
-  };
-
-  switch (item.frequency as Cadence) {
-    case "onetime":
-      push(anchor);
-      break;
-    case "weekly": {
-      let cur = anchor;
-      while (cur > from) cur = addDays(cur, -7);
-      while (cur < from) cur = addDays(cur, 7);
-      while (cur <= to) {
-        push(cur);
-        cur = addDays(cur, 7);
-      }
-      break;
-    }
-    case "biweekly": {
-      let cur = anchor;
-      while (cur > from) cur = addDays(cur, -14);
-      while (cur < from) cur = addDays(cur, 14);
-      while (cur <= to) {
-        push(cur);
-        cur = addDays(cur, 14);
-      }
-      break;
-    }
-    case "monthly": {
-      const day = item.dayOfMonth ?? anchor.getDate();
-      let y = from.getFullYear(),
-        m = from.getMonth();
-      const anchorFirst = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-      const fromFirst = new Date(from.getFullYear(), from.getMonth(), 1);
-      if (anchorFirst > fromFirst) {
-        y = anchor.getFullYear();
-        m = anchor.getMonth();
-      }
-      let cur = setSafeDay(y, m, day);
-      while (cur < from) {
-        m += 1;
-        if (m > 11) {
-          m = 0;
-          y += 1;
-        }
-        cur = setSafeDay(y, m, day);
-      }
-      while (cur <= to) {
-        push(cur);
-        m += 1;
-        if (m > 11) {
-          m = 0;
-          y += 1;
-        }
-        cur = setSafeDay(y, m, day);
-      }
-      break;
-    }
-    case "semimonthly": {
-      const d1 = item.dayOfMonth ?? anchor.getDate();
-      const d2 = ((d1 + 14 - 1) % 30) + 1;
-      let y = from.getFullYear(),
-        m = from.getMonth();
-      const days = [Math.min(d1, d2), Math.max(d1, d2)];
-      while (true) {
-        const a = setSafeDay(y, m, days[0]);
-        const b = setSafeDay(y, m, days[1]);
-        if (a > to && b > to) break;
-        push(a);
-        push(b);
-        m += 1;
-        if (m > 11) {
-          m = 0;
-          y += 1;
-        }
-      }
-      break;
-    }
-    case "quarterly": {
-      let cur = anchor;
-      while (cur > from) cur = addMonths(cur, -3);
-      while (cur < from) cur = addMonths(cur, 3);
-      while (cur <= to) {
-        push(cur);
-        cur = addMonths(cur, 3);
-      }
-      break;
-    }
-    case "annual": {
-      let cur = anchor;
-      while (cur > from) cur = addMonths(cur, -12);
-      while (cur < from) cur = addMonths(cur, 12);
-      while (cur <= to) {
-        push(cur);
-        cur = addMonths(cur, 12);
-      }
-      break;
-    }
-  }
-  return out;
-}
 
 async function ensureSettings(userId: string) {
   const [row] = await db
@@ -182,13 +35,64 @@ async function ensureSettings(userId: string) {
   return created;
 }
 
+function presentSettings(row: typeof forecastSettingsTable.$inferSelect) {
+  return {
+    daysAhead: row.daysAhead,
+    startingBalance: row.startingBalance,
+    cashBuffer: row.cashBuffer,
+  };
+}
+
+function presentSnapshot(row: typeof forecastSettingsTable.$inferSelect) {
+  if (row.bankSnapshotBalance == null || !row.bankSnapshotAt) return null;
+  return {
+    balance: row.bankSnapshotBalance,
+    at: row.bankSnapshotAt.toISOString(),
+    source: (row.bankSnapshotSource as "manual" | "plaid") ?? "manual",
+    accountId: row.bankSnapshotAccountId ?? null,
+    name: row.bankSnapshotName ?? null,
+    mask: row.bankSnapshotMask ?? null,
+  };
+}
+
+async function listCheckingAccounts(userId: string) {
+  const rows = await db
+    .select({
+      id: plaidAccountsTable.id,
+      accountId: plaidAccountsTable.accountId,
+      name: plaidAccountsTable.name,
+      mask: plaidAccountsTable.mask,
+      subtype: plaidAccountsTable.subtype,
+      type: plaidAccountsTable.type,
+      institutionName: plaidItemsTable.institutionName,
+    })
+    .from(plaidAccountsTable)
+    .leftJoin(plaidItemsTable, eq(plaidAccountsTable.itemId, plaidItemsTable.id))
+    .where(eq(plaidAccountsTable.userId, userId));
+  return rows
+    .filter(
+      (a) =>
+        a.subtype === "checking" ||
+        a.type === "depository" ||
+        a.subtype === "savings",
+    )
+    .map((a) => ({
+      id: a.id,
+      accountId: a.accountId,
+      name: a.name,
+      mask: a.mask,
+      subtype: a.subtype,
+      institutionName: a.institutionName,
+    }));
+}
+
 router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   const settings = await ensureSettings(userId);
   const days = Number(req.query.days) || settings.daysAhead || 90;
 
   const today = new Date();
-  const from = new Date(today.getFullYear(), today.getMonth() - 1, 1); // include prior month for context
+  const from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const to = addDays(today, days);
   const fromISO = fmtISO(from);
   const toISO = fmtISO(to);
@@ -233,7 +137,6 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     )
     .where(eq(forecastResolutionsTable.userId, userId));
 
-  // Filter out resolutions tied to txns whose forecast_flag was turned off
   const resolutions = resolutionRows.filter(
     (r) => !r.matchedTxnId || r.txnForecastFlag !== false,
   );
@@ -243,6 +146,9 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     .from(forecastClosedMonthsTable)
     .where(eq(forecastClosedMonthsTable.userId, userId));
 
+  const cashSignal = await computeCashSignal(userId);
+  const plaidCheckingAccounts = await listCheckingAccounts(userId);
+
   res.json({
     fromDate: fromISO,
     toDate: toISO,
@@ -250,16 +156,16 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     transactions: txns,
     resolutions,
     closedMonths: closedRows.map((c) => c.monthKey),
-    settings: {
-      daysAhead: settings.daysAhead,
-      startingBalance: settings.startingBalance,
-    },
+    settings: presentSettings(settings),
+    bankSnapshot: presentSnapshot(settings),
+    cashSignal,
+    plaidCheckingAccounts,
   });
 });
 
 router.get("/forecast/settings", requireAuth, async (req, res): Promise<void> => {
   const s = await ensureSettings(req.userId!);
-  res.json({ daysAhead: s.daysAhead, startingBalance: s.startingBalance });
+  res.json(presentSettings(s));
 });
 
 router.put("/forecast/settings", requireAuth, async (req, res): Promise<void> => {
@@ -270,12 +176,168 @@ router.put("/forecast/settings", requireAuth, async (req, res): Promise<void> =>
   if (typeof body.daysAhead === "number") update.daysAhead = body.daysAhead;
   if (typeof body.startingBalance === "string")
     update.startingBalance = body.startingBalance;
+  if (typeof body.cashBuffer === "string") update.cashBuffer = body.cashBuffer;
   const [row] = await db
     .update(forecastSettingsTable)
     .set(update)
     .where(eq(forecastSettingsTable.userId, userId))
     .returning();
-  res.json({ daysAhead: row.daysAhead, startingBalance: row.startingBalance });
+  res.json(presentSettings(row));
+});
+
+router.get("/forecast/cash-signal", requireAuth, async (req, res): Promise<void> => {
+  const signal = await computeCashSignal(req.userId!);
+  res.json(signal);
+});
+
+router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
+  await ensureSettings(userId);
+  const { balance, plaidAccountId } = req.body ?? {};
+
+  let snapshotBalance: string | null = null;
+  let source: "manual" | "plaid" = "manual";
+  let accountId: string | null = null;
+  let accountName: string | null = null;
+  let accountMask: string | null = null;
+
+  if (plaidAccountId) {
+    // Plaid refresh: look up account, fetch live balance
+    const [acct] = await db
+      .select()
+      .from(plaidAccountsTable)
+      .where(
+        and(
+          eq(plaidAccountsTable.id, String(plaidAccountId)),
+          eq(plaidAccountsTable.userId, userId),
+        ),
+      );
+    if (!acct) {
+      res.status(404).json({ error: "Plaid account not found" });
+      return;
+    }
+    const [item] = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, acct.itemId));
+    if (!item) {
+      res.status(404).json({ error: "Plaid item not found" });
+      return;
+    }
+    try {
+      const resp = await plaid().accountsBalanceGet({
+        access_token: item.accessToken,
+        options: { account_ids: [acct.accountId] },
+      });
+      const a = resp.data.accounts.find((x) => x.account_id === acct.accountId);
+      const live = a?.balances.available ?? a?.balances.current;
+      if (live == null) {
+        res.status(502).json({ error: "Plaid did not return a balance" });
+        return;
+      }
+      snapshotBalance = Number(live).toFixed(2);
+      source = "plaid";
+      accountId = acct.id;
+      accountName = acct.name;
+      accountMask = acct.mask;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Plaid balance fetch failed";
+      req.log.error({ err: e }, "accountsBalanceGet failed");
+      res.status(502).json({ error: msg });
+      return;
+    }
+  } else if (typeof balance === "string" && balance.length > 0) {
+    const n = Number(balance);
+    if (!Number.isFinite(n)) {
+      res.status(400).json({ error: "Invalid balance" });
+      return;
+    }
+    snapshotBalance = n.toFixed(2);
+    source = "manual";
+  } else {
+    res.status(400).json({ error: "balance or plaidAccountId required" });
+    return;
+  }
+
+  const at = new Date();
+  const [row] = await db
+    .update(forecastSettingsTable)
+    .set({
+      bankSnapshotBalance: snapshotBalance,
+      bankSnapshotAt: at,
+      bankSnapshotSource: source,
+      bankSnapshotAccountId: accountId,
+      bankSnapshotName: accountName,
+      bankSnapshotMask: accountMask,
+      updatedAt: new Date(),
+    })
+    .where(eq(forecastSettingsTable.userId, userId))
+    .returning();
+  res.json(presentSnapshot(row));
+});
+
+router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
+  const settings = await ensureSettings(userId);
+  if (!settings.bankSnapshotAccountId) {
+    res.status(400).json({ error: "No checking account linked. Set one first." });
+    return;
+  }
+  // Reuse the same flow as bank-snapshot
+  req.body = { plaidAccountId: settings.bankSnapshotAccountId };
+  // Forward
+  const [acct] = await db
+    .select()
+    .from(plaidAccountsTable)
+    .where(
+      and(
+        eq(plaidAccountsTable.id, settings.bankSnapshotAccountId),
+        eq(plaidAccountsTable.userId, userId),
+      ),
+    );
+  if (!acct) {
+    res.status(404).json({ error: "Linked checking account no longer exists" });
+    return;
+  }
+  const [item] = await db
+    .select()
+    .from(plaidItemsTable)
+    .where(eq(plaidItemsTable.id, acct.itemId));
+  if (!item) {
+    res.status(404).json({ error: "Plaid item not found" });
+    return;
+  }
+  try {
+    const resp = await plaid().accountsBalanceGet({
+      access_token: item.accessToken,
+      options: { account_ids: [acct.accountId] },
+    });
+    const a = resp.data.accounts.find((x) => x.account_id === acct.accountId);
+    const live = a?.balances.available ?? a?.balances.current;
+    if (live == null) {
+      res.status(502).json({ error: "Plaid did not return a balance" });
+      return;
+    }
+    const at = new Date();
+    const [row] = await db
+      .update(forecastSettingsTable)
+      .set({
+        bankSnapshotBalance: Number(live).toFixed(2),
+        bankSnapshotAt: at,
+        bankSnapshotSource: "plaid",
+        bankSnapshotAccountId: acct.id,
+        bankSnapshotName: acct.name,
+        bankSnapshotMask: acct.mask,
+        updatedAt: new Date(),
+      })
+      .where(eq(forecastSettingsTable.userId, userId))
+      .returning();
+    res.json(presentSnapshot(row));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Plaid balance fetch failed";
+    req.log.error({ err: e }, "refresh-bank failed");
+    res.status(502).json({ error: msg });
+  }
 });
 
 router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void> => {
@@ -286,7 +348,6 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
     return;
   }
 
-  // Idempotency: replace any existing resolution for the same plan-event or same txn
   if (recurringItemId && occurrenceDate) {
     await db
       .delete(forecastResolutionsTable)
@@ -356,6 +417,23 @@ router.post(
         set: { monthKey },
       })
       .returning();
+
+    // Freeze the current snapshot into monthSnapshots[monthKey]
+    const settings = await ensureSettings(userId);
+    if (settings.bankSnapshotBalance != null && settings.bankSnapshotAt) {
+      const monthSnapshots = {
+        ...(settings.monthSnapshots ?? {}),
+        [String(monthKey)]: {
+          balance: settings.bankSnapshotBalance,
+          at: settings.bankSnapshotAt.toISOString(),
+        },
+      };
+      await db
+        .update(forecastSettingsTable)
+        .set({ monthSnapshots, updatedAt: new Date() })
+        .where(eq(forecastSettingsTable.userId, userId));
+    }
+
     res.json(row);
   },
 );
@@ -364,19 +442,30 @@ router.delete(
   "/forecast/closed-months/:monthKey",
   requireAuth,
   async (req, res): Promise<void> => {
+    const userId = req.userId!;
+    const monthKey = String(req.params.monthKey);
     await db
       .delete(forecastClosedMonthsTable)
       .where(
         and(
-          eq(forecastClosedMonthsTable.userId, req.userId!),
-          eq(forecastClosedMonthsTable.monthKey, String(req.params.monthKey)),
+          eq(forecastClosedMonthsTable.userId, userId),
+          eq(forecastClosedMonthsTable.monthKey, monthKey),
         ),
       );
+    // Drop the frozen snapshot for this month, if any
+    const settings = await ensureSettings(userId);
+    if (settings.monthSnapshots && monthKey in settings.monthSnapshots) {
+      const monthSnapshots = { ...settings.monthSnapshots };
+      delete monthSnapshots[monthKey];
+      await db
+        .update(forecastSettingsTable)
+        .set({ monthSnapshots, updatedAt: new Date() })
+        .where(eq(forecastSettingsTable.userId, userId));
+    }
     res.sendStatus(204);
   },
 );
 
-// Suppress unused import in some build configs
 void sql;
 
 export default router;

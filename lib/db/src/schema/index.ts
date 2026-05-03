@@ -276,6 +276,14 @@ export const forecastSettingsTable = pgTable("forecast_settings", {
   userId: text("user_id").primaryKey(),
   daysAhead: integer("days_ahead").notNull().default(90),
   startingBalance: numeric("starting_balance", { precision: 12, scale: 2 }).notNull().default("0"),
+  cashBuffer: numeric("cash_buffer", { precision: 12, scale: 2 }).notNull().default("500"),
+  bankSnapshotBalance: numeric("bank_snapshot_balance", { precision: 12, scale: 2 }),
+  bankSnapshotAt: timestamp("bank_snapshot_at", { withTimezone: true }),
+  bankSnapshotSource: text("bank_snapshot_source"),
+  bankSnapshotAccountId: uuid("bank_snapshot_account_id"),
+  bankSnapshotName: text("bank_snapshot_name"),
+  bankSnapshotMask: text("bank_snapshot_mask"),
+  monthSnapshots: jsonb("month_snapshots").$type<Record<string, { balance: string; at: string }>>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

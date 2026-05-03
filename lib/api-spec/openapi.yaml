@@ -507,6 +507,42 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /forecast/bank-snapshot:
+    post:
+      operationId: setForecastBankSnapshot
+      tags: [forecast]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetBankSnapshotInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankSnapshot" }
+  /forecast/refresh-bank:
+    post:
+      operationId: refreshForecastBank
+      tags: [forecast]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankSnapshot" }
+  /forecast/cash-signal:
+    get:
+      operationId: getForecastCashSignal
+      tags: [forecast]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashSignal" }
+
   /forecast/closed-months:
     post:
       operationId: closeForecastMonth
@@ -1020,18 +1056,52 @@ components:
         monthKey: { type: string }
     ForecastSettings:
       type: object
-      required: [daysAhead, startingBalance]
+      required: [daysAhead, startingBalance, cashBuffer]
       properties:
         daysAhead: { type: integer }
         startingBalance: { type: string }
+        cashBuffer: { type: string }
     ForecastSettingsInput:
       type: object
       properties:
         daysAhead: { type: integer }
         startingBalance: { type: string }
+        cashBuffer: { type: string }
+    BankSnapshot:
+      type: object
+      required: [balance, at, source]
+      properties:
+        balance: { type: string }
+        at: { type: string }
+        source: { type: string, enum: [manual, plaid] }
+        accountId: { type: ["string", "null"] }
+        name: { type: ["string", "null"] }
+        mask: { type: ["string", "null"] }
+    PlaidCheckingAccount:
+      type: object
+      required: [id, accountId]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        name: { type: ["string", "null"] }
+        mask: { type: ["string", "null"] }
+        subtype: { type: ["string", "null"] }
+        institutionName: { type: ["string", "null"] }
+    CashSignal:
+      type: object
+      required: [bankToday, lowestProjected, lowestDate, cashBuffer, status, maxSafeExtra]
+      properties:
+        bankToday: { type: string }
+        lowestProjected: { type: string }
+        lowestDate: { type: ["string", "null"] }
+        cashBuffer: { type: string }
+        status: { type: string, enum: [ready, tight, not_yet, no_data] }
+        maxSafeExtra: { type: string }
+        snapshotAt: { type: ["string", "null"] }
+        snapshotSource: { type: ["string", "null"] }
     ForecastBundle:
       type: object
-      required: [events, transactions, resolutions, closedMonths, settings, fromDate, toDate]
+      required: [events, transactions, resolutions, closedMonths, settings, fromDate, toDate, plaidCheckingAccounts]
       properties:
         fromDate: { type: string }
         toDate: { type: string }
@@ -1048,6 +1118,22 @@ components:
           type: array
           items: { type: string }
         settings: { $ref: "#/components/schemas/ForecastSettings" }
+        bankSnapshot:
+          oneOf:
+            - $ref: "#/components/schemas/BankSnapshot"
+            - type: "null"
+        cashSignal:
+          oneOf:
+            - $ref: "#/components/schemas/CashSignal"
+            - type: "null"
+        plaidCheckingAccounts:
+          type: array
+          items: { $ref: "#/components/schemas/PlaidCheckingAccount" }
+    SetBankSnapshotInput:
+      type: object
+      properties:
+        balance: { type: ["string", "null"] }
+        plaidAccountId: { type: ["string", "null"] }
 
     DashboardBudget:
       type: object

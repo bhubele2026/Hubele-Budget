@@ -22,6 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardKillOrder } from "@/components/dashboard-kill-order";
+import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
 
 import { SUB_BUCKETS, type SubBucket, useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 
@@ -591,6 +592,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AvalancheReadyCard />
 
       <DashboardKillOrder />
 

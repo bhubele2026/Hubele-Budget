@@ -4,9 +4,13 @@ import {
   plaidItemsTable,
   plaidAccountsTable,
   transactionsTable,
+  forecastSettingsTable,
+  forecastResolutionsTable,
+  recurringItemsTable,
 } from "@workspace/db";
 import { plaid, institutionSlug, type PlaidTxn } from "./plaid";
 import { loadUserRules, matchRule } from "./autoCategorize";
+import { expandItem, parseISO, addDays, fmtISO } from "./cashSignal";
 
 export type SyncResult = {
   itemId: string;
@@ -53,6 +57,22 @@ export async function syncPlaidItem(
   const source = `plaid:${slug}`;
   const rules = await loadUserRules(userId);
 
+  // Identify the user's chosen "checking" Plaid account (if any) so we can
+  // auto-flag its transactions for the cash forecast and try to auto-match
+  // them against planned recurring items.
+  const [forecastSettings] = await db
+    .select()
+    .from(forecastSettingsTable)
+    .where(eq(forecastSettingsTable.userId, userId));
+  let checkingPlaidAccountId: string | null = null;
+  if (forecastSettings?.bankSnapshotAccountId) {
+    const [acct] = await db
+      .select()
+      .from(plaidAccountsTable)
+      .where(eq(plaidAccountsTable.id, forecastSettings.bankSnapshotAccountId));
+    checkingPlaidAccountId = acct?.accountId ?? null;
+  }
+
   let cursor = item.cursor ?? undefined;
   let added: PlaidTxn[] = [];
   let modified: PlaidTxn[] = [];
@@ -75,10 +95,13 @@ export async function syncPlaidItem(
     }
 
     // Upsert added/modified
+    const insertedCheckingTxns: { id: string; amount: number; date: string }[] = [];
     for (const t of [...added, ...modified]) {
       const description = t.merchant_name || t.name || "(no description)";
       const categoryId = matchRule(description, rules);
       if (categoryId) autoCategorized++;
+      const isChecking =
+        checkingPlaidAccountId !== null && t.account_id === checkingPlaidAccountId;
       const values = {
         userId,
         occurredOn: t.date,
@@ -89,8 +112,9 @@ export async function syncPlaidItem(
         plaidTransactionId: t.transaction_id,
         plaidAccountId: t.account_id,
         notes: t.pending ? "[pending]" : null,
+        forecastFlag: isChecking,
       };
-      await db
+      const [row] = await db
         .insert(transactionsTable)
         .values(values)
         .onConflictDoUpdate({
@@ -100,8 +124,85 @@ export async function syncPlaidItem(
             description: values.description,
             amount: values.amount,
             notes: values.notes,
+            ...(isChecking ? { forecastFlag: true } : {}),
           },
+        })
+        .returning({ id: transactionsTable.id });
+      if (isChecking && row) {
+        insertedCheckingTxns.push({
+          id: row.id,
+          amount: Number(values.amount),
+          date: values.occurredOn,
         });
+      }
+    }
+
+    // Auto-match: for each new checking txn, find a planned recurring event
+    // within ±3 days with the same sign and (within $1) amount, and mark it matched.
+    if (insertedCheckingTxns.length > 0) {
+      const recurring = await db
+        .select()
+        .from(recurringItemsTable)
+        .where(eq(recurringItemsTable.userId, userId));
+      const minDate = insertedCheckingTxns.reduce((a, b) => (a < b.date ? a : b.date), insertedCheckingTxns[0].date);
+      const maxDate = insertedCheckingTxns.reduce((a, b) => (a > b.date ? a : b.date), insertedCheckingTxns[0].date);
+      const from = addDays(parseISO(minDate), -7);
+      const to = addDays(parseISO(maxDate), 7);
+      const events = recurring.flatMap((r) => expandItem(r, from, to));
+
+      const existingResolutions = await db
+        .select()
+        .from(forecastResolutionsTable)
+        .where(eq(forecastResolutionsTable.userId, userId));
+      const usedPlanKeys = new Set(
+        existingResolutions
+          .filter((r) => r.recurringItemId && r.occurrenceDate)
+          .map((r) => `${r.recurringItemId}|${r.occurrenceDate}`),
+      );
+      const usedTxnIds = new Set(
+        existingResolutions
+          .filter((r) => r.matchedTxnId)
+          .map((r) => r.matchedTxnId as string),
+      );
+
+      for (const txn of insertedCheckingTxns) {
+        if (usedTxnIds.has(txn.id)) continue;
+        const txnSign = Math.sign(txn.amount) || 0;
+        if (txnSign === 0) continue;
+        let bestKey: string | null = null;
+        let bestItemId: string | null = null;
+        let bestDate: string | null = null;
+        let bestScore = Infinity;
+        const txnMs = parseISO(txn.date).getTime();
+        for (const ev of events) {
+          if (Math.sign(ev.amount) !== txnSign) continue;
+          if (Math.abs(Math.abs(ev.amount) - Math.abs(txn.amount)) > 1) continue;
+          const evMs = parseISO(ev.date).getTime();
+          const days = Math.abs(evMs - txnMs) / 86_400_000;
+          if (days > 3) continue;
+          const key = `${ev.itemId}|${ev.date}`;
+          if (usedPlanKeys.has(key)) continue;
+          const score = days * 10 + Math.abs(Math.abs(ev.amount) - Math.abs(txn.amount));
+          if (score < bestScore) {
+            bestScore = score;
+            bestKey = key;
+            bestItemId = ev.itemId;
+            bestDate = ev.date;
+          }
+        }
+        if (bestKey && bestItemId && bestDate) {
+          await db.insert(forecastResolutionsTable).values({
+            userId,
+            recurringItemId: bestItemId,
+            occurrenceDate: bestDate,
+            status: "matched",
+            matchedTxnId: txn.id,
+          });
+          usedPlanKeys.add(bestKey);
+          usedTxnIds.add(txn.id);
+        }
+      }
+      void fmtISO; // silence unused warning if helper not needed elsewhere
     }
 
     // Remove

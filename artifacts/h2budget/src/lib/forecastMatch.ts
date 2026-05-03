@@ -77,12 +77,17 @@ export function buildLineRegister(opts: {
   fromISO: string;
   toISO: string;
   today?: Date;
+  /** Optional snapshot anchor (YYYY-MM-DD). Items dated on/before this date are
+   *  treated as already baked into startBalance and skipped from the running
+   *  balance calculation. */
+  snapshotISO?: string | null;
 }): { rows: LineRow[]; allPlan: PlanLine[]; allBank: BankLine[] } {
-  const { events, txns, resolutions, closedMonths, startBalance, fromISO, toISO } = opts;
+  const { events, txns, resolutions, closedMonths, startBalance, fromISO, toISO, snapshotISO } = opts;
   const today = opts.today ?? new Date();
   const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const fromMs = parseISO(fromISO);
   const toMs = parseISO(toISO);
+  const anchorMs = snapshotISO ? parseISO(snapshotISO) : null;
 
   const byEventKey = new Map<string, Resolution>();
   const byTxn = new Map<string, Resolution>();
@@ -155,6 +160,11 @@ export function buildLineRegister(opts: {
   let bal = startBalance;
   const balanceByTxnId = new Map<string, number>();
   for (const b of bankInWindowAll) {
+    // Items on/before snapshot anchor are already in the snapshot balance.
+    if (anchorMs !== null && parseISO(b.date) <= anchorMs) {
+      balanceByTxnId.set(b.txn.id, bal);
+      continue;
+    }
     bal = Math.round((bal + b.amount) * 100) / 100;
     balanceByTxnId.set(b.txn.id, bal);
   }
@@ -178,6 +188,10 @@ export function buildLineRegister(opts: {
   if (bankInWindowAll.length === 0) {
     let proj = startBalance;
     for (const r of rows) {
+      if (anchorMs !== null && parseISO(r.date) <= anchorMs) {
+        r.runningBalance = proj;
+        continue;
+      }
       proj = Math.round((proj + r.amount) * 100) / 100;
       r.runningBalance = proj;
     }
