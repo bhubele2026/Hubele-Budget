@@ -61,6 +61,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { isBankTxn } from "@/lib/forecastMatch";
+import { computeBalanceAtEndOf } from "@/lib/accountBalance";
 import {
   Command,
   CommandInput,
@@ -267,31 +268,28 @@ export default function TransactionsPage() {
   }, [chaseTransactions]);
 
   const anchorBalance = bankSnapshot ? Number(bankSnapshot.balance) || 0 : null;
+  // Anchor the rolling balance at the bank snapshot's month, NOT today's
+  // month. The snapshot value is the known balance as of `bankSnapshot.at`,
+  // so end-of-snapshot-month MUST equal the snapshot. Anchoring to "today"
+  // caused months earlier than today (e.g., April when today is in May) to
+  // be computed as snapshot − netChange(May...today), which subtracts
+  // future activity from a known historical balance.
+  const anchorMonth = useMemo<MonthKey>(() => {
+    if (bankSnapshot?.at) return monthKeyFromISO(bankSnapshot.at);
+    return currentMonth;
+  }, [bankSnapshot?.at, currentMonth]);
 
   const balanceAtEndOf = useMemo(() => {
     return (mk: MonthKey): number | null => {
       if (anchorBalance === null) return null;
-      const cmp = compareMonth(mk, currentMonth);
-      if (cmp === 0) return anchorBalance;
-      let bal = anchorBalance;
-      if (cmp < 0) {
-        let cursor = currentMonth;
-        while (compareMonth(cursor, mk) > 0) {
-          const k = `${cursor.year}-${cursor.month}`;
-          bal -= netChangeByMonth.get(k) ?? 0;
-          cursor = shiftMonth(cursor, -1);
-        }
-      } else {
-        let cursor = shiftMonth(currentMonth, 1);
-        while (compareMonth(cursor, mk) <= 0) {
-          const k = `${cursor.year}-${cursor.month}`;
-          bal += netChangeByMonth.get(k) ?? 0;
-          cursor = shiftMonth(cursor, 1);
-        }
-      }
-      return bal;
+      return computeBalanceAtEndOf({
+        anchorBalance,
+        anchorMonth,
+        netChangeByMonth,
+        target: mk,
+      });
     };
-  }, [anchorBalance, currentMonth, netChangeByMonth]);
+  }, [anchorBalance, anchorMonth, netChangeByMonth]);
 
   const endingBalance = useMemo(
     () => balanceAtEndOf(selectedMonth),

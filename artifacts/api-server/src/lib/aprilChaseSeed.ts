@@ -127,9 +127,15 @@ export const APRIL_2026_CHASE_ROWS: readonly SeedRow[] = [
 // $4,444.06 (running after tx#1) + the $500 expense in tx#1.
 export const APRIL_2026_OPENING_BALANCE = 4944.06;
 export const APRIL_2026_ENDING_BALANCE = 3565.09;
-// Prior incorrect ending balance previously seeded. Used to detect and
-// repair stale snapshots when re-running the seed.
-const APRIL_2026_ENDING_BALANCE_LEGACY = 5554.45;
+// Historical values previously seeded as "the" April 30 ending balance.
+// Used to detect and repair stale snapshots when re-running the seed —
+// matching any of these is a strong signal the snapshot came from us
+// rather than a real user edit.
+const APRIL_2026_ENDING_BALANCE_HISTORICAL: readonly number[] = [5554.45];
+// ISO date our seed always writes for the snapshot. We treat a manual
+// snapshot pinned to this exact date as auto-seeded (vs. a user edit,
+// which would normally carry today's date).
+const APRIL_2026_SNAPSHOT_AT_ISO = "2026-04-30";
 
 const SOURCE = "plaid:chase";
 const SYNTHETIC_ITEM_ID = "seed-april-2026-chase";
@@ -248,25 +254,47 @@ async function ensureChaseAccount(userId: string): Promise<{
   // balance. Runs before any early-return below so that users whose
   // forecast_settings already has a bankSnapshotAccountId (the common
   // case after the first seed) still get the corrected value on re-run.
-  // Only touches manual snapshots that still hold the legacy value — a
-  // Plaid-sourced or user-edited balance is left alone.
+  //
+  // Repair rule (applies regardless of source — both manual and
+  // plaid-sourced rows can be stale leftovers from a prior seed):
+  //   1. The current value matches a known historical seeded ending
+  //      balance (e.g. the legacy $5,554.45). Unambiguous "we wrote
+  //      this" signal regardless of source.
+  //   2. OR the snapshot is pinned to 2026-04-30 (the exact date our
+  //      seed always writes). A real Plaid refresh writes today's
+  //      timestamp, and a real user edit also carries today's date,
+  //      so a row still anchored at 4/30 with the wrong balance is
+  //      almost certainly an earlier seed run.
+  // Anything else — already-correct value, or a different
+  // bankSnapshotAt (today's date from a real edit / Plaid sync) — is
+  // treated as user/live intent and preserved.
   let snapshotRepaired = false;
-  if (
-    settings &&
-    settings.bankSnapshotSource === "manual" &&
-    settings.bankSnapshotBalance != null &&
-    Math.abs(
-      Number(settings.bankSnapshotBalance) - APRIL_2026_ENDING_BALANCE_LEGACY,
-    ) < 0.005
-  ) {
-    await db
-      .update(forecastSettingsTable)
-      .set({
-        bankSnapshotBalance: APRIL_2026_ENDING_BALANCE.toFixed(2),
-        bankSnapshotAt: new Date("2026-04-30T23:59:59Z"),
-      })
-      .where(eq(forecastSettingsTable.userId, userId));
-    snapshotRepaired = true;
+  if (settings && settings.bankSnapshotBalance != null) {
+    const currentBal = Number(settings.bankSnapshotBalance);
+    const matchesHistorical = APRIL_2026_ENDING_BALANCE_HISTORICAL.some(
+      (v) => Math.abs(currentBal - v) < 0.005,
+    );
+    const snapshotAtISO = settings.bankSnapshotAt
+      ? settings.bankSnapshotAt.toISOString().slice(0, 10)
+      : null;
+    const pinnedToSeedDate = snapshotAtISO === APRIL_2026_SNAPSHOT_AT_ISO;
+    const alreadyCorrect =
+      Math.abs(currentBal - APRIL_2026_ENDING_BALANCE) < 0.005;
+
+    if (!alreadyCorrect && (matchesHistorical || pinnedToSeedDate)) {
+      await db
+        .update(forecastSettingsTable)
+        .set({
+          bankSnapshotBalance: APRIL_2026_ENDING_BALANCE.toFixed(2),
+          bankSnapshotAt: new Date("2026-04-30T23:59:59Z"),
+          // Force the source back to "manual" — we are asserting a
+          // known historical end-of-month value, not a live Plaid
+          // reading. Leaving it as "plaid" would mislead the UI badge.
+          bankSnapshotSource: "manual",
+        })
+        .where(eq(forecastSettingsTable.userId, userId));
+      snapshotRepaired = true;
+    }
   }
 
   let accountRowId: string | null = settings?.bankSnapshotAccountId ?? null;
