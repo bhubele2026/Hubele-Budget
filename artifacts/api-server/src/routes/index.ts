@@ -17,6 +17,7 @@ import meRouter from "./me";
 import invitationsRouter from "./invitations";
 import membersRouter from "./members";
 import amexRouter from "./amex";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(meRouter);
 router.use(invitationsRouter);
 router.use(membersRouter);
 router.use(amexRouter);
+router.use(adminRouter);
 
 export default router;
