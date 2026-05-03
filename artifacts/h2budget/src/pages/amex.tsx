@@ -154,6 +154,29 @@ export default function AmexPage() {
   const [anchorOpen, setAnchorOpen] = useState(false);
   const [anchorInput, setAnchorInput] = useState("");
   const [anchorSaving, setAnchorSaving] = useState(false);
+  const [anchorClearing, setAnchorClearing] = useState(false);
+  const clearAnchor = async () => {
+    setAnchorClearing(true);
+    try {
+      await customFetch("/api/amex/anchor", { method: "DELETE" });
+      await qc.invalidateQueries({ queryKey: ["/api/amex/anchor"] });
+      setAnchorOpen(false);
+      setAnchorInput("");
+      toast({
+        title: "Cleared saved anchor",
+        description:
+          "The chip will now use your linked debt or computed balance.",
+      });
+    } catch (e) {
+      toast({
+        title: "Couldn't clear anchor",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setAnchorClearing(false);
+    }
+  };
   const submitAnchor = async () => {
     const n = Number(anchorInput);
     if (!Number.isFinite(n)) {
@@ -1016,7 +1039,8 @@ export default function AmexPage() {
               tooltip={endingBalanceMeta?.tooltip}
               testId="stat-ending-balance"
               action={
-                endingBalance.source === "computed" ? (
+                endingBalance.source === "computed" ||
+                endingBalance.source === "anchor" ? (
                   <Popover
                     open={anchorOpen}
                     onOpenChange={(o) => {
@@ -1034,19 +1058,33 @@ export default function AmexPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-6 px-2 text-[11px] border-amber-400 text-amber-900 bg-white/60 hover:bg-white"
-                        data-testid="button-set-actual-balance"
+                        className={
+                          endingBalance.source === "anchor"
+                            ? "h-6 px-2 text-[11px] border-blue-300 text-blue-900 bg-white/60 hover:bg-white"
+                            : "h-6 px-2 text-[11px] border-amber-400 text-amber-900 bg-white/60 hover:bg-white"
+                        }
+                        data-testid={
+                          endingBalance.source === "anchor"
+                            ? "button-edit-actual-balance"
+                            : "button-set-actual-balance"
+                        }
                       >
-                        Set actual balance
+                        {endingBalance.source === "anchor"
+                          ? "Edit"
+                          : "Set actual balance"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-64 p-3" align="start">
                       <div className="space-y-2">
                         <div className="text-xs font-medium">
-                          Set actual Amex balance
+                          {endingBalance.source === "anchor"
+                            ? "Edit saved Amex balance"
+                            : "Set actual Amex balance"}
                         </div>
                         <div className="text-[11px] text-muted-foreground">
-                          Enter the real card balance. We'll save it as your anchor.
+                          {endingBalance.source === "anchor"
+                            ? "Update your saved anchor or clear it to fall back to the linked debt or computed balance."
+                            : "Enter the real card balance. We'll save it as your anchor."}
                         </div>
                         <Input
                           type="number"
@@ -1064,23 +1102,43 @@ export default function AmexPage() {
                           autoFocus
                           data-testid="input-actual-balance"
                         />
-                        <div className="flex justify-end gap-2 pt-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setAnchorOpen(false)}
-                            disabled={anchorSaving}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => void submitAnchor()}
-                            disabled={anchorSaving || !anchorInput.trim()}
-                            data-testid="button-save-actual-balance"
-                          >
-                            {anchorSaving ? "Saving…" : "Save"}
-                          </Button>
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          {endingBalance.source === "anchor" ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => void clearAnchor()}
+                              disabled={anchorSaving || anchorClearing}
+                              data-testid="button-clear-actual-balance"
+                            >
+                              {anchorClearing ? "Clearing…" : "Clear"}
+                            </Button>
+                          ) : (
+                            <span />
+                          )}
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setAnchorOpen(false)}
+                              disabled={anchorSaving || anchorClearing}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => void submitAnchor()}
+                              disabled={
+                                anchorSaving ||
+                                anchorClearing ||
+                                !anchorInput.trim()
+                              }
+                              data-testid="button-save-actual-balance"
+                            >
+                              {anchorSaving ? "Saving…" : "Save"}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </PopoverContent>

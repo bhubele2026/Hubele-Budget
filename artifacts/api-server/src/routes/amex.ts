@@ -216,4 +216,32 @@ router.post("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
+/**
+ * Clear a previously persisted Amex anchor at
+ * `settings.preferences.amexAnchor`. Lets the user remove the saved value so
+ * the Amex page falls back to the linked debt row, the computed running sum,
+ * or the missing state — whichever resolves next via GET /amex/anchor.
+ */
+router.delete("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
+  await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ preferences: settingsTable.preferences })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, userId));
+    if (!existing) return;
+    const prevPrefs =
+      (existing.preferences as Record<string, unknown> | null | undefined) ??
+      {};
+    if (!("amexAnchor" in prevPrefs)) return;
+    const nextPrefs = { ...prevPrefs };
+    delete (nextPrefs as Record<string, unknown>).amexAnchor;
+    await tx
+      .update(settingsTable)
+      .set({ preferences: nextPrefs, updatedAt: new Date() })
+      .where(eq(settingsTable.userId, userId));
+  });
+  res.json({ ok: true });
+});
+
 export default router;
