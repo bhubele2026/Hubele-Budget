@@ -1,1 +1,0 @@
-{"version":3,"file":"billsSummary.d.ts","sourceRoot":"","sources":["../../../src/generated/types/billsSummary.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,mBAAmB,EAAE,MAAM,uBAAuB,CAAC;AACjE,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,mBAAmB,CAAC;AAEzD,MAAM,WAAW,YAAY;IAC3B,MAAM,EAAE,eAAe,EAAE,CAAC;IAC1B,KAAK,EAAE,eAAe,EAAE,CAAC;IACzB,OAAO,EAAE,mBAAmB,CAAC;CAC9B"}

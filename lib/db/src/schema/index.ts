@@ -56,6 +56,28 @@ export const debtsTable = pgTable(
   }),
 );
 
+export const debtBalanceHistoryTable = pgTable(
+  "debt_balance_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    debtId: uuid("debt_id")
+      .notNull()
+      .references(() => debtsTable.id, { onDelete: "cascade" }),
+    recordedOn: date("recorded_on").notNull(),
+    balance: numeric("balance", { precision: 12, scale: 2 }).notNull().default("0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    userDebtDayUnique: uniqueIndex("debt_balance_history_user_debt_day_uq").on(
+      t.userId,
+      t.debtId,
+      t.recordedOn,
+    ),
+    userDebtIdx: index("debt_balance_history_user_debt_idx").on(t.userId, t.debtId),
+  }),
+);
+
 export const avalancheSettingsTable = pgTable("avalanche_settings", {
   userId: text("user_id").primaryKey(),
   strategy: text("strategy").notNull().default("avalanche"),

@@ -34,6 +34,7 @@ import type {
   DashboardBudgetInput,
   DashboardSummary,
   Debt,
+  DebtBalanceHistoryEntry,
   DebtInput,
   DebtLinkInput,
   DebtPaymentInput,
@@ -1027,6 +1028,85 @@ export function useListPlaidLiabilityAccounts<
     params,
     options,
   );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary All recorded balance snapshots for the current user's debts
+ */
+export const getListDebtBalanceHistoryUrl = () => {
+  return `/api/debts/balance-history`;
+};
+
+export const listDebtBalanceHistory = async (
+  options?: RequestInit,
+): Promise<DebtBalanceHistoryEntry[]> => {
+  return customFetch<DebtBalanceHistoryEntry[]>(
+    getListDebtBalanceHistoryUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListDebtBalanceHistoryQueryKey = () => {
+  return [`/api/debts/balance-history`] as const;
+};
+
+export const getListDebtBalanceHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDebtBalanceHistory>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDebtBalanceHistory>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListDebtBalanceHistoryQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listDebtBalanceHistory>>
+  > = ({ signal }) => listDebtBalanceHistory({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDebtBalanceHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDebtBalanceHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDebtBalanceHistory>>
+>;
+export type ListDebtBalanceHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary All recorded balance snapshots for the current user's debts
+ */
+
+export function useListDebtBalanceHistory<
+  TData = Awaited<ReturnType<typeof listDebtBalanceHistory>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDebtBalanceHistory>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDebtBalanceHistoryQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

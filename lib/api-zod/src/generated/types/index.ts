@@ -50,6 +50,7 @@ export * from "./daysSinceTracker";
 export * from "./daysSinceTrackerMatchType";
 export * from "./debt";
 export * from "./debtAprSource";
+export * from "./debtBalanceHistoryEntry";
 export * from "./debtBalanceSource";
 export * from "./debtInput";
 export * from "./debtLinkInput";

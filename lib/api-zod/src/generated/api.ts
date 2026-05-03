@@ -447,6 +447,18 @@ export const ListPlaidLiabilityAccountsResponse = zod.array(
   ListPlaidLiabilityAccountsResponseItem,
 );
 
+/**
+ * @summary All recorded balance snapshots for the current user's debts
+ */
+export const ListDebtBalanceHistoryResponseItem = zod.object({
+  debtId: zod.string(),
+  recordedOn: zod.string().describe("YYYY-MM-DD"),
+  balance: zod.string(),
+});
+export const ListDebtBalanceHistoryResponse = zod.array(
+  ListDebtBalanceHistoryResponseItem,
+);
+
 export const SyncDebtMinimumsResponse = zod.object({
   updated: zod.array(
     zod.object({

@@ -1366,6 +1366,35 @@ export declare const ListPlaidLiabilityAccountsResponse: zod.ZodArray<zod.ZodObj
         name: string;
     } | null | undefined;
 }>, "many">;
+/**
+ * @summary All recorded balance snapshots for the current user's debts
+ */
+export declare const ListDebtBalanceHistoryResponseItem: zod.ZodObject<{
+    debtId: zod.ZodString;
+    recordedOn: zod.ZodString;
+    balance: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    debtId: string;
+    balance: string;
+    recordedOn: string;
+}, {
+    debtId: string;
+    balance: string;
+    recordedOn: string;
+}>;
+export declare const ListDebtBalanceHistoryResponse: zod.ZodArray<zod.ZodObject<{
+    debtId: zod.ZodString;
+    recordedOn: zod.ZodString;
+    balance: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    debtId: string;
+    balance: string;
+    recordedOn: string;
+}, {
+    debtId: string;
+    balance: string;
+    recordedOn: string;
+}>, "many">;
 export declare const SyncDebtMinimumsResponse: zod.ZodObject<{
     updated: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;

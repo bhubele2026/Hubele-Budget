@@ -5,7 +5,10 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
-export type ImportWorkbookBody = {
-    file: Blob;
-};
-//# sourceMappingURL=importWorkbookBody.d.ts.map
+
+export interface DebtBalanceHistoryEntry {
+  debtId: string;
+  /** YYYY-MM-DD */
+  recordedOn: string;
+  balance: string;
+}

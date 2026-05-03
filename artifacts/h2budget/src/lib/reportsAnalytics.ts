@@ -5,6 +5,7 @@ import type {
   Transaction,
   Debt,
   BudgetMonthDetail,
+  DebtBalanceHistoryEntry,
 } from "@workspace/api-client-react";
 import { simulate, type SimResult, type Strategy, type SimDebt } from "./avalanche";
 
@@ -490,9 +491,26 @@ export function interestVsPrincipal(
   }));
 }
 
+// Map of debtId -> chronological history entries (ascending by recordedOn).
+export function groupBalanceHistory(
+  history: DebtBalanceHistoryEntry[],
+): Map<string, DebtBalanceHistoryEntry[]> {
+  const m = new Map<string, DebtBalanceHistoryEntry[]>();
+  for (const h of history) {
+    const arr = m.get(h.debtId) ?? [];
+    arr.push(h);
+    m.set(h.debtId, arr);
+  }
+  for (const [, arr] of m) {
+    arr.sort((a, b) => (a.recordedOn < b.recordedOn ? -1 : 1));
+  }
+  return m;
+}
+
 export function perDebtProgress(
   debts: Debt[],
   sim: SimResult,
+  history: DebtBalanceHistoryEntry[] = [],
 ): {
   id: string;
   name: string;
@@ -501,23 +519,128 @@ export function perDebtProgress(
   minPayment: number;
   payoffDate: Date | null;
   monthsLeft: number | null;
+  startingBalance: number;
+  paidOff: number;
+  paidPct: number;
+  trackingSince: string | null;
+  status: string;
 }[] {
   const killById = new Map(sim.killedOrder.map((k) => [k.id, k] as const));
+  const histById = groupBalanceHistory(history);
+  // Show every active debt PLUS any archived debt that has at least one
+  // recorded snapshot — so a paid-off debt still earns its 100% ring and
+  // the aggregate progress numbers stay accurate.
   return debts
-    .filter((d) => d.status === "active")
+    .filter((d) => d.status === "active" || histById.has(d.id))
     .map((d) => {
       const kill = killById.get(d.id);
+      const balance = Number(d.balance);
+      const hist = histById.get(d.id) ?? [];
+      const first = hist[0];
+      const startingBalance = first ? Number(first.balance) : balance;
+      const paidOff = Math.max(0, startingBalance - balance);
+      const paidPct =
+        startingBalance > 0
+          ? Math.min(100, (paidOff / startingBalance) * 100)
+          : 0;
       return {
         id: d.id,
         name: d.name,
-        balance: Number(d.balance),
+        balance,
         apr: Number(d.apr),
         minPayment: Number(d.minPayment),
         payoffDate: kill?.date ?? null,
         monthsLeft: kill?.monthIndex ?? null,
+        startingBalance,
+        paidOff,
+        paidPct,
+        trackingSince: first?.recordedOn ?? null,
+        status: d.status,
       };
     })
-    .sort((a, b) => (a.monthsLeft ?? 9999) - (b.monthsLeft ?? 9999));
+    .sort((a, b) => {
+      // Active debts first (by months-left), archived/paid-off after.
+      const aActive = a.status === "active" ? 0 : 1;
+      const bActive = b.status === "active" ? 0 : 1;
+      if (aActive !== bActive) return aActive - bActive;
+      return (a.monthsLeft ?? 9999) - (b.monthsLeft ?? 9999);
+    });
+}
+
+// Aggregate per-day total balance across all debts that have ever been
+// recorded (active OR archived/paid-off). Days with no snapshot for a
+// particular debt carry that debt's last known balance forward (LOCF) so
+// the curve is continuous and a paid-off debt's decline to $0 stays in
+// the picture.
+export function totalBalanceHistory(
+  debts: Debt[],
+  history: DebtBalanceHistoryEntry[],
+): { date: string; total: number }[] {
+  if (history.length === 0) return [];
+  const knownIds = new Set(debts.map((d) => d.id));
+  const filtered = history.filter((h) => knownIds.has(h.debtId));
+  if (filtered.length === 0) return [];
+  const allDays = Array.from(new Set(filtered.map((h) => h.recordedOn))).sort();
+  const byDebt = groupBalanceHistory(filtered);
+  // Only count a debt from its own first recorded date forward — never
+  // back-fill it into days before tracking started, which would inflate
+  // older totals when a new debt is added later.
+  const firstDayByDebt = new Map<string, string>();
+  for (const [id, arr] of byDebt) firstDayByDebt.set(id, arr[0].recordedOn);
+  const last = new Map<string, number>();
+  const out: { date: string; total: number }[] = [];
+  for (const day of allDays) {
+    for (const h of filtered) {
+      if (h.recordedOn === day) last.set(h.debtId, Number(h.balance));
+    }
+    let total = 0;
+    for (const [id, v] of last) {
+      const firstDay = firstDayByDebt.get(id);
+      if (firstDay && day >= firstDay) total += v;
+    }
+    out.push({ date: day, total: Math.round(total) });
+  }
+  return out;
+}
+
+// Real "% of original total balance you've paid off so far", based on the
+// earliest recorded snapshot per debt vs today's balance. Includes
+// archived/paid-off debts so killing a debt counts as 100% of that
+// balance against the aggregate denominator.
+export function totalPaidOffSoFar(
+  debts: Debt[],
+  history: DebtBalanceHistoryEntry[],
+): { startingBalance: number; currentBalance: number; paidOff: number; pct: number; trackingSince: string | null } {
+  const histById = groupBalanceHistory(history);
+  let startingBalance = 0;
+  let currentBalance = 0;
+  let earliest: string | null = null;
+  for (const d of debts) {
+    const arr = histById.get(d.id) ?? [];
+    const first = arr[0];
+    // Skip debts we never recorded AND that are no longer active — we have
+    // no idea what their starting balance was, so they shouldn't pull the
+    // denominator either way.
+    if (!first && d.status !== "active") continue;
+    const start = first ? Number(first.balance) : Number(d.balance);
+    startingBalance += start;
+    currentBalance += Number(d.balance);
+    if (first && (!earliest || first.recordedOn < earliest)) {
+      earliest = first.recordedOn;
+    }
+  }
+  const paidOff = Math.max(0, startingBalance - currentBalance);
+  const pct =
+    startingBalance > 0
+      ? Math.min(100, (paidOff / startingBalance) * 100)
+      : 0;
+  return {
+    startingBalance: Math.round(startingBalance),
+    currentBalance: Math.round(currentBalance),
+    paidOff: Math.round(paidOff),
+    pct,
+    trackingSince: earliest,
+  };
 }
 
 // Total interest you'd pay if you only ever paid the minimums on every debt

@@ -249,6 +249,13 @@ export interface DebtInput {
   lastBalanceUpdate?: string | null;
 }
 
+export interface DebtBalanceHistoryEntry {
+  debtId: string;
+  /** YYYY-MM-DD */
+  recordedOn: string;
+  balance: string;
+}
+
 export interface DebtLinkInput {
   plaidAccountId: string;
 }

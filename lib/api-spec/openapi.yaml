@@ -223,6 +223,19 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/PlaidLiabilityAccount" }
+  /debts/balance-history:
+    get:
+      operationId: listDebtBalanceHistory
+      tags: [debts]
+      summary: All recorded balance snapshots for the current user's debts
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DebtBalanceHistoryEntry" }
   /debts/sync-minimums:
     post:
       operationId: syncDebtMinimums
@@ -932,6 +945,13 @@ components:
         statementDay: { type: ["integer", "null"] }
         notes: { type: ["string", "null"] }
         lastBalanceUpdate: { type: ["string", "null"] }
+    DebtBalanceHistoryEntry:
+      type: object
+      required: [debtId, recordedOn, balance]
+      properties:
+        debtId: { type: string }
+        recordedOn: { type: string, description: "YYYY-MM-DD" }
+        balance: { type: string }
     DebtLinkInput:
       type: object
       required: [plaidAccountId]

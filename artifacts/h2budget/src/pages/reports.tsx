@@ -4,6 +4,7 @@ import {
   useGetBudgetMonth,
   useListCategories,
   useListDebts,
+  useListDebtBalanceHistory,
   useGetAvalancheSettings,
   useGetAvalancheExtra,
   useListRecurringItems,
@@ -12,6 +13,7 @@ import {
   type Transaction,
   type ForecastBundle,
   type RecurringItem,
+  type DebtBalanceHistoryEntry,
 } from "@workspace/api-client-react";
 import {
   DEFAULT_DAYS_SINCE_TRACKERS,
@@ -94,6 +96,8 @@ import {
   snowballWaterfall,
   interestVsPrincipal,
   perDebtProgress,
+  totalPaidOffSoFar,
+  totalBalanceHistory,
   daysSinceLast,
   spendByDayOfMonth,
   hourlySpendClock,
@@ -291,6 +295,7 @@ export default function ReportsPage() {
   });
   const { data: categories } = useListCategories();
   const { data: debts } = useListDebts();
+  const { data: debtBalanceHistory } = useListDebtBalanceHistory();
   const { data: avSettings } = useGetAvalancheSettings();
   const { data: avExtra } = useGetAvalancheExtra();
   const { data: recurringItems } = useListRecurringItems();
@@ -420,6 +425,7 @@ export default function ReportsPage() {
         <TabsContent value="debt" className="space-y-6">
           <DebtSection
             debts={debts ?? []}
+            balanceHistory={debtBalanceHistory ?? []}
             strategy={(avSettings?.strategy as "avalanche" | "snowball") ?? "avalanche"}
             extraPerMonth={Number(avExtra?.amount ?? avSettings?.manualExtra ?? 0)}
             today={today}
@@ -483,11 +489,13 @@ export default function ReportsPage() {
 
 function DebtSection({
   debts,
+  balanceHistory,
   strategy,
   extraPerMonth,
   today,
 }: {
   debts: import("@workspace/api-client-react").Debt[];
+  balanceHistory: DebtBalanceHistoryEntry[];
   strategy: "avalanche" | "snowball";
   extraPerMonth: number;
   today: Date;
@@ -507,7 +515,18 @@ function DebtSection({
   const waterfall = useMemo(() => snowballWaterfall(sim), [sim]);
   const ipBars = useMemo(() => interestVsPrincipal(sim, 24), [sim]);
   const killed = useMemo(() => debtsKilledOrder(sim), [sim]);
-  const progress = useMemo(() => perDebtProgress(debts, sim), [debts, sim]);
+  const progress = useMemo(
+    () => perDebtProgress(debts, sim, balanceHistory),
+    [debts, sim, balanceHistory],
+  );
+  const totalPaid = useMemo(
+    () => totalPaidOffSoFar(debts, balanceHistory),
+    [debts, balanceHistory],
+  );
+  const pastBalanceCurve = useMemo(
+    () => totalBalanceHistory(debts, balanceHistory),
+    [debts, balanceHistory],
+  );
   const minOnlyInterest = useMemo(() => interestIfMinimumsOnly(simDebts), [simDebts]);
   const interestSaved =
     Number.isFinite(minOnlyInterest) && minOnlyInterest > sim.totalInterestPaid
@@ -517,9 +536,9 @@ function DebtSection({
   const [gaugeFill, setGaugeFill] = useState(0);
   useEffect(() => {
     setGaugeFill(0);
-    const id = window.setTimeout(() => setGaugeFill(gauge.pct), 80);
+    const id = window.setTimeout(() => setGaugeFill(totalPaid.pct), 80);
     return () => window.clearTimeout(id);
-  }, [gauge.pct]);
+  }, [totalPaid.pct]);
 
   // Confetti when entering this tab if we project a kill within 30 days.
   const confettiFiredRef = useRef(false);
@@ -595,7 +614,8 @@ function DebtSection({
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-serif">Debt thermometer</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Share of today's balance the plan eliminates in the next 12 months.
+              How much of your starting total balance you've paid off since you
+              began tracking.
             </p>
           </CardHeader>
           <CardContent className="flex items-center justify-center pt-2">
@@ -612,14 +632,19 @@ function DebtSection({
               </div>
               <div>
                 <div className="text-4xl font-serif font-bold tabular-nums">
-                  {gauge.pct.toFixed(0)}%
+                  {totalPaid.pct.toFixed(1)}%
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  {formatCurrency(gauge.eliminated)} of{" "}
-                  {formatCurrency(gauge.startingBalance)}
+                  {formatCurrency(totalPaid.paidOff)} of{" "}
+                  {formatCurrency(totalPaid.startingBalance)} paid
                 </div>
                 <div className="text-[11px] text-muted-foreground mt-1 italic">
-                  next 12 months
+                  {totalPaid.trackingSince
+                    ? `since ${totalPaid.trackingSince}`
+                    : "tracking starts today"}
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-2">
+                  Plan projects {gauge.pct.toFixed(0)}% more in the next 12 mo.
                 </div>
               </div>
             </div>
@@ -632,8 +657,8 @@ function DebtSection({
               Per-debt progress rings
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Closer to done = more filled. Filled fraction = how much of the
-              longest payoff timeline this debt has already worked through.
+              Filled fraction = % of each debt's starting balance you've
+              already paid off since tracking began.
             </p>
           </CardHeader>
           <CardContent>
@@ -645,14 +670,9 @@ function DebtSection({
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {progress.map((p, i) => {
                   const color = CHART_SERIES[i % CHART_SERIES.length];
-                  const closerToDonePct =
-                    p.monthsLeft === null
-                      ? 0
-                      : Math.round(
-                          (1 - p.monthsLeft / Math.max(1, maxMonthsLeft)) * 100,
-                        );
+                  const paidPct = Math.round(p.paidPct);
                   const circ = 2 * Math.PI * 26;
-                  const dash = (closerToDonePct / 100) * circ;
+                  const dash = (paidPct / 100) * circ;
                   return (
                     <div key={p.id} className="text-center">
                       <div className="relative inline-block">
@@ -679,11 +699,15 @@ function DebtSection({
                           />
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center text-xs font-mono tabular-nums">
-                          {closerToDonePct}%
+                          {paidPct}%
                         </div>
                       </div>
                       <div className="text-[11px] font-medium truncate mt-1">
                         {p.name}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground tabular-nums">
+                        paid {formatCurrency(p.paidOff)} of{" "}
+                        {formatCurrency(p.startingBalance)}
                       </div>
                       <div className="text-[10px] text-muted-foreground tabular-nums">
                         {p.monthsLeft !== null ? `${p.monthsLeft} mo left` : "∞"}
@@ -696,6 +720,54 @@ function DebtSection({
           </CardContent>
         </Card>
       </div>
+
+      {/* Real past curve, then projected timeline */}
+      <ChartCard
+        title="Total balance — actual history"
+        caption={
+          pastBalanceCurve.length > 1
+            ? "Sum of all active debt balances per recorded snapshot."
+            : "We're collecting daily snapshots — the curve grows as you pay down."
+        }
+        empty={
+          pastBalanceCurve.length === 0
+            ? "No history yet — the projection below shows where you're headed."
+            : null
+        }
+        height={220}
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart
+            data={pastBalanceCurve}
+            margin={{ top: 10, right: 16, bottom: 16, left: 0 }}
+          >
+            <defs>
+              <linearGradient id="past-balance" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={H2_PALETTE.green} stopOpacity={0.7} />
+                <stop offset="100%" stopColor={H2_PALETTE.green} stopOpacity={0.1} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+            <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+            <YAxis
+              tick={{ fontSize: 10 }}
+              tickFormatter={(v) => `$${Math.round(v / 1000)}k`}
+            />
+            <Tooltip
+              contentStyle={tooltipStyle}
+              formatter={(v: number) => tooltipMoney(v)}
+            />
+            <Area
+              type="monotone"
+              dataKey="total"
+              stroke={H2_PALETTE.green}
+              fill="url(#past-balance)"
+              strokeWidth={2}
+              name="Total balance"
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </ChartCard>
 
       {/* Stacked payoff timeline */}
       <ChartCard

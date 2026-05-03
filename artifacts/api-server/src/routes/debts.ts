@@ -3,6 +3,7 @@ import { and, desc, eq, asc, gte, sql, inArray } from "drizzle-orm";
 import {
   db,
   debtsTable,
+  debtBalanceHistoryTable,
   transactionsTable,
   plaidAccountsTable,
   plaidItemsTable,
@@ -21,6 +22,35 @@ import { fetchLiabilitiesForItem } from "../lib/plaidLiabilities";
 const router: IRouter = Router();
 
 const REFRESH_STALE_MS = 60 * 60 * 1000; // 1 hour
+
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+async function recordBalanceSnapshot(
+  userId: string,
+  debtId: string,
+  balance: string | number,
+): Promise<void> {
+  const balStr =
+    typeof balance === "number" ? balance.toFixed(2) : String(balance);
+  await db
+    .insert(debtBalanceHistoryTable)
+    .values({
+      userId,
+      debtId,
+      recordedOn: todayISO(),
+      balance: balStr,
+    })
+    .onConflictDoNothing({
+      target: [
+        debtBalanceHistoryTable.userId,
+        debtBalanceHistoryTable.debtId,
+        debtBalanceHistoryTable.recordedOn,
+      ],
+    });
+}
 
 function normalize<T extends Record<string, unknown>>(input: T): Record<string, unknown> {
   const out: Record<string, unknown> = { ...input };
@@ -149,6 +179,9 @@ async function applyLiabilityToDebt(
     .set(patch)
     .where(and(eq(debtsTable.id, debt.id), eq(debtsTable.userId, userId)))
     .returning();
+  if (updated && patch.balance != null) {
+    await recordBalanceSnapshot(userId, updated.id, updated.balance);
+  }
   return updated ?? debt;
 }
 
@@ -181,6 +214,24 @@ async function refreshLinkedDebt(
   const updated = await applyLiabilityToDebt(userId, debt, "refresh", fetchOk);
   return { debt: updated, fetchOk, error };
 }
+
+router.get(
+  "/debts/balance-history",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const userId = req.userId!;
+    const rows = await db
+      .select({
+        debtId: debtBalanceHistoryTable.debtId,
+        recordedOn: debtBalanceHistoryTable.recordedOn,
+        balance: debtBalanceHistoryTable.balance,
+      })
+      .from(debtBalanceHistoryTable)
+      .where(eq(debtBalanceHistoryTable.userId, userId))
+      .orderBy(asc(debtBalanceHistoryTable.recordedOn));
+    res.json(rows);
+  },
+);
 
 router.get("/debts", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
@@ -235,6 +286,13 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
       .orderBy(asc(debtsTable.sortOrder), desc(debtsTable.apr), asc(debtsTable.name));
   }
 
+  // Ensure every active debt has at least one balance snapshot so the
+  // reports thermometer and per-debt rings have a starting reference.
+  for (const d of rows) {
+    if (d.status !== "active") continue;
+    await recordBalanceSnapshot(userId, d.id, d.balance);
+  }
+
   const accountIds = rows
     .map((r) => r.plaidAccountId)
     .filter((v): v is string => !!v);
@@ -258,6 +316,7 @@ router.post("/debts", requireAuth, async (req, res): Promise<void> => {
     .insert(debtsTable)
     .values(values as typeof debtsTable.$inferInsert)
     .returning();
+  await recordBalanceSnapshot(req.userId!, row.id, row.balance);
   res.status(201).json(shapeDebt(row, new Map(), new Map()));
 });
 
@@ -352,6 +411,9 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
   if (!row) {
     res.status(404).json({ error: "Not found" });
     return;
+  }
+  if (changed(parsed.data.balance, current.balance)) {
+    await recordBalanceSnapshot(req.userId!, row.id, row.balance);
   }
   const accountIds = row.plaidAccountId ? [row.plaidAccountId] : [];
   const { accountById, itemById } = await loadAccountContext(req.userId!, accountIds);
@@ -573,6 +635,7 @@ router.post(
       res.status(404).json({ error: "Not found" });
       return;
     }
+    await recordBalanceSnapshot(req.userId!, result.debt.id, result.debt.balance);
     const accountIds = result.debt.plaidAccountId ? [result.debt.plaidAccountId] : [];
     const { accountById, itemById } = await loadAccountContext(req.userId!, accountIds);
     res.status(201).json({
