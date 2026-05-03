@@ -1,10 +1,12 @@
 import { Router, type IRouter } from "express";
-import { and, eq, sql, asc } from "drizzle-orm";
+import { and, eq, sql, asc, desc, lt, inArray } from "drizzle-orm";
 import {
   db,
   budgetCategoriesTable,
   budgetLinesTable,
   budgetMonthsTable,
+  debtsTable,
+  recurringItemsTable,
   transactionsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -224,7 +226,7 @@ router.get(
       .where(eq(budgetCategoriesTable.userId, req.userId!))
       .orderBy(asc(budgetCategoriesTable.sortOrder), asc(budgetCategoriesTable.name));
 
-    const lines = await db
+    let lines = await db
       .select()
       .from(budgetLinesTable)
       .where(
@@ -233,6 +235,140 @@ router.get(
           eq(budgetLinesTable.monthStart, monthStart),
         ),
       );
+
+    // Carry-forward: if no lines exist yet for this month, copy the most recent
+    // prior month's planned amounts and notes for manual categories. Auto-pulled
+    // categories are skipped since their amounts derive from Bills/Debts.
+    if (lines.length === 0) {
+      const [prior] = await db
+        .select({ monthStart: budgetLinesTable.monthStart })
+        .from(budgetLinesTable)
+        .where(
+          and(
+            eq(budgetLinesTable.userId, req.userId!),
+            lt(budgetLinesTable.monthStart, monthStart),
+          ),
+        )
+        .orderBy(desc(budgetLinesTable.monthStart))
+        .limit(1);
+
+      if (prior) {
+        const manualCategoryIds = cats
+          .filter((c) => c.sourceKind === "manual")
+          .map((c) => c.id);
+
+        if (manualCategoryIds.length > 0) {
+          const priorLines = await db
+            .select()
+            .from(budgetLinesTable)
+            .where(
+              and(
+                eq(budgetLinesTable.userId, req.userId!),
+                eq(budgetLinesTable.monthStart, prior.monthStart),
+                inArray(budgetLinesTable.categoryId, manualCategoryIds),
+              ),
+            );
+
+          if (priorLines.length > 0) {
+            await db
+              .insert(budgetMonthsTable)
+              .values({ userId: req.userId!, monthStart })
+              .onConflictDoNothing();
+
+            await db
+              .insert(budgetLinesTable)
+              .values(
+                priorLines.map((l) => ({
+                  userId: req.userId!,
+                  monthStart,
+                  categoryId: l.categoryId,
+                  plannedAmount: l.plannedAmount,
+                  note: l.note,
+                })),
+              )
+              .onConflictDoNothing({
+                target: [
+                  budgetLinesTable.userId,
+                  budgetLinesTable.monthStart,
+                  budgetLinesTable.categoryId,
+                ],
+              });
+
+            lines = await db
+              .select()
+              .from(budgetLinesTable)
+              .where(
+                and(
+                  eq(budgetLinesTable.userId, req.userId!),
+                  eq(budgetLinesTable.monthStart, monthStart),
+                ),
+              );
+          }
+        }
+      }
+    }
+
+    // Source-derived planned amounts for auto categories. We compute these
+    // on the fly from Bills (recurring_items) and Debts so they always reflect
+    // the current source values, regardless of what (if anything) was carried
+    // forward into this month's budget_lines.
+    const FREQ_TO_MONTHLY: Record<string, number> = {
+      monthly: 1,
+      biweekly: 26 / 12,
+      "bi-weekly": 26 / 12,
+      weekly: 52 / 12,
+      semimonthly: 2,
+      "semi-monthly": 2,
+      quarterly: 1 / 3,
+      annually: 1 / 12,
+      yearly: 1 / 12,
+    };
+
+    const autoBillsCatIds = cats
+      .filter((c) => c.sourceKind === "auto_bills")
+      .map((c) => c.id);
+    const autoDebtCats = cats.filter((c) => c.sourceKind === "auto_debts");
+
+    const autoPlannedByCat = new Map<string, string>();
+
+    if (autoBillsCatIds.length > 0) {
+      const recurring = await db
+        .select()
+        .from(recurringItemsTable)
+        .where(
+          and(
+            eq(recurringItemsTable.userId, req.userId!),
+            inArray(recurringItemsTable.categoryId, autoBillsCatIds),
+          ),
+        );
+      const sums = new Map<string, number>();
+      for (const r of recurring) {
+        if (!r.categoryId) continue;
+        if (r.active === "false") continue;
+        const factor = FREQ_TO_MONTHLY[r.frequency.toLowerCase()] ?? 1;
+        const monthly = (parseFloat(r.amount) || 0) * factor;
+        sums.set(r.categoryId, (sums.get(r.categoryId) ?? 0) + monthly);
+      }
+      for (const [catId, total] of sums) {
+        autoPlannedByCat.set(catId, total.toFixed(2));
+      }
+    }
+
+    if (autoDebtCats.length > 0) {
+      const debts = await db
+        .select()
+        .from(debtsTable)
+        .where(eq(debtsTable.userId, req.userId!));
+      const activeDebts = debts
+        .filter((d) => d.status === "active")
+        .sort((a, b) => b.name.length - a.name.length);
+      for (const cat of autoDebtCats) {
+        const match = activeDebts.find((d) => cat.name.includes(d.name));
+        if (match) {
+          autoPlannedByCat.set(cat.id, parseFloat(match.minPayment).toFixed(2));
+        }
+      }
+    }
 
     const monthEnd = new Date(monthStart);
     monthEnd.setMonth(monthEnd.getMonth() + 1);
@@ -270,11 +406,16 @@ router.get(
         c.kind === "income"
           ? inflowByCat.get(c.id) ?? "0"
           : spendByCat.get(c.id) ?? "0";
+      const derived = autoPlannedByCat.get(c.id);
+      const plannedAmount =
+        c.sourceKind !== "manual" && derived !== undefined
+          ? derived
+          : line?.plannedAmount ?? "0";
       return {
         id: line?.id ?? null,
         categoryId: c.id,
         categoryName: c.name,
-        plannedAmount: line?.plannedAmount ?? "0",
+        plannedAmount,
         actualAmount,
         note: line?.note ?? null,
         groupName: c.groupName,
