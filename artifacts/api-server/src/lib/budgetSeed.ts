@@ -36,7 +36,10 @@ export type SeedRecurringItem = {
 
 // Recurring items that back the auto_bills budget categories.
 // `categoryName` (or `name` if absent) must match a SEED_CATEGORIES entry.
+// Income items are linked by name match; bills set `categoryName` explicitly
+// to point at the consolidated category they roll up into.
 export const SEED_RECURRING_ITEMS: SeedRecurringItem[] = [
+  // --- Income (3) ---
   {
     name: "Mom — Verizon reimbursement",
     categoryName: "Other Income",
@@ -61,6 +64,176 @@ export const SEED_RECURRING_ITEMS: SeedRecurringItem[] = [
     frequency: "biweekly",
     dayOfMonth: null,
     anchorDate: "2026-05-01",
+  },
+
+  // --- Bills (18) — totals exactly $8,466.70/mo for May 2026 ---
+  // (5 weekly events × $450 = $2,250 + monthly sum $6,216.70).
+  // Order roughly mirrors the user's Bills list so they read naturally.
+  // categoryName values point at the consolidated SEED_CATEGORIES from
+  // Task #65 (Subscriptions, Car Payments, Utilities, Insurance, etc).
+  {
+    name: "PlayStation Network",
+    kind: "bill",
+    amount: "18.98",
+    frequency: "monthly",
+    dayOfMonth: 5,
+    anchorDate: null,
+    categoryName: "Subscriptions",
+  },
+  {
+    name: "PlayStation Network",
+    kind: "bill",
+    amount: "18.98",
+    frequency: "monthly",
+    dayOfMonth: 16,
+    anchorDate: null,
+    categoryName: "Subscriptions",
+  },
+  {
+    name: "Hannah's Car (UW Credit Union)",
+    kind: "bill",
+    amount: "651.55",
+    frequency: "monthly",
+    dayOfMonth: 6,
+    anchorDate: null,
+    categoryName: "Car Payments",
+  },
+  {
+    name: "Toyota Lease",
+    kind: "bill",
+    amount: "672.80",
+    frequency: "monthly",
+    dayOfMonth: 7,
+    anchorDate: null,
+    categoryName: "Car Payments",
+  },
+  {
+    name: "Kwik Trip / gas",
+    kind: "bill",
+    amount: "200.00",
+    frequency: "monthly",
+    dayOfMonth: 9,
+    anchorDate: null,
+    categoryName: "Gas, Maintenance & Parking",
+  },
+  {
+    name: "Kwik Trip / gas",
+    kind: "bill",
+    amount: "200.00",
+    frequency: "monthly",
+    dayOfMonth: 24,
+    anchorDate: null,
+    categoryName: "Gas, Maintenance & Parking",
+  },
+  {
+    name: "Weekly Spend",
+    kind: "bill",
+    amount: "450.00",
+    frequency: "weekly",
+    dayOfMonth: null,
+    anchorDate: "2026-05-02",
+    categoryName: "Misc / Buffer",
+  },
+  {
+    // Amount chosen so the May 2026 Bills "per month" total lands on
+    // exactly $8,466.70 (5 weekly events × $450 + sum of monthly bills).
+    name: "Monthly Spend",
+    kind: "bill",
+    amount: "440.45",
+    frequency: "monthly",
+    dayOfMonth: 1,
+    anchorDate: null,
+    categoryName: "Misc / Buffer",
+  },
+  {
+    name: "TruStage / Ethos",
+    kind: "bill",
+    amount: "95.00",
+    frequency: "monthly",
+    dayOfMonth: 15,
+    anchorDate: null,
+    categoryName: "Insurance",
+  },
+  {
+    name: "Mortgage (Lakeview)",
+    kind: "bill",
+    amount: "1989.81",
+    frequency: "monthly",
+    dayOfMonth: 14,
+    anchorDate: null,
+    categoryName: "Mortgage (Lakeview)",
+  },
+  {
+    name: "Verizon Wireless",
+    kind: "bill",
+    amount: "342.00",
+    frequency: "monthly",
+    dayOfMonth: 16,
+    anchorDate: null,
+    categoryName: "Utilities",
+  },
+  {
+    name: "MGE Electric & Gas",
+    kind: "bill",
+    amount: "241.00",
+    frequency: "monthly",
+    dayOfMonth: 20,
+    anchorDate: null,
+    categoryName: "Utilities",
+  },
+  {
+    name: "Water/Sewer",
+    kind: "bill",
+    amount: "101.02",
+    frequency: "monthly",
+    dayOfMonth: 24,
+    anchorDate: null,
+    categoryName: "Utilities",
+  },
+  {
+    name: "Student Loan (Nelnet)",
+    kind: "bill",
+    amount: "237.58",
+    frequency: "monthly",
+    dayOfMonth: 29,
+    anchorDate: null,
+    categoryName: "Misc / Buffer",
+  },
+  {
+    name: "Dog Waste Removal",
+    kind: "bill",
+    amount: "80.00",
+    frequency: "monthly",
+    dayOfMonth: 1,
+    anchorDate: null,
+    categoryName: "Home Maintenance & Warranty",
+  },
+  {
+    name: "State Farm",
+    kind: "bill",
+    amount: "121.54",
+    frequency: "monthly",
+    dayOfMonth: 3,
+    anchorDate: null,
+    categoryName: "Insurance",
+  },
+  {
+    name: "State Farm Insurance",
+    kind: "bill",
+    amount: "128.59",
+    frequency: "monthly",
+    dayOfMonth: 3,
+    anchorDate: null,
+    categoryName: "Insurance",
+  },
+  {
+    name: "HELOC (Figure)",
+    kind: "bill",
+    amount: "677.40",
+    frequency: "monthly",
+    dayOfMonth: 3,
+    anchorDate: null,
+    categoryName: "HELOC (Figure)",
   },
 ];
 

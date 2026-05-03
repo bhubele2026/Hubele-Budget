@@ -531,14 +531,21 @@ router.post(
         .onConflictDoNothing();
 
       // Seed recurring items that back auto_bills budget categories.
-      // Match by exact name; only insert if no existing recurring item has that name.
+      // Bills link by `categoryName` (so the recurring row name and category
+      // name can differ); legacy/income items fall back to a name match.
+      // Idempotent skip-by-name at the *group* level: if the user already
+      // has any recurring row with a given seed name we leave the entire
+      // group untouched (preserves user edits). Duplicate names in the seed
+      // (e.g. two PlayStation Network rows on day 5 / day 16) are still
+      // inserted atomically on a fresh user because the existence check
+      // runs against the pre-seed table snapshot only.
       const existingRecurring = await tx
         .select()
         .from(recurringItemsTable)
         .where(eq(recurringItemsTable.userId, userId));
-      const recurringByName = new Map(existingRecurring.map((r) => [r.name, r]));
+      const existingRecurringNames = new Set(existingRecurring.map((r) => r.name));
       for (const r of SEED_RECURRING_ITEMS) {
-        if (recurringByName.has(r.name)) continue;
+        if (existingRecurringNames.has(r.name)) continue;
         const cat = byName.get(r.categoryName ?? r.name);
         await tx.insert(recurringItemsTable).values({
           userId,
@@ -630,6 +637,102 @@ router.post(
           categoriesInserted === 0 &&
           linesInserted === 0 &&
           mappingRulesInserted === 0,
+      };
+    });
+    res.json(result);
+  },
+);
+
+// One-shot endpoint to seed (or top up) the user's recurring bills. Useful
+// for users who already ran /budget/seed-defaults back when it only seeded
+// the 3 income items, so we don't have to re-run the whole defaults flow.
+// Idempotent: skips any (name, frequency, dayOfMonth, anchorDate) row the
+// user already has, and only creates the few support categories
+// (Subscriptions, Discretionary, Home services) that the new bills link to.
+router.post(
+  "/budget/seed-bills",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const userId = req.userId!;
+    const result = await db.transaction(async (tx) => {
+      const bills = SEED_RECURRING_ITEMS.filter((r) => r.kind !== "income");
+
+      // 1. Ensure every category referenced by a bill exists. We only insert
+      //    missing categories (planned 0, manual source) and never modify
+      //    existing rows here so user customizations survive.
+      const neededCategoryNames = Array.from(
+        new Set(bills.map((b) => b.categoryName).filter((n): n is string => !!n)),
+      );
+      const existingCats = await tx
+        .select()
+        .from(budgetCategoriesTable)
+        .where(eq(budgetCategoriesTable.userId, userId));
+      const catByName = new Map(existingCats.map((c) => [c.name, c]));
+
+      const sortOrderByGroup = new Map<string, number>();
+      SEED_GROUP_ORDER.forEach((g, i) => sortOrderByGroup.set(g, i * 100));
+
+      let categoriesInserted = 0;
+      for (const name of neededCategoryNames) {
+        if (catByName.has(name)) continue;
+        const seed = SEED_CATEGORIES.find((c) => c.name === name);
+        if (!seed) continue;
+        const groupBase = sortOrderByGroup.get(seed.groupName) ?? 9999;
+        const [row] = await tx
+          .insert(budgetCategoriesTable)
+          .values({
+            userId,
+            name: seed.name,
+            kind: seed.kind,
+            groupName: seed.groupName,
+            sourceKind: seed.sourceKind,
+            sortOrder: groupBase + SEED_CATEGORIES.indexOf(seed),
+          })
+          .onConflictDoNothing({
+            target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+          })
+          .returning();
+        if (row) {
+          catByName.set(row.name, row);
+          categoriesInserted++;
+        }
+      }
+
+      // 2. Insert every missing bill. Skip-by-name at the *group* level: if
+      //    the user already has any recurring row with a given seed name we
+      //    skip the entire group (preserving user edits). Duplicate seed
+      //    names (PlayStation Network, Kwik Trip / gas) are still inserted
+      //    atomically on a fresh user because the existence check runs
+      //    against the pre-seed snapshot only.
+      const existingRecurring = await tx
+        .select()
+        .from(recurringItemsTable)
+        .where(eq(recurringItemsTable.userId, userId));
+      const existingRecurringNames = new Set(existingRecurring.map((r) => r.name));
+
+      let billsInserted = 0;
+      for (const r of bills) {
+        if (existingRecurringNames.has(r.name)) continue;
+        const cat = catByName.get(r.categoryName ?? r.name);
+        await tx.insert(recurringItemsTable).values({
+          userId,
+          name: r.name,
+          kind: r.kind,
+          amount: r.amount,
+          frequency: r.frequency,
+          dayOfMonth: r.dayOfMonth,
+          anchorDate: r.anchorDate,
+          active: "true",
+          categoryId: cat?.id ?? null,
+        });
+        billsInserted++;
+      }
+
+      return {
+        categoriesInserted,
+        billsInserted,
+        billsTotal: bills.length,
+        alreadySeeded: categoriesInserted === 0 && billsInserted === 0,
       };
     });
     res.json(result);
