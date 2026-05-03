@@ -1261,7 +1261,119 @@ export default function AmexPage() {
             onToggleAll={(on) => toggleDay(ids, on)}
             totalNode={formatCurrency(dayTotal)}
           >
-              <div className="overflow-x-auto">
+              {/* Mobile: stacked card layout (below md) */}
+              <div className="md:hidden divide-y divide-border">
+                {items.map((t) => (
+                  <div
+                    key={t.id}
+                    className="p-3 flex flex-col gap-2 hover:bg-muted/30 transition-colors"
+                    data-testid={`row-amex-mobile-${t.id}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        checked={selected.has(t.id)}
+                        onCheckedChange={() => toggleOne(t.id)}
+                        aria-label="Select"
+                        className="mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium break-words" title={t.description}>
+                          {t.description}
+                        </div>
+                        {t.notes && (
+                          <div className="text-[11px] text-muted-foreground break-words" title={t.notes}>
+                            {t.notes}
+                          </div>
+                        )}
+                        <div className="text-[11px] text-muted-foreground mt-0.5">
+                          {t.member ?? "—"}
+                        </div>
+                      </div>
+                      <div className="text-sm font-mono tabular-nums whitespace-nowrap font-semibold">
+                        {formatCurrency(parseAbs(t.amount))}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 pl-7">
+                      <Input
+                        key={t.owedBy ?? ""}
+                        defaultValue={t.owedBy ?? ""}
+                        placeholder="Owed by…"
+                        aria-label={`Owed by for ${t.description}`}
+                        className="h-7 w-32 text-xs"
+                        onBlur={(e) => {
+                          if ((e.currentTarget.value.trim() || null) !== (t.owedBy ?? null)) {
+                            setRowOwedBy(t, e.currentTarget.value);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            (e.currentTarget as HTMLInputElement).blur();
+                          } else if (e.key === "Escape") {
+                            (e.currentTarget as HTMLInputElement).value = t.owedBy ?? "";
+                            (e.currentTarget as HTMLInputElement).blur();
+                          }
+                        }}
+                      />
+                      <CategoryPicker
+                        value={t.categoryId ?? null}
+                        categories={categories ?? []}
+                        description={t.description}
+                        onChange={(id, remember) =>
+                          setRowCategory(t.id, id, remember)
+                        }
+                      />
+                      <Select
+                        value={t.source}
+                        onValueChange={(v) => setRowSource(t.id, v)}
+                      >
+                        <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={AMEX_SOURCE}>amex</SelectItem>
+                          <SelectItem value="manual">manual</SelectItem>
+                          <SelectItem value="import">import</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <BucketBubbles
+                        flags={{
+                          weekly: t.weeklyAllowance,
+                          monthly: t.monthlyAllowance,
+                          unplanned: t.unplannedAllowance,
+                          reimbursable: t.reimbursable,
+                        }}
+                        onToggle={(b, next) => onBubbleToggle(t, b, next)}
+                      />
+                      {t.weeklyAllowance && (
+                        <Select
+                          value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}
+                          onValueChange={(v) =>
+                            setRowBucket(t, "weekly", v as typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket])
+                          }
+                        >
+                          <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={TransactionWeeklyBucket.groceries}>{weeklyLabels.groceries}</SelectItem>
+                            <SelectItem value={TransactionWeeklyBucket.dining}>{weeklyLabels.dining}</SelectItem>
+                            <SelectItem value={TransactionWeeklyBucket.entertainment}>{weeklyLabels.entertainment}</SelectItem>
+                            <SelectItem value={TransactionWeeklyBucket.misc}>{weeklyLabels.misc}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {t.isTransfer && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-slate-300 text-slate-700 bg-slate-50"
+                          title="Excluded from budget actuals"
+                          data-testid={`badge-transfer-mobile-${t.id}`}
+                        >
+                          Transfer
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Desktop: table layout (md and up) */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm min-w-[720px]">
                   <tbody>
                     {items.map((t) => (
