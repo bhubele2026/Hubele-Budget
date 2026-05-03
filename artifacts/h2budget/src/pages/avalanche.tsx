@@ -26,19 +26,19 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Tabs,
   TabsContent,
@@ -68,7 +68,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { Pencil, Trash2, Plus, RefreshCw, Flame, TrendingDown, PartyPopper, X } from "lucide-react";
+import { Pencil, Trash2, Plus, RefreshCw, Flame, TrendingDown, PartyPopper, X, ClipboardPaste, Sparkles } from "lucide-react";
 
 function debtToSim(d: Debt): SimDebt {
   return {
@@ -305,8 +305,29 @@ export default function AvalanchePage() {
     }
   };
 
+  // Avalanche budget cap: a soft headroom around the current manual extra.
+  // Real budget integration lives behind extraSource (budget_net / budget_line)
+  // and is owned by Phase 5 — for now we derive a friendly cap from the manual
+  // amount so the slider has somewhere to go.
+  const budgetCap = useMemo(() => {
+    const base = Math.max(manualExtra * 1.25, manualExtra + 250, 500);
+    return Math.ceil(base / 25) * 25;
+  }, [manualExtra]);
+  const roomLeft = Math.max(0, budgetCap - manualExtra);
+
+  // Progress: paid-down vs original total balance. Without a history snapshot
+  // we currently have only the live balance, so progress reads 0% until that
+  // snapshot lands. Use original = current as a safe placeholder.
+  const originalTotal = totalBalance;
+  const paidDown = Math.max(0, originalTotal - totalBalance);
+  const progressPct = originalTotal > 0 ? (paidDown / originalTotal) * 100 : 0;
+
+  const budgetMode = (settings?.budgetMode ?? "budgeted") as "budgeted" | "actual";
+
+  const next3 = sortedActive.slice(0, 3);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {killedBanner && (
         <div className="relative flex items-center gap-3 rounded-lg border border-emerald-300/60 bg-gradient-to-r from-emerald-50 to-amber-50 p-4 text-emerald-900 dark:border-emerald-700/60 dark:from-emerald-950/40 dark:to-amber-950/40 dark:text-emerald-100 animate-in fade-in slide-in-from-top-2">
           <PartyPopper className="h-6 w-6 shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -328,36 +349,54 @@ export default function AvalanchePage() {
           </Button>
         </div>
       )}
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-serif font-bold text-foreground flex items-center gap-2">
-            <Flame className="h-7 w-7 text-primary" /> Avalanche
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Pay the highest interest first. Watch the snowball cascade.
-          </p>
+      {/* Editorial header */}
+      <div>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              Section II
+            </div>
+            <h1 className="text-5xl font-serif font-bold text-foreground mt-1 leading-none">
+              Avalanche
+            </h1>
+            <p className="text-muted-foreground mt-2 italic">
+              Pay the highest interest first. Watch the snowball cascade.
+            </p>
+          </div>
+          <div className="flex gap-2 mt-2">
+            <Button
+              variant="outline"
+              className="gap-2 rounded-full"
+              onClick={() => syncMinimums.mutate()}
+              disabled={syncMinimums.isPending}
+              title="Sync minimums from recent payments"
+            >
+              <RefreshCw className={`h-4 w-4 ${syncMinimums.isPending ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">Sync minimums</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-2 rounded-full"
+              onClick={() => setAddOpen(true)}
+            >
+              <ClipboardPaste className="h-4 w-4" />
+              Paste debts
+            </Button>
+            <Button
+              className="gap-2 rounded-full bg-foreground text-background hover:bg-foreground/90"
+              onClick={() => setAddOpen(true)}
+            >
+              <Plus className="h-4 w-4" /> Add debt
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => syncMinimums.mutate()}
-            disabled={syncMinimums.isPending}
-          >
-            <RefreshCw className={`h-4 w-4 ${syncMinimums.isPending ? "animate-spin" : ""}`} />
-            Sync minimums
-          </Button>
-          <Button className="gap-2" onClick={() => setAddOpen(true)}>
-            <Plus className="h-4 w-4" /> Add debt
-          </Button>
-        </div>
+        <div className="border-t border-border mt-5" />
       </div>
 
-      {/* Hero stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Total debt" value={fmtMoneyCompact(totalBalance)} />
-        <StatCard
+      {/* Stat strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4">
+        <StatStripCell label="Total debt" value={fmtMoneyCompact(totalBalance)} />
+        <StatStripCell
           label="Months to free"
           value={sim.ranOutOfTime ? "∞" : String(sim.monthsToFreedom)}
           sub={
@@ -366,80 +405,45 @@ export default function AvalanchePage() {
               : `${(sim.monthsToFreedom / 12).toFixed(1)} yrs`
           }
         />
-        <StatCard
+        <StatStripCell
           label="Debt-free date"
           value={sim.debtFreeDate ? fmtMonth(sim.debtFreeDate) : "—"}
         />
-        <StatCard
+        <StatStripCell
           label="Total interest"
           value={fmtMoneyCompact(sim.totalInterestPaid)}
-          sub={`min only: ${fmtMoneyCompact(totalMin * (sim.monthsToFreedom || 0))}`}
+          valueClassName="text-destructive"
         />
       </div>
 
-      {/* Controls */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Strategy</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant={strategy === "avalanche" ? "default" : "outline"}
-                onClick={() => updateSettings.mutate({ data: { strategy: "avalanche" } })}
-              >
-                Avalanche
-                <span className="ml-2 text-xs opacity-70">Highest APR</span>
-              </Button>
-              <Button
-                variant={strategy === "snowball" ? "default" : "outline"}
-                onClick={() => updateSettings.mutate({ data: { strategy: "snowball" } })}
-              >
-                Snowball
-                <span className="ml-2 text-xs opacity-70">Smallest balance</span>
-              </Button>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {interestDelta > 0 ? (
-                <>
-                  <strong className="capitalize">{strategy}</strong> saves{" "}
-                  <strong className="text-emerald-600 dark:text-emerald-400">
-                    {fmtMoney(interestDelta)}
-                  </strong>
-                  {monthsDelta > 0 ? (
-                    <> and <strong>{monthsDelta} mo</strong></>
-                  ) : null}{" "}
-                  vs <strong>{strategy === "avalanche" ? "snowball" : "avalanche"}</strong> with your current extra source ({fmtMoney(resolvedExtraAmount)}/mo).
-                </>
-              ) : interestDelta < 0 ? (
-                <>
-                  Switching to{" "}
-                  <strong>{strategy === "avalanche" ? "snowball" : "avalanche"}</strong>{" "}
-                  would save{" "}
-                  <strong className="text-emerald-600 dark:text-emerald-400">
-                    {fmtMoney(-interestDelta)}
-                  </strong>
-                  {monthsDelta < 0 ? <> and <strong>{-monthsDelta} mo</strong></> : null}
-                  {" "}with your current extra source ({fmtMoney(resolvedExtraAmount)}/mo).
-                </>
-              ) : (
-                <>Both strategies cost the same with {fmtMoney(resolvedExtraAmount)}/mo extra.</>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Progress row */}
+      <div>
+        <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+          <span>Progress</span>
+          <span className="tabular-nums">{progressPct.toFixed(1)}%</span>
+        </div>
+        <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
+          <div
+            className="h-full bg-foreground rounded-full transition-all"
+            style={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }}
+          />
+        </div>
+      </div>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center justify-between">
-              <span>Extra per month</span>
-              <span className="tabular-nums text-primary">
+      {/* Two cards: Extra per month + Strategy */}
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* Extra per month */}
+        <Card className="rounded-2xl">
+          <CardContent className="p-6 space-y-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              Extra per month
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-5xl font-serif font-bold tabular-nums">
                 {fmtMoney(resolvedExtraAmount)}
               </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+              <span className="text-muted-foreground text-base">/mo</span>
+            </div>
             <div>
               <Label className="text-xs">Source</Label>
               <Select
@@ -460,20 +464,6 @@ export default function AvalanchePage() {
                 </SelectContent>
               </Select>
             </div>
-            {settings?.extraSource === "manual" && (
-              <div>
-                <Label className="text-xs">Manual amount ($/mo)</Label>
-                <Input
-                  type="number"
-                  step="25"
-                  min="0"
-                  value={manualExtra}
-                  onChange={(e) =>
-                    updateSettings.mutate({ data: { manualExtra: e.target.value || "0" } })
-                  }
-                />
-              </div>
-            )}
             {settings?.extraSource === "budget_line" && (
               <div>
                 <Label className="text-xs">Budget category</Label>
@@ -557,25 +547,173 @@ export default function AvalanchePage() {
                   )}
               </div>
             )}
-            <div>
-              <Label className="text-xs">Mode</Label>
-              <Select
-                value={settings?.budgetMode ?? "budgeted"}
-                onValueChange={(v) =>
-                  updateSettings.mutate({ data: { budgetMode: v as "budgeted" | "actual" } })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="budgeted">Budgeted (plan)</SelectItem>
-                  <SelectItem value="actual">Actual (transactions)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {settings?.extraSource === "manual" && (
+              <>
+                <div className="pt-2">
+                  <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                    <span>Avalanche budget</span>
+                    <span className="tabular-nums normal-case tracking-normal text-foreground font-medium">
+                      {fmtMoney(budgetCap)}/mo
+                    </span>
+                  </div>
+                  <Slider
+                    value={[Math.min(manualExtra, budgetCap)]}
+                    min={0}
+                    max={budgetCap}
+                    step={25}
+                    onValueChange={(v) =>
+                      updateSettings.mutate({
+                        data: { manualExtra: (v[0] ?? 0).toFixed(2) },
+                      })
+                    }
+                  />
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Room left in budget:{" "}
+                    <span className="tabular-nums text-foreground font-medium">
+                      {fmtMoney(roomLeft)}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() =>
+                    updateSettings.mutate({ data: { manualExtra: "0" } })
+                  }
+                >
+                  Reset to $0
+                </button>
+              </>
+            )}
           </CardContent>
         </Card>
+
+        {/* Strategy */}
+        <Card className="rounded-2xl">
+          <CardContent className="p-6 space-y-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              Strategy
+            </div>
+            <PillToggle
+              value={strategy}
+              onChange={(v) =>
+                updateSettings.mutate({ data: { strategy: v as Strategy } })
+              }
+              options={[
+                { value: "avalanche", label: "Avalanche", sub: "Highest APR first" },
+                { value: "snowball", label: "Snowball", sub: "Smallest balance first" },
+              ]}
+            />
+            <div className="text-sm text-muted-foreground flex items-start gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 mt-1 shrink-0" />
+              <span>
+                {interestDelta > 0 ? (
+                  <>
+                    Sticking with{" "}
+                    <strong className="text-foreground capitalize">{strategy}</strong>{" "}
+                    saves you{" "}
+                    <strong className="text-emerald-600 dark:text-emerald-400">
+                      {fmtMoney(interestDelta)}
+                    </strong>
+                    {monthsDelta > 0 ? (
+                      <> and <strong>{monthsDelta} mo</strong></>
+                    ) : null}{" "}
+                    vs the other strategy ({fmtMoney(resolvedExtraAmount)}/mo extra).
+                  </>
+                ) : interestDelta < 0 ? (
+                  <>
+                    Switching to{" "}
+                    <strong className="text-foreground">
+                      {strategy === "avalanche" ? "snowball" : "avalanche"}
+                    </strong>{" "}
+                    would save{" "}
+                    <strong className="text-emerald-600 dark:text-emerald-400">
+                      {fmtMoney(-interestDelta)}
+                    </strong>
+                    {monthsDelta < 0 ? (
+                      <> and <strong>{-monthsDelta} mo</strong></>
+                    ) : null}
+                    {" "}({fmtMoney(resolvedExtraAmount)}/mo extra).
+                  </>
+                ) : (
+                  <>
+                    Both strategies cost the same with{" "}
+                    {fmtMoney(resolvedExtraAmount)}/mo extra.
+                  </>
+                )}
+              </span>
+            </div>
+            <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground pt-1">
+              Mode
+            </div>
+            <PillToggle
+              value={budgetMode}
+              onChange={(v) =>
+                updateSettings.mutate({
+                  data: { budgetMode: v as "budgeted" | "actual" },
+                })
+              }
+              options={[
+                { value: "budgeted", label: "Budgeted", sub: "Plan numbers" },
+                { value: "actual", label: "Actual", sub: "From transactions" },
+              ]}
+            />
+            <p className="text-xs text-muted-foreground">
+              Plan numbers from your Budget. Switch to Actual to drive the plan
+              from real transactions this month.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Your next 3 moves / Kill order placeholder */}
+      <div>
+        <div className="flex items-baseline gap-3 mb-3">
+          <h2 className="text-2xl font-serif font-bold text-foreground">
+            Your next 3 moves
+          </h2>
+          <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            Kill order
+          </span>
+        </div>
+        {next3.length === 0 ? (
+          <Card className="rounded-2xl">
+            <CardContent className="p-6 text-sm text-muted-foreground">
+              Add a debt above to see which one gets killed first.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-3">
+            {next3.map((d, i) => {
+              const k = killById.get(d.id);
+              return (
+                <Card key={d.id} className="rounded-2xl">
+                  <CardContent className="p-4 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-full bg-foreground text-background text-xs font-semibold flex items-center justify-center">
+                        {i + 1}
+                      </div>
+                      {i === 0 && (
+                        <Flame className="h-4 w-4 text-destructive" aria-hidden />
+                      )}
+                      <div className="font-medium truncate">{d.name}</div>
+                    </div>
+                    <div className="text-xs text-muted-foreground flex items-center justify-between">
+                      <span className={aprToneClass(d.apr)}>{fmtPct(d.apr)} APR</span>
+                      <span className="tabular-nums">{fmtMoney(d.balance)}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Payoff:{" "}
+                      <span className="text-foreground tabular-nums">
+                        {k ? fmtMonth(k.date) : "—"}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Tabs: debts table + projection */}
@@ -1038,25 +1176,72 @@ export default function AvalanchePage() {
   );
 }
 
-function StatCard({
+function StatStripCell({
   label,
   value,
   sub,
+  valueClassName,
 }: {
   label: string;
   value: string;
   sub?: string;
+  valueClassName?: string;
 }) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground">
-          {label}
-        </div>
-        <div className="text-2xl font-semibold tabular-nums mt-1">{value}</div>
-        {sub && <div className="text-xs text-muted-foreground mt-0.5">{sub}</div>}
-      </CardContent>
-    </Card>
+    <div className="px-5 py-4 border-l border-border first:border-l-0 first:pl-0 md:first:pl-5">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+        {label}
+      </div>
+      <div
+        className={`text-3xl font-serif font-bold tabular-nums mt-2 ${
+          valueClassName ?? ""
+        }`}
+      >
+        {value}
+      </div>
+      {sub && (
+        <div className="text-xs text-muted-foreground mt-1 tabular-nums">{sub}</div>
+      )}
+    </div>
+  );
+}
+
+function PillToggle<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string; sub: string }[];
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-1 p-1 rounded-full bg-muted/60">
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={`rounded-full px-4 py-2 text-left transition-colors ${
+              active
+                ? "bg-foreground text-background shadow"
+                : "text-foreground hover:bg-background/60"
+            }`}
+          >
+            <div className="text-sm font-semibold leading-tight">{opt.label}</div>
+            <div
+              className={`text-[10px] uppercase tracking-[0.18em] mt-0.5 ${
+                active ? "text-background/70" : "text-muted-foreground"
+              }`}
+            >
+              {opt.sub}
+            </div>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
