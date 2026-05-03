@@ -1471,6 +1471,25 @@ export const RevokeInvitationResponse = zod.object({
 });
 
 /**
+ * @summary Resend a pending invitation (owner only). Revokes the existing invite and creates a new one for the same email.
+ */
+export const ResendInvitationParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+/**
+ * @summary Check whether the given email has a pending invitation. Public endpoint used by the sign-in page to help invited users who try to sign in before accepting their email invite.
+ */
+export const CheckInvitationBody = zod.object({
+  email: zod.string().email(),
+});
+
+export const CheckInvitationResponse = zod.object({
+  email: zod.string(),
+  hasPending: zod.boolean(),
+});
+
+/**
  * @summary List all current members (owner only).
  */
 export const ListMembersResponseItem = zod.object({

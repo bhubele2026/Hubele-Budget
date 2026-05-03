@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, RecurringItem, RecurringItemInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, Transaction, TransactionInput } from "./api.schemas";
+import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, RecurringItem, RecurringItemInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, Transaction, TransactionInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -1288,6 +1288,59 @@ export declare const useRevokeInvitation: <TError = ErrorType<void>, TContext = 
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof revokeInvitation>>, TError, {
     id: string;
+}, TContext>;
+/**
+ * @summary Resend a pending invitation (owner only). Revokes the existing invite and creates a new one for the same email.
+ */
+export declare const getResendInvitationUrl: (id: string) => string;
+export declare const resendInvitation: (id: string, options?: RequestInit) => Promise<Invitation>;
+export declare const getResendInvitationMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof resendInvitation>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof resendInvitation>>, TError, {
+    id: string;
+}, TContext>;
+export type ResendInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof resendInvitation>>>;
+export type ResendInvitationMutationError = ErrorType<void>;
+/**
+ * @summary Resend a pending invitation (owner only). Revokes the existing invite and creates a new one for the same email.
+ */
+export declare const useResendInvitation: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof resendInvitation>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof resendInvitation>>, TError, {
+    id: string;
+}, TContext>;
+/**
+ * @summary Check whether the given email has a pending invitation. Public endpoint used by the sign-in page to help invited users who try to sign in before accepting their email invite.
+ */
+export declare const getCheckInvitationUrl: () => string;
+export declare const checkInvitation: (checkInvitationInput: CheckInvitationInput, options?: RequestInit) => Promise<CheckInvitationResult>;
+export declare const getCheckInvitationMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof checkInvitation>>, TError, {
+        data: BodyType<CheckInvitationInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof checkInvitation>>, TError, {
+    data: BodyType<CheckInvitationInput>;
+}, TContext>;
+export type CheckInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof checkInvitation>>>;
+export type CheckInvitationMutationBody = BodyType<CheckInvitationInput>;
+export type CheckInvitationMutationError = ErrorType<unknown>;
+/**
+ * @summary Check whether the given email has a pending invitation. Public endpoint used by the sign-in page to help invited users who try to sign in before accepting their email invite.
+ */
+export declare const useCheckInvitation: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof checkInvitation>>, TError, {
+        data: BodyType<CheckInvitationInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof checkInvitation>>, TError, {
+    data: BodyType<CheckInvitationInput>;
 }, TContext>;
 /**
  * @summary List all current members (owner only).

@@ -3,6 +3,7 @@ import {
   useListInvitations,
   useCreateInvitation,
   useRevokeInvitation,
+  useResendInvitation,
   useListMembers,
   useRemoveMember,
   getListInvitationsQueryKey,
@@ -25,7 +26,7 @@ import {
 } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, X } from "lucide-react";
+import { Mail, RotateCw, X } from "lucide-react";
 
 const inviteSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -71,6 +72,7 @@ export function OwnerInvitationsSection() {
   });
   const createInvitation = useCreateInvitation();
   const revokeInvitation = useRevokeInvitation();
+  const resendInvitation = useResendInvitation();
   const removeMember = useRemoveMember();
 
   const form = useForm<InviteFormValues>({
@@ -98,6 +100,30 @@ export function OwnerInvitationsSection() {
         onError: (err) => {
           toast({
             title: "Failed to send invitation",
+            description: String(err),
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
+  const handleResend = (id: string, email: string) => {
+    resendInvitation.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getListInvitationsQueryKey(),
+          });
+          toast({
+            title: "Invitation resent",
+            description: `A new invite email has been sent to ${email}.`,
+          });
+        },
+        onError: (err) => {
+          toast({
+            title: "Failed to resend invitation",
             description: String(err),
             variant: "destructive",
           });
@@ -245,17 +271,30 @@ export function OwnerInvitationsSection() {
                       </td>
                       <td className="px-3 py-2 text-right">
                         {inv.status === "pending" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              handleRevoke(inv.id, inv.emailAddress)
-                            }
-                            disabled={revokeInvitation.isPending}
-                            data-testid={`button-revoke-${inv.id}`}
-                          >
-                            <X className="w-3.5 h-3.5 mr-1" /> Revoke
-                          </Button>
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                handleResend(inv.id, inv.emailAddress)
+                              }
+                              disabled={resendInvitation.isPending}
+                              data-testid={`button-resend-${inv.id}`}
+                            >
+                              <RotateCw className="w-3.5 h-3.5 mr-1" /> Resend
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                handleRevoke(inv.id, inv.emailAddress)
+                              }
+                              disabled={revokeInvitation.isPending}
+                              data-testid={`button-revoke-${inv.id}`}
+                            >
+                              <X className="w-3.5 h-3.5 mr-1" /> Revoke
+                            </Button>
+                          </div>
                         )}
                       </td>
                     </tr>

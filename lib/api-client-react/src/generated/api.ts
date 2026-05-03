@@ -29,6 +29,8 @@ import type {
   CashSignal,
   Category,
   CategoryInput,
+  CheckInvitationInput,
+  CheckInvitationResult,
   CleanupNonProdPlaidItems200,
   CloseForecastMonthBody,
   CreateInvitationInput,
@@ -5052,6 +5054,176 @@ export const useRevokeInvitation = <
   TContext
 > => {
   return useMutation(getRevokeInvitationMutationOptions(options));
+};
+
+/**
+ * @summary Resend a pending invitation (owner only). Revokes the existing invite and creates a new one for the same email.
+ */
+export const getResendInvitationUrl = (id: string) => {
+  return `/api/invitations/${id}/resend`;
+};
+
+export const resendInvitation = async (
+  id: string,
+  options?: RequestInit,
+): Promise<Invitation> => {
+  return customFetch<Invitation>(getResendInvitationUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getResendInvitationMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resendInvitation>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resendInvitation>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["resendInvitation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resendInvitation>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return resendInvitation(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResendInvitationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resendInvitation>>
+>;
+
+export type ResendInvitationMutationError = ErrorType<void>;
+
+/**
+ * @summary Resend a pending invitation (owner only). Revokes the existing invite and creates a new one for the same email.
+ */
+export const useResendInvitation = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resendInvitation>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resendInvitation>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getResendInvitationMutationOptions(options));
+};
+
+/**
+ * @summary Check whether the given email has a pending invitation. Public endpoint used by the sign-in page to help invited users who try to sign in before accepting their email invite.
+ */
+export const getCheckInvitationUrl = () => {
+  return `/api/invitations/check`;
+};
+
+export const checkInvitation = async (
+  checkInvitationInput: CheckInvitationInput,
+  options?: RequestInit,
+): Promise<CheckInvitationResult> => {
+  return customFetch<CheckInvitationResult>(getCheckInvitationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(checkInvitationInput),
+  });
+};
+
+export const getCheckInvitationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof checkInvitation>>,
+    TError,
+    { data: BodyType<CheckInvitationInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof checkInvitation>>,
+  TError,
+  { data: BodyType<CheckInvitationInput> },
+  TContext
+> => {
+  const mutationKey = ["checkInvitation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof checkInvitation>>,
+    { data: BodyType<CheckInvitationInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return checkInvitation(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CheckInvitationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof checkInvitation>>
+>;
+export type CheckInvitationMutationBody = BodyType<CheckInvitationInput>;
+export type CheckInvitationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Check whether the given email has a pending invitation. Public endpoint used by the sign-in page to help invited users who try to sign in before accepting their email invite.
+ */
+export const useCheckInvitation = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof checkInvitation>>,
+    TError,
+    { data: BodyType<CheckInvitationInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof checkInvitation>>,
+  TError,
+  { data: BodyType<CheckInvitationInput> },
+  TContext
+> => {
+  return useMutation(getCheckInvitationMutationOptions(options));
 };
 
 /**

@@ -4508,6 +4508,36 @@ export declare const RevokeInvitationResponse: zod.ZodObject<{
     url?: string | null | undefined;
 }>;
 /**
+ * @summary Resend a pending invitation (owner only). Revokes the existing invite and creates a new one for the same email.
+ */
+export declare const ResendInvitationParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+/**
+ * @summary Check whether the given email has a pending invitation. Public endpoint used by the sign-in page to help invited users who try to sign in before accepting their email invite.
+ */
+export declare const CheckInvitationBody: zod.ZodObject<{
+    email: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    email: string;
+}, {
+    email: string;
+}>;
+export declare const CheckInvitationResponse: zod.ZodObject<{
+    email: zod.ZodString;
+    hasPending: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    email: string;
+    hasPending: boolean;
+}, {
+    email: string;
+    hasPending: boolean;
+}>;
+/**
  * @summary List all current members (owner only).
  */
 export declare const ListMembersResponseItem: zod.ZodObject<{

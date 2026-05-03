@@ -42,6 +42,8 @@ export * from "./category";
 export * from "./categoryInput";
 export * from "./categoryInputSourceKind";
 export * from "./categorySourceKind";
+export * from "./checkInvitationInput";
+export * from "./checkInvitationResult";
 export * from "./cleanupNonProdPlaidItems200";
 export * from "./closeForecastMonthBody";
 export * from "./createInvitationInput";

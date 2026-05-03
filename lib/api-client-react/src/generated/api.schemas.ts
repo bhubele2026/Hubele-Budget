@@ -783,6 +783,15 @@ export interface CreateInvitationInput {
   email: string;
 }
 
+export interface CheckInvitationInput {
+  email: string;
+}
+
+export interface CheckInvitationResult {
+  email: string;
+  hasPending: boolean;
+}
+
 export interface Member {
   id: string;
   /** @nullable */

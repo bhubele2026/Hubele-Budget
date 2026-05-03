@@ -1,16 +1,115 @@
+import { useState } from "react";
 import { Redirect } from "wouter";
 import { SignIn, SignUp } from "@clerk/react";
+import { useCheckInvitation } from "@workspace/api-client-react";
+import { Mail } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+function PendingInvitationCheck() {
+  const [email, setEmail] = useState("");
+  const [result, setResult] = useState<
+    | { kind: "idle" }
+    | { kind: "pending"; email: string }
+    | { kind: "none"; email: string }
+    | { kind: "error" }
+  >({ kind: "idle" });
+  const checkInvitation = useCheckInvitation();
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = email.trim();
+    if (!trimmed) return;
+    checkInvitation.mutate(
+      { data: { email: trimmed } },
+      {
+        onSuccess: (data) => {
+          setResult(
+            data.hasPending
+              ? { kind: "pending", email: data.email }
+              : { kind: "none", email: data.email },
+          );
+        },
+        onError: () => setResult({ kind: "error" }),
+      },
+    );
+  };
+
+  return (
+    <div
+      className="bg-card rounded-2xl w-[440px] max-w-full overflow-hidden shadow-xl p-6 text-sm space-y-3"
+      data-testid="card-pending-invite-check"
+    >
+      <div className="flex items-start gap-2">
+        <Mail className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+        <div>
+          <p className="font-semibold text-foreground">Were you invited?</p>
+          <p className="text-muted-foreground">
+            This app is invite-only. If you were invited, you must open the
+            link in your invitation email — signing in here won&apos;t work
+            until you accept the invite.
+          </p>
+        </div>
+      </div>
+      <form onSubmit={onSubmit} className="flex gap-2" data-testid="form-check-invite">
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          data-testid="input-check-invite-email"
+        />
+        <button
+          type="submit"
+          disabled={checkInvitation.isPending}
+          className="h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+          data-testid="button-check-invite"
+        >
+          {checkInvitation.isPending ? "Checking..." : "Check"}
+        </button>
+      </form>
+      {result.kind === "pending" && (
+        <div
+          className="rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 px-3 py-2"
+          data-testid="text-invite-pending"
+        >
+          You have a pending invitation for <strong>{result.email}</strong>.
+          Please open the invitation email we sent and click the link to
+          finish creating your account.
+        </div>
+      )}
+      {result.kind === "none" && (
+        <div
+          className="rounded-md border border-border bg-muted/30 text-muted-foreground px-3 py-2"
+          data-testid="text-invite-none"
+        >
+          No pending invitation found for <strong>{result.email}</strong>.
+          Ask the family owner to send you an invite.
+        </div>
+      )}
+      {result.kind === "error" && (
+        <div
+          className="rounded-md border border-destructive/40 bg-destructive/10 text-destructive px-3 py-2"
+          data-testid="text-invite-error"
+        >
+          Couldn&apos;t check right now. Please try again.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SignInPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-4">
       <SignIn
         path={`${basePath}/sign-in`}
         routing="path"
         signUpUrl={`${basePath}/sign-up`}
       />
+      <PendingInvitationCheck />
     </div>
   );
 }
