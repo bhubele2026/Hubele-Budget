@@ -7,7 +7,28 @@ export type Transaction = {
   amount: string;
   forecastFlag: boolean;
   categoryId?: string | null;
+  source?: string;
+  plaidAccountId?: string | null;
 };
+
+/** True if a transaction belongs to a bank/checking-style account.
+ *  Account metadata wins: a Plaid txn whose `plaidAccountId` matches a
+ *  known checking/depository account is bank, regardless of source string.
+ *  Otherwise: `amex`/`plaid:amex` are not bank; other Plaid txns without a
+ *  matching checking account are credit-card-side and excluded.
+ *  Manual rows default to bank — that's the primary flow for them. */
+export function isBankTxn(
+  txn: Pick<Transaction, "source" | "plaidAccountId">,
+  checkingPlaidAccountIds: Set<string>,
+): boolean {
+  const s = (txn.source ?? "manual").toLowerCase();
+  if (txn.plaidAccountId) {
+    return checkingPlaidAccountIds.has(txn.plaidAccountId);
+  }
+  if (s === "amex" || s === "plaid:amex") return false;
+  if (s.startsWith("plaid:")) return false;
+  return true;
+}
 
 export type ResolutionStatus =
   | "matched"

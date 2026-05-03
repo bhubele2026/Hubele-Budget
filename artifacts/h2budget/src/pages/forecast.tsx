@@ -65,6 +65,7 @@ import {
   buildLineRegister,
   buildBucket,
   monthKey,
+  isBankTxn,
   type LineRow,
   type PlanLine,
   type BankLine,
@@ -97,6 +98,8 @@ import {
   RefreshCw,
   Landmark,
   TrendingDown,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import {
   Tooltip,
@@ -526,6 +529,158 @@ export default function ForecastPage() {
       .map((b) => ({ id: `inbox:${b.txn.id}`, bank: b }));
   }, [register]);
 
+  // Set of Plaid account IDs (the Plaid `account_id` text, matching what's
+  // stored on transactions.plaidAccountId) that are checking/depository.
+  // Used to classify Plaid transactions as bank vs credit-card by account
+  // metadata, not by source-string heuristics.
+  const checkingPlaidAccountIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const a of data?.plaidCheckingAccounts ?? []) {
+      if (a.accountId) s.add(a.accountId);
+    }
+    return s;
+  }, [data?.plaidCheckingAccounts]);
+
+  const amexInbox = useMemo(
+    () =>
+      inbox.filter(
+        (c) => !isBankTxn(c.bank.txn, checkingPlaidAccountIds),
+      ),
+    [inbox, checkingPlaidAccountIds],
+  );
+  // Bank inbox is scoped to the currently-selected month so counts and
+  // visible rows stay consistent.
+  const bankInbox = useMemo(
+    () =>
+      inbox.filter(
+        (c) =>
+          isBankTxn(c.bank.txn, checkingPlaidAccountIds) &&
+          monthKey(c.bank.date) === monthFilter,
+      ),
+    [inbox, monthFilter, checkingPlaidAccountIds],
+  );
+
+  // Bank rows already resolved (matched or marked unplanned) in the current
+  // month — used for an undo affordance directly on the bank card.
+  const bankResolvedThisMonth = useMemo(() => {
+    if (!register || !data) return [] as Array<{
+      bank: BankLine;
+      resolutionId: string;
+      kind: "matched" | "unplanned";
+    }>;
+    const byMatchedTxn = new Map<string, Resolution>();
+    for (const r of (data.resolutions ?? []) as Resolution[]) {
+      if (r.matchedTxnId) byMatchedTxn.set(r.matchedTxnId, r);
+    }
+    const out: Array<{
+      bank: BankLine;
+      resolutionId: string;
+      kind: "matched" | "unplanned";
+    }> = [];
+    for (const b of register.allBank) {
+      if (!isBankTxn(b.txn, checkingPlaidAccountIds)) continue;
+      if (monthKey(b.date) !== monthFilter) continue;
+      if (b.status !== "matched" && b.status !== "ignored_unforecasted")
+        continue;
+      const res = byMatchedTxn.get(b.txn.id);
+      if (!res) continue;
+      out.push({
+        bank: b,
+        resolutionId: res.id,
+        kind: b.status === "matched" ? "matched" : "unplanned",
+      });
+    }
+    out.sort((a, b) => (a.bank.date < b.bank.date ? 1 : -1));
+    return out;
+  }, [register, data, monthFilter, checkingPlaidAccountIds]);
+
+  // Bank reconciliation stats scoped to the selected month.
+  //
+  // forecastEnd = bank snapshot balance + Σ planned items in (snapshot.at, end-of-month].
+  //   Bank movements that already happened (matched / unplanned / pending bank
+  //   rows) are NOT added — the bank snapshot already includes everything that
+  //   actually cleared, and pending bank rows represent activity the forecast
+  //   hasn't yet absorbed (that's the gap).
+  //
+  // bankEnd = bank snapshot balance — the actual current/known bank balance.
+  //   For prior closed months we don't surface a gap (we don't store a
+  //   per-month historical snapshot), only counts.
+  //
+  // gap = forecastEnd − bankEnd. Reconciled when |gap| < $0.01 AND no pending.
+  const bankReconcile = useMemo(() => {
+    const empty = {
+      pending: 0,
+      matched: 0,
+      unplanned: 0,
+      gap: 0,
+      total: 0,
+      forecastEnd: 0,
+      bankEnd: 0,
+      hasBank: false,
+      isPriorMonth: false,
+    };
+    if (!register || !data) return empty;
+    let pending = 0;
+    let matched = 0;
+    let unplanned = 0;
+    for (const b of register.allBank) {
+      if (!isBankTxn(b.txn, checkingPlaidAccountIds)) continue;
+      if (monthKey(b.date) !== monthFilter) continue;
+      if (b.status === "pending_bank") pending += 1;
+      else if (b.status === "matched") matched += 1;
+      else if (b.status === "ignored_unforecasted") unplanned += 1;
+    }
+
+    const snapshotAtISO = data.bankSnapshot?.at
+      ? data.bankSnapshot.at.slice(0, 10)
+      : null;
+    const startBal = data.bankSnapshot
+      ? Number(data.bankSnapshot.balance) || 0
+      : Number(data.settings.startingBalance) || 0;
+
+    // End-of-month ISO (use month string + day 31; ISO comparison handles
+    // shorter months because lex order is fine here).
+    const endOfMonthISO = `${monthFilter}-31`;
+    const isPriorMonth = !!snapshotAtISO && endOfMonthISO < snapshotAtISO;
+
+    let forecastEnd = startBal;
+    if (!isPriorMonth) {
+      // Add planned items between snapshot date (exclusive) and end of month
+      // that haven't been resolved (matched/missed) — those are what the
+      // forecast still expects to flow through the bank.
+      for (const p of register.allPlan) {
+        if (snapshotAtISO && p.date <= snapshotAtISO) continue;
+        if (p.date > endOfMonthISO) continue;
+        if (p.status === "matched" || p.status === "missed") continue;
+        forecastEnd += p.amount;
+      }
+      forecastEnd = Math.round(forecastEnd * 100) / 100;
+    }
+
+    const bankEnd = data.bankSnapshot
+      ? Number(data.bankSnapshot.balance) || 0
+      : forecastEnd;
+    const gap = Math.round((forecastEnd - bankEnd) * 100) / 100;
+
+    return {
+      pending,
+      matched,
+      unplanned,
+      gap,
+      total: pending + matched + unplanned,
+      forecastEnd,
+      bankEnd,
+      hasBank: !!data.bankSnapshot,
+      isPriorMonth,
+    };
+  }, [register, data, monthFilter, checkingPlaidAccountIds]);
+
+  const isReconciledToBank =
+    bankReconcile.hasBank &&
+    !bankReconcile.isPriorMonth &&
+    bankReconcile.pending === 0 &&
+    Math.abs(bankReconcile.gap) < 0.01;
+
   // Plan rows used as drop targets (active register, plan-only)
   const planRows: PlanLine[] = useMemo(() => {
     if (!register) return [];
@@ -632,6 +787,42 @@ export default function ForecastPage() {
         },
       },
     );
+  };
+
+  const bulkMarkBankUnplanned = async () => {
+    const ids = bankInbox.map((c) => c.bank.txn.id);
+    if (!ids.length) return;
+    const CONCURRENCY = 6;
+    let cursor = 0;
+    let ok = 0;
+    const failures: string[] = [];
+    const worker = async () => {
+      while (cursor < ids.length) {
+        const i = cursor++;
+        const txnId = ids[i];
+        try {
+          await upsertResolution.mutateAsync({
+            data: { status: "ignored_unforecasted", matchedTxnId: txnId },
+          });
+          ok += 1;
+        } catch (e) {
+          failures.push((e as Error).message);
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
+    );
+    invalidate();
+    if (!failures.length) {
+      toast({ title: `Marked ${ok} as unplanned` });
+    } else {
+      toast({
+        title: `${ok} updated, ${failures.length} failed`,
+        description: failures[0],
+        variant: "destructive",
+      });
+    }
   };
 
   const onSelectPlan = (row: PlanLine) => {
@@ -801,10 +992,36 @@ export default function ForecastPage() {
             Cash Forecast
           </h1>
           <p className="text-muted-foreground mt-1">
-            Send Amex charges from Transactions, then drop them onto planned items here.
+            Send bank &amp; Amex charges from Transactions, then drop them onto planned items here.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {isReconciledToBank ? (
+            <Badge
+              className="bg-primary/15 text-primary border-primary/30"
+              data-testid="reconciled-to-bank"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Reconciled to bank
+            </Badge>
+          ) : bankReconcile.hasBank &&
+            !bankReconcile.isPriorMonth &&
+            (bankReconcile.pending > 0 ||
+              Math.abs(bankReconcile.gap) >= 0.01) ? (
+            <Badge
+              variant="outline"
+              className="bg-amber-50 text-amber-900 border-amber-200"
+              data-testid="reconcile-gap"
+              title={`Forecast end ${formatCurrency(bankReconcile.forecastEnd)} vs Bank ${formatCurrency(bankReconcile.bankEnd)}`}
+            >
+              <AlertCircle className="w-3.5 h-3.5 mr-1" />
+              {formatCurrency(bankReconcile.gap)} off bank
+              {bankReconcile.pending > 0 ? ` · ${bankReconcile.pending} pending` : ""}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="bg-muted text-muted-foreground">
+              <InboxIcon className="w-3.5 h-3.5 mr-1" /> Nothing to reconcile this period
+            </Badge>
+          )}
           {inboxCount > 0 ? (
             <Badge
               variant="outline"
@@ -819,13 +1036,9 @@ export default function ForecastPage() {
               className="bg-primary/15 text-primary border-primary/30"
               data-testid="reconciled-badge"
             >
-              <PartyPopper className="w-3.5 h-3.5 mr-1" /> Reconciled!
+              <PartyPopper className="w-3.5 h-3.5 mr-1" /> Inbox cleared
             </Badge>
-          ) : (
-            <Badge variant="outline" className="bg-muted text-muted-foreground">
-              <InboxIcon className="w-3.5 h-3.5 mr-1" /> Inbox: 0 pending
-            </Badge>
-          )}
+          ) : null}
           <Button variant="outline" onClick={openSettings}>
             <SettingsIcon className="w-4 h-4 mr-2" /> Settings
           </Button>
@@ -943,6 +1156,143 @@ export default function ForecastPage() {
             onDragEnd={onDragEnd}
             onDragCancel={() => setActiveDragId(null)}
           >
+            <Card data-testid="card-from-bank">
+              <CardHeader className="pb-3 flex-row items-center justify-between flex-wrap gap-2">
+                <CardTitle className="flex items-center gap-2 flex-wrap">
+                  <Landmark className="w-4 h-4" />
+                  From Bank · {monthFilter}
+                  <Badge variant="outline" className="text-[10px] ml-1">
+                    {bankReconcile.pending} pending
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                    {bankReconcile.matched} matched
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px]">
+                    {bankReconcile.unplanned} unplanned
+                  </Badge>
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  {bankReconcile.hasBank && !bankReconcile.isPriorMonth && (
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      Forecast end {formatCurrency(bankReconcile.forecastEnd)} ·
+                      Bank {formatCurrency(bankReconcile.bankEnd)} ·
+                      Gap {formatCurrency(bankReconcile.gap)}
+                    </span>
+                  )}
+                  {bankReconcile.isPriorMonth && (
+                    <span className="text-xs text-muted-foreground">
+                      Prior period — counts only
+                    </span>
+                  )}
+                  {bankInbox.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={bulkMarkBankUnplanned}
+                      disabled={upsertResolution.isPending}
+                      data-testid="bulk-mark-unplanned"
+                    >
+                      Mark all unplanned
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {bankInbox.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+                    {isReconciledToBank ? (
+                      <span className="inline-flex items-center gap-2 text-primary">
+                        <CheckCircle2 className="w-4 h-4" /> Reconciled to bank for {monthFilter}.
+                      </span>
+                    ) : (
+                      <>Send a bank transaction from the Transactions page to start reconciling.</>
+                    )}
+                  </div>
+                ) : (
+                  bankInbox.map((card) => (
+                    <div key={card.id} className="flex items-stretch gap-2">
+                      <div className="flex-1">
+                        <InboxCardView
+                          card={card}
+                          categoryName={
+                            card.bank.txn.categoryId
+                              ? categoryById.get(card.bank.txn.categoryId) ?? null
+                              : null
+                          }
+                          onUnplanned={() => onMarkUnplannedTxn(card.bank.txn.id)}
+                          onMatchPick={(p) =>
+                            matchInboxToPlan(card.bank.txn.id, p)
+                          }
+                          planRows={planRows.filter(
+                            (r) => r.status === "pending_plan" || r.status === "future",
+                          )}
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onRemoveFromForecast(card.bank.txn.id)}
+                        title="Un-send back to Bank list"
+                      >
+                        <X className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+                {bankResolvedThisMonth.length > 0 && (
+                  <div
+                    className="mt-3 pt-3 border-t space-y-1"
+                    data-testid="bank-resolved-list"
+                  >
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                      Resolved this month — undo if needed
+                    </div>
+                    {bankResolvedThisMonth.map((r) => (
+                      <div
+                        key={r.resolutionId}
+                        className="flex items-center gap-2 text-xs rounded-md border bg-muted/30 px-2 py-1"
+                      >
+                        <Badge
+                          variant="outline"
+                          className={
+                            r.kind === "matched"
+                              ? "text-[10px] bg-primary/10 text-primary border-primary/20"
+                              : "text-[10px]"
+                          }
+                        >
+                          {r.kind === "matched" ? "matched" : "unplanned"}
+                        </Badge>
+                        <span className="truncate flex-1">
+                          {r.bank.txn.description}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {formatDate(r.bank.date)}
+                        </span>
+                        <span
+                          className={`tabular-nums ${
+                            r.bank.amount < 0
+                              ? "text-destructive"
+                              : "text-primary"
+                          }`}
+                        >
+                          {formatCurrency(r.bank.amount)}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => onUndo(r.resolutionId)}
+                          data-testid={`undo-resolution-${r.resolutionId}`}
+                        >
+                          Undo
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader className="pb-3 flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
@@ -954,18 +1304,12 @@ export default function ForecastPage() {
                 </span>
               </CardHeader>
               <CardContent className="space-y-2">
-                {inbox.length === 0 ? (
+                {amexInbox.length === 0 ? (
                   <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-                    {reconciledNow ? (
-                      <span className="inline-flex items-center gap-2 text-primary">
-                        <PartyPopper className="w-4 h-4" /> All Amex charges reconciled.
-                      </span>
-                    ) : (
-                      <>Send an Amex charge from the Transactions page to start reconciling.</>
-                    )}
+                    Send an Amex charge from the Transactions page to start reconciling.
                   </div>
                 ) : (
-                  inbox.map((card) => (
+                  amexInbox.map((card) => (
                     <div key={card.id} className="flex items-stretch gap-2">
                       <div className="flex-1">
                         <InboxCardView

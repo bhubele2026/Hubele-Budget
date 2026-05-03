@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useListTransactions, useCreateTransaction, useUpdateTransaction, useDeleteTransaction, useListCategories, getListTransactionsQueryKey, getGetForecastQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -176,6 +176,86 @@ export default function TransactionsPage() {
     }
   };
 
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const visibleIds = useMemo(
+    () => new Set((transactions ?? []).map((t) => t.id)),
+    [transactions],
+  );
+  useEffect(() => {
+    setSelected((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (visibleIds.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [visibleIds]);
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const toggleAll = (on: boolean) =>
+    setSelected(on ? new Set(visibleIds) : new Set());
+  const clearSelection = () => setSelected(new Set());
+
+  const bulkSetForecast = async (next: boolean) => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const byId = new Map((transactions ?? []).map((t) => [t.id, t] as const));
+    const targets = ids.filter((id) => {
+      const t = byId.get(id);
+      return t && t.forecastFlag !== next;
+    });
+    if (!targets.length) {
+      toast({
+        title: next
+          ? "Selected items already in Forecast"
+          : "Selected items not in Forecast",
+      });
+      return;
+    }
+    const CONCURRENCY = 6;
+    let cursor = 0;
+    let okCount = 0;
+    const failures: string[] = [];
+    const worker = async () => {
+      while (cursor < targets.length) {
+        const i = cursor++;
+        const id = targets[i];
+        try {
+          await updateTx.mutateAsync({ id, data: { forecastFlag: next } });
+          okCount += 1;
+        } catch (e) {
+          failures.push((e as Error).message);
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker),
+    );
+    queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    clearSelection();
+    if (!failures.length) {
+      toast({
+        title: next
+          ? `Sent ${okCount} to Forecast`
+          : `Removed ${okCount} from Forecast`,
+      });
+    } else {
+      toast({
+        title: `${okCount} updated, ${failures.length} failed`,
+        description: failures[0],
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDelete = (id: string) => {
     if (confirm("Delete this transaction?")) {
       deleteTx.mutate({ id }, {
@@ -259,11 +339,67 @@ export default function TransactionsPage() {
         </DialogContent>
       </Dialog>
 
+      {selected.size > 0 && (
+        <div
+          className="sticky top-0 z-20 flex items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 shadow-sm"
+          data-testid="bulk-bar"
+        >
+          <span className="text-sm font-medium text-emerald-900">
+            {selected.size} selected
+          </span>
+          <Button
+            size="sm"
+            onClick={() => bulkSetForecast(true)}
+            disabled={updateTx.isPending}
+            data-testid="bulk-send-forecast"
+          >
+            <Send className="w-3.5 h-3.5 mr-1.5" /> Send to Forecast
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => bulkSetForecast(false)}
+            disabled={updateTx.isPending}
+            data-testid="bulk-remove-forecast"
+          >
+            Remove from Forecast
+          </Button>
+          <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
+            Clear
+          </Button>
+        </div>
+      )}
+
       <Card>
         <CardContent className="p-0">
+          {(transactions?.length ?? 0) > 0 && (
+            <div className="px-4 py-2 flex items-center gap-3 border-b bg-muted/30 text-xs text-muted-foreground">
+              <Checkbox
+                checked={
+                  visibleIds.size > 0 && selected.size === visibleIds.size
+                    ? true
+                    : selected.size > 0
+                      ? "indeterminate"
+                      : false
+                }
+                onCheckedChange={(v) => toggleAll(!!v)}
+                aria-label="Select all"
+                data-testid="select-all"
+              />
+              <span>Select all on page</span>
+            </div>
+          )}
           <div className="divide-y divide-border">
             {transactions?.map((tx) => (
               <div key={tx.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-muted/50 transition-colors">
+                <div className="flex items-start gap-3 flex-1">
+                  <Checkbox
+                    checked={selected.has(tx.id)}
+                    onCheckedChange={() => toggleOne(tx.id)}
+                    aria-label="Select"
+                    className="mt-1"
+                    data-testid={`select-${tx.id}`}
+                  />
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-medium text-foreground">{tx.description}</span>
@@ -305,6 +441,7 @@ export default function TransactionsPage() {
                     {tx.reimbursable && <Badge variant="outline" className="text-xs border-orange-200 text-orange-700 bg-orange-50">Reimbursable</Badge>}
                     {tx.reimbursed && <Badge variant="outline" className="text-xs border-green-200 text-green-700 bg-green-50">Reimbursed</Badge>}
                   </div>
+                </div>
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="font-medium text-foreground whitespace-nowrap">{formatCurrency(tx.amount)}</span>
