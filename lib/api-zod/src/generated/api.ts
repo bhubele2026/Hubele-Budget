@@ -193,6 +193,34 @@ export const SyncDebtMinimumsResponse = zod.object({
   ),
 });
 
+/**
+ * @summary Resolved monthly extra-payment amount
+ */
+export const GetAvalancheExtraResponse = zod.object({
+  source: zod.enum(["budget_net", "budget_line", "manual"]),
+  amount: zod.string(),
+  monthStart: zod.string(),
+  breakdown: zod
+    .object({
+      income: zod.string().optional(),
+      expenses: zod.string().optional(),
+      categoryId: zod.string().nullish(),
+      categoryName: zod.string().nullish(),
+    })
+    .optional(),
+});
+
+export const CreateDebtPaymentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const CreateDebtPaymentBody = zod.object({
+  amount: zod.string(),
+  occurredOn: zod.string(),
+  account: zod.string().nullish(),
+  notes: zod.string().nullish(),
+});
+
 export const GetAvalancheSettingsResponse = zod.object({
   strategy: zod.enum(["avalanche", "snowball"]),
   extraSource: zod.enum(["budget_net", "budget_line", "manual"]),

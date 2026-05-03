@@ -7,6 +7,8 @@ import {
   UpdateDebtBody,
   UpdateDebtParams,
   DeleteDebtParams,
+  CreateDebtPaymentBody,
+  CreateDebtPaymentParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -118,6 +120,68 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
   }
   res.json(row);
 });
+
+router.post(
+  "/debts/:id/payments",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const params = CreateDebtPaymentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const parsed = CreateDebtPaymentBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const debtId = String(params.data.id);
+    const userId = req.userId!;
+    const amount = Number(parsed.data.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      res.status(400).json({ error: "amount must be > 0" });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      const [debt] = await tx
+        .select()
+        .from(debtsTable)
+        .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)));
+      if (!debt) return null;
+      const oldBal = Number(debt.balance);
+      const newBal = Math.max(0, oldBal - amount);
+      const occurredOn = parsed.data.occurredOn;
+      const [txn] = await tx
+        .insert(transactionsTable)
+        .values({
+          userId,
+          occurredOn,
+          description: `Payment — ${debt.name}`,
+          amount: (-Math.abs(amount)).toFixed(2),
+          account: parsed.data.account ?? null,
+          notes: parsed.data.notes ?? null,
+          source: "manual",
+          member: null,
+        })
+        .returning();
+      const [updated] = await tx
+        .update(debtsTable)
+        .set({
+          balance: newBal.toFixed(2),
+          lastBalanceUpdate: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)))
+        .returning();
+      return { debt: updated, transaction: txn };
+    });
+    if (!result) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    res.status(201).json(result);
+  },
+);
 
 router.delete("/debts/:id", requireAuth, async (req, res): Promise<void> => {
   const params = DeleteDebtParams.safeParse(req.params);

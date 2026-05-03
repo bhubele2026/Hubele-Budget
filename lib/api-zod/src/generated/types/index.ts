@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./avalancheExtra";
+export * from "./avalancheExtraBreakdown";
+export * from "./avalancheExtraSource";
 export * from "./avalancheSettings";
 export * from "./avalancheSettingsBudgetMode";
 export * from "./avalancheSettingsExtraSource";
@@ -28,6 +31,8 @@ export * from "./dashboardSummary";
 export * from "./dashboardSummaryTopCategoriesItem";
 export * from "./debt";
 export * from "./debtInput";
+export * from "./debtPaymentInput";
+export * from "./debtPaymentResult";
 export * from "./forecastBundle";
 export * from "./forecastClosedMonth";
 export * from "./forecastEvent";

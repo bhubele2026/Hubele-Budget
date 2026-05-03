@@ -185,6 +185,45 @@ export interface AvalancheSettingsInput {
   budgetMode?: AvalancheSettingsInputBudgetMode;
 }
 
+export type AvalancheExtraSource =
+  (typeof AvalancheExtraSource)[keyof typeof AvalancheExtraSource];
+
+export const AvalancheExtraSource = {
+  budget_net: "budget_net",
+  budget_line: "budget_line",
+  manual: "manual",
+} as const;
+
+export type AvalancheExtraBreakdown = {
+  income?: string;
+  expenses?: string;
+  /** @nullable */
+  categoryId?: string | null;
+  /** @nullable */
+  categoryName?: string | null;
+};
+
+export interface AvalancheExtra {
+  source: AvalancheExtraSource;
+  amount: string;
+  monthStart: string;
+  breakdown?: AvalancheExtraBreakdown;
+}
+
+export interface DebtPaymentInput {
+  amount: string;
+  occurredOn: string;
+  /** @nullable */
+  account?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface DebtPaymentResult {
+  debt: Debt;
+  transaction: Transaction;
+}
+
 export type SyncMinimumsResultUpdatedItem = {
   id: string;
   name: string;

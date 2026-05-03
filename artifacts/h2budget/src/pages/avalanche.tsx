@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListDebts,
@@ -8,10 +8,16 @@ import {
   useGetAvalancheSettings,
   useUpdateAvalancheSettings,
   useSyncDebtMinimums,
+  useGetAvalancheExtra,
+  useCreateDebtPayment,
+  useListCategories,
+  useGetSettings,
   getListDebtsQueryKey,
   getGetAvalancheSettingsQueryKey,
+  getGetAvalancheExtraQueryKey,
 } from "@workspace/api-client-react";
 import type { Debt } from "@workspace/api-client-react";
+import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,6 +97,18 @@ export default function AvalanchePage() {
     mutation: {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getGetAvalancheSettingsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetAvalancheExtraQueryKey() });
+      },
+    },
+  });
+  const { data: resolvedExtra } = useGetAvalancheExtra();
+  const { data: categories } = useListCategories();
+  const { data: appSettings } = useGetSettings();
+  const createPayment = useCreateDebtPayment({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetAvalancheExtraQueryKey() });
       },
     },
   });
@@ -132,9 +150,13 @@ export default function AvalanchePage() {
   const [editing, setEditing] = useState<Debt | null>(null);
   const [drillDown, setDrillDown] = useState<string | null>(null);
   const [showAllMonths, setShowAllMonths] = useState(false);
+  const [whatIf, setWhatIf] = useState(0);
+  const [paying, setPaying] = useState<Debt | null>(null);
 
   const strategy: Strategy = (settings?.strategy as Strategy) ?? "avalanche";
   const manualExtra = Number(settings?.manualExtra ?? 0);
+  const resolvedExtraAmount = Number(resolvedExtra?.amount ?? manualExtra);
+  const totalExtra = resolvedExtraAmount + whatIf;
 
   const simDebts: SimDebt[] = useMemo(
     () => (debts ?? []).map(debtToSim),
@@ -142,20 +164,29 @@ export default function AvalanchePage() {
   );
 
   const sim = useMemo(
-    () => simulate({ debts: simDebts, extraPerMonth: manualExtra, strategy }),
-    [simDebts, manualExtra, strategy],
+    () => simulate({ debts: simDebts, extraPerMonth: totalExtra, strategy }),
+    [simDebts, totalExtra, strategy],
   );
 
   const otherSim = useMemo(
     () =>
       simulate({
         debts: simDebts,
-        extraPerMonth: manualExtra,
+        extraPerMonth: totalExtra,
         strategy: strategy === "avalanche" ? "snowball" : "avalanche",
       }),
-    [simDebts, manualExtra, strategy],
+    [simDebts, totalExtra, strategy],
   );
   const interestDelta = otherSim.totalInterestPaid - sim.totalInterestPaid;
+  const monthsDelta = (otherSim.ranOutOfTime ? 600 : otherSim.monthsToFreedom) - (sim.ranOutOfTime ? 600 : sim.monthsToFreedom);
+
+  // Baseline (no what-if) sim — used for "saves vs baseline" hint
+  const baselineSim = useMemo(
+    () => simulate({ debts: simDebts, extraPerMonth: resolvedExtraAmount, strategy }),
+    [simDebts, resolvedExtraAmount, strategy],
+  );
+  const whatIfInterestSaved = baselineSim.totalInterestPaid - sim.totalInterestPaid;
+  const whatIfMonthsSaved = (baselineSim.ranOutOfTime ? 600 : baselineSim.monthsToFreedom) - (sim.ranOutOfTime ? 600 : sim.monthsToFreedom);
 
   const activeDebts = simDebts.filter((d) => (d.status ?? "active") === "active");
   const archivedDebts = (debts ?? []).filter((d) => d.status === "archived");
@@ -306,11 +337,14 @@ export default function AvalanchePage() {
             <div className="text-xs text-muted-foreground">
               {interestDelta > 0 ? (
                 <>
-                  Sticking with <strong>{strategy}</strong> saves{" "}
+                  <strong className="capitalize">{strategy}</strong> saves{" "}
                   <strong className="text-emerald-600 dark:text-emerald-400">
                     {fmtMoney(interestDelta)}
-                  </strong>{" "}
-                  vs the other strategy.
+                  </strong>
+                  {monthsDelta > 0 ? (
+                    <> and <strong>{monthsDelta} mo</strong></>
+                  ) : null}{" "}
+                  vs <strong>{strategy === "avalanche" ? "snowball" : "avalanche"}</strong> with your current extra source ({fmtMoney(resolvedExtraAmount)}/mo).
                 </>
               ) : interestDelta < 0 ? (
                 <>
@@ -320,10 +354,11 @@ export default function AvalanchePage() {
                   <strong className="text-emerald-600 dark:text-emerald-400">
                     {fmtMoney(-interestDelta)}
                   </strong>
-                  .
+                  {monthsDelta < 0 ? <> and <strong>{-monthsDelta} mo</strong></> : null}
+                  {" "}with your current extra source ({fmtMoney(resolvedExtraAmount)}/mo).
                 </>
               ) : (
-                <>Both strategies cost the same right now.</>
+                <>Both strategies cost the same with {fmtMoney(resolvedExtraAmount)}/mo extra.</>
               )}
             </div>
           </CardContent>
@@ -331,7 +366,12 @@ export default function AvalanchePage() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Extra per month</CardTitle>
+            <CardTitle className="text-base flex items-center justify-between">
+              <span>Extra per month</span>
+              <span className="tabular-nums text-primary">
+                {fmtMoney(resolvedExtraAmount)}
+              </span>
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
@@ -354,18 +394,71 @@ export default function AvalanchePage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label className="text-xs">Manual amount ($/mo)</Label>
-              <Input
-                type="number"
-                step="25"
-                min="0"
-                value={manualExtra}
-                onChange={(e) =>
-                  updateSettings.mutate({ data: { manualExtra: e.target.value || "0" } })
-                }
-              />
-            </div>
+            {settings?.extraSource === "manual" && (
+              <div>
+                <Label className="text-xs">Manual amount ($/mo)</Label>
+                <Input
+                  type="number"
+                  step="25"
+                  min="0"
+                  value={manualExtra}
+                  onChange={(e) =>
+                    updateSettings.mutate({ data: { manualExtra: e.target.value || "0" } })
+                  }
+                />
+              </div>
+            )}
+            {settings?.extraSource === "budget_line" && (
+              <div>
+                <Label className="text-xs">Budget category</Label>
+                <Select
+                  value={settings?.extraBudgetCategoryId ?? ""}
+                  onValueChange={(v) =>
+                    updateSettings.mutate({
+                      data: { extraBudgetCategoryId: v || null },
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pick a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(categories ?? []).map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Uses planned amount of "
+                  {resolvedExtra?.breakdown?.categoryName ?? "—"}" for{" "}
+                  {resolvedExtra?.monthStart?.slice(0, 7) ?? "this month"}.
+                </div>
+              </div>
+            )}
+            {settings?.extraSource === "budget_net" && (
+              <div className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground space-y-0.5">
+                <div className="flex justify-between">
+                  <span>Planned income</span>
+                  <span className="tabular-nums text-foreground">
+                    {fmtMoney(Number(resolvedExtra?.breakdown?.income ?? 0))}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>− Planned expenses</span>
+                  <span className="tabular-nums text-foreground">
+                    {fmtMoney(Number(resolvedExtra?.breakdown?.expenses ?? 0))}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t pt-1 mt-1">
+                  <span>Net surplus</span>
+                  <span className="tabular-nums font-medium text-primary">
+                    {fmtMoney(resolvedExtraAmount)}
+                  </span>
+                </div>
+              </div>
+            )}
             <div>
               <Label className="text-xs">Mode</Label>
               <Select
@@ -409,16 +502,17 @@ export default function AvalanchePage() {
                     <th className="text-right px-3 py-2">APR</th>
                     <th className="text-right px-3 py-2">Balance</th>
                     <th className="text-right px-3 py-2">Min</th>
-                    <th className="text-right px-3 py-2">Due</th>
+                    <th className="text-left px-3 py-2">Due</th>
                     <th className="text-right px-3 py-2">Payoff</th>
                     <th className="text-right px-3 py-2">Daily $</th>
+                    <th className="px-3 py-2"></th>
                     <th className="px-3 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedActive.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="text-center py-8 text-muted-foreground">
+                      <td colSpan={10} className="text-center py-8 text-muted-foreground">
                         No active debts. Add one to get started.
                       </td>
                     </tr>
@@ -427,6 +521,7 @@ export default function AvalanchePage() {
                     const dbt = (debts ?? []).find((x) => x.id === d.id)!;
                     const k = killById.get(d.id);
                     const isTarget = i === 0;
+                    const dueChip = renderDueChip(dbt.dueDay ?? null);
                     return (
                       <tr
                         key={d.id}
@@ -455,14 +550,24 @@ export default function AvalanchePage() {
                         <td className="px-3 py-2 text-right tabular-nums">
                           {fmtMoney(d.minPayment)}
                         </td>
-                        <td className="px-3 py-2 text-right text-muted-foreground">
-                          {dbt.dueDay ? `day ${dbt.dueDay}` : "—"}
-                        </td>
+                        <td className="px-3 py-2">{dueChip}</td>
                         <td className="px-3 py-2 text-right text-xs text-muted-foreground">
                           {k ? fmtMonth(k.date) : "—"}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-xs text-muted-foreground">
                           {fmtMoney(dailyInterest(d))}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPaying(dbt);
+                            }}
+                          >
+                            Pay
+                          </Button>
                         </td>
                         <td className="px-3 py-2 text-right">
                           <Button
@@ -492,7 +597,7 @@ export default function AvalanchePage() {
                       <td className="px-3 py-2 text-right tabular-nums">
                         {fmtMoney(totalMin)}
                       </td>
-                      <td colSpan={4}></td>
+                      <td colSpan={5}></td>
                     </tr>
                   </tfoot>
                 )}
@@ -501,7 +606,42 @@ export default function AvalanchePage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="projection" className="mt-4">
+        <TabsContent value="projection" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center justify-between gap-3">
+                <span>What-if extra</span>
+                <span className="tabular-nums text-sm font-normal">
+                  +{fmtMoney(whatIf)} / mo
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Slider
+                min={0}
+                max={2000}
+                step={25}
+                value={[whatIf]}
+                onValueChange={([v]) => setWhatIf(v ?? 0)}
+              />
+              <div className="text-xs text-muted-foreground">
+                {whatIf > 0 && whatIfInterestSaved > 0 ? (
+                  <>
+                    Adding {fmtMoney(whatIf)}/mo saves{" "}
+                    <strong className="text-emerald-600 dark:text-emerald-400">
+                      {fmtMoney(whatIfInterestSaved)}
+                    </strong>
+                    {whatIfMonthsSaved > 0 ? (
+                      <> and <strong>{whatIfMonthsSaved} mo</strong></>
+                    ) : null}
+                    {" "}vs your baseline ({fmtMoney(resolvedExtraAmount)}/mo).
+                  </>
+                ) : (
+                  <>Drag to see how much sooner you'd be debt-free.</>
+                )}
+              </div>
+            </CardContent>
+          </Card>
           <Card>
             <CardContent className="p-0 overflow-x-auto">
               <table className="w-full text-sm">
@@ -674,6 +814,31 @@ export default function AvalanchePage() {
           await updateDebt.mutateAsync({ id: editing.id, data });
           setEditing(null);
           toast({ title: "Saved" });
+        }}
+      />
+
+      {/* Pay dialog */}
+      <PayDialog
+        open={!!paying}
+        onOpenChange={(o) => !o && setPaying(null)}
+        debt={paying}
+        isTarget={paying ? sortedActive[0]?.id === paying.id : false}
+        suggestedExtra={totalExtra}
+        defaultAccount={appSettings?.primaryAccount ?? ""}
+        submitting={createPayment.isPending}
+        onSubmit={async (data) => {
+          if (!paying) return;
+          try {
+            await createPayment.mutateAsync({ id: paying.id, data });
+            toast({ title: "Payment recorded" });
+            setPaying(null);
+          } catch (e) {
+            toast({
+              title: "Couldn't record payment",
+              description: (e as Error).message,
+              variant: "destructive",
+            });
+          }
         }}
       />
 
@@ -939,6 +1104,179 @@ function DebtDialog({
               Save
             </Button>
           </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function daysUntilDue(dueDay: number | null): number | null {
+  if (!dueDay || dueDay < 1 || dueDay > 31) return null;
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = today.getMonth();
+  const lastDayThisMonth = new Date(y, m + 1, 0).getDate();
+  const lastDayNextMonth = new Date(y, m + 2, 0).getDate();
+  const todayD = today.getDate();
+  let target: Date;
+  if (dueDay >= todayD) {
+    target = new Date(y, m, Math.min(dueDay, lastDayThisMonth));
+  } else {
+    target = new Date(y, m + 1, Math.min(dueDay, lastDayNextMonth));
+  }
+  const ms = target.setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0);
+  return Math.round(ms / 86400000);
+}
+
+function renderDueChip(dueDay: number | null) {
+  const days = daysUntilDue(dueDay);
+  if (days === null) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  let cls = "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
+  if (days <= 2) cls = "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300";
+  else if (days <= 6) cls = "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
+  const label = days === 0 ? "Due today" : days === 1 ? "Due tomorrow" : `Due in ${days}d`;
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+function PayDialog({
+  open,
+  onOpenChange,
+  debt,
+  isTarget,
+  suggestedExtra,
+  defaultAccount,
+  submitting,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  debt: Debt | null;
+  isTarget: boolean;
+  suggestedExtra: number;
+  defaultAccount: string;
+  submitting: boolean;
+  onSubmit: (data: {
+    amount: string;
+    occurredOn: string;
+    account?: string | null;
+    notes?: string | null;
+  }) => Promise<void>;
+}) {
+  const min = debt ? Number(debt.minPayment) : 0;
+  const recommendedTopUp = isTarget ? suggestedExtra : 0;
+  const [payExtra, setPayExtra] = useState(false);
+  const [amount, setAmount] = useState((min + (isTarget ? suggestedExtra : 0)).toFixed(2));
+  const [occurredOn, setOccurredOn] = useState(() => new Date().toISOString().slice(0, 10));
+  const [account, setAccount] = useState(defaultAccount);
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (open && debt) {
+      const m = Number(debt.minPayment);
+      setPayExtra(false);
+      setAmount(m.toFixed(2));
+      setOccurredOn(new Date().toISOString().slice(0, 10));
+      setAccount(defaultAccount);
+      setNotes("");
+    }
+  }, [open, debt, defaultAccount]);
+
+  const togglePayExtra = (next: boolean) => {
+    setPayExtra(next);
+    setAmount(((next ? min + recommendedTopUp : min) || 0).toFixed(2));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Pay {debt?.name ?? "debt"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="rounded-md border bg-muted/30 p-2 text-xs space-y-0.5">
+            <div className="flex justify-between">
+              <span>Current balance</span>
+              <span className="tabular-nums">
+                {debt ? fmtMoney(Number(debt.balance)) : "—"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Minimum</span>
+              <span className="tabular-nums">{fmtMoney(min)}</span>
+            </div>
+            {isTarget && recommendedTopUp > 0 && (
+              <div className="flex justify-between text-primary">
+                <span>Avalanche top-up</span>
+                <span className="tabular-nums">+{fmtMoney(recommendedTopUp)}</span>
+              </div>
+            )}
+          </div>
+          {isTarget && recommendedTopUp > 0 && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={payExtra}
+                onChange={(e) => togglePayExtra(e.target.checked)}
+              />
+              Pay extra ({fmtMoney(min + recommendedTopUp)})
+            </label>
+          )}
+          <div>
+            <Label className="text-xs">Amount ($)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Date</Label>
+              <Input
+                type="date"
+                value={occurredOn}
+                onChange={(e) => setOccurredOn(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Account</Label>
+              <Input
+                value={account}
+                placeholder="e.g. Checking"
+                onChange={(e) => setAccount(e.target.value)}
+              />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Notes</Label>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            disabled={submitting || !amount || Number(amount) <= 0}
+            onClick={() =>
+              onSubmit({
+                amount: Number(amount).toFixed(2),
+                occurredOn,
+                account: account.trim() || null,
+                notes: notes.trim() || null,
+              })
+            }
+          >
+            Record payment
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

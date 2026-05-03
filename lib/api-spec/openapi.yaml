@@ -149,6 +149,37 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SyncMinimumsResult" }
+  /avalanche/extra:
+    get:
+      operationId: getAvalancheExtra
+      tags: [avalanche]
+      summary: Resolved monthly extra-payment amount
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvalancheExtra" }
+  /debts/{id}/payments:
+    post:
+      operationId: createDebtPayment
+      tags: [debts]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DebtPaymentInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DebtPaymentResult" }
   /avalanche/settings:
     get:
       operationId: getAvalancheSettings
@@ -660,6 +691,34 @@ components:
         extraBudgetCategoryId: { type: ["string", "null"] }
         manualExtra: { type: string }
         budgetMode: { type: string, enum: [budgeted, actual] }
+    AvalancheExtra:
+      type: object
+      required: [source, amount, monthStart]
+      properties:
+        source: { type: string, enum: [budget_net, budget_line, manual] }
+        amount: { type: string }
+        monthStart: { type: string }
+        breakdown:
+          type: object
+          properties:
+            income: { type: string }
+            expenses: { type: string }
+            categoryId: { type: ["string", "null"] }
+            categoryName: { type: ["string", "null"] }
+    DebtPaymentInput:
+      type: object
+      required: [amount, occurredOn]
+      properties:
+        amount: { type: string }
+        occurredOn: { type: string }
+        account: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+    DebtPaymentResult:
+      type: object
+      required: [debt, transaction]
+      properties:
+        debt: { $ref: "#/components/schemas/Debt" }
+        transaction: { $ref: "#/components/schemas/Transaction" }
     SyncMinimumsResult:
       type: object
       required: [updated]

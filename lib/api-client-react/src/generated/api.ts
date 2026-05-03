@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AvalancheExtra,
   AvalancheSettings,
   AvalancheSettingsInput,
   BudgetLine,
@@ -31,6 +32,8 @@ import type {
   DashboardSummary,
   Debt,
   DebtInput,
+  DebtPaymentInput,
+  DebtPaymentResult,
   ForecastBundle,
   ForecastClosedMonth,
   ForecastResolution,
@@ -753,6 +756,162 @@ export const useSyncDebtMinimums = <
   TContext
 > => {
   return useMutation(getSyncDebtMinimumsMutationOptions(options));
+};
+
+/**
+ * @summary Resolved monthly extra-payment amount
+ */
+export const getGetAvalancheExtraUrl = () => {
+  return `/api/avalanche/extra`;
+};
+
+export const getAvalancheExtra = async (
+  options?: RequestInit,
+): Promise<AvalancheExtra> => {
+  return customFetch<AvalancheExtra>(getGetAvalancheExtraUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAvalancheExtraQueryKey = () => {
+  return [`/api/avalanche/extra`] as const;
+};
+
+export const getGetAvalancheExtraQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAvalancheExtra>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAvalancheExtra>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAvalancheExtraQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAvalancheExtra>>
+  > = ({ signal }) => getAvalancheExtra({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAvalancheExtra>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAvalancheExtraQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAvalancheExtra>>
+>;
+export type GetAvalancheExtraQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Resolved monthly extra-payment amount
+ */
+
+export function useGetAvalancheExtra<
+  TData = Awaited<ReturnType<typeof getAvalancheExtra>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAvalancheExtra>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAvalancheExtraQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getCreateDebtPaymentUrl = (id: string) => {
+  return `/api/debts/${id}/payments`;
+};
+
+export const createDebtPayment = async (
+  id: string,
+  debtPaymentInput: DebtPaymentInput,
+  options?: RequestInit,
+): Promise<DebtPaymentResult> => {
+  return customFetch<DebtPaymentResult>(getCreateDebtPaymentUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(debtPaymentInput),
+  });
+};
+
+export const getCreateDebtPaymentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDebtPayment>>,
+    TError,
+    { id: string; data: BodyType<DebtPaymentInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDebtPayment>>,
+  TError,
+  { id: string; data: BodyType<DebtPaymentInput> },
+  TContext
+> => {
+  const mutationKey = ["createDebtPayment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createDebtPayment>>,
+    { id: string; data: BodyType<DebtPaymentInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createDebtPayment(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateDebtPaymentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDebtPayment>>
+>;
+export type CreateDebtPaymentMutationBody = BodyType<DebtPaymentInput>;
+export type CreateDebtPaymentMutationError = ErrorType<unknown>;
+
+export const useCreateDebtPayment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDebtPayment>>,
+    TError,
+    { id: string; data: BodyType<DebtPaymentInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createDebtPayment>>,
+  TError,
+  { id: string; data: BodyType<DebtPaymentInput> },
+  TContext
+> => {
+  return useMutation(getCreateDebtPaymentMutationOptions(options));
 };
 
 export const getGetAvalancheSettingsUrl = () => {
