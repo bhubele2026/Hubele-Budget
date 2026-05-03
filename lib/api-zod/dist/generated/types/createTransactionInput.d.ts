@@ -8,6 +8,8 @@
 import type { CreateTransactionInputWeeklyBucket } from "./createTransactionInputWeeklyBucket";
 export interface CreateTransactionInput {
     occurredOn: string;
+    /** @nullable */
+    occurredAt?: string | null;
     /** @minLength 1 */
     description: string;
     amount: string;

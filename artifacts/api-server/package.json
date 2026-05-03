@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
+    "prebuild": "tsc -b ../../lib/db ../../lib/api-zod",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
+    "pretypecheck": "tsc -b ../../lib/db ../../lib/api-zod",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

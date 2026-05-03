@@ -1207,6 +1207,23 @@ export declare const transactionsTable: import("drizzle-orm/pg-core").PgTableWit
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        occurredAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "occurred_at";
+            tableName: "transactions";
+            dataType: "string";
+            columnType: "PgTimestampString";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         description: import("drizzle-orm/pg-core").PgColumn<{
             name: "description";
             tableName: "transactions";
@@ -3040,6 +3057,7 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
     categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     amount: import("zod/v4").ZodString;
     occurredOn: import("zod/v4").ZodString;
+    occurredAt: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     description: import("zod/v4").ZodString;
     account: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     forecastFlag: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;

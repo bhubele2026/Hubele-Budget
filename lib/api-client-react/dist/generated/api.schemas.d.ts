@@ -21,6 +21,8 @@ export declare const TransactionWeeklyBucket: {
 export interface Transaction {
     id: string;
     occurredOn: string;
+    /** @nullable */
+    occurredAt?: string | null;
     description: string;
     amount: string;
     /** @nullable */
@@ -60,6 +62,8 @@ export declare const CreateTransactionInputWeeklyBucket: {
 };
 export interface CreateTransactionInput {
     occurredOn: string;
+    /** @nullable */
+    occurredAt?: string | null;
     /** @minLength 1 */
     description: string;
     amount: string;
@@ -96,6 +100,8 @@ export declare const TransactionInputWeeklyBucket: {
 };
 export interface TransactionInput {
     occurredOn?: string;
+    /** @nullable */
+    occurredAt?: string | null;
     /** @minLength 1 */
     description?: string;
     amount?: string;
