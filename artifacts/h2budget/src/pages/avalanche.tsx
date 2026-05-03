@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListDebts,
@@ -152,6 +153,40 @@ export default function AvalanchePage() {
   const [showAllMonths, setShowAllMonths] = useState(false);
   const [whatIf, setWhatIf] = useState(0);
   const [paying, setPaying] = useState<Debt | null>(null);
+  const [activeTab, setActiveTab] = useState("debts");
+  const [highlightedDebtId, setHighlightedDebtId] = useState<string | null>(null);
+  const rowRefs = useRef<Map<string, HTMLTableRowElement | null>>(new Map());
+
+  const search = useSearch();
+  const focusDebtId = useMemo(() => {
+    const params = new URLSearchParams(search);
+    return params.get("focus");
+  }, [search]);
+
+  useEffect(() => {
+    if (!focusDebtId || isLoading) return;
+    setActiveTab("debts");
+    const tryScroll = () => {
+      const row = rowRefs.current.get(focusDebtId);
+      if (row) {
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        setHighlightedDebtId(focusDebtId);
+        return true;
+      }
+      return false;
+    };
+    if (!tryScroll()) {
+      const t = setTimeout(tryScroll, 80);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [focusDebtId, isLoading]);
+
+  useEffect(() => {
+    if (!highlightedDebtId) return;
+    const t = setTimeout(() => setHighlightedDebtId(null), 2200);
+    return () => clearTimeout(t);
+  }, [highlightedDebtId]);
 
   const strategy: Strategy = (settings?.strategy as Strategy) ?? "avalanche";
   const manualExtra = Number(settings?.manualExtra ?? 0);
@@ -481,7 +516,7 @@ export default function AvalanchePage() {
       </div>
 
       {/* Tabs: debts table + projection */}
-      <Tabs defaultValue="debts">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="debts">Debts ({activeDebts.length})</TabsTrigger>
           <TabsTrigger value="projection">Projection</TabsTrigger>
@@ -521,12 +556,21 @@ export default function AvalanchePage() {
                     const dbt = (debts ?? []).find((x) => x.id === d.id)!;
                     const k = killById.get(d.id);
                     const isTarget = i === 0;
+                    const isHighlighted = highlightedDebtId === d.id;
                     const dueChip = renderDueChip(dbt.dueDay ?? null);
                     return (
                       <tr
                         key={d.id}
-                        className={`border-t hover:bg-muted/30 cursor-pointer ${
-                          isTarget ? "bg-primary/5" : ""
+                        ref={(el) => {
+                          rowRefs.current.set(d.id, el);
+                        }}
+                        data-testid={`row-debt-${d.id}`}
+                        className={`border-t hover:bg-muted/30 cursor-pointer transition-colors duration-700 ${
+                          isHighlighted
+                            ? "bg-primary/20 ring-2 ring-primary"
+                            : isTarget
+                            ? "bg-primary/5"
+                            : ""
                         }`}
                         onClick={() => setDrillDown(d.id)}
                       >

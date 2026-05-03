@@ -132,9 +132,16 @@ export function DashboardKillOrder() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {next3.map((m, i) => (
-          <Card
+          <Link
             key={m.id}
-            className={i === 0 ? "border-2 border-foreground/80" : ""}
+            href={`/avalanche?focus=${encodeURIComponent(m.id)}`}
+            data-testid={`link-kill-order-${i}`}
+            className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
+          >
+          <Card
+            className={`cursor-pointer transition-all hover:border-foreground/60 hover:shadow-md ${
+              i === 0 ? "border-2 border-foreground/80" : ""
+            }`}
           >
             <CardContent className="p-5 space-y-2">
               <div className="flex items-center gap-2">
@@ -171,6 +178,7 @@ export function DashboardKillOrder() {
               </div>
             </CardContent>
           </Card>
+          </Link>
         ))}
       </div>
     </section>
