@@ -23,6 +23,42 @@ const toNum = (v: unknown): string => {
       : parseFloat(String(v).replace(/[$,]/g, ""));
   return Number.isNaN(n) ? "0" : n.toFixed(2);
 };
+
+export class AprImportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AprImportError";
+  }
+}
+
+// Normalize a workbook APR cell to a decimal string in [0, 1). Accepts
+// 0.2849, 34.99 ("bare percent"), or "34.99%". Throws on values that
+// still resolve >= 1.0 after normalization.
+export const toAprDecimal = (v: unknown, ctx?: string): string => {
+  if (v === null || v === undefined || v === "" || v === "—") return "0";
+  let raw: number;
+  let hadPercentSign = false;
+  if (typeof v === "number") {
+    raw = v;
+  } else {
+    const s = String(v).trim();
+    hadPercentSign = s.includes("%");
+    raw = parseFloat(s.replace(/[%$,\s]/g, ""));
+  }
+  if (!Number.isFinite(raw)) return "0";
+  const decimal = hadPercentSign || raw >= 1 ? raw / 100 : raw;
+  if (!Number.isFinite(decimal) || decimal < 0) {
+    throw new AprImportError(
+      `Invalid APR ${JSON.stringify(v)}${ctx ? ` for ${ctx}` : ""}: must be >= 0.`,
+    );
+  }
+  if (decimal >= 1) {
+    throw new AprImportError(
+      `APR ${JSON.stringify(v)}${ctx ? ` for ${ctx}` : ""} normalizes to ${decimal} which is >= 1.0; APRs must be a decimal in [0, 1) (e.g. 0.2499 for 24.99%).`,
+    );
+  }
+  return String(decimal);
+};
 const toStr = (v: unknown): string | null =>
   v === null || v === undefined || v === "" ? null : String(v);
 const excelDate = (v: unknown): string | null => {
@@ -165,7 +201,7 @@ export async function importWorkbook(
         userId,
         name,
         type: toStr(r[2]),
-        apr: toNum(r[3]),
+        apr: toAprDecimal(r[3], `debt "${name}"`),
         balance: toNum(r[4]),
         minPayment: toNum(r[5]),
         payment: toNum(r[5]),

@@ -48,6 +48,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   simulate,
+  simulateWithSolvableFallback,
+  simulateMinimumsOnly,
   monthsIfMinOnly,
   interestIfMinOnly,
   dailyInterest,
@@ -231,30 +233,74 @@ export default function AvalanchePage() {
     [debts],
   );
 
-  const sim = useMemo(
-    () => simulate({ debts: simDebts, extraPerMonth: totalExtra, strategy }),
+  const fallback = useMemo(
+    () =>
+      simulateWithSolvableFallback({
+        debts: simDebts,
+        extraPerMonth: totalExtra,
+        strategy,
+      }),
     [simDebts, totalExtra, strategy],
   );
+  const sim = fallback.sim;
+  const usingSolvableSubset = fallback.usingSolvableSubset;
+  const excludedUnderwaterCount = fallback.excludedUnderwaterCount;
+  const effectiveDebts = fallback.effectiveDebts;
+
+  const minOnlyBaseline = useMemo(
+    () =>
+      simulateMinimumsOnly({
+        debts: simDebts,
+        strategy,
+      }),
+    [simDebts, strategy],
+  );
+  const minOnlyForever = minOnlyBaseline.ranOutOfTime;
 
   const otherSim = useMemo(
     () =>
       simulate({
-        debts: simDebts,
+        debts: effectiveDebts,
         extraPerMonth: totalExtra,
         strategy: strategy === "avalanche" ? "snowball" : "avalanche",
       }),
-    [simDebts, totalExtra, strategy],
+    [effectiveDebts, totalExtra, strategy],
   );
+  const bothInfinite = sim.ranOutOfTime && otherSim.ranOutOfTime;
   const interestDelta = otherSim.totalInterestPaid - sim.totalInterestPaid;
   const monthsDelta = (otherSim.ranOutOfTime ? 600 : otherSim.monthsToFreedom) - (sim.ranOutOfTime ? 600 : sim.monthsToFreedom);
 
-  // Baseline (no what-if) sim — used for "saves vs baseline" hint
-  const baselineSim = useMemo(
-    () => simulate({ debts: simDebts, extraPerMonth: resolvedExtraAmount, strategy }),
-    [simDebts, resolvedExtraAmount, strategy],
+  // Null when minimums-only never finishes — the UI renders that case
+  // explicitly rather than displaying an unbounded "savings" number.
+  const interestSavedVsMin = minOnlyForever
+    ? null
+    : Math.max(0, minOnlyBaseline.totalInterestPaid - sim.totalInterestPaid);
+  const monthsSavedVsMin = minOnlyForever
+    ? null
+    : Math.max(
+        0,
+        minOnlyBaseline.monthsToFreedom -
+          (sim.ranOutOfTime ? 600 : sim.monthsToFreedom),
+      );
+
+  const whatIfBaselineSim = useMemo(
+    () =>
+      simulate({
+        debts: effectiveDebts,
+        extraPerMonth: resolvedExtraAmount,
+        strategy,
+      }),
+    [effectiveDebts, resolvedExtraAmount, strategy],
   );
-  const whatIfInterestSaved = baselineSim.totalInterestPaid - sim.totalInterestPaid;
-  const whatIfMonthsSaved = (baselineSim.ranOutOfTime ? 600 : baselineSim.monthsToFreedom) - (sim.ranOutOfTime ? 600 : sim.monthsToFreedom);
+  const whatIfInterestSaved = Math.max(
+    0,
+    whatIfBaselineSim.totalInterestPaid - sim.totalInterestPaid,
+  );
+  const whatIfMonthsSaved = Math.max(
+    0,
+    (whatIfBaselineSim.ranOutOfTime ? 600 : whatIfBaselineSim.monthsToFreedom) -
+      (sim.ranOutOfTime ? 600 : sim.monthsToFreedom),
+  );
 
   const activeDebts = simDebts.filter((d) => (d.status ?? "active") === "active");
   const archivedDebts = (debts ?? []).filter((d) => d.status === "archived");
@@ -304,6 +350,32 @@ export default function AvalanchePage() {
       .filter((r): r is NonNullable<typeof r> => r !== null);
   }, [sim, drillDown]);
 
+  // Drive next-3 from the sim's payoff cascade so underwater debts (no
+  // real payoff date) aren't promoted to card #1.
+  const next3 = useMemo(() => {
+    if (sim.killedOrder.length > 0) {
+      return sim.killedOrder
+        .slice(0, 3)
+        .map((k) => activeDebts.find((d) => d.id === k.id))
+        .filter((d): d is NonNullable<typeof d> => Boolean(d));
+    }
+    return sortedActive.slice(0, 3);
+  }, [sim.killedOrder, activeDebts, sortedActive]);
+
+  // The debt the sim is throwing extra at this month. With $0 extra,
+  // falls back to the strategy-sorted first solvable debt.
+  const planTarget = useMemo(() => {
+    const activeTargetId = sim.months[0]?.activeTargetId;
+    if (activeTargetId) {
+      return activeDebts.find((d) => d.id === activeTargetId) ?? null;
+    }
+    const sortedSolvable = sortDebts(
+      effectiveDebts.filter((d) => d.balance > 0),
+      strategy,
+    );
+    return sortedSolvable[0] ?? sortedActive[0] ?? null;
+  }, [sim.months, activeDebts, effectiveDebts, sortedActive, strategy]);
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -344,8 +416,6 @@ export default function AvalanchePage() {
   const progressPct = originalTotal > 0 ? (paidDown / originalTotal) * 100 : 0;
 
   const budgetMode = (settings?.budgetMode ?? "budgeted") as "budgeted" | "actual";
-
-  const next3 = sortedActive.slice(0, 3);
 
   return (
     <div className="space-y-6">
@@ -427,7 +497,9 @@ export default function AvalanchePage() {
               ? sim.underwater.length > 0
                 ? `${sim.underwater[0]!.name} interest > minimum`
                 : "raise the extra"
-              : `${(sim.monthsToFreedom / 12).toFixed(1)} yrs`
+              : excludedUnderwaterCount > 0
+                ? `excludes ${excludedUnderwaterCount} underwater debt${excludedUnderwaterCount === 1 ? "" : "s"}`
+                : `${(sim.monthsToFreedom / 12).toFixed(1)} yrs`
           }
           valueClassName={sim.ranOutOfTime ? "text-destructive" : undefined}
         />
@@ -441,7 +513,7 @@ export default function AvalanchePage() {
           valueClassName="text-destructive"
         />
       </div>
-      {sim.ranOutOfTime && sim.underwater.length > 0 && (() => {
+      {sim.underwater.length > 0 && (() => {
         const sanitized = sim.underwater.map((u) => {
           const interestOk =
             Number.isFinite(u.monthlyInterest) &&
@@ -455,7 +527,12 @@ export default function AvalanchePage() {
               Math.min(100, (u.minPayment / u.monthlyInterest) * 100),
             );
           }
-          return { ...u, interestOk, minOk, coverage };
+          const aprLooksWrong =
+            !interestOk ||
+            !Number.isFinite(u.apr) ||
+            u.apr < 0 ||
+            u.apr >= 1;
+          return { ...u, interestOk, minOk, coverage, aprLooksWrong };
         });
         const sorted = [...sanitized].sort((a, b) => {
           const ax = a.coverage ?? -1;
@@ -482,12 +559,30 @@ export default function AvalanchePage() {
                 const minLabel = u.minOk ? fmtMoney(u.minPayment) : "—";
                 const coverageLabel =
                   u.coverage !== null ? `~${Math.round(u.coverage)}%` : "—";
+                const debtRow = (debts ?? []).find((x) => x.id === u.id);
                 return (
                   <li key={u.id} className="flex items-baseline gap-1.5">
                     <span className="font-medium text-destructive">{u.name}</span>
-                    <span className="text-destructive/80">
-                      min {minLabel} covers {coverageLabel} of interest
-                    </span>
+                    {u.aprLooksWrong ? (
+                      <span className="text-destructive/80">
+                        APR looks wrong —{" "}
+                        {debtRow ? (
+                          <button
+                            type="button"
+                            className="underline underline-offset-2 hover:text-destructive"
+                            onClick={() => setEditing(debtRow)}
+                          >
+                            check this debt
+                          </button>
+                        ) : (
+                          "check this debt"
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-destructive/80">
+                        min {minLabel} covers {coverageLabel} of interest
+                      </span>
+                    )}
                   </li>
                 );
               })}
@@ -513,6 +608,72 @@ export default function AvalanchePage() {
         </div>
       </div>
       </div>
+
+      {/* This month — full plan amount + target debt + projected kill date. */}
+      {(() => {
+        const target = planTarget;
+        if (!target) return null;
+        const targetDebt = (debts ?? []).find((x) => x.id === target.id);
+        const allMins = activeDebts.reduce((s, d) => s + d.minPayment, 0);
+        const planTotal = allMins + totalExtra;
+        const targetPayment = target.minPayment + totalExtra;
+        const dailyCost = dailyInterest(target);
+        const killDate = sim.killedOrder.find((k) => k.id === target.id)?.date ?? null;
+        return (
+          <Card
+            className="rounded-2xl border-primary/40 bg-primary/[0.03]"
+            data-testid="panel-this-month"
+          >
+            <CardContent className="p-5 flex flex-col md:flex-row md:items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                  This month
+                </div>
+                <div className="mt-1 text-lg">
+                  Pay{" "}
+                  <span className="font-semibold tabular-nums">
+                    {fmtMoney(planTotal)}
+                  </span>{" "}
+                  total —{" "}
+                  <span className="tabular-nums">{fmtMoney(allMins)}</span>{" "}
+                  in minimums on every debt plus{" "}
+                  <span className="tabular-nums">{fmtMoney(totalExtra)}</span>{" "}
+                  extra onto{" "}
+                  <span className="font-semibold">{target.name}</span>
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Target gets{" "}
+                  <span className="tabular-nums text-foreground">
+                    {fmtMoney(targetPayment)}
+                  </span>{" "}
+                  · costs{" "}
+                  <span className="tabular-nums text-foreground">
+                    {fmtMoney(dailyCost)}
+                  </span>
+                  /day in interest right now
+                  {killDate && (
+                    <>
+                      {" "}· projected kill{" "}
+                      <span className="tabular-nums text-foreground">
+                        {fmtMonth(killDate)}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+              {targetDebt && (
+                <Button
+                  className="rounded-full"
+                  data-testid="btn-pay-target"
+                  onClick={() => setPaying(targetDebt)}
+                >
+                  Pay {target.name}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Two cards: Extra per month + Strategy */}
       <div className="grid md:grid-cols-2 gap-4">
@@ -710,20 +871,59 @@ export default function AvalanchePage() {
             <div className="text-sm text-muted-foreground flex items-start gap-1.5">
               <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 mt-1 shrink-0" />
               <span>
-                {interestDelta > 0 ? (
+                {bothInfinite ? (
+                  <>
+                    Neither strategy beats minimums at{" "}
+                    {fmtMoney(totalExtra)}/mo extra. Add more extra,
+                    or refinance the underwater debt(s) above to make a plan
+                    that actually finishes.
+                  </>
+                ) : minOnlyForever && !sim.ranOutOfTime ? (
+                  <>
+                    <strong className="text-foreground capitalize">{strategy}</strong>{" "}
+                    with{" "}
+                    <strong>{fmtMoney(totalExtra)}/mo</strong> extra
+                    finishes{" "}
+                    {usingSolvableSubset ? (
+                      <>
+                        the solvable portion (excludes{" "}
+                        {excludedUnderwaterCount} underwater debt
+                        {excludedUnderwaterCount === 1 ? "" : "s"} above)
+                      </>
+                    ) : (
+                      <>the plan</>
+                    )}
+                    . Minimums alone never do — the underwater debt(s) above
+                    grow forever without it.
+                  </>
+                ) : interestSavedVsMin !== null && monthsSavedVsMin !== null && (interestSavedVsMin > 0 || monthsSavedVsMin > 0) ? (
+                  <>
+                    <strong className="text-foreground capitalize">{strategy}</strong>{" "}
+                    with{" "}
+                    <strong>{fmtMoney(totalExtra)}/mo</strong> extra
+                    saves{" "}
+                    <strong className="text-emerald-600 dark:text-emerald-400">
+                      {fmtMoney(interestSavedVsMin)}
+                    </strong>
+                    {monthsSavedVsMin > 0 ? (
+                      <> and <strong>{monthsSavedVsMin} mo</strong></>
+                    ) : null}{" "}
+                    vs paying minimums only.
+                  </>
+                ) : interestDelta > 0 || monthsDelta > 0 ? (
                   <>
                     Sticking with{" "}
                     <strong className="text-foreground capitalize">{strategy}</strong>{" "}
-                    saves you{" "}
+                    saves{" "}
                     <strong className="text-emerald-600 dark:text-emerald-400">
-                      {fmtMoney(interestDelta)}
+                      {fmtMoney(Math.max(0, interestDelta))}
                     </strong>
                     {monthsDelta > 0 ? (
                       <> and <strong>{monthsDelta} mo</strong></>
                     ) : null}{" "}
-                    vs the other strategy ({fmtMoney(resolvedExtraAmount)}/mo extra).
+                    vs the other strategy.
                   </>
-                ) : interestDelta < 0 ? (
+                ) : interestDelta < 0 || monthsDelta < 0 ? (
                   <>
                     Switching to{" "}
                     <strong className="text-foreground">
@@ -731,17 +931,16 @@ export default function AvalanchePage() {
                     </strong>{" "}
                     would save{" "}
                     <strong className="text-emerald-600 dark:text-emerald-400">
-                      {fmtMoney(-interestDelta)}
+                      {fmtMoney(Math.max(0, -interestDelta))}
                     </strong>
                     {monthsDelta < 0 ? (
                       <> and <strong>{-monthsDelta} mo</strong></>
-                    ) : null}
-                    {" "}({fmtMoney(resolvedExtraAmount)}/mo extra).
+                    ) : null}.
                   </>
                 ) : (
                   <>
                     Both strategies cost the same with{" "}
-                    {fmtMoney(resolvedExtraAmount)}/mo extra.
+                    {fmtMoney(totalExtra)}/mo extra.
                   </>
                 )}
               </span>
@@ -789,6 +988,9 @@ export default function AvalanchePage() {
           <div className="grid gap-3 md:grid-cols-3">
             {next3.map((d, i) => {
               const k = killById.get(d.id);
+              const killEntry = sim.killedOrder.find((x) => x.id === d.id);
+              const cascadeFreed = killEntry?.minFreed ?? 0;
+              const nextDebt = next3[i + 1];
               return (
                 <Card key={d.id} className="rounded-2xl">
                   <CardContent className="p-4 space-y-1">
@@ -811,6 +1013,19 @@ export default function AvalanchePage() {
                         {k ? fmtMonth(k.date) : "—"}
                       </span>
                     </div>
+                    {cascadeFreed > 0 && (
+                      <div className="text-xs text-emerald-700 dark:text-emerald-400">
+                        +{fmtMoney(cascadeFreed)}/mo{" "}
+                        {nextDebt ? (
+                          <>
+                            rolls into{" "}
+                            <span className="font-medium">{nextDebt.name}</span>
+                          </>
+                        ) : (
+                          <>rolls forward to the next debt</>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -860,7 +1075,7 @@ export default function AvalanchePage() {
                   {sortedActive.map((d, i) => {
                     const dbt = (debts ?? []).find((x) => x.id === d.id)!;
                     const k = killById.get(d.id);
-                    const isTarget = i === 0;
+                    const isTarget = planTarget?.id === d.id;
                     const isHighlighted = highlightedDebtId === d.id;
                     const dueChip = renderDueChip(dbt.dueDay ?? null);
                     return (
@@ -1188,7 +1403,7 @@ export default function AvalanchePage() {
         open={!!paying}
         onOpenChange={(o) => !o && setPaying(null)}
         debt={paying}
-        isTarget={paying ? sortedActive[0]?.id === paying.id : false}
+        isTarget={paying ? planTarget?.id === paying.id : false}
         suggestedExtra={totalExtra}
         defaultAccount={appSettings?.primaryAccount ?? ""}
         submitting={createPayment.isPending}
@@ -1611,13 +1826,14 @@ function PayDialog({
   useEffect(() => {
     if (open && debt) {
       const m = Number(debt.minPayment);
-      setPayExtra(false);
-      setAmount(m.toFixed(2));
+      const prefillExtra = isTarget && suggestedExtra > 0;
+      setPayExtra(prefillExtra);
+      setAmount((m + (prefillExtra ? suggestedExtra : 0)).toFixed(2));
       setOccurredOn(new Date().toISOString().slice(0, 10));
       setAccount(defaultAccount);
       setNotes("");
     }
-  }, [open, debt, defaultAccount]);
+  }, [open, debt, defaultAccount, isTarget, suggestedExtra]);
 
   const togglePayExtra = (next: boolean) => {
     setPayExtra(next);

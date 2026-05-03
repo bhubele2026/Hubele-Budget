@@ -52,10 +52,40 @@ async function recordBalanceSnapshot(
     });
 }
 
+export class AprValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AprValidationError";
+  }
+}
+
+// APR is stored and consumed as a *decimal* (e.g. 0.2499 for 24.99%). A user
+// sending the percentage form (e.g. 24.99) would be interpreted as 2,499%
+// APR by the simulator, breaking the whole avalanche page. Reject anything
+// outside [0, 1) with a clear message so the bad value never reaches the DB.
+export function validateAprDecimal(apr: unknown): void {
+  if (apr === undefined || apr === null) return;
+  const n = typeof apr === "number" ? apr : Number(apr);
+  if (!Number.isFinite(n)) {
+    throw new AprValidationError("APR must be a number");
+  }
+  if (n < 0) {
+    throw new AprValidationError("APR must be ≥ 0");
+  }
+  if (n >= 1) {
+    throw new AprValidationError(
+      `APR must be a decimal — e.g. 0.2499 for 24.99% (got ${n})`,
+    );
+  }
+}
+
 function normalize<T extends Record<string, unknown>>(input: T): Record<string, unknown> {
   const out: Record<string, unknown> = { ...input };
   if (typeof out.lastBalanceUpdate === "string") {
     out.lastBalanceUpdate = new Date(out.lastBalanceUpdate as string);
+  }
+  if ("apr" in out) {
+    validateAprDecimal(out.apr);
   }
   return out;
 }
@@ -167,6 +197,7 @@ async function applyLiabilityToDebt(
     patch.lastBalanceUpdate = new Date();
   }
   if (allowApr && acct.liabilityApr != null) {
+    validateAprDecimal(acct.liabilityApr);
     patch.apr = acct.liabilityApr;
     patch.aprSource = "plaid";
   }
@@ -276,8 +307,13 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
     const itemByAccount = new Map(accts.map((a) => [a.id, a.itemId]));
     for (const d of stale) {
       const ok = itemFetchOk.get(itemByAccount.get(d.plaidAccountId!) ?? "") ?? false;
-      // Only stamp the sync timestamp on accounts whose Plaid fetch succeeded.
-      await applyLiabilityToDebt(userId, d, "refresh", ok);
+      // Don't break GET /debts if a single Plaid value is malformed — the
+      // explicit /refresh endpoint surfaces that as a 400.
+      try {
+        await applyLiabilityToDebt(userId, d, "refresh", ok);
+      } catch (e) {
+        if (!(e instanceof AprValidationError)) throw e;
+      }
     }
     rows = await db
       .select()
@@ -310,7 +346,16 @@ router.post("/debts", requireAuth, async (req, res): Promise<void> => {
     .select({ maxOrder: sql<number>`coalesce(max(${debtsTable.sortOrder}), 0)` })
     .from(debtsTable)
     .where(eq(debtsTable.userId, req.userId!));
-  const values = normalize({ ...parsed.data, userId: req.userId! });
+  let values: Record<string, unknown>;
+  try {
+    values = normalize({ ...parsed.data, userId: req.userId! });
+  } catch (e) {
+    if (e instanceof AprValidationError) {
+      res.status(400).json({ error: e.message });
+      return;
+    }
+    throw e;
+  }
   if (values.sortOrder == null) values.sortOrder = (maxOrder ?? 0) + 1;
   const [row] = await db
     .insert(debtsTable)
@@ -401,9 +446,19 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
     overrides.aprSource = "manual";
   if (changed(parsed.data.minPayment, current.minPayment))
     overrides.minPaymentSource = "manual";
+  let normalizedPatch: Record<string, unknown>;
+  try {
+    normalizedPatch = normalize(parsed.data);
+  } catch (e) {
+    if (e instanceof AprValidationError) {
+      res.status(400).json({ error: e.message });
+      return;
+    }
+    throw e;
+  }
   const [row] = await db
     .update(debtsTable)
-    .set({ ...normalize(parsed.data), ...overrides, updatedAt: new Date() })
+    .set({ ...normalizedPatch, ...overrides, updatedAt: new Date() })
     .where(
       and(eq(debtsTable.id, String(params.data.id)), eq(debtsTable.userId, req.userId!)),
     )
@@ -500,7 +555,25 @@ router.post(
       .set({ plaidAccountId, updatedAt: new Date() })
       .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)))
       .returning();
-    const refreshed = await applyLiabilityToDebt(userId, linked, "adopt", fetchOk);
+    let refreshed;
+    try {
+      refreshed = await applyLiabilityToDebt(userId, linked, "adopt", fetchOk);
+    } catch (e) {
+      if (e instanceof AprValidationError) {
+        // Roll back the link write so the debt isn't left half-attached
+        // to a Plaid account whose APR we couldn't accept.
+        await db
+          .update(debtsTable)
+          .set({
+            plaidAccountId: debt.plaidAccountId,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)));
+        res.status(400).json({ error: e.message });
+        return;
+      }
+      throw e;
+    }
     const { accountById, itemById } = await loadAccountContext(userId, [plaidAccountId]);
     res.json(shapeDebt(refreshed, accountById, itemById));
   },
@@ -550,7 +623,16 @@ router.post(
       res.status(400).json({ error: "Debt is not linked to Plaid" });
       return;
     }
-    const result = await refreshLinkedDebt(userId, debt);
+    let result;
+    try {
+      result = await refreshLinkedDebt(userId, debt);
+    } catch (e) {
+      if (e instanceof AprValidationError) {
+        res.status(400).json({ error: e.message });
+        return;
+      }
+      throw e;
+    }
     if (!result.fetchOk) {
       res.status(502).json({
         error: "Failed to refresh from Plaid",

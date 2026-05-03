@@ -118,6 +118,15 @@ vi.mock("@/lib/avalanche", async () => {
   return {
     ...actual,
     simulate: () => currentSim,
+    // The page now uses the shared solvable-subset helper. Mocked here so
+    // these underwater-banner tests can still drive `sim.underwater`
+    // exactly via `currentSim` regardless of the helper's internal logic.
+    simulateWithSolvableFallback: () => ({
+      sim: currentSim,
+      usingSolvableSubset: false,
+      effectiveDebts: [],
+      excludedUnderwaterCount: 0,
+    }),
   };
 });
 

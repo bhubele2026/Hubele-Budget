@@ -430,7 +430,7 @@ async function main() {
           userId: USER_ID,
           name: "Amex Delta SkyMiles Gold",
           type: "credit_card",
-          apr: "28.49",
+          apr: "0.2849",
           balance: endingBalance.toFixed(2),
           minPayment: "40.00",
           payment: "40.00",

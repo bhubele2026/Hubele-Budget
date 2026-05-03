@@ -92,6 +92,33 @@ function targetIndex(rows: { balance: number; apr: number }[], strat: Strategy):
   return bestIdx;
 }
 
+// A debt is "underwater" when its monthly interest exceeds its minimum
+// payment, so minimums alone will never pay it off. Computed from initial
+// state, independent of whether the full plan converges.
+export function identifyUnderwater(debts: SimDebt[]): UnderwaterDebt[] {
+  const out: UnderwaterDebt[] = [];
+  for (const d of debts) {
+    if ((d.status ?? "active") !== "active") continue;
+    if (!Number.isFinite(d.balance) || d.balance <= CENTS) continue;
+    const apr = Number.isFinite(d.apr) ? d.apr : 0;
+    if (apr <= 0) continue;
+    const monthlyInterest = round2(d.balance * (apr / 12));
+    const minPayment = Number.isFinite(d.minPayment) ? d.minPayment : 0;
+    const shortfall = round2(monthlyInterest - minPayment);
+    if (shortfall <= 0) continue;
+    out.push({
+      id: d.id,
+      name: d.name,
+      apr: d.apr,
+      balance: d.balance,
+      minPayment: d.minPayment,
+      monthlyInterest,
+      shortfallPerMonth: shortfall,
+    });
+  }
+  return out;
+}
+
 export function simulate(opts: {
   debts: SimDebt[];
   extraPerMonth: number;
@@ -224,32 +251,7 @@ export function simulate(opts: {
   const monthsToFreedom = ranOutOfTime ? Infinity : months.length;
   const debtFreeDate = ranOutOfTime || months.length === 0 ? null : last.date;
 
-  // Underwater detection: when the sim ran out of time, surface every debt
-  // whose monthly interest exceeds the payment it actually receives, so the
-  // UI can name the offending debt(s) instead of just showing ∞.
-  const underwater: UnderwaterDebt[] = [];
-  if (ranOutOfTime) {
-    const startBalances = new Map<string, number>(
-      opts.debts.map((d) => [d.id, d.balance]),
-    );
-    for (const d of work) {
-      if (d.balance <= CENTS) continue;
-      const startBal = startBalances.get(d.id) ?? d.balance;
-      if (d.balance < startBal - CENTS) continue; // making progress, just slow
-      const monthlyInterest = round2(d.balance * (d.apr / 12));
-      const shortfall = round2(monthlyInterest - d.minPayment);
-      if (shortfall <= 0) continue;
-      underwater.push({
-        id: d.id,
-        name: d.name,
-        apr: d.apr,
-        balance: d.balance,
-        minPayment: d.minPayment,
-        monthlyInterest,
-        shortfallPerMonth: shortfall,
-      });
-    }
-  }
+  const underwater = identifyUnderwater(opts.debts);
 
   return {
     months,
@@ -264,10 +266,161 @@ export function simulate(opts: {
   };
 }
 
-// Returns the smallest monthly extra (in dollars) that pays off all active
-// debts within `maxMonths` using the given strategy. Used to pick a slider
-// ceiling that's always reachable. Returns null when no amount works (e.g.
-// no debts).
+// Runs `simulate`; if it hits MAX_MONTHS and some (but not all) debts are
+// underwater, re-runs on the solvable subset so callers get finite numbers.
+// The full underwater list is re-attached for banners/captions.
+export function simulateWithSolvableFallback(opts: {
+  debts: SimDebt[];
+  extraPerMonth: number;
+  strategy: Strategy;
+  startDate?: Date;
+}): {
+  sim: SimResult;
+  usingSolvableSubset: boolean;
+  effectiveDebts: SimDebt[];
+  excludedUnderwaterCount: number;
+} {
+  const rawSim = simulate(opts);
+  const underwaterIds = new Set(rawSim.underwater.map((u) => u.id));
+  const activeCount = opts.debts.filter(
+    (d) => (d.status ?? "active") === "active",
+  ).length;
+  const usingSolvableSubset =
+    rawSim.ranOutOfTime &&
+    underwaterIds.size > 0 &&
+    underwaterIds.size < activeCount;
+  if (!usingSolvableSubset) {
+    return {
+      sim: rawSim,
+      usingSolvableSubset: false,
+      effectiveDebts: opts.debts,
+      excludedUnderwaterCount: 0,
+    };
+  }
+  const effectiveDebts = opts.debts.filter((d) => !underwaterIds.has(d.id));
+  const fallback = simulate({ ...opts, debts: effectiveDebts });
+  return {
+    sim: { ...fallback, underwater: rawSim.underwater },
+    usingSolvableSubset: true,
+    effectiveDebts,
+    excludedUnderwaterCount: rawSim.underwater.length,
+  };
+}
+
+// Minimums-only sim: each debt pays exactly its own min every month, with
+// no cascade of freed minimums into the next debt. Returns the same shape
+// as `simulate`.
+export function simulateMinimumsOnly(opts: {
+  debts: SimDebt[];
+  strategy: Strategy;
+  startDate?: Date;
+}): SimResult {
+  const startDate =
+    opts.startDate ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const work = opts.debts
+    .filter((d) => (d.status ?? "active") === "active" && d.balance > CENTS)
+    .map((d) => ({
+      id: d.id,
+      name: d.name,
+      apr: d.apr,
+      balance: d.balance,
+      minPayment: d.minPayment,
+    }));
+  const startingTotalBalance = round2(work.reduce((s, d) => s + d.balance, 0));
+  const startingTotalMin = round2(work.reduce((s, d) => s + d.minPayment, 0));
+  const months: SimMonth[] = [];
+  const killedOrder: DebtKill[] = [];
+  let totalInterestPaid = 0;
+
+  for (let m = 1; m <= MAX_MONTHS; m++) {
+    const remaining = work.filter((d) => d.balance > CENTS);
+    if (remaining.length === 0) break;
+    const date = new Date(startDate.getFullYear(), startDate.getMonth() + (m - 1), 1);
+
+    let monthInterest = 0;
+    let monthMins = 0;
+    const perDebt: SimDebtSnapshot[] = [];
+    for (const d of work) {
+      if (d.balance <= CENTS) {
+        perDebt.push({
+          id: d.id, name: d.name,
+          startBalance: 0, endBalance: 0, interest: 0,
+          minPaid: 0, extraPaid: 0, paidOffThisMonth: false,
+        });
+        continue;
+      }
+      const startBal = d.balance;
+      const interest = round2(startBal * (d.apr / 12));
+      let bal = round2(startBal + interest);
+      monthInterest += interest;
+      const pay = Math.min(d.minPayment, bal);
+      bal = round2(bal - pay);
+      monthMins += pay;
+      d.balance = bal;
+      perDebt.push({
+        id: d.id, name: d.name,
+        startBalance: startBal, endBalance: bal, interest,
+        minPaid: pay, extraPaid: 0, paidOffThisMonth: false,
+      });
+    }
+
+    const killedThisMonth: SimMonth["killedThisMonth"] = [];
+    for (let i = 0; i < work.length; i++) {
+      const d = work[i];
+      const wasAliveAtMonthStart = perDebt[i].startBalance > CENTS;
+      const alreadyKilled = killedOrder.some((k) => k.id === d.id);
+      if (wasAliveAtMonthStart && d.balance <= CENTS && !alreadyKilled) {
+        perDebt[i].paidOffThisMonth = true;
+        const entry: DebtKill = {
+          id: d.id, name: d.name, apr: d.apr,
+          minFreed: d.minPayment, date, monthIndex: m,
+        };
+        killedOrder.push(entry);
+        killedThisMonth.push({ id: entry.id, name: entry.name, apr: entry.apr, minFreed: entry.minFreed });
+      }
+    }
+
+    const totalBalanceEnd = round2(work.reduce((s, d) => s + d.balance, 0));
+    totalInterestPaid = round2(totalInterestPaid + monthInterest);
+    months.push({
+      monthIndex: m,
+      date,
+      totalInterest: round2(monthInterest),
+      totalMinsPaid: round2(monthMins),
+      totalExtraPaid: 0,
+      activeTargetId: null,
+      activeTargetName: null,
+      totalBalanceEnd,
+      pctPaidOff: startingTotalBalance > 0
+        ? Math.max(0, Math.min(1, 1 - totalBalanceEnd / startingTotalBalance))
+        : 1,
+      killedThisMonth,
+      perDebt,
+    });
+    if (totalBalanceEnd <= CENTS) break;
+  }
+
+  const last = months[months.length - 1];
+  const ranOutOfTime = months.length === MAX_MONTHS && (last?.totalBalanceEnd ?? 0) > CENTS;
+  const monthsToFreedom = ranOutOfTime ? Infinity : months.length;
+  const debtFreeDate = ranOutOfTime || months.length === 0 ? null : last.date;
+  const underwater = identifyUnderwater(opts.debts);
+
+  return {
+    months,
+    monthsToFreedom,
+    debtFreeDate,
+    totalInterestPaid,
+    startingTotalBalance,
+    startingTotalMin,
+    killedOrder,
+    ranOutOfTime,
+    underwater,
+  };
+}
+
+// Smallest monthly extra (dollars) that pays off all active debts within
+// `maxMonths` using `strategy`. Returns null when no amount works.
 export function findExtraForPayoff(
   debts: SimDebt[],
   strategy: Strategy,
