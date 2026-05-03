@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus } from "lucide-react";
 import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import { OwnerInvitationsSection } from "@/components/owner-invitations";
 import {
   DEFAULT_DAYS_SINCE_TRACKERS,
   newTrackerId,
@@ -258,6 +259,8 @@ export default function SettingsPage() {
         <h1 className="text-3xl font-serif font-bold text-foreground">Settings</h1>
         <p className="text-muted-foreground mt-1">Configure allowances and import historical data.</p>
       </div>
+
+      <OwnerInvitationsSection />
 
       <Card>
         <CardHeader>

@@ -4391,6 +4391,176 @@ export declare const ImportWorkbookResponse: zod.ZodObject<{
     counts: Record<string, number>;
 }>;
 /**
+ * @summary Returns information about the current authenticated user, including whether they are the owner.
+ */
+export declare const GetMeResponse: zod.ZodObject<{
+    userId: zod.ZodString;
+    email: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    displayName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    isOwner: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    userId: string;
+    isOwner: boolean;
+    email?: string | null | undefined;
+    displayName?: string | null | undefined;
+}, {
+    userId: string;
+    isOwner: boolean;
+    email?: string | null | undefined;
+    displayName?: string | null | undefined;
+}>;
+/**
+ * @summary List all invitations (owner only).
+ */
+export declare const ListInvitationsResponseItem: zod.ZodObject<{
+    id: zod.ZodString;
+    emailAddress: zod.ZodString;
+    status: zod.ZodEnum<["pending", "accepted", "revoked", "expired"]>;
+    createdAt: zod.ZodNumber;
+    updatedAt: zod.ZodNumber;
+    url: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    revoked: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+}, "strip", zod.ZodTypeAny, {
+    status: "pending" | "accepted" | "revoked" | "expired";
+    id: string;
+    emailAddress: string;
+    createdAt: number;
+    updatedAt: number;
+    revoked?: boolean | null | undefined;
+    url?: string | null | undefined;
+}, {
+    status: "pending" | "accepted" | "revoked" | "expired";
+    id: string;
+    emailAddress: string;
+    createdAt: number;
+    updatedAt: number;
+    revoked?: boolean | null | undefined;
+    url?: string | null | undefined;
+}>;
+export declare const ListInvitationsResponse: zod.ZodArray<zod.ZodObject<{
+    id: zod.ZodString;
+    emailAddress: zod.ZodString;
+    status: zod.ZodEnum<["pending", "accepted", "revoked", "expired"]>;
+    createdAt: zod.ZodNumber;
+    updatedAt: zod.ZodNumber;
+    url: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    revoked: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+}, "strip", zod.ZodTypeAny, {
+    status: "pending" | "accepted" | "revoked" | "expired";
+    id: string;
+    emailAddress: string;
+    createdAt: number;
+    updatedAt: number;
+    revoked?: boolean | null | undefined;
+    url?: string | null | undefined;
+}, {
+    status: "pending" | "accepted" | "revoked" | "expired";
+    id: string;
+    emailAddress: string;
+    createdAt: number;
+    updatedAt: number;
+    revoked?: boolean | null | undefined;
+    url?: string | null | undefined;
+}>, "many">;
+/**
+ * @summary Send a new invitation by email (owner only).
+ */
+export declare const CreateInvitationBody: zod.ZodObject<{
+    email: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    email: string;
+}, {
+    email: string;
+}>;
+/**
+ * @summary Revoke a pending invitation (owner only).
+ */
+export declare const RevokeInvitationParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const RevokeInvitationResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    emailAddress: zod.ZodString;
+    status: zod.ZodEnum<["pending", "accepted", "revoked", "expired"]>;
+    createdAt: zod.ZodNumber;
+    updatedAt: zod.ZodNumber;
+    url: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    revoked: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+}, "strip", zod.ZodTypeAny, {
+    status: "pending" | "accepted" | "revoked" | "expired";
+    id: string;
+    emailAddress: string;
+    createdAt: number;
+    updatedAt: number;
+    revoked?: boolean | null | undefined;
+    url?: string | null | undefined;
+}, {
+    status: "pending" | "accepted" | "revoked" | "expired";
+    id: string;
+    emailAddress: string;
+    createdAt: number;
+    updatedAt: number;
+    revoked?: boolean | null | undefined;
+    url?: string | null | undefined;
+}>;
+/**
+ * @summary List all current members (owner only).
+ */
+export declare const ListMembersResponseItem: zod.ZodObject<{
+    id: zod.ZodString;
+    email: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    displayName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    imageUrl: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    isOwner: zod.ZodBoolean;
+    createdAt: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    lastSignInAt: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    isOwner: boolean;
+    email?: string | null | undefined;
+    displayName?: string | null | undefined;
+    createdAt?: number | null | undefined;
+    imageUrl?: string | null | undefined;
+    lastSignInAt?: number | null | undefined;
+}, {
+    id: string;
+    isOwner: boolean;
+    email?: string | null | undefined;
+    displayName?: string | null | undefined;
+    createdAt?: number | null | undefined;
+    imageUrl?: string | null | undefined;
+    lastSignInAt?: number | null | undefined;
+}>;
+export declare const ListMembersResponse: zod.ZodArray<zod.ZodObject<{
+    id: zod.ZodString;
+    email: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    displayName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    imageUrl: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    isOwner: zod.ZodBoolean;
+    createdAt: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    lastSignInAt: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    isOwner: boolean;
+    email?: string | null | undefined;
+    displayName?: string | null | undefined;
+    createdAt?: number | null | undefined;
+    imageUrl?: string | null | undefined;
+    lastSignInAt?: number | null | undefined;
+}, {
+    id: string;
+    isOwner: boolean;
+    email?: string | null | undefined;
+    displayName?: string | null | undefined;
+    createdAt?: number | null | undefined;
+    imageUrl?: string | null | undefined;
+    lastSignInAt?: number | null | undefined;
+}>, "many">;
+/**
  * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
  */
 export declare const SeedAprilChaseResponse: zod.ZodObject<{

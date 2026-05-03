@@ -13,6 +13,9 @@ import dashboardBudgetsRouter from "./dashboardBudgets";
 import avalancheRouter from "./avalanche";
 import plaidRouter from "./plaid";
 import billsRouter from "./bills";
+import meRouter from "./me";
+import invitationsRouter from "./invitations";
+import membersRouter from "./members";
 
 const router: IRouter = Router();
 
@@ -30,5 +33,8 @@ router.use(dashboardBudgetsRouter);
 router.use(avalancheRouter);
 router.use(plaidRouter);
 router.use(billsRouter);
+router.use(meRouter);
+router.use(invitationsRouter);
+router.use(membersRouter);
 
 export default router;

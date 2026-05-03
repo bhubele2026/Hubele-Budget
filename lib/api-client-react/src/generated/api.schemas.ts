@@ -748,6 +748,56 @@ export interface SettingsInput {
   preferences?: SettingsPreferences | null;
 }
 
+export interface MeResponse {
+  userId: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  displayName?: string | null;
+  isOwner: boolean;
+}
+
+export type InvitationStatus =
+  (typeof InvitationStatus)[keyof typeof InvitationStatus];
+
+export const InvitationStatus = {
+  pending: "pending",
+  accepted: "accepted",
+  revoked: "revoked",
+  expired: "expired",
+} as const;
+
+export interface Invitation {
+  id: string;
+  emailAddress: string;
+  status: InvitationStatus;
+  createdAt: number;
+  updatedAt: number;
+  /** @nullable */
+  url?: string | null;
+  /** @nullable */
+  revoked?: boolean | null;
+}
+
+export interface CreateInvitationInput {
+  email: string;
+}
+
+export interface Member {
+  id: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  displayName?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  isOwner: boolean;
+  /** @nullable */
+  createdAt?: number | null;
+  /** @nullable */
+  lastSignInAt?: number | null;
+}
+
 export type DashboardSummaryTopCategoriesItem = {
   categoryName: string;
   total: string;

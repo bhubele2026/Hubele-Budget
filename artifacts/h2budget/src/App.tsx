@@ -14,7 +14,6 @@ import { shadcn } from "@clerk/themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
-import LandingPage from "./pages/landing";
 import { SignInPage, SignUpPage } from "./pages/auth";
 import DashboardPage from "./pages/dashboard";
 import ForecastPage from "./pages/forecast";
@@ -92,7 +91,7 @@ function HomeRoute() {
         <Redirect to="/dashboard" />
       </Show>
       <Show when="signed-out">
-        <LandingPage />
+        <Redirect to="/sign-in" />
       </Show>
     </>
   );
@@ -127,7 +126,7 @@ function ProtectedShell() {
         </AppLayout>
       </Show>
       <Show when="signed-out">
-        <Redirect to="/" />
+        <Redirect to="/sign-in" />
       </Show>
     </>
   );

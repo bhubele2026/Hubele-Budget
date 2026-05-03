@@ -18,6 +18,9 @@ tags:
   - name: import
   - name: forecast
   - name: dashboard-budgets
+  - name: auth
+  - name: invitations
+  - name: members
 paths:
   /healthz:
     get:
@@ -899,6 +902,86 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ImportSummary" }
 
+  /me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Returns information about the current authenticated user, including whether they are the owner.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MeResponse" }
+
+  /invitations:
+    get:
+      operationId: listInvitations
+      tags: [invitations]
+      summary: List all invitations (owner only).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Invitation" }
+        "403":
+          description: Forbidden
+    post:
+      operationId: createInvitation
+      tags: [invitations]
+      summary: Send a new invitation by email (owner only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateInvitationInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Invitation" }
+        "403":
+          description: Forbidden
+
+  /invitations/{id}:
+    delete:
+      operationId: revokeInvitation
+      tags: [invitations]
+      summary: Revoke a pending invitation (owner only).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Invitation" }
+        "403":
+          description: Forbidden
+
+  /members:
+    get:
+      operationId: listMembers
+      tags: [members]
+      summary: List all current members (owner only).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Member" }
+        "403":
+          description: Forbidden
+
   /seed/april-chase:
     post:
       operationId: seedAprilChase
@@ -1457,6 +1540,45 @@ components:
           oneOf:
             - $ref: "#/components/schemas/SettingsPreferences"
             - type: "null"
+
+    MeResponse:
+      type: object
+      required: [userId, isOwner]
+      properties:
+        userId: { type: string }
+        email: { type: ["string", "null"] }
+        displayName: { type: ["string", "null"] }
+        isOwner: { type: boolean }
+
+    Invitation:
+      type: object
+      required: [id, emailAddress, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        emailAddress: { type: string }
+        status: { type: string, enum: [pending, accepted, revoked, expired] }
+        createdAt: { type: integer }
+        updatedAt: { type: integer }
+        url: { type: ["string", "null"] }
+        revoked: { type: ["boolean", "null"] }
+
+    CreateInvitationInput:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+
+    Member:
+      type: object
+      required: [id, isOwner]
+      properties:
+        id: { type: string }
+        email: { type: ["string", "null"] }
+        displayName: { type: ["string", "null"] }
+        imageUrl: { type: ["string", "null"] }
+        isOwner: { type: boolean }
+        createdAt: { type: ["integer", "null"] }
+        lastSignInAt: { type: ["integer", "null"] }
 
     DashboardSummary:
       type: object

@@ -1423,6 +1423,68 @@ export const ImportWorkbookResponse = zod.object({
 });
 
 /**
+ * @summary Returns information about the current authenticated user, including whether they are the owner.
+ */
+export const GetMeResponse = zod.object({
+  userId: zod.string(),
+  email: zod.string().nullish(),
+  displayName: zod.string().nullish(),
+  isOwner: zod.boolean(),
+});
+
+/**
+ * @summary List all invitations (owner only).
+ */
+export const ListInvitationsResponseItem = zod.object({
+  id: zod.string(),
+  emailAddress: zod.string(),
+  status: zod.enum(["pending", "accepted", "revoked", "expired"]),
+  createdAt: zod.number(),
+  updatedAt: zod.number(),
+  url: zod.string().nullish(),
+  revoked: zod.boolean().nullish(),
+});
+export const ListInvitationsResponse = zod.array(ListInvitationsResponseItem);
+
+/**
+ * @summary Send a new invitation by email (owner only).
+ */
+export const CreateInvitationBody = zod.object({
+  email: zod.string().email(),
+});
+
+/**
+ * @summary Revoke a pending invitation (owner only).
+ */
+export const RevokeInvitationParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const RevokeInvitationResponse = zod.object({
+  id: zod.string(),
+  emailAddress: zod.string(),
+  status: zod.enum(["pending", "accepted", "revoked", "expired"]),
+  createdAt: zod.number(),
+  updatedAt: zod.number(),
+  url: zod.string().nullish(),
+  revoked: zod.boolean().nullish(),
+});
+
+/**
+ * @summary List all current members (owner only).
+ */
+export const ListMembersResponseItem = zod.object({
+  id: zod.string(),
+  email: zod.string().nullish(),
+  displayName: zod.string().nullish(),
+  imageUrl: zod.string().nullish(),
+  isOwner: zod.boolean(),
+  createdAt: zod.number().nullish(),
+  lastSignInAt: zod.number().nullish(),
+});
+export const ListMembersResponse = zod.array(ListMembersResponseItem);
+
+/**
  * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
  */
 export const SeedAprilChaseResponse = zod.object({

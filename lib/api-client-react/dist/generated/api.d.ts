@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, RecurringItem, RecurringItemInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, Transaction, TransactionInput } from "./api.schemas";
+import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, RecurringItem, RecurringItemInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, Transaction, TransactionInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -1190,6 +1190,128 @@ export declare const useImportWorkbook: <TError = ErrorType<unknown>, TContext =
 }) => UseMutationResult<Awaited<ReturnType<typeof importWorkbook>>, TError, {
     data: BodyType<ImportWorkbookBody>;
 }, TContext>;
+/**
+ * @summary Returns information about the current authenticated user, including whether they are the owner.
+ */
+export declare const getGetMeUrl: () => string;
+export declare const getMe: (options?: RequestInit) => Promise<MeResponse>;
+export declare const getGetMeQueryKey: () => readonly ["/api/me"];
+export declare const getGetMeQueryOptions: <TData = Awaited<ReturnType<typeof getMe>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getMe>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getMe>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetMeQueryResult = NonNullable<Awaited<ReturnType<typeof getMe>>>;
+export type GetMeQueryError = ErrorType<unknown>;
+/**
+ * @summary Returns information about the current authenticated user, including whether they are the owner.
+ */
+export declare function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getMe>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary List all invitations (owner only).
+ */
+export declare const getListInvitationsUrl: () => string;
+export declare const listInvitations: (options?: RequestInit) => Promise<Invitation[]>;
+export declare const getListInvitationsQueryKey: () => readonly ["/api/invitations"];
+export declare const getListInvitationsQueryOptions: <TData = Awaited<ReturnType<typeof listInvitations>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listInvitations>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listInvitations>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListInvitationsQueryResult = NonNullable<Awaited<ReturnType<typeof listInvitations>>>;
+export type ListInvitationsQueryError = ErrorType<void>;
+/**
+ * @summary List all invitations (owner only).
+ */
+export declare function useListInvitations<TData = Awaited<ReturnType<typeof listInvitations>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listInvitations>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary Send a new invitation by email (owner only).
+ */
+export declare const getCreateInvitationUrl: () => string;
+export declare const createInvitation: (createInvitationInput: CreateInvitationInput, options?: RequestInit) => Promise<Invitation>;
+export declare const getCreateInvitationMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof createInvitation>>, TError, {
+        data: BodyType<CreateInvitationInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof createInvitation>>, TError, {
+    data: BodyType<CreateInvitationInput>;
+}, TContext>;
+export type CreateInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof createInvitation>>>;
+export type CreateInvitationMutationBody = BodyType<CreateInvitationInput>;
+export type CreateInvitationMutationError = ErrorType<void>;
+/**
+ * @summary Send a new invitation by email (owner only).
+ */
+export declare const useCreateInvitation: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof createInvitation>>, TError, {
+        data: BodyType<CreateInvitationInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof createInvitation>>, TError, {
+    data: BodyType<CreateInvitationInput>;
+}, TContext>;
+/**
+ * @summary Revoke a pending invitation (owner only).
+ */
+export declare const getRevokeInvitationUrl: (id: string) => string;
+export declare const revokeInvitation: (id: string, options?: RequestInit) => Promise<Invitation>;
+export declare const getRevokeInvitationMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof revokeInvitation>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof revokeInvitation>>, TError, {
+    id: string;
+}, TContext>;
+export type RevokeInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof revokeInvitation>>>;
+export type RevokeInvitationMutationError = ErrorType<void>;
+/**
+ * @summary Revoke a pending invitation (owner only).
+ */
+export declare const useRevokeInvitation: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof revokeInvitation>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof revokeInvitation>>, TError, {
+    id: string;
+}, TContext>;
+/**
+ * @summary List all current members (owner only).
+ */
+export declare const getListMembersUrl: () => string;
+export declare const listMembers: (options?: RequestInit) => Promise<Member[]>;
+export declare const getListMembersQueryKey: () => readonly ["/api/members"];
+export declare const getListMembersQueryOptions: <TData = Awaited<ReturnType<typeof listMembers>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listMembers>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listMembers>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListMembersQueryResult = NonNullable<Awaited<ReturnType<typeof listMembers>>>;
+export type ListMembersQueryError = ErrorType<void>;
+/**
+ * @summary List all current members (owner only).
+ */
+export declare function useListMembers<TData = Awaited<ReturnType<typeof listMembers>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listMembers>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
 /**
  * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
  */

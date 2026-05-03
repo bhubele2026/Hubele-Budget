@@ -17,7 +17,7 @@ Currently hosts the **H2 Family Budget** application — a personal/family budge
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
 - **Frontend**: React 18 + Vite 7, Tailwind v4, shadcn-style UI, wouter router, TanStack Query
-- **Auth**: Clerk (Replit-managed)
+- **Auth**: Clerk (Replit-managed). **Invite-only — deployment prerequisite**: in the Clerk dashboard, set User & Authentication → Restrictions → **Sign-up mode = Restricted** so that only users with a Clerk invitation can create an account. The app's `/sign-up` route also blocks direct visits client-side, but Restricted Mode is the authoritative server-side enforcement and must be enabled before deploy. Owner is identified by primary email matching the `OWNER_EMAIL` env var (defaults to `h2hubele@gmail.com`).
 - **XLSX import**: `xlsx` + `multer`
 
 ## Artifacts
