@@ -117,10 +117,17 @@ function SummaryTile({
   );
 }
 
+const MIN_MONTH = "2026-04-01";
+
+function thisMonthStart(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
 export default function BudgetPage() {
   const [currentMonth, setCurrentMonth] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    const tm = thisMonthStart();
+    return tm < MIN_MONTH ? MIN_MONTH : tm;
   });
 
   const { data: budgetData, isLoading: isLoadingBudget } =
@@ -173,10 +180,11 @@ export default function BudgetPage() {
   const changeMonth = (offset: number) => {
     const d = new Date(currentMonth);
     d.setMonth(d.getMonth() + offset);
-    setCurrentMonth(
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`,
-    );
+    const next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    setCurrentMonth(next < MIN_MONTH ? MIN_MONTH : next);
   };
+
+  const atFloor = currentMonth <= MIN_MONTH;
 
   const invalidate = () => {
     queryClient.invalidateQueries({
@@ -277,6 +285,9 @@ export default function BudgetPage() {
             variant="ghost"
             size="icon"
             onClick={() => changeMonth(-1)}
+            disabled={atFloor}
+            aria-disabled={atFloor}
+            title={atFloor ? "April 2026 is the earliest month" : undefined}
             data-testid="button-prev-month"
           >
             <ChevronLeft className="w-5 h-5" />

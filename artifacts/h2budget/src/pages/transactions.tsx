@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useListTransactions, useCreateTransaction, useUpdateTransaction, useDeleteTransaction, useListCategories, useGetForecast, useRefreshForecastBank, getListTransactionsQueryKey, getGetForecastQueryKey } from "@workspace/api-client-react";
+import { useListTransactions, useCreateTransaction, useUpdateTransaction, useDeleteTransaction, useListCategories, useGetForecast, useRefreshForecastBank, getListTransactionsQueryKey, getGetForecastQueryKey, getGetBudgetMonthQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -212,6 +212,9 @@ export default function TransactionsPage() {
         data: { categoryId },
       });
       queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      queryClient.invalidateQueries({
+        queryKey: getGetBudgetMonthQueryKey(`${tx.occurredOn.slice(0, 7)}-01`),
+      });
       toast({
         title: "Categorized",
         description: "Future similar transactions will auto-categorize.",

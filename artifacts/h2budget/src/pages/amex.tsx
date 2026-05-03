@@ -4,6 +4,7 @@ import {
   useUpdateTransaction,
   useListCategories,
   getListTransactionsQueryKey,
+  getGetBudgetMonthQueryKey,
   type Transaction,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -220,11 +221,24 @@ export default function AmexPage() {
   const invalidateTxns = () =>
     qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
 
+  const monthStartOf = (occurredOn: string): string =>
+    `${occurredOn.slice(0, 7)}-01`;
+
+  const invalidateBudgetMonths = (monthStarts: Iterable<string>) => {
+    const seen = new Set<string>();
+    for (const m of monthStarts) {
+      if (seen.has(m)) continue;
+      seen.add(m);
+      qc.invalidateQueries({ queryKey: getGetBudgetMonthQueryKey(m) });
+    }
+  };
+
   const setRowCategory = async (
     id: string,
     categoryId: string | null,
     rememberPattern?: string | null,
   ) => {
+    const tx = all.find((t) => t.id === id);
     try {
       await updateTx.mutateAsync({
         id,
@@ -234,6 +248,7 @@ export default function AmexPage() {
         },
       });
       invalidateTxns();
+      if (tx) invalidateBudgetMonths([monthStartOf(tx.occurredOn)]);
       if (rememberPattern && categoryId) {
         toast({
           title: "Categorized & remembered",
@@ -401,6 +416,7 @@ export default function AmexPage() {
   const bulkSetCategory = async (categoryId: string | null) => {
     const ids = Array.from(selected);
     if (!ids.length) return;
+    const byId = new Map(all.map((t) => [t.id, t] as const));
     const CONCURRENCY = 6;
     const results: { id: string; ok: boolean; err?: string }[] = [];
     let cursor = 0;
@@ -422,6 +438,12 @@ export default function AmexPage() {
     const okIds = new Set(results.filter((r) => r.ok).map((r) => r.id));
     const failed = results.filter((r) => !r.ok);
     invalidateTxns();
+    invalidateBudgetMonths(
+      Array.from(okIds)
+        .map((id) => byId.get(id)?.occurredOn)
+        .filter((d): d is string => !!d)
+        .map(monthStartOf),
+    );
     setSelected((prev) => {
       const next = new Set<string>();
       for (const id of prev) if (!okIds.has(id)) next.add(id);

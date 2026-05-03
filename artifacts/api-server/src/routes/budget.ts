@@ -750,6 +750,25 @@ router.get(
     }
     const monthStart = params.data.monthStart;
 
+    // Hard floor: data starts April 2026. A bookmarked URL or stale client
+    // requesting an earlier month gets an empty payload rather than a
+    // computed (and meaningless) view. Skipped before any work below.
+    if (monthStart < "2026-04-01") {
+      res.json({
+        monthStart,
+        note: null,
+        lines: [],
+        groups: [],
+        summary: {
+          income: { budget: "0.00", actual: "0.00" },
+          expenses: { budget: "0.00", actual: "0.00" },
+          net: { budget: "0.00", actual: "0.00" },
+          percentSpent: { budget: "0.0", actual: "0.0" },
+        },
+      });
+      return;
+    }
+
     // One-time consolidation of the legacy budget category list (task #65).
     // Gated by a per-user flag, so it's a no-op on subsequent requests.
     await migrateBudgetCategoriesV2(req.userId!);
