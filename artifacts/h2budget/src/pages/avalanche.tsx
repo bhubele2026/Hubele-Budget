@@ -362,19 +362,39 @@ export default function AvalanchePage() {
     return sortedActive.slice(0, 3);
   }, [sim.killedOrder, activeDebts, sortedActive]);
 
-  // The debt the sim is throwing extra at this month. With $0 extra,
-  // falls back to the strategy-sorted first solvable debt.
-  const planTarget = useMemo(() => {
-    const activeTargetId = sim.months[0]?.activeTargetId;
-    if (activeTargetId) {
-      return activeDebts.find((d) => d.id === activeTargetId) ?? null;
+  // Every debt the sim is throwing extra at this month, in cascade order
+  // (the first one is the primary target; subsequent entries appear when
+  // extra is large enough to wipe out earlier debts and spill over). With
+  // $0 extra this month, falls back to a single strategy-sorted debt so
+  // the UI always shows a "next target."
+  const planTargets = useMemo(() => {
+    const monthTargets = sim.months[0]?.targets ?? [];
+    if (monthTargets.length > 0) {
+      return monthTargets
+        .map((t) => {
+          const d = activeDebts.find((x) => x.id === t.id);
+          if (!d) return null;
+          return {
+            ...d,
+            extraForTarget: t.extraPaid,
+            killedThisMonth: t.killedThisMonth,
+          };
+        })
+        .filter((d): d is NonNullable<typeof d> => Boolean(d));
     }
     const sortedSolvable = sortDebts(
       effectiveDebts.filter((d) => d.balance > 0),
       strategy,
     );
-    return sortedSolvable[0] ?? sortedActive[0] ?? null;
+    const fallback = sortedSolvable[0] ?? sortedActive[0] ?? null;
+    if (!fallback) return [];
+    return [{ ...fallback, extraForTarget: 0, killedThisMonth: false }];
   }, [sim.months, activeDebts, effectiveDebts, sortedActive, strategy]);
+
+  const planTargetIds = useMemo(
+    () => new Set(planTargets.map((d) => d.id)),
+    [planTargets],
+  );
 
   if (isLoading) {
     return (
@@ -609,66 +629,165 @@ export default function AvalanchePage() {
       </div>
       </div>
 
-      {/* This month — full plan amount + target debt + projected kill date. */}
+      {/* This month — full plan amount + target debt(s) + projected kill date. */}
       {(() => {
-        const target = planTarget;
-        if (!target) return null;
-        const targetDebt = (debts ?? []).find((x) => x.id === target.id);
+        if (planTargets.length === 0) return null;
         const allMins = activeDebts.reduce((s, d) => s + d.minPayment, 0);
         const planTotal = allMins + totalExtra;
-        const targetPayment = target.minPayment + totalExtra;
-        const dailyCost = dailyInterest(target);
-        const killDate = sim.killedOrder.find((k) => k.id === target.id)?.date ?? null;
+        const isMulti = planTargets.length > 1;
+        const primary = planTargets[0]!;
+        const primaryDebt = (debts ?? []).find((x) => x.id === primary.id);
         return (
           <Card
             className="rounded-2xl border-primary/40 bg-primary/[0.03]"
             data-testid="panel-this-month"
           >
-            <CardContent className="p-5 flex flex-col md:flex-row md:items-center gap-4">
+            <CardContent className="p-5 flex flex-col md:flex-row md:items-start gap-4">
               <div className="flex-1 min-w-0">
                 <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
                   This month
                 </div>
-                <div className="mt-1 text-lg">
-                  Pay{" "}
-                  <span className="font-semibold tabular-nums">
-                    {fmtMoney(planTotal)}
-                  </span>{" "}
-                  total —{" "}
-                  <span className="tabular-nums">{fmtMoney(allMins)}</span>{" "}
-                  in minimums on every debt plus{" "}
-                  <span className="tabular-nums">{fmtMoney(totalExtra)}</span>{" "}
-                  extra onto{" "}
-                  <span className="font-semibold">{target.name}</span>
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Target gets{" "}
-                  <span className="tabular-nums text-foreground">
-                    {fmtMoney(targetPayment)}
-                  </span>{" "}
-                  · costs{" "}
-                  <span className="tabular-nums text-foreground">
-                    {fmtMoney(dailyCost)}
-                  </span>
-                  /day in interest right now
-                  {killDate && (
-                    <>
-                      {" "}· projected kill{" "}
-                      <span className="tabular-nums text-foreground">
-                        {fmtMonth(killDate)}
+                {isMulti ? (
+                  <>
+                    <div className="mt-1 text-lg">
+                      Pay{" "}
+                      <span className="font-semibold tabular-nums">
+                        {fmtMoney(planTotal)}
+                      </span>{" "}
+                      total —{" "}
+                      <span className="tabular-nums">{fmtMoney(allMins)}</span>{" "}
+                      in minimums on every debt plus{" "}
+                      <span className="tabular-nums">
+                        {fmtMoney(totalExtra)}
+                      </span>{" "}
+                      extra split across{" "}
+                      <span className="font-semibold">
+                        {planTargets.length} debts
                       </span>
-                    </>
-                  )}
-                </div>
+                    </div>
+                    <ul
+                      className="mt-2 space-y-1 text-xs text-muted-foreground"
+                      data-testid="this-month-targets"
+                    >
+                      {planTargets.map((t) => {
+                        const killDate =
+                          sim.killedOrder.find((k) => k.id === t.id)?.date ??
+                          null;
+                        return (
+                          <li
+                            key={t.id}
+                            data-testid={`this-month-target-${t.id}`}
+                            className="flex items-baseline gap-1.5"
+                          >
+                            <span className="font-medium text-foreground">
+                              {t.name}
+                            </span>
+                            <span>
+                              gets{" "}
+                              <span className="tabular-nums text-foreground">
+                                {fmtMoney(t.minPayment + t.extraForTarget)}
+                              </span>{" "}
+                              ({fmtMoney(t.minPayment)} min +{" "}
+                              {fmtMoney(t.extraForTarget)} extra)
+                            </span>
+                            {t.killedThisMonth ? (
+                              <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                                · killed this month
+                              </span>
+                            ) : killDate ? (
+                              <span>
+                                · projected kill{" "}
+                                <span className="tabular-nums text-foreground">
+                                  {fmtMonth(killDate)}
+                                </span>
+                              </span>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                ) : (
+                  (() => {
+                    const target = primary;
+                    const targetPayment = target.minPayment + totalExtra;
+                    const dailyCost = dailyInterest(target);
+                    const killDate =
+                      sim.killedOrder.find((k) => k.id === target.id)?.date ??
+                      null;
+                    return (
+                      <>
+                        <div className="mt-1 text-lg">
+                          Pay{" "}
+                          <span className="font-semibold tabular-nums">
+                            {fmtMoney(planTotal)}
+                          </span>{" "}
+                          total —{" "}
+                          <span className="tabular-nums">
+                            {fmtMoney(allMins)}
+                          </span>{" "}
+                          in minimums on every debt plus{" "}
+                          <span className="tabular-nums">
+                            {fmtMoney(totalExtra)}
+                          </span>{" "}
+                          extra onto{" "}
+                          <span className="font-semibold">{target.name}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Target gets{" "}
+                          <span className="tabular-nums text-foreground">
+                            {fmtMoney(targetPayment)}
+                          </span>{" "}
+                          · costs{" "}
+                          <span className="tabular-nums text-foreground">
+                            {fmtMoney(dailyCost)}
+                          </span>
+                          /day in interest right now
+                          {killDate && (
+                            <>
+                              {" "}· projected kill{" "}
+                              <span className="tabular-nums text-foreground">
+                                {fmtMonth(killDate)}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()
+                )}
               </div>
-              {targetDebt && (
-                <Button
-                  className="rounded-full"
-                  data-testid="btn-pay-target"
-                  onClick={() => setPaying(targetDebt)}
+              {isMulti ? (
+                <div
+                  className="flex flex-col gap-2 md:items-end"
+                  data-testid="this-month-pay-buttons"
                 >
-                  Pay {target.name}
-                </Button>
+                  {planTargets.map((t) => {
+                    const dbt = (debts ?? []).find((x) => x.id === t.id);
+                    if (!dbt) return null;
+                    return (
+                      <Button
+                        key={t.id}
+                        className="rounded-full"
+                        data-testid={`btn-pay-target-${t.id}`}
+                        variant={t.id === primary.id ? "default" : "outline"}
+                        onClick={() => setPaying(dbt)}
+                      >
+                        Pay {t.name}
+                      </Button>
+                    );
+                  })}
+                </div>
+              ) : (
+                primaryDebt && (
+                  <Button
+                    className="rounded-full"
+                    data-testid="btn-pay-target"
+                    onClick={() => setPaying(primaryDebt)}
+                  >
+                    Pay {primary.name}
+                  </Button>
+                )
               )}
             </CardContent>
           </Card>
@@ -1075,7 +1194,7 @@ export default function AvalanchePage() {
                   {sortedActive.map((d, i) => {
                     const dbt = (debts ?? []).find((x) => x.id === d.id)!;
                     const k = killById.get(d.id);
-                    const isTarget = planTarget?.id === d.id;
+                    const isTarget = planTargetIds.has(d.id);
                     const isHighlighted = highlightedDebtId === d.id;
                     const dueChip = renderDueChip(dbt.dueDay ?? null);
                     return (
@@ -1403,8 +1522,14 @@ export default function AvalanchePage() {
         open={!!paying}
         onOpenChange={(o) => !o && setPaying(null)}
         debt={paying}
-        isTarget={paying ? planTarget?.id === paying.id : false}
-        suggestedExtra={totalExtra}
+        isTarget={paying ? planTargetIds.has(paying.id) : false}
+        suggestedExtra={
+          paying
+            ? planTargets.length > 1
+              ? planTargets.find((t) => t.id === paying.id)?.extraForTarget ?? 0
+              : totalExtra
+            : 0
+        }
         defaultAccount={appSettings?.primaryAccount ?? ""}
         submitting={createPayment.isPending}
         onSubmit={async (data) => {

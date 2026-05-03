@@ -105,6 +105,68 @@ describe("simulate — APR sanity & solvable subset", () => {
   });
 });
 
+describe("simulate — per-month targets list", () => {
+  it("with $0 extra, month 1's targets list is empty (and activeTargetId is null)", () => {
+    // After the first debt dies, its freed minimum cascades into the next
+    // debt as "extra" — so later months legitimately do have a target.
+    // We only assert the no-cascade case here for the no-extra baseline.
+    const r = simulate({
+      debts: SOLVABLE,
+      extraPerMonth: 0,
+      strategy: "avalanche",
+    });
+    expect(r.months.length).toBeGreaterThan(0);
+    expect(r.months[0]!.targets).toEqual([]);
+    expect(r.months[0]!.activeTargetId).toBeNull();
+  });
+
+  it("records a single target when extra only covers one debt", () => {
+    // $50/mo extra is enough to focus on Amex but nowhere near killing it
+    // in month 1.
+    const r = simulate({
+      debts: SOLVABLE,
+      extraPerMonth: 50,
+      strategy: "avalanche",
+    });
+    const m0 = r.months[0]!;
+    expect(m0.targets).toHaveLength(1);
+    expect(m0.targets[0]!.id).toBe("amex");
+    expect(m0.targets[0]!.extraPaid).toBeCloseTo(50, 2);
+    expect(m0.targets[0]!.killedThisMonth).toBe(false);
+    // Back-compat fields still match the first target.
+    expect(m0.activeTargetId).toBe("amex");
+    expect(m0.activeTargetName).toBe("Amex");
+  });
+
+  it("records every debt that received extra (in kill order) when one month wipes out 2+ debts", () => {
+    // $2000 extra should kill BOTH Amex (~$1k) and Chase (~$500) in
+    // month 1 with plenty of pool to spare. Avalanche order ⇒ Amex
+    // (highest APR) gets extra first, then the spillover finishes Chase.
+    const r = simulate({
+      debts: SOLVABLE,
+      extraPerMonth: 2000,
+      strategy: "avalanche",
+    });
+    const m0 = r.months[0]!;
+    expect(m0.targets).toHaveLength(2);
+    expect(m0.targets.map((t) => t.id)).toEqual(["amex", "chase"]);
+    expect(m0.targets.every((t) => t.killedThisMonth)).toBe(true);
+    // Amex: bal 1000 + 23.74 interest − 50 min = 973.74; gets first.
+    // Spillover into Chase: bal 500 + 7.50 interest − 30 min = 477.50.
+    expect(m0.targets[0]!.extraPaid).toBeCloseTo(973.74, 2);
+    expect(m0.targets[1]!.extraPaid).toBeCloseTo(477.5, 2);
+    // Sum of per-target extras should match the month's totalExtraPaid.
+    const sumExtras = m0.targets.reduce((s, t) => s + t.extraPaid, 0);
+    expect(sumExtras).toBeCloseTo(m0.totalExtraPaid, 2);
+    // Both deaths are also in killedThisMonth.
+    expect(m0.killedThisMonth.map((k) => k.id).sort()).toEqual(
+      ["amex", "chase"].sort(),
+    );
+    // Back-compat: activeTargetId is still the FIRST target.
+    expect(m0.activeTargetId).toBe("amex");
+  });
+});
+
 describe("simulateMinimumsOnly", () => {
   it("finishes a solvable set with finite months and interest, and never reallocates a freed minimum", () => {
     const sim = simulateMinimumsOnly({

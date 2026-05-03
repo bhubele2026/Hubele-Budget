@@ -24,14 +24,26 @@ export type SimDebtSnapshot = {
   paidOffThisMonth: boolean;
 };
 
+export type SimMonthTarget = {
+  id: string;
+  name: string;
+  extraPaid: number;
+  killedThisMonth: boolean;
+};
+
 export type SimMonth = {
   monthIndex: number;
   date: Date;
   totalInterest: number;
   totalMinsPaid: number;
   totalExtraPaid: number;
+  // Back-compat: the FIRST debt that received extra this month (or null
+  // when there was no extra). Prefer `targets` for new code.
   activeTargetId: string | null;
   activeTargetName: string | null;
+  // Every debt that received extra this month, in the order extra
+  // cascaded into them. Empty when there was no extra to spill.
+  targets: SimMonthTarget[];
   totalBalanceEnd: number;
   pctPaidOff: number;
   killedThisMonth: { id: string; name: string; apr: number; minFreed: number }[];
@@ -192,18 +204,25 @@ export function simulate(opts: {
     let monthExtra = 0;
     let activeTargetId: string | null = null;
     let activeTargetName: string | null = null;
+    const targetOrder: { id: string; name: string }[] = [];
+    const extraByTarget = new Map<string, number>();
     while (pool > CENTS) {
       const idx = targetIndex(work, opts.strategy);
       if (idx === -1) break;
-      if (activeTargetId === null) {
-        activeTargetId = work[idx].id;
-        activeTargetName = work[idx].name;
-      }
       const d = work[idx];
+      if (!extraByTarget.has(d.id)) {
+        targetOrder.push({ id: d.id, name: d.name });
+        extraByTarget.set(d.id, 0);
+      }
+      if (activeTargetId === null) {
+        activeTargetId = d.id;
+        activeTargetName = d.name;
+      }
       const pay = Math.min(pool, d.balance);
       d.balance = round2(d.balance - pay);
       pool = round2(pool - pay);
       monthExtra += pay;
+      extraByTarget.set(d.id, round2((extraByTarget.get(d.id) ?? 0) + pay));
       perDebt[idx].extraPaid = round2(perDebt[idx].extraPaid + pay);
       perDebt[idx].endBalance = d.balance;
     }
@@ -227,6 +246,13 @@ export function simulate(opts: {
     const totalBalanceEnd = round2(work.reduce((s, d) => s + d.balance, 0));
     totalInterestPaid = round2(totalInterestPaid + monthInterest);
 
+    const targets: SimMonthTarget[] = targetOrder.map((t) => ({
+      id: t.id,
+      name: t.name,
+      extraPaid: extraByTarget.get(t.id) ?? 0,
+      killedThisMonth: killedThisMonth.some((k) => k.id === t.id),
+    }));
+
     months.push({
       monthIndex: m,
       date,
@@ -235,6 +261,7 @@ export function simulate(opts: {
       totalExtraPaid: round2(monthExtra),
       activeTargetId,
       activeTargetName,
+      targets,
       totalBalanceEnd,
       pctPaidOff: startingTotalBalance > 0
         ? Math.max(0, Math.min(1, 1 - totalBalanceEnd / startingTotalBalance))
@@ -390,6 +417,7 @@ export function simulateMinimumsOnly(opts: {
       totalExtraPaid: 0,
       activeTargetId: null,
       activeTargetName: null,
+      targets: [],
       totalBalanceEnd,
       pctPaidOff: startingTotalBalance > 0
         ? Math.max(0, Math.min(1, 1 - totalBalanceEnd / startingTotalBalance))
