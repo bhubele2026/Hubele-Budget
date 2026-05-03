@@ -146,6 +146,11 @@ export default function TransactionsPage() {
               description: `Ending balance ${formatCurrency(res.endingBalance)}`,
             });
           }
+        } else if (res.snapshotRepaired) {
+          // Snapshot was rewritten from the legacy ending balance to the
+          // corrected one — refresh the forecast bundle so the cached UI
+          // picks up the new bank snapshot value.
+          queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
         }
       },
       onError: (e) => {

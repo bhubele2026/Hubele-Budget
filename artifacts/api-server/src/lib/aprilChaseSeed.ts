@@ -20,8 +20,11 @@ type SeedRow = {
 };
 
 // 95 transactions for April 2026 — Chase checking activity supplied by the
-// user. Running balance reconciles from $4,944.06 (3/31 carryover) to
-// $5,554.45 (4/30). Embedded so we don't depend on attached_assets at runtime.
+// user. The transaction list and opening balance ($4,944.06 carryover from
+// 3/31) are not a complete reconciliation of the month: the authoritative
+// 4/30 ending balance is the bank snapshot ($3,565.09 — see
+// APRIL_2026_ENDING_BALANCE), which is what the Forecast / Chase pages
+// anchor to. Embedded so we don't depend on attached_assets at runtime.
 export const APRIL_2026_CHASE_ROWS: readonly SeedRow[] = [
   { idx: 1, date: "2026-04-01", description: "CAPITAL ONE CRCARDPMT CA0CBEAA436C428 WEB ID: 9541719318", type: "expense", pfc: "LOAN_PAYMENTS", amount: 500.00 },
   { idx: 2, date: "2026-04-01", description: "Venmo", type: "expense", pfc: "TRANSFER_OUT", amount: 16.25 },
@@ -123,7 +126,10 @@ export const APRIL_2026_CHASE_ROWS: readonly SeedRow[] = [
 // Stable carryover starting balance: end-of-day 3/31/2026, derived from
 // $4,444.06 (running after tx#1) + the $500 expense in tx#1.
 export const APRIL_2026_OPENING_BALANCE = 4944.06;
-export const APRIL_2026_ENDING_BALANCE = 5554.45;
+export const APRIL_2026_ENDING_BALANCE = 3565.09;
+// Prior incorrect ending balance previously seeded. Used to detect and
+// repair stale snapshots when re-running the seed.
+const APRIL_2026_ENDING_BALANCE_LEGACY = 5554.45;
 
 const SOURCE = "plaid:chase";
 const SYNTHETIC_ITEM_ID = "seed-april-2026-chase";
@@ -227,6 +233,7 @@ async function ensureChaseAccount(userId: string): Promise<{
   accountIdText: string;
   accountRowId: string;
   isSynthetic: boolean;
+  snapshotRepaired: boolean;
 }> {
   // Prefer the account the user has already linked as their bank snapshot
   // (the Chase checking they connected on the Forecast page). If none, fall
@@ -236,6 +243,31 @@ async function ensureChaseAccount(userId: string): Promise<{
     .select()
     .from(forecastSettingsTable)
     .where(eq(forecastSettingsTable.userId, userId));
+
+  // Repair a previously-seeded stale snapshot to the corrected ending
+  // balance. Runs before any early-return below so that users whose
+  // forecast_settings already has a bankSnapshotAccountId (the common
+  // case after the first seed) still get the corrected value on re-run.
+  // Only touches manual snapshots that still hold the legacy value — a
+  // Plaid-sourced or user-edited balance is left alone.
+  let snapshotRepaired = false;
+  if (
+    settings &&
+    settings.bankSnapshotSource === "manual" &&
+    settings.bankSnapshotBalance != null &&
+    Math.abs(
+      Number(settings.bankSnapshotBalance) - APRIL_2026_ENDING_BALANCE_LEGACY,
+    ) < 0.005
+  ) {
+    await db
+      .update(forecastSettingsTable)
+      .set({
+        bankSnapshotBalance: APRIL_2026_ENDING_BALANCE.toFixed(2),
+        bankSnapshotAt: new Date("2026-04-30T23:59:59Z"),
+      })
+      .where(eq(forecastSettingsTable.userId, userId));
+    snapshotRepaired = true;
+  }
 
   let accountRowId: string | null = settings?.bankSnapshotAccountId ?? null;
 
@@ -266,6 +298,7 @@ async function ensureChaseAccount(userId: string): Promise<{
         accountIdText: acct.accountId,
         accountRowId: acct.id,
         isSynthetic: false,
+        snapshotRepaired,
       };
     }
   }
@@ -357,6 +390,7 @@ async function ensureChaseAccount(userId: string): Promise<{
     accountIdText: acct.accountId,
     accountRowId: acct.id,
     isSynthetic: true,
+    snapshotRepaired,
   };
 }
 
@@ -428,6 +462,14 @@ export type AprilChaseSeedResult = {
   endingBalance: string;
   syntheticAccount: boolean;
   accountId: string;
+  /**
+   * True when an existing manual bank snapshot still equal to the legacy
+   * APRIL_2026_ENDING_BALANCE_LEGACY value was rewritten to the corrected
+   * ending balance during this seed run. Clients can use this to invalidate
+   * cached forecast / bank snapshot queries even when no transactions or
+   * rules were inserted.
+   */
+  snapshotRepaired: boolean;
 };
 
 export async function seedAprilChase(
@@ -526,5 +568,6 @@ export async function seedAprilChase(
     endingBalance: APRIL_2026_ENDING_BALANCE.toFixed(2),
     syntheticAccount: acct.isSynthetic,
     accountId: acct.accountIdText,
+    snapshotRepaired: acct.snapshotRepaired,
   };
 }

@@ -1355,7 +1355,7 @@ components:
         alreadySeeded: { type: boolean }
     AprilChaseSeedResult:
       type: object
-      required: [alreadySeeded, inserted, skipped, categorized, transfers, rulesAdded, endingBalance, syntheticAccount, accountId]
+      required: [alreadySeeded, inserted, skipped, categorized, transfers, rulesAdded, endingBalance, syntheticAccount, accountId, snapshotRepaired]
       properties:
         alreadySeeded: { type: boolean }
         inserted: { type: integer }
@@ -1366,6 +1366,9 @@ components:
         endingBalance: { type: string }
         syntheticAccount: { type: boolean }
         accountId: { type: string }
+        snapshotRepaired:
+          type: boolean
+          description: True when an existing manual bank snapshot still equal to the prior incorrect April ending balance was rewritten to the corrected value during this seed run. Use to invalidate cached forecast / bank snapshot queries even when no transactions or rules were inserted.
 
     MappingRule:
       type: object

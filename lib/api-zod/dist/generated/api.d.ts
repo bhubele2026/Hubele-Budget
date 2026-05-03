@@ -4357,6 +4357,7 @@ export declare const SeedAprilChaseResponse: zod.ZodObject<{
     endingBalance: zod.ZodString;
     syntheticAccount: zod.ZodBoolean;
     accountId: zod.ZodString;
+    snapshotRepaired: zod.ZodBoolean;
 }, "strip", zod.ZodTypeAny, {
     accountId: string;
     alreadySeeded: boolean;
@@ -4367,6 +4368,7 @@ export declare const SeedAprilChaseResponse: zod.ZodObject<{
     transfers: number;
     rulesAdded: number;
     syntheticAccount: boolean;
+    snapshotRepaired: boolean;
 }, {
     accountId: string;
     alreadySeeded: boolean;
@@ -4377,5 +4379,6 @@ export declare const SeedAprilChaseResponse: zod.ZodObject<{
     transfers: number;
     rulesAdded: number;
     syntheticAccount: boolean;
+    snapshotRepaired: boolean;
 }>;
 //# sourceMappingURL=api.d.ts.map

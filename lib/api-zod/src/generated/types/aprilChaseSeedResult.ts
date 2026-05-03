@@ -16,4 +16,6 @@ export interface AprilChaseSeedResult {
   endingBalance: string;
   syntheticAccount: boolean;
   accountId: string;
+  /** True when an existing manual bank snapshot still equal to the prior incorrect April ending balance was rewritten to the corrected value during this seed run. Use to invalidate cached forecast / bank snapshot queries even when no transactions or rules were inserted. */
+  snapshotRepaired: boolean;
 }
