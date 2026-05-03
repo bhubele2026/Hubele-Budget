@@ -20,6 +20,8 @@ export type {
   RecurringItemInput,
   Settings,
   SettingsInput,
+  SettingsPreferences,
+  WeeklyBucketLabels,
   Transaction,
   TransactionInput,
   TransactionWeeklyBucket,

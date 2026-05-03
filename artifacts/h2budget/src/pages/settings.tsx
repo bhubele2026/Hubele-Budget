@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
@@ -11,6 +12,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { UploadCloud, Download } from "lucide-react";
+import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 
 const settingsSchema = z.object({
   weeklyAllowanceAmount: z.string().min(1),
@@ -38,6 +40,10 @@ export default function SettingsPage() {
     }
   });
 
+  const [bucketLabels, setBucketLabels] = useState<Record<string, string>>(
+    () => ({ ...DEFAULT_WEEKLY_BUCKET_LABELS }),
+  );
+
   useEffect(() => {
     if (settings) {
       form.reset({
@@ -46,6 +52,7 @@ export default function SettingsPage() {
         unplannedAllowanceAmount: settings.unplannedAllowanceAmount,
         primaryAccount: settings.primaryAccount || "",
       });
+      setBucketLabels(resolveWeeklyBucketLabels(settings));
     }
   }, [settings, form]);
 
@@ -56,6 +63,31 @@ export default function SettingsPage() {
         toast({ title: "Settings updated successfully" });
       }
     });
+  };
+
+  const saveBucketLabels = () => {
+    const cleaned: Record<string, string> = {};
+    for (const k of SUB_BUCKETS) {
+      const v = (bucketLabels[k] ?? "").trim();
+      cleaned[k] = v || DEFAULT_WEEKLY_BUCKET_LABELS[k];
+    }
+    const nextPreferences = {
+      ...(settings?.preferences ?? {}),
+      weeklyBucketLabels: cleaned,
+    };
+    updateSettings.mutate(
+      { data: { preferences: nextPreferences } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+          toast({ title: "Bucket names updated" });
+        },
+      },
+    );
+  };
+
+  const resetBucketLabels = () => {
+    setBucketLabels({ ...DEFAULT_WEEKLY_BUCKET_LABELS });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,6 +152,44 @@ export default function SettingsPage() {
               </div>
             </form>
           </Form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Weekly Sub-Bucket Names</CardTitle>
+          <CardDescription>
+            Rename the four weekly spending sub-buckets. The underlying tags
+            (groceries / dining / entertainment / misc) stay the same so existing
+            transactions keep their bucket — only the labels you see change.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {SUB_BUCKETS.map((b) => (
+              <div key={b} className="space-y-1.5">
+                <Label htmlFor={`bucket-${b}`} className="text-xs uppercase tracking-widest text-muted-foreground">
+                  {b}
+                </Label>
+                <Input
+                  id={`bucket-${b}`}
+                  value={bucketLabels[b] ?? ""}
+                  placeholder={DEFAULT_WEEKLY_BUCKET_LABELS[b]}
+                  onChange={(e) =>
+                    setBucketLabels((prev) => ({ ...prev, [b]: e.target.value }))
+                  }
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 pt-2">
+            <Button onClick={saveBucketLabels} disabled={updateSettings.isPending}>
+              Save Bucket Names
+            </Button>
+            <Button type="button" variant="outline" onClick={resetBucketLabels}>
+              Reset to defaults
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

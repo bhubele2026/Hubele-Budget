@@ -467,6 +467,21 @@ export const GetSettingsResponse = zod.object({
   monthlyAllowanceAmount: zod.string(),
   unplannedAllowanceAmount: zod.string(),
   primaryAccount: zod.string().nullish(),
+  preferences: zod
+    .union([
+      zod.object({
+        weeklyBucketLabels: zod
+          .object({
+            groceries: zod.string().optional(),
+            dining: zod.string().optional(),
+            entertainment: zod.string().optional(),
+            misc: zod.string().optional(),
+          })
+          .optional(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
 });
 
 export const UpdateSettingsBody = zod.object({
@@ -474,6 +489,21 @@ export const UpdateSettingsBody = zod.object({
   monthlyAllowanceAmount: zod.string().optional(),
   unplannedAllowanceAmount: zod.string().optional(),
   primaryAccount: zod.string().nullish(),
+  preferences: zod
+    .union([
+      zod.object({
+        weeklyBucketLabels: zod
+          .object({
+            groceries: zod.string().optional(),
+            dining: zod.string().optional(),
+            entertainment: zod.string().optional(),
+            misc: zod.string().optional(),
+          })
+          .optional(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
 });
 
 export const UpdateSettingsResponse = zod.object({
@@ -481,6 +511,21 @@ export const UpdateSettingsResponse = zod.object({
   monthlyAllowanceAmount: zod.string(),
   unplannedAllowanceAmount: zod.string(),
   primaryAccount: zod.string().nullish(),
+  preferences: zod
+    .union([
+      zod.object({
+        weeklyBucketLabels: zod
+          .object({
+            groceries: zod.string().optional(),
+            dining: zod.string().optional(),
+            entertainment: zod.string().optional(),
+            misc: zod.string().optional(),
+          })
+          .optional(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
 });
 
 export const GetForecastQueryParams = zod.object({

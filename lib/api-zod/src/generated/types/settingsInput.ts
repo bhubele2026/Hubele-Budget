@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { SettingsPreferences } from "./settingsPreferences";
 
 export interface SettingsInput {
   weeklyAllowanceAmount?: string;
@@ -12,4 +13,5 @@ export interface SettingsInput {
   unplannedAllowanceAmount?: string;
   /** @nullable */
   primaryAccount?: string | null;
+  preferences?: SettingsPreferences | null;
 }

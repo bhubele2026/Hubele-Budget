@@ -389,12 +389,24 @@ export interface MappingRuleInput {
   priority?: number;
 }
 
+export interface WeeklyBucketLabels {
+  groceries?: string;
+  dining?: string;
+  entertainment?: string;
+  misc?: string;
+}
+
+export interface SettingsPreferences {
+  weeklyBucketLabels?: WeeklyBucketLabels;
+}
+
 export interface Settings {
   weeklyAllowanceAmount: string;
   monthlyAllowanceAmount: string;
   unplannedAllowanceAmount: string;
   /** @nullable */
   primaryAccount?: string | null;
+  preferences?: SettingsPreferences | null;
 }
 
 export interface SettingsInput {
@@ -403,6 +415,7 @@ export interface SettingsInput {
   unplannedAllowanceAmount?: string;
   /** @nullable */
   primaryAccount?: string | null;
+  preferences?: SettingsPreferences | null;
 }
 
 export type DashboardSummaryTopCategoriesItem = {

@@ -839,6 +839,17 @@ components:
         categoryId: { type: ["string", "null"] }
         priority: { type: integer }
 
+    WeeklyBucketLabels:
+      type: object
+      properties:
+        groceries: { type: string }
+        dining: { type: string }
+        entertainment: { type: string }
+        misc: { type: string }
+    SettingsPreferences:
+      type: object
+      properties:
+        weeklyBucketLabels: { $ref: "#/components/schemas/WeeklyBucketLabels" }
     Settings:
       type: object
       required: [weeklyAllowanceAmount, monthlyAllowanceAmount, unplannedAllowanceAmount]
@@ -847,6 +858,10 @@ components:
         monthlyAllowanceAmount: { type: string }
         unplannedAllowanceAmount: { type: string }
         primaryAccount: { type: ["string", "null"] }
+        preferences:
+          oneOf:
+            - $ref: "#/components/schemas/SettingsPreferences"
+            - type: "null"
     SettingsInput:
       type: object
       properties:
@@ -854,6 +869,10 @@ components:
         monthlyAllowanceAmount: { type: string }
         unplannedAllowanceAmount: { type: string }
         primaryAccount: { type: ["string", "null"] }
+        preferences:
+          oneOf:
+            - $ref: "#/components/schemas/SettingsPreferences"
+            - type: "null"
 
     DashboardSummary:
       type: object

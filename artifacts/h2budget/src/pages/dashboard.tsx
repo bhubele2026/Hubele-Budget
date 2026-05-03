@@ -20,14 +20,7 @@ import { ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardKillOrder } from "@/components/dashboard-kill-order";
 
-const SUB_BUCKETS = ["groceries", "dining", "entertainment", "misc"] as const;
-type SubBucket = (typeof SUB_BUCKETS)[number];
-const SUB_LABEL: Record<SubBucket, string> = {
-  groceries: "Groceries",
-  dining: "Dining",
-  entertainment: "Entertainment",
-  misc: "Misc",
-};
+import { SUB_BUCKETS, type SubBucket, useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 
 function startOfWeek(d: Date): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -130,6 +123,7 @@ function LifeThisWeek({
   transactions: Transaction[];
   today: Date;
 }) {
+  const SUB_LABEL = useWeeklyBucketLabels();
   const [weekOffset, setWeekOffset] = useState(0);
   const weekStart = useMemo(
     () => addDays(startOfWeek(today), weekOffset * 7),
@@ -218,7 +212,7 @@ function LifeThisWeek({
           </div>
           <div className="text-xs text-muted-foreground border-t pt-3">
             Tag any other Amex charge as "weekly" on the{" "}
-            <Link href="/amex" className="text-amber-700 underline">Amex page</Link> to add it to Misc.
+            <Link href="/amex" className="text-amber-700 underline">Amex page</Link> to add it to {SUB_LABEL.misc}.
           </div>
         </CardContent>
       </Card>

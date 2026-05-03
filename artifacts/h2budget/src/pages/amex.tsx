@@ -37,6 +37,7 @@ import { Search, Check, ChevronsUpDown, CreditCard } from "lucide-react";
 import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, cn } from "@/lib/utils";
+import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 
 const AMEX_SOURCE = "amex";
 
@@ -112,6 +113,7 @@ export default function AmexPage() {
   const { data: txns, isLoading } = useListTransactions(queryParams);
   const { data: categories } = useListCategories();
   const updateTx = useUpdateTransaction();
+  const weeklyLabels = useWeeklyBucketLabels();
 
   const categoryById = useMemo(() => {
     const m = new Map<string, string>();
@@ -627,10 +629,10 @@ export default function AmexPage() {
                               >
                                 <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value={TransactionWeeklyBucket.groceries}>Groceries</SelectItem>
-                                  <SelectItem value={TransactionWeeklyBucket.dining}>Dining</SelectItem>
-                                  <SelectItem value={TransactionWeeklyBucket.entertainment}>Entertainment</SelectItem>
-                                  <SelectItem value={TransactionWeeklyBucket.misc}>Misc</SelectItem>
+                                  <SelectItem value={TransactionWeeklyBucket.groceries}>{weeklyLabels.groceries}</SelectItem>
+                                  <SelectItem value={TransactionWeeklyBucket.dining}>{weeklyLabels.dining}</SelectItem>
+                                  <SelectItem value={TransactionWeeklyBucket.entertainment}>{weeklyLabels.entertainment}</SelectItem>
+                                  <SelectItem value={TransactionWeeklyBucket.misc}>{weeklyLabels.misc}</SelectItem>
                                 </SelectContent>
                               </Select>
                             )}
