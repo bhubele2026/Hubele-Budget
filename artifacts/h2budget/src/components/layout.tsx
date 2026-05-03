@@ -32,13 +32,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row">
+    <div className="h-screen overflow-hidden bg-background flex flex-col md:flex-row">
       <aside className="w-full md:w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
         <div className="p-4 border-b border-sidebar-border flex items-center gap-3">
           <img src={`${import.meta.env.BASE_URL}logo.png`} alt="H2 Budget" className="w-8 h-8 rounded" />
           <span className="font-serif font-bold text-lg tracking-tight text-sidebar-foreground">H2 Budget</span>
         </div>
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto max-h-[35vh] md:max-h-none">
           {navItems.map((item) => {
             const isActive = location.startsWith(item.href);
             return (
@@ -61,7 +61,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <UserButton />
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 min-h-0 overflow-y-auto">
         <div className="p-4 md:p-8 max-w-6xl mx-auto">
           {children}
         </div>
