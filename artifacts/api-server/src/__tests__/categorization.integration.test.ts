@@ -390,4 +390,94 @@ describe("categorization pipeline (integration)", () => {
     expect(rules2.length).toBe(1);
     expect(rules2[0]!.categoryId).toBe(cat2!.id);
   });
+
+  it("PATCH /transactions/:id without rememberPattern auto-derives a rule from the description", async () => {
+    const merchant = `AUTOMERCH${randomUUID().slice(0, 6).toUpperCase()}`;
+
+    const [cat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Auto Test ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+
+    const [txn] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: dateInCurrentMonth(23),
+        description: `${merchant} STORE #5523`,
+        amount: "-9.99",
+        source: "manual",
+      })
+      .returning();
+
+    // No rememberPattern in body — but a rule should still be created from
+    // the cleaned description.
+    const patch = await api("PATCH", `/transactions/${txn!.id}`, {
+      categoryId: cat!.id,
+    });
+    expect(patch.status).toBe(200);
+
+    const rules = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(
+        and(
+          eq(mappingRulesTable.userId, TEST_USER),
+          eq(mappingRulesTable.categoryId, cat!.id),
+        ),
+      );
+    expect(rules.length).toBe(1);
+    // First 2 tokens after stripping '#...' suffix.
+    expect(rules[0]!.pattern).toBe(`${merchant} STORE`);
+    expect(rules[0]!.matchType).toBe("contains");
+    expect(rules[0]!.priority).toBe(100);
+  });
+
+  it("PATCH /transactions/:id does not create a rule for an internal transfer", async () => {
+    const [cat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Transfer Test ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+
+    const uniqueDesc = `XFER-DESC-${randomUUID().slice(0, 8)}`;
+    const [txn] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: dateInCurrentMonth(24),
+        description: uniqueDesc,
+        amount: "-50.00",
+        source: "bank",
+        isTransfer: true,
+      })
+      .returning();
+
+    const patch = await api("PATCH", `/transactions/${txn!.id}`, {
+      categoryId: cat!.id,
+    });
+    expect(patch.status).toBe(200);
+
+    const rules = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(
+        and(
+          eq(mappingRulesTable.userId, TEST_USER),
+          eq(mappingRulesTable.categoryId, cat!.id),
+        ),
+      );
+    expect(rules.length).toBe(0);
+  });
 });

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useListMappingRules, useCreateMappingRule, useDeleteMappingRule, useListCategories, getListMappingRulesQueryKey } from "@workspace/api-client-react";
+import type { MappingRule, Category } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,10 +13,10 @@ import { useToast } from "@/hooks/use-toast";
 export default function MappingRulesPage() {
   const { data: rules, isLoading: rulesLoading } = useListMappingRules();
   const { data: categories, isLoading: catsLoading } = useListCategories();
-  
+
   const createRule = useCreateMappingRule();
   const deleteRule = useDeleteMappingRule();
-  
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -43,20 +44,41 @@ export default function MappingRulesPage() {
     });
   };
 
+  const grouped = useMemo(() => {
+    const byCat = new Map<string, { category: Category | null; rules: MappingRule[] }>();
+    const catById = new Map<string, Category>();
+    for (const c of categories ?? []) catById.set(c.id, c);
+    for (const r of rules ?? []) {
+      const key = r.categoryId ?? "__uncat__";
+      if (!byCat.has(key)) {
+        byCat.set(key, {
+          category: r.categoryId ? catById.get(r.categoryId) ?? null : null,
+          rules: [],
+        });
+      }
+      byCat.get(key)!.rules.push(r);
+    }
+    const arr = Array.from(byCat.entries()).map(([key, v]) => ({
+      key,
+      name: v.category?.name ?? "Uncategorized",
+      rules: v.rules,
+    }));
+    arr.sort((a, b) => a.name.localeCompare(b.name));
+    return arr;
+  }, [rules, categories]);
+
   if (rulesLoading || catsLoading) {
     return <div className="space-y-4"><Skeleton className="h-10 w-48" /><Skeleton className="h-64 w-full" /></div>;
   }
-
-  const getCategoryName = (id: string | null | undefined) => {
-    if (!id) return "None";
-    return categories?.find(c => c.id === id)?.name || "Unknown";
-  };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-serif font-bold text-foreground">Mapping Rules</h1>
-        <p className="text-muted-foreground mt-1">Auto-categorize transactions based on description patterns.</p>
+        <p className="text-muted-foreground mt-1">
+          Auto-categorize transactions based on description patterns. New rules
+          are added automatically when you categorize a transaction.
+        </p>
       </div>
 
       <Card>
@@ -98,33 +120,55 @@ export default function MappingRulesPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="grid grid-cols-12 gap-4 p-4 border-b border-border bg-muted/30 font-medium text-sm text-muted-foreground">
-            <div className="col-span-3">Match Type</div>
-            <div className="col-span-5">Pattern</div>
-            <div className="col-span-3">Category</div>
-            <div className="col-span-1"></div>
-          </div>
-          <div className="divide-y divide-border">
-            {rules?.map(rule => (
-              <div key={rule.id} className="grid grid-cols-12 gap-4 p-4 items-center hover:bg-muted/10">
-                <div className="col-span-3 text-sm capitalize">{rule.matchType.replace('_', ' ')}</div>
-                <div className="col-span-5 font-mono text-sm bg-muted/50 px-2 py-1 rounded w-max">{rule.pattern}</div>
-                <div className="col-span-3 text-sm font-medium">{getCategoryName(rule.categoryId)}</div>
-                <div className="col-span-1 flex justify-end">
-                  <Button variant="ghost" size="icon" onClick={() => handleDeleteRule(rule.id)}>
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
+      {grouped.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center text-muted-foreground">
+            No mapping rules yet. Categorize a transaction on the Chase page and a rule will be created automatically.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {grouped.map((g) => (
+            <Card key={g.key} data-testid={`rule-group-${g.key}`}>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center justify-between text-base">
+                  <span>{g.name}</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {g.rules.length} {g.rules.length === 1 ? "rule" : "rules"}
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="max-h-64 overflow-y-auto divide-y divide-border">
+                  {g.rules.map((rule) => (
+                    <div
+                      key={rule.id}
+                      className="flex items-center gap-2 px-4 py-2 hover:bg-muted/30"
+                      data-testid={`rule-row-${rule.id}`}
+                    >
+                      <span className="font-mono text-xs bg-muted/60 px-2 py-0.5 rounded truncate flex-1">
+                        {rule.pattern}
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        {rule.matchType.replace("_", " ")}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleDeleteRule(rule.id)}
+                        data-testid={`rule-delete-${rule.id}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))}
-            {rules?.length === 0 && (
-              <div className="p-8 text-center text-muted-foreground">No mapping rules created yet.</div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

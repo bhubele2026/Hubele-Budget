@@ -150,22 +150,16 @@ export default function TransactionsPage() {
   const handleQuickCategorize = async (
     tx: Transaction,
     categoryId: string,
-    rememberPattern: string | null,
   ) => {
     try {
       await updateTx.mutateAsync({
         id: tx.id,
-        data: {
-          categoryId,
-          ...(rememberPattern ? { rememberPattern } : {}),
-        },
+        data: { categoryId },
       });
       queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
       toast({
-        title: rememberPattern ? "Categorized & remembered" : "Categorized",
-        description: rememberPattern
-          ? `Future "${rememberPattern}" transactions will auto-categorize.`
-          : undefined,
+        title: "Categorized",
+        description: "Future similar transactions will auto-categorize.",
       });
     } catch (e) {
       toast({
@@ -415,9 +409,7 @@ export default function TransactionsPage() {
                       <CategorizeChip
                         tx={tx}
                         categories={categories ?? []}
-                        onPick={(catId, pattern) =>
-                          handleQuickCategorize(tx, catId, pattern)
-                        }
+                        onPick={(catId) => handleQuickCategorize(tx, catId)}
                       />
                     )}
                     {tx.isTransfer && (
@@ -472,13 +464,6 @@ export default function TransactionsPage() {
   );
 }
 
-function defaultRememberPattern(description: string): string {
-  const cleaned = description.replace(/[#*].*$/, "").trim();
-  const tokens = cleaned.split(/\s+/).filter(Boolean);
-  const head = tokens.slice(0, 2).join(" ");
-  return (head || cleaned).slice(0, 40);
-}
-
 function CategorizeChip({
   tx,
   categories,
@@ -486,11 +471,9 @@ function CategorizeChip({
 }: {
   tx: Transaction;
   categories: { id: string; name: string }[];
-  onPick: (categoryId: string, rememberPattern: string | null) => void;
+  onPick: (categoryId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [remember, setRemember] = useState(true);
-  const pattern = defaultRememberPattern(tx.description);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -512,7 +495,7 @@ function CategorizeChip({
                 <CommandItem
                   key={c.id}
                   onSelect={() => {
-                    onPick(c.id, remember && pattern ? pattern : null);
+                    onPick(c.id);
                     setOpen(false);
                   }}
                 >
@@ -521,19 +504,9 @@ function CategorizeChip({
               ))}
             </CommandGroup>
           </CommandList>
-          {pattern && (
-            <div className="border-t px-2 py-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-              <Checkbox
-                checked={remember}
-                onCheckedChange={(v) => setRemember(!!v)}
-                id={`remember-${tx.id}`}
-                data-testid={`checkbox-remember-${tx.id}`}
-              />
-              <label htmlFor={`remember-${tx.id}`} className="cursor-pointer">
-                Remember <span className="font-mono">"{pattern}"</span>
-              </label>
-            </div>
-          )}
+          <div className="border-t px-2 py-1.5 text-[11px] text-muted-foreground">
+            Picking a category will remember this merchant.
+          </div>
         </Command>
       </PopoverContent>
     </Popover>

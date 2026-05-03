@@ -61,6 +61,21 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   res.json(rows);
 });
 
+/**
+ * Cleans a raw transaction description into a short, stable pattern suitable
+ * for a `contains` mapping rule. Strips trailing reference suffixes (after
+ * `#` / `*`), takes the first couple of meaningful tokens, and caps length.
+ * Mirrors the client-side `defaultRememberPattern` so the auto-created rule
+ * matches the user's mental model.
+ */
+function derivePatternFromDescription(description: string | null | undefined): string {
+  if (!description) return "";
+  const cleaned = description.replace(/[#*].*$/, "").trim();
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  const head = tokens.slice(0, 2).join(" ");
+  return (head || cleaned).slice(0, 40);
+}
+
 async function userOwnsDebt(userId: string, debtId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: debtsTable.id })
@@ -101,9 +116,9 @@ router.patch(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    // `rememberPattern` is a UI affordance, not a column on the txn table.
-    // Strip it before passing the payload to drizzle so the underlying
-    // update stays focused on real columns.
+    // `rememberPattern` is a legacy UI affordance kept for backward compat
+    // but no longer required: assigning a category always implies "remember"
+    // and auto-creates a mapping rule below. Strip it from the drizzle patch.
     const { rememberPattern, ...patch } = parsed.data as typeof parsed.data & {
       rememberPattern?: string | null;
     };
@@ -125,17 +140,18 @@ router.patch(
       res.status(404).json({ error: "Not found" });
       return;
     }
-    // If the client opted in to "remember this", and we just assigned a
-    // category, upsert a high-priority mapping_rule so future bank/Amex
-    // transactions with this description fragment auto-categorize the same
-    // way. We trim the pattern to a reasonable length so noisy suffixes
-    // (dates, store IDs) don't accidentally make the rule too narrow.
-    if (
-      rememberPattern &&
-      patch.categoryId &&
-      typeof rememberPattern === "string"
-    ) {
-      const pattern = rememberPattern.trim().slice(0, 60);
+    // Whenever a category is assigned via the quick-categorize flow, upsert
+    // a high-priority mapping_rule from the txn's description so future
+    // matching transactions auto-categorize the same way. The user no longer
+    // needs to opt in via `rememberPattern`. Internal transfers and very
+    // short descriptions are skipped because they wouldn't form a useful
+    // pattern. We trim to a reasonable length so noisy suffixes don't make
+    // the rule too narrow.
+    if (patch.categoryId && !row.isTransfer) {
+      const explicit =
+        typeof rememberPattern === "string" ? rememberPattern : null;
+      const source = explicit ?? derivePatternFromDescription(row.description);
+      const pattern = (source ?? "").trim().slice(0, 60);
       if (pattern.length >= 3) {
         const existing = await db
           .select({ id: mappingRulesTable.id })
