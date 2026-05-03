@@ -4022,6 +4022,52 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         error?: string | null | undefined;
     }[];
 }>;
+export declare const GetPlaidEnvironmentResponse: zod.ZodObject<{
+    env: zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"sandbox">, zod.ZodLiteral<"development">, zod.ZodLiteral<"production">, zod.ZodLiteral<null>]>>;
+    configured: zod.ZodBoolean;
+    configError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    nonProdItemCount: zod.ZodNumber;
+    nonProdItems: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        institutionName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        env: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        env: string | null;
+        institutionName?: string | null | undefined;
+    }, {
+        id: string;
+        env: string | null;
+        institutionName?: string | null | undefined;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    env: "sandbox" | "development" | "production" | null;
+    configured: boolean;
+    nonProdItemCount: number;
+    nonProdItems: {
+        id: string;
+        env: string | null;
+        institutionName?: string | null | undefined;
+    }[];
+    configError?: string | null | undefined;
+}, {
+    env: "sandbox" | "development" | "production" | null;
+    configured: boolean;
+    nonProdItemCount: number;
+    nonProdItems: {
+        id: string;
+        env: string | null;
+        institutionName?: string | null | undefined;
+    }[];
+    configError?: string | null | undefined;
+}>;
+export declare const CleanupNonProdPlaidItemsResponse: zod.ZodObject<{
+    removed: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    removed: number;
+}, {
+    removed: number;
+}>;
 export declare const GetBillsSummaryResponse: zod.ZodObject<{
     income: zod.ZodArray<zod.ZodObject<{
         item: zod.ZodObject<{

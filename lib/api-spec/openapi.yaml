@@ -841,6 +841,30 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PlaidSyncResult" }
+  /plaid/environment:
+    get:
+      operationId: getPlaidEnvironment
+      tags: [plaid]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlaidEnvironmentInfo" }
+  /plaid/cleanup-non-prod:
+    post:
+      operationId: cleanupNonProdPlaidItems
+      tags: [plaid]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [removed]
+                properties:
+                  removed: { type: integer }
 
   /bills/summary:
     get:
@@ -1700,3 +1724,22 @@ components:
               removed: { type: integer }
               autoCategorized: { type: integer }
               error: { type: ["string", "null"] }
+    PlaidEnvironmentInfo:
+      type: object
+      required: [env, configured, nonProdItemCount, nonProdItems]
+      properties:
+        env:
+          type: ["string", "null"]
+          enum: [sandbox, development, production, null]
+        configured: { type: boolean }
+        configError: { type: ["string", "null"] }
+        nonProdItemCount: { type: integer }
+        nonProdItems:
+          type: array
+          items:
+            type: object
+            required: [id, env]
+            properties:
+              id: { type: string }
+              institutionName: { type: ["string", "null"] }
+              env: { type: ["string", "null"] }

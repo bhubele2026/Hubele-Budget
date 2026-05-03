@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CloseForecastMonthBody, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, RecurringItem, RecurringItemInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, Transaction, TransactionInput } from "./api.schemas";
+import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, RecurringItem, RecurringItemInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, Transaction, TransactionInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -1123,6 +1123,35 @@ export declare const useSyncPlaidTransactions: <TError = ErrorType<unknown>, TCo
 }) => UseMutationResult<Awaited<ReturnType<typeof syncPlaidTransactions>>, TError, {
     data: BodyType<PlaidSyncInput>;
 }, TContext>;
+export declare const getGetPlaidEnvironmentUrl: () => string;
+export declare const getPlaidEnvironment: (options?: RequestInit) => Promise<PlaidEnvironmentInfo>;
+export declare const getGetPlaidEnvironmentQueryKey: () => readonly ["/api/plaid/environment"];
+export declare const getGetPlaidEnvironmentQueryOptions: <TData = Awaited<ReturnType<typeof getPlaidEnvironment>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getPlaidEnvironment>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getPlaidEnvironment>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetPlaidEnvironmentQueryResult = NonNullable<Awaited<ReturnType<typeof getPlaidEnvironment>>>;
+export type GetPlaidEnvironmentQueryError = ErrorType<unknown>;
+export declare function useGetPlaidEnvironment<TData = Awaited<ReturnType<typeof getPlaidEnvironment>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getPlaidEnvironment>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+export declare const getCleanupNonProdPlaidItemsUrl: () => string;
+export declare const cleanupNonProdPlaidItems: (options?: RequestInit) => Promise<CleanupNonProdPlaidItems200>;
+export declare const getCleanupNonProdPlaidItemsMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof cleanupNonProdPlaidItems>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof cleanupNonProdPlaidItems>>, TError, void, TContext>;
+export type CleanupNonProdPlaidItemsMutationResult = NonNullable<Awaited<ReturnType<typeof cleanupNonProdPlaidItems>>>;
+export type CleanupNonProdPlaidItemsMutationError = ErrorType<unknown>;
+export declare const useCleanupNonProdPlaidItems: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof cleanupNonProdPlaidItems>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof cleanupNonProdPlaidItems>>, TError, void, TContext>;
 export declare const getGetBillsSummaryUrl: () => string;
 export declare const getBillsSummary: (options?: RequestInit) => Promise<BillsSummary>;
 export declare const getGetBillsSummaryQueryKey: () => readonly ["/api/bills/summary"];

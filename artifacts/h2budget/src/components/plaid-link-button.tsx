@@ -3,6 +3,7 @@ import { usePlaidLink } from "react-plaid-link";
 import {
   useCreatePlaidLinkToken,
   useExchangePlaidPublicToken,
+  useGetPlaidEnvironment,
   getListPlaidItemsQueryKey,
   getListTransactionsQueryKey,
   getListPlaidLiabilityAccountsQueryKey,
@@ -26,6 +27,7 @@ export function PlaidLinkButton({
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const createLinkToken = useCreatePlaidLinkToken();
   const exchange = useExchangePlaidPublicToken();
+  const { data: plaidEnv } = useGetPlaidEnvironment();
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -119,9 +121,25 @@ export function PlaidLinkButton({
   }, [linkToken, ready, open]);
 
   const busy = createLinkToken.isPending || exchange.isPending;
+  // Disable Link Bank when the API reports Plaid isn't configured (or the
+  // server reported a config error like a missing/invalid PLAID_ENV) so
+  // the user gets a clear, immediate signal instead of a runtime failure
+  // after Plaid Link tries to load.
+  const notConfigured = plaidEnv ? !plaidEnv.configured : false;
+  const hasConfigError = Boolean(plaidEnv?.configError);
+  const disabledReason = plaidEnv?.configError
+    ? plaidEnv.configError
+    : notConfigured
+      ? "Plaid is not configured. Set PLAID_CLIENT_ID, PLAID_SECRET, and PLAID_ENV in Secrets."
+      : null;
 
   return (
-    <Button onClick={fetchToken} disabled={busy} data-testid="button-link-bank">
+    <Button
+      onClick={fetchToken}
+      disabled={busy || notConfigured || hasConfigError}
+      title={disabledReason ?? undefined}
+      data-testid="button-link-bank"
+    >
       {busy ? (
         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
       ) : (

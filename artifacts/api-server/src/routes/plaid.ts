@@ -12,7 +12,20 @@ import {
   PLAID_OPTIONAL_PRODUCTS,
   PLAID_COUNTRY_CODES,
   institutionSlug,
+  getPlaidEnv,
+  isPlaidConfigured,
 } from "../lib/plaid";
+
+// Plaid issues access tokens prefixed with the environment they were
+// minted in (e.g. `access-sandbox-...`, `access-development-...`,
+// `access-production-...`). We use that prefix to detect which existing
+// `plaid_items` rows came from a non-production environment so they can
+// be cleaned up after the production cutover.
+function tokenEnv(token: string | null | undefined): string | null {
+  if (!token) return null;
+  const m = /^access-([^-]+)-/.exec(token);
+  return m ? m[1].toLowerCase() : null;
+}
 import { syncPlaidItem, syncAllForUser } from "../lib/plaidSync";
 import { fetchLiabilitiesForUser } from "../lib/plaidLiabilities";
 import { debtsTable } from "@workspace/db";
@@ -361,6 +374,102 @@ router.get(
         };
       }),
     );
+  },
+);
+
+router.get("/plaid/environment", requireAuth, async (req, res): Promise<void> => {
+  let env: string | null = null;
+  let configured = false;
+  let configError: string | null = null;
+  try {
+    configured = isPlaidConfigured();
+    if (configured) env = getPlaidEnv();
+  } catch (e) {
+    configError = e instanceof Error ? e.message : String(e);
+  }
+  const items = await db
+    .select({ id: plaidItemsTable.id, accessToken: plaidItemsTable.accessToken, institutionName: plaidItemsTable.institutionName })
+    .from(plaidItemsTable)
+    .where(eq(plaidItemsTable.userId, req.userId!));
+  const nonProdItems = items
+    .map((it) => ({ id: it.id, institutionName: it.institutionName, env: tokenEnv(it.accessToken) }))
+    .filter((it) => it.env !== null && it.env !== "production");
+  res.json({
+    env,
+    configured,
+    configError,
+    nonProdItemCount: nonProdItems.length,
+    nonProdItems,
+  });
+});
+
+router.post(
+  "/plaid/cleanup-non-prod",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const items = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.userId, req.userId!));
+    const targets = items.filter((it) => {
+      const env = tokenEnv(it.accessToken);
+      return env !== null && env !== "production";
+    });
+    let removed = 0;
+    for (const item of targets) {
+      try {
+        // Best-effort: a sandbox/development token will be rejected by the
+        // production Plaid host, but we still want to free the local rows.
+        await plaid().itemRemove({ access_token: item.accessToken });
+      } catch (e) {
+        req.log.warn({ err: e, itemId: item.id }, "itemRemove failed during non-prod cleanup");
+      }
+      const itemAccounts = await db
+        .select({ id: plaidAccountsTable.id })
+        .from(plaidAccountsTable)
+        .where(
+          and(
+            eq(plaidAccountsTable.itemId, item.id),
+            eq(plaidAccountsTable.userId, req.userId!),
+          ),
+        );
+      const itemAcctIds = itemAccounts.map((a) => a.id);
+      if (itemAcctIds.length > 0) {
+        await db
+          .update(debtsTable)
+          .set({
+            balanceSource: "manual",
+            aprSource: "manual",
+            minPaymentSource: "manual",
+            plaidLastSyncedAt: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(debtsTable.userId, req.userId!),
+              inArray(debtsTable.plaidAccountId, itemAcctIds),
+            ),
+          );
+      }
+      await db
+        .delete(plaidAccountsTable)
+        .where(
+          and(
+            eq(plaidAccountsTable.itemId, item.id),
+            eq(plaidAccountsTable.userId, req.userId!),
+          ),
+        );
+      await db
+        .delete(plaidItemsTable)
+        .where(
+          and(
+            eq(plaidItemsTable.id, item.id),
+            eq(plaidItemsTable.userId, req.userId!),
+          ),
+        );
+      removed++;
+    }
+    res.json({ removed });
   },
 );
 

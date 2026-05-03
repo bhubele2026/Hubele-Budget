@@ -7,11 +7,30 @@ import {
 } from "plaid";
 import type { Transaction as PlaidTxn, RemovedTransaction } from "plaid";
 
-const env = (process.env.PLAID_ENV ?? "sandbox").toLowerCase();
+export const PLAID_VALID_ENVS = ["sandbox", "development", "production"] as const;
+export type PlaidEnv = (typeof PLAID_VALID_ENVS)[number];
 
-const basePath =
-  PlaidEnvironments[env as keyof typeof PlaidEnvironments] ??
-  PlaidEnvironments.sandbox;
+export function getPlaidEnv(): PlaidEnv {
+  const raw = process.env.PLAID_ENV;
+  if (!raw) {
+    throw new Error(
+      "PLAID_ENV is required. Set it to one of: sandbox, development, production.",
+    );
+  }
+  const env = raw.toLowerCase() as PlaidEnv;
+  if (!(PLAID_VALID_ENVS as readonly string[]).includes(env)) {
+    throw new Error(
+      `PLAID_ENV="${raw}" is invalid. Must be one of: ${PLAID_VALID_ENVS.join(", ")}.`,
+    );
+  }
+  return env;
+}
+
+export function isPlaidConfigured(): boolean {
+  return Boolean(
+    process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET && process.env.PLAID_ENV,
+  );
+}
 
 let _client: PlaidApi | null = null;
 
@@ -24,6 +43,8 @@ export function plaid(): PlaidApi {
       "Plaid is not configured. Set PLAID_CLIENT_ID and PLAID_SECRET (and PLAID_ENV) in Secrets.",
     );
   }
+  const env = getPlaidEnv();
+  const basePath = PlaidEnvironments[env];
   const config = new Configuration({
     basePath,
     baseOptions: {

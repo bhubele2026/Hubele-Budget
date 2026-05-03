@@ -29,6 +29,7 @@ import type {
   CashSignal,
   Category,
   CategoryInput,
+  CleanupNonProdPlaidItems200,
   CloseForecastMonthBody,
   CreateTransactionInput,
   DashboardBudget,
@@ -60,6 +61,7 @@ import type {
   PinBudgetLineInput,
   PinBudgetMonthInput,
   PinResult,
+  PlaidEnvironmentInfo,
   PlaidExchangeInput,
   PlaidItemDetail,
   PlaidLiabilityAccount,
@@ -4442,6 +4444,152 @@ export const useSyncPlaidTransactions = <
   TContext
 > => {
   return useMutation(getSyncPlaidTransactionsMutationOptions(options));
+};
+
+export const getGetPlaidEnvironmentUrl = () => {
+  return `/api/plaid/environment`;
+};
+
+export const getPlaidEnvironment = async (
+  options?: RequestInit,
+): Promise<PlaidEnvironmentInfo> => {
+  return customFetch<PlaidEnvironmentInfo>(getGetPlaidEnvironmentUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPlaidEnvironmentQueryKey = () => {
+  return [`/api/plaid/environment`] as const;
+};
+
+export const getGetPlaidEnvironmentQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPlaidEnvironment>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPlaidEnvironment>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPlaidEnvironmentQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPlaidEnvironment>>
+  > = ({ signal }) => getPlaidEnvironment({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPlaidEnvironment>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPlaidEnvironmentQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPlaidEnvironment>>
+>;
+export type GetPlaidEnvironmentQueryError = ErrorType<unknown>;
+
+export function useGetPlaidEnvironment<
+  TData = Awaited<ReturnType<typeof getPlaidEnvironment>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPlaidEnvironment>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPlaidEnvironmentQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getCleanupNonProdPlaidItemsUrl = () => {
+  return `/api/plaid/cleanup-non-prod`;
+};
+
+export const cleanupNonProdPlaidItems = async (
+  options?: RequestInit,
+): Promise<CleanupNonProdPlaidItems200> => {
+  return customFetch<CleanupNonProdPlaidItems200>(
+    getCleanupNonProdPlaidItemsUrl(),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getCleanupNonProdPlaidItemsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cleanupNonProdPlaidItems>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cleanupNonProdPlaidItems>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["cleanupNonProdPlaidItems"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cleanupNonProdPlaidItems>>,
+    void
+  > = () => {
+    return cleanupNonProdPlaidItems(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CleanupNonProdPlaidItemsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cleanupNonProdPlaidItems>>
+>;
+
+export type CleanupNonProdPlaidItemsMutationError = ErrorType<unknown>;
+
+export const useCleanupNonProdPlaidItems = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cleanupNonProdPlaidItems>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cleanupNonProdPlaidItems>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getCleanupNonProdPlaidItemsMutationOptions(options));
 };
 
 export const getGetBillsSummaryUrl = () => {

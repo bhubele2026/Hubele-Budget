@@ -886,6 +886,31 @@ export type PlaidSyncResultItemsItem = {
 export interface PlaidSyncResult {
     items: PlaidSyncResultItemsItem[];
 }
+/**
+ * @nullable
+ */
+export type PlaidEnvironmentInfoEnv = (typeof PlaidEnvironmentInfoEnv)[keyof typeof PlaidEnvironmentInfoEnv] | null;
+export declare const PlaidEnvironmentInfoEnv: {
+    readonly sandbox: "sandbox";
+    readonly development: "development";
+    readonly production: "production";
+};
+export type PlaidEnvironmentInfoNonProdItemsItem = {
+    id: string;
+    /** @nullable */
+    institutionName?: string | null;
+    /** @nullable */
+    env: string | null;
+};
+export interface PlaidEnvironmentInfo {
+    /** @nullable */
+    env: PlaidEnvironmentInfoEnv;
+    configured: boolean;
+    /** @nullable */
+    configError?: string | null;
+    nonProdItemCount: number;
+    nonProdItems: PlaidEnvironmentInfoNonProdItemsItem[];
+}
 export type ListTransactionsParams = {
     from?: string;
     to?: string;
@@ -929,6 +954,9 @@ export type ListDashboardBudgetsParams = {
 export type DeleteDashboardBudgetParams = {
     bucket: string;
     periodKey: string;
+};
+export type CleanupNonProdPlaidItems200 = {
+    removed: number;
 };
 export type ImportWorkbookBody = {
     file: Blob;

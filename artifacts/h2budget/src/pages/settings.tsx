@@ -8,6 +8,9 @@ import {
   useListPlaidItems,
   useDeletePlaidItem,
   useSyncPlaidTransactions,
+  useGetPlaidEnvironment,
+  useCleanupNonProdPlaidItems,
+  getGetPlaidEnvironmentQueryKey,
   useListCategories,
   getListPlaidItemsQueryKey,
   getListTransactionsQueryKey,
@@ -55,6 +58,8 @@ export default function SettingsPage() {
   const { data: plaidItems } = useListPlaidItems();
   const deletePlaidItem = useDeletePlaidItem();
   const syncPlaid = useSyncPlaidTransactions();
+  const { data: plaidEnv } = useGetPlaidEnvironment();
+  const cleanupNonProd = useCleanupNonProdPlaidItems();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -294,11 +299,99 @@ export default function SettingsPage() {
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
-            <CardTitle>Linked Accounts</CardTitle>
-            <CardDescription>Connect your bank and credit card accounts via Plaid to auto-import transactions.</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              Linked Accounts
+              {plaidEnv?.env && (
+                <span
+                  className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                    plaidEnv.env === "production"
+                      ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
+                      : "border-amber-500/40 text-amber-700 dark:text-amber-400"
+                  }`}
+                  data-testid="badge-plaid-env"
+                  title={`Plaid is running in ${plaidEnv.env} mode`}
+                >
+                  Plaid: {plaidEnv.env}
+                </span>
+              )}
+            </CardTitle>
+            <CardDescription>
+              Connect your bank and credit card accounts via Plaid to auto-import transactions.
+              {plaidEnv && !plaidEnv.configured && (
+                <span className="block mt-1 text-destructive" data-testid="text-plaid-not-configured">
+                  Plaid is not configured. Set <code>PLAID_CLIENT_ID</code>,{" "}
+                  <code>PLAID_SECRET</code>, and <code>PLAID_ENV</code> in Secrets to
+                  enable bank linking.
+                </span>
+              )}
+              {plaidEnv?.configError && (
+                <span className="block mt-1 text-destructive">{plaidEnv.configError}</span>
+              )}
+            </CardDescription>
           </div>
           <PlaidLinkButton />
         </CardHeader>
+        {plaidEnv && plaidEnv.nonProdItemCount > 0 && (
+          <CardContent className="pt-0">
+            <div
+              className="rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm"
+              data-testid="banner-non-prod-cleanup"
+            >
+              <div className="font-medium">
+                {plaidEnv.nonProdItemCount} linked institution
+                {plaidEnv.nonProdItemCount === 1 ? "" : "s"} from a non-production
+                Plaid environment
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Their access tokens won't work against Plaid Production and will
+                fail to sync. Remove them so only real, Production-linked banks
+                remain.
+              </div>
+              <ul className="mt-2 text-xs list-disc list-inside text-muted-foreground">
+                {plaidEnv.nonProdItems.map((it) => (
+                  <li key={it.id}>
+                    {it.institutionName ?? "Unnamed institution"}{" "}
+                    <span className="uppercase tracking-wider">({it.env ?? "unknown"})</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-2">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={cleanupNonProd.isPending}
+                  onClick={() => {
+                    if (
+                      !confirm(
+                        `Permanently remove ${plaidEnv.nonProdItemCount} non-production Plaid link(s)? Imported transactions stay; new syncs from these institutions will stop.`,
+                      )
+                    )
+                      return;
+                    cleanupNonProd.mutate(undefined, {
+                      onSuccess: (res) => {
+                        queryClient.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
+                        queryClient.invalidateQueries({ queryKey: getGetPlaidEnvironmentQueryKey() });
+                        toast({
+                          title: "Cleanup complete",
+                          description: `Removed ${res.removed} non-production link(s).`,
+                        });
+                      },
+                      onError: (err) =>
+                        toast({
+                          title: "Cleanup failed",
+                          description: String(err),
+                          variant: "destructive",
+                        }),
+                    });
+                  }}
+                  data-testid="button-cleanup-non-prod"
+                >
+                  Remove non-production links
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        )}
         <CardContent className="space-y-3">
           {(plaidItems ?? []).length === 0 && (
             <p className="text-sm text-muted-foreground">

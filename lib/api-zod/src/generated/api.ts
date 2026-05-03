@@ -1326,6 +1326,31 @@ export const SyncPlaidTransactionsResponse = zod.object({
   ),
 });
 
+export const GetPlaidEnvironmentResponse = zod.object({
+  env: zod
+    .union([
+      zod.literal("sandbox"),
+      zod.literal("development"),
+      zod.literal("production"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  configured: zod.boolean(),
+  configError: zod.string().nullish(),
+  nonProdItemCount: zod.number(),
+  nonProdItems: zod.array(
+    zod.object({
+      id: zod.string(),
+      institutionName: zod.string().nullish(),
+      env: zod.string().nullable(),
+    }),
+  ),
+});
+
+export const CleanupNonProdPlaidItemsResponse = zod.object({
+  removed: zod.number(),
+});
+
 export const GetBillsSummaryResponse = zod.object({
   income: zod.array(
     zod.object({
