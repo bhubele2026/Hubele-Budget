@@ -837,6 +837,7 @@ components:
         anchorDate: { type: ["string", "null"] }
         active: { type: string }
         categoryId: { type: ["string", "null"] }
+        debtId: { type: ["string", "null"] }
     RecurringItemInput:
       type: object
       required: [name]
@@ -849,6 +850,7 @@ components:
         anchorDate: { type: ["string", "null"] }
         active: { type: string }
         categoryId: { type: ["string", "null"] }
+        debtId: { type: ["string", "null"] }
 
     Category:
       type: object

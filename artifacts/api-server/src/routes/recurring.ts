@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, eq, asc } from "drizzle-orm";
-import { db, recurringItemsTable } from "@workspace/db";
+import { db, recurringItemsTable, debtsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   CreateRecurringItemBody,
@@ -10,6 +10,15 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+async function userOwnsDebt(userId: string, debtId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: debtsTable.id })
+    .from(debtsTable)
+    .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)))
+    .limit(1);
+  return !!row;
+}
 
 router.get("/recurring-items", requireAuth, async (req, res): Promise<void> => {
   const rows = await db
@@ -24,6 +33,10 @@ router.post("/recurring-items", requireAuth, async (req, res): Promise<void> => 
   const parsed = CreateRecurringItemBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  if (parsed.data.debtId && !(await userOwnsDebt(req.userId!, parsed.data.debtId))) {
+    res.status(400).json({ error: "Invalid debtId" });
     return;
   }
   const [row] = await db
@@ -45,6 +58,10 @@ router.patch(
     const parsed = UpdateRecurringItemBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    if (parsed.data.debtId && !(await userOwnsDebt(req.userId!, parsed.data.debtId))) {
+      res.status(400).json({ error: "Invalid debtId" });
       return;
     }
     const [row] = await db

@@ -71,6 +71,7 @@ export const GetDashboardResponse = zod.object({
       anchorDate: zod.string().nullish(),
       active: zod.string(),
       categoryId: zod.string().nullish(),
+      debtId: zod.string().nullish(),
     }),
   ),
 });
@@ -355,6 +356,7 @@ export const ListRecurringItemsResponseItem = zod.object({
   anchorDate: zod.string().nullish(),
   active: zod.string(),
   categoryId: zod.string().nullish(),
+  debtId: zod.string().nullish(),
 });
 export const ListRecurringItemsResponse = zod.array(
   ListRecurringItemsResponseItem,
@@ -369,6 +371,7 @@ export const CreateRecurringItemBody = zod.object({
   anchorDate: zod.string().nullish(),
   active: zod.string().optional(),
   categoryId: zod.string().nullish(),
+  debtId: zod.string().nullish(),
 });
 
 export const UpdateRecurringItemParams = zod.object({
@@ -384,6 +387,7 @@ export const UpdateRecurringItemBody = zod.object({
   anchorDate: zod.string().nullish(),
   active: zod.string().optional(),
   categoryId: zod.string().nullish(),
+  debtId: zod.string().nullish(),
 });
 
 export const UpdateRecurringItemResponse = zod.object({
@@ -396,6 +400,7 @@ export const UpdateRecurringItemResponse = zod.object({
   anchorDate: zod.string().nullish(),
   active: zod.string(),
   categoryId: zod.string().nullish(),
+  debtId: zod.string().nullish(),
 });
 
 export const DeleteRecurringItemParams = zod.object({

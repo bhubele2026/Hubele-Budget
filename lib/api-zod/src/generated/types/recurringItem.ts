@@ -19,4 +19,6 @@ export interface RecurringItem {
   active: string;
   /** @nullable */
   categoryId?: string | null;
+  /** @nullable */
+  debtId?: string | null;
 }

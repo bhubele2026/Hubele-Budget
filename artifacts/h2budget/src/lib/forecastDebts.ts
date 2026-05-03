@@ -14,6 +14,7 @@ export type RecurringLite = {
   amount: string | number;
   kind: string;
   active: string | boolean;
+  debtId?: string | null;
 };
 
 export type PayoffInfo = {
@@ -59,9 +60,19 @@ export function linkRecurringToDebts(
   }));
 
   const matchedDebtIds = new Set<string>();
+  const activeDebtIds = new Set(activeDebts.map((d) => d.id));
+
+  // Pass 0: explicit debtId on the recurring item wins.
+  for (const r of activeRecur) {
+    if (r.debtId && activeDebtIds.has(r.debtId)) {
+      out.set(r.id, r.debtId);
+      matchedDebtIds.add(r.debtId);
+    }
+  }
 
   // Pass 1: name match
   for (const r of activeRecur) {
+    if (out.has(r.id)) continue;
     const rn = normalize(r.name);
     if (rn.length < 3) continue;
     let best: (typeof debtNorms)[number] | null = null;

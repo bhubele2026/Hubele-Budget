@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListRecurringItems, useCreateRecurringItem, useUpdateRecurringItem, useDeleteRecurringItem, getListRecurringItemsQueryKey } from "@workspace/api-client-react";
+import { useListRecurringItems, useCreateRecurringItem, useUpdateRecurringItem, useDeleteRecurringItem, getListRecurringItemsQueryKey, useListDebts } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,18 +16,22 @@ import { Plus, Edit2, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { RecurringItem } from "@workspace/api-client-react";
 
+const NO_DEBT = "__none__";
+
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   kind: z.string().min(1, "Kind is required"),
   amount: z.string().min(1, "Amount is required"),
   frequency: z.string().min(1, "Frequency is required"),
   active: z.string().min(1, "Status is required"),
+  debtId: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 export default function RecurringPage() {
   const { data: items, isLoading } = useListRecurringItems();
+  const { data: debts } = useListDebts();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   
@@ -46,6 +50,7 @@ export default function RecurringPage() {
       amount: "",
       frequency: "monthly",
       active: "true",
+      debtId: NO_DEBT,
     },
   });
 
@@ -57,6 +62,7 @@ export default function RecurringPage() {
       amount: "",
       frequency: "monthly",
       active: "true",
+      debtId: NO_DEBT,
     });
     setIsDialogOpen(true);
   };
@@ -69,13 +75,18 @@ export default function RecurringPage() {
       amount: item.amount,
       frequency: item.frequency,
       active: item.active,
+      debtId: item.debtId ?? NO_DEBT,
     });
     setIsDialogOpen(true);
   };
 
   const onSubmit = (values: FormValues) => {
+    const payload = {
+      ...values,
+      debtId: values.debtId && values.debtId !== NO_DEBT ? values.debtId : null,
+    };
     if (editingItem) {
-      updateItem.mutate({ id: editingItem.id, data: values }, {
+      updateItem.mutate({ id: editingItem.id, data: payload }, {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListRecurringItemsQueryKey() });
           setIsDialogOpen(false);
@@ -83,7 +94,7 @@ export default function RecurringPage() {
         }
       });
     } else {
-      createItem.mutate({ data: values }, {
+      createItem.mutate({ data: payload }, {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListRecurringItemsQueryKey() });
           setIsDialogOpen(false);
@@ -148,7 +159,33 @@ export default function RecurringPage() {
               <FormField control={form.control} name="active" render={({ field }) => (
                 <FormItem><FormLabel>Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl><SelectContent><SelectItem value="true">Active</SelectItem><SelectItem value="false">Inactive</SelectItem></SelectContent></Select><FormMessage /></FormItem>
               )} />
-              
+              <FormField control={form.control} name="debtId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Linked debt</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || NO_DEBT}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="select-linked-debt">
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NO_DEBT}>None</SelectItem>
+                      {(debts ?? [])
+                        .filter((d) => (d.status ?? "active") === "active")
+                        .map((d) => (
+                          <SelectItem key={d.id} value={d.id}>
+                            {d.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
               <div className="flex justify-end pt-4">
                 <Button type="submit" disabled={createItem.isPending || updateItem.isPending}>Save</Button>
               </div>
@@ -165,11 +202,16 @@ export default function RecurringPage() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y divide-border">
-                {kindItems.map((item) => (
+                {kindItems.map((item) => {
+                  const linkedDebt = item.debtId ? debts?.find((d) => d.id === item.debtId) : null;
+                  return (
                   <div key={item.id} className="p-4 flex items-center justify-between hover:bg-muted/50">
                     <div>
                       <p className="font-medium text-foreground">{item.name}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{item.frequency} • {item.active === "true" ? "Active" : "Inactive"}</p>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {item.frequency} • {item.active === "true" ? "Active" : "Inactive"}
+                        {linkedDebt ? <span className="ml-1 normal-case">• Linked to {linkedDebt.name}</span> : null}
+                      </p>
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="font-medium">{formatCurrency(item.amount)}</span>
@@ -179,7 +221,8 @@ export default function RecurringPage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>

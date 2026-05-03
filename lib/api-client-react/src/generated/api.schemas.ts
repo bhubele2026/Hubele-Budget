@@ -314,6 +314,8 @@ export interface RecurringItem {
   active: string;
   /** @nullable */
   categoryId?: string | null;
+  /** @nullable */
+  debtId?: string | null;
 }
 
 export interface RecurringItemInput {
@@ -328,6 +330,8 @@ export interface RecurringItemInput {
   active?: string;
   /** @nullable */
   categoryId?: string | null;
+  /** @nullable */
+  debtId?: string | null;
 }
 
 export interface Category {

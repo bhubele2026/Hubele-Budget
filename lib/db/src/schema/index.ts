@@ -114,6 +114,7 @@ export const recurringItemsTable = pgTable(
     anchorDate: date("anchor_date"),
     active: text("active").notNull().default("true"),
     categoryId: uuid("category_id"),
+    debtId: uuid("debt_id").references(() => debtsTable.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({

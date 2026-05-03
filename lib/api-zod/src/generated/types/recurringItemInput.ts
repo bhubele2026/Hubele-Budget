@@ -18,4 +18,6 @@ export interface RecurringItemInput {
   active?: string;
   /** @nullable */
   categoryId?: string | null;
+  /** @nullable */
+  debtId?: string | null;
 }
