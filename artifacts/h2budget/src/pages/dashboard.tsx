@@ -27,14 +27,15 @@ import { DashboardKillOrder } from "@/components/dashboard-kill-order";
 import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
 
 import { SUB_BUCKETS, type SubBucket, useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
+import {
+  computeViewMonth,
+  isAtFloor as isViewMonthAtFloor,
+  monthLabelFor,
+} from "@/lib/dashboardMonthCycler";
 
 function fmtISO(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-
-// Earliest month the dashboard month-cycler is allowed to navigate back to.
-const FLOOR_YEAR = 2026;
-const FLOOR_MONTH_INDEX = 3; // April (0-indexed)
 
 function expenseAmount(t: Transaction): number {
   const a = Number(t.amount) || 0;
@@ -1113,19 +1114,79 @@ function MonthlySnapshot({
   );
 }
 
-export default function DashboardPage() {
-  const today = useMemo(() => new Date(), []);
+export function DashboardMonthlyBuckets({
+  today,
+  transactions,
+}: {
+  today: Date;
+  transactions: Transaction[];
+}) {
   const [monthOffset, setMonthOffset] = useState(0);
   const viewMonth = useMemo(
-    () => new Date(today.getFullYear(), today.getMonth() + monthOffset, 1),
+    () => computeViewMonth(today, monthOffset),
     [today, monthOffset],
   );
-  const isAtFloor =
-    viewMonth.getFullYear() === FLOOR_YEAR &&
-    viewMonth.getMonth() === FLOOR_MONTH_INDEX;
-  const monthLabel = viewMonth
-    .toLocaleDateString("en-US", { month: "long", year: "numeric" })
-    .toUpperCase();
+  const isAtFloor = isViewMonthAtFloor(viewMonth);
+  const monthLabel = monthLabelFor(viewMonth);
+
+  return (
+    <>
+      <div
+        className="flex items-center justify-end gap-2"
+        data-testid="dashboard-month-cycler"
+      >
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 rounded-full"
+          onClick={() => setMonthOffset((m) => m - 1)}
+          disabled={isAtFloor}
+          data-testid="button-month-prev"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span
+          className="text-xs uppercase tracking-widest text-muted-foreground min-w-[140px] text-center"
+          data-testid="text-month-label"
+        >
+          {monthLabel}
+        </span>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 rounded-full"
+          onClick={() => setMonthOffset((m) => m + 1)}
+          data-testid="button-month-next"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <WeeklyMonthlySection
+        transactions={transactions}
+        viewMonth={viewMonth}
+        today={today}
+      />
+      <MonthlyLikeSection
+        title="Monthly spending"
+        bucket="monthly"
+        transactions={transactions}
+        viewMonth={viewMonth}
+        today={today}
+      />
+      <MonthlyLikeSection
+        title="Unplanned spending"
+        bucket="unplanned"
+        transactions={transactions}
+        viewMonth={viewMonth}
+        today={today}
+      />
+    </>
+  );
+}
+
+export default function DashboardPage() {
+  const today = useMemo(() => new Date(), []);
   // Pull 12 months back so prev-month navigation in monthly sections has data.
   const monthlyFromISO = useMemo(() => {
     const start = new Date(today.getFullYear(), today.getMonth() - 12, 1);
@@ -1161,52 +1222,9 @@ export default function DashboardPage() {
         activeDebtCount={data.activeDebtCount}
       />
 
-      <div className="flex items-center justify-end gap-2" data-testid="dashboard-month-cycler">
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 rounded-full"
-          onClick={() => setMonthOffset((m) => m - 1)}
-          disabled={isAtFloor}
-          data-testid="button-month-prev"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span
-          className="text-xs uppercase tracking-widest text-muted-foreground min-w-[140px] text-center"
-          data-testid="text-month-label"
-        >
-          {monthLabel}
-        </span>
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 rounded-full"
-          onClick={() => setMonthOffset((m) => m + 1)}
-          data-testid="button-month-next"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <WeeklyMonthlySection
-        transactions={monthlyTagged}
-        viewMonth={viewMonth}
+      <DashboardMonthlyBuckets
         today={today}
-      />
-      <MonthlyLikeSection
-        title="Monthly spending"
-        bucket="monthly"
         transactions={monthlyTagged}
-        viewMonth={viewMonth}
-        today={today}
-      />
-      <MonthlyLikeSection
-        title="Unplanned spending"
-        bucket="unplanned"
-        transactions={monthlyTagged}
-        viewMonth={viewMonth}
-        today={today}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
