@@ -9,6 +9,10 @@ import {
   useUpdateForecastSettings,
   useUpdateTransaction,
   useListCategories,
+  useListDebts,
+  useListRecurringItems,
+  useGetAvalancheSettings,
+  useGetAvalancheExtra,
   getGetForecastQueryKey,
   getListTransactionsQueryKey,
 } from "@workspace/api-client-react";
@@ -65,6 +69,16 @@ import {
 } from "@/lib/forecastMatch";
 import type { CashEvent } from "@/lib/forecast";
 import {
+  linkRecurringToDebts,
+  computePayoffsByDebt,
+  filterEventsByPayoff,
+  payoffByRecurringItem,
+  type PayoffInfo,
+  type DebtLite,
+  type RecurringLite,
+} from "@/lib/forecastDebts";
+import { simulate, fmtMonth, type SimDebt, type Strategy } from "@/lib/avalanche";
+import {
   Lock,
   Unlock,
   Settings as SettingsIcon,
@@ -72,7 +86,14 @@ import {
   GripVertical,
   PartyPopper,
   Inbox as InboxIcon,
+  Flame,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 function statusBadge(s: string) {
   const map: Record<string, { label: string; cls: string }> = {
@@ -239,10 +260,12 @@ function PlanDropRow({
   row,
   onSelect,
   activeDragId,
+  payoff,
 }: {
   row: PlanLine;
   onSelect: (row: PlanLine) => void;
   activeDragId: string | null;
+  payoff?: PayoffInfo;
 }) {
   const droppable = useDroppable({
     id: `plan:${row.itemId}|${row.date}`,
@@ -268,7 +291,27 @@ function PlanDropRow({
           Plan
         </Badge>
         <div className="min-w-0">
-          <div className="font-medium text-sm truncate">{row.label}</div>
+          <div className="font-medium text-sm truncate flex items-center gap-2">
+            <span className="truncate">{row.label}</span>
+            {payoff && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge
+                      variant="outline"
+                      className="bg-orange-50 text-orange-900 border-orange-200 dark:bg-orange-950/30 dark:text-orange-200 dark:border-orange-900 text-[10px] gap-1 px-1.5 py-0"
+                    >
+                      <Flame className="h-3 w-3" />
+                      ends {fmtMonth(payoff.payoffDate)}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Avalanche projects {payoff.debtName} paid off in {fmtMonth(payoff.payoffDate)}.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           <div className="text-xs text-muted-foreground">
             {formatDate(row.date)}
           </div>
@@ -291,6 +334,10 @@ function PlanDropRow({
 export default function ForecastPage() {
   const { data, isLoading } = useGetForecast();
   const { data: categories } = useListCategories();
+  const { data: debts } = useListDebts();
+  const { data: recurringItems } = useListRecurringItems();
+  const { data: avaSettings } = useGetAvalancheSettings();
+  const { data: resolvedExtra } = useGetAvalancheExtra();
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -325,9 +372,44 @@ export default function ForecastPage() {
     return m;
   }, [categories]);
 
+  const strategy: Strategy = (avaSettings?.strategy as Strategy) ?? "avalanche";
+  const extraPerMonth = useMemo(() => {
+    const r = Number(resolvedExtra?.amount);
+    if (Number.isFinite(r)) return r;
+    return Number(avaSettings?.manualExtra ?? 0) || 0;
+  }, [resolvedExtra?.amount, avaSettings?.manualExtra]);
+
+  const sim = useMemo(() => {
+    const simDebts: SimDebt[] = (debts ?? []).map((d) => ({
+      id: d.id,
+      name: d.name,
+      apr: Number(d.apr),
+      balance: Number(d.balance),
+      minPayment: Number(d.minPayment),
+      status: d.status,
+    }));
+    return simulate({ debts: simDebts, extraPerMonth, strategy });
+  }, [debts, extraPerMonth, strategy]);
+
+  const debtLinks = useMemo(
+    () =>
+      linkRecurringToDebts(
+        (debts ?? []) as DebtLite[],
+        (recurringItems ?? []) as RecurringLite[],
+      ),
+    [debts, recurringItems],
+  );
+
+  const payoffsByDebt = useMemo(() => computePayoffsByDebt(sim), [sim]);
+  const payoffsByItem = useMemo(
+    () => payoffByRecurringItem(debtLinks, payoffsByDebt),
+    [debtLinks, payoffsByDebt],
+  );
+
   const register = useMemo(() => {
     if (!data) return null;
-    const events = (data.events ?? []) as CashEvent[];
+    const rawEvents = (data.events ?? []) as CashEvent[];
+    const events = filterEventsByPayoff(rawEvents, debtLinks, payoffsByDebt);
     const txns = ((data.transactions ?? []) as unknown as MatchTxn[]).filter(
       (t) => t.forecastFlag,
     );
@@ -342,7 +424,7 @@ export default function ForecastPage() {
       toISO: data.toDate,
       today,
     });
-  }, [data, closedMonths, today]);
+  }, [data, closedMonths, today, debtLinks, payoffsByDebt]);
 
   const bucket = useMemo(() => {
     if (!register || !data) return [];
@@ -743,6 +825,7 @@ export default function ForecastPage() {
                       row={row}
                       onSelect={onSelectPlan}
                       activeDragId={activeDragId}
+                      payoff={payoffsByItem.get(row.itemId)}
                     />
                   ))}
                 </div>
