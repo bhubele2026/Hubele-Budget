@@ -251,12 +251,14 @@ export declare const ListTransactionsQueryParams: zod.ZodObject<{
     source: zod.ZodOptional<zod.ZodString>;
     uncategorized: zod.ZodOptional<zod.ZodBoolean>;
     excludeTransfers: zod.ZodOptional<zod.ZodBoolean>;
+    reimbursable: zod.ZodOptional<zod.ZodBoolean>;
     search: zod.ZodOptional<zod.ZodString>;
     minAmount: zod.ZodOptional<zod.ZodString>;
     maxAmount: zod.ZodOptional<zod.ZodString>;
     categoryId: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     categoryId?: string | undefined;
+    reimbursable?: boolean | undefined;
     source?: string | undefined;
     from?: string | undefined;
     to?: string | undefined;
@@ -268,6 +270,7 @@ export declare const ListTransactionsQueryParams: zod.ZodObject<{
     maxAmount?: string | undefined;
 }, {
     categoryId?: string | undefined;
+    reimbursable?: boolean | undefined;
     source?: string | undefined;
     from?: string | undefined;
     to?: string | undefined;

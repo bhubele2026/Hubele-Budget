@@ -67,6 +67,9 @@ paths:
           name: excludeTransfers
           schema: { type: boolean }
         - in: query
+          name: reimbursable
+          schema: { type: boolean }
+        - in: query
           name: search
           schema: { type: string }
         - in: query

@@ -36,6 +36,9 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   if (q.data.excludeTransfers === true) {
     conds.push(eq(transactionsTable.isTransfer, false));
   }
+  if (typeof q.data.reimbursable === "boolean") {
+    conds.push(eq(transactionsTable.reimbursable, q.data.reimbursable));
+  }
   if (q.data.categoryId) {
     conds.push(eq(transactionsTable.categoryId, q.data.categoryId));
   }
