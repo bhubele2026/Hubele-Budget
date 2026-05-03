@@ -18,6 +18,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -447,6 +448,9 @@ function ReimbursementsBox({
   const [justReimbursedIds, setJustReimbursedIds] = useState<Set<string>>(
     new Set(),
   );
+  const [pendingScope, setPendingScope] = useState<"month" | "older" | "all">(
+    "all",
+  );
 
   const monthStartISO = useMemo(
     () => fmtISO(new Date(today.getFullYear(), today.getMonth(), 1)),
@@ -479,9 +483,24 @@ function ReimbursementsBox({
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [reimbursable]);
 
+  const filteredPending = useMemo(() => {
+    if (pendingScope === "all") return pending;
+    if (pendingScope === "month") {
+      return pending.filter(
+        (t) => t.occurredOn >= monthStartISO && t.occurredOn <= monthEndISO,
+      );
+    }
+    return pending.filter((t) => t.occurredOn < monthStartISO);
+  }, [pending, pendingScope, monthStartISO, monthEndISO]);
+
+  const filteredPendingTotal = useMemo(
+    () => filteredPending.reduce((s, t) => s + expenseAmount(t), 0),
+    [filteredPending],
+  );
+
   const pendingByPayer = useMemo(() => {
     const map = new Map<string, { total: number; count: number }>();
-    for (const t of pending) {
+    for (const t of filteredPending) {
       const key = (t.owedBy ?? "").trim() || "Unassigned";
       const cur = map.get(key) ?? { total: 0, count: 0 };
       cur.total += expenseAmount(t);
@@ -491,7 +510,7 @@ function ReimbursementsBox({
     return Array.from(map.entries())
       .map(([payer, v]) => ({ payer, ...v }))
       .sort((a, b) => b.total - a.total);
-  }, [pending]);
+  }, [filteredPending]);
 
   const reimbursedThisMonth = useMemo(
     () =>
@@ -748,11 +767,34 @@ function ReimbursementsBox({
         ) : (
           <div className="space-y-2">
             <div className="text-3xl font-serif font-bold tabular-nums text-foreground">
-              {formatCurrency(pendingTotal)}{" "}
+              {formatCurrency(filteredPendingTotal)}{" "}
               <span className="text-sm font-sans font-normal text-muted-foreground">
-                pending · {pending.length} item{pending.length === 1 ? "" : "s"}
+                pending · {filteredPending.length} item
+                {filteredPending.length === 1 ? "" : "s"}
               </span>
             </div>
+            <ToggleGroup
+              type="single"
+              size="sm"
+              value={pendingScope}
+              onValueChange={(v) => {
+                if (v === "month" || v === "older" || v === "all") {
+                  setPendingScope(v);
+                }
+              }}
+              className="justify-start gap-1"
+              aria-label="Filter pending reimbursements by date"
+            >
+              <ToggleGroupItem value="month" className="h-7 px-2 text-xs">
+                This month
+              </ToggleGroupItem>
+              <ToggleGroupItem value="older" className="h-7 px-2 text-xs">
+                Older
+              </ToggleGroupItem>
+              <ToggleGroupItem value="all" className="h-7 px-2 text-xs">
+                All
+              </ToggleGroupItem>
+            </ToggleGroup>
             {pendingByPayer.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {pendingByPayer.map(({ payer, total, count }) => (
@@ -788,7 +830,8 @@ function ReimbursementsBox({
       <CardContent className="space-y-5">
         <div>
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-            Pending ({pending.length})
+            Pending ({filteredPending.length}
+            {pendingScope !== "all" ? ` of ${pending.length}` : ""})
           </div>
           {isLoading ? (
             <div className="space-y-2">
@@ -800,9 +843,15 @@ function ReimbursementsBox({
             <p className="text-sm text-muted-foreground text-center py-6">
               All caught up — nothing waiting to be reimbursed.
             </p>
+          ) : filteredPending.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">
+              {pendingScope === "month"
+                ? "No pending items from this month."
+                : "No older pending items."}
+            </p>
           ) : (
             <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
-              {pending.map((t) => renderRow(t, false))}
+              {filteredPending.map((t) => renderRow(t, false))}
             </div>
           )}
         </div>
