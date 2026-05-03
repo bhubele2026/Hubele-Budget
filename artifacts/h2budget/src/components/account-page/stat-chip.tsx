@@ -1,5 +1,11 @@
 import { AlertTriangle } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export function StatChip({
   label,
@@ -8,6 +14,8 @@ export function StatChip({
   valueClassName,
   signed,
   testId,
+  footer,
+  tooltip,
 }: {
   label: string;
   value: number;
@@ -15,10 +23,12 @@ export function StatChip({
   valueClassName?: string;
   signed?: boolean;
   testId?: string;
+  footer?: string;
+  tooltip?: string;
 }) {
   const display =
     signed && value > 0 ? `+${formatCurrency(value)}` : formatCurrency(value);
-  return (
+  const body = (
     <div
       className={cn("rounded-md border px-3 py-2", accent ?? "bg-card")}
       data-testid={testId}
@@ -34,7 +44,31 @@ export function StatChip({
       >
         {display}
       </div>
+      {footer ? (
+        <div
+          className="text-[10px] leading-tight mt-0.5 opacity-80"
+          data-testid={testId ? `${testId}-footer` : undefined}
+        >
+          {footer}
+        </div>
+      ) : null}
     </div>
+  );
+  if (!tooltip) return body;
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="cursor-help">{body}</div>
+        </TooltipTrigger>
+        <TooltipContent
+          side="bottom"
+          className="max-w-[260px] whitespace-pre-line"
+        >
+          {tooltip}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 

@@ -276,9 +276,11 @@ export default function AmexPage() {
     // anchor resolution.
     let anchor: number | null = null;
     let resolvedSource: "debt" | "anchor" | "computed" = "debt";
+    let asOf: string | null = null;
     if (amexDebt) {
       anchor = parseSigned(amexDebt.balance);
       resolvedSource = "debt";
+      asOf = amexDebt.lastBalanceUpdate ?? amexDebt.plaidLastSyncedAt ?? null;
     } else if (
       amexAnchorResp &&
       amexAnchorResp.amexEndingBalance !== null &&
@@ -287,16 +289,18 @@ export default function AmexPage() {
       anchor = amexAnchorResp.amexEndingBalance;
       resolvedSource =
         amexAnchorResp.source === "debt" ? "anchor" : amexAnchorResp.source;
+      asOf = amexAnchorResp.asOf ?? null;
     }
     if (anchor === null) {
       const loading = amexAnchorLoading || amexAnchorResp === undefined;
       return {
         value: null as number | null,
         source: (loading ? "loading" : "missing") as "loading" | "missing",
+        asOf: null as string | null,
       };
     }
     const cmp = compareMonth(selectedMonth, currentMonth);
-    if (cmp === 0) return { value: anchor, source: resolvedSource };
+    if (cmp === 0) return { value: anchor, source: resolvedSource, asOf };
     let bal = anchor;
     if (cmp < 0) {
       // Past month: undo every month after selectedMonth, up to and
@@ -318,8 +322,43 @@ export default function AmexPage() {
         cursor = shiftMonth(cursor, 1);
       }
     }
-    return { value: bal, source: resolvedSource };
+    return { value: bal, source: resolvedSource, asOf };
   }, [amexDebt, amexAnchorResp, amexAnchorLoading, netChangeByMonth, selectedMonth, currentMonth]);
+
+  const endingBalanceMeta = useMemo(() => {
+    if (
+      endingBalance.source !== "debt" &&
+      endingBalance.source !== "anchor" &&
+      endingBalance.source !== "computed"
+    ) {
+      return null;
+    }
+    const sourceLabel =
+      endingBalance.source === "debt"
+        ? "From debt row"
+        : endingBalance.source === "anchor"
+          ? "From saved anchor"
+          : "Computed from transactions";
+    let asOfLabel: string | null = null;
+    if (endingBalance.asOf) {
+      const d = new Date(endingBalance.asOf);
+      if (!Number.isNaN(d.getTime())) {
+        asOfLabel = d.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+      }
+    }
+    const footer = asOfLabel
+      ? `${sourceLabel} · as of ${asOfLabel}`
+      : sourceLabel;
+    const tooltip =
+      endingBalance.source === "computed"
+        ? `${footer}\nNo linked Amex debt or saved anchor — this is the running sum of imported transactions and may drift from the real card balance.`
+        : footer;
+    return { sourceLabel, asOfLabel, footer, tooltip };
+  }, [endingBalance]);
 
   // Trailing 12-month ending-balance series, anchored at the current
   // month's known Amex debt balance and rolled month-by-month using the
@@ -848,7 +887,13 @@ export default function AmexPage() {
             <StatChip
               label="Ending balance"
               value={endingBalance.value ?? 0}
-              accent="bg-blue-50 text-blue-900 border-blue-200"
+              accent={
+                endingBalance.source === "computed"
+                  ? "bg-amber-50 text-amber-900 border-amber-300"
+                  : "bg-blue-50 text-blue-900 border-blue-200"
+              }
+              footer={endingBalanceMeta?.footer}
+              tooltip={endingBalanceMeta?.tooltip}
               testId="stat-ending-balance"
             />
           )}
