@@ -12,6 +12,7 @@ import {
   monthlySnapshotsTable,
 } from "@workspace/db";
 import { categorize, type RuleRow } from "./autoCategorize";
+import { refreshAmexAnchor } from "./amexAnchor";
 
 type Row = (string | number | Date | null)[];
 
@@ -508,6 +509,13 @@ export async function importWorkbook(
 
     // Suppress unused-warning for debt mapping (used implicitly by future features)
     void debtByName;
+
+    // Auto-update the Amex anchor (debt.balance + settings.preferences.amexAnchor)
+    // to match the workbook we just imported. `adopt: true` because the
+    // debts table was wiped above, so any prior auto-vs-manual distinction
+    // no longer applies.
+    const anchor = await refreshAmexAnchor(userId, tx, { adopt: true });
+    counts.amex_anchor_updated = anchor.changed ? 1 : 0;
 
     return counts;
   });

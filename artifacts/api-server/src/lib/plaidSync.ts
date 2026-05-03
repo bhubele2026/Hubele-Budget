@@ -12,6 +12,7 @@ import {
 import { plaid, institutionSlug, type PlaidTxn } from "./plaid";
 import { loadUserRules, categorize } from "./autoCategorize";
 import { expandItem, parseISO, addDays, fmtISO } from "./cashSignal";
+import { refreshAmexAnchor } from "./amexAnchor";
 
 export type SyncResult = {
   itemId: string;
@@ -320,6 +321,18 @@ export async function syncPlaidItem(
         lastSyncError: null,
       })
       .where(eq(plaidItemsTable.id, itemRowId));
+
+    // If this item is American Express, refresh the persisted Amex anchor so
+    // GET /amex/anchor's `asOf` timestamp advances and the linked debt's
+    // balance moves forward (unless the user has manually overridden it via
+    // the debts UI since the last auto-update).
+    if (slug === "amex") {
+      try {
+        await refreshAmexAnchor(userId, db, { adopt: false });
+      } catch {
+        // Anchor refresh is best-effort; never break the sync result.
+      }
+    }
 
     return {
       itemId: item.itemId,

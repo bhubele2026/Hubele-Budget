@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -7,6 +7,7 @@ import {
   settingsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
+import { AMEX_TXN_SOURCES } from "../lib/amexAnchor";
 
 const router: IRouter = Router();
 
@@ -32,7 +33,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     .where(
       and(
         eq(transactionsTable.userId, userId),
-        eq(transactionsTable.source, "amex"),
+        inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
         sql`${transactionsTable.plaidAccountId} is not null`,
       ),
     );
@@ -76,15 +77,11 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     debt = byName;
   }
 
-  if (debt) {
-    res.json({
-      amexEndingBalance: Number(debt.balance),
-      asOf: (debt.updatedAt ?? new Date()).toISOString(),
-      source: "debt" as const,
-    });
-    return;
-  }
-
+  // Always read the settings anchor (even when a debt row resolves) so we
+  // can advance the returned `asOf` to the most recent of the two
+  // timestamps. Without this, an auto-refresh that intentionally LEAVES the
+  // debt row alone (manual UI override wins) would never bump the anchor's
+  // `asOf` for clients hitting this endpoint, defeating the auto-update.
   const [settingsRow] = await db
     .select({ preferences: settingsTable.preferences })
     .from(settingsTable)
@@ -97,6 +94,20 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
           | { balance?: number | string; asOf?: string }
           | undefined)
       : undefined;
+
+  if (debt) {
+    const debtAsOf = (debt.updatedAt ?? new Date()).toISOString();
+    const anchorAsOf = anchor?.asOf ?? null;
+    const asOf =
+      anchorAsOf && anchorAsOf > debtAsOf ? anchorAsOf : debtAsOf;
+    res.json({
+      amexEndingBalance: Number(debt.balance),
+      asOf,
+      source: "debt" as const,
+    });
+    return;
+  }
+
   if (anchor && anchor.balance !== undefined && anchor.balance !== null) {
     const n = Number(anchor.balance);
     if (Number.isFinite(n)) {
@@ -119,7 +130,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     .where(
       and(
         eq(transactionsTable.userId, userId),
-        eq(transactionsTable.source, "amex"),
+        inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
       ),
     );
 

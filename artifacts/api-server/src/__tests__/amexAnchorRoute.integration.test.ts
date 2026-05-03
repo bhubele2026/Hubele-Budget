@@ -1,0 +1,123 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import { randomUUID } from "node:crypto";
+import { createServer, type Server } from "node:http";
+import express from "express";
+import { eq } from "drizzle-orm";
+
+const TEST_USER = `amex-route-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+
+vi.mock("../middlewares/requireAuth", () => ({
+  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+    req.userId = TEST_USER;
+    next();
+  },
+}));
+
+import {
+  db,
+  debtsTable,
+  transactionsTable,
+  settingsTable,
+} from "@workspace/db";
+import amexRouter from "../routes/amex";
+import { refreshAmexAnchor } from "../lib/amexAnchor";
+
+const app = express();
+app.use(express.json());
+app.use((req: { log?: unknown }, _res, next) => {
+  req.log = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} };
+  next();
+});
+app.use(amexRouter);
+
+let server: Server;
+let baseUrl: string;
+
+async function cleanup(): Promise<void> {
+  await db.delete(transactionsTable).where(eq(transactionsTable.userId, TEST_USER));
+  await db.delete(debtsTable).where(eq(debtsTable.userId, TEST_USER));
+  await db.delete(settingsTable).where(eq(settingsTable.userId, TEST_USER));
+}
+
+beforeAll(async () => {
+  await cleanup();
+  server = createServer(app);
+  await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
+  const addr = server.address();
+  if (!addr || typeof addr === "string") throw new Error("no addr");
+  baseUrl = `http://127.0.0.1:${addr.port}`;
+});
+
+afterAll(async () => {
+  await cleanup();
+  await new Promise<void>((res) => server.close(() => res()));
+});
+
+beforeEach(cleanup);
+
+describe("GET /amex/anchor", () => {
+  it("advances asOf via the settings anchor even when manual override keeps debt unchanged", async () => {
+    // Seed: one Amex txn + a linked debt row whose updatedAt is OLD.
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER,
+      occurredOn: "2026-04-01",
+      description: "Amex charge",
+      amount: "100.00",
+      source: "amex",
+    });
+    const oldDate = new Date("2025-01-01T00:00:00.000Z");
+    const [debt] = await db
+      .insert(debtsTable)
+      .values({
+        userId: TEST_USER,
+        name: "American Express",
+        balance: "100.00",
+        apr: "0.2849",
+        minPayment: "40",
+        payment: "40",
+        updatedAt: oldDate,
+      })
+      .returning({ id: debtsTable.id });
+
+    // First anchor refresh adopts (no prior anchor).
+    await refreshAmexAnchor(TEST_USER);
+    // Force the debt's updatedAt back to the old timestamp so we can
+    // observe the route picking the fresher settings anchor asOf.
+    await db
+      .update(debtsTable)
+      .set({ updatedAt: oldDate })
+      .where(eq(debtsTable.id, debt!.id));
+
+    // User manually edits the debt balance via the UI (this DOES bump
+    // updatedAt in the real PATCH route — simulate that by leaving it as
+    // the OLD date so we can isolate the asOf-advance behavior).
+    await db
+      .update(debtsTable)
+      .set({ balance: "777.77", updatedAt: oldDate })
+      .where(eq(debtsTable.id, debt!.id));
+
+    // A new Amex txn arrives and we re-refresh (manual override should win
+    // for debt.balance, but the settings anchor advances).
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER,
+      occurredOn: "2026-04-05",
+      description: "Amex charge 2",
+      amount: "25.00",
+      source: "amex",
+    });
+    await refreshAmexAnchor(TEST_USER, db, { adopt: false });
+
+    const res = await fetch(`${baseUrl}/amex/anchor`);
+    const body = (await res.json()) as {
+      amexEndingBalance: number;
+      asOf: string;
+      source: string;
+    };
+    expect(body.source).toBe("debt");
+    // Manual override balance still wins.
+    expect(body.amexEndingBalance).toBeCloseTo(777.77, 2);
+    // But asOf advanced past the stale debt.updatedAt because the
+    // settings anchor was just refreshed.
+    expect(new Date(body.asOf).getTime()).toBeGreaterThan(oldDate.getTime());
+  });
+});
