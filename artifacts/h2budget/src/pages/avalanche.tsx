@@ -153,7 +153,6 @@ export default function AvalanchePage() {
   const [showAllMonths, setShowAllMonths] = useState(false);
   const [whatIf, setWhatIf] = useState(0);
   const [paying, setPaying] = useState<Debt | null>(null);
-  const [activeTab, setActiveTab] = useState("debts");
   const [highlightedDebtId, setHighlightedDebtId] = useState<string | null>(null);
   const rowRefs = useRef<Map<string, HTMLTableRowElement | null>>(new Map());
   const [killedBanner, setKilledBanner] = useState<{ id: string; name: string } | null>(null);
@@ -163,6 +162,16 @@ export default function AvalanchePage() {
     const params = new URLSearchParams(search);
     return params.get("focus");
   }, [search]);
+  const initialTab = useMemo(() => {
+    const params = new URLSearchParams(search);
+    const t = params.get("tab");
+    if (t === "debts" || t === "projection" || t === "chart" || t === "archived") return t;
+    return "debts";
+  }, [search]);
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   useEffect(() => {
     if (!focusDebtId || isLoading) return;

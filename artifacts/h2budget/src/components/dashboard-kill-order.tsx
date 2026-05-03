@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import {
   useListDebts,
@@ -52,6 +52,16 @@ export function DashboardKillOrder() {
   const { data: settings, isLoading: settingsLoading } = useGetAvalancheSettings();
 
   const isLoading = debtsLoading || settingsLoading;
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const [highlight, setHighlight] = useState(false);
+
+  const scrollToKillOrder = () => {
+    const el = sectionRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    setHighlight(true);
+    window.setTimeout(() => setHighlight(false), 1600);
+  };
 
   const simDebts = useMemo<SimDebt[]>(
     () => (debts ?? []).map(debtToSim).filter((d) => (d.status ?? "active") === "active"),
@@ -84,19 +94,29 @@ export function DashboardKillOrder() {
 
   if (isLoading) {
     return (
-      <section>
+      <section
+        id="kill-order"
+        ref={sectionRef}
+        className={`scroll-mt-20 rounded-lg transition-shadow duration-700 ${
+          highlight ? "ring-2 ring-orange-400 ring-offset-2 ring-offset-background" : ""
+        }`}
+      >
         <div className="flex items-end justify-between mb-3 gap-4">
           <div>
-            <div className="text-xs font-semibold tracking-widest text-orange-600 dark:text-orange-400 uppercase">
+            <button
+              type="button"
+              onClick={scrollToKillOrder}
+              className="text-xs font-semibold tracking-widest text-orange-600 dark:text-orange-400 uppercase cursor-pointer hover:underline focus:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-orange-400 rounded-sm"
+            >
               Avalanche Plan · Kill Order
-            </div>
+            </button>
             <h2 className="text-lg font-serif font-semibold text-foreground">
               Your next 3 moves
             </h2>
           </div>
           <Link
-            href="/avalanche"
-            className="text-xs font-semibold tracking-widest text-orange-600 dark:text-orange-400 uppercase hover:underline"
+            href="/avalanche?tab=projection"
+            className="text-xs font-semibold tracking-widest text-orange-600 dark:text-orange-400 uppercase cursor-pointer hover:underline focus:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-orange-400 rounded-sm"
           >
             See full order →
           </Link>
@@ -113,19 +133,29 @@ export function DashboardKillOrder() {
   if (next3.length === 0) return null;
 
   return (
-    <section>
+    <section
+      id="kill-order"
+      ref={sectionRef}
+      className={`scroll-mt-20 rounded-lg transition-shadow duration-700 ${
+        highlight ? "ring-2 ring-orange-400 ring-offset-2 ring-offset-background" : ""
+      }`}
+    >
       <div className="flex items-end justify-between mb-3 gap-4">
         <div>
-          <div className="text-xs font-semibold tracking-widest text-orange-600 dark:text-orange-400 uppercase">
+          <button
+            type="button"
+            onClick={scrollToKillOrder}
+            className="text-xs font-semibold tracking-widest text-orange-600 dark:text-orange-400 uppercase cursor-pointer hover:underline focus:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-orange-400 rounded-sm"
+          >
             Avalanche Plan · Kill Order
-          </div>
+          </button>
           <h2 className="text-lg font-serif font-semibold text-foreground">
             Your next 3 moves
           </h2>
         </div>
         <Link
-          href="/avalanche"
-          className="text-xs font-semibold tracking-widest text-orange-600 dark:text-orange-400 uppercase hover:underline"
+          href="/avalanche?tab=projection"
+          className="text-xs font-semibold tracking-widest text-orange-600 dark:text-orange-400 uppercase cursor-pointer hover:underline focus:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-orange-400 rounded-sm"
         >
           See full order →
         </Link>
