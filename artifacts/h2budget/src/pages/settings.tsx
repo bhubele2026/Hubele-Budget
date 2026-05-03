@@ -218,7 +218,18 @@ export default function SettingsPage() {
     toast({ title: "Importing workbook..." });
     importWorkbook.mutate({ data: { file } }, {
       onSuccess: (res) => {
-        toast({ title: "Import complete", description: `Processed ${res.counts.transactions || 0} transactions.` });
+        {
+          const c = res.counts as Record<string, number>;
+          const parts = [`Processed ${c.transactions || 0} transactions.`];
+          const rulesKept = c.mapping_rules_preserved || 0;
+          const txKept = c.transactions_preserved || 0;
+          if (rulesKept || txKept) {
+            parts.push(
+              `Preserved ${rulesKept} of your mapping rule${rulesKept === 1 ? "" : "s"} and ${txKept} manual category edit${txKept === 1 ? "" : "s"}.`,
+            );
+          }
+          toast({ title: "Import complete", description: parts.join(" ") });
+        }
         e.target.value = ''; // reset input
       },
       onError: (err) => {

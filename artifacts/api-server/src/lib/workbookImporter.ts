@@ -107,6 +107,42 @@ export async function importWorkbook(
   const counts: Record<string, number> = {};
 
   return await db.transaction(async (tx) => {
+    // Snapshot data we want to merge BEFORE wiping, so user-edited mapping
+    // rules and manual transaction category overrides survive a re-import.
+    const priorCats = await tx
+      .select({ id: budgetCategoriesTable.id, name: budgetCategoriesTable.name })
+      .from(budgetCategoriesTable)
+      .where(eq(budgetCategoriesTable.userId, userId));
+    const priorCatNameById = new Map(priorCats.map((c) => [c.id, c.name]));
+
+    const priorRules = await tx
+      .select({
+        pattern: mappingRulesTable.pattern,
+        matchType: mappingRulesTable.matchType,
+        categoryId: mappingRulesTable.categoryId,
+        priority: mappingRulesTable.priority,
+      })
+      .from(mappingRulesTable)
+      .where(eq(mappingRulesTable.userId, userId));
+
+    const priorTx = await tx
+      .select({
+        occurredOn: transactionsTable.occurredOn,
+        description: transactionsTable.description,
+        amount: transactionsTable.amount,
+        source: transactionsTable.source,
+        categoryId: transactionsTable.categoryId,
+      })
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, userId));
+    const priorTxByKey = new Map<string, string | null>();
+    for (const t of priorTx) {
+      priorTxByKey.set(
+        `${t.occurredOn}|${t.description}|${t.amount}|${t.source}`,
+        t.categoryId,
+      );
+    }
+
     // Wipe existing user data so re-imports are deterministic
     await tx.delete(transactionsTable).where(eq(transactionsTable.userId, userId));
     await tx.delete(budgetLinesTable).where(eq(budgetLinesTable.userId, userId));
@@ -259,9 +295,51 @@ export async function importWorkbook(
         })
       : [];
     counts.mapping_rules = insertedRules.length;
+
+    // Merge user-edited mapping rules: keep any prior rule whose priority is
+    // higher than the workbook seed (0), or whose (pattern, matchType) the
+    // workbook does not redefine. categoryId is re-mapped by category name
+    // since wiping budget_categories assigned new ids.
+    const seedKeys = new Set(
+      mapValues.map((v) => `${v.pattern}|${v.matchType}`),
+    );
+    const SEED_PRIORITY = 0;
+    const preservedRuleRows = priorRules
+      .filter(
+        (r) =>
+          r.priority > SEED_PRIORITY ||
+          !seedKeys.has(`${r.pattern}|${r.matchType}`),
+      )
+      .map((r) => {
+        const oldName = r.categoryId
+          ? priorCatNameById.get(r.categoryId) ?? null
+          : null;
+        const remappedCat = oldName ? catByName.get(oldName) ?? null : null;
+        return {
+          userId,
+          pattern: r.pattern,
+          matchType: r.matchType,
+          categoryId: remappedCat,
+          priority: r.priority,
+        };
+      });
+    const insertedPreservedRules = preservedRuleRows.length
+      ? await tx
+          .insert(mappingRulesTable)
+          .values(preservedRuleRows)
+          .returning({
+            id: mappingRulesTable.id,
+            pattern: mappingRulesTable.pattern,
+            matchType: mappingRulesTable.matchType,
+            categoryId: mappingRulesTable.categoryId,
+            priority: mappingRulesTable.priority,
+          })
+      : [];
+    counts.mapping_rules_preserved = insertedPreservedRules.length;
+
     // Sort highest-priority first so categorize() picks the user's most
     // specific rules before generic ones.
-    const ruleRows: RuleRow[] = [...insertedRules].sort(
+    const ruleRows: RuleRow[] = [...insertedRules, ...insertedPreservedRules].sort(
       (a, b) => b.priority - a.priority,
     );
 
@@ -272,6 +350,7 @@ export async function importWorkbook(
     // user gets out-of-the-box categorization instead of an uncategorized row.
     const pay = sheet(wb, "Payments");
     const txValues: typeof transactionsTable.$inferInsert[] = [];
+    let preservedTxOverrides = 0;
     for (let i = 5; i < pay.length; i++) {
       const r = pay[i];
       if (!r || !r[1]) continue;
@@ -291,13 +370,31 @@ export async function importWorkbook(
       const auto = explicitCat
         ? { categoryId: explicitCat, isTransfer: false }
         : categorize({ description }, ruleRows);
+
+      // Preserve manual category overrides: if the prior transaction with
+      // the same (date, description, amount, source) had a categoryId that
+      // differs from what we'd auto-assign now, treat it as a user edit and
+      // keep their choice.
+      let finalCategoryId = auto.categoryId;
+      const priorCatId = priorTxByKey.get(`${date}|${description}|${signed}|amex`);
+      if (priorCatId !== undefined) {
+        const priorName = priorCatId
+          ? priorCatNameById.get(priorCatId) ?? null
+          : null;
+        const remappedPrior = priorName ? catByName.get(priorName) ?? null : null;
+        if ((remappedPrior ?? null) !== (auto.categoryId ?? null)) {
+          finalCategoryId = remappedPrior;
+          preservedTxOverrides++;
+        }
+      }
+
       txValues.push({
         userId,
         occurredOn: date,
         occurredAt,
         description,
         amount: signed,
-        categoryId: auto.categoryId,
+        categoryId: finalCategoryId,
         isTransfer: auto.isTransfer,
         source: "amex",
         importBatchId: batchId,
@@ -312,6 +409,7 @@ export async function importWorkbook(
       txInserted += chunk.length;
     }
     counts.transactions = txInserted;
+    counts.transactions_preserved = preservedTxOverrides;
 
     // Monthly snapshots (optional sheet)
     const mt = sheet(wb, "Monthly Tracking");
