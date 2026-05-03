@@ -19,6 +19,7 @@ import {
   type CashEvent,
 } from "../lib/cashSignal";
 import { plaid } from "../lib/plaid";
+import { archiveExpiredOneTime } from "./bills";
 
 const router: IRouter = Router();
 
@@ -88,6 +89,7 @@ async function listCheckingAccounts(userId: string) {
 
 router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
+  await archiveExpiredOneTime(userId);
   const settings = await ensureSettings(userId);
   const days = Number(req.query.days) || settings.daysAhead || 90;
 
