@@ -45,6 +45,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import { computeBalanceAtEndOf } from "@/lib/accountBalance";
 import {
   AccountPageHeader,
   AccountFilterBar,
@@ -337,12 +338,9 @@ export default function AmexPage() {
     );
   }, [debts, amexPlaidAccountIds]);
 
-  const endingBalance = useMemo(() => {
-    // Prefer the linked Amex debt; otherwise fall back to the server-
-    // provided anchor. Only declare "missing" when neither source has a
-    // usable balance AND the server fallback has finished loading — this
-    // avoids a flicker of "Unavailable" between debt/transaction load and
-    // anchor resolution.
+  // Resolve the anchor (balance + as-of timestamp) from either the linked
+  // Amex debt or the server-side anchor fallback.
+  const resolvedAnchor = useMemo(() => {
     let anchor: number | null = null;
     let resolvedSource: "debt" | "anchor" | "computed" = "debt";
     let asOf: string | null = null;
@@ -360,7 +358,26 @@ export default function AmexPage() {
         amexAnchorResp.source === "debt" ? "anchor" : amexAnchorResp.source;
       asOf = amexAnchorResp.asOf ?? null;
     }
-    if (anchor === null) {
+    return { anchor, resolvedSource, asOf };
+  }, [amexDebt, amexAnchorResp]);
+
+  // The anchor month is the month containing the as-of timestamp (typically
+  // the Plaid sync date), NOT today's month. The anchor balance is a
+  // mid-month snapshot, so the helper reconstructs end-of-anchor-month
+  // using the post-anchor activity in that month.
+  const anchorMonth = useMemo<MonthKey>(() => {
+    if (resolvedAnchor.asOf) return monthKeyFromISO(resolvedAnchor.asOf);
+    return currentMonth;
+  }, [resolvedAnchor.asOf, currentMonth]);
+
+  const anchorMonthTxns = useMemo(() => {
+    return all.filter(
+      (t) => compareMonth(monthKeyFromISO(t.occurredOn), anchorMonth) === 0,
+    );
+  }, [all, anchorMonth]);
+
+  const endingBalance = useMemo(() => {
+    if (resolvedAnchor.anchor === null) {
       const loading = amexAnchorLoading || amexAnchorResp === undefined;
       return {
         value: null as number | null,
@@ -368,31 +385,28 @@ export default function AmexPage() {
         asOf: null as string | null,
       };
     }
-    const cmp = compareMonth(selectedMonth, currentMonth);
-    if (cmp === 0) return { value: anchor, source: resolvedSource, asOf };
-    let bal = anchor;
-    if (cmp < 0) {
-      // Past month: undo every month after selectedMonth, up to and
-      // including currentMonth (those net changes happened after the end
-      // of the selected month).
-      let cursor = currentMonth;
-      while (compareMonth(cursor, selectedMonth) > 0) {
-        const k = `${cursor.year}-${cursor.month}`;
-        bal -= netChangeByMonth.get(k) ?? 0;
-        cursor = shiftMonth(cursor, -1);
-      }
-    } else {
-      // Future month: add net change for every month strictly after
-      // currentMonth, up to and including selectedMonth.
-      let cursor = shiftMonth(currentMonth, 1);
-      while (compareMonth(cursor, selectedMonth) <= 0) {
-        const k = `${cursor.year}-${cursor.month}`;
-        bal += netChangeByMonth.get(k) ?? 0;
-        cursor = shiftMonth(cursor, 1);
-      }
-    }
-    return { value: bal, source: resolvedSource, asOf };
-  }, [amexDebt, amexAnchorResp, amexAnchorLoading, netChangeByMonth, selectedMonth, currentMonth]);
+    const value = computeBalanceAtEndOf({
+      anchorBalance: resolvedAnchor.anchor,
+      anchorMonth,
+      netChangeByMonth,
+      target: selectedMonth,
+      anchorAt: resolvedAnchor.asOf,
+      anchorMonthTxns,
+    });
+    return {
+      value,
+      source: resolvedAnchor.resolvedSource,
+      asOf: resolvedAnchor.asOf,
+    };
+  }, [
+    resolvedAnchor,
+    amexAnchorResp,
+    amexAnchorLoading,
+    netChangeByMonth,
+    selectedMonth,
+    anchorMonth,
+    anchorMonthTxns,
+  ]);
 
   const endingBalanceMeta = useMemo(() => {
     if (
@@ -429,43 +443,11 @@ export default function AmexPage() {
     return { sourceLabel, asOfLabel, footer, tooltip };
   }, [endingBalance]);
 
-  // Trailing 12-month ending-balance series, anchored at the current
-  // month's known Amex debt balance and rolled month-by-month using the
-  // same net-change math as `endingBalance` above.
+  // Trailing 12-month ending-balance series, anchored at the snapshot
+  // month's known Amex balance and rolled month-by-month using the same
+  // mid-month-aware helper as `endingBalance` above.
   const balanceTrend = useMemo<TrendPoint[]>(() => {
-    let anchor: number | null = null;
-    if (amexDebt) anchor = parseSigned(amexDebt.balance);
-    else if (
-      amexAnchorResp &&
-      amexAnchorResp.amexEndingBalance !== null &&
-      amexAnchorResp.source !== "missing"
-    ) {
-      anchor = amexAnchorResp.amexEndingBalance;
-    }
-    if (anchor === null) return [];
-    // Compute the ending balance for any given month by rolling from the
-    // currentMonth anchor.
-    const balanceAt = (mk: MonthKey): number => {
-      const cmp = compareMonth(mk, currentMonth);
-      if (cmp === 0) return anchor;
-      let bal = anchor;
-      if (cmp < 0) {
-        let cursor = currentMonth;
-        while (compareMonth(cursor, mk) > 0) {
-          const k = `${cursor.year}-${cursor.month}`;
-          bal -= netChangeByMonth.get(k) ?? 0;
-          cursor = shiftMonth(cursor, -1);
-        }
-      } else {
-        let cursor = shiftMonth(currentMonth, 1);
-        while (compareMonth(cursor, mk) <= 0) {
-          const k = `${cursor.year}-${cursor.month}`;
-          bal += netChangeByMonth.get(k) ?? 0;
-          cursor = shiftMonth(cursor, 1);
-        }
-      }
-      return bal;
-    };
+    if (resolvedAnchor.anchor === null) return [];
     const points: TrendPoint[] = [];
     for (let i = 11; i >= 0; i--) {
       const mk = shiftMonth(selectedMonth, -i);
@@ -474,12 +456,19 @@ export default function AmexPage() {
         key: `${mk.year}-${mk.month}`,
         label: d.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
         shortLabel: d.toLocaleDateString("en-US", { month: "short" }),
-        balance: balanceAt(mk),
+        balance: computeBalanceAtEndOf({
+          anchorBalance: resolvedAnchor.anchor,
+          anchorMonth,
+          netChangeByMonth,
+          target: mk,
+          anchorAt: resolvedAnchor.asOf,
+          anchorMonthTxns,
+        }),
         isSelected: compareMonth(mk, selectedMonth) === 0,
       });
     }
     return points;
-  }, [amexDebt, amexAnchorResp, netChangeByMonth, selectedMonth, currentMonth]);
+  }, [resolvedAnchor, anchorMonth, anchorMonthTxns, netChangeByMonth, selectedMonth]);
 
   const knownPayers = useMemo(() => {
     const set = new Set<string>();

@@ -294,6 +294,15 @@ export default function TransactionsPage() {
     return currentMonth;
   }, [bankSnapshot?.at, currentMonth]);
 
+  // Transactions that occurred in the anchor month (the snapshot's month).
+  // Used to reconstruct end-of-anchor-month from the mid-month snapshot:
+  // endOfAnchorMonth = snapshot + sum(post-snapshot txns in anchor month).
+  const anchorMonthTxns = useMemo(() => {
+    return chaseTransactions.filter(
+      (t) => compareMonth(monthKeyFromISO(t.occurredOn), anchorMonth) === 0,
+    );
+  }, [chaseTransactions, anchorMonth]);
+
   const balanceAtEndOf = useMemo(() => {
     return (mk: MonthKey): number | null => {
       if (anchorBalance === null) return null;
@@ -302,9 +311,11 @@ export default function TransactionsPage() {
         anchorMonth,
         netChangeByMonth,
         target: mk,
+        anchorAt: bankSnapshot?.at ?? null,
+        anchorMonthTxns,
       });
     };
-  }, [anchorBalance, anchorMonth, netChangeByMonth]);
+  }, [anchorBalance, anchorMonth, netChangeByMonth, bankSnapshot?.at, anchorMonthTxns]);
 
   const endingBalance = useMemo(
     () => balanceAtEndOf(selectedMonth),

@@ -4,26 +4,64 @@ import {
   type MonthKey,
 } from "@/components/account-page";
 
+export type AnchorMonthTxn = {
+  occurredOn: string;
+  amount: string | number;
+};
+
 /**
  * Compute the account ending balance at the end of `target` month, anchored
- * at `anchorMonth` with `anchorBalance`. The anchor balance is the known
- * balance at end-of-month for `anchorMonth` (typically the bank snapshot
- * date's month). We walk forward/backward from the anchor by adding/
- * subtracting per-month net change.
+ * at `anchorMonth` with `anchorBalance`.
  *
- * Net changes are looked up by `${year}-${month}` keys (month is 0-indexed,
- * matching `MonthKey.month`).
+ * The anchor balance can be either:
+ *  - end-of-month (legacy behavior, when `anchorAt` / `anchorMonthTxns` are
+ *    omitted), or
+ *  - a mid-month point-in-time snapshot (e.g. a Plaid balance fetched on
+ *    Apr 15). In that case, end-of-anchor-month is reconstructed as
+ *    `anchorBalance + sum(amount for tx in anchorMonth where occurredOn
+ *    is strictly after the anchor date)`. Transactions on the same calendar
+ *    day as the anchor are assumed to already be reflected in the snapshot.
+ *
+ * After establishing end-of-anchor-month, the function walks forward
+ * (adding) or backward (subtracting) one whole month's net change at a
+ * time, looked up from `netChangeByMonth` keyed by `${year}-${month}`
+ * (month is 0-indexed, matching `MonthKey.month`).
  */
 export function computeBalanceAtEndOf(args: {
   anchorBalance: number;
   anchorMonth: MonthKey;
   netChangeByMonth: Map<string, number>;
   target: MonthKey;
+  anchorAt?: string | null;
+  anchorMonthTxns?: ReadonlyArray<AnchorMonthTxn>;
 }): number {
-  const { anchorBalance, anchorMonth, netChangeByMonth, target } = args;
+  const {
+    anchorBalance,
+    anchorMonth,
+    netChangeByMonth,
+    target,
+    anchorAt,
+    anchorMonthTxns,
+  } = args;
+
+  // Reconstruct end-of-anchor-month from a mid-month snapshot when we have
+  // both the anchor date and the anchor-month transactions.
+  let endOfAnchor = anchorBalance;
+  if (anchorAt && anchorMonthTxns && anchorMonthTxns.length > 0) {
+    const anchorDay = anchorAt.slice(0, 10);
+    let postAnchor = 0;
+    for (const t of anchorMonthTxns) {
+      const day = t.occurredOn.slice(0, 10);
+      if (day > anchorDay) {
+        postAnchor += Number(t.amount) || 0;
+      }
+    }
+    endOfAnchor = anchorBalance + postAnchor;
+  }
+
   const cmp = compareMonth(target, anchorMonth);
-  if (cmp === 0) return anchorBalance;
-  let bal = anchorBalance;
+  if (cmp === 0) return endOfAnchor;
+  let bal = endOfAnchor;
   if (cmp < 0) {
     let cursor = anchorMonth;
     while (compareMonth(cursor, target) > 0) {
