@@ -66,11 +66,14 @@ import {
   buildBucket,
   monthKey,
   isBankTxn,
+  suggestPlanMatchesForBank,
+  pickConfidentBankMatches,
   type LineRow,
   type PlanLine,
   type BankLine,
   type Resolution,
   type Transaction as MatchTxn,
+  type PlanSuggestion,
 } from "@/lib/forecastMatch";
 import type { CashEvent } from "@/lib/forecast";
 import {
@@ -266,6 +269,57 @@ function InboxCardView({
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+function SuggestionStrip({
+  suggestions,
+  onPick,
+  txnId,
+}: {
+  suggestions: PlanSuggestion[];
+  onPick: (p: PlanLine) => void;
+  txnId: string;
+}) {
+  if (suggestions.length === 0) return null;
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1 px-3 pb-2 pt-1"
+      data-testid={`bank-suggestions-${txnId}`}
+    >
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-1">
+        Suggested:
+      </span>
+      {suggestions.map((s) => {
+        const cls =
+          s.confidence === "high"
+            ? "bg-primary/15 text-primary border-primary/30"
+            : s.confidence === "medium"
+              ? "bg-amber-50 text-amber-900 border-amber-200"
+              : "bg-muted text-muted-foreground";
+        return (
+          <Button
+            key={`${s.plan.itemId}|${s.plan.date}`}
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs gap-1.5 px-2"
+            onClick={() => onPick(s.plan)}
+            data-testid={`suggest-match-${txnId}-${s.plan.itemId}-${s.plan.date}`}
+            title={`${s.daysAway}d away · Δ ${formatCurrency(s.amountDelta)}${s.labelMatch ? " · label match" : ""}`}
+            aria-label={`Match to ${s.plan.label} on ${s.plan.date}, ${s.confidence} confidence`}
+          >
+            <span className="font-semibold">Match:</span>
+            <span className="truncate max-w-[140px]">{s.plan.label}</span>
+            <span className="text-muted-foreground tabular-nums">
+              {formatDate(s.plan.date)}
+            </span>
+            <Badge variant="outline" className={`${cls} text-[9px] px-1 py-0`}>
+              {s.confidence}
+            </Badge>
+          </Button>
+        );
+      })}
     </div>
   );
 }
@@ -705,6 +759,30 @@ export default function ForecastPage() {
     return register.rows.filter((r): r is PlanLine => r.kind === "plan");
   }, [register]);
 
+  // Per-bank-card top suggestions (uses pure scorer; never auto-applies).
+  // Source from `register.allPlan` (not the visible `planRows`) so that bank
+  // rows in a selected month or near a window edge can still match planned
+  // occurrences that fall just outside the active register view.
+  const bankSuggestions = useMemo(() => {
+    const m = new Map<string, PlanSuggestion[]>();
+    if (!register) return m;
+    const candidatePlans = register.allPlan.filter(
+      (r) => r.status === "pending_plan" || r.status === "future",
+    );
+    for (const c of bankInbox) {
+      m.set(c.bank.txn.id, suggestPlanMatchesForBank(c.bank, candidatePlans));
+    }
+    return m;
+  }, [bankInbox, register]);
+
+  // Greedy uniqueness pass: how many of the pending bank rows have a `high`
+  // confidence top suggestion that wouldn't collide with another. This drives
+  // the "Match all confident" bulk action label & enabled state.
+  const confidentMatches = useMemo(
+    () => pickConfidentBankMatches(bankSuggestions),
+    [bankSuggestions],
+  );
+
   // Window key for confetti persistence: from→to
   const windowKey = data ? `${data.fromDate}_${data.toDate}` : null;
   const inboxCount = inbox.length;
@@ -837,6 +915,47 @@ export default function ForecastPage() {
     } else {
       toast({
         title: `${ok} updated, ${failures.length} failed`,
+        description: failures[0],
+        variant: "destructive",
+      });
+    }
+  };
+
+  const bulkMatchConfident = async () => {
+    const items = confidentMatches;
+    if (!items.length) return;
+    const CONCURRENCY = 6;
+    let cursor = 0;
+    let ok = 0;
+    const failures: string[] = [];
+    const worker = async () => {
+      while (cursor < items.length) {
+        const i = cursor++;
+        const it = items[i];
+        try {
+          await upsertResolution.mutateAsync({
+            data: {
+              status: "matched",
+              recurringItemId: it.plan.itemId,
+              occurrenceDate: it.plan.date,
+              matchedTxnId: it.txnId,
+            },
+          });
+          ok += 1;
+        } catch (e) {
+          failures.push((e as Error).message);
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker),
+    );
+    invalidate();
+    if (!failures.length) {
+      toast({ title: `Matched ${ok} confident bank row${ok === 1 ? "" : "s"}` });
+    } else {
+      toast({
+        title: `${ok} matched, ${failures.length} failed`,
         description: failures[0],
         variant: "destructive",
       });
@@ -1217,6 +1336,17 @@ export default function ForecastPage() {
                       Prior period — counts only
                     </span>
                   )}
+                  {confidentMatches.length > 0 && (
+                    <Button
+                      size="sm"
+                      onClick={bulkMatchConfident}
+                      disabled={upsertResolution.isPending}
+                      data-testid="bulk-match-confident"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 mr-1" />
+                      Match all confident ({confidentMatches.length})
+                    </Button>
+                  )}
                   {bankInbox.length > 0 && (
                     <Button
                       size="sm"
@@ -1242,35 +1372,54 @@ export default function ForecastPage() {
                     )}
                   </div>
                 ) : (
-                  bankInbox.map((card) => (
-                    <div key={card.id} className="flex items-stretch gap-2">
-                      <div className="flex-1">
-                        <InboxCardView
-                          card={card}
-                          categoryName={
-                            card.bank.txn.categoryId
-                              ? categoryById.get(card.bank.txn.categoryId) ?? null
-                              : null
-                          }
-                          onUnplanned={() => onMarkUnplannedTxn(card.bank.txn.id)}
-                          onMatchPick={(p) =>
-                            matchInboxToPlan(card.bank.txn.id, p)
-                          }
-                          planRows={planRows.filter(
-                            (r) => r.status === "pending_plan" || r.status === "future",
-                          )}
-                        />
+                  bankInbox.map((card) => {
+                    const sugs = bankSuggestions.get(card.bank.txn.id) ?? [];
+                    return (
+                      <div key={card.id} className="space-y-1">
+                        <div className="flex items-stretch gap-2">
+                          <div className="flex-1">
+                            <InboxCardView
+                              card={card}
+                              categoryName={
+                                card.bank.txn.categoryId
+                                  ? categoryById.get(card.bank.txn.categoryId) ??
+                                    null
+                                  : null
+                              }
+                              onUnplanned={() =>
+                                onMarkUnplannedTxn(card.bank.txn.id)
+                              }
+                              onMatchPick={(p) =>
+                                matchInboxToPlan(card.bank.txn.id, p)
+                              }
+                              planRows={planRows.filter(
+                                (r) =>
+                                  r.status === "pending_plan" ||
+                                  r.status === "future",
+                              )}
+                            />
+                            <SuggestionStrip
+                              suggestions={sugs}
+                              txnId={card.bank.txn.id}
+                              onPick={(p) =>
+                                matchInboxToPlan(card.bank.txn.id, p)
+                              }
+                            />
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              onRemoveFromForecast(card.bank.txn.id)
+                            }
+                            title="Un-send back to Bank list"
+                          >
+                            <X className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onRemoveFromForecast(card.bank.txn.id)}
-                        title="Un-send back to Bank list"
-                      >
-                        <X className="w-4 h-4 text-muted-foreground" />
-                      </Button>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
                 {bankResolvedThisMonth.length > 0 && (
                   <div

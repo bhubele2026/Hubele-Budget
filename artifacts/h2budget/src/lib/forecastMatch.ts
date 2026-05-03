@@ -244,6 +244,130 @@ export function findCandidates(row: LineRow, rows: LineRow[], days = 7): LineRow
     });
 }
 
+export type MatchConfidence = "high" | "medium" | "low";
+
+export type PlanSuggestion = {
+  plan: PlanLine;
+  score: number;
+  confidence: MatchConfidence;
+  daysAway: number;
+  amountDelta: number;
+  labelMatch: boolean;
+};
+
+/** Suggest the most likely planned items for a single pending bank row.
+ *  Pure function: signal is amount-sign + amount closeness + date proximity,
+ *  with a small bonus if any 4+ char token from the plan's label appears in
+ *  the bank description (case-insensitive). Lower score = better.
+ *
+ *  Confidence buckets:
+ *   - high: exact amount (within $0.01) AND within 5 days, OR exact amount
+ *           within 14 days WITH a label-token overlap.
+ *   - medium: exact amount within `maxDays`, OR within 2% of amount and 7 days.
+ *   - low: otherwise.
+ *
+ *  Returns up to `limit` suggestions sorted by score (best first). Filters
+ *  out any plan whose status isn't `pending_plan` or `future`. Works for
+ *  refunds/credits because we match on Math.sign of `amount`.
+ */
+export function suggestPlanMatchesForBank(
+  bank: BankLine,
+  planRows: PlanLine[],
+  opts: { maxDays?: number; limit?: number } = {},
+): PlanSuggestion[] {
+  const maxDays = opts.maxDays ?? 14;
+  const limit = opts.limit ?? 3;
+  const wantSign = Math.sign(bank.amount);
+  if (!wantSign) return [];
+  const targetMs = parseISO(bank.date);
+  const want = Math.abs(bank.amount);
+  const desc = (bank.txn.description ?? "").toLowerCase();
+
+  const out: PlanSuggestion[] = [];
+  for (const p of planRows) {
+    if (p.status !== "pending_plan" && p.status !== "future") continue;
+    if (Math.sign(p.amount) !== wantSign) continue;
+    const daysAway = Math.round(Math.abs(parseISO(p.date) - targetMs) / DAY);
+    if (daysAway > maxDays) continue;
+
+    const amountDelta = Math.round(Math.abs(Math.abs(p.amount) - want) * 100) / 100;
+    const relDelta = want > 0 ? amountDelta / want : amountDelta;
+
+    const tokens = (p.label ?? "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length >= 4);
+    const labelMatch = tokens.some((t) => desc.includes(t));
+
+    const score = amountDelta * 100 + daysAway - (labelMatch ? 2 : 0);
+
+    let confidence: MatchConfidence;
+    if (amountDelta < 0.01 && daysAway <= 5) confidence = "high";
+    else if (amountDelta < 0.01 && labelMatch && daysAway <= maxDays) confidence = "high";
+    else if (amountDelta < 0.01 && daysAway <= maxDays) confidence = "medium";
+    else if (relDelta <= 0.02 && daysAway <= 7) confidence = "medium";
+    else confidence = "low";
+
+    out.push({ plan: p, score, confidence, daysAway, amountDelta, labelMatch });
+  }
+  out.sort((a, b) => a.score - b.score);
+  return out.slice(0, limit);
+}
+
+/** Greedy bulk picker: from a map of bank txn id → ranked suggestions,
+ *  return the set of (txnId, plan) pairs whose chosen suggestion is `high`
+ *  confidence, ensuring no plan occurrence is assigned to two bank rows.
+ *  When a bank row's best high-confidence pick collides with one already
+ *  taken, it falls through to its next high-confidence suggestion (if any)
+ *  instead of being dropped. Bank rows are processed in order of their
+ *  current-best score so the strongest signals win the contested plans. */
+export function pickConfidentBankMatches(
+  bankSuggestions: Map<string, PlanSuggestion[]>,
+): Array<{ txnId: string; plan: PlanLine; suggestion: PlanSuggestion }> {
+  type Pending = { txnId: string; highs: PlanSuggestion[]; cursor: number };
+  const pending: Pending[] = [];
+  for (const [txnId, sugs] of bankSuggestions) {
+    const highs = sugs.filter((s) => s.confidence === "high");
+    if (highs.length > 0) pending.push({ txnId, highs, cursor: 0 });
+  }
+  const usedPlanKeys = new Set<string>();
+  const usedTxnIds = new Set<string>();
+  const out: Array<{ txnId: string; plan: PlanLine; suggestion: PlanSuggestion }> = [];
+
+  // Iterate until no more pending row can claim a plan. Each pass picks the
+  // pending row whose next-available suggestion has the lowest score.
+  while (true) {
+    let bestIdx = -1;
+    let bestSug: PlanSuggestion | null = null;
+    for (let i = 0; i < pending.length; i++) {
+      const p = pending[i];
+      if (usedTxnIds.has(p.txnId)) continue;
+      // Advance cursor past any taken plans.
+      while (
+        p.cursor < p.highs.length &&
+        usedPlanKeys.has(
+          `${p.highs[p.cursor].plan.itemId}|${p.highs[p.cursor].plan.date}`,
+        )
+      ) {
+        p.cursor += 1;
+      }
+      if (p.cursor >= p.highs.length) continue;
+      const sug = p.highs[p.cursor];
+      if (!bestSug || sug.score < bestSug.score) {
+        bestSug = sug;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx === -1 || !bestSug) break;
+    const winner = pending[bestIdx];
+    const key = `${bestSug.plan.itemId}|${bestSug.plan.date}`;
+    usedPlanKeys.add(key);
+    usedTxnIds.add(winner.txnId);
+    out.push({ txnId: winner.txnId, plan: bestSug.plan, suggestion: bestSug });
+  }
+  return out;
+}
+
 export type BucketEntry = {
   id: string;
   status: "matched" | "missed" | "ignored_unforecasted" | "unplanned";
