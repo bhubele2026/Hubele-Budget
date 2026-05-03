@@ -21,11 +21,13 @@ import {
   SEED_CATEGORIES,
   SEED_GROUP_ORDER,
   SEED_MONTH,
+  SEED_RECURRING_ITEMS,
 } from "../lib/budgetSeed";
 import {
   SEED_MAPPING_RULES,
   SEED_MAPPING_PRIORITY,
 } from "../lib/mappingSeed";
+import { expandItem, parseISO, addDays } from "../lib/cashSignal";
 
 const router: IRouter = Router();
 
@@ -319,6 +321,29 @@ router.post(
         .values({ userId, monthStart: SEED_MONTH })
         .onConflictDoNothing();
 
+      // Seed recurring items that back auto_bills budget categories.
+      // Match by exact name; only insert if no existing recurring item has that name.
+      const existingRecurring = await tx
+        .select()
+        .from(recurringItemsTable)
+        .where(eq(recurringItemsTable.userId, userId));
+      const recurringByName = new Map(existingRecurring.map((r) => [r.name, r]));
+      for (const r of SEED_RECURRING_ITEMS) {
+        if (recurringByName.has(r.name)) continue;
+        const cat = byName.get(r.name);
+        await tx.insert(recurringItemsTable).values({
+          userId,
+          name: r.name,
+          kind: r.kind,
+          amount: r.amount,
+          frequency: r.frequency,
+          dayOfMonth: r.dayOfMonth,
+          anchorDate: r.anchorDate,
+          active: "true",
+          categoryId: cat?.id ?? null,
+        });
+      }
+
       const existingLines = await tx
         .select()
         .from(budgetLinesTable)
@@ -520,45 +545,50 @@ router.get(
     // on the fly from Bills (recurring_items) and Debts so they always reflect
     // the current source values, regardless of what (if anything) was carried
     // forward into this month's budget_lines.
-    const FREQ_TO_MONTHLY: Record<string, number> = {
-      monthly: 1,
-      biweekly: 26 / 12,
-      "bi-weekly": 26 / 12,
-      weekly: 52 / 12,
-      semimonthly: 2,
-      "semi-monthly": 2,
-      quarterly: 1 / 3,
-      annually: 1 / 12,
-      yearly: 1 / 12,
-    };
+    const monthEnd0 = new Date(monthStart);
+    monthEnd0.setMonth(monthEnd0.getMonth() + 1);
+    const monthEndStr0 = monthEnd0.toISOString().slice(0, 10);
+    const monthFromDate = parseISO(monthStart);
+    const monthToDate = addDays(parseISO(monthEndStr0), -1);
 
-    const autoBillsCatIds = cats
-      .filter((c) => c.sourceKind === "auto_bills")
-      .map((c) => c.id);
+    const autoBillsCats = cats.filter((c) => c.sourceKind === "auto_bills");
+    const autoBillsCatIds = autoBillsCats.map((c) => c.id);
+    const autoBillsCatByName = new Map(autoBillsCats.map((c) => [c.name, c]));
     const autoDebtCats = cats.filter((c) => c.sourceKind === "auto_debts");
 
     const autoPlannedByCat = new Map<string, string>();
 
     if (autoBillsCatIds.length > 0) {
+      // Pull every recurring item the user has so we can match by either
+      // categoryId (preferred) or by exact category name (fallback for
+      // legacy items created before categoryId linkage existed).
       const recurring = await db
         .select()
         .from(recurringItemsTable)
-        .where(
-          and(
-            eq(recurringItemsTable.userId, req.userId!),
-            inArray(recurringItemsTable.categoryId, autoBillsCatIds),
-          ),
-        );
+        .where(eq(recurringItemsTable.userId, req.userId!));
       const sums = new Map<string, number>();
+      const expandFor = (item: typeof recurring[number], catId: string) => {
+        const events = expandItem(item, monthFromDate, monthToDate);
+        let total = 0;
+        for (const ev of events) total += Math.abs(ev.amount);
+        sums.set(catId, (sums.get(catId) ?? 0) + total);
+      };
       for (const r of recurring) {
-        if (!r.categoryId) continue;
         if (r.active === "false") continue;
-        const factor = FREQ_TO_MONTHLY[r.frequency.toLowerCase()] ?? 1;
-        const monthly = (parseFloat(r.amount) || 0) * factor;
-        sums.set(r.categoryId, (sums.get(r.categoryId) ?? 0) + monthly);
+        if (r.categoryId && autoBillsCatIds.includes(r.categoryId)) {
+          expandFor(r, r.categoryId);
+          continue;
+        }
+        // Fallback: match by exact category name when categoryId is not set
+        // or points elsewhere.
+        const cat = autoBillsCatByName.get(r.name);
+        if (cat) expandFor(r, cat.id);
       }
-      for (const [catId, total] of sums) {
-        autoPlannedByCat.set(catId, total.toFixed(2));
+      // Ensure every auto_bills category gets a value (deactivated/missing
+      // recurring items leave the budget line at $0 for the month, per
+      // task #35 acceptance criteria).
+      for (const c of autoBillsCats) {
+        autoPlannedByCat.set(c.id, (sums.get(c.id) ?? 0).toFixed(2));
       }
     }
 

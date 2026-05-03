@@ -25,6 +25,44 @@ export const SEED_GROUP_ORDER = [
   "Savings & Sinking Funds",
 ];
 
+export type SeedRecurringItem = {
+  name: string;
+  kind: "income" | "bill" | "subscription";
+  amount: string;
+  frequency: "weekly" | "biweekly" | "semimonthly" | "monthly" | "quarterly" | "annual" | "onetime";
+  dayOfMonth: number | null;
+  anchorDate: string | null;
+};
+
+// Recurring items that back the auto_bills budget categories.
+// Names must match SEED_CATEGORIES entries exactly (used as the join key).
+export const SEED_RECURRING_ITEMS: SeedRecurringItem[] = [
+  {
+    name: "Mom — Verizon reimbursement",
+    kind: "income",
+    amount: "88.00",
+    frequency: "monthly",
+    dayOfMonth: 15,
+    anchorDate: null,
+  },
+  {
+    name: "Hannah's paycheck (Exact)",
+    kind: "income",
+    amount: "4499.99",
+    frequency: "biweekly",
+    dayOfMonth: null,
+    anchorDate: "2026-05-08",
+  },
+  {
+    name: "Brad's paycheck (KFI)",
+    kind: "income",
+    amount: "8100.00",
+    frequency: "biweekly",
+    dayOfMonth: null,
+    anchorDate: "2026-05-01",
+  },
+];
+
 export const SEED_CATEGORIES: SeedCategory[] = [
   // Income
   { groupName: "Income", kind: "income", sourceKind: "auto_bills", name: "Mom — Verizon reimbursement", planned: "88.00", note: "Auto-pulled from Bills · monthly" },
