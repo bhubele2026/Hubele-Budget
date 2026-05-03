@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Edit2, Wallet, TrendingUp, TrendingDown, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { DashboardKillOrder } from "@/components/dashboard-kill-order";
 
 function startOfWeek(d: Date): Date {
   const day = d.getDay();
@@ -255,6 +256,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <DashboardKillOrder />
 
       <div>
         <h2 className="text-lg font-serif font-semibold mb-3 text-foreground">Allowance Buckets</h2>
