@@ -89,10 +89,11 @@ describe("budget category v2 migration", () => {
     await insertLine(phone.id, "342.00");
 
     // A transaction tagged to the old MGE category — Actual should follow.
+    // Amex sign convention (Task #93/#130): charges are stored POSITIVE.
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
       occurredOn: "2026-05-10",
-      amount: "-150.00",
+      amount: "150.00",
       description: "MGE Electric",
       source: "amex",
       categoryId: mge.id,

@@ -24,6 +24,19 @@ const toNum = (v: unknown): string => {
   return Number.isNaN(n) ? "0" : n.toFixed(2);
 };
 
+/**
+ * Canonical Amex sign convention (Task #93/#130): expense charges are stored
+ * POSITIVE, and payments / credits / income are stored NEGATIVE. Matches
+ * `scripts/src/importApril2026Amex.ts` and the
+ * `artifacts/h2budget/src/pages/amex.tsx` monthTotals split.
+ */
+export function amexSignedAmount(typeStr: string, amount: number): string {
+  const t = typeStr.toLowerCase();
+  const isCredit = t.includes("income") || t.includes("credit");
+  const n = isCredit ? -Math.abs(amount) : Math.abs(amount);
+  return n.toFixed(2);
+}
+
 export class AprImportError extends Error {
   constructor(message: string) {
     super(message);
@@ -398,10 +411,7 @@ export async function importWorkbook(
       const typeStr = String(r[3] ?? "Expense").toLowerCase();
       const rawAmount = toNum(r[5]);
       const num = Number(rawAmount);
-      const signed =
-        typeStr.includes("income") || typeStr.includes("credit")
-          ? num.toFixed(2)
-          : (-Math.abs(num)).toFixed(2);
+      const signed = amexSignedAmount(typeStr, num);
       const explicitCat = target ? catByName.get(target) ?? null : null;
       const auto = explicitCat
         ? { categoryId: explicitCat, isTransfer: false }
@@ -410,9 +420,15 @@ export async function importWorkbook(
       // Preserve manual category overrides: if the prior transaction with
       // the same (date, description, amount, source) had a categoryId that
       // differs from what we'd auto-assign now, treat it as a user edit and
-      // keep their choice.
+      // keep their choice. Fall back to the opposite-sign key so overrides
+      // on rows imported under the pre-Task-#130 (flipped) convention still
+      // survive the first re-import after the sign normalization.
       let finalCategoryId = auto.categoryId;
-      const priorCatId = priorTxByKey.get(`${date}|${description}|${signed}|amex`);
+      const flippedSigned = (-Number(signed)).toFixed(2);
+      let priorCatId = priorTxByKey.get(`${date}|${description}|${signed}|amex`);
+      if (priorCatId === undefined) {
+        priorCatId = priorTxByKey.get(`${date}|${description}|${flippedSigned}|amex`);
+      }
       if (priorCatId !== undefined) {
         const priorName = priorCatId
           ? priorCatNameById.get(priorCatId) ?? null

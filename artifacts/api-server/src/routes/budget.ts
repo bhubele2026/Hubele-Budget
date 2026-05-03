@@ -1130,16 +1130,25 @@ router.get(
     monthEnd.setMonth(monthEnd.getMonth() + 1);
     const monthEndStr = monthEnd.toISOString().slice(0, 10);
 
-    // Spend = sum of |amount| where amount < 0 for expense categories; income = sum positive.
-    // Transfers (between user's own accounts) are excluded from both totals.
-    // We also break down by source so the budget row can show "Bank" / "Amex"
-    // counts derived from where each transaction came from.
+    // Spend / inflow aggregation. Bank-style sources (Plaid bank, manual,
+    // import) follow the standard convention: NEGATIVE amounts are spend,
+    // POSITIVE amounts are inflow. Amex (`source='amex'`) uses the canonical
+    // Amex convention (Task #93/#130): POSITIVE amounts are charges (spend),
+    // NEGATIVE amounts are payments / credits (inflow). Transfers are
+    // excluded from both totals. We also break down by source so the budget
+    // row can show "Bank" / "Amex" counts.
     const actuals = await db
       .select({
         categoryId: transactionsTable.categoryId,
         source: transactionsTable.source,
-        spend: sql<string>`coalesce(sum(case when ${transactionsTable.amount} < 0 then -${transactionsTable.amount} else 0 end)::text, '0')`,
-        inflow: sql<string>`coalesce(sum(case when ${transactionsTable.amount} > 0 then ${transactionsTable.amount} else 0 end)::text, '0')`,
+        spend: sql<string>`coalesce(sum(case
+          when ${transactionsTable.source} = 'amex' and ${transactionsTable.amount} > 0 then ${transactionsTable.amount}
+          when ${transactionsTable.source} <> 'amex' and ${transactionsTable.amount} < 0 then -${transactionsTable.amount}
+          else 0 end)::text, '0')`,
+        inflow: sql<string>`coalesce(sum(case
+          when ${transactionsTable.source} = 'amex' and ${transactionsTable.amount} < 0 then -${transactionsTable.amount}
+          when ${transactionsTable.source} <> 'amex' and ${transactionsTable.amount} > 0 then ${transactionsTable.amount}
+          else 0 end)::text, '0')`,
         cnt: sql<string>`count(*)::text`,
       })
       .from(transactionsTable)
