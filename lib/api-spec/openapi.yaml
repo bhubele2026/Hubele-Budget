@@ -1173,13 +1173,16 @@ components:
 
     DashboardSummary:
       type: object
-      required: [totalDebt, monthlyIncome, monthlySpend, netCashflow, debtCount, transactionCount, recentTransactions, topCategories, upcomingBills]
+      required: [totalDebt, monthlyIncome, monthlySpend, netCashflow, debtCount, activeDebtCount, paidThisMonth, paidLifetime, transactionCount, recentTransactions, topCategories, upcomingBills]
       properties:
         totalDebt: { type: string }
         monthlyIncome: { type: string }
         monthlySpend: { type: string }
         netCashflow: { type: string }
         debtCount: { type: integer }
+        activeDebtCount: { type: integer }
+        paidThisMonth: { type: string }
+        paidLifetime: { type: string }
         transactionCount: { type: integer }
         recentTransactions:
           type: array

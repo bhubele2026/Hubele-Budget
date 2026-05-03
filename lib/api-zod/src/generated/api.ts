@@ -23,6 +23,9 @@ export const GetDashboardResponse = zod.object({
   monthlySpend: zod.string(),
   netCashflow: zod.string(),
   debtCount: zod.number(),
+  activeDebtCount: zod.number(),
+  paidThisMonth: zod.string(),
+  paidLifetime: zod.string(),
   transactionCount: zod.number(),
   recentTransactions: zod.array(
     zod.object({

@@ -597,6 +597,9 @@ export interface DashboardSummary {
   monthlySpend: string;
   netCashflow: string;
   debtCount: number;
+  activeDebtCount: number;
+  paidThisMonth: string;
+  paidLifetime: string;
   transactionCount: number;
   recentTransactions: Transaction[];
   topCategories: DashboardSummaryTopCategoriesItem[];

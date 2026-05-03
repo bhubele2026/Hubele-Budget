@@ -374,6 +374,61 @@ function MonthlyLikeSection({
   );
 }
 
+function DebtProgressCard({
+  owed,
+  paidThisMonth,
+  paidLifetime,
+  activeDebtCount,
+}: {
+  owed: string;
+  paidThisMonth: string;
+  paidLifetime: string;
+  activeDebtCount: number;
+}) {
+  const owedNum = Math.max(0, Number(owed) || 0);
+  const paidLifetimeNum = Math.max(0, Number(paidLifetime) || 0);
+  const paidMonthNum = Math.max(0, Number(paidThisMonth) || 0);
+  const denom = owedNum + paidLifetimeNum;
+  const pct = denom > 0 ? Math.round((paidLifetimeNum / denom) * 100) : 0;
+  return (
+    <Card className="md:col-span-2 lg:col-span-2">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">
+          Debt progress
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <div className="text-xs text-muted-foreground">Owed now</div>
+            <div className="text-2xl font-bold tabular-nums">
+              {formatCurrency(owedNum.toFixed(2))}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {activeDebtCount} active {activeDebtCount === 1 ? "debt" : "debts"}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Paid off</div>
+            <div className="text-2xl font-bold tabular-nums text-primary">
+              {formatCurrency(paidLifetimeNum.toFixed(2))}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              all-time · {formatCurrency(paidMonthNum.toFixed(2))} this month
+            </div>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Progress value={pct} className="h-1.5" />
+          <div className="text-xs text-muted-foreground tabular-nums">
+            {pct}% paid down
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ReimbursementsBox({
   transactions,
   isLoading,
@@ -853,7 +908,7 @@ export default function DashboardPage() {
         today={today}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -886,16 +941,12 @@ export default function DashboardPage() {
             <div className="text-2xl font-bold tabular-nums">{formatCurrency(data.monthlySpend)}</div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Debt
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums">{formatCurrency(data.totalDebt)}</div>
-          </CardContent>
-        </Card>
+        <DebtProgressCard
+          owed={data.totalDebt}
+          paidThisMonth={data.paidThisMonth}
+          paidLifetime={data.paidLifetime}
+          activeDebtCount={data.activeDebtCount}
+        />
       </div>
 
       <AvalancheReadyCard />
