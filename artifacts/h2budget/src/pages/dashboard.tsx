@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
   useGetDashboard,
+  useGetBudgetMonth,
   useListTransactions,
   useListDashboardBudgets,
   useUpsertDashboardBudget,
@@ -849,6 +850,305 @@ function DashboardMonthlySections({
   );
 }
 
+function DashboardHero({ today }: { today: Date }) {
+  const dateLabel = today
+    .toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    })
+    .replace(",", "")
+    .toUpperCase()
+    .replace(/^(\S+)\s/, "$1 · ");
+  return (
+    <Card>
+      <CardContent className="p-6 flex flex-col sm:flex-row items-center sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <img
+            src={`${import.meta.env.BASE_URL}logo.png`}
+            alt="H2"
+            className="h-12 w-12 rounded"
+          />
+          <div className="font-serif font-bold text-2xl tracking-tight text-foreground">
+            H2 Budget
+          </div>
+        </div>
+        <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-4 py-1.5 text-xs font-semibold tracking-widest tabular-nums">
+          {dateLabel}
+        </span>
+      </CardContent>
+    </Card>
+  );
+}
+
+const SNAPSHOT_MIN_MONTH = "2026-04-01";
+
+function monthOffsetFromCurrent(today: Date, monthStart: string) {
+  const d = new Date(monthStart + "T00:00:00");
+  return (
+    (d.getFullYear() - today.getFullYear()) * 12 +
+    (d.getMonth() - today.getMonth())
+  );
+}
+
+function fmtMonthStart(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function MonthlySnapshot({
+  today,
+  totalDebt,
+  activeDebtCount,
+}: {
+  today: Date;
+  totalDebt: string;
+  activeDebtCount: number;
+}) {
+  const currentMonthStart = useMemo(
+    () => fmtMonthStart(new Date(today.getFullYear(), today.getMonth(), 1)),
+    [today],
+  );
+  const [monthStart, setMonthStart] = useState(currentMonthStart);
+
+  const monthDate = useMemo(
+    () => new Date(monthStart + "T00:00:00"),
+    [monthStart],
+  );
+  const monthLabel = useMemo(
+    () =>
+      monthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+    [monthDate],
+  );
+  const shortMonth = useMemo(
+    () => monthDate.toLocaleDateString("en-US", { month: "long" }),
+    [monthDate],
+  );
+
+  const offset = monthOffsetFromCurrent(today, monthStart);
+  const canPrev = monthStart > SNAPSHOT_MIN_MONTH;
+  const canNext = offset < 0;
+
+  const stepMonth = (delta: number) => {
+    const d = new Date(monthDate);
+    d.setMonth(d.getMonth() + delta);
+    const next = fmtMonthStart(d);
+    if (next < SNAPSHOT_MIN_MONTH) return;
+    if (next > currentMonthStart) return;
+    setMonthStart(next);
+  };
+
+  const { data: budget, isLoading } = useGetBudgetMonth(monthStart);
+  const summary = budget?.summary;
+
+  const incomeActual = parseFloat(summary?.income.actual ?? "0") || 0;
+  const incomeBudget = parseFloat(summary?.income.budget ?? "0") || 0;
+  const expensesActual = parseFloat(summary?.expenses.actual ?? "0") || 0;
+  const expensesBudget = parseFloat(summary?.expenses.budget ?? "0") || 0;
+
+  // Split debt vs everyday expenses using auto_debts groups in the response.
+  const paidThisMonth = useMemo(() => {
+    if (!budget) return 0;
+    let sum = 0;
+    for (const g of budget.groups ?? []) {
+      for (const l of g.lines ?? []) {
+        if (l.sourceKind === "auto_debts") {
+          sum += parseFloat(l.actualAmount) || 0;
+        }
+      }
+    }
+    return sum;
+  }, [budget]);
+
+  const everydaySpend = Math.max(0, expensesActual - paidThisMonth);
+  const net = incomeActual - everydaySpend - paidThisMonth;
+  const netPositive = net >= 0;
+
+  const daysInMonth = new Date(
+    monthDate.getFullYear(),
+    monthDate.getMonth() + 1,
+    0,
+  ).getDate();
+  const isCurrentMonth = offset === 0;
+  const dayOfMonth = isCurrentMonth ? today.getDate() : daysInMonth;
+  const monthElapsedPct = (dayOfMonth / daysInMonth) * 100;
+
+  const spentPct =
+    expensesBudget > 0
+      ? Math.min(100, (expensesActual / expensesBudget) * 100)
+      : 0;
+  const spentPctRaw =
+    expensesBudget > 0 ? (expensesActual / expensesBudget) * 100 : 0;
+
+  const paceDelta = spentPctRaw - monthElapsedPct;
+  let paceLabel: "ON PACE" | "AHEAD" | "BEHIND" = "ON PACE";
+  let paceClass = "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300";
+  if (paceDelta > 5) {
+    paceLabel = "BEHIND";
+    paceClass =
+      "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300";
+  } else if (paceDelta < -5) {
+    paceLabel = "AHEAD";
+    paceClass =
+      "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300";
+  }
+  const overspent = expensesBudget > 0 && expensesActual > expensesBudget;
+  const remaining = Math.max(0, expensesBudget - expensesActual);
+
+  return (
+    <section className="space-y-4" data-testid="dashboard-monthly-snapshot">
+      <div className="flex items-center justify-center gap-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-full"
+          onClick={() => stepMonth(-1)}
+          disabled={!canPrev}
+          aria-label="Previous month"
+          data-testid="button-snapshot-prev-month"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span
+          className="text-sm font-semibold tracking-wide min-w-[160px] text-center"
+          data-testid="text-snapshot-month-label"
+        >
+          {monthLabel}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-full"
+          onClick={() => stepMonth(1)}
+          disabled={!canNext}
+          aria-label="Next month"
+          data-testid="button-snapshot-next-month"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card data-testid="tile-total-owed">
+          <CardContent className="p-5">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+              Total Owed
+            </div>
+            <div className="text-3xl font-serif font-bold tabular-nums mt-1">
+              {formatCurrency(totalDebt)}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {activeDebtCount} active{" "}
+              {activeDebtCount === 1 ? "debt" : "debts"}
+            </div>
+          </CardContent>
+        </Card>
+        <Card data-testid="tile-net-month">
+          <CardContent className="p-5">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+              Net {shortMonth}
+            </div>
+            <div
+              className={cn(
+                "text-3xl font-serif font-bold tabular-nums mt-1",
+                netPositive
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-destructive",
+              )}
+            >
+              {netPositive ? "" : "-"}
+              {formatCurrency(Math.abs(net))}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              income − spend − debt paid
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card data-testid="card-month-vs-plan">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-base">{shortMonth} vs plan</CardTitle>
+          <Link
+            href={`/budget?month=${monthStart}`}
+            className="text-xs uppercase tracking-widest text-amber-700 dark:text-amber-400 hover:underline"
+            data-testid="link-open-budget"
+          >
+            OPEN BUDGET →
+          </Link>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {isLoading ? (
+            <Skeleton className="h-28 w-full" />
+          ) : (
+            <>
+              <div className="space-y-2">
+                <div className="flex items-baseline justify-between gap-3">
+                  <div className="flex items-baseline gap-2">
+                    <span
+                      className={cn(
+                        "text-3xl md:text-4xl font-serif font-bold tabular-nums",
+                        overspent && "text-destructive",
+                      )}
+                    >
+                      {formatCurrency(expensesActual)}
+                    </span>
+                    <span className="text-xl font-serif font-light text-muted-foreground tabular-nums">
+                      of {formatCurrency(expensesBudget)}
+                    </span>
+                  </div>
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full px-3 py-1 text-[10px] font-semibold tracking-widest",
+                      paceClass,
+                    )}
+                    data-testid="badge-pace"
+                  >
+                    {paceLabel}
+                  </span>
+                </div>
+                <Progress
+                  value={spentPct}
+                  className={overspent ? "[&>div]:bg-destructive" : ""}
+                />
+                <div className="text-xs text-muted-foreground tabular-nums">
+                  {Math.round(spentPctRaw)}% used · day {dayOfMonth} of{" "}
+                  {daysInMonth}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t">
+                <div data-testid="tile-income-received">
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Income Received
+                  </div>
+                  <div className="text-2xl font-serif font-bold tabular-nums mt-1">
+                    {formatCurrency(incomeActual)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    of {formatCurrency(incomeBudget)}
+                  </div>
+                </div>
+                <div data-testid="tile-left-to-spend">
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Left to spend
+                  </div>
+                  <div className="text-2xl font-serif font-bold tabular-nums mt-1">
+                    {formatCurrency(remaining)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    across the rest of {shortMonth}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
 export default function DashboardPage() {
   const today = useMemo(() => new Date(), []);
   // Anchor weekly fetch to the April 2026 floor so the weekly cycler
@@ -884,14 +1184,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-serif font-bold text-foreground tracking-tight">
-          Ledger Overview
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Your family's financial snapshot.
-        </p>
-      </div>
+      <DashboardHero today={today} />
+      <MonthlySnapshot
+        today={today}
+        totalDebt={data.totalDebt}
+        activeDebtCount={data.activeDebtCount}
+      />
 
       <LifeThisWeek transactions={allTxns} today={today} />
       <DashboardMonthlySections

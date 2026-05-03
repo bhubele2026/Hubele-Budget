@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useSearch } from "wouter";
 import {
   useGetBudgetMonth,
   useUpsertBudgetLine,
@@ -125,10 +126,25 @@ function thisMonthStart(): string {
 }
 
 export default function BudgetPage() {
+  const search = useSearch();
   const [currentMonth, setCurrentMonth] = useState(() => {
+    const params = new URLSearchParams(search);
+    const m = params.get("month");
+    if (m && /^\d{4}-\d{2}-01$/.test(m)) {
+      return m < MIN_MONTH ? MIN_MONTH : m;
+    }
     const tm = thisMonthStart();
     return tm < MIN_MONTH ? MIN_MONTH : tm;
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const m = params.get("month");
+    if (m && /^\d{4}-\d{2}-01$/.test(m) && m !== currentMonth) {
+      setCurrentMonth(m);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   const { data: budgetData, isLoading: isLoadingBudget } =
     useGetBudgetMonth(currentMonth);
