@@ -5,6 +5,7 @@ import {
   avalancheSettingsTable,
   budgetCategoriesTable,
   budgetLinesTable,
+  budgetMonthsTable,
   transactionsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -19,6 +20,176 @@ const DEFAULTS = {
   manualExtra: "0",
   budgetMode: "budgeted" as const,
 };
+
+// System-managed budget category that mirrors the slider amount on the
+// Avalanche page. Editing the planned amount on the budget reflects back
+// into avalancheSettings.manualExtra.
+export const AVALANCHE_PAYMENT_NAME = "Avalanche payment";
+const AVALANCHE_PAYMENT_GROUP = "Avalanche — Extra to Highest APR";
+const AVALANCHE_PAYMENT_LEGACY_NAME = "Avalanche extra";
+
+// Ensures a single "Avalanche payment" expense category exists for the user
+// in the Avalanche group, renames any legacy "Avalanche extra" row to it,
+// and upserts that month's budget_lines row with planned = manualExtra.
+// Idempotent and safe to call from any GET/PUT path.
+export async function syncAvalanchePaymentCategory(
+  userId: string,
+  monthStart: string,
+): Promise<{ categoryId: string }> {
+  const settings = await ensureSettings(userId);
+  const manualExtra = settings.manualExtra ?? "0";
+
+  // 1. Rename legacy "Avalanche extra" → "Avalanche payment" if present and
+  //    the new name doesn't already exist (otherwise we'll merge below).
+  const [legacy] = await db
+    .select()
+    .from(budgetCategoriesTable)
+    .where(
+      and(
+        eq(budgetCategoriesTable.userId, userId),
+        eq(budgetCategoriesTable.name, AVALANCHE_PAYMENT_LEGACY_NAME),
+      ),
+    );
+  const [existing] = await db
+    .select()
+    .from(budgetCategoriesTable)
+    .where(
+      and(
+        eq(budgetCategoriesTable.userId, userId),
+        eq(budgetCategoriesTable.name, AVALANCHE_PAYMENT_NAME),
+      ),
+    );
+
+  let catId: string;
+  if (legacy && !existing) {
+    const [renamed] = await db
+      .update(budgetCategoriesTable)
+      .set({
+        name: AVALANCHE_PAYMENT_NAME,
+        groupName: AVALANCHE_PAYMENT_GROUP,
+        kind: "expense",
+        sourceKind: "manual",
+      })
+      .where(eq(budgetCategoriesTable.id, legacy.id))
+      .returning();
+    catId = renamed!.id;
+  } else if (existing) {
+    catId = existing.id;
+    if (legacy) {
+      // Both rows exist (rare). Move budget_lines from legacy to the canonical
+      // row, then drop the legacy row.
+      const legacyLines = await db
+        .select()
+        .from(budgetLinesTable)
+        .where(
+          and(
+            eq(budgetLinesTable.userId, userId),
+            eq(budgetLinesTable.categoryId, legacy.id),
+          ),
+        );
+      for (const ll of legacyLines) {
+        await db
+          .insert(budgetLinesTable)
+          .values({
+            userId,
+            monthStart: ll.monthStart,
+            categoryId: catId,
+            plannedAmount: ll.plannedAmount,
+            note: ll.note,
+          })
+          .onConflictDoNothing({
+            target: [
+              budgetLinesTable.userId,
+              budgetLinesTable.monthStart,
+              budgetLinesTable.categoryId,
+            ],
+          });
+      }
+      await db
+        .delete(budgetCategoriesTable)
+        .where(eq(budgetCategoriesTable.id, legacy.id));
+    }
+    if (
+      existing.groupName !== AVALANCHE_PAYMENT_GROUP ||
+      existing.kind !== "expense" ||
+      existing.sourceKind !== "manual"
+    ) {
+      await db
+        .update(budgetCategoriesTable)
+        .set({
+          groupName: AVALANCHE_PAYMENT_GROUP,
+          kind: "expense",
+          sourceKind: "manual",
+        })
+        .where(eq(budgetCategoriesTable.id, catId));
+    }
+  } else {
+    const [created] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId,
+        name: AVALANCHE_PAYMENT_NAME,
+        kind: "expense",
+        groupName: AVALANCHE_PAYMENT_GROUP,
+        sourceKind: "manual",
+        sortOrder: 800,
+      })
+      .onConflictDoUpdate({
+        target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+        set: {
+          groupName: AVALANCHE_PAYMENT_GROUP,
+          kind: "expense",
+          sourceKind: "manual",
+        },
+      })
+      .returning();
+    catId = created!.id;
+  }
+
+  // 2. Ensure the budget month exists, then upsert the line for this month.
+  await db
+    .insert(budgetMonthsTable)
+    .values({ userId, monthStart })
+    .onConflictDoNothing();
+  await db
+    .insert(budgetLinesTable)
+    .values({
+      userId,
+      monthStart,
+      categoryId: catId,
+      plannedAmount: manualExtra,
+      note: "Managed by Avalanche planner",
+    })
+    .onConflictDoUpdate({
+      target: [
+        budgetLinesTable.userId,
+        budgetLinesTable.monthStart,
+        budgetLinesTable.categoryId,
+      ],
+      set: { plannedAmount: manualExtra, note: "Managed by Avalanche planner" },
+    });
+
+  return { categoryId: catId };
+}
+
+// Returns whether the given budget category is the system-managed
+// "Avalanche payment" line.
+export async function isAvalanchePaymentCategory(
+  userId: string,
+  categoryId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select()
+    .from(budgetCategoriesTable)
+    .where(
+      and(
+        eq(budgetCategoriesTable.id, categoryId),
+        eq(budgetCategoriesTable.userId, userId),
+        eq(budgetCategoriesTable.name, AVALANCHE_PAYMENT_NAME),
+      ),
+    );
+  return !!row;
+}
 
 async function ensureSettings(userId: string) {
   const [row] = await db
@@ -61,11 +232,19 @@ export async function resolveExtraForUser(userId: string) {
   const source = settings.extraSource ?? "manual";
   const mode = settings.budgetMode ?? "budgeted";
 
+  // Headroom is computed for every source so the UI can always show the
+  // "Room left in budget / Over budget by" indicator next to the slider.
+  const headroom = await computeBudgetHeadroom(userId, monthStart);
+
   if (source === "manual") {
     return {
       source: "manual" as const,
       amount: settings.manualExtra ?? "0",
       monthStart,
+      availableMoney: headroom.availableMoney,
+      plannedAvalanchePayment: headroom.plannedAvalanchePayment,
+      plannedIncome: headroom.plannedIncome,
+      plannedExpenses: headroom.plannedExpenses,
     };
   }
 
@@ -211,6 +390,10 @@ export async function resolveExtraForUser(userId: string) {
     amount: net.toFixed(2),
     monthStart,
     mode,
+    availableMoney: headroom.availableMoney,
+    plannedAvalanchePayment: headroom.plannedAvalanchePayment,
+    plannedIncome: headroom.plannedIncome,
+    plannedExpenses: headroom.plannedExpenses,
     breakdown: {
       income: income.toFixed(2),
       expenses: expenses.toFixed(2),
@@ -220,7 +403,57 @@ export async function resolveExtraForUser(userId: string) {
   };
 }
 
+// "Headroom" available for the avalanche payment line for the given month.
+// availableMoney = plannedIncome − (plannedExpenses − plannedAvalanchePayment).
+// We exclude the avalanche payment itself from the expense side so the slider
+// represents "everything else is already accounted for, here's how much room
+// you have to throw at debt" rather than fighting itself.
+async function computeBudgetHeadroom(userId: string, monthStart: string) {
+  const rows = await db
+    .select({
+      kind: budgetCategoriesTable.kind,
+      name: budgetCategoriesTable.name,
+      planned: sql<string>`coalesce(sum(${budgetLinesTable.plannedAmount})::text, '0')`,
+    })
+    .from(budgetLinesTable)
+    .innerJoin(
+      budgetCategoriesTable,
+      eq(budgetLinesTable.categoryId, budgetCategoriesTable.id),
+    )
+    .where(
+      and(
+        eq(budgetLinesTable.userId, userId),
+        eq(budgetLinesTable.monthStart, monthStart),
+      ),
+    )
+    .groupBy(budgetCategoriesTable.kind, budgetCategoriesTable.name);
+
+  let plannedIncome = 0;
+  let plannedExpenses = 0;
+  let plannedAvalanchePayment = 0;
+  for (const r of rows) {
+    const v = Number(r.planned) || 0;
+    if (r.kind === "income") plannedIncome += v;
+    else plannedExpenses += v;
+    if (r.name === AVALANCHE_PAYMENT_NAME) plannedAvalanchePayment = v;
+  }
+  const availableMoney = Math.max(
+    0,
+    plannedIncome - (plannedExpenses - plannedAvalanchePayment),
+  );
+  return {
+    availableMoney: availableMoney.toFixed(2),
+    plannedIncome: plannedIncome.toFixed(2),
+    plannedExpenses: plannedExpenses.toFixed(2),
+    plannedAvalanchePayment: plannedAvalanchePayment.toFixed(2),
+  };
+}
+
 router.get("/avalanche/extra", requireAuth, async (req, res): Promise<void> => {
+  // Make sure the managed "Avalanche payment" budget line for this month
+  // is in sync with manualExtra before we read budget headroom.
+  const monthStart = currentMonthStart();
+  await syncAvalanchePaymentCategory(req.userId!, monthStart);
   const result = await resolveExtraForUser(req.userId!);
   res.json(result);
 });
@@ -242,6 +475,10 @@ router.put("/avalanche/settings", requireAuth, async (req, res): Promise<void> =
     .set({ ...parsed.data, updatedAt: new Date() })
     .where(eq(avalancheSettingsTable.userId, req.userId!))
     .returning();
+  // Mirror the new manualExtra into the managed budget line for this month.
+  if (parsed.data.manualExtra !== undefined) {
+    await syncAvalanchePaymentCategory(req.userId!, currentMonthStart());
+  }
   res.json(present(row));
 });
 

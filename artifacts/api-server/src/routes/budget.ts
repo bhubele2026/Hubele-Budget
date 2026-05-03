@@ -14,6 +14,11 @@ import {
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
+  syncAvalanchePaymentCategory,
+  isAvalanchePaymentCategory,
+  AVALANCHE_PAYMENT_NAME,
+} from "./avalanche";
+import {
   CreateCategoryBody,
   DeleteCategoryParams,
   GetBudgetMonthParams,
@@ -778,6 +783,10 @@ router.get(
     // match the current Debts state (adds, removes, renames, min changes).
     await syncAutoDebtCategories(req.userId!, monthStart);
 
+    // Ensure the system-managed "Avalanche payment" line is present and
+    // mirrors avalancheSettings.manualExtra for this month.
+    await syncAvalanchePaymentCategory(req.userId!, monthStart);
+
     const [month] = await db
       .select()
       .from(budgetMonthsTable)
@@ -1172,6 +1181,22 @@ router.post("/budget/lines", requireAuth, async (req, res): Promise<void> => {
       .insert(budgetLinesTable)
       .values({ ...parsed.data, userId: req.userId! })
       .returning();
+  }
+
+  // If the user just edited the managed "Avalanche payment" line on the
+  // Budget page, push the new amount back into avalancheSettings.manualExtra
+  // so the Avalanche slider stays in sync.
+  if (await isAvalanchePaymentCategory(req.userId!, parsed.data.categoryId)) {
+    await db
+      .insert(avalancheSettingsTable)
+      .values({ userId: req.userId!, manualExtra: parsed.data.plannedAmount })
+      .onConflictDoUpdate({
+        target: avalancheSettingsTable.userId,
+        set: {
+          manualExtra: parsed.data.plannedAmount,
+          updatedAt: new Date(),
+        },
+      });
   }
   res.json(row);
 });

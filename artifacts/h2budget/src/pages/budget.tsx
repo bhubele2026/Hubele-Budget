@@ -524,6 +524,10 @@ function BudgetLineRow({
         : "text-muted-foreground";
   const pct = planned > 0 ? Math.round((actual / planned) * 100) : null;
   const sourceKind = line.sourceKind as SourceKind;
+  // The "Avalanche payment" line is system-managed: created/updated by the
+  // Avalanche page slider. It's still editable here (POST mirrors back into
+  // avalancheSettings.manualExtra) but it can't be deleted.
+  const isAvalanchePayment = line.categoryName === "Avalanche payment";
   const isReadOnly = sourceKind !== "manual";
 
   return (
@@ -552,20 +556,30 @@ function BudgetLineRow({
               {b.source} · {b.count}
             </Badge>
           ))}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 ml-auto md:ml-0 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
-            onClick={() => onDelete(line.categoryId)}
-            data-testid={`button-delete-${line.categoryId}`}
-            title={
-              isReadOnly
-                ? "Delete this auto-pulled line (re-seeding will restore it)"
-                : "Delete this line"
-            }
-          >
-            <Trash2 className="w-3 h-3" />
-          </Button>
+          {isAvalanchePayment ? (
+            <Badge
+              variant="outline"
+              className="text-[10px] font-normal ml-auto md:ml-0 border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300"
+              title="Edit this on the Avalanche page slider — both stay in sync."
+            >
+              Managed by Avalanche
+            </Badge>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 ml-auto md:ml-0 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+              onClick={() => onDelete(line.categoryId)}
+              data-testid={`button-delete-${line.categoryId}`}
+              title={
+                isReadOnly
+                  ? "Delete this auto-pulled line (re-seeding will restore it)"
+                  : "Delete this line"
+              }
+            >
+              <Trash2 className="w-3 h-3" />
+            </Button>
+          )}
         </div>
         {line.note && (
           <div className="text-xs text-muted-foreground mt-0.5">

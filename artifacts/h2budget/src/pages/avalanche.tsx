@@ -51,6 +51,7 @@ import {
   monthsIfMinOnly,
   interestIfMinOnly,
   dailyInterest,
+  findExtraForPayoff,
   fmtMoney,
   fmtMoneyCompact,
   fmtMonth,
@@ -311,15 +312,21 @@ export default function AvalanchePage() {
     }
   };
 
-  // Avalanche budget cap: a soft headroom around the current manual extra.
-  // Real budget integration lives behind extraSource (budget_net / budget_line)
-  // and is owned by Phase 5 — for now we derive a friendly cap from the manual
-  // amount so the slider has somewhere to go.
+  // Slider ceiling = max( real money available this month, extra needed to
+  // pay every debt off in 12 months ). The first anchors the slider to the
+  // user's real budget headroom; the second guarantees the slider can always
+  // reach a meaningful payoff target even if the budget is loose.
+  const availableMoney = Number(resolvedExtra?.availableMoney ?? 0);
+  const extraForPayoff = useMemo(
+    () => findExtraForPayoff(simDebts, strategy, 12) ?? 0,
+    [simDebts, strategy],
+  );
   const budgetCap = useMemo(() => {
-    const base = Math.max(manualExtra * 1.25, manualExtra + 250, 500);
+    const base = Math.max(availableMoney, extraForPayoff, manualExtra, 500);
     return Math.ceil(base / 25) * 25;
-  }, [manualExtra]);
-  const roomLeft = Math.max(0, budgetCap - manualExtra);
+  }, [availableMoney, extraForPayoff, manualExtra]);
+  const roomLeft = availableMoney - manualExtra;
+  const overBudget = roomLeft < 0;
 
   // Progress: paid-down vs original total balance. Without a history snapshot
   // we currently have only the live balance, so progress reads 0% until that
@@ -407,9 +414,12 @@ export default function AvalanchePage() {
           value={sim.ranOutOfTime ? "∞" : String(sim.monthsToFreedom)}
           sub={
             sim.ranOutOfTime
-              ? "raise the extra"
+              ? sim.underwater.length > 0
+                ? `${sim.underwater[0]!.name} interest > minimum`
+                : "raise the extra"
               : `${(sim.monthsToFreedom / 12).toFixed(1)} yrs`
           }
+          valueClassName={sim.ranOutOfTime ? "text-destructive" : undefined}
         />
         <StatStripCell
           label="Debt-free date"
@@ -417,10 +427,27 @@ export default function AvalanchePage() {
         />
         <StatStripCell
           label="Total interest"
-          value={fmtMoneyCompact(sim.totalInterestPaid)}
+          value={sim.ranOutOfTime ? "∞" : fmtMoneyCompact(sim.totalInterestPaid)}
           valueClassName="text-destructive"
         />
       </div>
+      {sim.ranOutOfTime && sim.underwater.length > 0 && (
+        <div
+          className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"
+          data-testid="banner-underwater"
+        >
+          <strong>Underwater:</strong> the minimum payment doesn't cover monthly
+          interest on{" "}
+          {sim.underwater.map((u, i) => (
+            <span key={u.id}>
+              {i > 0 && ", "}
+              <strong>{u.name}</strong> ({fmtMoney(u.monthlyInterest)} interest
+              vs {fmtMoney(u.minPayment)} min)
+            </span>
+          ))}
+          . Raise the minimum or add extra to start making progress.
+        </div>
+      )}
 
       {/* Progress row */}
       <div>
@@ -573,11 +600,30 @@ export default function AvalanchePage() {
                       })
                     }
                   />
-                  <div className="text-xs text-muted-foreground mt-2">
-                    Room left in budget:{" "}
-                    <span className="tabular-nums text-foreground font-medium">
-                      {fmtMoney(roomLeft)}
-                    </span>
+                  <div
+                    className={`text-xs mt-2 ${overBudget ? "text-destructive font-medium" : "text-muted-foreground"}`}
+                    data-testid="text-room-left"
+                  >
+                    {overBudget ? (
+                      <>
+                        Over budget by{" "}
+                        <span className="tabular-nums">
+                          {fmtMoney(Math.abs(roomLeft))}
+                        </span>{" "}
+                        — only{" "}
+                        <span className="tabular-nums">
+                          {fmtMoney(availableMoney)}
+                        </span>{" "}
+                        free this month.
+                      </>
+                    ) : (
+                      <>
+                        Room left in budget:{" "}
+                        <span className="tabular-nums text-foreground font-medium">
+                          {fmtMoney(roomLeft)}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
                 <button

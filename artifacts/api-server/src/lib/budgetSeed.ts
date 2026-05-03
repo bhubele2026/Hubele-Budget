@@ -270,7 +270,9 @@ export const SEED_CATEGORIES: SeedCategory[] = [
   // rows here — adding/removing/editing a debt updates this group automatically.
 
   // Avalanche — Extra to Highest APR
-  { groupName: "Avalanche — Extra to Highest APR", kind: "expense", sourceKind: "manual", name: "Avalanche extra", planned: "2225.00", note: "Tag transactions with category 'Avalanche extra' to feed Actual" },
+  // The "Avalanche payment" line is system-managed: it's created and kept in
+  // sync by syncAvalanchePaymentCategory based on avalancheSettings.manualExtra.
+  // No seed entry here on purpose.
 
   // 7. Lifestyle & Shopping
   { groupName: "Lifestyle & Shopping", kind: "expense", sourceKind: "manual", name: "Subscriptions", planned: "315.62", note: "Streaming, tech, software, gaming" },

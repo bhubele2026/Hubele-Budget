@@ -47,6 +47,16 @@ export type DebtKill = {
   monthIndex: number;
 };
 
+export type UnderwaterDebt = {
+  id: string;
+  name: string;
+  apr: number;
+  balance: number;
+  minPayment: number;
+  monthlyInterest: number;
+  shortfallPerMonth: number;
+};
+
 export type SimResult = {
   months: SimMonth[];
   monthsToFreedom: number;
@@ -56,6 +66,7 @@ export type SimResult = {
   startingTotalMin: number;
   killedOrder: DebtKill[];
   ranOutOfTime: boolean;
+  underwater: UnderwaterDebt[];
 };
 
 const CENTS = 0.005;
@@ -213,6 +224,33 @@ export function simulate(opts: {
   const monthsToFreedom = ranOutOfTime ? Infinity : months.length;
   const debtFreeDate = ranOutOfTime || months.length === 0 ? null : last.date;
 
+  // Underwater detection: when the sim ran out of time, surface every debt
+  // whose monthly interest exceeds the payment it actually receives, so the
+  // UI can name the offending debt(s) instead of just showing ∞.
+  const underwater: UnderwaterDebt[] = [];
+  if (ranOutOfTime) {
+    const startBalances = new Map<string, number>(
+      opts.debts.map((d) => [d.id, d.balance]),
+    );
+    for (const d of work) {
+      if (d.balance <= CENTS) continue;
+      const startBal = startBalances.get(d.id) ?? d.balance;
+      if (d.balance < startBal - CENTS) continue; // making progress, just slow
+      const monthlyInterest = round2(d.balance * (d.apr / 12));
+      const shortfall = round2(monthlyInterest - d.minPayment);
+      if (shortfall <= 0) continue;
+      underwater.push({
+        id: d.id,
+        name: d.name,
+        apr: d.apr,
+        balance: d.balance,
+        minPayment: d.minPayment,
+        monthlyInterest,
+        shortfallPerMonth: shortfall,
+      });
+    }
+  }
+
   return {
     months,
     monthsToFreedom,
@@ -222,7 +260,39 @@ export function simulate(opts: {
     startingTotalMin,
     killedOrder,
     ranOutOfTime,
+    underwater,
   };
+}
+
+// Returns the smallest monthly extra (in dollars) that pays off all active
+// debts within `maxMonths` using the given strategy. Used to pick a slider
+// ceiling that's always reachable. Returns null when no amount works (e.g.
+// no debts).
+export function findExtraForPayoff(
+  debts: SimDebt[],
+  strategy: Strategy,
+  maxMonths = 60,
+): number | null {
+  const active = debts.filter((d) => (d.status ?? "active") === "active" && d.balance > CENTS);
+  if (active.length === 0) return 0;
+  const totalBalance = active.reduce((s, d) => s + d.balance, 0);
+  // Upper bound: pay off everything in one month at most.
+  let lo = 0;
+  let hi = Math.max(totalBalance, 1000);
+  // Sanity: try the upper bound first.
+  const top = simulate({ debts, extraPerMonth: hi, strategy });
+  if (top.ranOutOfTime || top.monthsToFreedom > maxMonths) {
+    // Even paying off the entire balance in a month isn't enough? unlikely.
+    return Math.ceil(hi);
+  }
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    const r = simulate({ debts, extraPerMonth: mid, strategy });
+    if (r.ranOutOfTime || r.monthsToFreedom > maxMonths) lo = mid;
+    else hi = mid;
+    if (hi - lo < 25) break;
+  }
+  return Math.ceil(hi / 25) * 25;
 }
 
 export function monthsIfMinOnly(debt: SimDebt): number | null {

@@ -400,6 +400,10 @@ export interface AvalancheExtra {
   amount: string;
   monthStart: string;
   mode?: AvalancheExtraMode;
+  availableMoney?: string;
+  plannedAvalanchePayment?: string;
+  plannedIncome?: string;
+  plannedExpenses?: string;
   breakdown?: AvalancheExtraBreakdown;
 }
 

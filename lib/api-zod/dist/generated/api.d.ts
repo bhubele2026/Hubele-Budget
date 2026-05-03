@@ -1438,6 +1438,10 @@ export declare const GetAvalancheExtraResponse: zod.ZodObject<{
     amount: zod.ZodString;
     monthStart: zod.ZodString;
     mode: zod.ZodOptional<zod.ZodEnum<["budgeted", "actual"]>>;
+    availableMoney: zod.ZodOptional<zod.ZodString>;
+    plannedAvalanchePayment: zod.ZodOptional<zod.ZodString>;
+    plannedIncome: zod.ZodOptional<zod.ZodString>;
+    plannedExpenses: zod.ZodOptional<zod.ZodString>;
     breakdown: zod.ZodOptional<zod.ZodObject<{
         income: zod.ZodOptional<zod.ZodString>;
         expenses: zod.ZodOptional<zod.ZodString>;
@@ -1451,19 +1455,19 @@ export declare const GetAvalancheExtraResponse: zod.ZodObject<{
         categoryId?: string | null | undefined;
         categoryName?: string | null | undefined;
         actual?: string | undefined;
-        income?: string | undefined;
-        expenses?: string | undefined;
         plannedIncome?: string | undefined;
         plannedExpenses?: string | undefined;
+        income?: string | undefined;
+        expenses?: string | undefined;
         planned?: string | undefined;
     }, {
         categoryId?: string | null | undefined;
         categoryName?: string | null | undefined;
         actual?: string | undefined;
-        income?: string | undefined;
-        expenses?: string | undefined;
         plannedIncome?: string | undefined;
         plannedExpenses?: string | undefined;
+        income?: string | undefined;
+        expenses?: string | undefined;
         planned?: string | undefined;
     }>>;
 }, "strip", zod.ZodTypeAny, {
@@ -1471,14 +1475,18 @@ export declare const GetAvalancheExtraResponse: zod.ZodObject<{
     source: "manual" | "budget_net" | "budget_line";
     monthStart: string;
     mode?: "budgeted" | "actual" | undefined;
+    availableMoney?: string | undefined;
+    plannedAvalanchePayment?: string | undefined;
+    plannedIncome?: string | undefined;
+    plannedExpenses?: string | undefined;
     breakdown?: {
         categoryId?: string | null | undefined;
         categoryName?: string | null | undefined;
         actual?: string | undefined;
-        income?: string | undefined;
-        expenses?: string | undefined;
         plannedIncome?: string | undefined;
         plannedExpenses?: string | undefined;
+        income?: string | undefined;
+        expenses?: string | undefined;
         planned?: string | undefined;
     } | undefined;
 }, {
@@ -1486,14 +1494,18 @@ export declare const GetAvalancheExtraResponse: zod.ZodObject<{
     source: "manual" | "budget_net" | "budget_line";
     monthStart: string;
     mode?: "budgeted" | "actual" | undefined;
+    availableMoney?: string | undefined;
+    plannedAvalanchePayment?: string | undefined;
+    plannedIncome?: string | undefined;
+    plannedExpenses?: string | undefined;
     breakdown?: {
         categoryId?: string | null | undefined;
         categoryName?: string | null | undefined;
         actual?: string | undefined;
-        income?: string | undefined;
-        expenses?: string | undefined;
         plannedIncome?: string | undefined;
         plannedExpenses?: string | undefined;
+        income?: string | undefined;
+        expenses?: string | undefined;
         planned?: string | undefined;
     } | undefined;
 }>;

@@ -1033,6 +1033,10 @@ components:
         amount: { type: string }
         monthStart: { type: string }
         mode: { type: string, enum: [budgeted, actual] }
+        availableMoney: { type: string }
+        plannedAvalanchePayment: { type: string }
+        plannedIncome: { type: string }
+        plannedExpenses: { type: string }
         breakdown:
           type: object
           properties:
