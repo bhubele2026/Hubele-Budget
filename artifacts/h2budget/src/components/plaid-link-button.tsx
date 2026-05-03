@@ -13,6 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+export const PLAID_LINK_TOKEN_STORAGE_KEY = "h2:plaid:link_token";
+export const PLAID_RETURN_TO_STORAGE_KEY = "h2:plaid:return_to";
+
 export function PlaidLinkButton({
   onLinked,
   label,
@@ -39,6 +42,15 @@ export function PlaidLinkButton({
     });
   }, [createLinkToken, toast]);
 
+  const clearStoredLinkToken = useCallback(() => {
+    try {
+      localStorage.removeItem(PLAID_LINK_TOKEN_STORAGE_KEY);
+      localStorage.removeItem(PLAID_RETURN_TO_STORAGE_KEY);
+    } catch {
+      // ignore — storage may be unavailable
+    }
+  }, []);
+
   const onSuccess = useCallback(
     (publicToken: string, metadata: { institution?: { institution_id?: string; name?: string } | null }) => {
       exchange.mutate(
@@ -63,6 +75,7 @@ export function PlaidLinkButton({
             qc.invalidateQueries({ queryKey: getListPlaidLiabilityAccountsQueryKey() });
             toast({ title: "Account linked", description: "Transactions are syncing." });
             setLinkToken(null);
+            clearStoredLinkToken();
             onLinked?.();
           },
           onError: (err) => {
@@ -71,21 +84,36 @@ export function PlaidLinkButton({
               description: String(err),
               variant: "destructive",
             });
+            clearStoredLinkToken();
           },
         },
       );
     },
-    [exchange, qc, toast],
+    [exchange, qc, toast, clearStoredLinkToken, onLinked],
   );
 
   const { open, ready } = usePlaidLink({
     token: linkToken,
     onSuccess,
-    onExit: () => setLinkToken(null),
+    onExit: () => {
+      setLinkToken(null);
+      clearStoredLinkToken();
+    },
   });
 
   useEffect(() => {
     if (linkToken && ready) {
+      // Stash the active link_token (and where to return to) before
+      // opening Link, so OAuth bounce-back can resume the handshake.
+      try {
+        localStorage.setItem(PLAID_LINK_TOKEN_STORAGE_KEY, linkToken);
+        localStorage.setItem(
+          PLAID_RETURN_TO_STORAGE_KEY,
+          window.location.pathname + window.location.search,
+        );
+      } catch {
+        // ignore — non-OAuth banks still work without storage
+      }
       open();
     }
   }, [linkToken, ready, open]);

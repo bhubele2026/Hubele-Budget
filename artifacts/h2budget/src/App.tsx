@@ -27,6 +27,7 @@ import BillsPage from "./pages/bills";
 import BudgetPage from "./pages/budget";
 import MappingRulesPage from "./pages/mapping-rules";
 import SettingsPage from "./pages/settings";
+import PlaidOAuthPage from "./pages/plaid-oauth";
 import NotFound from "./pages/not-found";
 
 const queryClient = new QueryClient();
@@ -120,6 +121,7 @@ function ProtectedShell() {
             </Route>
             <Route path="/mapping-rules" component={MappingRulesPage} />
             <Route path="/settings" component={SettingsPage} />
+            <Route path="/plaid-oauth" component={PlaidOAuthPage} />
             <Route component={NotFound} />
           </Switch>
         </AppLayout>

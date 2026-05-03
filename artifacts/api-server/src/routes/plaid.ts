@@ -21,6 +21,7 @@ const router: IRouter = Router();
 
 router.post("/plaid/link-token", requireAuth, async (req, res): Promise<void> => {
   try {
+    const redirectUri = process.env.PLAID_REDIRECT_URI?.trim();
     const resp = await plaid().linkTokenCreate({
       user: { client_user_id: req.userId! },
       client_name: "H2 Family Budget",
@@ -28,6 +29,7 @@ router.post("/plaid/link-token", requireAuth, async (req, res): Promise<void> =>
       optional_products: PLAID_OPTIONAL_PRODUCTS,
       country_codes: PLAID_COUNTRY_CODES,
       language: "en",
+      ...(redirectUri ? { redirect_uri: redirectUri } : {}),
     });
     res.json({
       linkToken: resp.data.link_token,
