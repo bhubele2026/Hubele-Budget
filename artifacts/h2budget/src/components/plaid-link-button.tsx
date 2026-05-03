@@ -5,13 +5,21 @@ import {
   useExchangePlaidPublicToken,
   getListPlaidItemsQueryKey,
   getListTransactionsQueryKey,
+  getListPlaidLiabilityAccountsQueryKey,
+  listPlaidLiabilityAccounts,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-export function PlaidLinkButton() {
+export function PlaidLinkButton({
+  onLinked,
+  label,
+}: {
+  onLinked?: () => void;
+  label?: string;
+} = {}) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const createLinkToken = useCreatePlaidLinkToken();
   const exchange = useExchangePlaidPublicToken();
@@ -42,11 +50,20 @@ export function PlaidLinkButton() {
           },
         },
         {
-          onSuccess: () => {
+          onSuccess: async () => {
             qc.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
             qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+            // Trigger a server-side liabilities fetch so debt-like accounts
+            // appear immediately in pickers, then refresh the cached query.
+            try {
+              await listPlaidLiabilityAccounts({ refresh: true });
+            } catch {
+              // ignore — query invalidation below will retry without refresh
+            }
+            qc.invalidateQueries({ queryKey: getListPlaidLiabilityAccountsQueryKey() });
             toast({ title: "Account linked", description: "Transactions are syncing." });
             setLinkToken(null);
+            onLinked?.();
           },
           onError: (err) => {
             toast({
@@ -82,7 +99,7 @@ export function PlaidLinkButton() {
       ) : (
         <Plus className="w-4 h-4 mr-2" />
       )}
-      Link a Bank or Card
+      {label ?? "Link a Bank or Card"}
     </Button>
   );
 }

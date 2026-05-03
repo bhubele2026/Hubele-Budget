@@ -226,6 +226,26 @@ export const ListDebtsResponseItem = zod.object({
   statementDay: zod.number().nullish(),
   notes: zod.string().nullish(),
   lastBalanceUpdate: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+  plaidLastSyncedAt: zod.string().nullish(),
+  balanceSource: zod.enum(["plaid", "manual"]),
+  aprSource: zod.enum(["plaid", "manual"]),
+  minPaymentSource: zod.enum(["plaid", "manual"]),
+  plaidAccount: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+        type: zod.string().nullish(),
+        subtype: zod.string().nullish(),
+        liabilityKind: zod.string().nullish(),
+        institutionName: zod.string().nullish(),
+        institutionSlug: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
 });
 export const ListDebtsResponse = zod.array(ListDebtsResponseItem);
 
@@ -243,6 +263,164 @@ export const CreateDebtBody = zod.object({
   notes: zod.string().nullish(),
   lastBalanceUpdate: zod.string().nullish(),
 });
+
+export const LinkDebtToPlaidParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const LinkDebtToPlaidBody = zod.object({
+  plaidAccountId: zod.string(),
+});
+
+export const LinkDebtToPlaidResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  balance: zod.string(),
+  apr: zod.string(),
+  minPayment: zod.string(),
+  payment: zod.string(),
+  type: zod.string().nullish(),
+  status: zod.string(),
+  sortOrder: zod.number(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+  plaidLastSyncedAt: zod.string().nullish(),
+  balanceSource: zod.enum(["plaid", "manual"]),
+  aprSource: zod.enum(["plaid", "manual"]),
+  minPaymentSource: zod.enum(["plaid", "manual"]),
+  plaidAccount: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+        type: zod.string().nullish(),
+        subtype: zod.string().nullish(),
+        liabilityKind: zod.string().nullish(),
+        institutionName: zod.string().nullish(),
+        institutionSlug: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
+
+export const UnlinkDebtFromPlaidParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UnlinkDebtFromPlaidResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  balance: zod.string(),
+  apr: zod.string(),
+  minPayment: zod.string(),
+  payment: zod.string(),
+  type: zod.string().nullish(),
+  status: zod.string(),
+  sortOrder: zod.number(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+  plaidLastSyncedAt: zod.string().nullish(),
+  balanceSource: zod.enum(["plaid", "manual"]),
+  aprSource: zod.enum(["plaid", "manual"]),
+  minPaymentSource: zod.enum(["plaid", "manual"]),
+  plaidAccount: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+        type: zod.string().nullish(),
+        subtype: zod.string().nullish(),
+        liabilityKind: zod.string().nullish(),
+        institutionName: zod.string().nullish(),
+        institutionSlug: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
+
+export const RefreshDebtFromPlaidParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const RefreshDebtFromPlaidResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  balance: zod.string(),
+  apr: zod.string(),
+  minPayment: zod.string(),
+  payment: zod.string(),
+  type: zod.string().nullish(),
+  status: zod.string(),
+  sortOrder: zod.number(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+  plaidLastSyncedAt: zod.string().nullish(),
+  balanceSource: zod.enum(["plaid", "manual"]),
+  aprSource: zod.enum(["plaid", "manual"]),
+  minPaymentSource: zod.enum(["plaid", "manual"]),
+  plaidAccount: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+        type: zod.string().nullish(),
+        subtype: zod.string().nullish(),
+        liabilityKind: zod.string().nullish(),
+        institutionName: zod.string().nullish(),
+        institutionSlug: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
+
+export const ListPlaidLiabilityAccountsQueryParams = zod.object({
+  refresh: zod.coerce.boolean().optional(),
+});
+
+export const ListPlaidLiabilityAccountsResponseItem = zod.object({
+  id: zod.string(),
+  accountId: zod.string(),
+  name: zod.string().nullish(),
+  officialName: zod.string().nullish(),
+  mask: zod.string().nullish(),
+  type: zod.string().nullish(),
+  subtype: zod.string().nullish(),
+  liabilityKind: zod.string().nullish(),
+  balance: zod.string().nullish(),
+  apr: zod.string().nullish(),
+  minPayment: zod.string().nullish(),
+  lastFetchedAt: zod.string().nullish(),
+  institutionId: zod.string().nullish(),
+  institutionName: zod.string().nullish(),
+  institutionSlug: zod.string().nullish(),
+  linkedDebt: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
+export const ListPlaidLiabilityAccountsResponse = zod.array(
+  ListPlaidLiabilityAccountsResponseItem,
+);
 
 export const SyncDebtMinimumsResponse = zod.object({
   updated: zod.array(
@@ -345,6 +523,26 @@ export const UpdateDebtResponse = zod.object({
   statementDay: zod.number().nullish(),
   notes: zod.string().nullish(),
   lastBalanceUpdate: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+  plaidLastSyncedAt: zod.string().nullish(),
+  balanceSource: zod.enum(["plaid", "manual"]),
+  aprSource: zod.enum(["plaid", "manual"]),
+  minPaymentSource: zod.enum(["plaid", "manual"]),
+  plaidAccount: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+        type: zod.string().nullish(),
+        subtype: zod.string().nullish(),
+        liabilityKind: zod.string().nullish(),
+        institutionName: zod.string().nullish(),
+        institutionSlug: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
 });
 
 export const DeleteDebtParams = zod.object({

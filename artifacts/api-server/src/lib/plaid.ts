@@ -39,6 +39,7 @@ export function plaid(): PlaidApi {
 }
 
 export const PLAID_PRODUCTS = [Products.Transactions];
+export const PLAID_OPTIONAL_PRODUCTS = [Products.Liabilities];
 export const PLAID_COUNTRY_CODES = [CountryCode.Us];
 
 export type { PlaidTxn, RemovedTransaction };

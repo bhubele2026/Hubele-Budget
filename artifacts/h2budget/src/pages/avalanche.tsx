@@ -69,6 +69,12 @@ import {
   Legend,
 } from "recharts";
 import { Pencil, Trash2, Plus, RefreshCw, Flame, TrendingDown, PartyPopper, X, ClipboardPaste, Sparkles } from "lucide-react";
+import {
+  DebtPlaidActions,
+  DebtPlaidIndicator,
+  DebtLastSynced,
+  DebtPlaidSource,
+} from "@/components/debt-plaid-link";
 
 function debtToSim(d: Debt): SimDebt {
   return {
@@ -743,12 +749,13 @@ export default function AvalanchePage() {
                     <th className="text-right px-3 py-2">Daily $</th>
                     <th className="px-3 py-2"></th>
                     <th className="px-3 py-2"></th>
+                    <th className="px-3 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedActive.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="text-center py-8 text-muted-foreground">
+                      <td colSpan={11} className="text-center py-8 text-muted-foreground">
                         No active debts. Add one to get started.
                       </td>
                     </tr>
@@ -782,18 +789,29 @@ export default function AvalanchePage() {
                             </Badge>
                           )}
                           {d.name}
+                          <DebtPlaidSource debt={dbt} />
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">{dbt.type ?? "—"}</td>
                         <td
                           className={`px-3 py-2 text-right tabular-nums ${aprToneClass(d.apr)}`}
                         >
-                          {fmtPct(d.apr)}
+                          <div className="flex items-center justify-end gap-1">
+                            <span>{fmtPct(d.apr)}</span>
+                            <DebtPlaidIndicator debt={dbt} field="apr" />
+                          </div>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">
-                          {fmtMoney(d.balance)}
+                          <div className="flex items-center justify-end gap-1">
+                            <span>{fmtMoney(d.balance)}</span>
+                            <DebtPlaidIndicator debt={dbt} field="balance" />
+                          </div>
+                          <DebtLastSynced debt={dbt} />
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">
-                          {fmtMoney(d.minPayment)}
+                          <div className="flex items-center justify-end gap-1">
+                            <span>{fmtMoney(d.minPayment)}</span>
+                            <DebtPlaidIndicator debt={dbt} field="minPayment" />
+                          </div>
                         </td>
                         <td className="px-3 py-2">{dueChip}</td>
                         <td className="px-3 py-2 text-right text-xs text-muted-foreground">
@@ -813,6 +831,12 @@ export default function AvalanchePage() {
                           >
                             Pay
                           </Button>
+                        </td>
+                        <td
+                          className="px-3 py-2 text-right"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <DebtPlaidActions debt={dbt} />
                         </td>
                         <td className="px-3 py-2 text-right">
                           <Button
@@ -842,7 +866,7 @@ export default function AvalanchePage() {
                       <td className="px-3 py-2 text-right tabular-nums">
                         {fmtMoney(totalMin)}
                       </td>
-                      <td colSpan={5}></td>
+                      <td colSpan={6}></td>
                     </tr>
                   </tfoot>
                 )}
@@ -1308,6 +1332,13 @@ function DebtDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          {initial?.plaidAccountId ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              This debt is linked to Plaid. Editing balance, APR, or minimum
+              payment will switch that field to a manual override and stop
+              auto-syncing it.
+            </p>
+          ) : null}
         </DialogHeader>
         <div className="space-y-3">
           <div>

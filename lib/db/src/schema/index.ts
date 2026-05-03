@@ -11,6 +11,7 @@ import {
   jsonb,
   uniqueIndex,
   index,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
@@ -38,11 +39,20 @@ export const debtsTable = pgTable(
     statementDay: integer("statement_day"),
     notes: text("notes"),
     lastBalanceUpdate: timestamp("last_balance_update", { withTimezone: true }),
+    plaidAccountId: uuid("plaid_account_id").references(
+      (): AnyPgColumn => plaidAccountsTable.id,
+      { onDelete: "set null" },
+    ),
+    plaidLastSyncedAt: timestamp("plaid_last_synced_at", { withTimezone: true }),
+    balanceSource: text("balance_source").notNull().default("manual"),
+    aprSource: text("apr_source").notNull().default("manual"),
+    minPaymentSource: text("min_payment_source").notNull().default("manual"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
     userIdx: index("debts_user_idx").on(t.userId),
+    plaidAcctIdx: index("debts_plaid_account_idx").on(t.plaidAccountId),
   }),
 );
 
@@ -195,6 +205,11 @@ export const plaidAccountsTable = pgTable(
     mask: text("mask"),
     type: text("type"),
     subtype: text("subtype"),
+    liabilityKind: text("liability_kind"),
+    liabilityBalance: numeric("liability_balance", { precision: 12, scale: 2 }),
+    liabilityApr: numeric("liability_apr", { precision: 6, scale: 4 }),
+    liabilityMinPayment: numeric("liability_min_payment", { precision: 12, scale: 2 }),
+    liabilityLastFetchedAt: timestamp("liability_last_fetched_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({

@@ -34,6 +34,7 @@ import type {
   DashboardSummary,
   Debt,
   DebtInput,
+  DebtLinkInput,
   DebtPaymentInput,
   DebtPaymentResult,
   ForecastBundle,
@@ -47,11 +48,13 @@ import type {
   ImportSummary,
   ImportWorkbookBody,
   ListDashboardBudgetsParams,
+  ListPlaidLiabilityAccountsParams,
   ListTransactionsParams,
   MappingRule,
   MappingRuleInput,
   PlaidExchangeInput,
   PlaidItemDetail,
+  PlaidLiabilityAccount,
   PlaidLinkToken,
   PlaidSyncInput,
   PlaidSyncResult,
@@ -691,6 +694,345 @@ export const useCreateDebt = <
 > => {
   return useMutation(getCreateDebtMutationOptions(options));
 };
+
+export const getLinkDebtToPlaidUrl = (id: string) => {
+  return `/api/debts/${id}/link`;
+};
+
+export const linkDebtToPlaid = async (
+  id: string,
+  debtLinkInput: DebtLinkInput,
+  options?: RequestInit,
+): Promise<Debt> => {
+  return customFetch<Debt>(getLinkDebtToPlaidUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(debtLinkInput),
+  });
+};
+
+export const getLinkDebtToPlaidMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof linkDebtToPlaid>>,
+    TError,
+    { id: string; data: BodyType<DebtLinkInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof linkDebtToPlaid>>,
+  TError,
+  { id: string; data: BodyType<DebtLinkInput> },
+  TContext
+> => {
+  const mutationKey = ["linkDebtToPlaid"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof linkDebtToPlaid>>,
+    { id: string; data: BodyType<DebtLinkInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return linkDebtToPlaid(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LinkDebtToPlaidMutationResult = NonNullable<
+  Awaited<ReturnType<typeof linkDebtToPlaid>>
+>;
+export type LinkDebtToPlaidMutationBody = BodyType<DebtLinkInput>;
+export type LinkDebtToPlaidMutationError = ErrorType<unknown>;
+
+export const useLinkDebtToPlaid = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof linkDebtToPlaid>>,
+    TError,
+    { id: string; data: BodyType<DebtLinkInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof linkDebtToPlaid>>,
+  TError,
+  { id: string; data: BodyType<DebtLinkInput> },
+  TContext
+> => {
+  return useMutation(getLinkDebtToPlaidMutationOptions(options));
+};
+
+export const getUnlinkDebtFromPlaidUrl = (id: string) => {
+  return `/api/debts/${id}/unlink`;
+};
+
+export const unlinkDebtFromPlaid = async (
+  id: string,
+  options?: RequestInit,
+): Promise<Debt> => {
+  return customFetch<Debt>(getUnlinkDebtFromPlaidUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getUnlinkDebtFromPlaidMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlinkDebtFromPlaid>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unlinkDebtFromPlaid>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["unlinkDebtFromPlaid"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unlinkDebtFromPlaid>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return unlinkDebtFromPlaid(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnlinkDebtFromPlaidMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unlinkDebtFromPlaid>>
+>;
+
+export type UnlinkDebtFromPlaidMutationError = ErrorType<unknown>;
+
+export const useUnlinkDebtFromPlaid = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlinkDebtFromPlaid>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unlinkDebtFromPlaid>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getUnlinkDebtFromPlaidMutationOptions(options));
+};
+
+export const getRefreshDebtFromPlaidUrl = (id: string) => {
+  return `/api/debts/${id}/refresh`;
+};
+
+export const refreshDebtFromPlaid = async (
+  id: string,
+  options?: RequestInit,
+): Promise<Debt> => {
+  return customFetch<Debt>(getRefreshDebtFromPlaidUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRefreshDebtFromPlaidMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof refreshDebtFromPlaid>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof refreshDebtFromPlaid>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["refreshDebtFromPlaid"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof refreshDebtFromPlaid>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return refreshDebtFromPlaid(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RefreshDebtFromPlaidMutationResult = NonNullable<
+  Awaited<ReturnType<typeof refreshDebtFromPlaid>>
+>;
+
+export type RefreshDebtFromPlaidMutationError = ErrorType<unknown>;
+
+export const useRefreshDebtFromPlaid = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof refreshDebtFromPlaid>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof refreshDebtFromPlaid>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getRefreshDebtFromPlaidMutationOptions(options));
+};
+
+export const getListPlaidLiabilityAccountsUrl = (
+  params?: ListPlaidLiabilityAccountsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/plaid/liability-accounts?${stringifiedParams}`
+    : `/api/plaid/liability-accounts`;
+};
+
+export const listPlaidLiabilityAccounts = async (
+  params?: ListPlaidLiabilityAccountsParams,
+  options?: RequestInit,
+): Promise<PlaidLiabilityAccount[]> => {
+  return customFetch<PlaidLiabilityAccount[]>(
+    getListPlaidLiabilityAccountsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListPlaidLiabilityAccountsQueryKey = (
+  params?: ListPlaidLiabilityAccountsParams,
+) => {
+  return [
+    `/api/plaid/liability-accounts`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListPlaidLiabilityAccountsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPlaidLiabilityAccounts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListPlaidLiabilityAccountsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPlaidLiabilityAccounts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListPlaidLiabilityAccountsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPlaidLiabilityAccounts>>
+  > = ({ signal }) =>
+    listPlaidLiabilityAccounts(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPlaidLiabilityAccounts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPlaidLiabilityAccountsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPlaidLiabilityAccounts>>
+>;
+export type ListPlaidLiabilityAccountsQueryError = ErrorType<unknown>;
+
+export function useListPlaidLiabilityAccounts<
+  TData = Awaited<ReturnType<typeof listPlaidLiabilityAccounts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListPlaidLiabilityAccountsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPlaidLiabilityAccounts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPlaidLiabilityAccountsQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 export const getSyncDebtMinimumsUrl = () => {
   return `/api/debts/sync-minimums`;

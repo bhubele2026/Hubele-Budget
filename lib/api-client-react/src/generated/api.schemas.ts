@@ -133,6 +133,47 @@ export interface TransactionInput {
   owedBy?: string | null;
 }
 
+export type DebtBalanceSource =
+  (typeof DebtBalanceSource)[keyof typeof DebtBalanceSource];
+
+export const DebtBalanceSource = {
+  plaid: "plaid",
+  manual: "manual",
+} as const;
+
+export type DebtAprSource = (typeof DebtAprSource)[keyof typeof DebtAprSource];
+
+export const DebtAprSource = {
+  plaid: "plaid",
+  manual: "manual",
+} as const;
+
+export type DebtMinPaymentSource =
+  (typeof DebtMinPaymentSource)[keyof typeof DebtMinPaymentSource];
+
+export const DebtMinPaymentSource = {
+  plaid: "plaid",
+  manual: "manual",
+} as const;
+
+export interface DebtPlaidAccount {
+  id: string;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  mask?: string | null;
+  /** @nullable */
+  type?: string | null;
+  /** @nullable */
+  subtype?: string | null;
+  /** @nullable */
+  liabilityKind?: string | null;
+  /** @nullable */
+  institutionName?: string | null;
+  /** @nullable */
+  institutionSlug?: string | null;
+}
+
 export interface Debt {
   id: string;
   name: string;
@@ -152,6 +193,14 @@ export interface Debt {
   notes?: string | null;
   /** @nullable */
   lastBalanceUpdate?: string | null;
+  /** @nullable */
+  plaidAccountId?: string | null;
+  /** @nullable */
+  plaidLastSyncedAt?: string | null;
+  balanceSource: DebtBalanceSource;
+  aprSource: DebtAprSource;
+  minPaymentSource: DebtMinPaymentSource;
+  plaidAccount?: DebtPlaidAccount | null;
 }
 
 export interface DebtInput {
@@ -173,6 +222,47 @@ export interface DebtInput {
   notes?: string | null;
   /** @nullable */
   lastBalanceUpdate?: string | null;
+}
+
+export interface DebtLinkInput {
+  plaidAccountId: string;
+}
+
+export type PlaidLiabilityAccountLinkedDebt = {
+  id: string;
+  name: string;
+} | null;
+
+export interface PlaidLiabilityAccount {
+  id: string;
+  accountId: string;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  officialName?: string | null;
+  /** @nullable */
+  mask?: string | null;
+  /** @nullable */
+  type?: string | null;
+  /** @nullable */
+  subtype?: string | null;
+  /** @nullable */
+  liabilityKind?: string | null;
+  /** @nullable */
+  balance?: string | null;
+  /** @nullable */
+  apr?: string | null;
+  /** @nullable */
+  minPayment?: string | null;
+  /** @nullable */
+  lastFetchedAt?: string | null;
+  /** @nullable */
+  institutionId?: string | null;
+  /** @nullable */
+  institutionName?: string | null;
+  /** @nullable */
+  institutionSlug?: string | null;
+  linkedDebt?: PlaidLiabilityAccountLinkedDebt;
 }
 
 export type AvalancheSettingsStrategy =
@@ -738,6 +828,10 @@ export type ListTransactionsParams = {
   minAmount?: string;
   maxAmount?: string;
   categoryId?: string;
+};
+
+export type ListPlaidLiabilityAccountsParams = {
+  refresh?: boolean;
 };
 
 export type GetForecastParams = {

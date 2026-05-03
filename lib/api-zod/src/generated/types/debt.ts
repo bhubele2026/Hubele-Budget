@@ -5,6 +5,10 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { DebtAprSource } from "./debtAprSource";
+import type { DebtBalanceSource } from "./debtBalanceSource";
+import type { DebtMinPaymentSource } from "./debtMinPaymentSource";
+import type { DebtPlaidAccount } from "./debtPlaidAccount";
 
 export interface Debt {
   id: string;
@@ -25,4 +29,12 @@ export interface Debt {
   notes?: string | null;
   /** @nullable */
   lastBalanceUpdate?: string | null;
+  /** @nullable */
+  plaidAccountId?: string | null;
+  /** @nullable */
+  plaidLastSyncedAt?: string | null;
+  balanceSource: DebtBalanceSource;
+  aprSource: DebtAprSource;
+  minPaymentSource: DebtMinPaymentSource;
+  plaidAccount?: DebtPlaidAccount | null;
 }

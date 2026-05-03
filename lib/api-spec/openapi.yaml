@@ -154,6 +154,72 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Debt" }
+  /debts/{id}/link:
+    post:
+      operationId: linkDebtToPlaid
+      tags: [debts]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DebtLinkInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Debt" }
+  /debts/{id}/unlink:
+    post:
+      operationId: unlinkDebtFromPlaid
+      tags: [debts]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Debt" }
+  /debts/{id}/refresh:
+    post:
+      operationId: refreshDebtFromPlaid
+      tags: [debts]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Debt" }
+  /plaid/liability-accounts:
+    get:
+      operationId: listPlaidLiabilityAccounts
+      tags: [plaid]
+      parameters:
+        - in: query
+          name: refresh
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PlaidLiabilityAccount" }
   /debts/sync-minimums:
     post:
       operationId: syncDebtMinimums
@@ -779,7 +845,7 @@ components:
 
     Debt:
       type: object
-      required: [id, name, balance, apr, minPayment, payment, status, sortOrder]
+      required: [id, name, balance, apr, minPayment, payment, status, sortOrder, balanceSource, aprSource, minPaymentSource]
       properties:
         id: { type: string }
         name: { type: string }
@@ -794,6 +860,27 @@ components:
         statementDay: { type: ["integer", "null"] }
         notes: { type: ["string", "null"] }
         lastBalanceUpdate: { type: ["string", "null"] }
+        plaidAccountId: { type: ["string", "null"] }
+        plaidLastSyncedAt: { type: ["string", "null"] }
+        balanceSource: { type: string, enum: [plaid, manual] }
+        aprSource: { type: string, enum: [plaid, manual] }
+        minPaymentSource: { type: string, enum: [plaid, manual] }
+        plaidAccount:
+          oneOf:
+            - $ref: "#/components/schemas/DebtPlaidAccount"
+            - type: "null"
+    DebtPlaidAccount:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+        name: { type: ["string", "null"] }
+        mask: { type: ["string", "null"] }
+        type: { type: ["string", "null"] }
+        subtype: { type: ["string", "null"] }
+        liabilityKind: { type: ["string", "null"] }
+        institutionName: { type: ["string", "null"] }
+        institutionSlug: { type: ["string", "null"] }
     DebtInput:
       type: object
       properties:
@@ -809,6 +896,38 @@ components:
         statementDay: { type: ["integer", "null"] }
         notes: { type: ["string", "null"] }
         lastBalanceUpdate: { type: ["string", "null"] }
+    DebtLinkInput:
+      type: object
+      required: [plaidAccountId]
+      properties:
+        plaidAccountId: { type: string }
+    PlaidLiabilityAccount:
+      type: object
+      required: [id, accountId]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        name: { type: ["string", "null"] }
+        officialName: { type: ["string", "null"] }
+        mask: { type: ["string", "null"] }
+        type: { type: ["string", "null"] }
+        subtype: { type: ["string", "null"] }
+        liabilityKind: { type: ["string", "null"] }
+        balance: { type: ["string", "null"] }
+        apr: { type: ["string", "null"] }
+        minPayment: { type: ["string", "null"] }
+        lastFetchedAt: { type: ["string", "null"] }
+        institutionId: { type: ["string", "null"] }
+        institutionName: { type: ["string", "null"] }
+        institutionSlug: { type: ["string", "null"] }
+        linkedDebt:
+          oneOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id: { type: string }
+                name: { type: string }
+            - type: "null"
     AvalancheSettings:
       type: object
       required: [strategy, extraSource, manualExtra, budgetMode]
