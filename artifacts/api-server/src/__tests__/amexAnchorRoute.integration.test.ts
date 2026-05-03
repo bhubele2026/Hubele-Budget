@@ -133,6 +133,121 @@ describe("DELETE /amex/anchor", () => {
   });
 });
 
+describe("POST /amex/anchor", () => {
+  it("persists a valid balance to settings.preferences.amexAnchor (no prior settings row)", async () => {
+    const res = await fetch(`${baseUrl}/amex/anchor`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ balance: 1234.56, asOf: "2026-04-01T12:34:56.000Z" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      amexEndingBalance: number;
+      asOf: string;
+      source: string;
+    };
+    expect(body.source).toBe("anchor");
+    expect(body.amexEndingBalance).toBeCloseTo(1234.56, 2);
+    expect(body.asOf).toBe("2026-04-01T12:34:56.000Z");
+
+    const [row] = await db
+      .select({ preferences: settingsTable.preferences })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, TEST_USER));
+    const prefs = (row?.preferences ?? {}) as Record<string, unknown>;
+    expect(prefs.amexAnchor).toEqual({
+      balance: 1234.56,
+      asOf: "2026-04-01T12:34:56.000Z",
+    });
+  });
+
+  it("preserves other preference keys when upserting on an existing row", async () => {
+    await db.insert(settingsTable).values({
+      userId: TEST_USER,
+      preferences: {
+        forecastFloor: 250,
+        nested: { keepMe: true },
+        amexAnchor: { balance: 10, asOf: "2025-01-01T00:00:00.000Z" },
+      },
+    });
+
+    const res = await fetch(`${baseUrl}/amex/anchor`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ balance: 999.99, asOf: "2026-05-01T00:00:00.000Z" }),
+    });
+    expect(res.status).toBe(200);
+
+    const [row] = await db
+      .select({ preferences: settingsTable.preferences })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, TEST_USER));
+    const prefs = (row?.preferences ?? {}) as Record<string, unknown>;
+    expect(prefs.forecastFloor).toBe(250);
+    expect(prefs.nested).toEqual({ keepMe: true });
+    expect(prefs.amexAnchor).toEqual({
+      balance: 999.99,
+      asOf: "2026-05-01T00:00:00.000Z",
+    });
+  });
+
+  it("normalizes asOf to ISO when given a non-ISO but parseable date string", async () => {
+    const res = await fetch(`${baseUrl}/amex/anchor`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ balance: 42, asOf: "2026-04-01" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { asOf: string };
+    expect(body.asOf).toBe(new Date("2026-04-01").toISOString());
+
+    const [row] = await db
+      .select({ preferences: settingsTable.preferences })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, TEST_USER));
+    const prefs = (row?.preferences ?? {}) as {
+      amexAnchor?: { asOf?: string };
+    };
+    expect(prefs.amexAnchor?.asOf).toBe(new Date("2026-04-01").toISOString());
+  });
+
+  it("returns 400 on a non-finite balance", async () => {
+    for (const balance of ["not-a-number", undefined]) {
+      const res = await fetch(`${baseUrl}/amex/anchor`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ balance, asOf: "2026-04-01T00:00:00.000Z" }),
+      });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error?: string };
+      expect(body.error).toMatch(/balance/i);
+    }
+
+    const rows = await db
+      .select({ userId: settingsTable.userId })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, TEST_USER));
+    expect(rows.length).toBe(0);
+  });
+
+  it("returns 400 on a bad asOf string", async () => {
+    const res = await fetch(`${baseUrl}/amex/anchor`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ balance: 100, asOf: "not-a-real-date" }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toMatch(/asOf/i);
+
+    const rows = await db
+      .select({ userId: settingsTable.userId })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, TEST_USER));
+    expect(rows.length).toBe(0);
+  });
+});
+
 describe("GET /amex/anchor", () => {
   it("advances asOf via the settings anchor even when manual override keeps debt unchanged", async () => {
     // Seed: one Amex txn + a linked debt row whose updatedAt is OLD.
