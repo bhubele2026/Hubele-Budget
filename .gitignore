@@ -5,6 +5,20 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
+
+# Composite-project declaration outputs that consumers (api-server,
+# h2budget) reference at typecheck time. These are generated from
+# source by `pnpm --filter @workspace/api-spec run codegen` (which
+# runs orval and then `tsc --build`), but `pnpm exec tsc --noEmit`
+# bypasses lifecycle scripts, so the declaration outputs need to be
+# present in a fresh checkout for direct typechecks to resolve
+# cross-package types.
+!lib/db/dist
+!lib/db/dist/**
+!lib/api-zod/dist
+!lib/api-zod/dist/**
+!lib/api-client-react/dist
+!lib/api-client-react/dist/**
 .expo
 .expo-shared
 
