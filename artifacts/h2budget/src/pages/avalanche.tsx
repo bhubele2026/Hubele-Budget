@@ -563,18 +563,20 @@ export default function AvalanchePage() {
         const moreCount = sorted.length - visible.length;
         return (
           <div
-            className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
+            className="rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-950/20 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-100"
             data-testid="banner-underwater"
           >
             <div className="font-medium">
               {sorted.length === 1
                 ? "1 debt is underwater"
                 : `${sorted.length} debts are underwater`}{" "}
-              <span className="font-normal text-destructive/80">
-                — minimum payments don't cover monthly interest.
+              <span className="font-normal text-amber-900/80 dark:text-amber-100/80">
+                — the minimum payment isn't keeping up with monthly interest, so
+                the balance keeps growing. Add a little extra to start chipping
+                away at it.
               </span>
             </div>
-            <ul className="mt-1.5 space-y-0.5 text-[13px] leading-snug text-destructive/90">
+            <ul className="mt-1.5 space-y-0.5 text-[13px] leading-snug text-amber-900/90 dark:text-amber-100/90">
               {visible.map((u) => {
                 const minLabel = u.minOk ? fmtMoney(u.minPayment) : "—";
                 const coverageLabel =
@@ -582,14 +584,14 @@ export default function AvalanchePage() {
                 const debtRow = (debts ?? []).find((x) => x.id === u.id);
                 return (
                   <li key={u.id} className="flex items-baseline gap-1.5">
-                    <span className="font-medium text-destructive">{u.name}</span>
+                    <span className="font-medium text-amber-950 dark:text-amber-50">{u.name}</span>
                     {u.aprLooksWrong ? (
-                      <span className="text-destructive/80">
+                      <span className="text-amber-900/80 dark:text-amber-100/80">
                         APR looks wrong —{" "}
                         {debtRow ? (
                           <button
                             type="button"
-                            className="underline underline-offset-2 hover:text-destructive"
+                            className="underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-50"
                             onClick={() => setEditing(debtRow)}
                           >
                             check this debt
@@ -599,7 +601,7 @@ export default function AvalanchePage() {
                         )}
                       </span>
                     ) : (
-                      <span className="text-destructive/80">
+                      <span className="text-amber-900/80 dark:text-amber-100/80">
                         min {minLabel} covers {coverageLabel} of interest
                       </span>
                     )}
@@ -607,7 +609,7 @@ export default function AvalanchePage() {
                 );
               })}
               {moreCount > 0 && (
-                <li className="text-destructive/70">+{moreCount} more</li>
+                <li className="text-amber-900/70 dark:text-amber-100/70">+{moreCount} more</li>
               )}
             </ul>
           </div>

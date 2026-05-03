@@ -403,7 +403,7 @@ export default function AmexPage() {
         ? "From debt row"
         : endingBalance.source === "anchor"
           ? "From saved anchor"
-          : "Computed from transactions";
+          : "Calculated";
     let asOfLabel: string | null = null;
     if (endingBalance.asOf) {
       const d = new Date(endingBalance.asOf);
@@ -420,7 +420,7 @@ export default function AmexPage() {
       : sourceLabel;
     const tooltip =
       endingBalance.source === "computed"
-        ? `${footer}\nNo linked Amex debt or saved anchor — this is the running sum of imported transactions and may drift from the real card balance.`
+        ? `${footer}\nRunning sum of imported transactions. Set an actual balance to anchor the chip to the real card.`
         : footer;
     return { sourceLabel, asOfLabel, footer, tooltip };
   }, [endingBalance]);
@@ -1030,11 +1030,7 @@ export default function AmexPage() {
             <StatChip
               label="Ending balance"
               value={endingBalance.value ?? 0}
-              accent={
-                endingBalance.source === "computed"
-                  ? "bg-amber-50 text-amber-900 border-amber-300"
-                  : "bg-blue-50 text-blue-900 border-blue-200"
-              }
+              accent="bg-blue-50 text-blue-900 border-blue-200"
               footer={endingBalanceMeta?.footer}
               tooltip={endingBalanceMeta?.tooltip}
               testId="stat-ending-balance"
@@ -1058,11 +1054,7 @@ export default function AmexPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className={
-                          endingBalance.source === "anchor"
-                            ? "h-6 px-2 text-[11px] border-blue-300 text-blue-900 bg-white/60 hover:bg-white"
-                            : "h-6 px-2 text-[11px] border-amber-400 text-amber-900 bg-white/60 hover:bg-white"
-                        }
+                        className="h-6 px-2 text-[11px] border-blue-300 text-blue-900 bg-white/60 hover:bg-white"
                         data-testid={
                           endingBalance.source === "anchor"
                             ? "button-edit-actual-balance"

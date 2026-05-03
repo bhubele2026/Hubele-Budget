@@ -259,12 +259,12 @@ function InboxCardView({
             }}
           >
             <SelectTrigger className="h-8 w-[140px] text-xs">
-              <SelectValue placeholder="Match to…" />
+              <SelectValue placeholder="Choose a planned item" />
             </SelectTrigger>
             <SelectContent>
               {planRows.length === 0 && (
                 <div className="px-2 py-1 text-xs text-muted-foreground">
-                  No planned items
+                  No planned items this month
                 </div>
               )}
               {planRows.map((p) => (
@@ -1685,7 +1685,7 @@ export default function ForecastPage() {
               {data.plaidCheckingAccounts.length > 0 && (
                 <Select onValueChange={onLinkChecking}>
                   <SelectTrigger className="h-8 w-44 text-xs">
-                    <SelectValue placeholder="Link checking…" />
+                    <SelectValue placeholder="Link a checking account" />
                   </SelectTrigger>
                   <SelectContent>
                     {data.plaidCheckingAccounts.map((a) => (

@@ -334,7 +334,7 @@ export default function SettingsPage() {
           </div>
           <PlaidLinkButton />
         </CardHeader>
-        {plaidEnv && plaidEnv.nonProdItemCount > 0 && (
+        {import.meta.env.DEV && plaidEnv && plaidEnv.nonProdItemCount > 0 && (
           <CardContent className="pt-0">
             <div
               className="rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm"

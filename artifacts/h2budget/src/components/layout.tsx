@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { H2Logo } from "@/components/h2-logo";
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -42,11 +43,7 @@ function SidebarContents({
   return (
     <>
       <div className="p-4 border-b border-sidebar-border flex items-center gap-3">
-        <img
-          src={`${import.meta.env.BASE_URL}logo.png`}
-          alt="H2 Budget"
-          className="w-8 h-8 rounded"
-        />
+        <H2Logo className="w-8 h-8 rounded" />
         <span className="font-serif font-bold text-lg tracking-tight text-sidebar-foreground">
           H2 Budget
         </span>
@@ -116,11 +113,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </SheetContent>
         </Sheet>
         <div className="flex items-center gap-2">
-          <img
-            src={`${import.meta.env.BASE_URL}logo.png`}
-            alt="H2 Budget"
-            className="w-7 h-7 rounded"
-          />
+          <H2Logo className="w-7 h-7 rounded" />
           <span className="font-serif font-bold text-base tracking-tight text-sidebar-foreground">
             H2 Budget
           </span>
