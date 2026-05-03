@@ -681,6 +681,11 @@ export const GetBudgetMonthParams = zod.object({
 export const GetBudgetMonthResponse = zod.object({
   monthStart: zod.string(),
   note: zod.string().nullish(),
+  monthPinned: zod
+    .boolean()
+    .describe(
+      "True when the user has pinned this month, which causes every\nauto-pulled line with a persisted budget_lines value to use that\nstored value instead of the live Bills\/Debts derivation.\n",
+    ),
   lines: zod.array(
     zod.object({
       id: zod.string().nullish(),
@@ -693,6 +698,11 @@ export const GetBudgetMonthResponse = zod.object({
       sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
       sortOrder: zod.number(),
       kind: zod.string(),
+      pinned: zod
+        .boolean()
+        .describe(
+          "True when this line's persisted planned amount is being used in\nplace of the live Bills\/Debts derivation. Driven by either the\nmonth-level pin or the per-line pin.\n",
+        ),
       sourceBreakdown: zod
         .array(
           zod.object({
@@ -724,6 +734,11 @@ export const GetBudgetMonthResponse = zod.object({
           sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
           sortOrder: zod.number(),
           kind: zod.string(),
+          pinned: zod
+            .boolean()
+            .describe(
+              "True when this line's persisted planned amount is being used in\nplace of the live Bills\/Debts derivation. Driven by either the\nmonth-level pin or the per-line pin.\n",
+            ),
           sourceBreakdown: zod
             .array(
               zod.object({
@@ -783,6 +798,46 @@ export const UpsertBudgetLineResponse = zod.object({
   categoryId: zod.string(),
   plannedAmount: zod.string(),
   note: zod.string().nullish(),
+});
+
+/**
+ * @summary Pin (or unpin) every auto-pulled line in a month to its currently
+displayed planned amount, so the persisted value is preferred over the
+live Bills/Debts derivation. Pinning snapshots the current derived
+amounts into budget_lines; unpinning leaves the snapshot in place but
+causes the response to fall back to the live derivation again.
+
+ */
+export const PinBudgetMonthParams = zod.object({
+  monthStart: zod.coerce.string(),
+});
+
+export const PinBudgetMonthBody = zod.object({
+  pinned: zod.boolean(),
+});
+
+export const PinBudgetMonthResponse = zod.object({
+  monthStart: zod.string(),
+  monthPinned: zod.boolean(),
+  linesPinned: zod.number(),
+});
+
+/**
+ * @summary Pin (or unpin) a single auto-pulled budget line for a given month so
+the persisted planned amount is preferred over the live derivation.
+Pinning snapshots the current derived amount into budget_lines.
+
+ */
+export const PinBudgetLineBody = zod.object({
+  monthStart: zod.string(),
+  categoryId: zod.string(),
+  pinned: zod.boolean(),
+});
+
+export const PinBudgetLineResponse = zod.object({
+  monthStart: zod.string(),
+  monthPinned: zod.boolean(),
+  linesPinned: zod.number(),
 });
 
 export const ListMappingRulesResponseItem = zod.object({

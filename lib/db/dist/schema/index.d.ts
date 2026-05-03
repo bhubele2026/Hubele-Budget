@@ -904,6 +904,23 @@ export declare const budgetMonthsTable: import("drizzle-orm/pg-core").PgTableWit
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        pinned: import("drizzle-orm/pg-core").PgColumn<{
+            name: "pinned";
+            tableName: "budget_months";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
             tableName: "budget_months";
@@ -1026,6 +1043,23 @@ export declare const budgetLinesTable: import("drizzle-orm/pg-core").PgTableWith
             isAutoincrement: false;
             hasRuntimeDefault: false;
             enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        pinned: import("drizzle-orm/pg-core").PgColumn<{
+            name: "pinned";
+            tableName: "budget_lines";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
             baseColumn: never;
             identity: undefined;
             generated: undefined;
@@ -3179,6 +3213,7 @@ export declare const insertCategorySchema: import("zod/v4").ZodObject<{
 export declare const insertBudgetMonthSchema: import("zod/v4").ZodObject<{
     monthStart: import("zod/v4").ZodString;
     note: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    pinned: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
 }, {
     out: {};
     in: {};
@@ -3186,6 +3221,7 @@ export declare const insertBudgetMonthSchema: import("zod/v4").ZodObject<{
 export declare const insertBudgetLineSchema: import("zod/v4").ZodObject<{
     monthStart: import("zod/v4").ZodString;
     note: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    pinned: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     categoryId: import("zod/v4").ZodUUID;
     plannedAmount: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
 }, {

@@ -22,6 +22,9 @@ import {
   CreateCategoryBody,
   DeleteCategoryParams,
   GetBudgetMonthParams,
+  PinBudgetLineBody,
+  PinBudgetMonthBody,
+  PinBudgetMonthParams,
   UpsertBudgetLineBody,
 } from "@workspace/api-zod";
 import {
@@ -507,6 +510,7 @@ async function reconcileMay2026Amounts(userId: string): Promise<void> {
           monthStart: MAY_2026_MONTH,
           categoryId: cat.id,
           plannedAmount: canonical,
+          pinned: isAuto,
         })
         .onConflictDoUpdate({
           target: [
@@ -514,9 +518,24 @@ async function reconcileMay2026Amounts(userId: string): Promise<void> {
             budgetLinesTable.monthStart,
             budgetLinesTable.categoryId,
           ],
-          set: { plannedAmount: canonical },
+          set: isAuto
+            ? { plannedAmount: canonical, pinned: true }
+            : { plannedAmount: canonical },
         });
     }
+
+    // Mark May 2026 as a pinned month so the per-line pinned flag is
+    // unambiguous — the response builder uses either signal to prefer the
+    // persisted budget_lines value over the live derivation. (task #115)
+    await tx
+      .update(budgetMonthsTable)
+      .set({ pinned: true })
+      .where(
+        and(
+          eq(budgetMonthsTable.userId, userId),
+          eq(budgetMonthsTable.monthStart, MAY_2026_MONTH),
+        ),
+      );
 
     // Upsert avalanche manualExtra to the canonical $6,225.00 for this user.
     const [existingAv] = await tx
@@ -1157,6 +1176,7 @@ router.get(
     }
     const linesByCat = new Map(lines.map((l) => [l.categoryId, l]));
 
+    const monthPinned = month?.pinned === true;
     const responseLines = cats.map((c) => {
       const line = linesByCat.get(c.id);
       const actualNum =
@@ -1164,20 +1184,19 @@ router.get(
           ? inflowByCat.get(c.id) ?? 0
           : spendByCat.get(c.id) ?? 0;
       const derived = autoPlannedByCat.get(c.id);
-      // For auto-pulled categories listed in the May 2026 canonical map, the
-      // user pinned a specific monthly amount (e.g. one paycheck of $4,499.99
-      // rather than the 2–3 biweekly events the recurring-item expansion
-      // would yield). Prefer the persisted budget_line so the UI matches the
-      // user's source-of-truth totals for that month. Other months continue
-      // to derive from Bills/Debts as usual. (task #106)
-      const useCanonicalLine =
-        monthStart === MAY_2026_MONTH &&
-        c.sourceKind !== "manual" &&
-        MAY_2026_CANONICAL_PLANNED[c.name] !== undefined &&
-        line !== undefined;
-      const plannedAmount = useCanonicalLine
+      // For auto-pulled categories, the user can "pin" a month — or an
+      // individual line — so the persisted budget_lines value is preferred
+      // over the live Bills/Debts derivation. This lets the user lock in
+      // a monthly amount (e.g. one paycheck of $4,499.99) instead of the
+      // 2–3 biweekly events that the recurring-item expansion would yield
+      // for some months. Manual categories are unaffected. (task #115)
+      const isAuto = c.sourceKind !== "manual";
+      const linePinned = line?.pinned === true;
+      const usePinnedLine =
+        isAuto && line !== undefined && (monthPinned || linePinned);
+      const plannedAmount = usePinnedLine
         ? line!.plannedAmount
-        : c.sourceKind !== "manual" && derived !== undefined
+        : isAuto && derived !== undefined
           ? derived
           : line?.plannedAmount ?? "0";
       const buckets = breakdownByCat.get(c.id) ?? [];
@@ -1217,6 +1236,7 @@ router.get(
         sourceKind: c.sourceKind,
         sortOrder: c.sortOrder,
         kind: c.kind,
+        pinned: usePinnedLine,
         sourceBreakdown,
       };
     });
@@ -1304,6 +1324,7 @@ router.get(
     res.json({
       monthStart,
       note: month?.note ?? null,
+      monthPinned,
       lines: responseLines,
       groups,
       summary,
@@ -1367,5 +1388,232 @@ router.post("/budget/lines", requireAuth, async (req, res): Promise<void> => {
   }
   res.json(row);
 });
+
+// Snapshot every auto-pulled category's currently displayed planned amount
+// (live Bills/Debts derivation) into budget_lines for the given month. Used
+// by the pin endpoints so that pinning captures whatever is on screen now,
+// not whatever happens to already be persisted (which may be stale).
+async function snapshotAutoLinesForMonth(
+  userId: string,
+  monthStart: string,
+): Promise<void> {
+  await syncAutoDebtCategories(userId, monthStart);
+  await syncAvalanchePaymentCategory(userId, monthStart);
+
+  const cats = await db
+    .select()
+    .from(budgetCategoriesTable)
+    .where(eq(budgetCategoriesTable.userId, userId));
+
+  const monthEnd0 = new Date(monthStart);
+  monthEnd0.setMonth(monthEnd0.getMonth() + 1);
+  const monthEndStr0 = monthEnd0.toISOString().slice(0, 10);
+  const monthFromDate = parseISO(monthStart);
+  const monthToDate = addDays(parseISO(monthEndStr0), -1);
+
+  const autoBillsCats = cats.filter((c) => c.sourceKind === "auto_bills");
+  const autoBillsCatIds = autoBillsCats.map((c) => c.id);
+  const autoBillsCatByName = new Map(autoBillsCats.map((c) => [c.name, c]));
+  const autoDebtCats = cats.filter((c) => c.sourceKind === "auto_debts");
+  const autoPlannedByCat = new Map<string, string>();
+
+  if (autoBillsCatIds.length > 0) {
+    const recurring = await db
+      .select()
+      .from(recurringItemsTable)
+      .where(eq(recurringItemsTable.userId, userId));
+    const sums = new Map<string, number>();
+    for (const r of recurring) {
+      if (r.active === "false") continue;
+      const expandFor = (catId: string) => {
+        const events = expandItem(r, monthFromDate, monthToDate);
+        let total = 0;
+        for (const ev of events) total += Math.abs(ev.amount);
+        sums.set(catId, (sums.get(catId) ?? 0) + total);
+      };
+      if (r.categoryId && autoBillsCatIds.includes(r.categoryId)) {
+        expandFor(r.categoryId);
+        continue;
+      }
+      const cat = autoBillsCatByName.get(r.name);
+      if (cat) expandFor(cat.id);
+    }
+    for (const c of autoBillsCats) {
+      autoPlannedByCat.set(c.id, (sums.get(c.id) ?? 0).toFixed(2));
+    }
+  }
+
+  if (autoDebtCats.length > 0) {
+    const debts = await db
+      .select()
+      .from(debtsTable)
+      .where(eq(debtsTable.userId, userId));
+    const activeDebts = debts
+      .filter((d) => d.status === "active")
+      .sort((a, b) => b.name.length - a.name.length);
+    for (const cat of autoDebtCats) {
+      const match = activeDebts.find((d) => cat.name.includes(d.name));
+      if (match) {
+        autoPlannedByCat.set(cat.id, parseFloat(match.minPayment).toFixed(2));
+      }
+    }
+  }
+
+  if (autoPlannedByCat.size === 0) return;
+
+  await db
+    .insert(budgetMonthsTable)
+    .values({ userId, monthStart })
+    .onConflictDoNothing();
+
+  for (const [categoryId, planned] of autoPlannedByCat) {
+    await db
+      .insert(budgetLinesTable)
+      .values({ userId, monthStart, categoryId, plannedAmount: planned })
+      .onConflictDoNothing({
+        target: [
+          budgetLinesTable.userId,
+          budgetLinesTable.monthStart,
+          budgetLinesTable.categoryId,
+        ],
+      });
+  }
+}
+
+router.post(
+  "/budget/months/:monthStart/pin",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const params = PinBudgetMonthParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const body = PinBudgetMonthBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const userId = req.userId!;
+    const { monthStart } = params.data;
+    const { pinned } = body.data;
+
+    if (pinned) {
+      // Snapshot whatever the live derivation currently shows so the pin
+      // captures what the user sees on screen.
+      await snapshotAutoLinesForMonth(userId, monthStart);
+    }
+
+    await db
+      .insert(budgetMonthsTable)
+      .values({ userId, monthStart, pinned })
+      .onConflictDoUpdate({
+        target: [budgetMonthsTable.userId, budgetMonthsTable.monthStart],
+        set: { pinned },
+      });
+
+    const linesPinned = pinned
+      ? (
+          await db
+            .select({ id: budgetLinesTable.id })
+            .from(budgetLinesTable)
+            .innerJoin(
+              budgetCategoriesTable,
+              eq(budgetCategoriesTable.id, budgetLinesTable.categoryId),
+            )
+            .where(
+              and(
+                eq(budgetLinesTable.userId, userId),
+                eq(budgetLinesTable.monthStart, monthStart),
+                inArray(budgetCategoriesTable.sourceKind, [
+                  "auto_bills",
+                  "auto_debts",
+                ]),
+              ),
+            )
+        ).length
+      : 0;
+
+    res.json({ monthStart, monthPinned: pinned, linesPinned });
+  },
+);
+
+router.post(
+  "/budget/lines/pin",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const body = PinBudgetLineBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const userId = req.userId!;
+    const { monthStart, categoryId, pinned } = body.data;
+
+    // Confirm the category is auto-pulled — pinning a manual category is
+    // a no-op since manual rows already use their persisted value.
+    const [cat] = await db
+      .select()
+      .from(budgetCategoriesTable)
+      .where(
+        and(
+          eq(budgetCategoriesTable.userId, userId),
+          eq(budgetCategoriesTable.id, categoryId),
+        ),
+      );
+    if (!cat) {
+      res.status(404).json({ error: "Category not found" });
+      return;
+    }
+
+    if (pinned && cat.sourceKind !== "manual") {
+      // Snapshot just this line's currently derived value.
+      await snapshotAutoLinesForMonth(userId, monthStart);
+    }
+
+    await db
+      .insert(budgetMonthsTable)
+      .values({ userId, monthStart })
+      .onConflictDoNothing();
+
+    const [existing] = await db
+      .select()
+      .from(budgetLinesTable)
+      .where(
+        and(
+          eq(budgetLinesTable.userId, userId),
+          eq(budgetLinesTable.monthStart, monthStart),
+          eq(budgetLinesTable.categoryId, categoryId),
+        ),
+      );
+    if (existing) {
+      await db
+        .update(budgetLinesTable)
+        .set({ pinned })
+        .where(eq(budgetLinesTable.id, existing.id));
+    } else {
+      await db
+        .insert(budgetLinesTable)
+        .values({ userId, monthStart, categoryId, plannedAmount: "0", pinned })
+        .onConflictDoNothing();
+    }
+
+    const [month] = await db
+      .select()
+      .from(budgetMonthsTable)
+      .where(
+        and(
+          eq(budgetMonthsTable.userId, userId),
+          eq(budgetMonthsTable.monthStart, monthStart),
+        ),
+      );
+
+    res.json({
+      monthStart,
+      monthPinned: month?.pinned === true,
+      linesPinned: pinned ? 1 : 0,
+    });
+  },
+);
 
 export default router;

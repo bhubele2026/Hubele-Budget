@@ -57,6 +57,9 @@ import type {
   ListTransactionsParams,
   MappingRule,
   MappingRuleInput,
+  PinBudgetLineInput,
+  PinBudgetMonthInput,
+  PinResult,
   PlaidExchangeInput,
   PlaidItemDetail,
   PlaidLiabilityAccount,
@@ -2430,6 +2433,195 @@ export const useUpsertBudgetLine = <
   TContext
 > => {
   return useMutation(getUpsertBudgetLineMutationOptions(options));
+};
+
+/**
+ * @summary Pin (or unpin) every auto-pulled line in a month to its currently
+displayed planned amount, so the persisted value is preferred over the
+live Bills/Debts derivation. Pinning snapshots the current derived
+amounts into budget_lines; unpinning leaves the snapshot in place but
+causes the response to fall back to the live derivation again.
+
+ */
+export const getPinBudgetMonthUrl = (monthStart: string) => {
+  return `/api/budget/months/${monthStart}/pin`;
+};
+
+export const pinBudgetMonth = async (
+  monthStart: string,
+  pinBudgetMonthInput: PinBudgetMonthInput,
+  options?: RequestInit,
+): Promise<PinResult> => {
+  return customFetch<PinResult>(getPinBudgetMonthUrl(monthStart), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(pinBudgetMonthInput),
+  });
+};
+
+export const getPinBudgetMonthMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof pinBudgetMonth>>,
+    TError,
+    { monthStart: string; data: BodyType<PinBudgetMonthInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof pinBudgetMonth>>,
+  TError,
+  { monthStart: string; data: BodyType<PinBudgetMonthInput> },
+  TContext
+> => {
+  const mutationKey = ["pinBudgetMonth"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof pinBudgetMonth>>,
+    { monthStart: string; data: BodyType<PinBudgetMonthInput> }
+  > = (props) => {
+    const { monthStart, data } = props ?? {};
+
+    return pinBudgetMonth(monthStart, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PinBudgetMonthMutationResult = NonNullable<
+  Awaited<ReturnType<typeof pinBudgetMonth>>
+>;
+export type PinBudgetMonthMutationBody = BodyType<PinBudgetMonthInput>;
+export type PinBudgetMonthMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Pin (or unpin) every auto-pulled line in a month to its currently
+displayed planned amount, so the persisted value is preferred over the
+live Bills/Debts derivation. Pinning snapshots the current derived
+amounts into budget_lines; unpinning leaves the snapshot in place but
+causes the response to fall back to the live derivation again.
+
+ */
+export const usePinBudgetMonth = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof pinBudgetMonth>>,
+    TError,
+    { monthStart: string; data: BodyType<PinBudgetMonthInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof pinBudgetMonth>>,
+  TError,
+  { monthStart: string; data: BodyType<PinBudgetMonthInput> },
+  TContext
+> => {
+  return useMutation(getPinBudgetMonthMutationOptions(options));
+};
+
+/**
+ * @summary Pin (or unpin) a single auto-pulled budget line for a given month so
+the persisted planned amount is preferred over the live derivation.
+Pinning snapshots the current derived amount into budget_lines.
+
+ */
+export const getPinBudgetLineUrl = () => {
+  return `/api/budget/lines/pin`;
+};
+
+export const pinBudgetLine = async (
+  pinBudgetLineInput: PinBudgetLineInput,
+  options?: RequestInit,
+): Promise<PinResult> => {
+  return customFetch<PinResult>(getPinBudgetLineUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(pinBudgetLineInput),
+  });
+};
+
+export const getPinBudgetLineMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof pinBudgetLine>>,
+    TError,
+    { data: BodyType<PinBudgetLineInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof pinBudgetLine>>,
+  TError,
+  { data: BodyType<PinBudgetLineInput> },
+  TContext
+> => {
+  const mutationKey = ["pinBudgetLine"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof pinBudgetLine>>,
+    { data: BodyType<PinBudgetLineInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return pinBudgetLine(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PinBudgetLineMutationResult = NonNullable<
+  Awaited<ReturnType<typeof pinBudgetLine>>
+>;
+export type PinBudgetLineMutationBody = BodyType<PinBudgetLineInput>;
+export type PinBudgetLineMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Pin (or unpin) a single auto-pulled budget line for a given month so
+the persisted planned amount is preferred over the live derivation.
+Pinning snapshots the current derived amount into budget_lines.
+
+ */
+export const usePinBudgetLine = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof pinBudgetLine>>,
+    TError,
+    { data: BodyType<PinBudgetLineInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof pinBudgetLine>>,
+  TError,
+  { data: BodyType<PinBudgetLineInput> },
+  TContext
+> => {
+  return useMutation(getPinBudgetLineMutationOptions(options));
 };
 
 export const getListMappingRulesUrl = () => {

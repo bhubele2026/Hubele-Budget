@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CloseForecastMonthBody, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, RecurringItem, RecurringItemInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, Transaction, TransactionInput } from "./api.schemas";
+import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CloseForecastMonthBody, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, RecurringItem, RecurringItemInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, Transaction, TransactionInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -616,6 +616,80 @@ export declare const useUpsertBudgetLine: <TError = ErrorType<unknown>, TContext
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof upsertBudgetLine>>, TError, {
     data: BodyType<BudgetLineInput>;
+}, TContext>;
+/**
+ * @summary Pin (or unpin) every auto-pulled line in a month to its currently
+displayed planned amount, so the persisted value is preferred over the
+live Bills/Debts derivation. Pinning snapshots the current derived
+amounts into budget_lines; unpinning leaves the snapshot in place but
+causes the response to fall back to the live derivation again.
+
+ */
+export declare const getPinBudgetMonthUrl: (monthStart: string) => string;
+export declare const pinBudgetMonth: (monthStart: string, pinBudgetMonthInput: PinBudgetMonthInput, options?: RequestInit) => Promise<PinResult>;
+export declare const getPinBudgetMonthMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof pinBudgetMonth>>, TError, {
+        monthStart: string;
+        data: BodyType<PinBudgetMonthInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof pinBudgetMonth>>, TError, {
+    monthStart: string;
+    data: BodyType<PinBudgetMonthInput>;
+}, TContext>;
+export type PinBudgetMonthMutationResult = NonNullable<Awaited<ReturnType<typeof pinBudgetMonth>>>;
+export type PinBudgetMonthMutationBody = BodyType<PinBudgetMonthInput>;
+export type PinBudgetMonthMutationError = ErrorType<unknown>;
+/**
+ * @summary Pin (or unpin) every auto-pulled line in a month to its currently
+displayed planned amount, so the persisted value is preferred over the
+live Bills/Debts derivation. Pinning snapshots the current derived
+amounts into budget_lines; unpinning leaves the snapshot in place but
+causes the response to fall back to the live derivation again.
+
+ */
+export declare const usePinBudgetMonth: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof pinBudgetMonth>>, TError, {
+        monthStart: string;
+        data: BodyType<PinBudgetMonthInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof pinBudgetMonth>>, TError, {
+    monthStart: string;
+    data: BodyType<PinBudgetMonthInput>;
+}, TContext>;
+/**
+ * @summary Pin (or unpin) a single auto-pulled budget line for a given month so
+the persisted planned amount is preferred over the live derivation.
+Pinning snapshots the current derived amount into budget_lines.
+
+ */
+export declare const getPinBudgetLineUrl: () => string;
+export declare const pinBudgetLine: (pinBudgetLineInput: PinBudgetLineInput, options?: RequestInit) => Promise<PinResult>;
+export declare const getPinBudgetLineMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof pinBudgetLine>>, TError, {
+        data: BodyType<PinBudgetLineInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof pinBudgetLine>>, TError, {
+    data: BodyType<PinBudgetLineInput>;
+}, TContext>;
+export type PinBudgetLineMutationResult = NonNullable<Awaited<ReturnType<typeof pinBudgetLine>>>;
+export type PinBudgetLineMutationBody = BodyType<PinBudgetLineInput>;
+export type PinBudgetLineMutationError = ErrorType<unknown>;
+/**
+ * @summary Pin (or unpin) a single auto-pulled budget line for a given month so
+the persisted planned amount is preferred over the live derivation.
+Pinning snapshots the current derived amount into budget_lines.
+
+ */
+export declare const usePinBudgetLine: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof pinBudgetLine>>, TError, {
+        data: BodyType<PinBudgetLineInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof pinBudgetLine>>, TError, {
+    data: BodyType<PinBudgetLineInput>;
 }, TContext>;
 export declare const getListMappingRulesUrl: () => string;
 export declare const listMappingRules: (options?: RequestInit) => Promise<MappingRule[]>;

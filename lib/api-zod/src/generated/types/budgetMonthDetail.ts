@@ -13,6 +13,11 @@ export interface BudgetMonthDetail {
   monthStart: string;
   /** @nullable */
   note?: string | null;
+  /** True when the user has pinned this month, which causes every
+auto-pulled line with a persisted budget_lines value to use that
+stored value instead of the live Bills/Debts derivation.
+ */
+  monthPinned: boolean;
   lines: BudgetLineWithActual[];
   groups: BudgetGroup[];
   summary: BudgetSummary;

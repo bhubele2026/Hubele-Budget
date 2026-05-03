@@ -2007,6 +2007,7 @@ export declare const GetBudgetMonthParams: zod.ZodObject<{
 export declare const GetBudgetMonthResponse: zod.ZodObject<{
     monthStart: zod.ZodString;
     note: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    monthPinned: zod.ZodBoolean;
     lines: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         categoryId: zod.ZodString;
@@ -2018,6 +2019,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         sourceKind: zod.ZodEnum<["manual", "auto_bills", "auto_debts"]>;
         sortOrder: zod.ZodNumber;
         kind: zod.ZodString;
+        pinned: zod.ZodBoolean;
         sourceBreakdown: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
             source: zod.ZodEnum<["Bank", "Amex", "Other"]>;
             count: zod.ZodNumber;
@@ -2040,6 +2042,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         sourceKind: "manual" | "auto_bills" | "auto_debts";
         plannedAmount: string;
         actualAmount: string;
+        pinned: boolean;
         id?: string | null | undefined;
         note?: string | null | undefined;
         sourceBreakdown?: {
@@ -2056,6 +2059,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         sourceKind: "manual" | "auto_bills" | "auto_debts";
         plannedAmount: string;
         actualAmount: string;
+        pinned: boolean;
         id?: string | null | undefined;
         note?: string | null | undefined;
         sourceBreakdown?: {
@@ -2079,6 +2083,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             sourceKind: zod.ZodEnum<["manual", "auto_bills", "auto_debts"]>;
             sortOrder: zod.ZodNumber;
             kind: zod.ZodString;
+            pinned: zod.ZodBoolean;
             sourceBreakdown: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
                 source: zod.ZodEnum<["Bank", "Amex", "Other"]>;
                 count: zod.ZodNumber;
@@ -2101,6 +2106,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             sourceKind: "manual" | "auto_bills" | "auto_debts";
             plannedAmount: string;
             actualAmount: string;
+            pinned: boolean;
             id?: string | null | undefined;
             note?: string | null | undefined;
             sourceBreakdown?: {
@@ -2117,6 +2123,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             sourceKind: "manual" | "auto_bills" | "auto_debts";
             plannedAmount: string;
             actualAmount: string;
+            pinned: boolean;
             id?: string | null | undefined;
             note?: string | null | undefined;
             sourceBreakdown?: {
@@ -2136,6 +2143,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             sourceKind: "manual" | "auto_bills" | "auto_debts";
             plannedAmount: string;
             actualAmount: string;
+            pinned: boolean;
             id?: string | null | undefined;
             note?: string | null | undefined;
             sourceBreakdown?: {
@@ -2157,6 +2165,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             sourceKind: "manual" | "auto_bills" | "auto_debts";
             plannedAmount: string;
             actualAmount: string;
+            pinned: boolean;
             id?: string | null | undefined;
             note?: string | null | undefined;
             sourceBreakdown?: {
@@ -2246,6 +2255,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
     }>;
 }, "strip", zod.ZodTypeAny, {
     monthStart: string;
+    monthPinned: boolean;
     lines: {
         categoryId: string;
         categoryName: string;
@@ -2255,6 +2265,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         sourceKind: "manual" | "auto_bills" | "auto_debts";
         plannedAmount: string;
         actualAmount: string;
+        pinned: boolean;
         id?: string | null | undefined;
         note?: string | null | undefined;
         sourceBreakdown?: {
@@ -2274,6 +2285,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             sourceKind: "manual" | "auto_bills" | "auto_debts";
             plannedAmount: string;
             actualAmount: string;
+            pinned: boolean;
             id?: string | null | undefined;
             note?: string | null | undefined;
             sourceBreakdown?: {
@@ -2306,6 +2318,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
     note?: string | null | undefined;
 }, {
     monthStart: string;
+    monthPinned: boolean;
     lines: {
         categoryId: string;
         categoryName: string;
@@ -2315,6 +2328,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
         sourceKind: "manual" | "auto_bills" | "auto_debts";
         plannedAmount: string;
         actualAmount: string;
+        pinned: boolean;
         id?: string | null | undefined;
         note?: string | null | undefined;
         sourceBreakdown?: {
@@ -2334,6 +2348,7 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             sourceKind: "manual" | "auto_bills" | "auto_debts";
             plannedAmount: string;
             actualAmount: string;
+            pinned: boolean;
             id?: string | null | undefined;
             note?: string | null | undefined;
             sourceBreakdown?: {
@@ -2418,6 +2433,73 @@ export declare const UpsertBudgetLineResponse: zod.ZodObject<{
     monthStart: string;
     plannedAmount: string;
     note?: string | null | undefined;
+}>;
+/**
+ * @summary Pin (or unpin) every auto-pulled line in a month to its currently
+displayed planned amount, so the persisted value is preferred over the
+live Bills/Debts derivation. Pinning snapshots the current derived
+amounts into budget_lines; unpinning leaves the snapshot in place but
+causes the response to fall back to the live derivation again.
+
+ */
+export declare const PinBudgetMonthParams: zod.ZodObject<{
+    monthStart: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    monthStart: string;
+}, {
+    monthStart: string;
+}>;
+export declare const PinBudgetMonthBody: zod.ZodObject<{
+    pinned: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    pinned: boolean;
+}, {
+    pinned: boolean;
+}>;
+export declare const PinBudgetMonthResponse: zod.ZodObject<{
+    monthStart: zod.ZodString;
+    monthPinned: zod.ZodBoolean;
+    linesPinned: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    monthStart: string;
+    monthPinned: boolean;
+    linesPinned: number;
+}, {
+    monthStart: string;
+    monthPinned: boolean;
+    linesPinned: number;
+}>;
+/**
+ * @summary Pin (or unpin) a single auto-pulled budget line for a given month so
+the persisted planned amount is preferred over the live derivation.
+Pinning snapshots the current derived amount into budget_lines.
+
+ */
+export declare const PinBudgetLineBody: zod.ZodObject<{
+    monthStart: zod.ZodString;
+    categoryId: zod.ZodString;
+    pinned: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    categoryId: string;
+    monthStart: string;
+    pinned: boolean;
+}, {
+    categoryId: string;
+    monthStart: string;
+    pinned: boolean;
+}>;
+export declare const PinBudgetLineResponse: zod.ZodObject<{
+    monthStart: zod.ZodString;
+    monthPinned: zod.ZodBoolean;
+    linesPinned: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    monthStart: string;
+    monthPinned: boolean;
+    linesPinned: number;
+}, {
+    monthStart: string;
+    monthPinned: boolean;
+    linesPinned: number;
 }>;
 export declare const ListMappingRulesResponseItem: zod.ZodObject<{
     id: zod.ZodString;

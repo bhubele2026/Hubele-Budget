@@ -474,6 +474,53 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BudgetLine" }
 
+  /budget/months/{monthStart}/pin:
+    post:
+      operationId: pinBudgetMonth
+      tags: [budget]
+      summary: |
+        Pin (or unpin) every auto-pulled line in a month to its currently
+        displayed planned amount, so the persisted value is preferred over the
+        live Bills/Debts derivation. Pinning snapshots the current derived
+        amounts into budget_lines; unpinning leaves the snapshot in place but
+        causes the response to fall back to the live derivation again.
+      parameters:
+        - in: path
+          name: monthStart
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PinBudgetMonthInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PinResult" }
+
+  /budget/lines/pin:
+    post:
+      operationId: pinBudgetLine
+      tags: [budget]
+      summary: |
+        Pin (or unpin) a single auto-pulled budget line for a given month so
+        the persisted planned amount is preferred over the live derivation.
+        Pinning snapshots the current derived amount into budget_lines.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PinBudgetLineInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PinResult" }
+
   /mapping-rules:
     get:
       operationId: listMappingRules
@@ -1202,12 +1249,37 @@ components:
         categoryId: { type: string }
         plannedAmount: { type: string }
         note: { type: ["string", "null"] }
+    PinBudgetMonthInput:
+      type: object
+      required: [pinned]
+      properties:
+        pinned: { type: boolean }
+    PinBudgetLineInput:
+      type: object
+      required: [monthStart, categoryId, pinned]
+      properties:
+        monthStart: { type: string }
+        categoryId: { type: string }
+        pinned: { type: boolean }
+    PinResult:
+      type: object
+      required: [monthStart, monthPinned, linesPinned]
+      properties:
+        monthStart: { type: string }
+        monthPinned: { type: boolean }
+        linesPinned: { type: integer }
     BudgetMonthDetail:
       type: object
-      required: [monthStart, lines, groups, summary]
+      required: [monthStart, monthPinned, lines, groups, summary]
       properties:
         monthStart: { type: string }
         note: { type: ["string", "null"] }
+        monthPinned:
+          type: boolean
+          description: |
+            True when the user has pinned this month, which causes every
+            auto-pulled line with a persisted budget_lines value to use that
+            stored value instead of the live Bills/Debts derivation.
         lines:
           type: array
           items: { $ref: "#/components/schemas/BudgetLineWithActual" }
@@ -1217,7 +1289,7 @@ components:
         summary: { $ref: "#/components/schemas/BudgetSummary" }
     BudgetLineWithActual:
       type: object
-      required: [categoryId, categoryName, plannedAmount, actualAmount, groupName, sourceKind, sortOrder, kind]
+      required: [categoryId, categoryName, plannedAmount, actualAmount, groupName, sourceKind, sortOrder, kind, pinned]
       properties:
         id: { type: ["string", "null"] }
         categoryId: { type: string }
@@ -1229,6 +1301,12 @@ components:
         sourceKind: { type: string, enum: [manual, auto_bills, auto_debts] }
         sortOrder: { type: integer }
         kind: { type: string }
+        pinned:
+          type: boolean
+          description: |
+            True when this line's persisted planned amount is being used in
+            place of the live Bills/Debts derivation. Driven by either the
+            month-level pin or the per-line pin.
         sourceBreakdown:
           type: array
           description: |

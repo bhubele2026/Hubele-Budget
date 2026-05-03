@@ -566,6 +566,22 @@ export interface BudgetLineInput {
   note?: string | null;
 }
 
+export interface PinBudgetMonthInput {
+  pinned: boolean;
+}
+
+export interface PinBudgetLineInput {
+  monthStart: string;
+  categoryId: string;
+  pinned: boolean;
+}
+
+export interface PinResult {
+  monthStart: string;
+  monthPinned: boolean;
+  linesPinned: number;
+}
+
 export type BudgetLineWithActualSourceKind =
   (typeof BudgetLineWithActualSourceKind)[keyof typeof BudgetLineWithActualSourceKind];
 
@@ -603,6 +619,11 @@ export interface BudgetLineWithActual {
   sourceKind: BudgetLineWithActualSourceKind;
   sortOrder: number;
   kind: string;
+  /** True when this line's persisted planned amount is being used in
+place of the live Bills/Debts derivation. Driven by either the
+month-level pin or the per-line pin.
+ */
+  pinned: boolean;
   /** Per-source breakdown of the actuals that contribute to this
 budget line. Used to render Bank/Amex badges with counts on the
 budget page so the user can see at a glance where the spend came
@@ -634,6 +655,11 @@ export interface BudgetMonthDetail {
   monthStart: string;
   /** @nullable */
   note?: string | null;
+  /** True when the user has pinned this month, which causes every
+auto-pulled line with a persisted budget_lines value to use that
+stored value instead of the live Bills/Debts derivation.
+ */
+  monthPinned: boolean;
   lines: BudgetLineWithActual[];
   groups: BudgetGroup[];
   summary: BudgetSummary;

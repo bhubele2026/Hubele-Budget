@@ -21,6 +21,11 @@ export interface BudgetLineWithActual {
   sourceKind: BudgetLineWithActualSourceKind;
   sortOrder: number;
   kind: string;
+  /** True when this line's persisted planned amount is being used in
+place of the live Bills/Debts derivation. Driven by either the
+month-level pin or the per-line pin.
+ */
+  pinned: boolean;
   /** Per-source breakdown of the actuals that contribute to this
 budget line. Used to render Bank/Amex badges with counts on the
 budget page so the user can see at a glance where the spend came

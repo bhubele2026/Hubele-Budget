@@ -114,6 +114,7 @@ export const budgetMonthsTable = pgTable(
     userId: text("user_id").notNull(),
     monthStart: date("month_start").notNull(),
     note: text("note"),
+    pinned: boolean("pinned").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
@@ -130,6 +131,7 @@ export const budgetLinesTable = pgTable(
     categoryId: uuid("category_id").notNull(),
     plannedAmount: numeric("planned_amount", { precision: 12, scale: 2 }).notNull().default("0"),
     note: text("note"),
+    pinned: boolean("pinned").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({

@@ -7,6 +7,8 @@ import {
   useCreateCategory,
   useDeleteCategory,
   useSeedDefaultBudget,
+  usePinBudgetMonth,
+  usePinBudgetLine,
   getGetBudgetMonthQueryKey,
   getListCategoriesQueryKey,
 } from "@workspace/api-client-react";
@@ -28,6 +30,7 @@ type BudgetLineWithActual = {
   sourceKind: string;
   sortOrder: number;
   kind: string;
+  pinned: boolean;
   sourceBreakdown?: SourceBreakdownEntry[] | null;
 };
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,6 +46,8 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -155,6 +160,8 @@ export default function BudgetPage() {
   const createCat = useCreateCategory();
   const deleteCat = useDeleteCategory();
   const seedDefaults = useSeedDefaultBudget();
+  const pinMonth = usePinBudgetMonth();
+  const pinLine = usePinBudgetLine();
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -248,6 +255,43 @@ export default function BudgetPage() {
     );
   };
 
+  const monthPinned = budgetData?.monthPinned === true;
+
+  const handleTogglePinMonth = () => {
+    const next = !monthPinned;
+    pinMonth.mutate(
+      { monthStart: currentMonth, data: { pinned: next } },
+      {
+        onSuccess: () => {
+          invalidate();
+          toast({
+            title: next
+              ? "Month pinned"
+              : "Month unpinned",
+            description: next
+              ? "Auto-pulled lines will hold their current planned amounts."
+              : "Auto-pulled lines will track Bills and Debts again.",
+          });
+        },
+      },
+    );
+  };
+
+  const handleTogglePinLine = (categoryId: string, currentlyPinned: boolean) => {
+    const next = !currentlyPinned;
+    pinLine.mutate(
+      { data: { monthStart: currentMonth, categoryId, pinned: next } },
+      {
+        onSuccess: () => {
+          invalidate();
+          toast({
+            title: next ? "Line pinned" : "Line unpinned",
+          });
+        },
+      },
+    );
+  };
+
   const handleDeleteCategory = (id: string) => {
     if (!confirm("Delete this category?")) return;
     deleteCat.mutate(
@@ -296,28 +340,54 @@ export default function BudgetPage() {
             A plan for every dollar this month.
           </p>
         </div>
-        <div className="flex items-center gap-4 bg-card px-4 py-2 rounded-md shadow-sm border border-border">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-4 bg-card px-4 py-2 rounded-md shadow-sm border border-border">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => changeMonth(-1)}
+              disabled={atFloor}
+              aria-disabled={atFloor}
+              title={atFloor ? "April 2026 is the earliest month" : undefined}
+              data-testid="button-prev-month"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <span className="font-medium text-lg w-32 text-center">
+              {monthName}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => changeMonth(1)}
+              data-testid="button-next-month"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </Button>
+          </div>
           <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => changeMonth(-1)}
-            disabled={atFloor}
-            aria-disabled={atFloor}
-            title={atFloor ? "April 2026 is the earliest month" : undefined}
-            data-testid="button-prev-month"
+            variant={monthPinned ? "default" : "outline"}
+            size="sm"
+            onClick={handleTogglePinMonth}
+            disabled={pinMonth.isPending}
+            title={
+              monthPinned
+                ? "Auto-pulled lines are locked to the persisted planned amounts for this month. Click to unpin and let them track Bills/Debts again."
+                : "Lock every auto-pulled line to its current planned amount so it doesn't shift when Bills/Debts produce a different monthly total."
+            }
+            data-testid="button-toggle-pin-month"
           >
-            <ChevronLeft className="w-5 h-5" />
-          </Button>
-          <span className="font-medium text-lg w-32 text-center">
-            {monthName}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => changeMonth(1)}
-            data-testid="button-next-month"
-          >
-            <ChevronRight className="w-5 h-5" />
+            {monthPinned ? (
+              <>
+                <Pin className="w-4 h-4 mr-1 fill-current" />
+                Pinned
+              </>
+            ) : (
+              <>
+                <Pin className="w-4 h-4 mr-1" />
+                Pin month
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -433,8 +503,11 @@ export default function BudgetPage() {
                         <BudgetLineRow
                           key={line.categoryId}
                           line={line}
+                          monthPinned={monthPinned}
                           onUpdatePlanned={handleUpdatePlanned}
                           onDelete={handleDeleteCategory}
+                          onTogglePin={handleTogglePinLine}
+                          pinDisabled={pinLine.isPending}
                         />
                       ))}
                     </div>
@@ -504,12 +577,18 @@ export default function BudgetPage() {
 
 function BudgetLineRow({
   line,
+  monthPinned,
   onUpdatePlanned,
   onDelete,
+  onTogglePin,
+  pinDisabled,
 }: {
   line: BudgetLineWithActual;
+  monthPinned: boolean;
   onUpdatePlanned: (categoryId: string, amount: string) => void;
   onDelete: (id: string) => void;
+  onTogglePin: (categoryId: string, currentlyPinned: boolean) => void;
+  pinDisabled: boolean;
 }) {
   const planned = parseFloat(line.plannedAmount) || 0;
   const actual = parseFloat(line.actualAmount) || 0;
@@ -556,6 +635,21 @@ function BudgetLineRow({
               {b.source} · {b.count}
             </Badge>
           ))}
+          {line.pinned && (
+            <Badge
+              variant="outline"
+              className="text-[10px] font-normal border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300"
+              title={
+                monthPinned
+                  ? "This month is pinned — every auto-pulled line is locked to its persisted planned amount."
+                  : "This line is pinned to its persisted planned amount."
+              }
+              data-testid={`badge-pinned-${line.categoryId}`}
+            >
+              <Pin className="w-3 h-3 mr-1 fill-current" />
+              Pinned
+            </Badge>
+          )}
           {isAvalanchePayment ? (
             <Badge
               variant="outline"
@@ -565,20 +659,45 @@ function BudgetLineRow({
               Managed by Avalanche
             </Badge>
           ) : (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 ml-auto md:ml-0 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
-              onClick={() => onDelete(line.categoryId)}
-              data-testid={`button-delete-${line.categoryId}`}
-              title={
-                isReadOnly
-                  ? "Delete this auto-pulled line (re-seeding will restore it)"
-                  : "Delete this line"
-              }
-            >
-              <Trash2 className="w-3 h-3" />
-            </Button>
+            <div className="ml-auto md:ml-0 flex items-center gap-1">
+              {isReadOnly && !isAvalanchePayment && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 disabled:opacity-50"
+                  onClick={() => onTogglePin(line.categoryId, line.pinned)}
+                  disabled={pinDisabled || monthPinned}
+                  data-testid={`button-toggle-pin-${line.categoryId}`}
+                  title={
+                    monthPinned
+                      ? "This month is pinned — unpin the month to control individual lines."
+                      : line.pinned
+                        ? "Unpin this line so it tracks Bills/Debts again."
+                        : "Pin this line to its current planned amount."
+                  }
+                >
+                  {line.pinned ? (
+                    <PinOff className="w-3 h-3" />
+                  ) : (
+                    <Pin className="w-3 h-3" />
+                  )}
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+                onClick={() => onDelete(line.categoryId)}
+                data-testid={`button-delete-${line.categoryId}`}
+                title={
+                  isReadOnly
+                    ? "Delete this auto-pulled line (re-seeding will restore it)"
+                    : "Delete this line"
+                }
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </div>
           )}
         </div>
         {line.note && (
