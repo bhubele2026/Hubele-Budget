@@ -1,0 +1,1820 @@
+#	Date	Description	Card	Type	Category	Wk	Mo	Un	Re	Amount	Running	
+1	2026-04-01	
+AplPay CITY VIEW LIQMADISON WI
+BRAD HUBELE	
+expense
+
+Restaurants & Bars
+
+			$42.18	-$3,311.98	
+2	2026-04-01	
+AplPay MILWAUKEE BREMILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Brewers F&B / Streaming Sports
+
+			$33.96	-$3,278.02	
+3	2026-04-01	
+AplPay MILWAUKEE BREMILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Brewers F&B / Streaming Sports
+
+			$38.02	-$3,240.00	
+4	2026-04-01	
+AplPay STARBUCKS 800-782-7282 WA
+BRAD HUBELE	
+expense
+
+Coffee (Starbucks, Dunkin)
+
+			$10.00	-$3,230.00	
+5	2026-04-01	
+MILWAUKEE BREWERS F&MILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Brewers F&B / Streaming Sports
+
+			$6.49	-$3,223.51	
+6	2026-04-01	
+MILWAUKEE BREWERS F&MILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Brewers F&B / Streaming Sports
+
+			$7.32	-$3,216.19	
+7	2026-04-01	
+MILWAUKEE BREWERS F&MILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Brewers F&B / Streaming Sports
+
+			$11.53	-$3,204.66	
+8	2026-04-01	
+AplPay MILWAUKEE BREMILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Brewers F&B / Streaming Sports
+
+			$13.09	-$3,191.57	
+9	2026-04-02	
+AplPay MLB*BREWERS TMILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Brewers F&B / Streaming Sports
+
+			$29.00	-$3,162.57	
+10	2026-04-02	
+K9 CRUSH MADISON WI
+BRAD HUBELE	
+expense
+
+Camp K9 (Pet Boarding)
+	
+		$57.20	-$3,105.37	
+11	2026-04-02	
+POINTS FOR STATEMENT CREDIT
+BRAD HUBELE	
+transfer
+
+Uncategorized
+				$1,080.00	-$4,185.37	
+12	2026-04-02	
+ITI* WIDO0016 MADISON WI
+BRAD HUBELE	
+expense
+
+Uncategorized
+			
+$10.00	-$4,175.37	
+13	2026-04-02	
+MLB TV 866-244-2291 NY
+BRAD HUBELE	
+expense
+
+Uncategorized
+	
+		$21.09	-$4,154.28	
+14	2026-04-02	
+ONLINE PAYMENT - THANK YOU
+BRAD HUBELE	
+transfer
+
+Uncategorized
+				$600.00	-$4,754.28	
+15	2026-04-02	
+POINTS FOR STATEMENT CREDIT
+—	
+income
+
+OTHER
+				$1,080.00	-$5,834.28	
+16	2026-04-02	
+AplPay CITY VIEW LIQMADISON
+Merchant: City View Liquor
+—	
+expense
+
+FOOD_AND_DRINK
+				$42.18	-$5,792.10	
+17	2026-04-02	
+AplPay MILWAUKEE BREMILWAUKEE
+Merchant: Milwaukee Bre
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$13.09	-$5,779.01	
+18	2026-04-02	
+AplPay MILWAUKEE BREMILWAUKEE
+Merchant: Milwaukee Bre
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$33.96	-$5,745.05	
+19	2026-04-02	
+AplPay MILWAUKEE BREMILWAUKEE
+Merchant: Milwaukee Bre
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$38.02	-$5,707.03	
+20	2026-04-02	
+MILWAUKEE BREWERS F&MILWAUKEE
+Merchant: Milwaukee Brewer's Miller Park
+—	
+expense
+
+ENTERTAINMENT
+				$6.49	-$5,700.54	
+21	2026-04-02	
+MILWAUKEE BREWERS F&MILWAUKEE
+Merchant: Milwaukee Brewer's Miller Park
+—	
+expense
+
+ENTERTAINMENT
+				$7.32	-$5,693.22	
+22	2026-04-02	
+MILWAUKEE BREWERS F&MILWAUKEE
+Merchant: Milwaukee Brewer's Miller Park
+—	
+expense
+
+ENTERTAINMENT
+				$11.53	-$5,681.69	
+23	2026-04-03	
+AplPay DUNKIN #35995MADISON WI
+BRAD HUBELE	
+expense
+
+Coffee (Starbucks, Dunkin)
+
+			$20.94	-$5,660.75	
+24	2026-04-03	
+AplPay IGREDO 41751 BARABOO WI
+BRAD HUBELE	
+expense
+
+Movies / Concerts / Other Fun
+		
+	$45.39	-$5,615.36	
+25	2026-04-03	
+BOOST MEMBERSHIP 000INDIANAPOLIS IN
+HANNAH HUBELE	
+expense
+
+Tech Subscriptions (Boost, Ring, Tonal)
+	
+		$12.99	-$5,602.37	
+26	2026-04-03	
+ITI* WIDO0016 MADISON WI
+BRAD HUBELE	
+expense
+
+Uncategorized
+				$10.00	-$5,592.37	
+27	2026-04-03	
+AplPay IGREDO 41751
+Merchant: Igredo
+—	
+expense
+
+FOOD_AND_DRINK
+				$45.39	-$5,546.98	
+28	2026-04-03	
+AplPay MLB*BREWERS TMILWAUKEE
+Merchant: Brewers
+—	
+expense
+
+ENTERTAINMENT
+				$29.00	-$5,517.98	
+29	2026-04-03	
+K9 CRUSH
+Merchant: K9 Crush Dog Daycare and Boarding
+—	
+expense
+
+MEDICAL
+				$57.20	-$5,460.78	
+30	2026-04-04	
+TST* FLIX BREWHOUSE MADISON WI
+BRAD HUBELE	
+expense
+
+Movies / Concerts / Other Fun
+
+			$54.22	-$5,406.56	
+31	2026-04-04	
+FLIX BREWHOUSE MADISMADISON WI
+BRAD HUBELE	
+expense
+
+Movies / Concerts / Other Fun
+
+			$28.50	-$5,378.06	
+32	2026-04-04	
+ZIP* BEST BUY NEW YORK NY
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$48.72	-$5,329.34	
+33	2026-04-04	
+NETEASE INFORMATION LOS ANGELES CA
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$9.99	-$5,319.35	
+34	2026-04-04	
+Dunkin' Donuts
+Merchant: Dunkin'
+—	
+expense
+
+FOOD_AND_DRINK
+				$20.94	-$5,298.41	
+35	2026-04-05	
+TST* STARKWEATHER BRMADISON WI
+HANNAH HUBELE	
+expense
+
+Restaurants & Bars
+
+			$49.19	-$5,249.22	
+36	2026-04-05	
+METRO MARKET #5434 0MADISON WI
+HANNAH HUBELE	
+expense
+
+Groceries ($425/wk × 4.33 wks)
+
+			$46.70	-$5,202.52	
+37	2026-04-05	
+METRO MARKET #5434 0MADISON WI
+HANNAH HUBELE	
+expense
+
+Groceries ($425/wk × 4.33 wks)
+
+			$97.28	-$5,105.24	
+38	2026-04-05	
+THREADBEAST LOS ANGELES CA
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$158.25	-$4,946.99	
+39	2026-04-05	
+TST* STARKWEATHER BRMADISON
+Merchant: Starkweather
+—	
+expense
+
+FOOD_AND_DRINK
+				$49.19	-$4,897.80	
+40	2026-04-05	
+FLIX BREWHOUSE MADISMADISON
+Merchant: Flix Brewhouse
+—	
+expense
+
+ENTERTAINMENT
+				$28.50	-$4,869.30	
+41	2026-04-05	
+TST* FLIX BREWHOUSE
+Merchant: Flix Brewhouse
+—	
+expense
+
+ENTERTAINMENT
+				$54.22	-$4,815.08	
+42	2026-04-06	
+AplPay DD/BR #363732COTTAGE GROVE WI
+BRAD HUBELE	
+expense
+
+Coffee (Starbucks, Dunkin)
+
+			$7.89	-$4,807.19	
+43	2026-04-06	
+MADISON METRO SCHOOLMADISON WI
+BRAD HUBELE	
+expense
+
+Childcare / School Costs
+		
+	$60.00	-$4,747.19	
+44	2026-04-06	
+MOBILE PAYMENT - THANK YOU
+BRAD HUBELE	
+transfer
+
+Uncategorized
+				$402.82	-$5,150.01	
+45	2026-04-06	
+MOBILE PAYMENT - THANK YOU
+BRAD HUBELE	
+transfer
+
+Uncategorized
+				$85.01	-$5,235.02	
+46	2026-04-06	
+MOBILE PAYMENT - THANK YOU
+—	
+income
+
+LOAN_PAYMENTS
+				$402.82	-$5,637.84	
+47	2026-04-07	
+TST* ANCORA - MONONAMADISON WI
+BRAD HUBELE	
+expense
+
+Restaurants & Bars
+
+			$15.21	-$5,622.63	
+48	2026-04-07	
+METRO MARKET #5434 0MADISON WI
+HANNAH HUBELE	
+expense
+
+Groceries ($425/wk × 4.33 wks)
+
+			$51.86	-$5,570.77	
+49	2026-04-07	
+SPOTIFY USA NEW YORK NY
+BRAD HUBELE	
+expense
+
+Uncategorized
+	
+		$23.20	-$5,547.57	
+50	2026-04-07	
+ZIP* BEST BUY NEW YORK NY
+BRAD HUBELE	
+transfer
+
+Uncategorized
+		
+	$48.72	-$5,596.29	
+51	2026-04-07	
+RUNDISNEY LAKE BUENA VI FL
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$370.00	-$5,226.29	
+52	2026-04-07	
+ONLINE PAYMENT - THANK YOU
+BRAD HUBELE	
+transfer
+
+Uncategorized
+				$370.00	-$5,596.29	
+53	2026-04-07	
+SCOOP, SCOOP, AND AWOREGON WI
+HANNAH HUBELE	
+expense
+
+Uncategorized
+	
+		$20.00	-$5,576.29	
+54	2026-04-07	
+AplPay DD/BR #363732COTTAGE GROVE
+Merchant: Dunkin'
+—	
+expense
+
+FOOD_AND_DRINK
+				$7.89	-$5,568.40	
+55	2026-04-07	
+MADISON METRO SCHOOLMADISON
+Merchant: Madison Metro School
+—	
+expense
+
+GENERAL_SERVICES
+				$60.00	-$5,508.40	
+56	2026-04-08	
+AplPay Exact ScienceMadison WI
+BRAD HUBELE	
+expense
+
+Coffee (Starbucks, Dunkin)
+
+			$4.98	-$5,503.42	
+57	2026-04-08	
+TST* ANCORA - MONONAMADISON
+Merchant: Ancora
+—	
+expense
+
+FOOD_AND_DRINK
+				$15.21	-$5,488.21	
+58	2026-04-09	
+AplPay PP*ATHENAEUM CHICAGO IL
+BRAD HUBELE	
+expense
+
+Charitable Giving (Athenaeum)
+
+			$26.58	-$5,461.63	
+59	2026-04-09	
+AplPay PP*ATHENAEUM CHICAGO IL
+BRAD HUBELE	
+expense
+
+Charitable Giving (Athenaeum)
+
+			$31.90	-$5,429.73	
+60	2026-04-09	
+AplPay PP*ATHENAEUM CHICAGO IL
+BRAD HUBELE	
+expense
+
+Charitable Giving (Athenaeum)
+
+			$37.83	-$5,391.90	
+61	2026-04-09	
+HUNGRYROOT.COM NEW YORK NY
+BRAD HUBELE	
+expense
+
+Groceries ($425/wk × 4.33 wks)
+
+			$139.76	-$5,252.14	
+62	2026-04-09	
+Interest Charge on Purchases
+BRAD HUBELE	
+expense
+
+Misc / Buffer
+		
+	$14.00	-$5,238.14	
+63	2026-04-09	
+TMNA SUBSCRIPTION PLANO TX
+BRAD HUBELE	
+expense
+
+Other Tech / Software
+		
+	$15.00	-$5,223.14	
+64	2026-04-09	
+SPOT PET SNOQUALMIE WA
+HANNAH HUBELE	
+expense
+
+Uncategorized
+	
+		$37.40	-$5,185.74	
+65	2026-04-09	
+WTB & BERKSHIRE ROOMCHICAGO IL
+BRAD HUBELE	
+expense
+
+Uncategorized
+
+			$66.50	-$5,119.24	
+66	2026-04-09	
+AplPay Exact ScienceMadison
+Merchant: Exact Science
+—	
+expense
+
+MEDICAL
+				$4.98	-$5,114.26	
+67	2026-04-10	
+AplPay SEAMLSS*CHINANEW YORK NY
+BRAD HUBELE	
+expense
+
+DoorDash & Delivery
+
+			$53.22	-$5,061.04	
+68	2026-04-10	
+AplPay WB STUDIO ENTNEW YORK, NY
+BRAD HUBELE	
+expense
+
+Movies / Concerts / Other Fun
+
+			$20.95	-$5,040.09	
+69	2026-04-10	
+TST* WEBER GRILL RESCHICAGO IL
+BRAD HUBELE	
+expense
+
+Uncategorized
+
+			$55.15	-$4,984.94	
+70	2026-04-10	
+AplPay SEAMLSS*CHINANEW
+Merchant: Chinanew
+—	
+expense
+
+FOOD_AND_DRINK
+				$53.22	-$4,931.72	
+71	2026-04-10	
+AplPay WB STUDIO ENTNEW
+Merchant: Wb Studio Entnew
+—	
+expense
+
+ENTERTAINMENT
+				$20.95	-$4,910.77	
+72	2026-04-10	
+AplPay ATHENAEUM
+Merchant: Athenaeum
+—	
+expense
+
+PERSONAL_CARE
+				$26.58	-$4,884.19	
+73	2026-04-10	
+AplPay ATHENAEUM
+Merchant: Athenaeum
+—	
+expense
+
+PERSONAL_CARE
+				$31.90	-$4,852.29	
+74	2026-04-10	
+AplPay ATHENAEUM
+Merchant: Athenaeum
+—	
+expense
+
+PERSONAL_CARE
+				$37.83	-$4,814.46	
+75	2026-04-10	
+HUNGRYROOT.COM
+Merchant: Hungryroot
+—	
+expense
+
+FOOD_AND_DRINK
+				$139.76	-$4,674.70	
+76	2026-04-11	
+LULULEMON ATHLETICA (877)263-9300 CA
+BRAD HUBELE	
+expense
+
+Clothing (Threadbeast/Stitch/Lulu)
+		
+	$111.83	-$4,562.87	
+77	2026-04-11	
+Platinum Lululemon Credit
+BRAD HUBELE	
+transfer
+
+Uncategorized
+				$75.00	-$4,637.87	
+78	2026-04-11	
+METRO MARKET #5434 0MADISON WI
+HANNAH HUBELE	
+expense
+
+Groceries ($425/wk × 4.33 wks)
+
+			$101.22	-$4,536.65	
+79	2026-04-11	
+CAMP K9 PET RESORT MADISON WI
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$208.67	-$4,327.98	
+80	2026-04-11	
+SPOT PET SNOQUALMIE WA
+HANNAH HUBELE	
+expense
+
+Uncategorized
+	
+		$13.61	-$4,314.37	
+81	2026-04-12	
+AplPay MILWAUKEE BREMILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Brewers F&B / Streaming Sports
+
+			$4.99	-$4,309.38	
+82	2026-04-12	
+AplPay MILWAUKEE BREMILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Brewers F&B / Streaming Sports
+
+			$9.75	-$4,299.63	
+83	2026-04-12	
+AplPay MILWAUKEE BREMILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Brewers F&B / Streaming Sports
+
+			$10.30	-$4,289.33	
+84	2026-04-12	
+AplPay MILWAUKEE BREMILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Brewers F&B / Streaming Sports
+
+			$33.58	-$4,255.75	
+85	2026-04-12	
+AplPay MLB*BREWERS TMILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Brewers F&B / Streaming Sports
+
+			$23.00	-$4,232.75	
+86	2026-04-12	
+MILWAUKEE BREWERS F&MILWAUKEE WI
+HANNAH HUBELE	
+expense
+
+Brewers F&B / Streaming Sports
+
+			$18.07	-$4,214.68	
+87	2026-04-12	
+OPENAI *CHATGPT SUBSSAN FRANCISCO CA
+BRAD HUBELE	
+expense
+
+Other Tech / Software
+		
+	$70.04	-$4,144.64	
+88	2026-04-12	
+MILWAUKEE BREWERS F&MILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Uncategorized
+
+			$4.34	-$4,140.30	
+89	2026-04-12	
+MILWAUKEE BREWERS F&MILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Uncategorized
+
+			$8.42	-$4,131.88	
+90	2026-04-12	
+MILWAUKEE BREWERS F&MILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Uncategorized
+
+			$10.03	-$4,121.85	
+91	2026-04-12	
+MILWAUKEE BREWERS F&MILWAUKEE WI
+BRAD HUBELE	
+expense
+
+Uncategorized
+
+			$24.72	-$4,097.13	
+92	2026-04-12	
+WALMART.COM 80092562BENTONVILLE AR
+BRAD HUBELE	
+expense
+
+Uncategorized
+
+			$57.22	-$4,039.91	
+93	2026-04-13	
+AplPay Exact ScienceMadison WI
+BRAD HUBELE	
+expense
+
+Coffee (Starbucks, Dunkin)
+
+			$6.16	-$4,033.75	
+94	2026-04-13	
+AplPay TRITON AUTO SMADISON WI
+BRAD HUBELE	
+expense
+
+Auto Maintenance / Wash
+
+			$39.14	-$3,994.61	
+95	2026-04-13	
+ONLINE PAYMENT - THANK YOU
+BRAD HUBELE	
+transfer
+
+Uncategorized
+				$300.00	-$4,294.61	
+96	2026-04-13	
+Platinum Digital Entertainment Credit
+BRAD HUBELE	
+transfer
+
+Uncategorized
+				$25.00	-$4,319.61	
+97	2026-04-13	
+ONLINE PAYMENT - THANK YOU
+BRAD HUBELE	
+transfer
+
+Uncategorized
+				$150.00	-$4,469.61	
+98	2026-04-13	
+HLU*HULUPLUS HULU.COM/BILL CA
+BRAD HUBELE	
+expense
+
+Streaming (Netflix, Hulu, Spotify, Peacock)
+	
+		$105.49	-$4,364.12	
+99	2026-04-13	
+HLU*HULUPLUS HULU.COM/BILL
+Merchant: Hulu
+—	
+expense
+
+ENTERTAINMENT
+				$105.49	-$4,258.63	
+100	2026-04-13	
+ONLINE PAYMENT - THANK YOU
+—	
+income
+
+LOAN_PAYMENTS
+				$300.00	-$4,558.63	
+101	2026-04-13	
+AplPay MILWAUKEE BREMILWAUKEE
+Merchant: Milwaukee Bre
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$4.99	-$4,553.64	
+102	2026-04-13	
+AplPay MILWAUKEE BREMILWAUKEE
+Merchant: Milwaukee Bre
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$9.75	-$4,543.89	
+103	2026-04-13	
+AplPay MILWAUKEE BREMILWAUKEE
+Merchant: Milwaukee Bre
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$10.30	-$4,533.59	
+104	2026-04-13	
+AplPay MILWAUKEE BREMILWAUKEE
+Merchant: Milwaukee Bre
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$33.58	-$4,500.01	
+105	2026-04-13	
+AplPay MLB*BREWERS TMILWAUKEE
+Merchant: Brewers
+—	
+expense
+
+ENTERTAINMENT
+				$23.00	-$4,477.01	
+106	2026-04-13	
+MILWAUKEE BREWERS F&MILWAUKEE
+Merchant: Milwaukee Brewer's Miller Park
+—	
+expense
+
+ENTERTAINMENT
+				$18.07	-$4,458.94	
+107	2026-04-14	
+AplPay Exact ScienceMadison WI
+BRAD HUBELE	
+expense
+
+Coffee (Starbucks, Dunkin)
+
+			$6.87	-$4,452.07	
+108	2026-04-14	
+eFAX.COM SERVICES 800-958-2983 CA
+BRAD HUBELE	
+expense
+
+Other Tech / Software
+		
+	$10.00	-$4,442.07	
+109	2026-04-14	
+OVERTURE CENTER FOUNMADISON WI
+BRAD HUBELE	
+expense
+
+Movies / Concerts / Other Fun
+		
+	$295.14	-$4,146.93	
+110	2026-04-14	
+MADISON NEWSPAPERS MMADISON WI
+BRAD HUBELE	
+expense
+
+Uncategorized
+				$14.99	-$4,131.94	
+111	2026-04-14	
+SCOOP, SCOOP, AND AWOREGON WI
+HANNAH HUBELE	
+expense
+
+Uncategorized
+	
+		$20.00	-$4,111.94	
+112	2026-04-14	
+eFAX.COM SERVICES
+Merchant: Efax
+—	
+expense
+
+GENERAL_SERVICES
+				$10.00	-$4,101.94	
+113	2026-04-14	
+AplPay Exact ScienceMadison
+Merchant: Exact Science
+—	
+expense
+
+MEDICAL
+				$6.16	-$4,095.78	
+114	2026-04-14	
+AplPay TRITON AUTO SMADISON
+Merchant: Triton Auto Spa
+—	
+expense
+
+GENERAL_SERVICES
+				$39.14	-$4,056.64	
+115	2026-04-14	
+Platinum Digital Entertainment Credit
+—	
+income
+
+ENTERTAINMENT
+				$25.00	-$4,081.64	
+116	2026-04-15	
+AplPay DD/BR #363732COTTAGE GROVE WI
+BRAD HUBELE	
+expense
+
+Coffee (Starbucks, Dunkin)
+
+			$8.29	-$4,073.35	
+117	2026-04-15	
+AplPay Exact ScienceMadison WI
+BRAD HUBELE	
+expense
+
+Coffee (Starbucks, Dunkin)
+
+			$2.73	-$4,070.62	
+118	2026-04-15	
+CHEWY.COM (800)672-4399 FL
+BRAD HUBELE	
+expense
+
+Vet / Pet Other
+	
+		$50.24	-$4,020.38	
+119	2026-04-15	
+OPC COL*SERVICE FEE NORCROSS GA
+BRAD HUBELE	
+expense
+
+Education (Becker, Eastern Univ)
+		
+	$14.75	-$4,005.63	
+120	2026-04-15	
+OPC*EASTERN UNIV PAYSaint Davids PA
+BRAD HUBELE	
+expense
+
+Education (Becker, Eastern Univ)
+		
+	$556.75	-$3,448.88	
+121	2026-04-15	
+THREADBEAST LOS ANGELES CA
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$158.19	-$3,290.69	
+122	2026-04-15	
+AplPay Exact ScienceMadison
+Merchant: Exact Science
+—	
+expense
+
+MEDICAL
+				$6.87	-$3,283.82	
+123	2026-04-15	
+LULULEMON ATHLETICA (877)263-9300
+Merchant: Lululemon Athletica
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$111.83	-$3,171.99	
+124	2026-04-16	
+HUNGRYROOT.COM NEW YORK NY
+BRAD HUBELE	
+expense
+
+Groceries ($425/wk × 4.33 wks)
+
+			$142.10	-$3,029.89	
+125	2026-04-16	
+METRO MARKET #5002 0MILWAUKEE WI
+HANNAH HUBELE	
+expense
+
+Groceries ($425/wk × 4.33 wks)
+
+			$44.81	-$2,985.08	
+126	2026-04-16	
+METRO MARKET #5434 0MADISON WI
+HANNAH HUBELE	
+expense
+
+Groceries ($425/wk × 4.33 wks)
+
+			$58.94	-$2,926.14	
+127	2026-04-16	
+DD *DOORDASHDASHPASSSAN FRANCISCO CA
+BRAD HUBELE	
+expense
+
+Uncategorized
+	
+		$9.99	-$2,916.15	
+128	2026-04-16	
+AplPay DD/BR #363732COTTAGE GROVE
+Merchant: Dunkin'
+—	
+expense
+
+FOOD_AND_DRINK
+				$8.29	-$2,907.86	
+129	2026-04-16	
+AplPay Exact ScienceMadison
+Merchant: Exact Science
+—	
+expense
+
+MEDICAL
+				$2.73	-$2,905.13	
+130	2026-04-16	
+CHEWY.COM (800)672-4399
+Merchant: Chewy
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$50.24	-$2,854.89	
+131	2026-04-16	
+Platinum Lululemon Credit
+—	
+income
+
+GENERAL_MERCHANDISE
+				$75.00	-$2,929.89	
+132	2026-04-17	
+AplPay YAKO SUSHI HOMADISON WI
+BRAD HUBELE	
+expense
+
+Restaurants & Bars
+
+			$30.35	-$2,899.54	
+133	2026-04-17	
+AplPay YAKO SUSHI HOMADISON
+Merchant: Yako Sushi House
+—	
+expense
+
+FOOD_AND_DRINK
+				$30.35	-$2,869.19	
+134	2026-04-17	
+HUNGRYROOT.COM
+Merchant: Hungryroot
+—	
+expense
+
+FOOD_AND_DRINK
+				$142.10	-$2,727.09	
+135	2026-04-17	
+OPC COL*SERVICE FEE
+—	
+expense
+
+GENERAL_SERVICES
+				$14.75	-$2,712.34	
+136	2026-04-17	
+OPC*EASTERN UNIV PAYSaint Davids
+Merchant: Eastern Univ Pay
+—	
+expense
+
+GENERAL_SERVICES
+				$556.75	-$2,155.59	
+137	2026-04-18	
+PEACOCK NEW YORK CITY NY
+BRAD HUBELE	
+expense
+
+Uncategorized
+	
+		$3.15	-$2,152.44	
+138	2026-04-19	
+AplPay KWIK TRIP #95MADISON WI
+BRAD HUBELE	
+expense
+
+Gasoline (Kwik Trip / Woodmans)
+
+			$20.56	-$2,131.88	
+139	2026-04-19	
+METRO MARKET #5002 0MILWAUKEE WI
+HANNAH HUBELE	
+expense
+
+Groceries ($425/wk × 4.33 wks)
+
+			$81.83	-$2,050.05	
+140	2026-04-19	
+BECKER PROFESSIONAL SAINT LOUIS MO
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$237.60	-$1,812.45	
+141	2026-04-19	
+Interest Charge on Purchases
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$134.28	-$1,678.17	
+142	2026-04-19	
+BECKER PROFESSIONAL
+Merchant: Becker Professional
+—	
+expense
+
+GENERAL_SERVICES
+				$237.60	-$1,440.57	
+143	2026-04-20	
+MOBILE PAYMENT - THANK YOU
+BRAD HUBELE	
+transfer
+
+Uncategorized
+				$410.32	-$1,850.89	
+144	2026-04-20	
+MOBILE PAYMENT - THANK YOU
+BRAD HUBELE	
+transfer
+
+Uncategorized
+				$162.41	-$2,013.30	
+145	2026-04-20	
+PLAYSTATION NETWORK 800-345-7669 CA
+BRAD HUBELE	
+expense
+
+Gaming subs
+		
+	$18.98	-$1,994.32	
+146	2026-04-20	
+MOBILE PAYMENT - THANK YOU
+—	
+income
+
+LOAN_PAYMENTS
+				$410.32	-$2,404.64	
+147	2026-04-20	
+Kwik Trip
+Merchant: Kwik Trip
+—	
+expense
+
+TRANSPORTATION
+				$20.56	-$2,384.08	
+148	2026-04-21	
+AplPay STARBUCKS 800-782-7282 WA
+BRAD HUBELE	
+expense
+
+Coffee (Starbucks, Dunkin)
+
+			$10.00	-$2,374.08	
+149	2026-04-21	
+BILL*BILL-2603210482650-621-7700 CA
+BRAD HUBELE	
+expense
+
+Other Tech / Software
+		
+	$89.00	-$2,285.08	
+150	2026-04-21	
+AplPay PY *COUSINS MHARTFORD WI
+BRAD HUBELE	
+expense
+
+Restaurants & Bars
+
+			$37.36	-$2,247.72	
+151	2026-04-21	
+METRO MARKET #5434 0MADISON WI
+HANNAH HUBELE	
+expense
+
+Groceries ($425/wk × 4.33 wks)
+
+			$48.80	-$2,198.92	
+152	2026-04-21	
+Paramount+ SAN FRANCISCO CA
+BRAD HUBELE	
+expense
+
+Streaming (Netflix, Hulu, Spotify, Peacock)
+	
+		$14.76	-$2,184.16	
+153	2026-04-21	
+AT&T UVERSE PAYMENT 8002882020 TX
+BRAD HUBELE	
+expense
+
+Uncategorized
+	
+		$90.22	-$2,093.94	
+154	2026-04-21	
+SCOOP, SCOOP, AND AWOREGON WI
+HANNAH HUBELE	
+expense
+
+Uncategorized
+	
+		$20.00	-$2,073.94	
+155	2026-04-21	
+VRBO HAHMLNPY 512-759-0902 TX
+BRAD HUBELE	
+transfer
+
+Uncategorized
+				$1,975.29	-$4,049.23	
+156	2026-04-21	
+VRBO HARL5T59 512-759-0902 TX
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$1,341.67	-$2,707.56	
+157	2026-04-21	
+BILL*BILL-2603210482650-621-7700
+Merchant: Bill
+—	
+expense
+
+RENT_AND_UTILITIES
+				$89.00	-$2,618.56	
+158	2026-04-21	
+Paramount+
+Merchant: Paramount+
+—	
+expense
+
+ENTERTAINMENT
+				$14.76	-$2,603.80	
+159	2026-04-21	
+SCOOP, SCOOP, AND AWOREGON
+Merchant: Scoop Scoop And Aw
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$20.00	-$2,583.80	
+160	2026-04-21	
+VRBO HARL5T59
+Merchant: VRBO
+—	
+expense
+
+TRAVEL
+				$1,341.67	-$1,242.13	
+161	2026-04-22	
+AplPay Exact ScienceMadison WI
+BRAD HUBELE	
+expense
+
+Coffee (Starbucks, Dunkin)
+
+			$4.22	-$1,237.91	
+162	2026-04-22	
+AplPay KWIK TRIP #18MADISON WI
+BRAD HUBELE	
+expense
+
+Gasoline (Kwik Trip / Woodmans)
+
+			$8.80	-$1,229.11	
+163	2026-04-22	
+CLAUDE.AI SUBSCRIPTISAN FRANCISCO CA
+BRAD HUBELE	
+expense
+
+Uncategorized
+			
+$20.00	-$1,209.11	
+164	2026-04-22	
+PELOTON* MEMBERSHIP NEW YORK CITY NY
+HANNAH HUBELE	
+expense
+
+Uncategorized
+	
+		$52.74	-$1,156.37	
+165	2026-04-22	
+Starbucks
+Merchant: Starbucks
+—	
+expense
+
+FOOD_AND_DRINK
+				$10.00	-$1,146.37	
+166	2026-04-22	
+PELOTON* MEMBERSHIP
+Merchant: Peloton
+—	
+expense
+
+PERSONAL_CARE
+				$52.74	-$1,093.63	
+167	2026-04-22	
+AT&T UVERSE PAYMENT
+Merchant: AT&T
+—	
+expense
+
+RENT_AND_UTILITIES
+				$90.22	-$1,003.41	
+168	2026-04-22	
+VRBO HAHMLNPY
+—	
+income
+
+INCOME
+				$1,975.29	-$2,978.70	
+169	2026-04-23	
+KWIK TRIP #966 966 MONONA WI
+HANNAH HUBELE	
+expense
+
+Gasoline (Kwik Trip / Woodmans)
+
+			$29.36	-$2,949.34	
+170	2026-04-23	
+AplPay Exact ScienceMadison
+Merchant: Exact Science
+—	
+expense
+
+MEDICAL
+				$4.22	-$2,945.12	
+171	2026-04-23	
+Kwik Trip
+Merchant: Kwik Trip
+—	
+expense
+
+TRANSPORTATION
+				$8.80	-$2,936.32	
+172	2026-04-23	
+CLAUDE.AI SUBSCRIPTISAN FRANCISCO
+Merchant: Claude.ai
+—	
+expense
+
+GENERAL_SERVICES
+				$20.00	-$2,916.32	
+173	2026-04-24	
+AplPay HARLEY S BALTMADISON WI
+BRAD HUBELE	
+expense
+
+Restaurants & Bars
+
+			$32.68	-$2,883.64	
+174	2026-04-24	
+AplPay WWW.GRACECOFFMADISON WI
+BRAD HUBELE	
+expense
+
+Coffee (Starbucks, Dunkin)
+
+			$5.79	-$2,877.85	
+175	2026-04-24	
+TARGET.COM 800-591-3869 MN
+BRAD HUBELE	
+expense
+
+Walmart / Target
+
+			$4.00	-$2,873.85	
+176	2026-04-24	
+TARGET.COM 800-591-3869 MN
+BRAD HUBELE	
+expense
+
+Walmart / Target
+
+			$4.86	-$2,868.99	
+177	2026-04-24	
+TARGET.COM 800-591-3869 MN
+BRAD HUBELE	
+expense
+
+Walmart / Target
+		
+	$104.45	-$2,764.54	
+178	2026-04-24	
+NETFLIX.COM 866-579-7172 CA
+BRAD HUBELE	
+expense
+
+Uncategorized
+	
+		$35.84	-$2,728.70	
+179	2026-04-24	
+AplPay WWW.GRACECOFFMADISON
+Merchant: Gracecoffmadison
+—	
+expense
+
+FOOD_AND_DRINK
+				$5.79	-$2,722.91	
+180	2026-04-24	
+Target
+Merchant: Target
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$4.00	-$2,718.91	
+181	2026-04-24	
+Target
+Merchant: Target
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$4.86	-$2,714.05	
+182	2026-04-24	
+Target
+Merchant: Target
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$104.45	-$2,609.60	
+183	2026-04-24	
+Kwik Trip
+Merchant: Kwik Trip
+—	
+expense
+
+TRANSPORTATION
+				$29.36	-$2,580.24	
+184	2026-04-24	
+Netflix
+Merchant: Netflix
+—	
+expense
+
+ENTERTAINMENT
+				$35.84	-$2,544.40	
+185	2026-04-25	
+TARGET.COM 800-591-3869 MN
+BRAD HUBELE	
+expense
+
+Walmart / Target
+
+			$140.26	-$2,404.14	
+186	2026-04-25	
+WORKING DRAFT BEER CMADISON WI
+HANNAH HUBELE	
+expense
+
+Restaurants & Bars
+
+			$27.52	-$2,376.62	
+187	2026-04-25	
+WORKING DRAFT BEER CMADISON
+Merchant: Working Draft Beer Company
+—	
+expense
+
+FOOD_AND_DRINK
+				$27.52	-$2,349.10	
+188	2026-04-26	
+AplPay KOPKE'S GREENOREGON WI
+BRAD HUBELE	
+expense
+
+Groceries ($425/wk × 4.33 wks)
+		
+	$174.76	-$2,174.34	
+189	2026-04-26	
+AplPay KWIK TRIP #95MADISON WI
+BRAD HUBELE	
+expense
+
+Gasoline (Kwik Trip / Woodmans)
+
+			$36.11	-$2,138.23	
+190	2026-04-26	
+PY *BODIHOW BREWING OREGON WI
+HANNAH HUBELE	
+expense
+
+Restaurants & Bars
+
+			$83.34	-$2,054.89	
+191	2026-04-26	
+TARGET.COM 800-591-3869 MN
+BRAD HUBELE	
+expense
+
+Walmart / Target
+
+			$8.00	-$2,046.89	
+192	2026-04-26	
+METRO MARKET #5002 0MILWAUKEE WI
+HANNAH HUBELE	
+expense
+
+Groceries ($425/wk × 4.33 wks)
+
+			$148.01	-$1,898.88	
+193	2026-04-26	
+IL TOLLWAY-AUTOREPLEDOWNERS GROVE IL
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$20.00	-$1,878.88	
+194	2026-04-26	
+IL TOLLWAY-WEB 9031 DOWNERS GROVE IL
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$10.00	-$1,868.88	
+195	2026-04-26	
+RING MULTI PLAN HAWTHORNE CA
+BRAD HUBELE	
+expense
+
+Uncategorized
+	
+		$10.54	-$1,858.34	
+196	2026-04-26	
+Target
+Merchant: Target
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$8.00	-$1,850.34	
+197	2026-04-26	
+Target
+Merchant: Target
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$140.26	-$1,710.08	
+198	2026-04-26	
+AplPay HARLEY S BALTMADISON
+Merchant: Harley S Balt
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$32.68	-$1,677.40	
+199	2026-04-26	
+RING MULTI PLAN
+Merchant: Ring Multi Plan
+—	
+expense
+
+HOME_IMPROVEMENT
+				$10.54	-$1,666.86	
+200	2026-04-27	
+NEAT FADES BARBERSHONEW YORK NY
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$54.74	-$1,612.12	
+201	2026-04-27	
+AplPay KOPKE'S GREENOREGON
+Merchant: Kopke's Greenhouse
+—	
+expense
+
+HOME_IMPROVEMENT
+				$174.76	-$1,437.36	
+202	2026-04-27	
+Kwik Trip
+Merchant: Kwik Trip
+—	
+expense
+
+TRANSPORTATION
+				$36.11	-$1,401.25	
+203	2026-04-27	
+PY *BODIHOW BREWING
+Merchant: Bodihow Brewing Company
+—	
+expense
+
+FOOD_AND_DRINK
+				$83.34	-$1,317.91	
+204	2026-04-27	
+NEAT FADES BARBERSHONEW
+Merchant: Neat Fades Barbershonew
+—	
+expense
+
+PERSONAL_CARE
+				$54.74	-$1,263.17	
+205	2026-04-27	
+IL TOLLWAY-AUTOREPLEDOWNERS
+Merchant: Il Tollway-autorepledowners
+—	
+expense
+
+TRANSPORTATION
+				$20.00	-$1,243.17	
+206	2026-04-27	
+IL TOLLWAY-WEB 9031
+Merchant: Illinois Tollway
+—	
+expense
+
+TRANSPORTATION
+				$10.00	-$1,233.17	
+207	2026-04-28	
+AplPay TST* ANCORA -MADISON WI
+BRAD HUBELE	
+expense
+
+Restaurants & Bars
+
+			$14.05	-$1,219.12	
+208	2026-04-28	
+TST* MILIO S - MONONMONONA WI
+BRAD HUBELE	
+expense
+
+Restaurants & Bars
+
+			$32.51	-$1,186.61	
+209	2026-04-28	
+UNIVERSAL HOME PROTEMADISON WI
+BRAD HUBELE	
+expense
+
+Home Maintenance / Repairs
+	
+		$53.85	-$1,132.76	
+210	2026-04-28	
+ANTHROPIC SAN FRANCISCO CA
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$45.00	-$1,087.76	
+211	2026-04-28	
+CLAUDE.AI SUBSCRIPTISAN FRANCISCO CA
+BRAD HUBELE	
+expense
+
+Uncategorized
+			
+$84.07	-$1,003.69	
+212	2026-04-28	
+SCOOP, SCOOP, AND AWOREGON WI
+HANNAH HUBELE	
+expense
+
+Uncategorized
+	
+		$20.00	-$983.69	
+213	2026-04-28	
+TST* MILIO S - MONONMONONA
+Merchant: Milio's Sandwiches
+—	
+expense
+
+FOOD_AND_DRINK
+				$32.51	-$951.18	
+214	2026-04-28	
+ANTHROPIC
+Merchant: Anthropic
+—	
+expense
+
+GENERAL_SERVICES
+				$45.00	-$906.18	
+215	2026-04-28	
+CLAUDE.AI SUBSCRIPTISAN FRANCISCO
+Merchant: Claude.ai
+—	
+expense
+
+GENERAL_SERVICES
+				$84.07	-$822.11	
+216	2026-04-28	
+SCOOP, SCOOP, AND AWOREGON
+Merchant: Scoop Scoop And Aw
+—	
+expense
+
+GENERAL_MERCHANDISE
+				$20.00	-$802.11	
+217	2026-04-29	
+AplPay DD/BR #363732COTTAGE GROVE WI
+BRAD HUBELE	
+expense
+
+Coffee (Starbucks, Dunkin)
+
+			$4.63	-$797.48	
+218	2026-04-29	
+AplPay Exact ScienceMadison WI
+BRAD HUBELE	
+expense
+
+Coffee (Starbucks, Dunkin)
+
+			$1.68	-$795.80	
+219	2026-04-29	
+AplPay TST* ANCORA -MADISON
+Merchant: Ancora
+—	
+expense
+
+FOOD_AND_DRINK
+
+			$14.05	-$781.75	
+220	2026-04-29	
+UNIVERSAL HOME PROTEMADISON
+Merchant: Universal Home Protection
+—	
+expense
+
+GENERAL_SERVICES
+	
+		$53.85	-$727.90	
+221	2026-04-30	
+SIMM ASSOCIATES 800-864-6033 DE
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$230.70	-$497.20	
+222	2026-04-30	
+LOVABLE DOVER DE
+BRAD HUBELE	
+expense
+
+Uncategorized
+		
+	$50.00	-$447.20	
+223	2026-04-30	
+AplPay Exact ScienceMadison
+Merchant: Exact Science
+—	
+expense
+
+MEDICAL
+
+			$1.68	-$445.52	
+224	2026-04-30	
+DOORDASH.COM
+Merchant: DoorDash
+—	
+expense
+
+FOOD_AND_DRINK
+
+			$28.46	-$417.06	
+225	2026-04-30	
+HARLEYS LIQUOR BAIT
+Merchant: Harleys Liquor
+—	
+expense
+
+FOOD_AND_DRINK
+
+			$36.89	-$380.17	
+226	2026-04-30	
+AplPay DD/BR #363732COTTAGE GROVE
+Merchant: Dunkin'
+—	
+expense
+
+FOOD_AND_DRINK
+
+			$4.63	-$375.54	
+227	2026-04-30	
+ZENWORK
+Merchant: Zenwork
+—	
+expense
+
+PERSONAL_CARE
+			
+$1,027.73	$652.19	
+228	2026-04-30	
+LOVABLE
+Merchant: Lovable
+—	
+expense
+
+GENERAL_SERVICES
+		
+	$50.00	$702.19	
+229	2026-04-30	
+SIMM ASSOCIATES DE
+Merchant: Simm Associates
+—	
+expense
+
+LOAN_PAYMENTS
+		
+	$230.70	$932.89
