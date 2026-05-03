@@ -36,6 +36,16 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { Search, CreditCard, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ReferenceDot,
+} from "recharts";
 import { CategoryPicker } from "@/components/category-picker";
 import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -143,8 +153,16 @@ export default function AmexPage() {
   // for rolling the ending balance between the anchor and the selected
   // month. Per-row From/To narrows further client-side.
   const queryParams = useMemo(() => {
-    const earlier = compareMonth(selectedMonth, currentMonth) <= 0 ? selectedMonth : currentMonth;
-    const later = compareMonth(selectedMonth, currentMonth) >= 0 ? selectedMonth : currentMonth;
+    // Widen window to cover the trailing-12-month trend chart, which
+    // anchors at currentMonth and rolls back to (selectedMonth - 11).
+    const trendStart = shiftMonth(selectedMonth, -11);
+    const candidates = [selectedMonth, currentMonth, trendStart];
+    let earlier = candidates[0];
+    let later = candidates[0];
+    for (const c of candidates) {
+      if (compareMonth(c, earlier) < 0) earlier = c;
+      if (compareMonth(c, later) > 0) later = c;
+    }
     const p: { source?: string; limit?: number; from?: string; to?: string } = {
       limit: 5000,
       from: monthFirstISO(earlier),
@@ -306,6 +324,62 @@ export default function AmexPage() {
       }
     }
     return { value: bal, source: "debt" as const };
+  }, [amexDebt, netChangeByMonth, selectedMonth, currentMonth]);
+
+  // Trailing 12-month ending-balance series, anchored at the current
+  // month's known Amex debt balance and rolled month-by-month using the
+  // same net-change math as `endingBalance` above.
+  const balanceTrend = useMemo(() => {
+    if (!amexDebt) return [] as Array<{
+      key: string;
+      label: string;
+      shortLabel: string;
+      balance: number;
+      isSelected: boolean;
+    }>;
+    const anchor = parseSigned(amexDebt.balance);
+    // Compute the ending balance for any given month by rolling from the
+    // currentMonth anchor.
+    const balanceAt = (mk: MonthKey): number => {
+      const cmp = compareMonth(mk, currentMonth);
+      if (cmp === 0) return anchor;
+      let bal = anchor;
+      if (cmp < 0) {
+        let cursor = currentMonth;
+        while (compareMonth(cursor, mk) > 0) {
+          const k = `${cursor.year}-${cursor.month}`;
+          bal -= netChangeByMonth.get(k) ?? 0;
+          cursor = shiftMonth(cursor, -1);
+        }
+      } else {
+        let cursor = shiftMonth(currentMonth, 1);
+        while (compareMonth(cursor, mk) <= 0) {
+          const k = `${cursor.year}-${cursor.month}`;
+          bal += netChangeByMonth.get(k) ?? 0;
+          cursor = shiftMonth(cursor, 1);
+        }
+      }
+      return bal;
+    };
+    const points: Array<{
+      key: string;
+      label: string;
+      shortLabel: string;
+      balance: number;
+      isSelected: boolean;
+    }> = [];
+    for (let i = 11; i >= 0; i--) {
+      const mk = shiftMonth(selectedMonth, -i);
+      const d = new Date(mk.year, mk.month, 1);
+      points.push({
+        key: `${mk.year}-${mk.month}`,
+        label: d.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+        shortLabel: d.toLocaleDateString("en-US", { month: "short" }),
+        balance: balanceAt(mk),
+        isSelected: compareMonth(mk, selectedMonth) === 0,
+      });
+    }
+    return points;
   }, [amexDebt, netChangeByMonth, selectedMonth, currentMonth]);
 
   // Bulk selection
@@ -618,6 +692,85 @@ export default function AmexPage() {
           </p>
         </div>
       </div>
+
+      {/* 12-month ending balance trend */}
+      {balanceTrend.length > 0 && (
+        <Card data-testid="card-balance-trend">
+          <CardContent className="p-3 pt-4">
+            <div className="flex items-baseline justify-between gap-2 px-1 mb-1">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Ending balance · trailing 12 months
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                {balanceTrend[0].label} – {balanceTrend[balanceTrend.length - 1].label}
+              </div>
+            </div>
+            <div className="h-[120px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={balanceTrend}
+                  margin={{ top: 6, right: 12, bottom: 0, left: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} vertical={false} />
+                  <XAxis
+                    dataKey="shortLabel"
+                    tick={{ fontSize: 10 }}
+                    tickLine={false}
+                    axisLine={false}
+                    interval="preserveStartEnd"
+                    minTickGap={16}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10 }}
+                    tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
+                    width={44}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <RechartsTooltip
+                    contentStyle={{
+                      background: "hsl(var(--background))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: 6,
+                      fontSize: 12,
+                    }}
+                    labelFormatter={(_label, payload) => {
+                      const p = payload?.[0]?.payload as
+                        | { label?: string }
+                        | undefined;
+                      return p?.label ?? String(_label);
+                    }}
+                    formatter={(v: number) => [formatCurrency(v), "Ending balance"]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="balance"
+                    stroke="#2563eb"
+                    strokeWidth={2}
+                    dot={{ r: 2.5, stroke: "#2563eb", fill: "#fff", strokeWidth: 1.5 }}
+                    activeDot={{ r: 4 }}
+                    isAnimationActive={false}
+                  />
+                  {balanceTrend
+                    .filter((p) => p.isSelected)
+                    .map((p) => (
+                      <ReferenceDot
+                        key={p.key}
+                        x={p.shortLabel}
+                        y={p.balance}
+                        r={5}
+                        fill="#2563eb"
+                        stroke="#fff"
+                        strokeWidth={2}
+                        ifOverflow="extendDomain"
+                      />
+                    ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Month selector + per-month totals */}
       <div className="flex items-stretch gap-4 flex-wrap">
