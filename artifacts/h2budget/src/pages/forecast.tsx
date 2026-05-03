@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetForecast,
@@ -7,7 +7,10 @@ import {
   useCloseForecastMonth,
   useReopenForecastMonth,
   useUpdateForecastSettings,
+  useUpdateTransaction,
+  useListCategories,
   getGetForecastQueryKey,
+  getListTransactionsQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,19 +37,42 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+  DragOverlay,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
+import confetti from "canvas-confetti";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   buildLineRegister,
   buildBucket,
-  findCandidates,
   monthKey,
   type LineRow,
+  type PlanLine,
+  type BankLine,
   type Resolution,
   type Transaction as MatchTxn,
 } from "@/lib/forecastMatch";
 import type { CashEvent } from "@/lib/forecast";
-import { Lock, Unlock, Settings as SettingsIcon, X, Check, AlertCircle } from "lucide-react";
+import {
+  Lock,
+  Unlock,
+  Settings as SettingsIcon,
+  X,
+  GripVertical,
+  PartyPopper,
+  Inbox as InboxIcon,
+} from "lucide-react";
 
 function statusBadge(s: string) {
   const map: Record<string, { label: string; cls: string }> = {
@@ -62,8 +88,209 @@ function statusBadge(s: string) {
   return <Badge variant="outline" className={v.cls}>{v.label}</Badge>;
 }
 
+const RECONCILED_STORAGE_KEY = "h2budget:forecastReconciled";
+
+function readReconciledMap(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(RECONCILED_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeReconciledMap(map: Record<string, boolean>) {
+  try {
+    localStorage.setItem(RECONCILED_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    /* no-op */
+  }
+}
+
+function fireConfetti() {
+  const defaults = { startVelocity: 32, spread: 360, ticks: 70, zIndex: 9999 };
+  confetti({ ...defaults, particleCount: 90, origin: { x: 0.2, y: 0.3 } });
+  confetti({ ...defaults, particleCount: 90, origin: { x: 0.8, y: 0.3 } });
+  setTimeout(
+    () =>
+      confetti({
+        ...defaults,
+        particleCount: 120,
+        origin: { x: 0.5, y: 0.4 },
+      }),
+    150,
+  );
+}
+
+type InboxCard = {
+  id: string;
+  bank: BankLine;
+};
+
+function InboxCardView({
+  card,
+  categoryName,
+  onUnplanned,
+  onMatchPick,
+  planRows,
+  isOverlay,
+}: {
+  card: InboxCard;
+  categoryName?: string | null;
+  onUnplanned: () => void;
+  onMatchPick: (planRow: PlanLine) => void;
+  planRows: PlanLine[];
+  isOverlay?: boolean;
+}) {
+  const draggable = useDraggable({
+    id: card.id,
+    data: { txnId: card.bank.txn.id },
+    disabled: isOverlay,
+  });
+  const { attributes, listeners, setNodeRef, transform, isDragging } = draggable;
+  const style = transform
+    ? { transform: CSS.Translate.toString(transform) }
+    : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`rounded-md border bg-card p-3 flex items-center gap-3 shadow-sm transition-opacity ${
+        isDragging ? "opacity-30" : ""
+      } ${isOverlay ? "shadow-lg ring-2 ring-primary/40 cursor-grabbing" : ""}`}
+    >
+      <button
+        {...listeners}
+        {...attributes}
+        className="touch-none cursor-grab text-muted-foreground hover:text-foreground"
+        aria-label="Drag to match"
+        type="button"
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      <div className="min-w-0 flex-1">
+        <div className="font-medium text-sm truncate">
+          {card.bank.txn.description}
+        </div>
+        <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+          <span>{formatDate(card.bank.date)}</span>
+          {categoryName && (
+            <Badge
+              variant="outline"
+              className="text-[10px] border-violet-200 text-violet-700 bg-violet-50"
+            >
+              {categoryName}
+            </Badge>
+          )}
+          {!categoryName && (
+            <Badge variant="outline" className="text-[10px] border-muted text-muted-foreground">
+              Uncategorized
+            </Badge>
+          )}
+        </div>
+      </div>
+      <span
+        className={`text-sm font-medium tabular-nums ${
+          card.bank.amount < 0 ? "text-destructive" : "text-primary"
+        }`}
+      >
+        {formatCurrency(card.bank.amount)}
+      </span>
+      {!isOverlay && (
+        <div className="flex items-center gap-1">
+          <Select
+            onValueChange={(v) => {
+              const p = planRows.find(
+                (r) => `${r.itemId}|${r.date}` === v,
+              );
+              if (p) onMatchPick(p);
+            }}
+          >
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue placeholder="Match to…" />
+            </SelectTrigger>
+            <SelectContent>
+              {planRows.length === 0 && (
+                <div className="px-2 py-1 text-xs text-muted-foreground">
+                  No planned items
+                </div>
+              )}
+              {planRows.map((p) => (
+                <SelectItem
+                  key={`${p.itemId}|${p.date}`}
+                  value={`${p.itemId}|${p.date}`}
+                >
+                  {p.label} · {formatDate(p.date)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={onUnplanned}>
+            Unplanned
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanDropRow({
+  row,
+  onSelect,
+  activeDragId,
+}: {
+  row: PlanLine;
+  onSelect: (row: PlanLine) => void;
+  activeDragId: string | null;
+}) {
+  const droppable = useDroppable({
+    id: `plan:${row.itemId}|${row.date}`,
+    data: { kind: "plan", planRow: row },
+    disabled: row.status === "matched" || row.status === "missed",
+  });
+  const isOver = droppable.isOver && activeDragId !== null;
+  return (
+    <button
+      ref={droppable.setNodeRef}
+      onClick={() => onSelect(row)}
+      className={`w-full text-left p-4 flex items-center justify-between transition-colors ${
+        isOver
+          ? "bg-primary/10 ring-2 ring-primary ring-inset"
+          : "hover:bg-muted/50"
+      }`}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <Badge
+          variant="outline"
+          className="bg-amber-50 text-amber-900 border-amber-200"
+        >
+          Plan
+        </Badge>
+        <div className="min-w-0">
+          <div className="font-medium text-sm truncate">{row.label}</div>
+          <div className="text-xs text-muted-foreground">
+            {formatDate(row.date)}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-4">
+        {statusBadge(row.status)}
+        <span
+          className={`font-medium tabular-nums ${
+            row.amount < 0 ? "text-destructive" : "text-primary"
+          }`}
+        >
+          {formatCurrency(row.amount)}
+        </span>
+      </div>
+    </button>
+  );
+}
+
 export default function ForecastPage() {
   const { data, isLoading } = useGetForecast();
+  const { data: categories } = useListCategories();
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -72,11 +299,13 @@ export default function ForecastPage() {
   const closeMonth = useCloseForecastMonth();
   const reopenMonth = useReopenForecastMonth();
   const updateSettings = useUpdateForecastSettings();
+  const updateTxn = useUpdateTransaction();
 
-  const [selectedRow, setSelectedRow] = useState<LineRow | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draftDays, setDraftDays] = useState("90");
   const [draftBalance, setDraftBalance] = useState("0");
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [reconciledNow, setReconciledNow] = useState(false);
 
   const today = useMemo(() => new Date(), []);
   const currentMonth = useMemo(
@@ -89,6 +318,12 @@ export default function ForecastPage() {
     () => new Set(data?.closedMonths ?? []),
     [data?.closedMonths],
   );
+
+  const categoryById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of categories ?? []) m.set(c.id, c.name);
+    return m;
+  }, [categories]);
 
   const register = useMemo(() => {
     if (!data) return null;
@@ -128,71 +363,145 @@ export default function ForecastPage() {
     return Array.from(set).sort();
   }, [register, currentMonth]);
 
-  const invalidate = () =>
+  // Build inbox: bank rows still pending (not matched, not unplanned)
+  const inbox: InboxCard[] = useMemo(() => {
+    if (!register) return [];
+    return register.allBank
+      .filter((b) => b.status === "pending_bank")
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+      .map((b) => ({ id: `inbox:${b.txn.id}`, bank: b }));
+  }, [register]);
+
+  // Plan rows used as drop targets (active register, plan-only)
+  const planRows: PlanLine[] = useMemo(() => {
+    if (!register) return [];
+    return register.rows.filter((r): r is PlanLine => r.kind === "plan");
+  }, [register]);
+
+  // Window key for confetti persistence: from→to
+  const windowKey = data ? `${data.fromDate}_${data.toDate}` : null;
+  const inboxCount = inbox.length;
+  const prevInboxCountRef = useRef<number | null>(null);
+
+  // Hydrate "reconciled" state from local storage when window changes
+  useEffect(() => {
+    if (!windowKey) return;
+    const map = readReconciledMap();
+    setReconciledNow(!!map[windowKey] && inboxCount === 0);
+    prevInboxCountRef.current = inboxCount;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowKey]);
+
+  // Watch transitions
+  useEffect(() => {
+    if (!windowKey) return;
+    const prev = prevInboxCountRef.current;
+    if (prev === null) {
+      prevInboxCountRef.current = inboxCount;
+      return;
+    }
+    const map = readReconciledMap();
+    if (prev > 0 && inboxCount === 0) {
+      // transitioned to zero — celebrate (only if not already celebrated)
+      if (!map[windowKey]) {
+        fireConfetti();
+        map[windowKey] = true;
+        writeReconciledMap(map);
+      }
+      setReconciledNow(true);
+    } else if (inboxCount > 0 && map[windowKey]) {
+      // re-opened: clear the celebrated flag for this window
+      delete map[windowKey];
+      writeReconciledMap(map);
+      setReconciledNow(false);
+    } else if (inboxCount > 0) {
+      setReconciledNow(false);
+    }
+    prevInboxCountRef.current = inboxCount;
+  }, [inboxCount, windowKey]);
+
+  const invalidate = () => {
     qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+  };
 
-  const handleOpenRow = (row: LineRow) => setSelectedRow(row);
-  const closeDialog = () => setSelectedRow(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 5 },
+    }),
+  );
 
-  const onMatch = (row: LineRow, candidate: LineRow) => {
-    const planRow = row.kind === "plan" ? row : (candidate as any);
-    const bankRow = row.kind === "bank" ? row : (candidate as any);
+  const matchInboxToPlan = (txnId: string, planRow: PlanLine) => {
     upsertResolution.mutate(
       {
         data: {
           status: "matched",
           recurringItemId: planRow.itemId,
           occurrenceDate: planRow.date,
-          matchedTxnId: bankRow.txn.id,
+          matchedTxnId: txnId,
         },
       },
       {
         onSuccess: () => {
           invalidate();
-          toast({ title: "Matched" });
-          closeDialog();
+          toast({ title: `Matched to ${planRow.label}` });
         },
       },
     );
   };
 
-  const onMarkMissed = (row: LineRow) => {
-    if (row.kind !== "plan") return;
-    upsertResolution.mutate(
-      {
-        data: {
-          status: "missed",
-          recurringItemId: row.itemId,
-          occurrenceDate: row.date,
-        },
-      },
-      {
-        onSuccess: () => {
-          invalidate();
-          toast({ title: "Marked missed" });
-          closeDialog();
-        },
-      },
-    );
+  const onDragStart = (e: DragStartEvent) => {
+    setActiveDragId(String(e.active.id));
+  };
+  const onDragEnd = (e: DragEndEvent) => {
+    setActiveDragId(null);
+    const overData = e.over?.data?.current as
+      | { kind?: string; planRow?: PlanLine }
+      | undefined;
+    const activeData = e.active.data.current as
+      | { txnId?: string }
+      | undefined;
+    if (overData?.kind === "plan" && overData.planRow && activeData?.txnId) {
+      matchInboxToPlan(activeData.txnId, overData.planRow);
+    }
   };
 
-  const onMarkUnplanned = (row: LineRow) => {
-    if (row.kind !== "bank") return;
+  const onMarkUnplannedTxn = (txnId: string) => {
     upsertResolution.mutate(
-      {
-        data: {
-          status: "ignored_unforecasted",
-          matchedTxnId: row.txn.id,
-        },
-      },
+      { data: { status: "ignored_unforecasted", matchedTxnId: txnId } },
       {
         onSuccess: () => {
           invalidate();
           toast({ title: "Marked unplanned" });
-          closeDialog();
         },
       },
     );
+  };
+
+  const onSelectPlan = (row: PlanLine) => {
+    if (row.status === "matched" || row.status === "missed") return;
+    if (
+      confirm(
+        `Mark "${row.label}" as missed for ${formatDate(row.date)}? You can drag an Amex card here to match instead.`,
+      )
+    ) {
+      upsertResolution.mutate(
+        {
+          data: {
+            status: "missed",
+            recurringItemId: row.itemId,
+            occurrenceDate: row.date,
+          },
+        },
+        {
+          onSuccess: () => {
+            invalidate();
+            toast({ title: "Marked missed" });
+          },
+        },
+      );
+    }
   };
 
   const onUndo = (resolutionId: string) => {
@@ -202,6 +511,18 @@ export default function ForecastPage() {
         onSuccess: () => {
           invalidate();
           toast({ title: "Undone" });
+        },
+      },
+    );
+  };
+
+  const onRemoveFromForecast = (txnId: string) => {
+    updateTxn.mutate(
+      { id: txnId, data: { forecastFlag: false } },
+      {
+        onSuccess: () => {
+          invalidate();
+          toast({ title: "Removed from Forecast" });
         },
       },
     );
@@ -263,6 +584,9 @@ export default function ForecastPage() {
   }
 
   const isClosed = closedMonths.has(monthFilter);
+  const activeCard = activeDragId
+    ? inbox.find((c) => c.id === activeDragId) ?? null
+    : null;
 
   return (
     <div className="space-y-6">
@@ -272,12 +596,35 @@ export default function ForecastPage() {
             Cash Forecast
           </h1>
           <p className="text-muted-foreground mt-1">
-            Match planned bills against bank activity, then close the month.
+            Send Amex charges from Transactions, then drop them onto planned items here.
           </p>
         </div>
-        <Button variant="outline" onClick={openSettings}>
-          <SettingsIcon className="w-4 h-4 mr-2" /> Settings
-        </Button>
+        <div className="flex items-center gap-2">
+          {inboxCount > 0 ? (
+            <Badge
+              variant="outline"
+              className="bg-emerald-50 text-emerald-900 border-emerald-200"
+              data-testid="inbox-counter"
+            >
+              <InboxIcon className="w-3.5 h-3.5 mr-1" />
+              Inbox: {inboxCount} pending
+            </Badge>
+          ) : reconciledNow ? (
+            <Badge
+              className="bg-primary/15 text-primary border-primary/30"
+              data-testid="reconciled-badge"
+            >
+              <PartyPopper className="w-3.5 h-3.5 mr-1" /> Reconciled!
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="bg-muted text-muted-foreground">
+              <InboxIcon className="w-3.5 h-3.5 mr-1" /> Inbox: 0 pending
+            </Badge>
+          )}
+          <Button variant="outline" onClick={openSettings}>
+            <SettingsIcon className="w-4 h-4 mr-2" /> Settings
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -302,11 +649,11 @@ export default function ForecastPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Open items</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">Planned open items</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{register.rows.length}</div>
-            <div className="text-xs text-muted-foreground mt-1">awaiting triage</div>
+            <div className="text-2xl font-bold">{planRows.length}</div>
+            <div className="text-xs text-muted-foreground mt-1">awaiting reconciliation</div>
           </CardContent>
         </Card>
       </div>
@@ -317,48 +664,108 @@ export default function ForecastPage() {
           <TabsTrigger value="bucket">Review Bucket</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="register" className="mt-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Pending plan ↔ bank items</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y divide-border">
-                {register.rows.length === 0 && (
-                  <div className="p-12 text-center text-muted-foreground">
-                    Nothing pending. All caught up.
-                  </div>
-                )}
-                {register.rows.map((row, i) => (
-                  <button
-                    key={`${row.kind}-${row.date}-${i}`}
-                    onClick={() => handleOpenRow(row)}
-                    className="w-full text-left p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Badge variant="outline" className={row.kind === "bank" ? "bg-sky-50 text-sky-900 border-sky-200" : "bg-amber-50 text-amber-900 border-amber-200"}>
-                        {row.kind === "bank" ? "Bank" : "Plan"}
-                      </Badge>
-                      <div className="min-w-0">
-                        <div className="font-medium text-sm truncate">
-                          {row.kind === "bank" ? row.txn.description : row.label}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatDate(row.date)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      {statusBadge(row.status)}
-                      <span className={`font-medium tabular-nums ${row.amount < 0 ? "text-destructive" : "text-primary"}`}>
-                        {formatCurrency(row.amount)}
+        <TabsContent value="register" className="mt-4 space-y-4">
+          <DndContext
+            sensors={sensors}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onDragCancel={() => setActiveDragId(null)}
+          >
+            <Card>
+              <CardHeader className="pb-3 flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <InboxIcon className="w-4 h-4" />
+                  Amex activity to reconcile
+                </CardTitle>
+                <span className="text-xs text-muted-foreground">
+                  Drag a card onto a planned item below, or pick "Match to…"
+                </span>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {inbox.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+                    {reconciledNow ? (
+                      <span className="inline-flex items-center gap-2 text-primary">
+                        <PartyPopper className="w-4 h-4" /> All Amex charges reconciled.
                       </span>
+                    ) : (
+                      <>Send an Amex charge from the Transactions page to start reconciling.</>
+                    )}
+                  </div>
+                ) : (
+                  inbox.map((card) => (
+                    <div key={card.id} className="flex items-stretch gap-2">
+                      <div className="flex-1">
+                        <InboxCardView
+                          card={card}
+                          categoryName={
+                            card.bank.txn.categoryId
+                              ? categoryById.get(card.bank.txn.categoryId) ?? null
+                              : null
+                          }
+                          onUnplanned={() => onMarkUnplannedTxn(card.bank.txn.id)}
+                          onMatchPick={(p) =>
+                            matchInboxToPlan(card.bank.txn.id, p)
+                          }
+                          planRows={planRows.filter(
+                            (r) => r.status === "pending_plan" || r.status === "future",
+                          )}
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onRemoveFromForecast(card.bank.txn.id)}
+                        title="Remove from Forecast"
+                      >
+                        <X className="w-4 h-4 text-muted-foreground" />
+                      </Button>
                     </div>
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle>Planned forecast items</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y divide-border">
+                  {planRows.length === 0 && (
+                    <div className="p-12 text-center text-muted-foreground">
+                      Nothing planned in this window.
+                    </div>
+                  )}
+                  {planRows.map((row, i) => (
+                    <PlanDropRow
+                      key={`${row.itemId}-${row.date}-${i}`}
+                      row={row}
+                      onSelect={onSelectPlan}
+                      activeDragId={activeDragId}
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <DragOverlay>
+              {activeCard && (
+                <InboxCardView
+                  card={activeCard}
+                  categoryName={
+                    activeCard.bank.txn.categoryId
+                      ? categoryById.get(activeCard.bank.txn.categoryId) ?? null
+                      : null
+                  }
+                  onUnplanned={() => undefined}
+                  onMatchPick={() => undefined}
+                  planRows={[]}
+                  isOverlay
+                />
+              )}
+            </DragOverlay>
+          </DndContext>
         </TabsContent>
 
         <TabsContent value="bucket" className="mt-4 space-y-4">
@@ -422,72 +829,6 @@ export default function ForecastPage() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Triage dialog */}
-      <Dialog open={!!selectedRow} onOpenChange={(o) => !o && closeDialog()}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedRow?.kind === "bank" ? "Bank transaction" : "Planned event"}
-            </DialogTitle>
-          </DialogHeader>
-          {selectedRow && (
-            <div className="space-y-4">
-              <div className="rounded-md border p-3">
-                <div className="font-medium">
-                  {selectedRow.kind === "bank" ? selectedRow.txn.description : selectedRow.label}
-                </div>
-                <div className="text-sm text-muted-foreground mt-1">
-                  {formatDate(selectedRow.date)} · {formatCurrency(selectedRow.amount)}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-sm font-medium mb-2">Suggested matches</div>
-                <div className="space-y-2">
-                  {findCandidates(selectedRow, register.rows, 7).slice(0, 5).map((c, i) => (
-                    <button
-                      key={i}
-                      onClick={() => onMatch(selectedRow, c)}
-                      className="w-full text-left p-3 rounded-md border hover:bg-muted transition-colors flex items-center justify-between"
-                    >
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">
-                          {c.kind === "bank" ? c.txn.description : c.label}
-                        </div>
-                        <div className="text-xs text-muted-foreground">{formatDate(c.date)}</div>
-                      </div>
-                      <span className={`text-sm tabular-nums ${c.amount < 0 ? "text-destructive" : "text-primary"}`}>
-                        {formatCurrency(c.amount)}
-                      </span>
-                    </button>
-                  ))}
-                  {findCandidates(selectedRow, register.rows, 7).length === 0 && (
-                    <div className="text-sm text-muted-foreground p-2">
-                      <AlertCircle className="w-4 h-4 inline mr-1" /> No close candidates within ±7 days.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-2 border-t">
-                {selectedRow.kind === "plan" ? (
-                  <Button variant="outline" onClick={() => onMarkMissed(selectedRow)}>
-                    <X className="w-4 h-4 mr-2" /> Mark missed
-                  </Button>
-                ) : (
-                  <Button variant="outline" onClick={() => onMarkUnplanned(selectedRow)}>
-                    <Check className="w-4 h-4 mr-2" /> Mark unplanned
-                  </Button>
-                )}
-                <Button variant="ghost" onClick={closeDialog} className="ml-auto">
-                  Close
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       {/* Settings dialog */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, gte, lte, isNull, ilike, sql } from "drizzle-orm";
-import { db, transactionsTable } from "@workspace/db";
+import { db, transactionsTable, forecastResolutionsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   CreateTransactionBody,
@@ -92,6 +92,18 @@ router.patch(
     if (!row) {
       res.status(404).json({ error: "Not found" });
       return;
+    }
+    // If forecast_flag was turned off, drop any forecast resolution that
+    // points to this txn so the Forecast inbox/bucket stays consistent.
+    if (parsed.data.forecastFlag === false) {
+      await db
+        .delete(forecastResolutionsTable)
+        .where(
+          and(
+            eq(forecastResolutionsTable.userId, req.userId!),
+            eq(forecastResolutionsTable.matchedTxnId, params.data.id),
+          ),
+        );
     }
     res.json(row);
   },

@@ -6,6 +6,7 @@ export type Transaction = {
   description: string;
   amount: string;
   forecastFlag: boolean;
+  categoryId?: string | null;
 };
 
 export type ResolutionStatus =

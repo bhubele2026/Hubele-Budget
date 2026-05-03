@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useListTransactions, useCreateTransaction, useUpdateTransaction, useDeleteTransaction, getListTransactionsQueryKey } from "@workspace/api-client-react";
+import { useMemo, useState } from "react";
+import { useListTransactions, useCreateTransaction, useUpdateTransaction, useDeleteTransaction, useListCategories, getListTransactionsQueryKey, getGetForecastQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit2, Trash2 } from "lucide-react";
+import { Plus, Edit2, Trash2, Send, Inbox } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Transaction } from "@workspace/api-client-react";
 
@@ -41,9 +41,16 @@ function normalizeAmount(raw: string, kind: "expense" | "income"): string {
 
 export default function TransactionsPage() {
   const { data: transactions, isLoading } = useListTransactions();
+  const { data: categories } = useListCategories();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  
+
+  const categoryById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of categories ?? []) m.set(c.id, c.name);
+    return m;
+  }, [categories]);
+
   const createTx = useCreateTransaction();
   const updateTx = useUpdateTransaction();
   const deleteTx = useDeleteTransaction();
@@ -122,6 +129,20 @@ export default function TransactionsPage() {
         }
       });
     }
+  };
+
+  const handleToggleForecast = (tx: Transaction) => {
+    const next = !tx.forecastFlag;
+    updateTx.mutate(
+      { id: tx.id, data: { forecastFlag: next } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+          toast({ title: next ? "Sent to Forecast" : "Removed from Forecast" });
+        },
+      },
+    );
   };
 
   const handleDelete = (id: string) => {
@@ -218,7 +239,19 @@ export default function TransactionsPage() {
                     <span className="text-sm text-muted-foreground">{formatDate(tx.occurredOn)}</span>
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {tx.forecastFlag && <Badge variant="secondary" className="text-xs">Forecast</Badge>}
+                    {tx.categoryId && categoryById.get(tx.categoryId) && (
+                      <Badge variant="outline" className="text-xs border-violet-200 text-violet-700 bg-violet-50">
+                        {categoryById.get(tx.categoryId)}
+                      </Badge>
+                    )}
+                    {!tx.categoryId && (
+                      <Badge variant="outline" className="text-xs border-muted text-muted-foreground">Uncategorized</Badge>
+                    )}
+                    {tx.forecastFlag && (
+                      <Badge variant="outline" className="text-xs border-emerald-200 text-emerald-700 bg-emerald-50">
+                        <Inbox className="w-3 h-3 mr-1" /> In forecast
+                      </Badge>
+                    )}
                     {tx.weeklyAllowance && <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50">Weekly</Badge>}
                     {tx.monthlyAllowance && <Badge variant="outline" className="text-xs border-indigo-200 text-indigo-700 bg-indigo-50">Monthly</Badge>}
                     {tx.unplannedAllowance && <Badge variant="outline" className="text-xs border-amber-200 text-amber-700 bg-amber-50">Unplanned</Badge>}
@@ -228,7 +261,17 @@ export default function TransactionsPage() {
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="font-medium text-foreground whitespace-nowrap">{formatCurrency(tx.amount)}</span>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
+                    <Button
+                      variant={tx.forecastFlag ? "outline" : "secondary"}
+                      size="sm"
+                      onClick={() => handleToggleForecast(tx)}
+                      disabled={updateTx.isPending}
+                      title={tx.forecastFlag ? "Remove from Forecast" : "Send to Forecast"}
+                    >
+                      <Send className="w-3.5 h-3.5 mr-1.5" />
+                      {tx.forecastFlag ? "Remove from Forecast" : "Send to Forecast"}
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(tx)}><Edit2 className="w-4 h-4 text-muted-foreground" /></Button>
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(tx.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                   </div>
