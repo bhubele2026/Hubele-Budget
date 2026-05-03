@@ -61,7 +61,6 @@ externalPort = 3000
 VITE_CLERK_PUBLISHABLE_KEY = "pk_test_Y2FsbS1sYWNld2luZy05Ny5jbGVyay5hY2NvdW50cy5kZXYk"
 
 [userenv.production]
-ADMIN_REMAP_TOKEN = "1cfd80ac8e58c64b06abd9afeab691889f3cc8e3d6e217e05d757628ad405e7b"
 
 [nix]
 channel = "stable-25_05"
