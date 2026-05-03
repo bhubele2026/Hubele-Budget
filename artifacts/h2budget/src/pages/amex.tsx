@@ -35,23 +35,31 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { Search, CreditCard, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ReferenceDot,
-} from "recharts";
+import { CreditCard } from "lucide-react";
 import { CategoryPicker } from "@/components/category-picker";
 import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency, cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
+import { PlaidLinkButton } from "@/components/plaid-link-button";
+import {
+  AccountPageHeader,
+  AccountFilterBar,
+  BalanceTrendChart,
+  DayGroup,
+  MonthNavigator,
+  StatChip,
+  StatChipUnavailable,
+  monthKeyOf,
+  monthKeyFromISO,
+  compareMonth,
+  shiftMonth,
+  monthFirstISO,
+  monthLastISO,
+  type MonthKey,
+  type TrendPoint,
+} from "@/components/account-page";
 
 const AMEX_SOURCE = "amex";
 
@@ -67,47 +75,6 @@ function parseSigned(amount: string) {
   return parseFloat(amount) || 0;
 }
 
-type MonthKey = { year: number; month: number };
-
-function monthKeyOf(d: Date): MonthKey {
-  return { year: d.getFullYear(), month: d.getMonth() };
-}
-
-function monthKeyFromISO(iso: string): MonthKey {
-  const [y, m] = iso.slice(0, 10).split("-").map(Number);
-  return { year: y, month: m - 1 };
-}
-
-function compareMonth(a: MonthKey, b: MonthKey): number {
-  if (a.year !== b.year) return a.year - b.year;
-  return a.month - b.month;
-}
-
-function shiftMonth(mk: MonthKey, delta: number): MonthKey {
-  const d = new Date(mk.year, mk.month + delta, 1);
-  return { year: d.getFullYear(), month: d.getMonth() };
-}
-
-function formatMonthLabel(mk: MonthKey): string {
-  return new Date(mk.year, mk.month, 1).toLocaleDateString("en-US", {
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function isoDate(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function monthFirstISO(mk: MonthKey): string {
-  return isoDate(new Date(mk.year, mk.month, 1));
-}
-
-function monthLastISO(mk: MonthKey): string {
-  return isoDate(new Date(mk.year, mk.month + 1, 0));
-}
-
 function defaultWeeklyBucketFor(categoryName: string): typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket] {
   const n = categoryName.toLowerCase();
   if (n.includes("grocer")) return TransactionWeeklyBucket.groceries;
@@ -121,16 +88,6 @@ function currentBucket(t: Pick<Transaction, "weeklyAllowance" | "monthlyAllowanc
   if (t.monthlyAllowance) return "monthly";
   if (t.unplannedAllowance) return "unplanned";
   return "";
-}
-
-function formatDayHeader(iso: string) {
-  const d = new Date(iso + "T00:00:00");
-  return d.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 export default function AmexPage() {
@@ -329,14 +286,8 @@ export default function AmexPage() {
   // Trailing 12-month ending-balance series, anchored at the current
   // month's known Amex debt balance and rolled month-by-month using the
   // same net-change math as `endingBalance` above.
-  const balanceTrend = useMemo(() => {
-    if (!amexDebt) return [] as Array<{
-      key: string;
-      label: string;
-      shortLabel: string;
-      balance: number;
-      isSelected: boolean;
-    }>;
+  const balanceTrend = useMemo<TrendPoint[]>(() => {
+    if (!amexDebt) return [];
     const anchor = parseSigned(amexDebt.balance);
     // Compute the ending balance for any given month by rolling from the
     // currentMonth anchor.
@@ -361,13 +312,7 @@ export default function AmexPage() {
       }
       return bal;
     };
-    const points: Array<{
-      key: string;
-      label: string;
-      shortLabel: string;
-      balance: number;
-      isSelected: boolean;
-    }> = [];
+    const points: TrendPoint[] = [];
     for (let i = 11; i >= 0; i--) {
       const mk = shiftMonth(selectedMonth, -i);
       const d = new Date(mk.year, mk.month, 1);
@@ -681,277 +626,122 @@ export default function AmexPage() {
 
   return (
     <div className="space-y-6">
-      {/* Frozen top pane: header + month/stats + filter row + bulk bar */}
-      <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4 flex-wrap border-l-4 border-blue-600 pl-4">
-          <div>
-            <h1 className="text-3xl font-serif font-bold text-foreground flex items-center gap-2">
-              <CreditCard className="h-7 w-7 text-blue-600" /> American Express
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Day-by-day card spending — categorized into your budget.
-            </p>
-          </div>
+      <AccountPageHeader
+        title="American Express"
+        subtitle="Day-by-day card spending — categorized into your budget."
+        icon={<CreditCard className="h-7 w-7 text-blue-600" />}
+        actions={<PlaidLinkButton label="Connect a card" />}
+      />
+
+      <BalanceTrendChart
+        caption="Ending balance · trailing 12 months"
+        data={balanceTrend}
+        color="#2563eb"
+        valueLabel="Ending balance"
+      />
+
+      <div className="flex items-stretch gap-4 flex-wrap">
+        <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 min-w-[280px]">
+          {endingBalance.source === "missing" ? (
+            <StatChipUnavailable
+              label="Ending balance"
+              hint="Link an Amex debt in Debts to see the balance."
+              testId="stat-ending-balance"
+            />
+          ) : (
+            <StatChip
+              label="Ending balance"
+              value={endingBalance.value ?? 0}
+              accent="bg-blue-50 text-blue-900 border-blue-200"
+              testId="stat-ending-balance"
+            />
+          )}
+          <StatChip
+            label="Charges"
+            value={monthTotals.charges}
+            testId="stat-charges"
+          />
+          <StatChip
+            label="Payments & credits"
+            value={Math.abs(monthTotals.paymentsAndCredits)}
+            valueClassName="text-emerald-700"
+            testId="stat-payments-credits"
+          />
+          <StatChip
+            label="Net change"
+            value={monthTotals.netChange}
+            valueClassName={
+              monthTotals.netChange > 0
+                ? "text-rose-700"
+                : monthTotals.netChange < 0
+                  ? "text-emerald-700"
+                  : undefined
+            }
+            signed
+            testId="stat-net-change"
+          />
         </div>
-
-        {/* Month selector + per-month totals */}
-        <div className="flex items-stretch gap-4 flex-wrap">
-          <div className="flex items-center gap-2 rounded-md border bg-card px-2 py-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setSelectedMonth((m) => shiftMonth(m, -1))}
-              aria-label="Previous month"
-              data-testid="button-prev-month"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div
-              className="min-w-[88px] text-center font-mono text-sm font-semibold tabular-nums"
-              data-testid="text-selected-month"
-            >
-              {formatMonthLabel(selectedMonth)}
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setSelectedMonth((m) => shiftMonth(m, 1))}
-              aria-label="Next month"
-              data-testid="button-next-month"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 min-w-[280px]">
-            {endingBalance.source === "missing" ? (
-              <div
-                className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900"
-                data-testid="stat-ending-balance"
-              >
-                <div className="text-[10px] uppercase tracking-widest text-amber-700 flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" /> Ending balance
-                </div>
-                <div className="font-mono tabular-nums font-semibold text-base">
-                  Unavailable
-                </div>
-                <div className="text-[10px] leading-tight mt-0.5">
-                  Link an Amex debt in Debts to see the balance.
-                </div>
-              </div>
-            ) : (
-              <StatChip
-                label="Ending balance"
-                value={endingBalance.value ?? 0}
-                accent="bg-blue-50 text-blue-900 border-blue-200"
-                testId="stat-ending-balance"
-              />
-            )}
-            <StatChip
-              label="Charges"
-              value={monthTotals.charges}
-              testId="stat-charges"
-            />
-            <StatChip
-              label="Payments & credits"
-              value={Math.abs(monthTotals.paymentsAndCredits)}
-              valueClassName="text-emerald-700"
-              testId="stat-payments-credits"
-            />
-            <StatChip
-              label="Net change"
-              value={monthTotals.netChange}
-              valueClassName={
-                monthTotals.netChange > 0
-                  ? "text-rose-700"
-                  : monthTotals.netChange < 0
-                    ? "text-emerald-700"
-                    : undefined
-              }
-              signed
-              testId="stat-net-change"
-            />
-          </div>
-        </div>
-
-        {/* Filter bar */}
-        <Card>
-          <CardContent className="p-4 flex flex-wrap items-end gap-3">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search description or category…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 h-9"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">From</label>
-              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40" />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">To</label>
-              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Source</label>
-              <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={AMEX_SOURCE}>amex</SelectItem>
-                  <SelectItem value="manual">manual</SelectItem>
-                  <SelectItem value="import">import</SelectItem>
-                  <SelectItem value="all">All sources</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Category</label>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All categories</SelectItem>
-                  <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                  {(categories ?? []).map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {members.length > 0 && (
-              <div>
-                <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Member</label>
-                <Select value={memberFilter} onValueChange={setMemberFilter}>
-                  <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All members</SelectItem>
-                    {members.map((m) => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div className="text-xs text-muted-foreground ml-auto" data-testid="text-row-count">
-              {filtered.length} of {monthScoped.length} txns
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Bulk action bar */}
-        {selected.size > 0 && (
-          <div className="flex items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-2 shadow-sm">
-            <span className="text-sm font-medium text-blue-900">
-              {selected.size} selected
-            </span>
-            <BulkCategoryPicker
-              categories={categories ?? []}
-              onPick={bulkSetCategory}
-            />
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-blue-900 mr-1">Bucket:</span>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("")}>
-                —
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("weekly")}>
-                Weekly
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("monthly")}>
-                Monthly
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("unplanned")}>
-                Unplanned
-              </Button>
-            </div>
-            <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
-              Clear
-            </Button>
-          </div>
-        )}
       </div>
 
-      {/* 12-month ending balance trend */}
-      {balanceTrend.length > 0 && (
-        <Card data-testid="card-balance-trend">
-          <CardContent className="p-3 pt-4">
-            <div className="flex items-baseline justify-between gap-2 px-1 mb-1">
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Ending balance · trailing 12 months
-              </div>
-              <div className="text-[10px] text-muted-foreground">
-                {balanceTrend[0].label} – {balanceTrend[balanceTrend.length - 1].label}
-              </div>
-            </div>
-            <div className="h-[120px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={balanceTrend}
-                  margin={{ top: 6, right: 12, bottom: 0, left: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} vertical={false} />
-                  <XAxis
-                    dataKey="shortLabel"
-                    tick={{ fontSize: 10 }}
-                    tickLine={false}
-                    axisLine={false}
-                    interval="preserveStartEnd"
-                    minTickGap={16}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10 }}
-                    tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
-                    width={44}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <RechartsTooltip
-                    contentStyle={{
-                      background: "hsl(var(--background))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: 6,
-                      fontSize: 12,
-                    }}
-                    labelFormatter={(_label, payload) => {
-                      const p = payload?.[0]?.payload as
-                        | { label?: string }
-                        | undefined;
-                      return p?.label ?? String(_label);
-                    }}
-                    formatter={(v: number) => [formatCurrency(v), "Ending balance"]}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="balance"
-                    stroke="#2563eb"
-                    strokeWidth={2}
-                    dot={{ r: 2.5, stroke: "#2563eb", fill: "#fff", strokeWidth: 1.5 }}
-                    activeDot={{ r: 4 }}
-                    isAnimationActive={false}
-                  />
-                  {balanceTrend
-                    .filter((p) => p.isSelected)
-                    .map((p) => (
-                      <ReferenceDot
-                        key={p.key}
-                        x={p.shortLabel}
-                        y={p.balance}
-                        r={5}
-                        fill="#2563eb"
-                        stroke="#fff"
-                        strokeWidth={2}
-                        ifOverflow="extendDomain"
-                      />
-                    ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <AccountFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        from={from}
+        onFromChange={setFrom}
+        to={to}
+        onToChange={setTo}
+        sourceFilter={sourceFilter}
+        onSourceFilterChange={setSourceFilter}
+        sourceOptions={[
+          { value: AMEX_SOURCE, label: "amex" },
+          { value: "manual", label: "manual" },
+          { value: "import", label: "import" },
+          { value: "all", label: "All sources" },
+        ]}
+        categoryFilter={categoryFilter}
+        onCategoryFilterChange={setCategoryFilter}
+        categories={categories ?? []}
+        members={members}
+        memberFilter={memberFilter}
+        onMemberFilterChange={setMemberFilter}
+        rightSlot={
+          <div className="text-xs text-muted-foreground ml-auto" data-testid="text-row-count">
+            {filtered.length} of {monthScoped.length} txns
+          </div>
+        }
+      />
 
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="sticky top-0 z-20 flex items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-2 shadow-sm">
+          <span className="text-sm font-medium text-blue-900">
+            {selected.size} selected
+          </span>
+          <BulkCategoryPicker
+            categories={categories ?? []}
+            onPick={bulkSetCategory}
+          />
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-blue-900 mr-1">Bucket:</span>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("")}>
+              —
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("weekly")}>
+              Weekly
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("monthly")}>
+              Monthly
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("unplanned")}>
+              Unplanned
+            </Button>
+          </div>
+          <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
+            Clear
+          </Button>
+        </div>
+      )}
       {/* Day groups */}
       {groups.length === 0 && (
         <Card><CardContent className="p-8 text-center text-muted-foreground">
@@ -965,37 +755,19 @@ export default function AmexPage() {
         const someSelected = !allSelected && ids.some((id) => selected.has(id));
         const isToday = dayKey === todayKey;
         return (
-          <div
+          <DayGroup
             key={dayKey}
-            ref={isToday ? todayRef : undefined}
-            className="space-y-2"
+            dayKey={dayKey}
+            count={items.length}
+            isToday={isToday}
+            todayAccent="blue"
+            containerRef={(el) => {
+              if (isToday) todayRef.current = el;
+            }}
+            selectionState={allSelected ? true : someSelected ? "indeterminate" : false}
+            onToggleAll={(on) => toggleDay(ids, on)}
+            totalNode={formatCurrency(dayTotal)}
           >
-            <div className={cn(
-              "flex items-center justify-between gap-3 rounded-md border bg-background/95 backdrop-blur px-3 py-2",
-              isToday && "border-blue-300 bg-blue-50/80",
-            )}>
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                  onCheckedChange={(v) => toggleDay(ids, !!v)}
-                  aria-label="Select day"
-                />
-                <div className="font-semibold text-sm">{formatDayHeader(dayKey)}</div>
-                {isToday && (
-                  <Badge variant="outline" className="text-[10px] border-blue-300 text-blue-700 bg-blue-50">
-                    Today
-                  </Badge>
-                )}
-                <Badge variant="secondary" className="text-[10px]">
-                  {items.length} txn{items.length === 1 ? "" : "s"}
-                </Badge>
-              </div>
-              <div className="text-sm font-mono tabular-nums font-semibold">
-                {formatCurrency(dayTotal)}
-              </div>
-            </div>
-            <Card>
-              <CardContent className="p-0">
                 <table className="w-full text-sm">
                   <tbody>
                     {items.map((t) => (
@@ -1111,47 +883,9 @@ export default function AmexPage() {
                     ))}
                   </tbody>
                 </table>
-              </CardContent>
-            </Card>
-          </div>
+          </DayGroup>
         );
       })}
-    </div>
-  );
-}
-
-function StatChip({
-  label,
-  value,
-  accent,
-  valueClassName,
-  signed,
-  testId,
-}: {
-  label: string;
-  value: number;
-  accent?: string;
-  valueClassName?: string;
-  signed?: boolean;
-  testId?: string;
-}) {
-  const display = signed && value > 0 ? `+${formatCurrency(value)}` : formatCurrency(value);
-  return (
-    <div
-      className={cn("rounded-md border px-3 py-2", accent ?? "bg-card")}
-      data-testid={testId}
-    >
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-        {label}
-      </div>
-      <div
-        className={cn(
-          "font-mono tabular-nums font-semibold text-base",
-          valueClassName,
-        )}
-      >
-        {display}
-      </div>
     </div>
   );
 }

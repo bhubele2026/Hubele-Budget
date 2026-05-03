@@ -1,25 +1,90 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useListTransactions, useCreateTransaction, useUpdateTransaction, useDeleteTransaction, useListCategories, useGetForecast, useRefreshForecastBank, useSeedAprilChase, getListTransactionsQueryKey, getGetForecastQueryKey, getGetBudgetMonthQueryKey } from "@workspace/api-client-react";
+import {
+  useListTransactions,
+  useCreateTransaction,
+  useUpdateTransaction,
+  useDeleteTransaction,
+  useListCategories,
+  useGetForecast,
+  useRefreshForecastBank,
+  useSeedAprilChase,
+  getListTransactionsQueryKey,
+  getGetForecastQueryKey,
+  getGetBudgetMonthQueryKey,
+  type Transaction,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit2, Trash2, Send, Inbox, Wand2, Landmark, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  Send,
+  Inbox,
+  Wand2,
+  Landmark,
+  RefreshCw,
+} from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import type { Transaction } from "@workspace/api-client-react";
-import { computeRunningBalances } from "@/lib/runningBalance";
+import { PlaidLinkButton } from "@/components/plaid-link-button";
+import {
+  AccountPageHeader,
+  AccountFilterBar,
+  BalanceTrendChart,
+  DayGroup,
+  MonthNavigator,
+  StatChip,
+  StatChipUnavailable,
+  monthKeyOf,
+  monthKeyFromISO,
+  compareMonth,
+  shiftMonth,
+  type MonthKey,
+  type TrendPoint,
+} from "@/components/account-page";
 
 const formSchema = z.object({
   occurredOn: z.string().min(1, "Date is required"),
@@ -41,24 +106,12 @@ function normalizeAmount(raw: string, kind: "expense" | "income"): string {
   return (kind === "income" ? num : -num).toFixed(2);
 }
 
-const MIN_MONTH = "2026-04-01";
-
-function thisMonthStart(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+function parseSigned(amount: string | number): number {
+  return Number(amount) || 0;
 }
 
-function addMonths(monthStart: string, offset: number): string {
-  const d = new Date(monthStart + "T00:00:00");
-  d.setMonth(d.getMonth() + offset);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
-
-function endOfMonth(monthStart: string): string {
-  const next = addMonths(monthStart, 1);
-  const d = new Date(next + "T00:00:00");
-  d.setDate(d.getDate() - 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function ymd(d: Date) {
+  return d.toISOString().slice(0, 10);
 }
 
 export default function TransactionsPage() {
@@ -69,24 +122,6 @@ export default function TransactionsPage() {
   const seedAprilChase = useSeedAprilChase();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const tm = thisMonthStart();
-    return tm < MIN_MONTH ? MIN_MONTH : tm;
-  });
-  const atFloor = currentMonth <= MIN_MONTH;
-  const changeMonth = (offset: number) => {
-    const next = addMonths(currentMonth, offset);
-    setCurrentMonth(next < MIN_MONTH ? MIN_MONTH : next);
-  };
-  const monthName = useMemo(() => {
-    const d = new Date(currentMonth + "T00:00:00");
-    return new Intl.DateTimeFormat("en-US", {
-      month: "long",
-      year: "numeric",
-    }).format(d);
-  }, [currentMonth]);
-  const monthEnd = useMemo(() => endOfMonth(currentMonth), [currentMonth]);
 
   // One-shot seed of the user's April 2026 Chase activity. Idempotent on the
   // server (skips rows whose plaid_transaction_id already exists), so it's
@@ -122,9 +157,6 @@ export default function TransactionsPage() {
   }, [isLoading]);
 
   const bankSnapshot = forecastData?.bankSnapshot ?? null;
-  // Resolve the linked Chase checking account: bankSnapshot.accountId is the
-  // internal plaid_accounts UUID; cross-ref it to the Plaid account_id text
-  // that lives on transactionsTable.plaidAccountId.
   const chasePlaidAccountId = useMemo(() => {
     if (!bankSnapshot?.accountId) return null;
     const acct = (forecastData?.plaidCheckingAccounts ?? []).find(
@@ -133,11 +165,8 @@ export default function TransactionsPage() {
     return acct?.accountId ?? null;
   }, [bankSnapshot?.accountId, forecastData?.plaidCheckingAccounts]);
 
-  // Scope the Chase page strictly to the linked checking account so the
-  // running balance reconciles to bankSnapshot. When nothing is linked yet
-  // (manual snapshot or no snapshot at all), fall back to manual rows so
-  // the page still has something to show.
-  const accountTransactions = useMemo(() => {
+  // Scope to the linked checking account (or manual rows when nothing linked).
+  const chaseTransactions = useMemo(() => {
     const all = transactions ?? [];
     if (chasePlaidAccountId) {
       return all.filter((t) => t.plaidAccountId === chasePlaidAccountId);
@@ -145,63 +174,15 @@ export default function TransactionsPage() {
     return all.filter((t) => !t.plaidAccountId);
   }, [transactions, chasePlaidAccountId]);
 
-  const chaseTransactions = useMemo(
-    () =>
-      accountTransactions.filter(
-        (t) => t.occurredOn >= currentMonth && t.occurredOn <= monthEnd,
-      ),
-    [accountTransactions, currentMonth, monthEnd],
-  );
-
-  // The bank snapshot reflects the live balance (today). To get the ending
-  // balance for the *displayed* month, undo every transaction that occurred
-  // strictly after monthEnd. For the current/future month, this collapses
-  // to the live snapshot itself.
-  const monthEndingBalance = useMemo(() => {
-    if (!bankSnapshot) return null;
-    const anchor = Number(bankSnapshot.balance) || 0;
-    let bal = Math.round(anchor * 100) / 100;
-    for (const t of accountTransactions) {
-      if (t.occurredOn > monthEnd) {
-        bal = Math.round((bal - (Number(t.amount) || 0)) * 100) / 100;
-      }
-    }
-    return bal;
-  }, [accountTransactions, bankSnapshot, monthEnd]);
-
-  const monthNetChange = useMemo(() => {
-    let sum = 0;
-    for (const t of chaseTransactions) sum += Number(t.amount) || 0;
-    return Math.round(sum * 100) / 100;
-  }, [chaseTransactions]);
-
-  const monthOpeningBalance = useMemo(() => {
-    if (monthEndingBalance === null) return null;
-    return Math.round((monthEndingBalance - monthNetChange) * 100) / 100;
-  }, [monthEndingBalance, monthNetChange]);
-
-  const runningBalances = useMemo(() => {
-    if (monthEndingBalance === null) return new Map<string, number>();
-    // Anchor on the displayed month's ending balance so historical months
-    // reconcile to that month rather than today's snapshot.
-    return computeRunningBalances(chaseTransactions, monthEndingBalance);
-  }, [chaseTransactions, monthEndingBalance]);
-
-  const handleRefreshBank = () => {
-    refreshBank.mutate(undefined, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
-        toast({ title: "Refreshed from Plaid" });
-      },
-      onError: (e) => {
-        toast({
-          title: "Couldn't refresh",
-          description: (e as Error).message,
-          variant: "destructive",
-        });
-      },
-    });
-  };
+  // ---- Filters & month navigation ----
+  const currentMonth = useMemo<MonthKey>(() => monthKeyOf(new Date()), []);
+  const [selectedMonth, setSelectedMonth] = useState<MonthKey>(currentMonth);
+  const [search, setSearch] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [memberFilter, setMemberFilter] = useState<string>("all");
 
   const categoryById = useMemo(() => {
     const m = new Map<string, string>();
@@ -209,6 +190,142 @@ export default function TransactionsPage() {
     return m;
   }, [categories]);
 
+  const sourceOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of chaseTransactions) if (t.source) set.add(t.source);
+    return [
+      { value: "all", label: "All sources" },
+      ...Array.from(set)
+        .sort()
+        .map((s) => ({ value: s, label: s })),
+    ];
+  }, [chaseTransactions]);
+
+  const members = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of chaseTransactions) if (t.member) s.add(t.member);
+    return Array.from(s).sort();
+  }, [chaseTransactions]);
+
+  const monthScoped = useMemo(() => {
+    return chaseTransactions.filter((t) => {
+      const mk = monthKeyFromISO(t.occurredOn);
+      return compareMonth(mk, selectedMonth) === 0;
+    });
+  }, [chaseTransactions, selectedMonth]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return monthScoped.filter((t) => {
+      const k = t.occurredOn.slice(0, 10);
+      if (from && k < from) return false;
+      if (to && k > to) return false;
+      if (sourceFilter !== "all" && t.source !== sourceFilter) return false;
+      if (memberFilter !== "all" && (t.member ?? "") !== memberFilter)
+        return false;
+      if (categoryFilter !== "all") {
+        if (categoryFilter === "uncategorized") {
+          if (t.categoryId) return false;
+        } else if (t.categoryId !== categoryFilter) return false;
+      }
+      if (q) {
+        const hay = `${t.description} ${categoryById.get(t.categoryId ?? "") ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [monthScoped, search, from, to, sourceFilter, memberFilter, categoryFilter, categoryById]);
+
+  // ---- Per-month money in/out & balance math ----
+  const monthTotals = useMemo(() => {
+    let moneyIn = 0;
+    let moneyOut = 0;
+    for (const t of filtered) {
+      const a = parseSigned(t.amount);
+      if (a >= 0) moneyIn += a;
+      else moneyOut += a; // negative
+    }
+    const netChange = moneyIn + moneyOut;
+    return { moneyIn, moneyOut: Math.abs(moneyOut), netChange };
+  }, [filtered]);
+
+  // Net change per month for the entire scoped set (for rolling balance).
+  const netChangeByMonth = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of chaseTransactions) {
+      const mk = monthKeyFromISO(t.occurredOn);
+      const k = `${mk.year}-${mk.month}`;
+      m.set(k, (m.get(k) ?? 0) + parseSigned(t.amount));
+    }
+    return m;
+  }, [chaseTransactions]);
+
+  const anchorBalance = bankSnapshot ? Number(bankSnapshot.balance) || 0 : null;
+
+  const balanceAtEndOf = useMemo(() => {
+    return (mk: MonthKey): number | null => {
+      if (anchorBalance === null) return null;
+      const cmp = compareMonth(mk, currentMonth);
+      if (cmp === 0) return anchorBalance;
+      let bal = anchorBalance;
+      if (cmp < 0) {
+        let cursor = currentMonth;
+        while (compareMonth(cursor, mk) > 0) {
+          const k = `${cursor.year}-${cursor.month}`;
+          bal -= netChangeByMonth.get(k) ?? 0;
+          cursor = shiftMonth(cursor, -1);
+        }
+      } else {
+        let cursor = shiftMonth(currentMonth, 1);
+        while (compareMonth(cursor, mk) <= 0) {
+          const k = `${cursor.year}-${cursor.month}`;
+          bal += netChangeByMonth.get(k) ?? 0;
+          cursor = shiftMonth(cursor, 1);
+        }
+      }
+      return bal;
+    };
+  }, [anchorBalance, currentMonth, netChangeByMonth]);
+
+  const endingBalance = useMemo(
+    () => balanceAtEndOf(selectedMonth),
+    [balanceAtEndOf, selectedMonth],
+  );
+  const startingBalance = useMemo(
+    () => balanceAtEndOf(shiftMonth(selectedMonth, -1)),
+    [balanceAtEndOf, selectedMonth],
+  );
+
+  const balanceTrend = useMemo<TrendPoint[]>(() => {
+    if (anchorBalance === null) return [];
+    const points: TrendPoint[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const mk = shiftMonth(selectedMonth, -i);
+      const d = new Date(mk.year, mk.month, 1);
+      points.push({
+        key: `${mk.year}-${mk.month}`,
+        label: d.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+        shortLabel: d.toLocaleDateString("en-US", { month: "short" }),
+        balance: balanceAtEndOf(mk) ?? 0,
+        isSelected: compareMonth(mk, selectedMonth) === 0,
+      });
+    }
+    return points;
+  }, [anchorBalance, balanceAtEndOf, selectedMonth]);
+
+  // ---- Day grouping ----
+  const groups = useMemo(() => {
+    const map = new Map<string, Transaction[]>();
+    for (const t of filtered) {
+      const k = t.occurredOn.slice(0, 10);
+      const arr = map.get(k);
+      if (arr) arr.push(t);
+      else map.set(k, [t]);
+    }
+    return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  }, [filtered]);
+
+  // ---- Mutations & dialog ----
   const createTx = useCreateTransaction();
   const updateTx = useUpdateTransaction();
   const deleteTx = useDeleteTransaction();
@@ -219,7 +336,7 @@ export default function TransactionsPage() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      occurredOn: new Date().toISOString().split('T')[0],
+      occurredOn: new Date().toISOString().split("T")[0],
       description: "",
       amount: "",
       kind: "expense",
@@ -234,7 +351,7 @@ export default function TransactionsPage() {
   const handleOpenNew = () => {
     setEditingTx(null);
     form.reset({
-      occurredOn: new Date().toISOString().split('T')[0],
+      occurredOn: new Date().toISOString().split("T")[0],
       description: "",
       amount: "",
       kind: "expense",
@@ -251,7 +368,7 @@ export default function TransactionsPage() {
     setEditingTx(tx);
     const numeric = parseFloat(tx.amount);
     form.reset({
-      occurredOn: tx.occurredOn.split('T')[0],
+      occurredOn: tx.occurredOn.split("T")[0],
       description: tx.description,
       amount: Math.abs(numeric).toFixed(2),
       kind: numeric >= 0 ? "income" : "expense",
@@ -268,21 +385,41 @@ export default function TransactionsPage() {
     const { kind, ...rest } = values;
     const payload = { ...rest, amount: normalizeAmount(values.amount, kind) };
     if (editingTx) {
-      updateTx.mutate({ id: editingTx.id, data: payload }, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-          setIsDialogOpen(false);
-          toast({ title: "Transaction updated" });
-        }
-      });
+      updateTx.mutate(
+        { id: editingTx.id, data: payload },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+            setIsDialogOpen(false);
+            toast({ title: "Transaction updated" });
+          },
+        },
+      );
     } else {
-      createTx.mutate({ data: payload }, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-          setIsDialogOpen(false);
-          toast({ title: "Transaction created" });
-        }
-      });
+      createTx.mutate(
+        { data: payload },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+            setIsDialogOpen(false);
+            toast({ title: "Transaction created" });
+          },
+        },
+      );
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm("Delete this transaction?")) {
+      deleteTx.mutate(
+        { id },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+            toast({ title: "Transaction deleted" });
+          },
+        },
+      );
     }
   };
 
@@ -308,15 +445,9 @@ export default function TransactionsPage() {
     );
   };
 
-  const handleQuickCategorize = async (
-    tx: Transaction,
-    categoryId: string,
-  ) => {
+  const handleQuickCategorize = async (tx: Transaction, categoryId: string) => {
     try {
-      await updateTx.mutateAsync({
-        id: tx.id,
-        data: { categoryId },
-      });
+      await updateTx.mutateAsync({ id: tx.id, data: { categoryId } });
       queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
       queryClient.invalidateQueries({
         queryKey: getGetBudgetMonthQueryKey(`${tx.occurredOn.slice(0, 7)}-01`),
@@ -334,37 +465,56 @@ export default function TransactionsPage() {
     }
   };
 
+  const handleRefreshBank = () => {
+    refreshBank.mutate(undefined, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+        toast({ title: "Refreshed from Plaid" });
+      },
+      onError: (e) => {
+        toast({
+          title: "Couldn't refresh",
+          description: (e as Error).message,
+          variant: "destructive",
+        });
+      },
+    });
+  };
+
+  // ---- Bulk selection ----
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const visibleIds = useMemo(
-    () => new Set(chaseTransactions.map((t) => t.id)),
-    [chaseTransactions],
-  );
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleDay = (ids: string[], on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) on ? next.add(id) : next.delete(id);
+      return next;
+    });
+  const clearSelection = () => setSelected(new Set());
   useEffect(() => {
     setSelected((prev) => {
+      const visible = new Set(filtered.map((t) => t.id));
       let changed = false;
       const next = new Set<string>();
       for (const id of prev) {
-        if (visibleIds.has(id)) next.add(id);
+        if (visible.has(id)) next.add(id);
         else changed = true;
       }
       return changed ? next : prev;
     });
-  }, [visibleIds]);
-  const toggleOne = (id: string) =>
-    setSelected((prev) => {
-      const n = new Set(prev);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
-  const toggleAll = (on: boolean) =>
-    setSelected(on ? new Set(visibleIds) : new Set());
-  const clearSelection = () => setSelected(new Set());
+  }, [filtered]);
 
   const bulkSetForecast = async (next: boolean) => {
     const ids = Array.from(selected);
     if (!ids.length) return;
-    const byId = new Map(chaseTransactions.map((t) => [t.id, t] as const));
+    const byId = new Map(filtered.map((t) => [t.id, t] as const));
     const candidates = ids
       .map((id) => byId.get(id))
       .filter((t): t is Transaction => !!t && t.forecastFlag !== next);
@@ -420,173 +570,166 @@ export default function TransactionsPage() {
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm("Delete this transaction?")) {
-      deleteTx.mutate({ id }, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-          toast({ title: "Transaction deleted" });
-        }
-      });
-    }
-  };
-
-  // Measure the frozen top pane so the bulk-action bar can stick directly
-  // beneath it without overlapping. The pane height changes with viewport
-  // wrapping (mobile) and when the dynamic balance card resizes.
-  const frozenPaneRef = useRef<HTMLDivElement | null>(null);
-  const [frozenPaneHeight, setFrozenPaneHeight] = useState(0);
+  // Smooth scroll to today on first load.
+  const todayRef = useRef<HTMLDivElement | null>(null);
+  const scrolledRef = useRef(false);
   useEffect(() => {
-    const el = frozenPaneRef.current;
-    if (!el) return;
-    const update = () => setFrozenPaneHeight(el.getBoundingClientRect().height);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+    if (scrolledRef.current || isLoading) return;
+    if (todayRef.current) {
+      todayRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      scrolledRef.current = true;
+    }
+  }, [isLoading, groups.length]);
 
   if (isLoading) {
-    return <div className="space-y-4"><Skeleton className="h-10 w-48" /><Skeleton className="h-64 w-full" /></div>;
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
   }
+
+  const todayKey = ymd(new Date());
+  const hasLinkedChecking = !!bankSnapshot;
+  const isPlaidLinked = bankSnapshot?.source === "plaid";
 
   return (
     <div className="space-y-6">
-      <div
-        ref={frozenPaneRef}
-        className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-4"
-      >
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-serif font-bold text-foreground">Chase</h1>
-          <p className="text-muted-foreground mt-1">Your checking activity, reconciled.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-card px-3 py-1.5 rounded-md shadow-sm border border-border">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => changeMonth(-1)}
-              disabled={atFloor}
-              aria-disabled={atFloor}
-              title={atFloor ? "April 2026 is the earliest month" : undefined}
-              data-testid="button-prev-month"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <span
-              className="font-medium text-sm w-32 text-center"
-              data-testid="text-current-month"
-            >
-              {monthName}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => changeMonth(1)}
-              data-testid="button-next-month"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
-          <Button onClick={handleOpenNew}><Plus className="w-4 h-4 mr-2" /> Add Transaction</Button>
-        </div>
-      </div>
-
-      <Card data-testid="card-chase-balance">
-        <CardHeader className="pb-2 flex-row items-center justify-between">
-          <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-            <Landmark className="w-4 h-4" /> {monthName} · Chase checking
-          </CardTitle>
-          {bankSnapshot && bankSnapshot.source === "plaid" && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              onClick={handleRefreshBank}
-              disabled={refreshBank.isPending}
-              title="Refresh from Plaid"
-              data-testid="button-refresh-bank"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshBank.isPending ? "animate-spin" : ""}`} />
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <div className="text-xs text-muted-foreground">Opening</div>
-              <div
-                className="text-lg font-semibold tabular-nums"
-                data-testid="text-month-opening-balance"
+      <AccountPageHeader
+        title="Chase"
+        subtitle="Your checking activity, day by day."
+        icon={<Landmark className="h-7 w-7 text-emerald-600" />}
+        accentBorderClass="border-emerald-600"
+        actions={
+          <>
+            {isPlaidLinked && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshBank}
+                disabled={refreshBank.isPending}
+                data-testid="button-refresh-bank"
               >
-                {monthOpeningBalance !== null
-                  ? formatCurrency(monthOpeningBalance)
-                  : "—"}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Net change</div>
-              <div
-                className={`text-lg font-semibold tabular-nums ${monthNetChange < 0 ? "text-red-600" : monthNetChange > 0 ? "text-emerald-600" : ""}`}
-                data-testid="text-month-net-change"
-              >
-                {monthNetChange > 0 ? "+" : ""}
-                {formatCurrency(monthNetChange)}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Ending</div>
-              <div
-                className="text-2xl font-bold tabular-nums"
-                data-testid="text-chase-balance"
-              >
-                {monthEndingBalance !== null
-                  ? formatCurrency(monthEndingBalance)
-                  : "—"}
-              </div>
-            </div>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {bankSnapshot ? (
-              <>
-                {bankSnapshot.source === "plaid" ? "Plaid" : "Manual"} ·{" "}
-                {bankSnapshot.name ?? "Checking"}
-                {bankSnapshot.mask ? ` ••${bankSnapshot.mask}` : ""} ·{" "}
-                {bankSnapshot.source === "plaid" ? "Live" : "Snapshot"}{" "}
-                {formatCurrency(bankSnapshot.balance)} (updated{" "}
-                {formatDate(bankSnapshot.at.slice(0, 10))})
-              </>
-            ) : (
-              <>Link a Chase checking account on the Forecast page to see a live balance.</>
+                <RefreshCw
+                  className={cn(
+                    "w-4 h-4 mr-1.5",
+                    refreshBank.isPending && "animate-spin",
+                  )}
+                />
+                Refresh from Plaid
+              </Button>
             )}
-          </div>
-        </CardContent>
-      </Card>
+            <Button onClick={handleOpenNew} variant="outline" size="sm" data-testid="button-add-transaction">
+              <Plus className="w-4 h-4 mr-1.5" /> Add transaction
+            </Button>
+            <PlaidLinkButton label="Connect a bank" />
+          </>
+        }
+      />
 
-        {chaseTransactions.length > 0 && (
-          <div
-            className="flex items-center gap-3 rounded-md border bg-muted/30 px-4 py-2 text-xs text-muted-foreground"
-            data-testid="select-all-row"
-          >
-            <Checkbox
-              checked={
-                visibleIds.size > 0 && selected.size === visibleIds.size
-                  ? true
-                  : selected.size > 0
-                    ? "indeterminate"
-                    : false
-              }
-              onCheckedChange={(v) => toggleAll(!!v)}
-              aria-label="Select all"
-              data-testid="select-all"
+      <BalanceTrendChart
+        caption="Checking balance · trailing 12 months"
+        data={balanceTrend}
+        color="#16a34a"
+        valueLabel="Ending balance"
+      />
+
+      <div className="flex items-stretch gap-4 flex-wrap">
+        <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 flex-1 min-w-[280px]">
+          {hasLinkedChecking ? (
+            <StatChip
+              label="Starting balance"
+              value={startingBalance ?? 0}
+              testId="stat-starting-balance"
             />
-            <span>Select all on page</span>
-          </div>
-        )}
+          ) : (
+            <StatChipUnavailable
+              label="Starting balance"
+              hint="Connect a checking account to see the balance."
+              testId="stat-starting-balance"
+            />
+          )}
+          <StatChip
+            label="Money in"
+            value={monthTotals.moneyIn}
+            valueClassName="text-emerald-700"
+            testId="stat-money-in"
+          />
+          <StatChip
+            label="Money out"
+            value={monthTotals.moneyOut}
+            valueClassName="text-rose-700"
+            testId="stat-money-out"
+          />
+          {hasLinkedChecking ? (
+            <StatChip
+              label="Ending balance"
+              value={endingBalance ?? 0}
+              accent="bg-emerald-50 text-emerald-900 border-emerald-200"
+              testId="stat-ending-balance"
+            />
+          ) : (
+            <StatChipUnavailable
+              label="Ending balance"
+              hint="Connect a checking account to see the balance."
+              testId="stat-ending-balance"
+            />
+          )}
+          <StatChip
+            label="Net change"
+            value={monthTotals.netChange}
+            valueClassName={
+              monthTotals.netChange > 0
+                ? "text-emerald-700"
+                : monthTotals.netChange < 0
+                  ? "text-rose-700"
+                  : undefined
+            }
+            signed
+            testId="stat-net-change"
+          />
+        </div>
       </div>
+
+      {bankSnapshot && (
+        <div
+          className="text-xs text-muted-foreground"
+          data-testid="text-snapshot-meta"
+        >
+          {bankSnapshot.source === "plaid" ? "Plaid" : "Manual"} ·{" "}
+          {bankSnapshot.name ?? "Checking"}
+          {bankSnapshot.mask ? ` ••${bankSnapshot.mask}` : ""} · Updated{" "}
+          {formatDate(bankSnapshot.at.slice(0, 10))} · Current balance{" "}
+          {formatCurrency(bankSnapshot.balance)}
+        </div>
+      )}
+
+      <AccountFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        from={from}
+        onFromChange={setFrom}
+        to={to}
+        onToChange={setTo}
+        sourceFilter={sourceFilter}
+        onSourceFilterChange={setSourceFilter}
+        sourceOptions={sourceOptions}
+        categoryFilter={categoryFilter}
+        onCategoryFilterChange={setCategoryFilter}
+        categories={categories ?? []}
+        members={members}
+        memberFilter={memberFilter}
+        onMemberFilterChange={setMemberFilter}
+        rightSlot={
+          <div className="text-xs text-muted-foreground ml-auto" data-testid="text-row-count">
+            {filtered.length} of {monthScoped.length} txns
+          </div>
+        }
+      />
+
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
@@ -616,7 +759,6 @@ export default function TransactionsPage() {
                   <FormItem className="col-span-2"><FormLabel>Amount</FormLabel><FormControl><Input type="number" step="0.01" min="0" placeholder="42.50" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="reimbursable" render={({ field }) => (
                   <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Reimbursable</FormLabel></FormItem>
@@ -634,7 +776,6 @@ export default function TransactionsPage() {
                   <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Unplanned Allow</FormLabel></FormItem>
                 )} />
               </div>
-
               <div className="flex justify-end pt-4">
                 <Button type="submit" disabled={createTx.isPending || updateTx.isPending}>Save</Button>
               </div>
@@ -645,8 +786,7 @@ export default function TransactionsPage() {
 
       {selected.size > 0 && (
         <div
-          className="sticky z-20 flex items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 shadow-sm"
-          style={{ top: frozenPaneHeight }}
+          className="sticky top-0 z-20 flex items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 shadow-sm"
           data-testid="bulk-bar"
         >
           <span className="text-sm font-medium text-emerald-900">
@@ -675,131 +815,178 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="divide-y divide-border">
-            {chaseTransactions.map((tx) => (
-              <div
-                key={tx.id}
-                className={`p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-muted/50 transition-colors ${tx.forecastFlag ? "opacity-60 bg-muted/30" : ""}`}
-                data-testid={`row-tx-${tx.id}`}
-                data-sent={tx.forecastFlag ? "true" : "false"}
-              >
-                <div className="flex items-start gap-3 flex-1">
-                  <Checkbox
-                    checked={selected.has(tx.id)}
-                    onCheckedChange={() => toggleOne(tx.id)}
-                    aria-label="Select"
-                    className="mt-1"
-                    data-testid={`select-${tx.id}`}
-                  />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-foreground">{tx.description}</span>
-                    <span className="text-sm text-muted-foreground">{formatDate(tx.occurredOn)}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {tx.categoryId && categoryById.get(tx.categoryId) && (
-                      <Badge variant="outline" className="text-xs border-violet-200 text-violet-700 bg-violet-50">
-                        {categoryById.get(tx.categoryId)}
-                      </Badge>
-                    )}
-                    {!tx.categoryId && !tx.isTransfer && (
-                      <CategorizeChip
-                        tx={tx}
-                        categories={categories ?? []}
-                        onPick={(catId) => handleQuickCategorize(tx, catId)}
-                      />
-                    )}
-                    {tx.isTransfer && (
-                      <Badge
-                        variant="outline"
-                        className="text-xs border-slate-300 text-slate-700 bg-slate-50"
-                        title="Excluded from budget actuals"
-                        data-testid={`badge-transfer-${tx.id}`}
-                      >
-                        Transfer
-                      </Badge>
-                    )}
-                    {tx.forecastFlag && (
-                      <Badge
-                        variant="outline"
-                        className="text-xs border-emerald-200 text-emerald-700 bg-emerald-50"
-                        data-testid={`badge-sent-${tx.id}`}
-                      >
-                        <Inbox className="w-3 h-3 mr-1" /> Sent · pending in Forecast
-                      </Badge>
-                    )}
-                    {tx.weeklyAllowance && <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50">Weekly</Badge>}
-                    {tx.monthlyAllowance && <Badge variant="outline" className="text-xs border-indigo-200 text-indigo-700 bg-indigo-50">Monthly</Badge>}
-                    {tx.unplannedAllowance && <Badge variant="outline" className="text-xs border-amber-200 text-amber-700 bg-amber-50">Unplanned</Badge>}
-                    {tx.reimbursable && <Badge variant="outline" className="text-xs border-orange-200 text-orange-700 bg-orange-50">Reimbursable</Badge>}
-                    {tx.reimbursed && <Badge variant="outline" className="text-xs border-green-200 text-green-700 bg-green-50">Reimbursed</Badge>}
-                  </div>
-                </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex flex-col items-end">
-                    <span className="font-medium text-foreground whitespace-nowrap tabular-nums">{formatCurrency(tx.amount)}</span>
-                    {runningBalances.has(tx.id) && (
-                      <span
-                        className="text-xs text-muted-foreground tabular-nums"
-                        data-testid={`text-running-balance-${tx.id}`}
-                        title="Running balance after this transaction"
-                      >
-                        Bal {formatCurrency(runningBalances.get(tx.id)!)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex gap-2 items-center">
-                    {tx.forecastFlag ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleToggleForecast(tx)}
-                        disabled={updateTx.isPending}
-                        title="Remove from Forecast"
-                        data-testid={`button-remove-forecast-${tx.id}`}
-                      >
-                        <Send className="w-3.5 h-3.5 mr-1.5" />
-                        Remove from Forecast
-                      </Button>
-                    ) : tx.categoryId ? (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleToggleForecast(tx)}
-                        disabled={updateTx.isPending}
-                        title="Send to Forecast"
-                        data-testid={`button-send-forecast-${tx.id}`}
-                      >
-                        <Send className="w-3.5 h-3.5 mr-1.5" />
-                        Send to Forecast
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled
-                        title="Categorize this transaction first"
-                        data-testid={`button-send-forecast-${tx.id}`}
-                      >
-                        <Send className="w-3.5 h-3.5 mr-1.5" />
-                        Categorize first
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(tx)}><Edit2 className="w-4 h-4 text-muted-foreground" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(tx.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {chaseTransactions.length === 0 && (
-              <div className="p-8 text-center text-muted-foreground">No transactions found.</div>
+      {groups.length === 0 && (
+        <Card>
+          <CardContent className="p-8 text-center text-muted-foreground">
+            No transactions match these filters.
+          </CardContent>
+        </Card>
+      )}
+
+      {groups.map(([dayKey, items]) => {
+        const ids = items.map((t) => t.id);
+        const allSelected = ids.every((id) => selected.has(id));
+        const someSelected = !allSelected && ids.some((id) => selected.has(id));
+        const isToday = dayKey === todayKey;
+        const dayNet = items.reduce((s, t) => s + parseSigned(t.amount), 0);
+        const dayNetNode = (
+          <span
+            className={cn(
+              "tabular-nums",
+              dayNet > 0 && "text-emerald-700",
+              dayNet < 0 && "text-rose-700",
             )}
-          </div>
-        </CardContent>
-      </Card>
+            data-testid={`day-net-${dayKey}`}
+          >
+            {dayNet > 0 ? `+${formatCurrency(dayNet)}` : formatCurrency(dayNet)}
+          </span>
+        );
+        return (
+          <DayGroup
+            key={dayKey}
+            dayKey={dayKey}
+            count={items.length}
+            isToday={isToday}
+            todayAccent="emerald"
+            containerRef={(el) => {
+              if (isToday) todayRef.current = el;
+            }}
+            selectionState={
+              allSelected ? true : someSelected ? "indeterminate" : false
+            }
+            onToggleAll={(on) => toggleDay(ids, on)}
+            totalNode={dayNetNode}
+          >
+            <div className="divide-y divide-border">
+              {items.map((tx) => (
+                <div
+                  key={tx.id}
+                  className={cn(
+                    "p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-muted/30 transition-colors",
+                    tx.forecastFlag && "opacity-60 bg-muted/20",
+                  )}
+                  data-testid={`row-tx-${tx.id}`}
+                  data-sent={tx.forecastFlag ? "true" : "false"}
+                >
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <Checkbox
+                      checked={selected.has(tx.id)}
+                      onCheckedChange={() => toggleOne(tx.id)}
+                      aria-label="Select"
+                      className="mt-1"
+                      data-testid={`select-${tx.id}`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className="font-medium text-foreground truncate">
+                          {tx.description}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {tx.source}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {tx.categoryId && categoryById.get(tx.categoryId) && (
+                          <Badge variant="outline" className="text-xs border-violet-200 text-violet-700 bg-violet-50">
+                            {categoryById.get(tx.categoryId)}
+                          </Badge>
+                        )}
+                        {!tx.categoryId && !tx.isTransfer && (
+                          <CategorizeChip
+                            tx={tx}
+                            categories={categories ?? []}
+                            onPick={(catId) => handleQuickCategorize(tx, catId)}
+                          />
+                        )}
+                        {tx.isTransfer && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs border-slate-300 text-slate-700 bg-slate-50"
+                            data-testid={`badge-transfer-${tx.id}`}
+                          >
+                            Transfer
+                          </Badge>
+                        )}
+                        {tx.forecastFlag && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs border-emerald-200 text-emerald-700 bg-emerald-50"
+                            data-testid={`badge-sent-${tx.id}`}
+                          >
+                            <Inbox className="w-3 h-3 mr-1" /> Sent · pending in Forecast
+                          </Badge>
+                        )}
+                        {tx.weeklyAllowance && <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50">Weekly</Badge>}
+                        {tx.monthlyAllowance && <Badge variant="outline" className="text-xs border-indigo-200 text-indigo-700 bg-indigo-50">Monthly</Badge>}
+                        {tx.unplannedAllowance && <Badge variant="outline" className="text-xs border-amber-200 text-amber-700 bg-amber-50">Unplanned</Badge>}
+                        {tx.reimbursable && <Badge variant="outline" className="text-xs border-orange-200 text-orange-700 bg-orange-50">Reimbursable</Badge>}
+                        {tx.reimbursed && <Badge variant="outline" className="text-xs border-green-200 text-green-700 bg-green-50">Reimbursed</Badge>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex flex-col items-end">
+                      <span
+                        className={cn(
+                          "font-medium tabular-nums whitespace-nowrap",
+                          parseSigned(tx.amount) > 0 && "text-emerald-700",
+                          parseSigned(tx.amount) < 0 && "text-foreground",
+                        )}
+                      >
+                        {formatCurrency(tx.amount)}
+                      </span>
+                    </div>
+                    <div className="flex gap-1 items-center">
+                      {tx.forecastFlag ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleToggleForecast(tx)}
+                          disabled={updateTx.isPending}
+                          title="Remove from Forecast"
+                          data-testid={`button-remove-forecast-${tx.id}`}
+                        >
+                          <Send className="w-3.5 h-3.5 mr-1.5" />
+                          Remove
+                        </Button>
+                      ) : tx.categoryId ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleToggleForecast(tx)}
+                          disabled={updateTx.isPending}
+                          title="Send to Forecast"
+                          data-testid={`button-send-forecast-${tx.id}`}
+                        >
+                          <Send className="w-3.5 h-3.5 mr-1.5" />
+                          Send
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled
+                          title="Categorize this transaction first"
+                          data-testid={`button-send-forecast-${tx.id}`}
+                        >
+                          <Send className="w-3.5 h-3.5 mr-1.5" />
+                          Categorize first
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(tx)}>
+                        <Edit2 className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(tx.id)}>
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </DayGroup>
+        );
+      })}
     </div>
   );
 }
