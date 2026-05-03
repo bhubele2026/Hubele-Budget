@@ -1215,12 +1215,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <DashboardHero today={today} />
-      <MonthlySnapshot
-        today={today}
-        totalDebt={data.totalDebt}
-        activeDebtCount={data.activeDebtCount}
-      />
+      <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-8">
+        <DashboardHero today={today} />
+        <MonthlySnapshot
+          today={today}
+          totalDebt={data.totalDebt}
+          activeDebtCount={data.activeDebtCount}
+        />
+      </div>
 
       <DashboardMonthlyBuckets
         today={today}

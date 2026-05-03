@@ -1257,6 +1257,7 @@ export default function ForecastPage() {
 
   return (
     <div className="space-y-6">
+      <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-6">
       <div className="flex justify-between items-start gap-4 flex-wrap">
         <div>
           <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
@@ -1380,6 +1381,7 @@ export default function ForecastPage() {
           </div>
         </CardContent>
       </Card>
+      </div>
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
