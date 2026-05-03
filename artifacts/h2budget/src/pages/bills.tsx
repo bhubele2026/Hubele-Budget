@@ -19,7 +19,7 @@ import {
   type BillsDebtMinRow,
 } from "@workspace/api-client-react";
 import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
-import { computePayoffsByDebt } from "@/lib/forecastDebts";
+import { computePayoffsByDebt, filterDebtMinRowsByPayoff } from "@/lib/forecastDebts";
 import { Lock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -316,15 +316,10 @@ export default function BillsPage() {
   }, [debts, extraPerMonth, strategy]);
 
   const allDebtMinRows = summary?.debtMins ?? [];
-  const debtMinRows = useMemo(() => {
-    return allDebtMinRows.filter((row) => {
-      const payoff = payoffsByDebt.get(row.debtId);
-      if (!payoff) return true;
-      if (!row.nextOccurrence) return true;
-      const nextYM = row.nextOccurrence.slice(0, 7);
-      return nextYM <= payoff.payoffYM;
-    });
-  }, [allDebtMinRows, payoffsByDebt]);
+  const debtMinRows = useMemo(
+    () => filterDebtMinRowsByPayoff(allDebtMinRows, payoffsByDebt),
+    [allDebtMinRows, payoffsByDebt],
+  );
 
   if (isLoading || !summary) {
     return (

@@ -217,6 +217,35 @@ export function computePayoffTransitions(
   return out;
 }
 
+export type DebtMinRowLite = {
+  debtId: string;
+  nextOccurrence?: string | null;
+};
+
+/**
+ * Hide a Bills page debt-minimum row when the avalanche simulation has
+ * already killed that debt before the row's next due date. Mirrors the
+ * Forecast page so the two views agree on which debts are still alive.
+ *
+ * Rules:
+ *  - Debt missing from `payoffs` (still alive in the sim) → keep.
+ *  - Row has no `nextOccurrence` (we don't know when it would fall) → keep.
+ *  - Otherwise compare the row's next-due YYYY-MM against the payoff month
+ *    and drop rows whose next due falls strictly after payoff.
+ */
+export function filterDebtMinRowsByPayoff<T extends DebtMinRowLite>(
+  rows: T[],
+  payoffs: Map<string, PayoffInfo>,
+): T[] {
+  return rows.filter((row) => {
+    const payoff = payoffs.get(row.debtId);
+    if (!payoff) return true;
+    if (!row.nextOccurrence) return true;
+    const nextYM = row.nextOccurrence.slice(0, 7);
+    return nextYM <= payoff.payoffYM;
+  });
+}
+
 /** Build a per-recurring-item lookup of payoff info, for badge rendering. */
 export function payoffByRecurringItem(
   links: Map<string, string>,
