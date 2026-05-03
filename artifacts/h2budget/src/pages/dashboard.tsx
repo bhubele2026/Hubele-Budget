@@ -231,30 +231,47 @@ function MonthlyLikeSection({
   bucket,
   transactions,
   today,
-  monthKey,
 }: {
   title: string;
   bucket: "monthly" | "unplanned";
   transactions: Transaction[];
   today: Date;
-  monthKey: string;
 }) {
+  const [monthOffset, setMonthOffset] = useState(0);
+  const viewMonth = useMemo(
+    () => new Date(today.getFullYear(), today.getMonth() + monthOffset, 1),
+    [today, monthOffset],
+  );
+  const monthKey = useMemo(
+    () => `${viewMonth.getFullYear()}-${String(viewMonth.getMonth() + 1).padStart(2, "0")}`,
+    [viewMonth],
+  );
+  const monthStartISO = useMemo(() => fmtISO(viewMonth), [viewMonth]);
+  const monthEndISO = useMemo(
+    () => fmtISO(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0)),
+    [viewMonth],
+  );
+
   const editor = useBudgetEditor(bucket, monthKey);
 
   const { total, recent } = useMemo(() => {
-    const filtered = transactions.filter((t) =>
-      bucket === "monthly" ? t.monthlyAllowance : t.unplannedAllowance,
-    );
+    const filtered = transactions.filter((t) => {
+      const matches = bucket === "monthly" ? t.monthlyAllowance : t.unplannedAllowance;
+      if (!matches) return false;
+      return t.occurredOn >= monthStartISO && t.occurredOn <= monthEndISO;
+    });
     const sum = filtered.reduce((s, t) => s + expenseAmount(t), 0);
     const sorted = [...filtered].sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1)).slice(0, 8);
     return { total: sum, recent: sorted };
-  }, [transactions, bucket]);
+  }, [transactions, bucket, monthStartISO, monthEndISO]);
 
   const cap = editor.saved;
   const overspent = cap > 0 && total > cap;
   const pct = cap > 0 ? Math.min(100, (total / cap) * 100) : 0;
-  const monthLabel = today.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const monthLabel = viewMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
+  const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
+  const isCurrentMonth = monthOffset === 0;
+  const dayOfMonth = isCurrentMonth ? today.getDate() : daysInMonth;
 
   return (
     <section>
@@ -265,7 +282,17 @@ function MonthlyLikeSection({
           </div>
           <h2 className="text-2xl font-serif font-bold text-foreground">{title}</h2>
         </div>
-        <div className="text-xs uppercase tracking-widest text-muted-foreground">{monthLabel}</div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setMonthOffset((m) => m - 1)}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-xs uppercase tracking-widest text-muted-foreground min-w-[140px] text-center">
+            {monthLabel}
+          </span>
+          <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setMonthOffset((m) => m + 1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       <Card>
         <CardContent className="p-6 space-y-4">
@@ -278,7 +305,7 @@ function MonthlyLikeSection({
             </div>
             <div className="text-xs text-muted-foreground tabular-nums">
               {cap > 0 ? null : <span>Click budget to set amount · </span>}
-              day {today.getDate()} of {daysInMonth}
+              day {dayOfMonth} of {daysInMonth}
             </div>
           </div>
           {cap > 0 && <Progress value={pct} className={overspent ? "[&>div]:bg-destructive" : ""} />}
@@ -320,12 +347,8 @@ function MonthlyLikeSection({
 
 export default function DashboardPage() {
   const today = useMemo(() => new Date(), []);
-  const monthStartISO = useMemo(
+  const currentMonthStartISO = useMemo(
     () => fmtISO(new Date(today.getFullYear(), today.getMonth(), 1)),
-    [today],
-  );
-  const monthKey = useMemo(
-    () => `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`,
     [today],
   );
   // Pull a wider window so prev/next week navigation has data.
@@ -333,17 +356,24 @@ export default function DashboardPage() {
     const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     return fmtISO(start);
   }, [today]);
+  // Pull 12 months back so prev-month navigation in monthly sections has data.
+  const monthlyFromISO = useMemo(() => {
+    const start = new Date(today.getFullYear(), today.getMonth() - 12, 1);
+    return fmtISO(start);
+  }, [today]);
 
   const { data, isLoading } = useGetDashboard();
   const { data: txns } = useListTransactions({ from: fromISO, limit: 1000 });
-  const { data: monthTxns } = useListTransactions({ from: monthStartISO, limit: 1000 });
+  const { data: monthTxns } = useListTransactions({ from: monthlyFromISO, limit: 5000 });
 
   const allTxns = txns ?? [];
   const monthlyTagged = useMemo(() => monthTxns ?? [], [monthTxns]);
 
   const reimbursables = useMemo(
-    () => monthlyTagged.filter((t) => t.reimbursable && !t.reimbursed),
-    [monthlyTagged],
+    () => monthlyTagged.filter(
+      (t) => t.reimbursable && !t.reimbursed && t.occurredOn >= currentMonthStartISO,
+    ),
+    [monthlyTagged, currentMonthStartISO],
   );
   const reimbursableTotal = useMemo(
     () => reimbursables.reduce((s, t) => s + expenseAmount(t), 0),
@@ -377,14 +407,12 @@ export default function DashboardPage() {
         bucket="monthly"
         transactions={monthlyTagged}
         today={today}
-        monthKey={monthKey}
       />
       <MonthlyLikeSection
         title="Unplanned spending"
         bucket="unplanned"
         transactions={monthlyTagged}
         today={today}
-        monthKey={monthKey}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
