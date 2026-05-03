@@ -55,6 +55,84 @@ afterAll(async () => {
 
 beforeEach(cleanup);
 
+describe("DELETE /amex/anchor", () => {
+  it("removes a present anchor from settings.preferences", async () => {
+    await db.insert(settingsTable).values({
+      userId: TEST_USER,
+      preferences: {
+        amexAnchor: { balance: 1234.56, asOf: "2026-04-01T00:00:00.000Z" },
+      },
+    });
+
+    const res = await fetch(`${baseUrl}/amex/anchor`, { method: "DELETE" });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+
+    const [row] = await db
+      .select({ preferences: settingsTable.preferences })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, TEST_USER));
+    const prefs = (row?.preferences ?? {}) as Record<string, unknown>;
+    expect("amexAnchor" in prefs).toBe(false);
+  });
+
+  it("is a no-op when no anchor (and no settings row) exists", async () => {
+    const res = await fetch(`${baseUrl}/amex/anchor`, { method: "DELETE" });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+
+    // No settings row should have been created by the no-op.
+    const rows = await db
+      .select({ userId: settingsTable.userId })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, TEST_USER));
+    expect(rows.length).toBe(0);
+  });
+
+  it("is a no-op when a settings row exists but has no amexAnchor key", async () => {
+    await db.insert(settingsTable).values({
+      userId: TEST_USER,
+      preferences: { someOtherKey: "keep-me" },
+    });
+
+    const res = await fetch(`${baseUrl}/amex/anchor`, { method: "DELETE" });
+    expect(res.status).toBe(200);
+
+    const [row] = await db
+      .select({ preferences: settingsTable.preferences })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, TEST_USER));
+    const prefs = (row?.preferences ?? {}) as Record<string, unknown>;
+    expect(prefs.someOtherKey).toBe("keep-me");
+    expect("amexAnchor" in prefs).toBe(false);
+  });
+
+  it("preserves other preference keys when removing amexAnchor", async () => {
+    await db.insert(settingsTable).values({
+      userId: TEST_USER,
+      preferences: {
+        amexAnchor: { balance: 50, asOf: "2026-04-01T00:00:00.000Z" },
+        forecastFloor: 250,
+        nested: { keepMe: true },
+      },
+    });
+
+    const res = await fetch(`${baseUrl}/amex/anchor`, { method: "DELETE" });
+    expect(res.status).toBe(200);
+
+    const [row] = await db
+      .select({ preferences: settingsTable.preferences })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, TEST_USER));
+    const prefs = (row?.preferences ?? {}) as Record<string, unknown>;
+    expect("amexAnchor" in prefs).toBe(false);
+    expect(prefs.forecastFloor).toBe(250);
+    expect(prefs.nested).toEqual({ keepMe: true });
+  });
+});
+
 describe("GET /amex/anchor", () => {
   it("advances asOf via the settings anchor even when manual override keeps debt unchanged", async () => {
     // Seed: one Amex txn + a linked debt row whose updatedAt is OLD.
