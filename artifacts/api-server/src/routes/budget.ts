@@ -2,12 +2,14 @@ import { Router, type IRouter } from "express";
 import { and, eq, sql, asc, desc, lt, inArray, isNull, notInArray } from "drizzle-orm";
 import {
   db,
+  avalancheSettingsTable,
   budgetCategoriesTable,
   budgetLinesTable,
   budgetMonthsTable,
   debtsTable,
   mappingRulesTable,
   recurringItemsTable,
+  settingsTable,
   transactionsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -18,6 +20,7 @@ import {
   UpsertBudgetLineBody,
 } from "@workspace/api-zod";
 import {
+  BUDGET_CATEGORY_MIGRATION_MAP,
   SEED_CATEGORIES,
   SEED_GROUP_ORDER,
   SEED_MONTH,
@@ -199,6 +202,212 @@ async function syncAutoDebtCategories(
   }
 }
 
+// One-time per-user consolidation of the legacy ~45-category budget seed
+// into the new ~22-category list (task #65). Idempotent: gated by a flag in
+// `settings.preferences.budgetCategoriesV2`. Re-runs are safe — the mapping
+// is applied only when an old category still exists.
+//
+// For each old → new mapping:
+//   - Find/create the new target category (matching the new SEED metadata)
+//   - Sum old budget_lines.planned_amount into the new line per month
+//   - Re-point transactions.category_id, recurring_items.category_id,
+//     mapping_rules.category_id, and avalanche_settings.extra_budget_category_id
+//   - Delete the old category
+// For categories that stay (same name), we also refresh group_name and
+// sort_order to match the new seed so the UI groups them correctly.
+async function migrateBudgetCategoriesV2(userId: string): Promise<void> {
+  // Check the flag first.
+  const [s] = await db
+    .select()
+    .from(settingsTable)
+    .where(eq(settingsTable.userId, userId));
+  const prefs = (s?.preferences as Record<string, unknown> | null) ?? null;
+  if (prefs && prefs.budgetCategoriesV2 === true) return;
+
+  await db.transaction(async (tx) => {
+    const cats = await tx
+      .select()
+      .from(budgetCategoriesTable)
+      .where(eq(budgetCategoriesTable.userId, userId));
+    const byName = new Map(cats.map((c) => [c.name, c]));
+
+    // Build sortOrder lookup from the new seed.
+    const sortOrderByGroup = new Map<string, number>();
+    SEED_GROUP_ORDER.forEach((g, i) => sortOrderByGroup.set(g, i * 100));
+    const seedByName = new Map(SEED_CATEGORIES.map((s) => [s.name, s]));
+    const seedIndex = new Map(SEED_CATEGORIES.map((s, i) => [s.name, i]));
+
+    // Helper: find or create the new target category by name with seed metadata.
+    const ensureCategory = async (newName: string) => {
+      let cur = byName.get(newName);
+      if (cur) return cur;
+      const seed = seedByName.get(newName);
+      const groupName = seed?.groupName ?? "Other";
+      const kind = seed?.kind ?? "expense";
+      const sourceKind = seed?.sourceKind ?? "manual";
+      const groupBase = sortOrderByGroup.get(groupName) ?? 9999;
+      const sortOrder = groupBase + (seedIndex.get(newName) ?? 0);
+      const [row] = await tx
+        .insert(budgetCategoriesTable)
+        .values({
+          userId,
+          name: newName,
+          kind,
+          groupName,
+          sourceKind,
+          sortOrder,
+        })
+        .onConflictDoUpdate({
+          target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+          set: { groupName, sortOrder },
+        })
+        .returning();
+      if (row) byName.set(row.name, row);
+      return row!;
+    };
+
+    // 1. Process every old → new mapping where the old category still exists.
+    for (const [oldName, newName] of Object.entries(
+      BUDGET_CATEGORY_MIGRATION_MAP,
+    )) {
+      const oldCat = byName.get(oldName);
+      if (!oldCat) continue;
+      if (oldName === newName) continue;
+      const newCat = await ensureCategory(newName);
+      if (!newCat || newCat.id === oldCat.id) continue;
+
+      // Re-point references on tables that hold category_id.
+      await tx
+        .update(transactionsTable)
+        .set({ categoryId: newCat.id })
+        .where(
+          and(
+            eq(transactionsTable.userId, userId),
+            eq(transactionsTable.categoryId, oldCat.id),
+          ),
+        );
+
+      await tx
+        .update(recurringItemsTable)
+        .set({ categoryId: newCat.id })
+        .where(
+          and(
+            eq(recurringItemsTable.userId, userId),
+            eq(recurringItemsTable.categoryId, oldCat.id),
+          ),
+        );
+
+      await tx
+        .update(mappingRulesTable)
+        .set({ categoryId: newCat.id })
+        .where(
+          and(
+            eq(mappingRulesTable.userId, userId),
+            eq(mappingRulesTable.categoryId, oldCat.id),
+          ),
+        );
+
+      await tx
+        .update(avalancheSettingsTable)
+        .set({ extraBudgetCategoryId: newCat.id })
+        .where(
+          and(
+            eq(avalancheSettingsTable.userId, userId),
+            eq(avalancheSettingsTable.extraBudgetCategoryId, oldCat.id),
+          ),
+        );
+
+      // Merge budget_lines: sum planned_amount per month into the new
+      // category's line. We rely on the unique (userId, monthStart, categoryId)
+      // index — for each month where both old and new lines exist we sum then
+      // delete the old; where only old exists we re-point it.
+      const oldLines = await tx
+        .select()
+        .from(budgetLinesTable)
+        .where(
+          and(
+            eq(budgetLinesTable.userId, userId),
+            eq(budgetLinesTable.categoryId, oldCat.id),
+          ),
+        );
+
+      for (const ol of oldLines) {
+        const [existingNewLine] = await tx
+          .select()
+          .from(budgetLinesTable)
+          .where(
+            and(
+              eq(budgetLinesTable.userId, userId),
+              eq(budgetLinesTable.monthStart, ol.monthStart),
+              eq(budgetLinesTable.categoryId, newCat.id),
+            ),
+          );
+
+        if (existingNewLine) {
+          const summed = (
+            (parseFloat(existingNewLine.plannedAmount) || 0) +
+            (parseFloat(ol.plannedAmount) || 0)
+          ).toFixed(2);
+          const mergedNote =
+            existingNewLine.note && ol.note && existingNewLine.note !== ol.note
+              ? `${existingNewLine.note} · ${ol.note}`
+              : existingNewLine.note ?? ol.note ?? null;
+          await tx
+            .update(budgetLinesTable)
+            .set({ plannedAmount: summed, note: mergedNote })
+            .where(eq(budgetLinesTable.id, existingNewLine.id));
+          await tx
+            .delete(budgetLinesTable)
+            .where(eq(budgetLinesTable.id, ol.id));
+        } else {
+          await tx
+            .update(budgetLinesTable)
+            .set({ categoryId: newCat.id })
+            .where(eq(budgetLinesTable.id, ol.id));
+        }
+      }
+
+      // Finally delete the old, now-orphan category row.
+      await tx
+        .delete(budgetCategoriesTable)
+        .where(eq(budgetCategoriesTable.id, oldCat.id));
+      byName.delete(oldName);
+    }
+
+    // 2. Refresh group_name / sort_order on every category whose name matches
+    //    the new seed (covers categories that stayed but moved groups).
+    for (const seed of SEED_CATEGORIES) {
+      const cur = byName.get(seed.name);
+      if (!cur) continue;
+      const groupBase = sortOrderByGroup.get(seed.groupName) ?? 9999;
+      const sortOrder = groupBase + (seedIndex.get(seed.name) ?? 0);
+      if (cur.groupName !== seed.groupName || cur.sortOrder !== sortOrder) {
+        await tx
+          .update(budgetCategoriesTable)
+          .set({ groupName: seed.groupName, sortOrder })
+          .where(eq(budgetCategoriesTable.id, cur.id));
+      }
+    }
+
+    // 3. Set the flag so this only runs once per user.
+    const nextPrefs = { ...(prefs ?? {}), budgetCategoriesV2: true };
+    if (s) {
+      await tx
+        .update(settingsTable)
+        .set({ preferences: nextPrefs })
+        .where(eq(settingsTable.userId, userId));
+    } else {
+      await tx
+        .insert(settingsTable)
+        .values({ userId, preferences: nextPrefs })
+        .onConflictDoUpdate({
+          target: settingsTable.userId,
+          set: { preferences: nextPrefs },
+        });
+    }
+  });
+}
+
 router.get("/budget/categories", requireAuth, async (req, res): Promise<void> => {
   const rows = await db
     .select()
@@ -330,7 +539,7 @@ router.post(
       const recurringByName = new Map(existingRecurring.map((r) => [r.name, r]));
       for (const r of SEED_RECURRING_ITEMS) {
         if (recurringByName.has(r.name)) continue;
-        const cat = byName.get(r.name);
+        const cat = byName.get(r.categoryName ?? r.name);
         await tx.insert(recurringItemsTable).values({
           userId,
           name: r.name,
@@ -437,6 +646,10 @@ router.get(
       return;
     }
     const monthStart = params.data.monthStart;
+
+    // One-time consolidation of the legacy budget category list (task #65).
+    // Gated by a per-user flag, so it's a no-op on subsequent requests.
+    await migrateBudgetCategoriesV2(req.userId!);
 
     // Pull the live Debts tracker into auto_debts categories/lines for this
     // month before reading anything back. Each call ensures the budget rows

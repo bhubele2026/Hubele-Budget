@@ -11,18 +11,15 @@ export const SEED_MONTH = "2026-05-01";
 
 export const SEED_GROUP_ORDER = [
   "Income",
-  "Essential — Housing",
-  "Essential — Insurance",
-  "Food & Groceries",
+  "Housing & Utilities",
+  "Insurance & Health",
+  "Food",
   "Transportation",
   "Kids & Pets",
   "Debt — Minimum Payments",
   "Avalanche — Extra to Highest APR",
-  "Streaming & Tech",
-  "Dining & Entertainment",
-  "Shopping",
-  "Other",
-  "Savings & Sinking Funds",
+  "Lifestyle & Shopping",
+  "Savings & Debt Payoff",
 ];
 
 export type SeedRecurringItem = {
@@ -32,13 +29,17 @@ export type SeedRecurringItem = {
   frequency: "weekly" | "biweekly" | "semimonthly" | "monthly" | "quarterly" | "annual" | "onetime";
   dayOfMonth: number | null;
   anchorDate: string | null;
+  // Name of the budget category this recurring item should link to.
+  // Defaults to `name` when not provided.
+  categoryName?: string;
 };
 
 // Recurring items that back the auto_bills budget categories.
-// Names must match SEED_CATEGORIES entries exactly (used as the join key).
+// `categoryName` (or `name` if absent) must match a SEED_CATEGORIES entry.
 export const SEED_RECURRING_ITEMS: SeedRecurringItem[] = [
   {
     name: "Mom — Verizon reimbursement",
+    categoryName: "Other Income",
     kind: "income",
     amount: "88.00",
     frequency: "monthly",
@@ -64,44 +65,32 @@ export const SEED_RECURRING_ITEMS: SeedRecurringItem[] = [
 ];
 
 export const SEED_CATEGORIES: SeedCategory[] = [
-  // Income
-  { groupName: "Income", kind: "income", sourceKind: "auto_bills", name: "Mom — Verizon reimbursement", planned: "88.00", note: "Auto-pulled from Bills · monthly" },
+  // 1. Income
   { groupName: "Income", kind: "income", sourceKind: "auto_bills", name: "Hannah's paycheck (Exact)", planned: "4499.99", note: "Auto-pulled from Bills · biweekly" },
   { groupName: "Income", kind: "income", sourceKind: "auto_bills", name: "Brad's paycheck (KFI)", planned: "8100.00", note: "Auto-pulled from Bills · biweekly" },
+  { groupName: "Income", kind: "income", sourceKind: "auto_bills", name: "Other Income", planned: "88.00", note: "Reimbursements, side income" },
 
-  // Essential — Housing
-  { groupName: "Essential — Housing", kind: "expense", sourceKind: "manual", name: "Mortgage (Lakeview)", planned: "1989.81", note: "Recurring — kept here, not in Debt Tracker" },
-  { groupName: "Essential — Housing", kind: "expense", sourceKind: "manual", name: "HELOC (Figure)", planned: "677.40", note: "Recurring — kept here, not in Debt Tracker" },
-  { groupName: "Essential — Housing", kind: "expense", sourceKind: "manual", name: "Electric & Gas (MGE)", planned: "241.00", note: null },
-  { groupName: "Essential — Housing", kind: "expense", sourceKind: "manual", name: "Water/Sewer (City of Madison)", planned: "101.02", note: null },
-  { groupName: "Essential — Housing", kind: "expense", sourceKind: "manual", name: "Internet/Cable (AT&T Uverse)", planned: "90.22", note: null },
-  { groupName: "Essential — Housing", kind: "expense", sourceKind: "manual", name: "Phone (Verizon)", planned: "342.00", note: "⚠ HIGH — review plan" },
-  { groupName: "Essential — Housing", kind: "expense", sourceKind: "manual", name: "Home Maintenance / Repairs", planned: "0", note: "Buffer" },
+  // 2. Housing & Utilities
+  { groupName: "Housing & Utilities", kind: "expense", sourceKind: "manual", name: "Mortgage (Lakeview)", planned: "1989.81", note: "Recurring — kept here, not in Debt Tracker" },
+  { groupName: "Housing & Utilities", kind: "expense", sourceKind: "manual", name: "HELOC (Figure)", planned: "677.40", note: "Recurring — kept here, not in Debt Tracker" },
+  { groupName: "Housing & Utilities", kind: "expense", sourceKind: "manual", name: "Utilities", planned: "774.24", note: "Electric, gas, water, internet, phone" },
+  { groupName: "Housing & Utilities", kind: "expense", sourceKind: "manual", name: "Home Maintenance & Warranty", planned: "53.85", note: "Repairs + UHP warranty" },
 
-  // Essential — Insurance
-  { groupName: "Essential — Insurance", kind: "expense", sourceKind: "manual", name: "Health/Medical Out-of-Pocket", planned: "0", note: null },
-  { groupName: "Essential — Insurance", kind: "expense", sourceKind: "manual", name: "Auto Insurance (State Farm)", planned: "128.59", note: null },
-  { groupName: "Essential — Insurance", kind: "expense", sourceKind: "manual", name: "Other Insurance (State Farm 2nd)", planned: "121.54", note: null },
-  { groupName: "Essential — Insurance", kind: "expense", sourceKind: "manual", name: "Life Insurance (Trustage)", planned: "95.00", note: null },
-  { groupName: "Essential — Insurance", kind: "expense", sourceKind: "manual", name: "Home Warranty (UHP)", planned: "53.85", note: null },
-  { groupName: "Essential — Insurance", kind: "expense", sourceKind: "manual", name: "Health Insurance Premium", planned: "0", note: "Fill in if not pre-tax via paycheck" },
+  // 3. Insurance & Health
+  { groupName: "Insurance & Health", kind: "expense", sourceKind: "manual", name: "Health", planned: "0", note: "Premium + out-of-pocket" },
+  { groupName: "Insurance & Health", kind: "expense", sourceKind: "manual", name: "Insurance", planned: "345.13", note: "Auto, home, life" },
 
-  // Food & Groceries
-  { groupName: "Food & Groceries", kind: "expense", sourceKind: "manual", name: "Groceries ($425/wk × 4.33 wks)", planned: "460.00", note: null },
-  { groupName: "Food & Groceries", kind: "expense", sourceKind: "manual", name: "Costco (warehouse stock-up)", planned: "0", note: "Periodic large hauls" },
+  // 4. Food
+  { groupName: "Food", kind: "expense", sourceKind: "manual", name: "Groceries", planned: "460.00", note: "Includes Costco" },
+  { groupName: "Food", kind: "expense", sourceKind: "manual", name: "Dining & Coffee", planned: "460.00", note: "Restaurants, DoorDash, coffee" },
 
-  // Transportation
-  { groupName: "Transportation", kind: "expense", sourceKind: "manual", name: "Toyota Lease", planned: "672.80", note: "Lease — kept here, not in Debt Tracker" },
-  { groupName: "Transportation", kind: "expense", sourceKind: "manual", name: "Hannah's Car Payment (UW Credit Union)", planned: "651.55", note: "Auto loan — kept here, not in Debt Tracker" },
-  { groupName: "Transportation", kind: "expense", sourceKind: "manual", name: "Gasoline (Kwik Trip / Woodmans)", planned: "250.00", note: null },
-  { groupName: "Transportation", kind: "expense", sourceKind: "manual", name: "Auto Maintenance / Wash", planned: "0", note: null },
-  { groupName: "Transportation", kind: "expense", sourceKind: "manual", name: "Parking (Madison)", planned: "0", note: null },
+  // 5. Transportation
+  { groupName: "Transportation", kind: "expense", sourceKind: "manual", name: "Car Payments", planned: "1324.35", note: "Toyota Lease + Hannah's car" },
+  { groupName: "Transportation", kind: "expense", sourceKind: "manual", name: "Gas, Maintenance & Parking", planned: "250.00", note: null },
 
-  // Kids & Pets
-  { groupName: "Kids & Pets", kind: "expense", sourceKind: "manual", name: "Childcare / School Costs", planned: "0", note: "Madison Metro $60 + Monona Grove $50" },
-  { groupName: "Kids & Pets", kind: "expense", sourceKind: "manual", name: "Kids' Activities", planned: "0", note: null },
-  { groupName: "Kids & Pets", kind: "expense", sourceKind: "manual", name: "Camp K9 (Pet Boarding)", planned: "0", note: "Use only when traveling" },
-  { groupName: "Kids & Pets", kind: "expense", sourceKind: "manual", name: "Vet / Pet Other", planned: "0", note: "Buffer" },
+  // 6. Kids & Pets
+  { groupName: "Kids & Pets", kind: "expense", sourceKind: "manual", name: "Childcare & Activities", planned: "0", note: null },
+  { groupName: "Kids & Pets", kind: "expense", sourceKind: "manual", name: "Pets", planned: "0", note: "Camp K9 + vet" },
 
   // Debt — Minimum Payments: rows are generated live from the Debts tracker on
   // every GET /budget/months/:monthStart (see syncAutoDebtCategories). No seed
@@ -110,37 +99,83 @@ export const SEED_CATEGORIES: SeedCategory[] = [
   // Avalanche — Extra to Highest APR
   { groupName: "Avalanche — Extra to Highest APR", kind: "expense", sourceKind: "manual", name: "Avalanche extra", planned: "2225.00", note: "Tag transactions with category 'Avalanche extra' to feed Actual" },
 
-  // Streaming & Tech
-  { groupName: "Streaming & Tech", kind: "expense", sourceKind: "manual", name: "Tech Subscriptions (Boost, Ring, Tonal)", planned: "86.78", note: null },
-  { groupName: "Streaming & Tech", kind: "expense", sourceKind: "manual", name: "Streaming (Netflix, Hulu, Spotify, Peacock)", planned: "167.68", note: null },
-  { groupName: "Streaming & Tech", kind: "expense", sourceKind: "manual", name: "Brewers F&B / Streaming Sports", planned: "0", note: "MLB Brewers tickets/food avg" },
-  { groupName: "Streaming & Tech", kind: "expense", sourceKind: "manual", name: "Other Tech / Software", planned: "0", note: "Buffer for variable subs" },
+  // 7. Lifestyle & Shopping
+  { groupName: "Lifestyle & Shopping", kind: "expense", sourceKind: "manual", name: "Subscriptions", planned: "315.62", note: "Streaming, tech, software, gaming" },
+  { groupName: "Lifestyle & Shopping", kind: "expense", sourceKind: "manual", name: "Shopping", planned: "0", note: "Amazon, Walmart/Target, clothing, electronics, home" },
+  { groupName: "Lifestyle & Shopping", kind: "expense", sourceKind: "manual", name: "Entertainment", planned: "0", note: "Movies, concerts, fun" },
+  { groupName: "Lifestyle & Shopping", kind: "expense", sourceKind: "manual", name: "Charitable Giving & Education", planned: "0", note: "Athenaeum + Becker/Eastern Univ" },
+  { groupName: "Lifestyle & Shopping", kind: "expense", sourceKind: "manual", name: "Misc / Buffer", planned: "0", note: "Catch-all small items" },
 
-  // Dining & Entertainment
-  { groupName: "Dining & Entertainment", kind: "expense", sourceKind: "manual", name: "Restaurants & Bars", planned: "460.00", note: null },
-  { groupName: "Dining & Entertainment", kind: "expense", sourceKind: "manual", name: "DoorDash & Delivery", planned: "0", note: "⚠ HIGH — discipline target" },
-  { groupName: "Dining & Entertainment", kind: "expense", sourceKind: "manual", name: "Coffee (Starbucks, Dunkin)", planned: "0", note: null },
-  { groupName: "Dining & Entertainment", kind: "expense", sourceKind: "manual", name: "Movies / Concerts / Other Fun", planned: "0", note: null },
-
-  // Shopping
-  { groupName: "Shopping", kind: "expense", sourceKind: "manual", name: "Clothing (Threadbeast/Stitch/Lulu)", planned: "0", note: "⚠ Cancel these subs" },
-  { groupName: "Shopping", kind: "expense", sourceKind: "manual", name: "Amazon (Non-essentials)", planned: "0", note: null },
-  { groupName: "Shopping", kind: "expense", sourceKind: "manual", name: "Walmart / Target", planned: "0", note: null },
-  { groupName: "Shopping", kind: "expense", sourceKind: "manual", name: "Best Buy / Electronics", planned: "0", note: null },
-  { groupName: "Shopping", kind: "expense", sourceKind: "manual", name: "Home & Menards", planned: "0", note: null },
-
-  // Other
-  { groupName: "Other", kind: "expense", sourceKind: "manual", name: "Charitable Giving (Athenaeum)", planned: "0", note: null },
-  { groupName: "Other", kind: "expense", sourceKind: "manual", name: "Education (Becker, Eastern Univ)", planned: "0", note: null },
-  { groupName: "Other", kind: "expense", sourceKind: "manual", name: "Intuit Financing", planned: "0", note: null },
-  { groupName: "Other", kind: "expense", sourceKind: "manual", name: "Student Loan (Nelnet / Dept of Ed)", planned: "237.58", note: "Federal loan — kept here, not in Debt Tracker" },
-  { groupName: "Other", kind: "expense", sourceKind: "manual", name: "Gaming subs", planned: "61.16", note: null },
-  { groupName: "Other", kind: "expense", sourceKind: "manual", name: "Misc / Buffer", planned: "0", note: "Catch-all small items" },
-
-  // Savings & Sinking Funds
-  { groupName: "Savings & Sinking Funds", kind: "expense", sourceKind: "manual", name: "Investments", planned: "0", note: null },
-  { groupName: "Savings & Sinking Funds", kind: "expense", sourceKind: "manual", name: "Emergency Fund Contribution", planned: "0", note: "Build $1,000 starter first" },
-  { groupName: "Savings & Sinking Funds", kind: "expense", sourceKind: "manual", name: "Tax Sinking Fund", planned: "0", note: "Save for next April taxes (~$1,500/yr)" },
-  { groupName: "Savings & Sinking Funds", kind: "expense", sourceKind: "manual", name: "Kids' Savings / 529", planned: "0", note: "Resume after high-APR debt is gone" },
-  { groupName: "Savings & Sinking Funds", kind: "expense", sourceKind: "manual", name: "Retirement (extra contributions)", planned: "0", note: "Don't reduce employer match contributions" },
+  // 8. Savings & Debt Payoff
+  { groupName: "Savings & Debt Payoff", kind: "expense", sourceKind: "manual", name: "Emergency Fund", planned: "0", note: "Build $1,000 starter first" },
+  { groupName: "Savings & Debt Payoff", kind: "expense", sourceKind: "manual", name: "Investments & Retirement", planned: "0", note: "Investments + extra retirement contributions" },
+  { groupName: "Savings & Debt Payoff", kind: "expense", sourceKind: "manual", name: "Kids' Savings / 529", planned: "0", note: "Resume after high-APR debt is gone" },
+  { groupName: "Savings & Debt Payoff", kind: "expense", sourceKind: "manual", name: "Tax Sinking Fund", planned: "0", note: "Save for next April taxes (~$1,500/yr)" },
 ];
+
+// Maps every old (pre-consolidation) category name to its new consolidated
+// target name. Used by the one-time per-user migration in /budget/months/...
+// to merge planned/actual amounts and re-point transactions, recurring items,
+// mapping rules, and avalanche settings onto the new category. Idempotent.
+export const BUDGET_CATEGORY_MIGRATION_MAP: Record<string, string> = {
+  // Income
+  "Mom — Verizon reimbursement": "Other Income",
+
+  // Housing & Utilities
+  "Electric & Gas (MGE)": "Utilities",
+  "Water/Sewer (City of Madison)": "Utilities",
+  "Internet/Cable (AT&T Uverse)": "Utilities",
+  "Phone (Verizon)": "Utilities",
+  "Home Maintenance / Repairs": "Home Maintenance & Warranty",
+  "Home Warranty (UHP)": "Home Maintenance & Warranty",
+
+  // Insurance & Health
+  "Health/Medical Out-of-Pocket": "Health",
+  "Health Insurance Premium": "Health",
+  "Auto Insurance (State Farm)": "Insurance",
+  "Other Insurance (State Farm 2nd)": "Insurance",
+  "Life Insurance (Trustage)": "Insurance",
+
+  // Food
+  "Groceries ($425/wk × 4.33 wks)": "Groceries",
+  "Costco (warehouse stock-up)": "Groceries",
+  "Restaurants & Bars": "Dining & Coffee",
+  "DoorDash & Delivery": "Dining & Coffee",
+  "Coffee (Starbucks, Dunkin)": "Dining & Coffee",
+
+  // Transportation
+  "Toyota Lease": "Car Payments",
+  "Hannah's Car Payment (UW Credit Union)": "Car Payments",
+  "Gasoline (Kwik Trip / Woodmans)": "Gas, Maintenance & Parking",
+  "Auto Maintenance / Wash": "Gas, Maintenance & Parking",
+  "Parking (Madison)": "Gas, Maintenance & Parking",
+
+  // Kids & Pets
+  "Childcare / School Costs": "Childcare & Activities",
+  "Kids' Activities": "Childcare & Activities",
+  "Camp K9 (Pet Boarding)": "Pets",
+  "Vet / Pet Other": "Pets",
+
+  // Lifestyle & Shopping
+  "Tech Subscriptions (Boost, Ring, Tonal)": "Subscriptions",
+  "Streaming (Netflix, Hulu, Spotify, Peacock)": "Subscriptions",
+  "Brewers F&B / Streaming Sports": "Subscriptions",
+  "Other Tech / Software": "Subscriptions",
+  "Gaming subs": "Subscriptions",
+  "Clothing (Threadbeast/Stitch/Lulu)": "Shopping",
+  "Amazon (Non-essentials)": "Shopping",
+  "Walmart / Target": "Shopping",
+  "Best Buy / Electronics": "Shopping",
+  "Home & Menards": "Shopping",
+  "Movies / Concerts / Other Fun": "Entertainment",
+  "Charitable Giving (Athenaeum)": "Charitable Giving & Education",
+  "Education (Becker, Eastern Univ)": "Charitable Giving & Education",
+  // Older "Other" group leftovers with no clear new home — roll into Misc / Buffer.
+  "Intuit Financing": "Misc / Buffer",
+  "Student Loan (Nelnet / Dept of Ed)": "Misc / Buffer",
+
+  // Savings & Debt Payoff
+  "Emergency Fund Contribution": "Emergency Fund",
+  "Investments": "Investments & Retirement",
+  "Retirement (extra contributions)": "Investments & Retirement",
+};
