@@ -637,6 +637,11 @@ paths:
               required: [monthKey]
               properties:
                 monthKey: { type: string }
+                gap: { type: ["string", "null"] }
+                forecastEnd: { type: ["string", "null"] }
+                bankEnd: { type: ["string", "null"] }
+                pending: { type: ["integer", "null"] }
+                reconciled: { type: ["boolean", "null"] }
       responses:
         "200":
           description: OK
@@ -1395,6 +1400,22 @@ components:
         plaidCheckingAccounts:
           type: array
           items: { $ref: "#/components/schemas/PlaidCheckingAccount" }
+        monthSnapshots:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/MonthSnapshot"
+    MonthSnapshot:
+      type: object
+      required: [balance, at]
+      properties:
+        balance: { type: string }
+        at: { type: string }
+        gap: { type: ["string", "null"] }
+        forecastEnd: { type: ["string", "null"] }
+        bankEnd: { type: ["string", "null"] }
+        pending: { type: ["integer", "null"] }
+        reconciled: { type: ["boolean", "null"] }
+        closedAt: { type: ["string", "null"] }
     SetBankSnapshotInput:
       type: object
       properties:

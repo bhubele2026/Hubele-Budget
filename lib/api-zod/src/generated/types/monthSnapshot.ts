@@ -6,8 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CloseForecastMonthBody = {
-  monthKey: string;
+export interface MonthSnapshot {
+  balance: string;
+  at: string;
   /** @nullable */
   gap?: string | null;
   /** @nullable */
@@ -18,4 +19,6 @@ export type CloseForecastMonthBody = {
   pending?: number | null;
   /** @nullable */
   reconciled?: boolean | null;
-};
+  /** @nullable */
+  closedAt?: string | null;
+}

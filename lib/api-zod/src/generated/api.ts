@@ -985,6 +985,21 @@ export const GetForecastResponse = zod.object({
       institutionName: zod.string().nullish(),
     }),
   ),
+  monthSnapshots: zod
+    .record(
+      zod.string(),
+      zod.object({
+        balance: zod.string(),
+        at: zod.string(),
+        gap: zod.string().nullish(),
+        forecastEnd: zod.string().nullish(),
+        bankEnd: zod.string().nullish(),
+        pending: zod.number().nullish(),
+        reconciled: zod.boolean().nullish(),
+        closedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
 });
 
 export const GetForecastSettingsResponse = zod.object({
@@ -1064,6 +1079,11 @@ export const GetForecastCashSignalResponse = zod.object({
 
 export const CloseForecastMonthBody = zod.object({
   monthKey: zod.string(),
+  gap: zod.string().nullish(),
+  forecastEnd: zod.string().nullish(),
+  bankEnd: zod.string().nullish(),
+  pending: zod.number().nullish(),
+  reconciled: zod.boolean().nullish(),
 });
 
 export const CloseForecastMonthResponse = zod.object({

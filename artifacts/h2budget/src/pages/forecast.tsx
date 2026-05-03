@@ -100,6 +100,7 @@ import {
   TrendingDown,
   CheckCircle2,
   AlertCircle,
+  History,
 } from "lucide-react";
 import {
   Tooltip,
@@ -426,6 +427,11 @@ export default function ForecastPage() {
     [data?.closedMonths],
   );
 
+  const monthSnapshotsMap = useMemo(
+    () => data?.monthSnapshots ?? {},
+    [data?.monthSnapshots],
+  );
+
   const categoryById = useMemo(() => {
     const m = new Map<string, string>();
     for (const c of categories ?? []) m.set(c.id, c.name);
@@ -513,12 +519,24 @@ export default function ForecastPage() {
   }, [register, data, closedMonths, monthFilter]);
 
   const monthsAvailable = useMemo(() => {
-    if (!register) return [currentMonth];
     const set = new Set<string>([currentMonth]);
-    for (const p of register.allPlan) set.add(monthKey(p.date));
-    for (const b of register.allBank) set.add(monthKey(b.date));
+    // Always include the last 6 calendar months so historical closed
+    // periods stay reachable from the picker even after the forecast
+    // window scrolls past them.
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+    if (register) {
+      for (const p of register.allPlan) set.add(monthKey(p.date));
+      for (const b of register.allBank) set.add(monthKey(b.date));
+    }
+    // Surface every closed month and every month with a frozen reconcile
+    // snapshot, regardless of the current forecast window.
+    for (const m of closedMonths) set.add(m);
+    for (const m of Object.keys(monthSnapshotsMap)) set.add(m);
     return Array.from(set).sort();
-  }, [register, currentMonth]);
+  }, [register, currentMonth, today, closedMonths, monthSnapshotsMap]);
 
   // Build inbox: bank rows still pending (not matched, not unplanned)
   const inbox: InboxCard[] = useMemo(() => {
@@ -875,8 +893,23 @@ export default function ForecastPage() {
   };
 
   const onCloseMonth = () => {
+    // Only attach a reconcile result when the live evaluation is
+    // meaningful — i.e. the snapshot still falls within (or after) the
+    // month being closed. For prior periods the bank snapshot has moved
+    // on and bankReconcile can't represent that month, so we omit the
+    // reconciled/gap fields rather than stamping a false negative.
+    const evaluable = bankReconcile.hasBank && !bankReconcile.isPriorMonth;
     closeMonth.mutate(
-      { data: { monthKey: monthFilter } },
+      {
+        data: {
+          monthKey: monthFilter,
+          gap: evaluable ? bankReconcile.gap.toFixed(2) : null,
+          forecastEnd: evaluable ? bankReconcile.forecastEnd.toFixed(2) : null,
+          bankEnd: evaluable ? bankReconcile.bankEnd.toFixed(2) : null,
+          pending: evaluable ? bankReconcile.pending : null,
+          reconciled: evaluable ? isReconciledToBank : null,
+        },
+      },
       {
         onSuccess: () => {
           invalidate();
@@ -1414,11 +1447,31 @@ export default function ForecastPage() {
             <div className="flex items-center gap-3">
               <Label className="text-sm">Month</Label>
               <Select value={monthFilter} onValueChange={setMonthFilter}>
-                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {monthsAvailable.map((m) => (
-                    <SelectItem key={m} value={m}>{m}{closedMonths.has(m) ? " (closed)" : ""}</SelectItem>
-                  ))}
+                  {monthsAvailable.map((m) => {
+                    const snap = monthSnapshotsMap[m];
+                    const isMClosed = closedMonths.has(m);
+                    let suffix = "";
+                    if (isMClosed) {
+                      if (snap?.reconciled) {
+                        suffix = " ✓";
+                      } else if (snap?.gap != null) {
+                        const g = Number(snap.gap);
+                        suffix = Number.isFinite(g)
+                          ? ` · ${formatCurrency(g)} off`
+                          : " (closed)";
+                      } else {
+                        suffix = " (closed)";
+                      }
+                    }
+                    return (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                        {suffix}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
               {isClosed && (
@@ -1426,6 +1479,30 @@ export default function ForecastPage() {
                   <Lock className="w-3 h-3 mr-1" /> Closed
                 </Badge>
               )}
+              {isClosed && monthSnapshotsMap[monthFilter]?.reconciled && (
+                <Badge
+                  className="bg-primary/15 text-primary border-primary/30"
+                  data-testid="month-reconciled-at-close"
+                >
+                  <CheckCircle2 className="w-3 h-3 mr-1" /> Reconciled at close
+                </Badge>
+              )}
+              {isClosed &&
+                monthSnapshotsMap[monthFilter] &&
+                !monthSnapshotsMap[monthFilter]?.reconciled &&
+                monthSnapshotsMap[monthFilter]?.gap != null && (
+                  <Badge
+                    variant="outline"
+                    className="bg-amber-50 text-amber-900 border-amber-200"
+                    data-testid="month-gap-at-close"
+                  >
+                    <AlertCircle className="w-3 h-3 mr-1" />
+                    Closed {formatCurrency(
+                      Number(monthSnapshotsMap[monthFilter]!.gap),
+                    )}{" "}
+                    off bank
+                  </Badge>
+                )}
             </div>
             {isClosed ? (
               <Button variant="outline" onClick={onReopenMonth}>
@@ -1437,6 +1514,106 @@ export default function ForecastPage() {
               </Button>
             )}
           </div>
+
+          <Card data-testid="reconcile-history">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+                <History className="w-4 h-4" /> Reconcile history
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-border">
+                {(() => {
+                  const months = monthsAvailable
+                    .filter((m) => m <= currentMonth)
+                    .slice(-6)
+                    .reverse();
+                  if (months.length === 0) {
+                    return (
+                      <div className="p-4 text-sm text-muted-foreground text-center">
+                        No history yet.
+                      </div>
+                    );
+                  }
+                  return months.map((m) => {
+                    const isMClosed = closedMonths.has(m);
+                    const snap = monthSnapshotsMap[m];
+                    const isCurrent = m === currentMonth;
+                    // For an open current month, evaluate live; for closed
+                    // months use the frozen snapshot; otherwise show "—".
+                    let reconciled: boolean | null = null;
+                    let gap: number | null = null;
+                    if (isMClosed && snap) {
+                      reconciled = !!snap.reconciled;
+                      gap = snap.gap != null ? Number(snap.gap) : null;
+                    } else if (isCurrent && !isMClosed) {
+                      // Live: only meaningful when the user is currently
+                      // looking at this month (bankReconcile is scoped to
+                      // monthFilter). Approximate by showing live values
+                      // when monthFilter === currentMonth.
+                      if (monthFilter === currentMonth && bankReconcile.hasBank) {
+                        reconciled = isReconciledToBank;
+                        gap = bankReconcile.gap;
+                      }
+                    }
+                    return (
+                      <div
+                        key={m}
+                        className="p-3 flex items-center justify-between gap-3 text-sm"
+                        data-testid={`reconcile-history-row-${m}`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-medium tabular-nums">{m}</span>
+                          {isMClosed ? (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] gap-1"
+                            >
+                              <Lock className="w-3 h-3" /> closed
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] bg-muted text-muted-foreground"
+                            >
+                              open
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {reconciled === true ? (
+                            <Badge className="bg-primary/15 text-primary border-primary/30 text-[10px] gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> reconciled
+                            </Badge>
+                          ) : reconciled === false ? (
+                            <Badge
+                              variant="outline"
+                              className="bg-amber-50 text-amber-900 border-amber-200 text-[10px] gap-1"
+                            >
+                              <AlertCircle className="w-3 h-3" /> gap
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              —
+                            </span>
+                          )}
+                          <span
+                            className={`text-xs tabular-nums w-24 text-right ${
+                              gap != null && Math.abs(gap) >= 0.01
+                                ? "text-amber-700 dark:text-amber-400"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {gap != null ? formatCurrency(gap) : "—"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardContent className="p-0">

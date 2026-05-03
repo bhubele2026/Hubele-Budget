@@ -162,6 +162,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     bankSnapshot: presentSnapshot(settings),
     cashSignal,
     plaidCheckingAccounts,
+    monthSnapshots: settings.monthSnapshots ?? {},
   });
 });
 
@@ -406,7 +407,8 @@ router.post(
   requireAuth,
   async (req, res): Promise<void> => {
     const userId = req.userId!;
-    const monthKey = req.body?.monthKey;
+    const body = req.body ?? {};
+    const monthKey = body.monthKey;
     if (!monthKey) {
       res.status(400).json({ error: "monthKey required" });
       return;
@@ -420,15 +422,44 @@ router.post(
       })
       .returning();
 
-    // Freeze the current snapshot into monthSnapshots[monthKey]
+    // Freeze the current snapshot into monthSnapshots[monthKey], including the
+    // reconcile state at close time so prior months can be displayed with a
+    // ✓/gap badge later.
     const settings = await ensureSettings(userId);
     if (settings.bankSnapshotBalance != null && settings.bankSnapshotAt) {
+      const closedAt = new Date().toISOString();
+      const entry: {
+        balance: string;
+        at: string;
+        gap?: string;
+        forecastEnd?: string;
+        bankEnd?: string;
+        pending?: number;
+        reconciled?: boolean;
+        closedAt?: string;
+      } = {
+        balance: settings.bankSnapshotBalance,
+        at: settings.bankSnapshotAt.toISOString(),
+        closedAt,
+      };
+      const normNum = (v: unknown): string | undefined => {
+        if (typeof v !== "string") return undefined;
+        const n = Number(v);
+        if (!Number.isFinite(n)) return undefined;
+        return n.toFixed(2);
+      };
+      const g = normNum(body.gap);
+      const fe = normNum(body.forecastEnd);
+      const be = normNum(body.bankEnd);
+      if (g !== undefined) entry.gap = g;
+      if (fe !== undefined) entry.forecastEnd = fe;
+      if (be !== undefined) entry.bankEnd = be;
+      if (typeof body.pending === "number" && Number.isInteger(body.pending) && body.pending >= 0)
+        entry.pending = body.pending;
+      if (typeof body.reconciled === "boolean") entry.reconciled = body.reconciled;
       const monthSnapshots = {
         ...(settings.monthSnapshots ?? {}),
-        [String(monthKey)]: {
-          balance: settings.bankSnapshotBalance,
-          at: settings.bankSnapshotAt.toISOString(),
-        },
+        [String(monthKey)]: entry,
       };
       await db
         .update(forecastSettingsTable)

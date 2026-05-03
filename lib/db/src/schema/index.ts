@@ -310,7 +310,21 @@ export const forecastSettingsTable = pgTable("forecast_settings", {
   bankSnapshotAccountId: uuid("bank_snapshot_account_id"),
   bankSnapshotName: text("bank_snapshot_name"),
   bankSnapshotMask: text("bank_snapshot_mask"),
-  monthSnapshots: jsonb("month_snapshots").$type<Record<string, { balance: string; at: string }>>(),
+  monthSnapshots: jsonb("month_snapshots").$type<
+    Record<
+      string,
+      {
+        balance: string;
+        at: string;
+        gap?: string;
+        forecastEnd?: string;
+        bankEnd?: string;
+        pending?: number;
+        reconciled?: boolean;
+        closedAt?: string;
+      }
+    >
+  >(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
