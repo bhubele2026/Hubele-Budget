@@ -68,7 +68,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { Pencil, Trash2, Plus, RefreshCw, Flame, TrendingDown } from "lucide-react";
+import { Pencil, Trash2, Plus, RefreshCw, Flame, TrendingDown, PartyPopper, X } from "lucide-react";
 
 function debtToSim(d: Debt): SimDebt {
   return {
@@ -156,6 +156,7 @@ export default function AvalanchePage() {
   const [activeTab, setActiveTab] = useState("debts");
   const [highlightedDebtId, setHighlightedDebtId] = useState<string | null>(null);
   const rowRefs = useRef<Map<string, HTMLTableRowElement | null>>(new Map());
+  const [killedBanner, setKilledBanner] = useState<{ id: string; name: string } | null>(null);
 
   const search = useSearch();
   const focusDebtId = useMemo(() => {
@@ -297,6 +298,27 @@ export default function AvalanchePage() {
 
   return (
     <div className="space-y-6">
+      {killedBanner && (
+        <div className="relative flex items-center gap-3 rounded-lg border border-emerald-300/60 bg-gradient-to-r from-emerald-50 to-amber-50 p-4 text-emerald-900 dark:border-emerald-700/60 dark:from-emerald-950/40 dark:to-amber-950/40 dark:text-emerald-100 animate-in fade-in slide-in-from-top-2">
+          <PartyPopper className="h-6 w-6 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <div className="flex-1">
+            <div className="font-semibold">Debt killed! 🎉</div>
+            <div className="text-sm opacity-90">
+              <strong>{killedBanner.name}</strong> is paid in full and moved to
+              Archived. Onto the next one.
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setKilledBanner(null)}
+            aria-label="Dismiss"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
@@ -873,9 +895,21 @@ export default function AvalanchePage() {
         onSubmit={async (data) => {
           if (!paying) return;
           try {
-            await createPayment.mutateAsync({ id: paying.id, data });
-            toast({ title: "Payment recorded" });
+            const payingDebt = paying;
+            const result = await createPayment.mutateAsync({
+              id: payingDebt.id,
+              data,
+            });
             setPaying(null);
+            if (result?.killed) {
+              setKilledBanner({ id: payingDebt.id, name: payingDebt.name });
+              toast({
+                title: `🎉 ${payingDebt.name} is paid off!`,
+                description: "Archived automatically. One less debt — keep going!",
+              });
+            } else {
+              toast({ title: "Payment recorded" });
+            }
           } catch (e) {
             toast({
               title: "Couldn't record payment",

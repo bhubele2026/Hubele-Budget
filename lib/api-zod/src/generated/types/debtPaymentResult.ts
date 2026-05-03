@@ -11,4 +11,5 @@ import type { Transaction } from "./transaction";
 export interface DebtPaymentResult {
   debt: Debt;
   transaction: Transaction;
+  killed: boolean;
 }

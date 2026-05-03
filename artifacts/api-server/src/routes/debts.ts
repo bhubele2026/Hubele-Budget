@@ -150,16 +150,26 @@ router.post(
       if (!debt) return null;
       const oldBal = Number(debt.balance);
       const newBal = Math.max(0, oldBal - amount);
+      const killed = oldBal > 0 && newBal === 0 && debt.status === "active";
       const occurredOn = parsed.data.occurredOn;
+      const userNotes = parsed.data.notes ?? null;
+      const finalNote = killed ? "Final payment — debt paid in full 🎉" : null;
+      const mergedNotes = killed
+        ? userNotes
+          ? `${userNotes}\n${finalNote}`
+          : finalNote
+        : userNotes;
       const [txn] = await tx
         .insert(transactionsTable)
         .values({
           userId,
           occurredOn,
-          description: `Payment — ${debt.name}`,
+          description: killed
+            ? `Payment — ${debt.name} (PAID OFF)`
+            : `Payment — ${debt.name}`,
           amount: (-Math.abs(amount)).toFixed(2),
           account: parsed.data.account ?? null,
-          notes: parsed.data.notes ?? null,
+          notes: mergedNotes,
           source: "manual",
           member: null,
         })
@@ -170,10 +180,11 @@ router.post(
           balance: newBal.toFixed(2),
           lastBalanceUpdate: new Date(),
           updatedAt: new Date(),
+          ...(killed ? { status: "archived" } : {}),
         })
         .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)))
         .returning();
-      return { debt: updated, transaction: txn };
+      return { debt: updated, transaction: txn, killed };
     });
     if (!result) {
       res.status(404).json({ error: "Not found" });

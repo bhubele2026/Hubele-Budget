@@ -718,10 +718,11 @@ components:
         notes: { type: ["string", "null"] }
     DebtPaymentResult:
       type: object
-      required: [debt, transaction]
+      required: [debt, transaction, killed]
       properties:
         debt: { $ref: "#/components/schemas/Debt" }
         transaction: { $ref: "#/components/schemas/Transaction" }
+        killed: { type: boolean }
     SyncMinimumsResult:
       type: object
       required: [updated]

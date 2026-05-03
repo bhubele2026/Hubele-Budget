@@ -270,6 +270,7 @@ export interface DebtPaymentInput {
 export interface DebtPaymentResult {
   debt: Debt;
   transaction: Transaction;
+  killed: boolean;
 }
 
 export type SyncMinimumsResultUpdatedItem = {
