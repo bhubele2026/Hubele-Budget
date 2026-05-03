@@ -74,6 +74,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   buildLineRegister,
+  filterForecastTxns,
   buildBucket,
   monthKey,
   isBankTxn,
@@ -663,8 +664,9 @@ export default function ForecastPage() {
     if (!data) return null;
     const rawEvents = (data.events ?? []) as CashEvent[];
     const events = filterEventsByPayoff(rawEvents, debtLinks, payoffsByDebt);
-    const txns = ((data.transactions ?? []) as unknown as MatchTxn[]).filter(
-      (t) => t.forecastFlag && isBankTxn(t, checkingPlaidAccountIds),
+    const txns = filterForecastTxns(
+      (data.transactions ?? []) as unknown as MatchTxn[],
+      checkingPlaidAccountIds,
     );
     const resolutions = (data.resolutions ?? []) as Resolution[];
     const snapshot = data.bankSnapshot ?? null;

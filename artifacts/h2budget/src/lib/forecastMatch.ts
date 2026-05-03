@@ -30,6 +30,20 @@ export function isBankTxn(
   return true;
 }
 
+/** The exact filter Forecast uses to decide which transactions can reach
+ *  the inbox / register / running balance. A txn is included iff it is
+ *  flagged for forecast AND belongs to the configured Chase checking
+ *  account (per `isBankTxn` semantics). Kept here so the page wiring and
+ *  tests share a single source of truth — a regression in either side
+ *  surfaces immediately. */
+export function filterForecastTxns<
+  T extends Pick<Transaction, "forecastFlag" | "source" | "plaidAccountId">,
+>(txns: T[], checkingPlaidAccountIds: Set<string>): T[] {
+  return txns.filter(
+    (t) => t.forecastFlag && isBankTxn(t, checkingPlaidAccountIds),
+  );
+}
+
 export type ResolutionStatus =
   | "matched"
   | "missed"
