@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, like } from "drizzle-orm";
 import {
   db,
   budgetCategoriesTable,
@@ -133,7 +133,15 @@ const SYNTHETIC_ACCOUNT_ID = "seed-april-2026-chase-checking";
 // fixed pattern plus an ordered list of candidate target category names —
 // the first one that exists for the user wins. Lets us cover both v1 and v2
 // (post-consolidation) category sets without overwriting user customizations.
-type RuleSeed = { pattern: string; candidates: string[] };
+type RuleSeed = {
+  pattern: string;
+  candidates: string[];
+  // When true and no candidate matches a user category (even by substring),
+  // fall back to the user's "Misc / Buffer" catch-all so the row still
+  // categorizes and the budget Actual reflects it. Used for debt-bearing
+  // rows where the user's debt category names are unpredictable.
+  fallbackMiscBuffer?: boolean;
+};
 
 const NEW_MAPPING_RULES: RuleSeed[] = [
   // Toyota lease appears as "TOYOTA ACH LEASE" in the Chase wire — existing
@@ -157,24 +165,38 @@ const NEW_MAPPING_RULES: RuleSeed[] = [
   { pattern: "NINTENDOAME", candidates: ["Subscriptions", "Gaming subs"] },
   // Dining
   { pattern: "MOOYAH", candidates: ["Dining & Coffee", "Restaurants & Bars"] },
-  // Debt-bearing patterns (best-effort): try a fuzzy candidate list. If the
-  // user's debt category names differ, the rule simply won't be created.
+  // Debt-bearing patterns: fuzzy candidate list, with a final Misc / Buffer
+  // fallback (see fallbackMiscBuffer) so the row always categorizes even when
+  // the user's debt category names don't match any candidate.
   { pattern: "SYNCHRONY BANK PAYMENT", candidates: [
     "Synchrony", "Synchrony Bank",
     "Ashley Furniture / Synchrony (34.99%)",
     "Mattress Firm / Synchrony Home (34.99%)",
     "PayPal Credit — Brad / Synchrony (27.49%)",
-  ] },
+  ], fallbackMiscBuffer: true },
   { pattern: "DEPT EDUCATION", candidates: [
     "Student Loan (Nelnet / Dept of Ed)",
     "Student Loan (Nelnet)",
-    "Misc / Buffer",
-  ] },
-  { pattern: "INTUIT FINANCING", candidates: ["Intuit Financing", "Misc / Buffer"] },
+    "Nelnet",
+    "Dept of Ed",
+    "Student Loan",
+  ], fallbackMiscBuffer: true },
+  { pattern: "INTUIT FINANCING", candidates: ["Intuit Financing", "Intuit"], fallbackMiscBuffer: true },
   { pattern: "CHASE CREDIT CRD AUTOPAY", candidates: [
     "Chase Sapphire", "Chase Freedom", "Chase",
-  ] },
-  { pattern: "UPSTART NETWORK", candidates: ["Upstart", "Upstart Personal Loan"] },
+  ], fallbackMiscBuffer: true },
+  { pattern: "UPSTART NETWORK", candidates: ["Upstart", "Upstart Personal Loan"], fallbackMiscBuffer: true },
+  // Chase wire uses "MOBILE PMT" (no Y) — existing seed only covers "MOBILE PYMT".
+  { pattern: "CAPITAL ONE MOBILE PMT", candidates: [
+    "Capital One Platinum (28.74%)", "Capital One",
+  ], fallbackMiscBuffer: true },
+  // PayPal Pay Monthly arrives as "PYPL PAYMTHLY" — existing seed only covers
+  // "PAYPAL PAYMTHLY".
+  { pattern: "PYPL PAYMTHLY", candidates: [
+    "PayPal Credit — Brad / Synchrony (27.49%)",
+    "PayPal Credit",
+    "PayPal",
+  ], fallbackMiscBuffer: true },
 ];
 
 // Description fragments that flag transfers between the user's own accounts.
@@ -353,20 +375,43 @@ async function ensureExtraMappingRules(userId: string): Promise<number> {
   const havePattern = new Set(
     existingRules.map((r) => r.pattern.toLowerCase()),
   );
+  const miscBuffer = catByName.get("Misc / Buffer");
+
+  // Substring/contains match: returns the first user category whose name
+  // contains any of the candidate strings (case-insensitive). Catches
+  // auto-generated debt categories like "Upstart Personal Loan ($1,309/mo)"
+  // when the candidate is "Upstart".
+  const findByContains = (candidates: string[]) => {
+    for (const cand of candidates) {
+      const needle = cand.toLowerCase();
+      if (!needle) continue;
+      const hit = cats.find((c) => c.name.toLowerCase().includes(needle));
+      if (hit) return hit;
+    }
+    return null;
+  };
 
   let inserted = 0;
   for (const seed of NEW_MAPPING_RULES) {
     if (havePattern.has(seed.pattern.toLowerCase())) continue;
-    const target = seed.candidates
+    const exact = seed.candidates
       .map((n) => catByName.get(n))
       .find((c): c is NonNullable<typeof c> => !!c);
+    const contains = exact ? null : findByContains(seed.candidates);
+    const target =
+      exact ??
+      contains ??
+      (seed.fallbackMiscBuffer ? miscBuffer ?? null : null);
     if (!target) continue;
+    // Lower priority for Misc / Buffer fallback rules so any future
+    // user-defined rule cleanly wins. Direct matches keep the default 50.
+    const isFallback = !exact && !contains;
     await db.insert(mappingRulesTable).values({
       userId,
       pattern: seed.pattern,
       matchType: "contains",
       categoryId: target.id,
-      priority: 50,
+      priority: isFallback ? 10 : 50,
     });
     inserted++;
   }
@@ -392,9 +437,42 @@ export async function seedAprilChase(
   const acct = await ensureChaseAccount(userId);
   const rules = await loadUserRules(userId);
 
+  // Backfill: re-categorize previously-seeded April Chase rows that landed
+  // uncategorized (e.g. from an earlier seed run before the new mapping
+  // rules were added). Only touches rows we own (plaid_transaction_id with
+  // our seed prefix) that have no category and are not flagged as transfer.
+  const backfillCandidates = await db
+    .select({
+      id: transactionsTable.id,
+      description: transactionsTable.description,
+    })
+    .from(transactionsTable)
+    .where(
+      and(
+        eq(transactionsTable.userId, userId),
+        isNull(transactionsTable.categoryId),
+        eq(transactionsTable.isTransfer, false),
+        like(transactionsTable.plaidTransactionId, "seed-april-2026-chase:%"),
+      ),
+    );
+  let backfilled = 0;
+  for (const row of backfillCandidates) {
+    const result = categorize(
+      { description: row.description, pfcPrimary: null },
+      rules,
+    );
+    if (result.categoryId) {
+      await db
+        .update(transactionsTable)
+        .set({ categoryId: result.categoryId })
+        .where(eq(transactionsTable.id, row.id));
+      backfilled++;
+    }
+  }
+
   let inserted = 0;
   let skipped = 0;
-  let categorized = 0;
+  let categorized = backfilled;
   let transfers = 0;
 
   for (const r of APRIL_2026_CHASE_ROWS) {

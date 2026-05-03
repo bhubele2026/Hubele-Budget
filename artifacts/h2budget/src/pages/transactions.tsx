@@ -779,6 +779,63 @@ export default function TransactionsPage() {
   );
 }
 
+// Keyword → list of category-name substrings to surface as suggestions when a
+// transaction is uncategorized. The first existing category whose name matches
+// any of the substrings (case-insensitive) wins. Designed to cover the
+// debt-bearing April Chase rows (Synchrony, Chase autopay, Upstart, Dept of
+// Education) plus a handful of common merchants.
+const SUGGESTION_RULES: { match: string[]; targets: string[] }[] = [
+  { match: ["synchrony"], targets: ["Synchrony", "Ashley", "Mattress", "PayPal Credit", "Misc / Buffer"] },
+  { match: ["upstart"], targets: ["Upstart", "Misc / Buffer"] },
+  { match: ["chase credit", "chase autopay"], targets: ["Chase Sapphire", "Chase Freedom", "Chase", "Misc / Buffer"] },
+  { match: ["dept education", "dept of ed", "nelnet"], targets: ["Student Loan", "Nelnet", "Dept of Ed", "Misc / Buffer"] },
+  { match: ["intuit"], targets: ["Intuit", "Misc / Buffer"] },
+  { match: ["affirm"], targets: ["Affirm", "Misc / Buffer"] },
+  { match: ["american express", "amex"], targets: ["American Express", "Amex", "Misc / Buffer"] },
+  { match: ["discover"], targets: ["Discover", "Misc / Buffer"] },
+  { match: ["capital one"], targets: ["Capital One", "Misc / Buffer"] },
+  { match: ["paymthly", "pypl paymthly", "paypal credit"], targets: ["PayPal Credit", "Synchrony", "Misc / Buffer"] },
+  { match: ["applecard", "apple card"], targets: ["Apple Card", "Misc / Buffer"] },
+  { match: ["credit one"], targets: ["Credit One", "Misc / Buffer"] },
+  { match: ["figure"], targets: ["Figure", "HELOC", "Misc / Buffer"] },
+  { match: ["uw credit union"], targets: ["Hannah", "Car Payments", "Misc / Buffer"] },
+  { match: ["toyota"], targets: ["Toyota", "Car Payments"] },
+  { match: ["lakeview"], targets: ["Mortgage", "Lakeview"] },
+  { match: ["madison gas", "city of madison"], targets: ["Utilities", "MGE"] },
+  { match: ["verizon"], targets: ["Phone", "Utilities", "Verizon"] },
+  { match: ["state farm"], targets: ["Insurance", "State Farm"] },
+  { match: ["trustage"], targets: ["Insurance", "TruStage"] },
+  { match: ["metro market", "costco", "walmart"], targets: ["Groceries", "Shopping"] },
+  { match: ["kwik trip"], targets: ["Gas", "Transportation"] },
+  { match: ["starbucks", "dunkin", "doordash", "mooyah"], targets: ["Dining", "Coffee", "Restaurants"] },
+  { match: ["paypal purchase", "stitchfix", "aldo", "shen zhen", "brghtwhl"], targets: ["Shopping"] },
+  { match: ["paramount", "adobe", "ancestry", "playstation", "nintendo"], targets: ["Subscriptions"] },
+];
+
+function suggestCategories(
+  description: string,
+  categories: { id: string; name: string }[],
+): { id: string; name: string }[] {
+  const hay = (description ?? "").toLowerCase();
+  const out: { id: string; name: string }[] = [];
+  const seen = new Set<string>();
+  for (const rule of SUGGESTION_RULES) {
+    if (!rule.match.some((m) => hay.includes(m))) continue;
+    for (const target of rule.targets) {
+      const needle = target.toLowerCase();
+      const hit = categories.find(
+        (c) => c.name.toLowerCase().includes(needle) && !seen.has(c.id),
+      );
+      if (hit) {
+        out.push(hit);
+        seen.add(hit.id);
+        if (out.length >= 3) return out;
+      }
+    }
+  }
+  return out;
+}
+
 function CategorizeChip({
   tx,
   categories,
@@ -789,6 +846,76 @@ function CategorizeChip({
   onPick: (categoryId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const suggestions = useMemo(
+    () => suggestCategories(tx.description, categories),
+    [tx.description, categories],
+  );
+  const top = suggestions[0];
+  if (top) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <Badge
+          variant="outline"
+          className="cursor-pointer text-xs border-violet-300 text-violet-700 bg-violet-50 hover:bg-violet-100"
+          onClick={() => onPick(top.id)}
+          title="Categorize and remember this merchant"
+          data-testid={`badge-suggest-${tx.id}`}
+        >
+          <Wand2 className="w-3 h-3 mr-1" /> Categorize as {top.name}
+        </Badge>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Badge
+              variant="outline"
+              className="cursor-pointer text-xs border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+              data-testid={`badge-uncategorized-${tx.id}`}
+            >
+              Other…
+            </Badge>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Search category…" />
+              <CommandList>
+                <CommandEmpty>No category</CommandEmpty>
+                {suggestions.length > 1 && (
+                  <CommandGroup heading="Suggested">
+                    {suggestions.slice(1).map((c) => (
+                      <CommandItem
+                        key={`s-${c.id}`}
+                        onSelect={() => {
+                          onPick(c.id);
+                          setOpen(false);
+                        }}
+                      >
+                        {c.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                )}
+                <CommandGroup heading="All categories">
+                  {categories.map((c) => (
+                    <CommandItem
+                      key={c.id}
+                      onSelect={() => {
+                        onPick(c.id);
+                        setOpen(false);
+                      }}
+                    >
+                      {c.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+              <div className="border-t px-2 py-1.5 text-[11px] text-muted-foreground">
+                Picking a category will remember this merchant.
+              </div>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </span>
+    );
+  }
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
