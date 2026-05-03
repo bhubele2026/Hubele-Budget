@@ -24,6 +24,7 @@ export interface TransactionInput {
   unplannedAllowance?: boolean;
   reimbursable?: boolean;
   reimbursed?: boolean;
+  isTransfer?: boolean;
   /** @nullable */
   notes?: string | null;
   source?: string;
@@ -31,4 +32,14 @@ export interface TransactionInput {
   member?: string | null;
   /** @nullable */
   owedBy?: string | null;
+  /**
+   * When set together with `categoryId`, the server upserts a
+mapping_rule (matchType=contains, priority=100) so that future
+transactions with this description fragment auto-categorize the
+same way. Used by the "Categorize + remember" affordance on the
+Transactions and Amex pages.
+
+   * @nullable
+   */
+  rememberPattern?: string | null;
 }

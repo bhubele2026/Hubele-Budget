@@ -14,7 +14,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit2, Trash2, Send, Inbox } from "lucide-react";
+import { Plus, Edit2, Trash2, Send, Inbox, Wand2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import type { Transaction } from "@workspace/api-client-react";
 
@@ -145,6 +147,35 @@ export default function TransactionsPage() {
     );
   };
 
+  const handleQuickCategorize = async (
+    tx: Transaction,
+    categoryId: string,
+    rememberPattern: string | null,
+  ) => {
+    try {
+      await updateTx.mutateAsync({
+        id: tx.id,
+        data: {
+          categoryId,
+          ...(rememberPattern ? { rememberPattern } : {}),
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      toast({
+        title: rememberPattern ? "Categorized & remembered" : "Categorized",
+        description: rememberPattern
+          ? `Future "${rememberPattern}" transactions will auto-categorize.`
+          : undefined,
+      });
+    } catch (e) {
+      toast({
+        title: "Couldn't categorize",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDelete = (id: string) => {
     if (confirm("Delete this transaction?")) {
       deleteTx.mutate({ id }, {
@@ -244,8 +275,24 @@ export default function TransactionsPage() {
                         {categoryById.get(tx.categoryId)}
                       </Badge>
                     )}
-                    {!tx.categoryId && (
-                      <Badge variant="outline" className="text-xs border-muted text-muted-foreground">Uncategorized</Badge>
+                    {!tx.categoryId && !tx.isTransfer && (
+                      <CategorizeChip
+                        tx={tx}
+                        categories={categories ?? []}
+                        onPick={(catId, pattern) =>
+                          handleQuickCategorize(tx, catId, pattern)
+                        }
+                      />
+                    )}
+                    {tx.isTransfer && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs border-slate-300 text-slate-700 bg-slate-50"
+                        title="Excluded from budget actuals"
+                        data-testid={`badge-transfer-${tx.id}`}
+                      >
+                        Transfer
+                      </Badge>
                     )}
                     {tx.forecastFlag && (
                       <Badge variant="outline" className="text-xs border-emerald-200 text-emerald-700 bg-emerald-50">
@@ -285,5 +332,73 @@ export default function TransactionsPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function defaultRememberPattern(description: string): string {
+  const cleaned = description.replace(/[#*].*$/, "").trim();
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  const head = tokens.slice(0, 2).join(" ");
+  return (head || cleaned).slice(0, 40);
+}
+
+function CategorizeChip({
+  tx,
+  categories,
+  onPick,
+}: {
+  tx: Transaction;
+  categories: { id: string; name: string }[];
+  onPick: (categoryId: string, rememberPattern: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [remember, setRemember] = useState(true);
+  const pattern = defaultRememberPattern(tx.description);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Badge
+          variant="outline"
+          className="cursor-pointer text-xs border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+          data-testid={`badge-uncategorized-${tx.id}`}
+        >
+          <Wand2 className="w-3 h-3 mr-1" /> Categorize
+        </Badge>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search category…" />
+          <CommandList>
+            <CommandEmpty>No category</CommandEmpty>
+            <CommandGroup>
+              {categories.map((c) => (
+                <CommandItem
+                  key={c.id}
+                  onSelect={() => {
+                    onPick(c.id, remember && pattern ? pattern : null);
+                    setOpen(false);
+                  }}
+                >
+                  {c.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+          {pattern && (
+            <div className="border-t px-2 py-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+              <Checkbox
+                checked={remember}
+                onCheckedChange={(v) => setRemember(!!v)}
+                id={`remember-${tx.id}`}
+                data-testid={`checkbox-remember-${tx.id}`}
+              />
+              <label htmlFor={`remember-${tx.id}`} className="cursor-pointer">
+                Remember <span className="font-mono">"{pattern}"</span>
+              </label>
+            </div>
+          )}
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }

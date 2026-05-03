@@ -156,6 +156,7 @@ export const transactionsTable = pgTable(
     unplannedAllowance: boolean("unplanned_allowance").notNull().default(false),
     reimbursable: boolean("reimbursable").notNull().default(false),
     reimbursed: boolean("reimbursed").notNull().default(false),
+    isTransfer: boolean("is_transfer").notNull().default(false),
     importBatchId: uuid("import_batch_id"),
     notes: text("notes"),
     source: text("source").notNull().default("manual"),

@@ -219,10 +219,26 @@ export default function AmexPage() {
   const invalidateTxns = () =>
     qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
 
-  const setRowCategory = async (id: string, categoryId: string | null) => {
+  const setRowCategory = async (
+    id: string,
+    categoryId: string | null,
+    rememberPattern?: string | null,
+  ) => {
     try {
-      await updateTx.mutateAsync({ id, data: { categoryId } });
+      await updateTx.mutateAsync({
+        id,
+        data: {
+          categoryId,
+          ...(rememberPattern ? { rememberPattern } : {}),
+        },
+      });
       invalidateTxns();
+      if (rememberPattern && categoryId) {
+        toast({
+          title: "Categorized & remembered",
+          description: `Future "${rememberPattern}" will auto-categorize.`,
+        });
+      }
     } catch (e) {
       toast({
         title: "Couldn't update category",
@@ -658,8 +674,21 @@ export default function AmexPage() {
                           <CategoryPicker
                             value={t.categoryId ?? null}
                             categories={categories ?? []}
-                            onChange={(id) => setRowCategory(t.id, id)}
+                            description={t.description}
+                            onChange={(id, remember) =>
+                              setRowCategory(t.id, id, remember)
+                            }
                           />
+                          {t.isTransfer && (
+                            <Badge
+                              variant="outline"
+                              className="mt-1 text-[10px] border-slate-300 text-slate-700 bg-slate-50"
+                              title="Excluded from budget actuals"
+                              data-testid={`badge-transfer-${t.id}`}
+                            >
+                              Transfer
+                            </Badge>
+                          )}
                         </td>
                         <td className="px-3 py-2">
                           <Select
@@ -740,19 +769,34 @@ function StatChip({
   );
 }
 
+function defaultRememberPattern(description: string): string {
+  // First two whitespace-separated tokens are usually the merchant name
+  // (e.g. "TRADER JOE'S #123" → "TRADER JOE'S"). We trim noisy trailing
+  // store IDs by stopping at the first '#' or numeric tail, and clamp
+  // length so the rule stays specific without being overly narrow.
+  const cleaned = description.replace(/[#*].*$/, "").trim();
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  const head = tokens.slice(0, 2).join(" ");
+  return (head || cleaned).slice(0, 40);
+}
+
 function CategoryPicker({
   value,
   categories,
+  description,
   onChange,
 }: {
   value: string | null;
   categories: { id: string; name: string }[];
-  onChange: (id: string | null) => void;
+  description?: string;
+  onChange: (id: string | null, rememberPattern?: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [remember, setRemember] = useState(true);
   const current = value
     ? categories.find((c) => c.id === value)?.name ?? "Unknown"
     : "Uncategorized";
+  const pattern = description ? defaultRememberPattern(description) : "";
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -760,12 +804,13 @@ function CategoryPicker({
           variant="outline"
           role="combobox"
           className="h-7 text-xs w-52 justify-between font-normal"
+          data-testid="button-category-picker"
         >
           <span className="truncate">{current}</span>
           <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-56 p-0" align="start">
+      <PopoverContent className="w-64 p-0" align="start">
         <Command>
           <CommandInput placeholder="Search…" />
           <CommandList>
@@ -786,7 +831,7 @@ function CategoryPicker({
                 <CommandItem
                   key={c.id}
                   onSelect={() => {
-                    onChange(c.id);
+                    onChange(c.id, remember && pattern ? pattern : null);
                     setOpen(false);
                   }}
                 >
@@ -798,6 +843,19 @@ function CategoryPicker({
               ))}
             </CommandGroup>
           </CommandList>
+          {pattern && (
+            <div className="border-t px-2 py-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+              <Checkbox
+                checked={remember}
+                onCheckedChange={(v) => setRemember(!!v)}
+                id="remember-rule"
+                data-testid="checkbox-remember-rule"
+              />
+              <label htmlFor="remember-rule" className="cursor-pointer">
+                Remember <span className="font-mono">"{pattern}"</span>
+              </label>
+            </div>
+          )}
         </Command>
       </PopoverContent>
     </Popover>

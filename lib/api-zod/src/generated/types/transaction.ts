@@ -24,6 +24,7 @@ export interface Transaction {
   unplannedAllowance: boolean;
   reimbursable: boolean;
   reimbursed: boolean;
+  isTransfer: boolean;
   /** @nullable */
   notes?: string | null;
   source: string;

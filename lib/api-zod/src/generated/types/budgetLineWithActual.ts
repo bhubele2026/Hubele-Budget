@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { BudgetLineWithActualSourceBreakdownItem } from "./budgetLineWithActualSourceBreakdownItem";
 import type { BudgetLineWithActualSourceKind } from "./budgetLineWithActualSourceKind";
 
 export interface BudgetLineWithActual {
@@ -20,4 +21,10 @@ export interface BudgetLineWithActual {
   sourceKind: BudgetLineWithActualSourceKind;
   sortOrder: number;
   kind: string;
+  /** Per-source breakdown of the actuals that contribute to this
+budget line. Used to render Bank/Amex badges with counts on the
+budget page so the user can see at a glance where the spend came
+from. Transfers are excluded from these counts.
+ */
+  sourceBreakdown?: BudgetLineWithActualSourceBreakdownItem[];
 }

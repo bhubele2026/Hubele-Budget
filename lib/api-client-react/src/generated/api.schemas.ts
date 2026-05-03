@@ -40,6 +40,7 @@ export interface Transaction {
   unplannedAllowance: boolean;
   reimbursable: boolean;
   reimbursed: boolean;
+  isTransfer: boolean;
   /** @nullable */
   notes?: string | null;
   source: string;
@@ -84,6 +85,7 @@ export interface CreateTransactionInput {
   unplannedAllowance?: boolean;
   reimbursable?: boolean;
   reimbursed?: boolean;
+  isTransfer?: boolean;
   /** @nullable */
   notes?: string | null;
   source?: string;
@@ -124,6 +126,7 @@ export interface TransactionInput {
   unplannedAllowance?: boolean;
   reimbursable?: boolean;
   reimbursed?: boolean;
+  isTransfer?: boolean;
   /** @nullable */
   notes?: string | null;
   source?: string;
@@ -131,6 +134,16 @@ export interface TransactionInput {
   member?: string | null;
   /** @nullable */
   owedBy?: string | null;
+  /**
+   * When set together with `categoryId`, the server upserts a
+mapping_rule (matchType=contains, priority=100) so that future
+transactions with this description fragment auto-categorize the
+same way. Used by the "Categorize + remember" affordance on the
+Transactions and Amex pages.
+
+   * @nullable
+   */
+  rememberPattern?: string | null;
 }
 
 export type DebtBalanceSource =
@@ -515,6 +528,21 @@ export const BudgetLineWithActualSourceKind = {
   auto_debts: "auto_debts",
 } as const;
 
+export type BudgetLineWithActualSourceBreakdownItemSource =
+  (typeof BudgetLineWithActualSourceBreakdownItemSource)[keyof typeof BudgetLineWithActualSourceBreakdownItemSource];
+
+export const BudgetLineWithActualSourceBreakdownItemSource = {
+  Bank: "Bank",
+  Amex: "Amex",
+  Other: "Other",
+} as const;
+
+export type BudgetLineWithActualSourceBreakdownItem = {
+  source: BudgetLineWithActualSourceBreakdownItemSource;
+  count: number;
+  amount: string;
+};
+
 export interface BudgetLineWithActual {
   /** @nullable */
   id?: string | null;
@@ -528,6 +556,12 @@ export interface BudgetLineWithActual {
   sourceKind: BudgetLineWithActualSourceKind;
   sortOrder: number;
   kind: string;
+  /** Per-source breakdown of the actuals that contribute to this
+budget line. Used to render Bank/Amex badges with counts on the
+budget page so the user can see at a glance where the spend came
+from. Transfers are excluded from these counts.
+ */
+  sourceBreakdown?: BudgetLineWithActualSourceBreakdownItem[];
 }
 
 export interface BudgetGroup {
@@ -561,6 +595,7 @@ export interface BudgetMonthDetail {
 export interface SeedDefaultBudgetResult {
   categoriesInserted: number;
   linesInserted: number;
+  mappingRulesInserted?: number;
   alreadySeeded: boolean;
 }
 

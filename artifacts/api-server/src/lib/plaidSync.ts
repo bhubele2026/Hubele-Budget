@@ -9,7 +9,7 @@ import {
   recurringItemsTable,
 } from "@workspace/db";
 import { plaid, institutionSlug, type PlaidTxn } from "./plaid";
-import { loadUserRules, matchRule } from "./autoCategorize";
+import { loadUserRules, categorize } from "./autoCategorize";
 import { expandItem, parseISO, addDays, fmtISO } from "./cashSignal";
 
 export type SyncResult = {
@@ -98,8 +98,21 @@ export async function syncPlaidItem(
     const insertedCheckingTxns: { id: string; amount: number; date: string }[] = [];
     for (const t of [...added, ...modified]) {
       const description = t.merchant_name || t.name || "(no description)";
-      const categoryId = matchRule(description, rules);
-      if (categoryId) autoCategorized++;
+      // `personal_finance_category` is the modern Plaid taxonomy used to
+      // detect transfers (TRANSFER_IN/OUT) and as a fallback signal when no
+      // mapping_rule matches the description.
+      const pfc = (t as unknown as {
+        personal_finance_category?: { primary?: string; detailed?: string } | null;
+      }).personal_finance_category;
+      const cat = categorize(
+        {
+          description,
+          pfcPrimary: pfc?.primary ?? null,
+          pfcDetailed: pfc?.detailed ?? null,
+        },
+        rules,
+      );
+      if (cat.categoryId) autoCategorized++;
       const isChecking =
         checkingPlaidAccountId !== null && t.account_id === checkingPlaidAccountId;
       const values = {
@@ -107,24 +120,28 @@ export async function syncPlaidItem(
         occurredOn: t.date,
         description,
         amount: plaidAmountToSigned(t),
-        categoryId,
+        categoryId: cat.categoryId,
+        isTransfer: cat.isTransfer,
         source,
         plaidTransactionId: t.transaction_id,
         plaidAccountId: t.account_id,
         notes: t.pending ? "[pending]" : null,
-        forecastFlag: isChecking,
+        forecastFlag: isChecking && !cat.isTransfer,
       };
       const [row] = await db
         .insert(transactionsTable)
         .values(values)
         .onConflictDoUpdate({
           target: transactionsTable.plaidTransactionId,
+          // Preserve any manual override of categoryId — only refresh fields
+          // that come straight from Plaid.
           set: {
             occurredOn: values.occurredOn,
             description: values.description,
             amount: values.amount,
             notes: values.notes,
-            ...(isChecking ? { forecastFlag: true } : {}),
+            isTransfer: values.isTransfer,
+            ...(isChecking && !cat.isTransfer ? { forecastFlag: true } : {}),
           },
         })
         .returning({ id: transactionsTable.id });

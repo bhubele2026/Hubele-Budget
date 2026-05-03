@@ -11,6 +11,7 @@ import {
   transactionsTable,
   monthlySnapshotsTable,
 } from "@workspace/db";
+import { categorize, type RuleRow } from "./autoCategorize";
 
 type Row = (string | number | Date | null)[];
 
@@ -210,12 +211,27 @@ export async function importWorkbook(
         priority: 0,
       });
     }
-    if (mapValues.length) {
-      await tx.insert(mappingRulesTable).values(mapValues);
-    }
-    counts.mapping_rules = mapValues.length;
+    const insertedRules = mapValues.length
+      ? await tx.insert(mappingRulesTable).values(mapValues).returning({
+          id: mappingRulesTable.id,
+          pattern: mappingRulesTable.pattern,
+          matchType: mappingRulesTable.matchType,
+          categoryId: mappingRulesTable.categoryId,
+          priority: mappingRulesTable.priority,
+        })
+      : [];
+    counts.mapping_rules = insertedRules.length;
+    // Sort highest-priority first so categorize() picks the user's most
+    // specific rules before generic ones.
+    const ruleRows: RuleRow[] = [...insertedRules].sort(
+      (a, b) => b.priority - a.priority,
+    );
 
-    // Transactions
+    // Transactions (Payments sheet → Amex card register).
+    // Each row is treated as `source = "amex"` so it shows up on the Amex
+    // page and contributes to the Amex bucket of the budget source breakdown.
+    // When the workbook leaves Target empty we run the rule engine so the
+    // user gets out-of-the-box categorization instead of an uncategorized row.
     const pay = sheet(wb, "Payments");
     const txValues: typeof transactionsTable.$inferInsert[] = [];
     for (let i = 5; i < pay.length; i++) {
@@ -232,12 +248,18 @@ export async function importWorkbook(
         typeStr.includes("income") || typeStr.includes("credit")
           ? num.toFixed(2)
           : (-Math.abs(num)).toFixed(2);
+      const explicitCat = target ? catByName.get(target) ?? null : null;
+      const auto = explicitCat
+        ? { categoryId: explicitCat, isTransfer: false }
+        : categorize({ description }, ruleRows);
       txValues.push({
         userId,
         occurredOn: date,
         description,
         amount: signed,
-        categoryId: target ? catByName.get(target) ?? null : null,
+        categoryId: auto.categoryId,
+        isTransfer: auto.isTransfer,
+        source: "amex",
         importBatchId: batchId,
         notes: toStr(r[7]),
       });

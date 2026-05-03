@@ -6,6 +6,7 @@ import {
   budgetLinesTable,
   budgetMonthsTable,
   debtsTable,
+  mappingRulesTable,
   recurringItemsTable,
   transactionsTable,
 } from "@workspace/db";
@@ -21,6 +22,10 @@ import {
   SEED_GROUP_ORDER,
   SEED_MONTH,
 } from "../lib/budgetSeed";
+import {
+  SEED_MAPPING_RULES,
+  SEED_MAPPING_PRIORITY,
+} from "../lib/mappingSeed";
 
 const router: IRouter = Router();
 
@@ -189,10 +194,40 @@ router.post(
         }
       }
 
+      // Seed mapping rules. Idempotent on (userId, pattern) — we skip seeding
+      // any pattern the user already has a rule for. Existing user-created
+      // rules (including different categoryId mappings for the same pattern)
+      // are left untouched so manual customizations survive re-seeds.
+      const existingRules = await tx
+        .select()
+        .from(mappingRulesTable)
+        .where(eq(mappingRulesTable.userId, userId));
+      const existingPatterns = new Set(
+        existingRules.map((r) => r.pattern.toLowerCase()),
+      );
+      let mappingRulesInserted = 0;
+      for (const seed of SEED_MAPPING_RULES) {
+        if (existingPatterns.has(seed.pattern.toLowerCase())) continue;
+        const cat = byName.get(seed.categoryName);
+        if (!cat) continue;
+        await tx.insert(mappingRulesTable).values({
+          userId,
+          pattern: seed.pattern,
+          matchType: "contains",
+          categoryId: cat.id,
+          priority: SEED_MAPPING_PRIORITY,
+        });
+        mappingRulesInserted++;
+      }
+
       return {
         categoriesInserted,
         linesInserted,
-        alreadySeeded: categoriesInserted === 0 && linesInserted === 0,
+        mappingRulesInserted,
+        alreadySeeded:
+          categoriesInserted === 0 &&
+          linesInserted === 0 &&
+          mappingRulesInserted === 0,
       };
     });
     res.json(result);
@@ -375,11 +410,16 @@ router.get(
     const monthEndStr = monthEnd.toISOString().slice(0, 10);
 
     // Spend = sum of |amount| where amount < 0 for expense categories; income = sum positive.
+    // Transfers (between user's own accounts) are excluded from both totals.
+    // We also break down by source so the budget row can show "Bank" / "Amex"
+    // counts derived from where each transaction came from.
     const actuals = await db
       .select({
         categoryId: transactionsTable.categoryId,
+        source: transactionsTable.source,
         spend: sql<string>`coalesce(sum(case when ${transactionsTable.amount} < 0 then -${transactionsTable.amount} else 0 end)::text, '0')`,
         inflow: sql<string>`coalesce(sum(case when ${transactionsTable.amount} > 0 then ${transactionsTable.amount} else 0 end)::text, '0')`,
+        cnt: sql<string>`count(*)::text`,
       })
       .from(transactionsTable)
       .where(
@@ -387,41 +427,83 @@ router.get(
           eq(transactionsTable.userId, req.userId!),
           sql`${transactionsTable.occurredOn} >= ${monthStart}`,
           sql`${transactionsTable.occurredOn} < ${monthEndStr}`,
+          eq(transactionsTable.isTransfer, false),
         ),
       )
-      .groupBy(transactionsTable.categoryId);
+      .groupBy(transactionsTable.categoryId, transactionsTable.source);
 
-    const spendByCat = new Map<string, string>();
-    const inflowByCat = new Map<string, string>();
+    type SourceBucket = { source: string; count: number; amount: number };
+    const spendByCat = new Map<string, number>();
+    const inflowByCat = new Map<string, number>();
+    const breakdownByCat = new Map<string, SourceBucket[]>();
     for (const a of actuals) {
       if (!a.categoryId) continue;
-      spendByCat.set(a.categoryId, a.spend);
-      inflowByCat.set(a.categoryId, a.inflow);
+      const spend = parseFloat(a.spend) || 0;
+      const inflow = parseFloat(a.inflow) || 0;
+      spendByCat.set(a.categoryId, (spendByCat.get(a.categoryId) ?? 0) + spend);
+      inflowByCat.set(
+        a.categoryId,
+        (inflowByCat.get(a.categoryId) ?? 0) + inflow,
+      );
+      const arr = breakdownByCat.get(a.categoryId) ?? [];
+      arr.push({
+        source: a.source,
+        count: parseInt(a.cnt, 10) || 0,
+        amount: spend > 0 ? spend : inflow,
+      });
+      breakdownByCat.set(a.categoryId, arr);
     }
     const linesByCat = new Map(lines.map((l) => [l.categoryId, l]));
 
     const responseLines = cats.map((c) => {
       const line = linesByCat.get(c.id);
-      const actualAmount =
+      const actualNum =
         c.kind === "income"
-          ? inflowByCat.get(c.id) ?? "0"
-          : spendByCat.get(c.id) ?? "0";
+          ? inflowByCat.get(c.id) ?? 0
+          : spendByCat.get(c.id) ?? 0;
       const derived = autoPlannedByCat.get(c.id);
       const plannedAmount =
         c.sourceKind !== "manual" && derived !== undefined
           ? derived
           : line?.plannedAmount ?? "0";
+      const buckets = breakdownByCat.get(c.id) ?? [];
+      // Collapse "plaid:bank", "plaid:capitalone", etc. into a single "Bank"
+      // bucket; Amex stays as Amex; everything else (manual, import) groups
+      // under "Other" so the badge row stays compact.
+      type Label = "Bank" | "Amex" | "Other";
+      const labelFor = (s: string): Label => {
+        if (s === "amex") return "Amex";
+        if (s.startsWith("plaid:amex")) return "Amex";
+        if (s.startsWith("plaid:")) return "Bank";
+        return "Other";
+      };
+      const grouped = new Map<Label, { count: number; amount: number }>();
+      for (const b of buckets) {
+        const k = labelFor(b.source);
+        const cur = grouped.get(k) ?? { count: 0, amount: 0 };
+        cur.count += b.count;
+        cur.amount += b.amount;
+        grouped.set(k, cur);
+      }
+      const sourceBreakdown = Array.from(grouped.entries()).map(
+        ([label, v]) => ({
+          source: label,
+          count: v.count,
+          amount: v.amount.toFixed(2),
+        }),
+      );
       return {
         id: line?.id ?? null,
         categoryId: c.id,
         categoryName: c.name,
         plannedAmount,
-        actualAmount,
+        actualAmount: actualNum.toFixed(2),
         note: line?.note ?? null,
         groupName: c.groupName,
         sourceKind: c.sourceKind,
         sortOrder: c.sortOrder,
         kind: c.kind,
+        sourceBreakdown,
       };
     });
 

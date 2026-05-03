@@ -50,6 +50,7 @@ export const GetDashboardResponse = zod.object({
       unplannedAllowance: zod.boolean(),
       reimbursable: zod.boolean(),
       reimbursed: zod.boolean(),
+      isTransfer: zod.boolean(),
       notes: zod.string().nullish(),
       source: zod.string(),
       member: zod.string().nullish(),
@@ -114,6 +115,7 @@ export const ListTransactionsResponseItem = zod.object({
   unplannedAllowance: zod.boolean(),
   reimbursable: zod.boolean(),
   reimbursed: zod.boolean(),
+  isTransfer: zod.boolean(),
   notes: zod.string().nullish(),
   source: zod.string(),
   member: zod.string().nullish(),
@@ -144,6 +146,7 @@ export const CreateTransactionBody = zod.object({
   unplannedAllowance: zod.boolean().optional(),
   reimbursable: zod.boolean().optional(),
   reimbursed: zod.boolean().optional(),
+  isTransfer: zod.boolean().optional(),
   notes: zod.string().nullish(),
   source: zod.string().optional(),
   member: zod.string().nullish(),
@@ -175,10 +178,17 @@ export const UpdateTransactionBody = zod.object({
   unplannedAllowance: zod.boolean().optional(),
   reimbursable: zod.boolean().optional(),
   reimbursed: zod.boolean().optional(),
+  isTransfer: zod.boolean().optional(),
   notes: zod.string().nullish(),
   source: zod.string().optional(),
   member: zod.string().nullish(),
   owedBy: zod.string().nullish(),
+  rememberPattern: zod
+    .string()
+    .nullish()
+    .describe(
+      'When set together with `categoryId`, the server upserts a\nmapping_rule (matchType=contains, priority=100) so that future\ntransactions with this description fragment auto-categorize the\nsame way. Used by the \"Categorize + remember\" affordance on the\nTransactions and Amex pages.\n',
+    ),
 });
 
 export const UpdateTransactionResponse = zod.object({
@@ -203,6 +213,7 @@ export const UpdateTransactionResponse = zod.object({
   unplannedAllowance: zod.boolean(),
   reimbursable: zod.boolean(),
   reimbursed: zod.boolean(),
+  isTransfer: zod.boolean(),
   notes: zod.string().nullish(),
   source: zod.string(),
   member: zod.string().nullish(),
@@ -654,6 +665,18 @@ export const GetBudgetMonthResponse = zod.object({
       sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
       sortOrder: zod.number(),
       kind: zod.string(),
+      sourceBreakdown: zod
+        .array(
+          zod.object({
+            source: zod.enum(["Bank", "Amex", "Other"]),
+            count: zod.number(),
+            amount: zod.string(),
+          }),
+        )
+        .optional()
+        .describe(
+          "Per-source breakdown of the actuals that contribute to this\nbudget line. Used to render Bank\/Amex badges with counts on the\nbudget page so the user can see at a glance where the spend came\nfrom. Transfers are excluded from these counts.\n",
+        ),
     }),
   ),
   groups: zod.array(
@@ -673,6 +696,18 @@ export const GetBudgetMonthResponse = zod.object({
           sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
           sortOrder: zod.number(),
           kind: zod.string(),
+          sourceBreakdown: zod
+            .array(
+              zod.object({
+                source: zod.enum(["Bank", "Amex", "Other"]),
+                count: zod.number(),
+                amount: zod.string(),
+              }),
+            )
+            .optional()
+            .describe(
+              "Per-source breakdown of the actuals that contribute to this\nbudget line. Used to render Bank\/Amex badges with counts on the\nbudget page so the user can see at a glance where the spend came\nfrom. Transfers are excluded from these counts.\n",
+            ),
         }),
       ),
     }),
@@ -703,6 +738,7 @@ export const GetBudgetMonthResponse = zod.object({
 export const SeedDefaultBudgetResponse = zod.object({
   categoriesInserted: zod.number(),
   linesInserted: zod.number(),
+  mappingRulesInserted: zod.number().optional(),
   alreadySeeded: zod.boolean(),
 });
 
@@ -846,6 +882,7 @@ export const GetForecastResponse = zod.object({
       unplannedAllowance: zod.boolean(),
       reimbursable: zod.boolean(),
       reimbursed: zod.boolean(),
+      isTransfer: zod.boolean(),
       notes: zod.string().nullish(),
       source: zod.string(),
       member: zod.string().nullish(),

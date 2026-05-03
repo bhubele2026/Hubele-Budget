@@ -9,5 +9,6 @@
 export interface SeedDefaultBudgetResult {
   categoriesInserted: number;
   linesInserted: number;
+  mappingRulesInserted?: number;
   alreadySeeded: boolean;
 }

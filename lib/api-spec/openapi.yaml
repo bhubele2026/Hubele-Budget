@@ -793,7 +793,7 @@ components:
 
     Transaction:
       type: object
-      required: [id, occurredOn, description, amount, forecastFlag, weeklyAllowance, monthlyAllowance, unplannedAllowance, reimbursable, reimbursed, source]
+      required: [id, occurredOn, description, amount, forecastFlag, weeklyAllowance, monthlyAllowance, unplannedAllowance, reimbursable, reimbursed, isTransfer, source]
       properties:
         id: { type: string }
         occurredOn: { type: string }
@@ -808,6 +808,7 @@ components:
         unplannedAllowance: { type: boolean }
         reimbursable: { type: boolean }
         reimbursed: { type: boolean }
+        isTransfer: { type: boolean }
         notes: { type: ["string", "null"] }
         source: { type: string }
         member: { type: ["string", "null"] }
@@ -830,6 +831,7 @@ components:
         unplannedAllowance: { type: boolean }
         reimbursable: { type: boolean }
         reimbursed: { type: boolean }
+        isTransfer: { type: boolean }
         notes: { type: ["string", "null"] }
         source: { type: string }
         member: { type: ["string", "null"] }
@@ -849,10 +851,19 @@ components:
         unplannedAllowance: { type: boolean }
         reimbursable: { type: boolean }
         reimbursed: { type: boolean }
+        isTransfer: { type: boolean }
         notes: { type: ["string", "null"] }
         source: { type: string }
         member: { type: ["string", "null"] }
         owedBy: { type: ["string", "null"] }
+        rememberPattern:
+          type: ["string", "null"]
+          description: |
+            When set together with `categoryId`, the server upserts a
+            mapping_rule (matchType=contains, priority=100) so that future
+            transactions with this description fragment auto-categorize the
+            same way. Used by the "Categorize + remember" affordance on the
+            Transactions and Amex pages.
 
     Debt:
       type: object
@@ -1128,6 +1139,20 @@ components:
         sourceKind: { type: string, enum: [manual, auto_bills, auto_debts] }
         sortOrder: { type: integer }
         kind: { type: string }
+        sourceBreakdown:
+          type: array
+          description: |
+            Per-source breakdown of the actuals that contribute to this
+            budget line. Used to render Bank/Amex badges with counts on the
+            budget page so the user can see at a glance where the spend came
+            from. Transfers are excluded from these counts.
+          items:
+            type: object
+            required: [source, count, amount]
+            properties:
+              source: { type: string, enum: [Bank, Amex, Other] }
+              count: { type: integer }
+              amount: { type: string }
     BudgetGroup:
       type: object
       required: [groupName, plannedTotal, actualTotal, lines]
@@ -1158,6 +1183,7 @@ components:
       properties:
         categoriesInserted: { type: integer }
         linesInserted: { type: integer }
+        mappingRulesInserted: { type: integer }
         alreadySeeded: { type: boolean }
 
     MappingRule:

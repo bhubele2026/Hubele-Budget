@@ -1,6 +1,11 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, gte, lte, isNull, ilike, sql } from "drizzle-orm";
-import { db, transactionsTable, forecastResolutionsTable } from "@workspace/db";
+import {
+  db,
+  transactionsTable,
+  forecastResolutionsTable,
+  mappingRulesTable,
+} from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   CreateTransactionBody,
@@ -79,9 +84,15 @@ router.patch(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
+    // `rememberPattern` is a UI affordance, not a column on the txn table.
+    // Strip it before passing the payload to drizzle so the underlying
+    // update stays focused on real columns.
+    const { rememberPattern, ...patch } = parsed.data as typeof parsed.data & {
+      rememberPattern?: string | null;
+    };
     const [row] = await db
       .update(transactionsTable)
-      .set(parsed.data)
+      .set(patch)
       .where(
         and(
           eq(transactionsTable.id, params.data.id),
@@ -92,6 +103,43 @@ router.patch(
     if (!row) {
       res.status(404).json({ error: "Not found" });
       return;
+    }
+    // If the client opted in to "remember this", and we just assigned a
+    // category, upsert a high-priority mapping_rule so future bank/Amex
+    // transactions with this description fragment auto-categorize the same
+    // way. We trim the pattern to a reasonable length so noisy suffixes
+    // (dates, store IDs) don't accidentally make the rule too narrow.
+    if (
+      rememberPattern &&
+      patch.categoryId &&
+      typeof rememberPattern === "string"
+    ) {
+      const pattern = rememberPattern.trim().slice(0, 60);
+      if (pattern.length >= 3) {
+        const existing = await db
+          .select({ id: mappingRulesTable.id })
+          .from(mappingRulesTable)
+          .where(
+            and(
+              eq(mappingRulesTable.userId, req.userId!),
+              eq(mappingRulesTable.pattern, pattern),
+            ),
+          );
+        if (existing.length > 0) {
+          await db
+            .update(mappingRulesTable)
+            .set({ categoryId: patch.categoryId, priority: 100 })
+            .where(eq(mappingRulesTable.id, existing[0].id));
+        } else {
+          await db.insert(mappingRulesTable).values({
+            userId: req.userId!,
+            pattern,
+            matchType: "contains",
+            categoryId: patch.categoryId,
+            priority: 100,
+          });
+        }
+      }
     }
     // If forecast_flag was turned off, drop any forecast resolution that
     // points to this txn so the Forecast inbox/bucket stays consistent.

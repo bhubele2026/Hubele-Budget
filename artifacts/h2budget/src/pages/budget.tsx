@@ -11,6 +11,11 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 
+type SourceBreakdownEntry = {
+  source: "Bank" | "Amex" | "Other";
+  count: number;
+  amount: string;
+};
 type BudgetLineWithActual = {
   id?: string | null;
   categoryId: string;
@@ -22,6 +27,7 @@ type BudgetLineWithActual = {
   sourceKind: string;
   sortOrder: number;
   kind: string;
+  sourceBreakdown?: SourceBreakdownEntry[] | null;
 };
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -499,9 +505,26 @@ function BudgetLineRow({
       data-testid={`row-budget-${line.categoryId}`}
     >
       <div className="col-span-12 md:col-span-5 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium truncate">{line.categoryName}</span>
           <SourceBadge kind={sourceKind} />
+          {(line.sourceBreakdown ?? []).map((b) => (
+            <Badge
+              key={b.source}
+              variant="outline"
+              className={cn(
+                "text-[10px] font-normal",
+                b.source === "Bank" &&
+                  "border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300",
+                b.source === "Amex" &&
+                  "border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300",
+              )}
+              title={`${b.count} txn${b.count === 1 ? "" : "s"} · ${formatCurrency(b.amount)}`}
+              data-testid={`badge-source-${b.source.toLowerCase()}-${line.categoryId}`}
+            >
+              {b.source} · {b.count}
+            </Badge>
+          ))}
           <Button
             variant="ghost"
             size="icon"

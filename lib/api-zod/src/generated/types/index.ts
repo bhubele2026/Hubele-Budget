@@ -27,6 +27,8 @@ export * from "./budgetGroup";
 export * from "./budgetLine";
 export * from "./budgetLineInput";
 export * from "./budgetLineWithActual";
+export * from "./budgetLineWithActualSourceBreakdownItem";
+export * from "./budgetLineWithActualSourceBreakdownItemSource";
 export * from "./budgetLineWithActualSourceKind";
 export * from "./budgetMonthDetail";
 export * from "./budgetSummary";
