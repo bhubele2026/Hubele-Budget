@@ -361,6 +361,18 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BudgetMonthDetail" }
 
+  /budget/seed-defaults:
+    post:
+      operationId: seedDefaultBudget
+      tags: [budget]
+      summary: Seed default categories and May 2026 budget lines (idempotent)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SeedDefaultBudgetResult" }
+
   /budget/lines:
     post:
       operationId: upsertBudgetLine
@@ -890,11 +902,13 @@ components:
 
     Category:
       type: object
-      required: [id, name, kind, sortOrder]
+      required: [id, name, kind, groupName, sourceKind, sortOrder]
       properties:
         id: { type: string }
         name: { type: string }
         kind: { type: string }
+        groupName: { type: string }
+        sourceKind: { type: string, enum: [manual, auto_bills, auto_debts] }
         sortOrder: { type: integer }
     CategoryInput:
       type: object
@@ -902,6 +916,8 @@ components:
       properties:
         name: { type: string }
         kind: { type: string }
+        groupName: { type: string }
+        sourceKind: { type: string, enum: [manual, auto_bills, auto_debts] }
         sortOrder: { type: integer }
 
     BudgetLine:
@@ -923,22 +939,62 @@ components:
         note: { type: ["string", "null"] }
     BudgetMonthDetail:
       type: object
-      required: [monthStart, lines]
+      required: [monthStart, lines, groups, summary]
       properties:
         monthStart: { type: string }
         note: { type: ["string", "null"] }
         lines:
           type: array
           items: { $ref: "#/components/schemas/BudgetLineWithActual" }
+        groups:
+          type: array
+          items: { $ref: "#/components/schemas/BudgetGroup" }
+        summary: { $ref: "#/components/schemas/BudgetSummary" }
     BudgetLineWithActual:
       type: object
-      required: [categoryId, categoryName, plannedAmount, actualAmount]
+      required: [categoryId, categoryName, plannedAmount, actualAmount, groupName, sourceKind, sortOrder, kind]
       properties:
         id: { type: ["string", "null"] }
         categoryId: { type: string }
         categoryName: { type: string }
         plannedAmount: { type: string }
         actualAmount: { type: string }
+        note: { type: ["string", "null"] }
+        groupName: { type: string }
+        sourceKind: { type: string, enum: [manual, auto_bills, auto_debts] }
+        sortOrder: { type: integer }
+        kind: { type: string }
+    BudgetGroup:
+      type: object
+      required: [groupName, plannedTotal, actualTotal, lines]
+      properties:
+        groupName: { type: string }
+        plannedTotal: { type: string }
+        actualTotal: { type: string }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/BudgetLineWithActual" }
+    BudgetSummaryPair:
+      type: object
+      required: [budget, actual]
+      properties:
+        budget: { type: string }
+        actual: { type: string }
+    BudgetSummary:
+      type: object
+      required: [income, expenses, net, percentSpent]
+      properties:
+        income: { $ref: "#/components/schemas/BudgetSummaryPair" }
+        expenses: { $ref: "#/components/schemas/BudgetSummaryPair" }
+        net: { $ref: "#/components/schemas/BudgetSummaryPair" }
+        percentSpent: { $ref: "#/components/schemas/BudgetSummaryPair" }
+    SeedDefaultBudgetResult:
+      type: object
+      required: [categoriesInserted, linesInserted, alreadySeeded]
+      properties:
+        categoriesInserted: { type: integer }
+        linesInserted: { type: integer }
+        alreadySeeded: { type: boolean }
 
     MappingRule:
       type: object

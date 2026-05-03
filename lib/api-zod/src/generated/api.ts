@@ -411,6 +411,8 @@ export const ListCategoriesResponseItem = zod.object({
   id: zod.string(),
   name: zod.string(),
   kind: zod.string(),
+  groupName: zod.string(),
+  sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
   sortOrder: zod.number(),
 });
 export const ListCategoriesResponse = zod.array(ListCategoriesResponseItem);
@@ -418,6 +420,8 @@ export const ListCategoriesResponse = zod.array(ListCategoriesResponseItem);
 export const CreateCategoryBody = zod.object({
   name: zod.string(),
   kind: zod.string().optional(),
+  groupName: zod.string().optional(),
+  sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]).optional(),
   sortOrder: zod.number().optional(),
 });
 
@@ -439,8 +443,61 @@ export const GetBudgetMonthResponse = zod.object({
       categoryName: zod.string(),
       plannedAmount: zod.string(),
       actualAmount: zod.string(),
+      note: zod.string().nullish(),
+      groupName: zod.string(),
+      sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
+      sortOrder: zod.number(),
+      kind: zod.string(),
     }),
   ),
+  groups: zod.array(
+    zod.object({
+      groupName: zod.string(),
+      plannedTotal: zod.string(),
+      actualTotal: zod.string(),
+      lines: zod.array(
+        zod.object({
+          id: zod.string().nullish(),
+          categoryId: zod.string(),
+          categoryName: zod.string(),
+          plannedAmount: zod.string(),
+          actualAmount: zod.string(),
+          note: zod.string().nullish(),
+          groupName: zod.string(),
+          sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
+          sortOrder: zod.number(),
+          kind: zod.string(),
+        }),
+      ),
+    }),
+  ),
+  summary: zod.object({
+    income: zod.object({
+      budget: zod.string(),
+      actual: zod.string(),
+    }),
+    expenses: zod.object({
+      budget: zod.string(),
+      actual: zod.string(),
+    }),
+    net: zod.object({
+      budget: zod.string(),
+      actual: zod.string(),
+    }),
+    percentSpent: zod.object({
+      budget: zod.string(),
+      actual: zod.string(),
+    }),
+  }),
+});
+
+/**
+ * @summary Seed default categories and May 2026 budget lines (idempotent)
+ */
+export const SeedDefaultBudgetResponse = zod.object({
+  categoriesInserted: zod.number(),
+  linesInserted: zod.number(),
+  alreadySeeded: zod.boolean(),
 });
 
 export const UpsertBudgetLineBody = zod.object({

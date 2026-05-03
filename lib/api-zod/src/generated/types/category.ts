@@ -5,10 +5,13 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { CategorySourceKind } from "./categorySourceKind";
 
 export interface Category {
   id: string;
   name: string;
   kind: string;
+  groupName: string;
+  sourceKind: CategorySourceKind;
   sortOrder: number;
 }

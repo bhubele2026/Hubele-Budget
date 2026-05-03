@@ -63,6 +63,8 @@ export const budgetCategoriesTable = pgTable(
     userId: text("user_id").notNull(),
     name: text("name").notNull(),
     kind: text("kind").notNull().default("expense"),
+    groupName: text("group_name").notNull().default("Other"),
+    sourceKind: text("source_kind").notNull().default("manual"),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -98,6 +100,11 @@ export const budgetLinesTable = pgTable(
   },
   (t) => ({
     userIdx: index("budget_lines_user_idx").on(t.userId, t.monthStart),
+    userMonthCatUq: uniqueIndex("budget_lines_user_month_cat_uq").on(
+      t.userId,
+      t.monthStart,
+      t.categoryId,
+    ),
   }),
 );
 

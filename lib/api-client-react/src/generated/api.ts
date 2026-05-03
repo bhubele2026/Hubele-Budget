@@ -57,6 +57,7 @@ import type {
   PlaidSyncResult,
   RecurringItem,
   RecurringItemInput,
+  SeedDefaultBudgetResult,
   SetBankSnapshotInput,
   Settings,
   SettingsInput,
@@ -1843,6 +1844,87 @@ export function useGetBudgetMonth<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Seed default categories and May 2026 budget lines (idempotent)
+ */
+export const getSeedDefaultBudgetUrl = () => {
+  return `/api/budget/seed-defaults`;
+};
+
+export const seedDefaultBudget = async (
+  options?: RequestInit,
+): Promise<SeedDefaultBudgetResult> => {
+  return customFetch<SeedDefaultBudgetResult>(getSeedDefaultBudgetUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSeedDefaultBudgetMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof seedDefaultBudget>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof seedDefaultBudget>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["seedDefaultBudget"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof seedDefaultBudget>>,
+    void
+  > = () => {
+    return seedDefaultBudget(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SeedDefaultBudgetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof seedDefaultBudget>>
+>;
+
+export type SeedDefaultBudgetMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Seed default categories and May 2026 budget lines (idempotent)
+ */
+export const useSeedDefaultBudget = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof seedDefaultBudget>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof seedDefaultBudget>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSeedDefaultBudgetMutationOptions(options));
+};
 
 export const getUpsertBudgetLineUrl = () => {
   return `/api/budget/lines`;

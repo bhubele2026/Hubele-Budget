@@ -334,16 +334,38 @@ export interface RecurringItemInput {
   debtId?: string | null;
 }
 
+export type CategorySourceKind =
+  (typeof CategorySourceKind)[keyof typeof CategorySourceKind];
+
+export const CategorySourceKind = {
+  manual: "manual",
+  auto_bills: "auto_bills",
+  auto_debts: "auto_debts",
+} as const;
+
 export interface Category {
   id: string;
   name: string;
   kind: string;
+  groupName: string;
+  sourceKind: CategorySourceKind;
   sortOrder: number;
 }
+
+export type CategoryInputSourceKind =
+  (typeof CategoryInputSourceKind)[keyof typeof CategoryInputSourceKind];
+
+export const CategoryInputSourceKind = {
+  manual: "manual",
+  auto_bills: "auto_bills",
+  auto_debts: "auto_debts",
+} as const;
 
 export interface CategoryInput {
   name: string;
   kind?: string;
+  groupName?: string;
+  sourceKind?: CategoryInputSourceKind;
   sortOrder?: number;
 }
 
@@ -364,6 +386,15 @@ export interface BudgetLineInput {
   note?: string | null;
 }
 
+export type BudgetLineWithActualSourceKind =
+  (typeof BudgetLineWithActualSourceKind)[keyof typeof BudgetLineWithActualSourceKind];
+
+export const BudgetLineWithActualSourceKind = {
+  manual: "manual",
+  auto_bills: "auto_bills",
+  auto_debts: "auto_debts",
+} as const;
+
 export interface BudgetLineWithActual {
   /** @nullable */
   id?: string | null;
@@ -371,6 +402,31 @@ export interface BudgetLineWithActual {
   categoryName: string;
   plannedAmount: string;
   actualAmount: string;
+  /** @nullable */
+  note?: string | null;
+  groupName: string;
+  sourceKind: BudgetLineWithActualSourceKind;
+  sortOrder: number;
+  kind: string;
+}
+
+export interface BudgetGroup {
+  groupName: string;
+  plannedTotal: string;
+  actualTotal: string;
+  lines: BudgetLineWithActual[];
+}
+
+export interface BudgetSummaryPair {
+  budget: string;
+  actual: string;
+}
+
+export interface BudgetSummary {
+  income: BudgetSummaryPair;
+  expenses: BudgetSummaryPair;
+  net: BudgetSummaryPair;
+  percentSpent: BudgetSummaryPair;
 }
 
 export interface BudgetMonthDetail {
@@ -378,6 +434,14 @@ export interface BudgetMonthDetail {
   /** @nullable */
   note?: string | null;
   lines: BudgetLineWithActual[];
+  groups: BudgetGroup[];
+  summary: BudgetSummary;
+}
+
+export interface SeedDefaultBudgetResult {
+  categoriesInserted: number;
+  linesInserted: number;
+  alreadySeeded: boolean;
 }
 
 export interface MappingRule {

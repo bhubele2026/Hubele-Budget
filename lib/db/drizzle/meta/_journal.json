@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1777773537118,
+      "tag": "0000_add_budget_category_group_source",
+      "breakpoints": true
+    }
+  ]
+}

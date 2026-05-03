@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { BudgetLineWithActualSourceKind } from "./budgetLineWithActualSourceKind";
 
 export interface BudgetLineWithActual {
   /** @nullable */
@@ -13,4 +14,10 @@ export interface BudgetLineWithActual {
   categoryName: string;
   plannedAmount: string;
   actualAmount: string;
+  /** @nullable */
+  note?: string | null;
+  groupName: string;
+  sourceKind: BudgetLineWithActualSourceKind;
+  sortOrder: number;
+  kind: string;
 }
