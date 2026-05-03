@@ -45,9 +45,10 @@ export function DayGroup({
     <div ref={containerRef} className="space-y-2">
       <div
         className={cn(
-          "sticky top-0 z-10 flex items-center justify-between gap-3 rounded-md border bg-background/95 backdrop-blur px-3 py-2",
+          "sticky z-10 flex items-center justify-between gap-3 rounded-md border bg-background/95 backdrop-blur px-3 py-2",
           isToday && todayBorder,
         )}
+        style={{ top: "var(--pinned-pane-h, 0px)" }}
       >
         <div className="flex items-center gap-3">
           <Checkbox

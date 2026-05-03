@@ -581,6 +581,20 @@ export default function TransactionsPage() {
     }
   }, [isLoading, groups.length]);
 
+  // Measure the pinned top pane so day-group headers (and the bulk bar)
+  // can stick directly beneath it via a CSS variable.
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  const [paneH, setPaneH] = useState(0);
+  useEffect(() => {
+    const el = paneRef.current;
+    if (!el) return;
+    const measure = () => setPaneH(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isLoading]);
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -596,7 +610,14 @@ export default function TransactionsPage() {
   const isPlaidLinked = bankSnapshot?.source === "plaid";
 
   return (
-    <div className="space-y-6">
+    <div
+      className="space-y-6"
+      style={{ ["--pinned-pane-h" as string]: `${paneH}px` } as React.CSSProperties}
+    >
+      <div
+        ref={paneRef}
+        className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-4"
+      >
       <AccountPageHeader
         title="Chase"
         subtitle="Your checking activity, day by day."
@@ -627,13 +648,6 @@ export default function TransactionsPage() {
             <PlaidLinkButton label="Connect a bank" />
           </>
         }
-      />
-
-      <BalanceTrendChart
-        caption="Checking balance · trailing 12 months"
-        data={balanceTrend}
-        color="#16a34a"
-        valueLabel="Ending balance"
       />
 
       <div className="flex items-stretch gap-4 flex-wrap">
@@ -729,7 +743,14 @@ export default function TransactionsPage() {
           </div>
         }
       />
+      </div>
 
+      <BalanceTrendChart
+        caption="Checking balance · trailing 12 months"
+        data={balanceTrend}
+        color="#16a34a"
+        valueLabel="Ending balance"
+      />
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
@@ -786,7 +807,8 @@ export default function TransactionsPage() {
 
       {selected.size > 0 && (
         <div
-          className="sticky top-0 z-20 flex items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 shadow-sm"
+          className="sticky z-20 flex items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 shadow-sm"
+          style={{ top: "var(--pinned-pane-h, 0px)" }}
           data-testid="bulk-bar"
         >
           <span className="text-sm font-medium text-emerald-900">

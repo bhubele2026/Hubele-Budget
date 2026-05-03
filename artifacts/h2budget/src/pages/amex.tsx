@@ -612,6 +612,20 @@ export default function AmexPage() {
     }
   }, [isLoading, groups.length]);
 
+  // Measure the pinned top pane so day-group headers (and the bulk bar)
+  // can stick directly beneath it via a CSS variable.
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  const [paneH, setPaneH] = useState(0);
+  useEffect(() => {
+    const el = paneRef.current;
+    if (!el) return;
+    const measure = () => setPaneH(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isLoading]);
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -625,20 +639,20 @@ export default function AmexPage() {
   const todayKey = ymd(new Date());
 
   return (
-    <div className="space-y-6">
-      <AccountPageHeader
-        title="American Express"
-        subtitle="Day-by-day card spending — categorized into your budget."
-        icon={<CreditCard className="h-7 w-7 text-blue-600" />}
-        actions={<PlaidLinkButton label="Connect a card" />}
-      />
-
-      <BalanceTrendChart
-        caption="Ending balance · trailing 12 months"
-        data={balanceTrend}
-        color="#2563eb"
-        valueLabel="Ending balance"
-      />
+    <div
+      className="space-y-6"
+      style={{ ["--pinned-pane-h" as string]: `${paneH}px` } as React.CSSProperties}
+    >
+      <div
+        ref={paneRef}
+        className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-4"
+      >
+        <AccountPageHeader
+          title="American Express"
+          subtitle="Day-by-day card spending — categorized into your budget."
+          icon={<CreditCard className="h-7 w-7 text-blue-600" />}
+          actions={<PlaidLinkButton label="Connect a card" />}
+        />
 
       <div className="flex items-stretch gap-4 flex-wrap">
         <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
@@ -684,37 +698,48 @@ export default function AmexPage() {
         </div>
       </div>
 
-      <AccountFilterBar
-        search={search}
-        onSearchChange={setSearch}
-        from={from}
-        onFromChange={setFrom}
-        to={to}
-        onToChange={setTo}
-        sourceFilter={sourceFilter}
-        onSourceFilterChange={setSourceFilter}
-        sourceOptions={[
-          { value: AMEX_SOURCE, label: "amex" },
-          { value: "manual", label: "manual" },
-          { value: "import", label: "import" },
-          { value: "all", label: "All sources" },
-        ]}
-        categoryFilter={categoryFilter}
-        onCategoryFilterChange={setCategoryFilter}
-        categories={categories ?? []}
-        members={members}
-        memberFilter={memberFilter}
-        onMemberFilterChange={setMemberFilter}
-        rightSlot={
-          <div className="text-xs text-muted-foreground ml-auto" data-testid="text-row-count">
-            {filtered.length} of {monthScoped.length} txns
-          </div>
-        }
+        <AccountFilterBar
+          search={search}
+          onSearchChange={setSearch}
+          from={from}
+          onFromChange={setFrom}
+          to={to}
+          onToChange={setTo}
+          sourceFilter={sourceFilter}
+          onSourceFilterChange={setSourceFilter}
+          sourceOptions={[
+            { value: AMEX_SOURCE, label: "amex" },
+            { value: "manual", label: "manual" },
+            { value: "import", label: "import" },
+            { value: "all", label: "All sources" },
+          ]}
+          categoryFilter={categoryFilter}
+          onCategoryFilterChange={setCategoryFilter}
+          categories={categories ?? []}
+          members={members}
+          memberFilter={memberFilter}
+          onMemberFilterChange={setMemberFilter}
+          rightSlot={
+            <div className="text-xs text-muted-foreground ml-auto" data-testid="text-row-count">
+              {filtered.length} of {monthScoped.length} txns
+            </div>
+          }
+        />
+      </div>
+
+      <BalanceTrendChart
+        caption="Ending balance · trailing 12 months"
+        data={balanceTrend}
+        color="#2563eb"
+        valueLabel="Ending balance"
       />
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
-        <div className="sticky top-0 z-20 flex items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-2 shadow-sm">
+        <div
+          className="sticky z-20 flex items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-2 shadow-sm"
+          style={{ top: "var(--pinned-pane-h, 0px)" }}
+        >
           <span className="text-sm font-medium text-blue-900">
             {selected.size} selected
           </span>
