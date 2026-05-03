@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "wouter";
 import {
   useListTransactions,
   useUpdateTransaction,
@@ -51,7 +52,6 @@ import {
   DayGroup,
   MonthNavigator,
   StatChip,
-  StatChipUnavailable,
   monthKeyOf,
   monthKeyFromISO,
   compareMonth,
@@ -918,11 +918,89 @@ export default function AmexPage() {
         <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 min-w-[280px]">
           {endingBalance.source === "missing" ? (
-            <StatChipUnavailable
-              label="Ending balance"
-              hint="Link an Amex debt in Debts to see the balance."
-              testId="stat-ending-balance"
-            />
+            <div
+              className="rounded-md border border-dashed border-blue-300 bg-blue-50/60 px-3 py-2 text-blue-900"
+              data-testid="stat-ending-balance"
+            >
+              <div className="text-[10px] uppercase tracking-widest text-blue-700">
+                Ending balance
+              </div>
+              <div className="font-mono tabular-nums font-semibold text-base text-blue-900/70">
+                Not set
+              </div>
+              <div className="mt-1 flex flex-col gap-1">
+                <Popover
+                  open={anchorOpen}
+                  onOpenChange={(o) => {
+                    setAnchorOpen(o);
+                    if (o) setAnchorInput("");
+                  }}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2 text-[11px] border-blue-400 text-blue-900 bg-white/70 hover:bg-white w-fit"
+                      data-testid="button-set-amex-balance"
+                    >
+                      Set Amex balance
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-3" align="start">
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium">
+                        Set actual Amex balance
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Enter your current card balance. We'll save it as your
+                        anchor and roll it month-to-month.
+                      </div>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={anchorInput}
+                        onChange={(e) => setAnchorInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void submitAnchor();
+                          }
+                        }}
+                        placeholder="1293.08"
+                        autoFocus
+                        data-testid="input-actual-balance"
+                      />
+                      <div className="flex justify-end gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setAnchorOpen(false)}
+                          disabled={anchorSaving}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => void submitAnchor()}
+                          disabled={anchorSaving || !anchorInput.trim()}
+                          data-testid="button-save-actual-balance"
+                        >
+                          {anchorSaving ? "Saving…" : "Save"}
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <Link
+                  href="/debts"
+                  className="text-[10px] leading-tight text-blue-700 hover:text-blue-900 underline-offset-2 hover:underline"
+                  data-testid="link-amex-debts"
+                >
+                  or link an Amex debt in Debts
+                </Link>
+              </div>
+            </div>
           ) : endingBalance.source === "loading" ? (
             <Skeleton className="h-[88px] w-full" data-testid="stat-ending-balance-loading" />
           ) : (
