@@ -1650,12 +1650,18 @@ export default function ForecastPage() {
             )}
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="text-2xl font-bold tabular-nums">
+            <div
+              className="text-2xl font-bold tabular-nums"
+              data-testid="text-bank-balance"
+            >
               {data.bankSnapshot
                 ? formatCurrency(data.bankSnapshot.balance)
                 : formatCurrency(data.settings.startingBalance)}
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div
+              className="text-xs text-muted-foreground"
+              data-testid="text-bank-snapshot-meta"
+            >
               {data.bankSnapshot ? (
                 <>
                   {data.bankSnapshot.source === "plaid" ? "Plaid" : "Manual"} ·{" "}
@@ -1668,7 +1674,12 @@ export default function ForecastPage() {
               )}
             </div>
             <div className="flex gap-2 pt-1 flex-wrap">
-              <Button size="sm" variant="outline" onClick={openSnapshot}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={openSnapshot}
+                data-testid="button-set-bank-snapshot"
+              >
                 Set manually
               </Button>
               {data.plaidCheckingAccounts.length > 0 && (

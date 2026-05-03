@@ -52,7 +52,10 @@ export default function DebtsPage() {
         ))}
       </div>
       {sortedDebts.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
+        <div
+          className="text-center py-12 text-muted-foreground"
+          data-testid="text-debts-empty-state"
+        >
           No debts recorded. You're debt free!
         </div>
       )}

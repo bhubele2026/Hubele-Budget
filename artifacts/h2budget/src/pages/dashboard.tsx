@@ -1023,10 +1023,16 @@ function MonthlySnapshot({
               if (bal === null) {
                 return (
                   <>
-                    <div className="text-3xl font-serif font-bold tabular-nums mt-1 text-muted-foreground">
+                    <div
+                      className="text-3xl font-serif font-bold tabular-nums mt-1 text-muted-foreground"
+                      data-testid="text-chase-ending-balance-empty"
+                    >
                       —
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1">
+                    <div
+                      className="text-xs text-muted-foreground mt-1"
+                      data-testid="text-chase-ending-balance-empty-hint"
+                    >
                       Link Chase checking to see this
                     </div>
                   </>

@@ -1,6 +1,9 @@
-import { test, expect, type Page } from "@playwright/test";
-import { setupClerkTestingToken } from "@clerk/testing/playwright";
-import { createClerkClient } from "@clerk/backend";
+import { test, expect } from "@playwright/test";
+import {
+  cleanupTestUsers,
+  createTestUser,
+  signInAndOpen,
+} from "./helpers/clerk";
 
 /**
  * End-to-end coverage for the empty Amex balance self-heal flow on /amex
@@ -16,110 +19,20 @@ import { createClerkClient } from "@clerk/backend";
  * navigate to /debts.
  */
 
-const clerkSecret = process.env.CLERK_SECRET_KEY!;
-const clerkPub = process.env.CLERK_PUBLISHABLE_KEY!;
-const clerkBackend = createClerkClient({
-  secretKey: clerkSecret,
-  publishableKey: clerkPub,
-});
-
-// Tracks every Clerk user we provision so afterAll can clean up.
 const provisionedUserIds: string[] = [];
 
-async function createTestUser(): Promise<{
-  userId: string;
-  email: string;
-  password: string;
-}> {
-  // The "+clerk_test" suffix triggers Clerk's deterministic test-mode email
-  // verification (any code submission is accepted as "424242"), which lets us
-  // satisfy the new-device verification step Clerk shows after the password
-  // step in test instances.
-  const suffix = Math.random().toString(36).slice(2, 10);
-  const email = `amex-self-heal-${suffix}+clerk_test@example.com`;
-  const password = `Pw-${suffix}-${Math.random().toString(36).slice(2, 8)}!A1`;
-  const user = await clerkBackend.users.createUser({
-    emailAddress: [email],
-    password,
-    skipPasswordChecks: true,
-    skipPasswordRequirement: false,
-  });
-  provisionedUserIds.push(user.id);
-  return { userId: user.id, email, password };
-}
-
-async function signInAndOpen(
-  page: Page,
-  email: string,
-  password: string,
-  path: string,
-): Promise<void> {
-  page.on("pageerror", (err) => console.log("[pageerror]", err.message));
-  page.on("console", (msg) => {
-    if (msg.type() === "error") console.log("[console.error]", msg.text());
-  });
-  await setupClerkTestingToken({ page });
-  await page.goto("/sign-in");
-  // Wait for Clerk.js to fully load on the SignIn page.
-  await page.waitForFunction(
-    () => typeof (window as unknown as { Clerk?: { loaded: boolean } }).Clerk !==
-      "undefined" &&
-      (window as unknown as { Clerk: { loaded: boolean } }).Clerk.loaded === true,
-    null,
-    { timeout: 30_000 },
-  );
-  // Drive the Clerk-hosted SignIn form directly. The clerk.signIn helper
-  // silently no-ops against this custom-routed instance, so we use the visible
-  // form fields (which carry stable accessible names) instead.
-  await page
-    .getByRole("textbox", { name: /email address/i })
-    .fill(email);
-  await page.getByRole("button", { name: /^continue$/i }).click();
-  await page.getByRole("textbox", { name: /password/i }).fill(password);
-  await page.getByRole("button", { name: /^continue$/i }).click();
-  // Clerk test instances may insert a new-device email verification step.
-  // For "+clerk_test" emails, "424242" is the deterministic accepted code.
-  const codeBox = page.getByRole("textbox", {
-    name: /enter verification code/i,
-  });
-  try {
-    await codeBox.waitFor({ state: "visible", timeout: 5_000 });
-    await codeBox.fill("424242");
-    // Some Clerk variants auto-submit on the 6th digit; others need Continue.
-    const cont = page.getByRole("button", { name: /^continue$/i });
-    if (await cont.isVisible().catch(() => false)) {
-      await cont.click();
-    }
-  } catch {
-    // No verification step shown — sign-in completed in one shot.
-  }
-  // Wait for an active session to exist before navigating away.
-  await page.waitForFunction(
-    () =>
-      Boolean(
-        (window as unknown as { Clerk?: { session?: unknown } }).Clerk?.session,
-      ),
-    null,
-    { timeout: 30_000 },
-  );
-  await page.goto(path);
-}
-
 test.afterAll(async () => {
-  for (const id of provisionedUserIds) {
-    try {
-      await clerkBackend.users.deleteUser(id);
-    } catch {
-      // Best-effort cleanup; CI prod environment may strip the user already.
-    }
-  }
+  await cleanupTestUsers(provisionedUserIds);
 });
 
 test.describe("Amex page — empty balance self-heal flow", () => {
   test("shows missing-state tile, saves an anchor, and re-renders the chip in place with 'From saved anchor'", async ({
     browser,
   }) => {
-    const { email, password } = await createTestUser();
+    const { email, password } = await createTestUser(
+      "amex-self-heal",
+      provisionedUserIds,
+    );
     const context = await browser.newContext();
     const page = await context.newPage();
 
@@ -168,7 +81,10 @@ test.describe("Amex page — empty balance self-heal flow", () => {
   }) => {
     // A fresh user is needed because the first test's save flips the
     // tile out of the missing state, hiding the secondary link.
-    const { email, password } = await createTestUser();
+    const { email, password } = await createTestUser(
+      "amex-self-heal",
+      provisionedUserIds,
+    );
     const context = await browser.newContext();
     const page = await context.newPage();
 
