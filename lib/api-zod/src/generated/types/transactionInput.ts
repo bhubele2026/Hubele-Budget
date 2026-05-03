@@ -9,6 +9,8 @@ import type { TransactionInputWeeklyBucket } from "./transactionInputWeeklyBucke
 
 export interface TransactionInput {
   occurredOn?: string;
+  /** @nullable */
+  occurredAt?: string | null;
   /** @minLength 1 */
   description?: string;
   amount?: string;

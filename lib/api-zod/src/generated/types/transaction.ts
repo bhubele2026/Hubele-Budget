@@ -10,6 +10,8 @@ import type { TransactionWeeklyBucket } from "./transactionWeeklyBucket";
 export interface Transaction {
   id: string;
   occurredOn: string;
+  /** @nullable */
+  occurredAt?: string | null;
   description: string;
   amount: string;
   /** @nullable */

@@ -115,9 +115,34 @@ export async function syncPlaidItem(
       if (cat.categoryId) autoCategorized++;
       const isChecking =
         checkingPlaidAccountId !== null && t.account_id === checkingPlaidAccountId;
+      // Plaid `datetime` / `authorized_datetime` are ISO 8601 strings that
+      // some institutions populate with a real time. The docs warn they
+      // "may contain default time values (such as 00:00:00)" — treat
+      // explicit-midnight as "no real time" so the hourly spending clock
+      // doesn't get an artificial midnight spike.
+      const pickRealTime = (raw: string | null | undefined): string | null => {
+        if (!raw) return null;
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) return null;
+        if (
+          parsed.getUTCHours() === 0 &&
+          parsed.getUTCMinutes() === 0 &&
+          parsed.getUTCSeconds() === 0
+        ) {
+          return null;
+        }
+        return parsed.toISOString();
+      };
+      // Try `datetime` first, then `authorized_datetime` — either may be a
+      // midnight sentinel ("default" per Plaid docs) while the other has a
+      // real time, so we evaluate them independently rather than short-
+      // circuiting on the first non-null value.
+      const occurredAt =
+        pickRealTime(t.datetime) ?? pickRealTime(t.authorized_datetime);
       const values = {
         userId,
         occurredOn: t.date,
+        occurredAt,
         description,
         amount: plaidAmountToSigned(t),
         categoryId: cat.categoryId,
@@ -137,6 +162,7 @@ export async function syncPlaidItem(
           // that come straight from Plaid.
           set: {
             occurredOn: values.occurredOn,
+            occurredAt: values.occurredAt,
             description: values.description,
             amount: values.amount,
             notes: values.notes,

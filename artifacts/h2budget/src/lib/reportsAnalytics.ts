@@ -574,10 +574,10 @@ export function spendByDayOfMonth(
   }));
 }
 
-// Hourly spend clock — uses ONLY transactions whose occurredOn carries a time
-// component (e.g. "2026-04-12T14:33:00"). Returns null when no transaction in
-// the input has any time component, so the caller can render an honest empty
-// state rather than fabricating hours.
+// Hourly spend clock — uses ONLY transactions whose `occurredAt` timestamp
+// is populated (Plaid `datetime` / Excel cells with a real time component).
+// Returns null when no transaction in the input has a real time, so the
+// caller can render an honest empty state rather than fabricating hours.
 export function hourlySpendClock(
   txns: Transaction[],
 ): { hour: number; label: string; amount: number }[] | null {
@@ -586,9 +586,10 @@ export function hourlySpendClock(
   for (const t of txns) {
     const e = expense(t);
     if (e <= 0) continue;
-    if (t.occurredOn.length <= 10 || !t.occurredOn.includes("T")) continue;
-    const h = Number(t.occurredOn.slice(11, 13));
-    if (Number.isNaN(h)) continue;
+    if (!t.occurredAt) continue;
+    const d = new Date(t.occurredAt);
+    if (Number.isNaN(d.getTime())) continue;
+    const h = d.getHours();
     buckets[h] += e;
     used += 1;
   }

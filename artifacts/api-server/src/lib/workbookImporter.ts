@@ -37,6 +37,44 @@ const excelDate = (v: unknown): string | null => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 };
 
+// Returns a Date with a real time-of-day if the cell carries one, otherwise
+// null. Used to populate `transactions.occurred_at` so the Reports hourly
+// spending clock can chart real hours instead of fabricating them. Cells
+// that resolve to exactly midnight (the common Excel "date only" sentinel)
+// are treated as time-less.
+const excelDateTime = (v: unknown): string | null => {
+  if (v === null || v === undefined || v === "") return null;
+  let d: Date | null = null;
+  if (v instanceof Date) {
+    d = v;
+  } else if (typeof v === "number") {
+    const parts = XLSX.SSF.parse_date_code(v);
+    if (!parts) return null;
+    d = new Date(
+      Date.UTC(
+        parts.y,
+        parts.m - 1,
+        parts.d,
+        parts.H ?? 0,
+        parts.M ?? 0,
+        Math.floor(parts.S ?? 0),
+      ),
+    );
+  } else {
+    const parsed = new Date(String(v));
+    if (!Number.isNaN(parsed.getTime())) d = parsed;
+  }
+  if (!d) return null;
+  if (
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0
+  ) {
+    return null;
+  }
+  return d.toISOString();
+};
+
 const sheet = (wb: XLSX.WorkBook, name: string): Row[] => {
   const ws = wb.Sheets[name];
   if (!ws) return [];
@@ -239,6 +277,7 @@ export async function importWorkbook(
       if (!r || !r[1]) continue;
       const date = excelDate(r[1]);
       if (!date) continue;
+      const occurredAt = excelDateTime(r[1]);
       const description = toStr(r[2]) ?? "(no description)";
       const target = toStr(r[4]);
       const typeStr = String(r[3] ?? "Expense").toLowerCase();
@@ -255,6 +294,7 @@ export async function importWorkbook(
       txValues.push({
         userId,
         occurredOn: date,
+        occurredAt,
         description,
         amount: signed,
         categoryId: auto.categoryId,

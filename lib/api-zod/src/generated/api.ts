@@ -31,6 +31,7 @@ export const GetDashboardResponse = zod.object({
     zod.object({
       id: zod.string(),
       occurredOn: zod.string(),
+      occurredAt: zod.string().nullish(),
       description: zod.string(),
       amount: zod.string(),
       account: zod.string().nullish(),
@@ -96,6 +97,7 @@ export const ListTransactionsQueryParams = zod.object({
 export const ListTransactionsResponseItem = zod.object({
   id: zod.string(),
   occurredOn: zod.string(),
+  occurredAt: zod.string().nullish(),
   description: zod.string(),
   amount: zod.string(),
   account: zod.string().nullish(),
@@ -127,6 +129,7 @@ export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem);
 
 export const CreateTransactionBody = zod.object({
   occurredOn: zod.string(),
+  occurredAt: zod.string().nullish(),
   description: zod.string().min(1),
   amount: zod.string(),
   account: zod.string().nullish(),
@@ -159,6 +162,7 @@ export const UpdateTransactionParams = zod.object({
 
 export const UpdateTransactionBody = zod.object({
   occurredOn: zod.string().optional(),
+  occurredAt: zod.string().nullish(),
   description: zod.string().min(1).optional(),
   amount: zod.string().optional(),
   account: zod.string().nullish(),
@@ -194,6 +198,7 @@ export const UpdateTransactionBody = zod.object({
 export const UpdateTransactionResponse = zod.object({
   id: zod.string(),
   occurredOn: zod.string(),
+  occurredAt: zod.string().nullish(),
   description: zod.string(),
   amount: zod.string(),
   account: zod.string().nullish(),
@@ -893,6 +898,7 @@ export const GetForecastResponse = zod.object({
     zod.object({
       id: zod.string(),
       occurredOn: zod.string(),
+      occurredAt: zod.string().nullish(),
       description: zod.string(),
       amount: zod.string(),
       account: zod.string().nullish(),

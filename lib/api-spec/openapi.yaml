@@ -797,6 +797,7 @@ components:
       properties:
         id: { type: string }
         occurredOn: { type: string }
+        occurredAt: { type: ["string", "null"] }
         description: { type: string }
         amount: { type: string }
         account: { type: ["string", "null"] }
@@ -820,6 +821,7 @@ components:
       required: [occurredOn, description, amount]
       properties:
         occurredOn: { type: string }
+        occurredAt: { type: ["string", "null"] }
         description: { type: string, minLength: 1 }
         amount: { type: string }
         account: { type: ["string", "null"] }
@@ -840,6 +842,7 @@ components:
       type: object
       properties:
         occurredOn: { type: string }
+        occurredAt: { type: ["string", "null"] }
         description: { type: string, minLength: 1 }
         amount: { type: string }
         account: { type: ["string", "null"] }

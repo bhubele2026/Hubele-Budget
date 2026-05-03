@@ -147,6 +147,7 @@ export const transactionsTable = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
     occurredOn: date("occurred_on").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true, mode: "string" }),
     description: text("description").notNull(),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
     account: text("account"),
