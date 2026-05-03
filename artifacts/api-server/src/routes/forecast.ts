@@ -188,8 +188,30 @@ router.put("/forecast/settings", requireAuth, async (req, res): Promise<void> =>
   res.json(presentSettings(row));
 });
 
+const ALLOWED_HORIZON_DAYS = new Set([30, 60, 90, 183, 365]);
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 router.get("/forecast/cash-signal", requireAuth, async (req, res): Promise<void> => {
-  const signal = await computeCashSignal(req.userId!);
+  let horizonDays: number | undefined;
+  if (req.query.horizonDays != null) {
+    const n = Number(req.query.horizonDays);
+    if (!Number.isFinite(n) || !ALLOWED_HORIZON_DAYS.has(n)) {
+      res.status(400).json({
+        error: "invalid horizonDays (allowed: 30, 60, 90, 183, 365)",
+      });
+      return;
+    }
+    horizonDays = n;
+  }
+  let fromDate: string | undefined;
+  if (typeof req.query.fromDate === "string" && req.query.fromDate) {
+    if (!ISO_DATE_RE.test(req.query.fromDate)) {
+      res.status(400).json({ error: "invalid fromDate (expected YYYY-MM-DD)" });
+      return;
+    }
+    fromDate = req.query.fromDate;
+  }
+  const signal = await computeCashSignal(req.userId!, { horizonDays, fromDate });
   res.json(signal);
 });
 

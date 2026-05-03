@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CloseForecastMonthBody, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, RecurringItem, RecurringItemInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, Transaction, TransactionInput } from "./api.schemas";
+import type { AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CloseForecastMonthBody, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, RecurringItem, RecurringItemInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, Transaction, TransactionInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -842,10 +842,10 @@ export declare const useRefreshForecastBank: <TError = ErrorType<unknown>, TCont
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof refreshForecastBank>>, TError, void, TContext>;
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof refreshForecastBank>>, TError, void, TContext>;
-export declare const getGetForecastCashSignalUrl: () => string;
-export declare const getForecastCashSignal: (options?: RequestInit) => Promise<CashSignal>;
-export declare const getGetForecastCashSignalQueryKey: () => readonly ["/api/forecast/cash-signal"];
-export declare const getGetForecastCashSignalQueryOptions: <TData = Awaited<ReturnType<typeof getForecastCashSignal>>, TError = ErrorType<unknown>>(options?: {
+export declare const getGetForecastCashSignalUrl: (params?: GetForecastCashSignalParams) => string;
+export declare const getForecastCashSignal: (params?: GetForecastCashSignalParams, options?: RequestInit) => Promise<CashSignal>;
+export declare const getGetForecastCashSignalQueryKey: (params?: GetForecastCashSignalParams) => readonly ["/api/forecast/cash-signal", ...GetForecastCashSignalParams[]];
+export declare const getGetForecastCashSignalQueryOptions: <TData = Awaited<ReturnType<typeof getForecastCashSignal>>, TError = ErrorType<unknown>>(params?: GetForecastCashSignalParams, options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getForecastCashSignal>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
 }) => UseQueryOptions<Awaited<ReturnType<typeof getForecastCashSignal>>, TError, TData> & {
@@ -853,7 +853,7 @@ export declare const getGetForecastCashSignalQueryOptions: <TData = Awaited<Retu
 };
 export type GetForecastCashSignalQueryResult = NonNullable<Awaited<ReturnType<typeof getForecastCashSignal>>>;
 export type GetForecastCashSignalQueryError = ErrorType<unknown>;
-export declare function useGetForecastCashSignal<TData = Awaited<ReturnType<typeof getForecastCashSignal>>, TError = ErrorType<unknown>>(options?: {
+export declare function useGetForecastCashSignal<TData = Awaited<ReturnType<typeof getForecastCashSignal>>, TError = ErrorType<unknown>>(params?: GetForecastCashSignalParams, options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getForecastCashSignal>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & {

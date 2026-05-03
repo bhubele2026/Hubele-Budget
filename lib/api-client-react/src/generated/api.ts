@@ -45,6 +45,7 @@ import type {
   ForecastResolutionInput,
   ForecastSettings,
   ForecastSettingsInput,
+  GetForecastCashSignalParams,
   GetForecastParams,
   HealthStatus,
   ImportSummary,
@@ -3352,41 +3353,63 @@ export const useRefreshForecastBank = <
   return useMutation(getRefreshForecastBankMutationOptions(options));
 };
 
-export const getGetForecastCashSignalUrl = () => {
-  return `/api/forecast/cash-signal`;
+export const getGetForecastCashSignalUrl = (
+  params?: GetForecastCashSignalParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/forecast/cash-signal?${stringifiedParams}`
+    : `/api/forecast/cash-signal`;
 };
 
 export const getForecastCashSignal = async (
+  params?: GetForecastCashSignalParams,
   options?: RequestInit,
 ): Promise<CashSignal> => {
-  return customFetch<CashSignal>(getGetForecastCashSignalUrl(), {
+  return customFetch<CashSignal>(getGetForecastCashSignalUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetForecastCashSignalQueryKey = () => {
-  return [`/api/forecast/cash-signal`] as const;
+export const getGetForecastCashSignalQueryKey = (
+  params?: GetForecastCashSignalParams,
+) => {
+  return [`/api/forecast/cash-signal`, ...(params ? [params] : [])] as const;
 };
 
 export const getGetForecastCashSignalQueryOptions = <
   TData = Awaited<ReturnType<typeof getForecastCashSignal>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getForecastCashSignal>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: GetForecastCashSignalParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForecastCashSignal>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetForecastCashSignalQueryKey();
+  const queryKey =
+    queryOptions?.queryKey ?? getGetForecastCashSignalQueryKey(params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof getForecastCashSignal>>
-  > = ({ signal }) => getForecastCashSignal({ signal, ...requestOptions });
+  > = ({ signal }) =>
+    getForecastCashSignal(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getForecastCashSignal>>,
@@ -3403,15 +3426,18 @@ export type GetForecastCashSignalQueryError = ErrorType<unknown>;
 export function useGetForecastCashSignal<
   TData = Awaited<ReturnType<typeof getForecastCashSignal>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getForecastCashSignal>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetForecastCashSignalQueryOptions(options);
+>(
+  params?: GetForecastCashSignalParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForecastCashSignal>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetForecastCashSignalQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { CashSignalDailyItem } from "./cashSignalDailyItem";
 import type { CashSignalStatus } from "./cashSignalStatus";
 
 export interface CashSignal {
@@ -19,4 +20,15 @@ export interface CashSignal {
   snapshotAt?: string | null;
   /** @nullable */
   snapshotSource?: string | null;
+  horizonDays?: number;
+  fromDate?: string;
+  toDate?: string;
+  startingBalance?: string;
+  endingBalance?: string;
+  /** @nullable */
+  endingDate?: string | null;
+  projectedIncome?: string;
+  projectedExpenses?: string;
+  acceptedImpact?: string;
+  daily?: CashSignalDailyItem[];
 }

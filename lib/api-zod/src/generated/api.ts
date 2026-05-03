@@ -989,6 +989,23 @@ export const GetForecastResponse = zod.object({
         maxSafeExtra: zod.string(),
         snapshotAt: zod.string().nullish(),
         snapshotSource: zod.string().nullish(),
+        horizonDays: zod.number().optional(),
+        fromDate: zod.string().optional(),
+        toDate: zod.string().optional(),
+        startingBalance: zod.string().optional(),
+        endingBalance: zod.string().optional(),
+        endingDate: zod.string().nullish(),
+        projectedIncome: zod.string().optional(),
+        projectedExpenses: zod.string().optional(),
+        acceptedImpact: zod.string().optional(),
+        daily: zod
+          .array(
+            zod.object({
+              date: zod.string(),
+              balance: zod.string(),
+            }),
+          )
+          .optional(),
       }),
       zod.null(),
     ])
@@ -1084,6 +1101,11 @@ export const RefreshForecastBankResponse = zod.object({
   mask: zod.string().nullish(),
 });
 
+export const GetForecastCashSignalQueryParams = zod.object({
+  horizonDays: zod.coerce.number().optional(),
+  fromDate: zod.coerce.string().optional(),
+});
+
 export const GetForecastCashSignalResponse = zod.object({
   bankToday: zod.string(),
   lowestProjected: zod.string(),
@@ -1093,6 +1115,23 @@ export const GetForecastCashSignalResponse = zod.object({
   maxSafeExtra: zod.string(),
   snapshotAt: zod.string().nullish(),
   snapshotSource: zod.string().nullish(),
+  horizonDays: zod.number().optional(),
+  fromDate: zod.string().optional(),
+  toDate: zod.string().optional(),
+  startingBalance: zod.string().optional(),
+  endingBalance: zod.string().optional(),
+  endingDate: zod.string().nullish(),
+  projectedIncome: zod.string().optional(),
+  projectedExpenses: zod.string().optional(),
+  acceptedImpact: zod.string().optional(),
+  daily: zod
+    .array(
+      zod.object({
+        date: zod.string(),
+        balance: zod.string(),
+      }),
+    )
+    .optional(),
 });
 
 export const CloseForecastMonthBody = zod.object({

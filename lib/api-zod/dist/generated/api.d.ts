@@ -2952,6 +2952,25 @@ export declare const GetForecastResponse: zod.ZodObject<{
         maxSafeExtra: zod.ZodString;
         snapshotAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         snapshotSource: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        horizonDays: zod.ZodOptional<zod.ZodNumber>;
+        fromDate: zod.ZodOptional<zod.ZodString>;
+        toDate: zod.ZodOptional<zod.ZodString>;
+        startingBalance: zod.ZodOptional<zod.ZodString>;
+        endingBalance: zod.ZodOptional<zod.ZodString>;
+        endingDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        projectedIncome: zod.ZodOptional<zod.ZodString>;
+        projectedExpenses: zod.ZodOptional<zod.ZodString>;
+        acceptedImpact: zod.ZodOptional<zod.ZodString>;
+        daily: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            date: zod.ZodString;
+            balance: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            balance: string;
+        }, {
+            date: string;
+            balance: string;
+        }>, "many">>;
     }, "strip", zod.ZodTypeAny, {
         status: "ready" | "tight" | "not_yet" | "no_data";
         cashBuffer: string;
@@ -2959,8 +2978,21 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestProjected: string;
         lowestDate: string | null;
         maxSafeExtra: string;
+        fromDate?: string | undefined;
+        toDate?: string | undefined;
+        startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
+        horizonDays?: number | undefined;
+        endingBalance?: string | undefined;
+        endingDate?: string | null | undefined;
+        projectedIncome?: string | undefined;
+        projectedExpenses?: string | undefined;
+        acceptedImpact?: string | undefined;
+        daily?: {
+            date: string;
+            balance: string;
+        }[] | undefined;
     }, {
         status: "ready" | "tight" | "not_yet" | "no_data";
         cashBuffer: string;
@@ -2968,8 +3000,21 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestProjected: string;
         lowestDate: string | null;
         maxSafeExtra: string;
+        fromDate?: string | undefined;
+        toDate?: string | undefined;
+        startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
+        horizonDays?: number | undefined;
+        endingBalance?: string | undefined;
+        endingDate?: string | null | undefined;
+        projectedIncome?: string | undefined;
+        projectedExpenses?: string | undefined;
+        acceptedImpact?: string | undefined;
+        daily?: {
+            date: string;
+            balance: string;
+        }[] | undefined;
     }>, zod.ZodNull]>>;
     plaidCheckingAccounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
@@ -3095,8 +3140,21 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestProjected: string;
         lowestDate: string | null;
         maxSafeExtra: string;
+        fromDate?: string | undefined;
+        toDate?: string | undefined;
+        startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
+        horizonDays?: number | undefined;
+        endingBalance?: string | undefined;
+        endingDate?: string | null | undefined;
+        projectedIncome?: string | undefined;
+        projectedExpenses?: string | undefined;
+        acceptedImpact?: string | undefined;
+        daily?: {
+            date: string;
+            balance: string;
+        }[] | undefined;
     } | null | undefined;
     monthSnapshots?: Record<string, {
         at: string;
@@ -3182,8 +3240,21 @@ export declare const GetForecastResponse: zod.ZodObject<{
         lowestProjected: string;
         lowestDate: string | null;
         maxSafeExtra: string;
+        fromDate?: string | undefined;
+        toDate?: string | undefined;
+        startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
+        horizonDays?: number | undefined;
+        endingBalance?: string | undefined;
+        endingDate?: string | null | undefined;
+        projectedIncome?: string | undefined;
+        projectedExpenses?: string | undefined;
+        acceptedImpact?: string | undefined;
+        daily?: {
+            date: string;
+            balance: string;
+        }[] | undefined;
     } | null | undefined;
     monthSnapshots?: Record<string, {
         at: string;
@@ -3343,6 +3414,16 @@ export declare const RefreshForecastBankResponse: zod.ZodObject<{
     mask?: string | null | undefined;
     accountId?: string | null | undefined;
 }>;
+export declare const GetForecastCashSignalQueryParams: zod.ZodObject<{
+    horizonDays: zod.ZodOptional<zod.ZodNumber>;
+    fromDate: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    fromDate?: string | undefined;
+    horizonDays?: number | undefined;
+}, {
+    fromDate?: string | undefined;
+    horizonDays?: number | undefined;
+}>;
 export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     bankToday: zod.ZodString;
     lowestProjected: zod.ZodString;
@@ -3352,6 +3433,25 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     maxSafeExtra: zod.ZodString;
     snapshotAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     snapshotSource: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    horizonDays: zod.ZodOptional<zod.ZodNumber>;
+    fromDate: zod.ZodOptional<zod.ZodString>;
+    toDate: zod.ZodOptional<zod.ZodString>;
+    startingBalance: zod.ZodOptional<zod.ZodString>;
+    endingBalance: zod.ZodOptional<zod.ZodString>;
+    endingDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    projectedIncome: zod.ZodOptional<zod.ZodString>;
+    projectedExpenses: zod.ZodOptional<zod.ZodString>;
+    acceptedImpact: zod.ZodOptional<zod.ZodString>;
+    daily: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        date: zod.ZodString;
+        balance: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        balance: string;
+    }, {
+        date: string;
+        balance: string;
+    }>, "many">>;
 }, "strip", zod.ZodTypeAny, {
     status: "ready" | "tight" | "not_yet" | "no_data";
     cashBuffer: string;
@@ -3359,8 +3459,21 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     lowestProjected: string;
     lowestDate: string | null;
     maxSafeExtra: string;
+    fromDate?: string | undefined;
+    toDate?: string | undefined;
+    startingBalance?: string | undefined;
     snapshotAt?: string | null | undefined;
     snapshotSource?: string | null | undefined;
+    horizonDays?: number | undefined;
+    endingBalance?: string | undefined;
+    endingDate?: string | null | undefined;
+    projectedIncome?: string | undefined;
+    projectedExpenses?: string | undefined;
+    acceptedImpact?: string | undefined;
+    daily?: {
+        date: string;
+        balance: string;
+    }[] | undefined;
 }, {
     status: "ready" | "tight" | "not_yet" | "no_data";
     cashBuffer: string;
@@ -3368,8 +3481,21 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     lowestProjected: string;
     lowestDate: string | null;
     maxSafeExtra: string;
+    fromDate?: string | undefined;
+    toDate?: string | undefined;
+    startingBalance?: string | undefined;
     snapshotAt?: string | null | undefined;
     snapshotSource?: string | null | undefined;
+    horizonDays?: number | undefined;
+    endingBalance?: string | undefined;
+    endingDate?: string | null | undefined;
+    projectedIncome?: string | undefined;
+    projectedExpenses?: string | undefined;
+    acceptedImpact?: string | undefined;
+    daily?: {
+        date: string;
+        balance: string;
+    }[] | undefined;
 }>;
 export declare const CloseForecastMonthBody: zod.ZodObject<{
     monthKey: zod.ZodString;

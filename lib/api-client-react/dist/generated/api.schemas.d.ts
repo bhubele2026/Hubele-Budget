@@ -680,6 +680,10 @@ export declare const CashSignalStatus: {
     readonly not_yet: "not_yet";
     readonly no_data: "no_data";
 };
+export type CashSignalDailyItem = {
+    date: string;
+    balance: string;
+};
 export interface CashSignal {
     bankToday: string;
     lowestProjected: string;
@@ -692,6 +696,17 @@ export interface CashSignal {
     snapshotAt?: string | null;
     /** @nullable */
     snapshotSource?: string | null;
+    horizonDays?: number;
+    fromDate?: string;
+    toDate?: string;
+    startingBalance?: string;
+    endingBalance?: string;
+    /** @nullable */
+    endingDate?: string | null;
+    projectedIncome?: string;
+    projectedExpenses?: string;
+    acceptedImpact?: string;
+    daily?: CashSignalDailyItem[];
 }
 export interface MonthSnapshot {
     balance: string;
@@ -823,6 +838,10 @@ export type ListPlaidLiabilityAccountsParams = {
 };
 export type GetForecastParams = {
     days?: number;
+};
+export type GetForecastCashSignalParams = {
+    horizonDays?: number;
+    fromDate?: string;
 };
 export type CloseForecastMonthBody = {
     monthKey: string;

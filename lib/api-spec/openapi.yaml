@@ -630,6 +630,13 @@ paths:
     get:
       operationId: getForecastCashSignal
       tags: [forecast]
+      parameters:
+        - in: query
+          name: horizonDays
+          schema: { type: integer }
+        - in: query
+          name: fromDate
+          schema: { type: string }
       responses:
         "200":
           description: OK
@@ -1393,6 +1400,23 @@ components:
         maxSafeExtra: { type: string }
         snapshotAt: { type: ["string", "null"] }
         snapshotSource: { type: ["string", "null"] }
+        horizonDays: { type: integer }
+        fromDate: { type: string }
+        toDate: { type: string }
+        startingBalance: { type: string }
+        endingBalance: { type: string }
+        endingDate: { type: ["string", "null"] }
+        projectedIncome: { type: string }
+        projectedExpenses: { type: string }
+        acceptedImpact: { type: string }
+        daily:
+          type: array
+          items:
+            type: object
+            required: [date, balance]
+            properties:
+              date: { type: string }
+              balance: { type: string }
     ForecastBundle:
       type: object
       required: [events, transactions, resolutions, closedMonths, settings, fromDate, toDate, plaidCheckingAccounts]

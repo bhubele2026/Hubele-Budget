@@ -173,6 +173,16 @@ export type CashSignal = {
   maxSafeExtra: string;
   snapshotAt: string | null;
   snapshotSource: string | null;
+  horizonDays?: number;
+  fromDate?: string;
+  toDate?: string;
+  startingBalance?: string;
+  endingBalance?: string;
+  endingDate?: string | null;
+  projectedIncome?: string;
+  projectedExpenses?: string;
+  acceptedImpact?: string;
+  daily?: Array<{ date: string; balance: string }>;
 };
 
 function r2(n: number): string {
@@ -186,17 +196,22 @@ function r2(n: number): string {
  *   - Skip planned events whose date is on/before the snapshot date (already baked in).
  *   - Skip checking transactions on/before the snapshot date (already counted).
  */
-export async function computeCashSignal(userId: string): Promise<CashSignal> {
+export async function computeCashSignal(
+  userId: string,
+  opts: { horizonDays?: number; fromDate?: string } = {},
+): Promise<CashSignal> {
   const [settings] = await db
     .select()
     .from(forecastSettingsTable)
     .where(eq(forecastSettingsTable.userId, userId));
   const cashBuffer = Number(settings?.cashBuffer ?? 500) || 0;
-  const daysAhead = settings?.daysAhead ?? 90;
+  const daysAhead = opts.horizonDays ?? settings?.daysAhead ?? 90;
 
   const today = new Date();
   const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const to = addDays(todayDateOnly, daysAhead);
+  const fromDateOnly = opts.fromDate ? parseISO(opts.fromDate) : todayDateOnly;
+  const fromISO = fmtISO(fromDateOnly);
+  const to = addDays(fromDateOnly, daysAhead);
   const toISO = fmtISO(to);
 
   const snapshotBalance = settings?.bankSnapshotBalance != null
@@ -206,16 +221,19 @@ export async function computeCashSignal(userId: string): Promise<CashSignal> {
   const snapshotISO = snapshotAt ? fmtISO(snapshotAt) : null;
 
   // No snapshot → fall back to startingBalance
-  const startBalance = snapshotBalance ?? (Number(settings?.startingBalance ?? 0) || 0);
+  const startBalanceAtAnchor = snapshotBalance ?? (Number(settings?.startingBalance ?? 0) || 0);
   // Anchor: events strictly AFTER snapshot date are projected; if no snapshot, project from today
   const anchorISO = snapshotISO ?? fmtISO(todayDateOnly);
+  // Expansion start: cover from min(anchor, fromDate) so we can roll the
+  // balance forward to fromDate even when fromDate > anchor.
+  const expandStart = anchorISO < fromISO ? parseISO(anchorISO) : fromDateOnly;
 
   const recurring = await db
     .select()
     .from(recurringItemsTable)
     .where(eq(recurringItemsTable.userId, userId));
   const events: CashEvent[] = [];
-  for (const item of recurring) events.push(...expandItem(item, todayDateOnly, to));
+  for (const item of recurring) events.push(...expandItem(item, expandStart, to));
 
   // Pull future-anchored checking transactions (forecast_flag and reflecting bank movement after snapshot)
   const txns = await db
@@ -236,35 +254,76 @@ export async function computeCashSignal(userId: string): Promise<CashSignal> {
     .from(forecastResolutionsTable)
     .where(eq(forecastResolutionsTable.userId, userId));
   const matchedPlanKeys = new Set<string>();
+  const matchedTxnIds = new Set<string>();
   for (const r of resolutions) {
-    if (r.status === "matched" && r.recurringItemId && r.occurrenceDate) {
-      matchedPlanKeys.add(`${r.recurringItemId}|${r.occurrenceDate}`);
+    if (r.status === "matched") {
+      if (r.recurringItemId && r.occurrenceDate) {
+        matchedPlanKeys.add(`${r.recurringItemId}|${r.occurrenceDate}`);
+      }
+      if (r.matchedTxnId) matchedTxnIds.add(r.matchedTxnId);
     }
   }
 
-  type Item = { date: string; amount: number };
+  type Item = { date: string; amount: number; matched: boolean };
   const items: Item[] = [];
   for (const ev of events) {
     if (ev.date <= anchorISO) continue; // already baked into snapshot
-    if (matchedPlanKeys.has(`${ev.itemId}|${ev.date}`)) continue;
-    items.push({ date: ev.date, amount: ev.amount });
+    const matched = matchedPlanKeys.has(`${ev.itemId}|${ev.date}`);
+    if (matched) continue;
+    items.push({ date: ev.date, amount: ev.amount, matched: false });
   }
   for (const t of txns) {
     if (t.occurredOn <= anchorISO) continue;
-    items.push({ date: t.occurredOn, amount: Number(t.amount) || 0 });
+    items.push({
+      date: t.occurredOn,
+      amount: Number(t.amount) || 0,
+      matched: matchedTxnIds.has(t.id),
+    });
   }
   items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
-  let bal = startBalance;
-  let lowest = bal;
-  let lowestDate: string | null = null;
+  // Roll the balance forward from anchor up to (but not including) fromDate
+  // so `startingBalance` reflects what the bank should be on the chart's
+  // first day.
+  let bal = startBalanceAtAnchor;
   for (const it of items) {
+    if (it.date >= fromISO) break;
     bal = Math.round((bal + it.amount) * 100) / 100;
+  }
+  const startingBalance = bal;
+
+  // Build daily series in [fromDate, toDate] and gather window stats.
+  const totalDays = Math.round((to.getTime() - fromDateOnly.getTime()) / 86_400_000) + 1;
+  const daily: Array<{ date: string; balance: string }> = [];
+  let lowest = startingBalance;
+  let lowestDate: string | null = null;
+  let projectedIncome = 0;
+  let projectedExpenses = 0;
+  let acceptedImpact = 0;
+
+  let cursor = 0;
+  // Skip items before window (already applied above)
+  while (cursor < items.length && items[cursor].date < fromISO) cursor++;
+
+  for (let i = 0; i < totalDays; i++) {
+    const d = addDays(fromDateOnly, i);
+    const dISO = fmtISO(d);
+    while (cursor < items.length && items[cursor].date <= dISO) {
+      const it = items[cursor];
+      bal = Math.round((bal + it.amount) * 100) / 100;
+      if (it.amount > 0) projectedIncome += it.amount;
+      else projectedExpenses += -it.amount;
+      if (it.matched) acceptedImpact += it.amount;
+      cursor++;
+    }
     if (bal < lowest) {
       lowest = bal;
-      lowestDate = it.date;
+      lowestDate = dISO;
     }
+    daily.push({ date: dISO, balance: r2(bal) });
   }
+  const endingBalance = bal;
+  const endingDate = toISO;
 
   const headroom = Math.max(0, lowest - cashBuffer);
   let status: CashSignal["status"];
@@ -274,7 +333,7 @@ export async function computeCashSignal(userId: string): Promise<CashSignal> {
   else status = "not_yet";
 
   return {
-    bankToday: r2(startBalance),
+    bankToday: r2(startBalanceAtAnchor),
     lowestProjected: r2(lowest),
     lowestDate,
     cashBuffer: r2(cashBuffer),
@@ -282,5 +341,15 @@ export async function computeCashSignal(userId: string): Promise<CashSignal> {
     maxSafeExtra: r2(headroom),
     snapshotAt: snapshotAt ? snapshotAt.toISOString() : null,
     snapshotSource: settings?.bankSnapshotSource ?? null,
+    horizonDays: daysAhead,
+    fromDate: fromISO,
+    toDate: toISO,
+    startingBalance: r2(startingBalance),
+    endingBalance: r2(endingBalance),
+    endingDate,
+    projectedIncome: r2(projectedIncome),
+    projectedExpenses: r2(projectedExpenses),
+    acceptedImpact: r2(acceptedImpact),
+    daily,
   };
 }

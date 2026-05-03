@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetForecast,
+  useGetForecastCashSignal,
   useUpsertForecastResolution,
   useDeleteForecastResolution,
   useCloseForecastMonth,
@@ -19,7 +20,17 @@ import {
   getGetForecastCashSignalQueryKey,
   getListTransactionsQueryKey,
 } from "@workspace/api-client-react";
+import { Link } from "wouter";
 import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+} from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -441,8 +452,71 @@ function PlanDropRow({
   );
 }
 
+type HorizonOpt = { label: string; days: number };
+const HORIZON_OPTS: HorizonOpt[] = [
+  { label: "30 DAYS", days: 30 },
+  { label: "60 DAYS", days: 60 },
+  { label: "90 DAYS", days: 90 },
+  { label: "6 MONTHS", days: 183 },
+  { label: "1 YEAR", days: 365 },
+];
+
+const FORECAST_FROM_KEY = "h2budget:forecastFromDate";
+const FORECAST_HORIZON_KEY = "h2budget:forecastHorizonDays";
+
+function todayISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function shortDate(iso: string): string {
+  if (!iso) return "";
+  const [, m, d] = iso.split("-");
+  return `${m}-${d}`;
+}
+
 export default function ForecastPage() {
-  const { data, isLoading } = useGetForecast();
+  const [horizonDays, setHorizonDays] = useState<number>(() => {
+    try {
+      const v = sessionStorage.getItem(FORECAST_HORIZON_KEY);
+      const n = v ? Number(v) : NaN;
+      return Number.isFinite(n) && HORIZON_OPTS.some((h) => h.days === n)
+        ? n
+        : 90;
+    } catch {
+      return 90;
+    }
+  });
+  const [forecastFromDate, setForecastFromDate] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem(FORECAST_FROM_KEY) || todayISO();
+    } catch {
+      return todayISO();
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FORECAST_HORIZON_KEY, String(horizonDays));
+    } catch {
+      /* no-op */
+    }
+  }, [horizonDays]);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FORECAST_FROM_KEY, forecastFromDate);
+    } catch {
+      /* no-op */
+    }
+  }, [forecastFromDate]);
+
+  const { data, isLoading } = useGetForecast({ days: horizonDays });
+  const { data: cashProjection } = useGetForecastCashSignal({
+    horizonDays,
+    fromDate: forecastFromDate,
+  });
   const { data: categories } = useListCategories();
   const { data: debts } = useListDebts();
   const { data: recurringItems } = useListRecurringItems();
@@ -1136,68 +1210,310 @@ export default function ForecastPage() {
     ? inbox.find((c) => c.id === activeDragId) ?? null
     : null;
 
+  // Status counters for hero — filtered to the active forecast window so they
+  // stay consistent with the chart and KPIs above the register.
+  const headerCounts = (() => {
+    let flagged = 0;
+    let plan = 0;
+    let matched = 0;
+    let unplanned = 0;
+    let toMatch = 0;
+    const fromISO = forecastFromDate;
+    const toDateObj = new Date(`${forecastFromDate}T00:00:00`);
+    toDateObj.setDate(toDateObj.getDate() + horizonDays);
+    const y = toDateObj.getFullYear();
+    const m = String(toDateObj.getMonth() + 1).padStart(2, "0");
+    const dd = String(toDateObj.getDate()).padStart(2, "0");
+    const toISO = `${y}-${m}-${dd}`;
+    const inWindow = (d: string) => d >= fromISO && d <= toISO;
+    if (register) {
+      for (const p of register.allPlan) {
+        if (!inWindow(p.date)) continue;
+        if (p.status === "pending_plan" || p.status === "future") plan++;
+        else if (p.status === "matched") matched++;
+      }
+      for (const b of register.allBank) {
+        if (!inWindow(b.date)) continue;
+        flagged++;
+        if (b.status === "pending_bank") toMatch++;
+        else if (b.status === "matched") matched++;
+        else if (b.status === "ignored_unforecasted") unplanned++;
+      }
+    }
+    return { flagged, plan, toMatch, matched, unplanned };
+  })();
+
+  const proj = cashProjection;
+  const endingNum = proj?.endingBalance ? Number(proj.endingBalance) : NaN;
+  const lowestNum = proj?.lowestProjected ? Number(proj.lowestProjected) : NaN;
+  const dailySeries = (proj?.daily ?? []).map((d: { date: string; balance: string | number }) => ({
+    date: shortDate(d.date),
+    rawDate: d.date,
+    balance: Number(d.balance),
+  }));
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-start gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-serif font-bold text-foreground tracking-tight">
-            Cash Forecast
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+            Section IV — Forecast
+          </div>
+          <h1 className="text-2xl font-serif font-bold text-foreground tracking-tight mt-1">
+            Plan register — you decide every match.
           </h1>
-          <p className="text-muted-foreground mt-1">
-            Send bank &amp; Amex charges from Transactions, then drop them onto planned items here.
-          </p>
         </div>
-        <div className="flex items-center gap-2">
-          {isReconciledToBank ? (
-            <Badge
-              className="bg-primary/15 text-primary border-primary/30"
-              data-testid="reconciled-to-bank"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Reconciled to bank
-            </Badge>
-          ) : bankReconcile.hasBank &&
-            !bankReconcile.isPriorMonth &&
-            (bankReconcile.pending > 0 ||
-              Math.abs(bankReconcile.gap) >= 0.01) ? (
-            <Badge
-              variant="outline"
-              className="bg-amber-50 text-amber-900 border-amber-200"
-              data-testid="reconcile-gap"
-              title={`Forecast end ${formatCurrency(bankReconcile.forecastEnd)} vs Bank ${formatCurrency(bankReconcile.bankEnd)}`}
-            >
-              <AlertCircle className="w-3.5 h-3.5 mr-1" />
-              {formatCurrency(bankReconcile.gap)} off bank
-              {bankReconcile.pending > 0 ? ` · ${bankReconcile.pending} pending` : ""}
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="bg-muted text-muted-foreground">
-              <InboxIcon className="w-3.5 h-3.5 mr-1" /> Nothing to reconcile this period
-            </Badge>
-          )}
-          {inboxCount > 0 ? (
-            <Badge
-              variant="outline"
-              className="bg-emerald-50 text-emerald-900 border-emerald-200"
-              data-testid="inbox-counter"
-            >
-              <InboxIcon className="w-3.5 h-3.5 mr-1" />
-              Inbox: {inboxCount} pending
-            </Badge>
-          ) : reconciledNow ? (
-            <Badge
-              className="bg-primary/15 text-primary border-primary/30"
-              data-testid="reconciled-badge"
-            >
-              <PartyPopper className="w-3.5 h-3.5 mr-1" /> Inbox cleared
-            </Badge>
-          ) : null}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="forecast-from" className="text-xs text-muted-foreground">
+              Forecast from
+            </Label>
+            <Input
+              id="forecast-from"
+              type="date"
+              value={forecastFromDate}
+              onChange={(e) => setForecastFromDate(e.target.value || todayISO())}
+              className="h-9 w-[160px]"
+              data-testid="input-forecast-from"
+            />
+          </div>
+          <Button variant="outline" asChild>
+            <Link href="/bills" data-testid="link-manage-bills">
+              Manage in Bills
+            </Link>
+          </Button>
           <Button variant="outline" onClick={openSettings}>
             <SettingsIcon className="w-4 h-4 mr-2" /> Settings
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="flex items-center gap-2 flex-wrap" data-testid="horizon-tabs">
+        {HORIZON_OPTS.map((h) => {
+          const active = horizonDays === h.days;
+          return (
+            <Button
+              key={h.label}
+              variant={active ? "default" : "outline"}
+              size="sm"
+              onClick={() => setHorizonDays(h.days)}
+              className="text-xs tracking-wider"
+              data-testid={`horizon-${h.days}`}
+            >
+              {h.label}
+            </Button>
+          );
+        })}
+      </div>
+
+      {/* Hero: Current Forecast Balance */}
+      <Card data-testid="card-forecast-hero" className="border-2">
+        <CardContent className="p-6">
+          <div className="flex justify-between items-start gap-6 flex-wrap">
+            <div className="space-y-2 min-w-0">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                Current Forecast Balance
+              </div>
+              <div
+                className={`text-5xl font-bold tabular-nums ${
+                  Number.isFinite(endingNum) && endingNum < 0
+                    ? "text-destructive"
+                    : "text-foreground"
+                }`}
+                data-testid="hero-forecast-balance"
+              >
+                {Number.isFinite(endingNum)
+                  ? formatCurrency(endingNum)
+                  : formatCurrency(0)}
+              </div>
+              <div className="text-sm text-muted-foreground space-y-0.5 pt-1">
+                <div>
+                  Bank balance before {formatDate(forecastFromDate)}:{" "}
+                  <span className="tabular-nums font-medium text-foreground">
+                    {formatCurrency(proj?.startingBalance ?? "0")}
+                  </span>
+                </div>
+                <div>
+                  Accepted / matched impact:{" "}
+                  <span className="tabular-nums font-medium text-foreground">
+                    {formatCurrency(proj?.acceptedImpact ?? "0")}
+                  </span>
+                </div>
+                <div>
+                  Target bank balance through{" "}
+                  {formatDate(proj?.endingDate ?? proj?.toDate ?? forecastFromDate)}:{" "}
+                  <span className="tabular-nums font-medium text-foreground">
+                    {formatCurrency(proj?.endingBalance ?? "0")}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-2 text-xs">
+              <div className="flex items-center gap-1.5 flex-wrap justify-end" data-testid="hero-counters">
+                <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-200">
+                  {headerCounts.flagged} flagged
+                </Badge>
+                <span className="text-muted-foreground">·</span>
+                <Badge variant="outline">{headerCounts.plan} plan</Badge>
+                <span className="text-muted-foreground">·</span>
+                <Badge variant="outline" className="bg-sky-50 text-sky-900 border-sky-200">
+                  {headerCounts.toMatch} to match
+                </Badge>
+                <span className="text-muted-foreground">·</span>
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                  {headerCounts.matched} matched
+                </Badge>
+                <span className="text-muted-foreground">·</span>
+                <Badge variant="outline" className="bg-muted text-muted-foreground">
+                  {headerCounts.unplanned} unplanned
+                </Badge>
+              </div>
+              {inboxCount === 0 && reconciledNow && (
+                <Badge className="bg-primary/15 text-primary border-primary/30">
+                  <PartyPopper className="w-3.5 h-3.5 mr-1" /> Inbox cleared
+                </Badge>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* KPI tiles */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card data-testid="kpi-lowest-point">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground">
+              Lowest Point
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div
+              className={`text-2xl font-bold tabular-nums ${
+                Number.isFinite(lowestNum) &&
+                lowestNum < Number(proj?.cashBuffer ?? 0)
+                  ? "text-destructive"
+                  : ""
+              }`}
+            >
+              {Number.isFinite(lowestNum)
+                ? formatCurrency(lowestNum)
+                : formatCurrency(0)}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {proj?.lowestDate ? `on ${formatDate(proj.lowestDate)}` : "—"}
+            </div>
+          </CardContent>
+        </Card>
+        <Card data-testid="kpi-ending-balance">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground">
+              Ending Balance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tabular-nums">
+              {formatCurrency(proj?.endingBalance ?? "0")}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {proj?.endingDate
+                ? `on ${formatDate(proj.endingDate)}`
+                : `${horizonDays}-day horizon`}
+            </div>
+          </CardContent>
+        </Card>
+        <Card data-testid="kpi-projected-income">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground">
+              Projected Income
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+              {formatCurrency(proj?.projectedIncome ?? "0")}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              over {horizonDays} days
+            </div>
+          </CardContent>
+        </Card>
+        <Card data-testid="kpi-projected-expenses">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground">
+              Projected Expenses
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tabular-nums">
+              {formatCurrency(proj?.projectedExpenses ?? "0")}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              over {horizonDays} days
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Projected Balance area chart */}
+      <Card data-testid="card-projected-balance-chart">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Projected Balance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[280px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={dailySeries}
+                margin={{ top: 10, right: 16, bottom: 16, left: 0 }}
+              >
+                <defs>
+                  <linearGradient id="projectedBalanceGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#f97316" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#f97316" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10 }}
+                  interval="preserveStartEnd"
+                  minTickGap={32}
+                />
+                <YAxis
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={(v: number) => `$${Math.round(v)}`}
+                  width={60}
+                />
+                <RechartsTooltip
+                  contentStyle={{
+                    background: "hsl(var(--background))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: 6,
+                    fontSize: 12,
+                  }}
+                  labelFormatter={(_label, payload) => {
+                    const p = payload?.[0]?.payload as
+                      | { rawDate?: string }
+                      | undefined;
+                    return p?.rawDate ? formatDate(p.rawDate) : String(_label);
+                  }}
+                  formatter={(v: number) => [formatCurrency(v), "Balance"]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="balance"
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  fill="url(#projectedBalanceGrad)"
+                  name="Projected balance"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Bank snapshot + Avalanche cards (kept below the new summary) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card data-testid="card-bank-snapshot">
           <CardHeader className="pb-2 flex-row items-center justify-between">
             <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
@@ -1255,40 +1571,6 @@ export default function ForecastPage() {
                   </SelectContent>
                 </Select>
               )}
-            </div>
-          </CardContent>
-        </Card>
-        <Card data-testid="card-lowest-projected">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-              <TrendingDown className="w-4 h-4" /> Lowest projected balance
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data.cashSignal ? (
-              <>
-                <div
-                  className={`text-2xl font-bold tabular-nums ${
-                    Number(data.cashSignal.lowestProjected) <
-                    Number(data.cashSignal.cashBuffer)
-                      ? "text-destructive"
-                      : ""
-                  }`}
-                >
-                  {formatCurrency(data.cashSignal.lowestProjected)}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {data.cashSignal.lowestDate
-                    ? `on ${formatDate(data.cashSignal.lowestDate)}`
-                    : "today"}{" "}
-                  · buffer {formatCurrency(data.cashSignal.cashBuffer)}
-                </div>
-              </>
-            ) : (
-              <div className="text-sm text-muted-foreground">No data</div>
-            )}
-            <div className="text-xs text-muted-foreground mt-1">
-              {data.settings.daysAhead}-day horizon
             </div>
           </CardContent>
         </Card>
