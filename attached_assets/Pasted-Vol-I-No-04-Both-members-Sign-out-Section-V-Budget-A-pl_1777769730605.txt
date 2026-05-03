@@ -1,0 +1,567 @@
+Vol. I · No. 04
+
+Both members
+Sign out
+Section V
+Budget
+A plan for every dollar this month.
+
+
+May 2026
+
+Editable
+Auto-pulled from Debts
+Auto-pulled from Income
+Income
+Budget
+$12,687.99
+Actual
+$4,036.29
+Expenses
+Budget
+$12,037.37
+Actual
+$2,094.67
+Net
+Budget
+$650.62
+Actual
+$1,941.62
+% Spent
+Budget
+94.9%
+Actual
+51.9%
+
+Income
+3 lines
+Budget $12,687.99
+Actual $4,036.29
+Δ -$8,651.70
+Category
+Budgeted
+Actual
+Difference
+% Spent
+Mom — Verizon reimbursement
+Auto-pulled from Bills · monthly
+$88.00
+$0.00
+-$88.00
+0%
+Hannah's paycheck (Exact)
+Auto-pulled from Bills · biweekly
+$4,499.99
+$0.00
+-$4,499.99
+0%
+Brad's paycheck (KFI)
+Auto-pulled from Bills · biweekly
+$8,100.00
+$4,036.29
+-$4,063.71
+50%
+Add line
+
+Essential — Housing
+7 lines
+Budget $3,441.45
+Actual $0.00
+Δ $3,441.45
+Category
+Budgeted
+Actual
+Difference
+% Spent
+
+Mortgage (Lakeview)
+Recurring — kept here, not in Debt Tracker
+$1,989.81
+$0.00
+$1,989.81
+0%
+
+
+HELOC (Figure)
+Recurring — kept here, not in Debt Tracker
+$677.40
+$0.00
+$677.40
+0%
+
+
+Electric & Gas (MGE)
+$241.00
+$0.00
+$241.00
+0%
+
+
+Water/Sewer (City of Madison)
+$101.02
+$0.00
+$101.02
+0%
+
+
+Internet/Cable (AT&T Uverse)
+$90.22
+$0.00
+$90.22
+0%
+
+
+Phone (Verizon)
+⚠ HIGH — review plan
+$342.00
+$0.00
+$342.00
+0%
+
+
+Home Maintenance / Repairs
+Buffer
+$0.00
+$0.00
+$0.00
+—
+
+Add line
+
+Essential — Insurance
+6 lines
+Budget $398.98
+Actual $0.00
+Δ $398.98
+Category
+Budgeted
+Actual
+Difference
+% Spent
+
+Health/Medical Out-of-Pocket
+$0.00
+$0.00
+$0.00
+—
+
+
+Auto Insurance (State Farm)
+$128.59
+$0.00
+$128.59
+0%
+
+
+Other Insurance (State Farm 2nd)
+$121.54
+$0.00
+$121.54
+0%
+
+
+Life Insurance (Trustage)
+$95.00
+$0.00
+$95.00
+0%
+
+
+Home Warranty (UHP)
+$53.85
+$0.00
+$53.85
+0%
+
+
+Health Insurance Premium
+Fill in if not pre-tax via paycheck
+$0.00
+$0.00
+$0.00
+—
+
+Add line
+
+Food & Groceries
+2 lines
+Budget $460.00
+Actual $0.00
+Δ $460.00
+Category
+Budgeted
+Actual
+Difference
+% Spent
+
+Groceries ($425/wk × 4.33 wks)
+$460.00
+$0.00
+$460.00
+0%
+
+
+Costco (warehouse stock-up)
+Periodic large hauls
+$0.00
+$0.00
+$0.00
+—
+
+Add line
+
+Transportation
+5 lines
+Budget $1,574.35
+Actual $0.00
+Δ $1,574.35
+Category
+Budgeted
+Actual
+Difference
+% Spent
+
+Toyota Lease
+Lease — kept here, not in Debt Tracker
+$672.80
+$0.00
+$672.80
+0%
+
+
+Hannah's Car Payment (UW Credit Union)
+Auto loan — kept here, not in Debt Tracker
+$651.55
+$0.00
+$651.55
+0%
+
+
+Gasoline (Kwik Trip / Woodmans)
+$250.00
+$0.00
+$250.00
+0%
+
+
+Auto Maintenance / Wash
+$0.00
+$0.00
+$0.00
+—
+
+
+Parking (Madison)
+$0.00
+$0.00
+$0.00
+—
+
+Add line
+
+Kids & Pets
+4 lines
+Budget $0.00
+Actual $20.00
+Δ -$20.00
+Category
+Budgeted
+Actual
+Difference
+% Spent
+
+Childcare / School Costs
+Madison Metro $60 + Monona Grove $50
+$0.00
+$20.00
+-$20.00
+—
+
+
+Kids' Activities
+$0.00
+$0.00
+$0.00
+—
+
+
+Camp K9 (Pet Boarding)
+Use only when traveling
+$0.00
+$0.00
+$0.00
+—
+
+
+Vet / Pet Other
+Buffer
+$0.00
+$0.00
+$0.00
+—
+
+Add line
+
+Debt — Minimum Payments
+16 lines
+Budget $2,924.39
+Actual $2,074.67
+Δ $849.72
+
+Avalanche — Extra to Highest APR
+1 line
+Budget $2,225.00
+Actual $0.00
+Δ $2,225.00
+Category
+Budgeted
+Actual
+Difference
+% Spent
+
+Avalanche extra
+Tag transactions with category “Avalanche extra” to feed Actual
+$2,225.00
+$0.00
+$2,225.00
+0%
+
+Add line
+
+Streaming & Tech
+4 lines
+Budget $254.46
+Actual $0.00
+Δ $254.46
+Category
+Budgeted
+Actual
+Difference
+% Spent
+
+Tech Subscriptions (Boost, Ring, Tonal)
+$86.78
+$0.00
+$86.78
+0%
+
+
+Streaming (Netflix, Hulu, Spotify, Peacock)
+$167.68
+$0.00
+$167.68
+0%
+
+
+Brewers F&B / Streaming Sports
+MLB Brewers tickets/food avg
+$0.00
+$0.00
+$0.00
+—
+
+
+Other Tech / Software
+Buffer for variable subs
+$0.00
+$0.00
+$0.00
+—
+
+Add line
+
+Dining & Entertainment
+4 lines
+Budget $460.00
+Actual $0.00
+Δ $460.00
+Category
+Budgeted
+Actual
+Difference
+% Spent
+
+Restaurants & Bars
+$460.00
+$0.00
+$460.00
+0%
+
+
+DoorDash & Delivery
+⚠ HIGH — discipline target
+$0.00
+$0.00
+$0.00
+—
+
+
+Coffee (Starbucks, Dunkin)
+$0.00
+$0.00
+$0.00
+—
+
+
+Movies / Concerts / Other Fun
+$0.00
+$0.00
+$0.00
+—
+
+Add line
+
+Shopping
+5 lines
+Budget $0.00
+Actual $0.00
+Δ $0.00
+Category
+Budgeted
+Actual
+Difference
+% Spent
+
+Clothing (Threadbeast/Stitch/Lulu)
+⚠ Cancel these subs
+$0.00
+$0.00
+$0.00
+—
+
+
+Amazon (Non-essentials)
+$0.00
+$0.00
+$0.00
+—
+
+
+Walmart / Target
+$0.00
+$0.00
+$0.00
+—
+
+
+Best Buy / Electronics
+$0.00
+$0.00
+$0.00
+—
+
+
+Home & Menards
+$0.00
+$0.00
+$0.00
+—
+
+Add line
+
+Other
+6 lines
+Budget $298.74
+Actual $0.00
+Δ $298.74
+Category
+Budgeted
+Actual
+Difference
+% Spent
+
+Charitable Giving (Athenaeum)
+$0.00
+$0.00
+$0.00
+—
+
+
+Education (Becker, Eastern Univ)
+$0.00
+$0.00
+$0.00
+—
+
+
+Intuit Financing
+$0.00
+$0.00
+$0.00
+—
+
+
+Student Loan (Nelnet / Dept of Ed)
+Federal loan — kept here, not in Debt Tracker
+$237.58
+$0.00
+$237.58
+0%
+
+
+Gaming subs
+$61.16
+$0.00
+$61.16
+0%
+
+
+Misc / Buffer
+Catch-all small items
+$0.00
+$0.00
+$0.00
+—
+
+Add line
+
+Savings & Sinking Funds
+5 lines
+Budget $0.00
+Actual $0.00
+Δ $0.00
+Category
+Budgeted
+Actual
+Difference
+% Spent
+
+Investments
+$0.00
+$0.00
+$0.00
+—
+
+
+Emergency Fund Contribution
+Build $1,000 starter first
+$0.00
+$0.00
+$0.00
+—
+
+
+Tax Sinking Fund
+Save for next April taxes (~$1,500/yr)
+$0.00
+$0.00
+$0.00
+—
+
+
+Kids' Savings / 529
+Resume after high-APR debt is gone
+$0.00
+$0.00
+$0.00
+—
+
+
+Retirement (extra contributions)
+Don't reduce employer match contributions
+$0.00
+$0.00
+$0.00
+—
+
+Add line
