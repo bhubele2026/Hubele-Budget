@@ -982,6 +982,24 @@ paths:
         "403":
           description: Forbidden
 
+  /members/{id}:
+    delete:
+      operationId: removeMember
+      tags: [members]
+      summary: Remove a member's access (owner only). Deletes the Clerk user and their profile row.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Removed
+        "400":
+          description: Cannot remove the owner
+        "403":
+          description: Forbidden
+
   /seed/april-chase:
     post:
       operationId: seedAprilChase

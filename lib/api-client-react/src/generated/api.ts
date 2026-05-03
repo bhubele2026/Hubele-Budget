@@ -5128,6 +5128,90 @@ export function useListMembers<
 }
 
 /**
+ * @summary Remove a member's access (owner only). Deletes the Clerk user and their profile row.
+ */
+export const getRemoveMemberUrl = (id: string) => {
+  return `/api/members/${id}`;
+};
+
+export const removeMember = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getRemoveMemberUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getRemoveMemberMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeMember>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeMember>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["removeMember"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeMember>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return removeMember(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveMemberMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeMember>>
+>;
+
+export type RemoveMemberMutationError = ErrorType<void>;
+
+/**
+ * @summary Remove a member's access (owner only). Deletes the Clerk user and their profile row.
+ */
+export const useRemoveMember = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeMember>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeMember>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getRemoveMemberMutationOptions(options));
+};
+
+/**
  * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
  */
 export const getSeedAprilChaseUrl = () => {

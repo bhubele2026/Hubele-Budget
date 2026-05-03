@@ -4,6 +4,7 @@ import {
   useCreateInvitation,
   useRevokeInvitation,
   useListMembers,
+  useRemoveMember,
   getListInvitationsQueryKey,
   getListMembersQueryKey,
 } from "@workspace/api-client-react";
@@ -70,6 +71,7 @@ export function OwnerInvitationsSection() {
   });
   const createInvitation = useCreateInvitation();
   const revokeInvitation = useRevokeInvitation();
+  const removeMember = useRemoveMember();
 
   const form = useForm<InviteFormValues>({
     resolver: zodResolver(inviteSchema),
@@ -96,6 +98,33 @@ export function OwnerInvitationsSection() {
         onError: (err) => {
           toast({
             title: "Failed to send invitation",
+            description: String(err),
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
+  const handleRemoveMember = (id: string, label: string) => {
+    if (
+      !confirm(
+        `Remove ${label}'s access to this family budget? They will be signed out and their account will be deleted.`,
+      )
+    )
+      return;
+    removeMember.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getListMembersQueryKey(),
+          });
+          toast({ title: "Member removed", description: `${label} no longer has access.` });
+        },
+        onError: (err) => {
+          toast({
+            title: "Failed to remove member",
             description: String(err),
             variant: "destructive",
           });
@@ -257,6 +286,7 @@ export function OwnerInvitationsSection() {
                     <th className="text-left px-3 py-2 font-medium">Name</th>
                     <th className="text-left px-3 py-2 font-medium">Role</th>
                     <th className="text-left px-3 py-2 font-medium">Joined</th>
+                    <th className="px-3 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -286,6 +316,24 @@ export function OwnerInvitationsSection() {
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">
                         {formatDate(m.createdAt)}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {!m.isOwner && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              handleRemoveMember(
+                                m.id,
+                                m.email ?? m.displayName ?? "this member",
+                              )
+                            }
+                            disabled={removeMember.isPending}
+                            data-testid={`button-remove-member-${m.id}`}
+                          >
+                            <X className="w-3.5 h-3.5 mr-1" /> Remove
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}

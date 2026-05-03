@@ -4561,6 +4561,16 @@ export declare const ListMembersResponse: zod.ZodArray<zod.ZodObject<{
     lastSignInAt?: number | null | undefined;
 }>, "many">;
 /**
+ * @summary Remove a member's access (owner only). Deletes the Clerk user and their profile row.
+ */
+export declare const RemoveMemberParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+/**
  * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
  */
 export declare const SeedAprilChaseResponse: zod.ZodObject<{

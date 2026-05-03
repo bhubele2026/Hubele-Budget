@@ -1313,6 +1313,32 @@ export declare function useListMembers<TData = Awaited<ReturnType<typeof listMem
     queryKey: QueryKey;
 };
 /**
+ * @summary Remove a member's access (owner only). Deletes the Clerk user and their profile row.
+ */
+export declare const getRemoveMemberUrl: (id: string) => string;
+export declare const removeMember: (id: string, options?: RequestInit) => Promise<void>;
+export declare const getRemoveMemberMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof removeMember>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof removeMember>>, TError, {
+    id: string;
+}, TContext>;
+export type RemoveMemberMutationResult = NonNullable<Awaited<ReturnType<typeof removeMember>>>;
+export type RemoveMemberMutationError = ErrorType<void>;
+/**
+ * @summary Remove a member's access (owner only). Deletes the Clerk user and their profile row.
+ */
+export declare const useRemoveMember: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof removeMember>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof removeMember>>, TError, {
+    id: string;
+}, TContext>;
+/**
  * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
  */
 export declare const getSeedAprilChaseUrl: () => string;

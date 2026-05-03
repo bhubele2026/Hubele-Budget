@@ -1,6 +1,8 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { clerkClient } from "@clerk/express";
-import { requireOwner, isOwnerEmail } from "../middlewares/requireOwner";
+import { db, profilesTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { requireOwner, isOwnerEmail, loadUserEmail } from "../middlewares/requireOwner";
 
 const router: IRouter = Router();
 
@@ -35,5 +37,37 @@ router.get("/members", requireOwner, async (_req: Request, res: Response): Promi
   });
   res.json(members);
 });
+
+router.delete(
+  "/members/:id",
+  requireOwner,
+  async (req: Request, res: Response): Promise<void> => {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!id) {
+      res.status(400).json({ error: "Missing member id" });
+      return;
+    }
+    if (req.userId && id === req.userId) {
+      res.status(400).json({ error: "You cannot remove yourself" });
+      return;
+    }
+    try {
+      const targetEmail = await loadUserEmail(id);
+      if (isOwnerEmail(targetEmail)) {
+        res.status(400).json({ error: "Cannot remove the owner" });
+        return;
+      }
+      await clerkClient.users.deleteUser(id);
+      await db.delete(profilesTable).where(eq(profilesTable.id, id));
+      res.status(204).end();
+    } catch (err: unknown) {
+      const e = err as { status?: number; errors?: Array<{ message?: string }>; message?: string };
+      const status = typeof e.status === "number" ? e.status : 500;
+      const message =
+        e.errors?.[0]?.message || e.message || "Failed to remove member";
+      res.status(status).json({ error: message });
+    }
+  },
+);
 
 export default router;

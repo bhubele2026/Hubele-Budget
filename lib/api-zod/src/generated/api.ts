@@ -1485,6 +1485,13 @@ export const ListMembersResponseItem = zod.object({
 export const ListMembersResponse = zod.array(ListMembersResponseItem);
 
 /**
+ * @summary Remove a member's access (owner only). Deletes the Clerk user and their profile row.
+ */
+export const RemoveMemberParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+/**
  * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
  */
 export const SeedAprilChaseResponse = zod.object({
