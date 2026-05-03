@@ -3,6 +3,7 @@ import {
   useListTransactions,
   useUpdateTransaction,
   useListCategories,
+  useListDebts,
   getListTransactionsQueryKey,
   getGetBudgetMonthQueryKey,
   type Transaction,
@@ -34,7 +35,7 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { Search, CreditCard } from "lucide-react";
+import { Search, CreditCard, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
 import { CategoryPicker } from "@/components/category-picker";
 import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -44,26 +45,57 @@ import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 
 const AMEX_SOURCE = "amex";
 
-function startOfWeek(d: Date) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  x.setDate(x.getDate() - x.getDay());
-  return x;
-}
-
-function startOfMonth(d: Date) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  x.setDate(1);
-  return x;
-}
-
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
 function parseAbs(amount: string) {
   return Math.abs(parseFloat(amount) || 0);
+}
+
+function parseSigned(amount: string) {
+  return parseFloat(amount) || 0;
+}
+
+type MonthKey = { year: number; month: number };
+
+function monthKeyOf(d: Date): MonthKey {
+  return { year: d.getFullYear(), month: d.getMonth() };
+}
+
+function monthKeyFromISO(iso: string): MonthKey {
+  const [y, m] = iso.slice(0, 10).split("-").map(Number);
+  return { year: y, month: m - 1 };
+}
+
+function compareMonth(a: MonthKey, b: MonthKey): number {
+  if (a.year !== b.year) return a.year - b.year;
+  return a.month - b.month;
+}
+
+function shiftMonth(mk: MonthKey, delta: number): MonthKey {
+  const d = new Date(mk.year, mk.month + delta, 1);
+  return { year: d.getFullYear(), month: d.getMonth() };
+}
+
+function formatMonthLabel(mk: MonthKey): string {
+  return new Date(mk.year, mk.month, 1).toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function isoDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function monthFirstISO(mk: MonthKey): string {
+  return isoDate(new Date(mk.year, mk.month, 1));
+}
+
+function monthLastISO(mk: MonthKey): string {
+  return isoDate(new Date(mk.year, mk.month + 1, 0));
 }
 
 function defaultWeeklyBucketFor(categoryName: string): typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket] {
@@ -103,18 +135,28 @@ export default function AmexPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [memberFilter, setMemberFilter] = useState<string>("all");
 
+  const currentMonth = useMemo<MonthKey>(() => monthKeyOf(new Date()), []);
+  const [selectedMonth, setSelectedMonth] = useState<MonthKey>(currentMonth);
+
+  // Server query: fetch the union of [selected month] ∪ [selected month →
+  // current month] so we have everything needed for the month's rows AND
+  // for rolling the ending balance between the anchor and the selected
+  // month. Per-row From/To narrows further client-side.
   const queryParams = useMemo(() => {
-    const p: { from?: string; to?: string; source?: string; limit?: number } = {
-      limit: 1000,
+    const earlier = compareMonth(selectedMonth, currentMonth) <= 0 ? selectedMonth : currentMonth;
+    const later = compareMonth(selectedMonth, currentMonth) >= 0 ? selectedMonth : currentMonth;
+    const p: { source?: string; limit?: number; from?: string; to?: string } = {
+      limit: 5000,
+      from: monthFirstISO(earlier),
+      to: monthLastISO(later),
     };
-    if (from) p.from = from;
-    if (to) p.to = to;
     if (sourceFilter && sourceFilter !== "all") p.source = sourceFilter;
     return p;
-  }, [from, to, sourceFilter]);
+  }, [sourceFilter, selectedMonth, currentMonth]);
 
   const { data: txns, isLoading } = useListTransactions(queryParams);
   const { data: categories } = useListCategories();
+  const { data: debts } = useListDebts();
   const updateTx = useUpdateTransaction();
   const weeklyLabels = useWeeklyBucketLabels();
 
@@ -134,10 +176,22 @@ export default function AmexPage() {
     return Array.from(s).sort();
   }, [all]);
 
+  // Restrict to the selected calendar month before any other client-side
+  // filtering. The From/To inputs further narrow within the month.
+  const monthScoped = useMemo(() => {
+    return all.filter((t) => {
+      const mk = monthKeyFromISO(t.occurredOn);
+      return compareMonth(mk, selectedMonth) === 0;
+    });
+  }, [all, selectedMonth]);
+
   // Apply client-side filters.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return all.filter((t) => {
+    return monthScoped.filter((t) => {
+      const k = t.occurredOn.slice(0, 10);
+      if (from && k < from) return false;
+      if (to && k > to) return false;
       if (memberFilter !== "all" && (t.member ?? "") !== memberFilter)
         return false;
       if (categoryFilter !== "all") {
@@ -151,7 +205,7 @@ export default function AmexPage() {
       }
       return true;
     });
-  }, [all, search, memberFilter, categoryFilter, categoryById]);
+  }, [monthScoped, search, memberFilter, categoryFilter, categoryById, from, to]);
 
   // Group by day (descending).
   const groups = useMemo(() => {
@@ -165,28 +219,75 @@ export default function AmexPage() {
     return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
   }, [filtered]);
 
-  // Top totals (across visible/filtered set).
-  const totals = useMemo(() => {
-    const today = new Date();
-    const weekStart = startOfWeek(today);
-    const monthStart = startOfMonth(today);
-    const todayKey = ymd(today);
-    const weekKey = ymd(weekStart);
-    const monthKey = ymd(monthStart);
-    let day = 0,
-      week = 0,
-      month = 0,
-      shown = 0;
+  // Per-month totals: split by sign of `amount`. Charges are positive
+  // (expenses on the card), payments/credits are negative.
+  const monthTotals = useMemo(() => {
+    let charges = 0;
+    let paymentsAndCredits = 0;
     for (const t of filtered) {
-      const a = parseAbs(t.amount);
-      shown += a;
-      const k = t.occurredOn.slice(0, 10);
-      if (k === todayKey) day += a;
-      if (k >= weekKey) week += a;
-      if (k >= monthKey) month += a;
+      const a = parseSigned(t.amount);
+      if (a >= 0) charges += a;
+      else paymentsAndCredits += a; // negative
     }
-    return { day, week, month, shown };
+    const netChange = charges + paymentsAndCredits; // charges - |payments|
+    return { charges, paymentsAndCredits, netChange };
   }, [filtered]);
+
+  // Net change per month for the entire visible (source-filtered) set —
+  // used to roll the latest known account balance backward/forward to give
+  // each month a consistent ending balance.
+  const netChangeByMonth = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of all) {
+      const mk = monthKeyFromISO(t.occurredOn);
+      const k = `${mk.year}-${mk.month}`;
+      m.set(k, (m.get(k) ?? 0) + parseSigned(t.amount));
+    }
+    return m;
+  }, [all]);
+
+  // Find the linked Amex debt (if any) for the anchor balance.
+  const amexDebt = useMemo(() => {
+    if (!debts) return null;
+    return (
+      debts.find((d) => /amex|american\s*express/i.test(d.name)) ?? null
+    );
+  }, [debts]);
+
+  const endingBalance = useMemo(() => {
+    if (!amexDebt) {
+      // No linked Amex debt — we have no opening-balance anchor and the
+      // server query is scoped, so we can't honestly compute a running
+      // sum here. Fail loudly in the UI rather than show a misleading
+      // number.
+      return { value: null as number | null, source: "missing" as const };
+    }
+    const anchor = parseSigned(amexDebt.balance);
+    const cmp = compareMonth(selectedMonth, currentMonth);
+    if (cmp === 0) return { value: anchor, source: "debt" as const };
+    let bal = anchor;
+    if (cmp < 0) {
+      // Past month: undo every month after selectedMonth, up to and
+      // including currentMonth (those net changes happened after the end
+      // of the selected month).
+      let cursor = currentMonth;
+      while (compareMonth(cursor, selectedMonth) > 0) {
+        const k = `${cursor.year}-${cursor.month}`;
+        bal -= netChangeByMonth.get(k) ?? 0;
+        cursor = shiftMonth(cursor, -1);
+      }
+    } else {
+      // Future month: add net change for every month strictly after
+      // currentMonth, up to and including selectedMonth.
+      let cursor = shiftMonth(currentMonth, 1);
+      while (compareMonth(cursor, selectedMonth) <= 0) {
+        const k = `${cursor.year}-${cursor.month}`;
+        bal += netChangeByMonth.get(k) ?? 0;
+        cursor = shiftMonth(cursor, 1);
+      }
+    }
+    return { value: bal, source: "debt" as const };
+  }, [amexDebt, netChangeByMonth, selectedMonth, currentMonth]);
 
   // Bulk selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -499,12 +600,85 @@ export default function AmexPage() {
         </div>
       </div>
 
-      {/* Stat chips */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatChip label="Today" value={totals.day} accent="bg-blue-50 text-blue-900 border-blue-200" />
-        <StatChip label="This week" value={totals.week} accent="bg-blue-50 text-blue-900 border-blue-200" />
-        <StatChip label="This month" value={totals.month} accent="bg-blue-50 text-blue-900 border-blue-200" />
-        <StatChip label="Shown" value={totals.shown} />
+      {/* Month selector + per-month totals */}
+      <div className="flex items-stretch gap-4 flex-wrap">
+        <div className="flex items-center gap-2 rounded-md border bg-card px-2 py-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setSelectedMonth((m) => shiftMonth(m, -1))}
+            aria-label="Previous month"
+            data-testid="button-prev-month"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <div
+            className="min-w-[88px] text-center font-mono text-sm font-semibold tabular-nums"
+            data-testid="text-selected-month"
+          >
+            {formatMonthLabel(selectedMonth)}
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setSelectedMonth((m) => shiftMonth(m, 1))}
+            aria-label="Next month"
+            data-testid="button-next-month"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 min-w-[280px]">
+          {endingBalance.source === "missing" ? (
+            <div
+              className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900"
+              data-testid="stat-ending-balance"
+            >
+              <div className="text-[10px] uppercase tracking-widest text-amber-700 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" /> Ending balance
+              </div>
+              <div className="font-mono tabular-nums font-semibold text-base">
+                Unavailable
+              </div>
+              <div className="text-[10px] leading-tight mt-0.5">
+                Link an Amex debt in Debts to see the balance.
+              </div>
+            </div>
+          ) : (
+            <StatChip
+              label="Ending balance"
+              value={endingBalance.value ?? 0}
+              accent="bg-blue-50 text-blue-900 border-blue-200"
+              testId="stat-ending-balance"
+            />
+          )}
+          <StatChip
+            label="Charges"
+            value={monthTotals.charges}
+            testId="stat-charges"
+          />
+          <StatChip
+            label="Payments & credits"
+            value={Math.abs(monthTotals.paymentsAndCredits)}
+            valueClassName="text-emerald-700"
+            testId="stat-payments-credits"
+          />
+          <StatChip
+            label="Net change"
+            value={monthTotals.netChange}
+            valueClassName={
+              monthTotals.netChange > 0
+                ? "text-rose-700"
+                : monthTotals.netChange < 0
+                  ? "text-emerald-700"
+                  : undefined
+            }
+            signed
+            testId="stat-net-change"
+          />
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -566,8 +740,8 @@ export default function AmexPage() {
               </Select>
             </div>
           )}
-          <div className="text-xs text-muted-foreground ml-auto">
-            {filtered.length} of {all.length} txns
+          <div className="text-xs text-muted-foreground ml-auto" data-testid="text-row-count">
+            {filtered.length} of {monthScoped.length} txns
           </div>
         </CardContent>
       </Card>
@@ -775,18 +949,33 @@ function StatChip({
   label,
   value,
   accent,
+  valueClassName,
+  signed,
+  testId,
 }: {
   label: string;
   value: number;
   accent?: string;
+  valueClassName?: string;
+  signed?: boolean;
+  testId?: string;
 }) {
+  const display = signed && value > 0 ? `+${formatCurrency(value)}` : formatCurrency(value);
   return (
-    <div className={cn("rounded-md border px-3 py-2", accent ?? "bg-card")}>
+    <div
+      className={cn("rounded-md border px-3 py-2", accent ?? "bg-card")}
+      data-testid={testId}
+    >
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
         {label}
       </div>
-      <div className="font-mono tabular-nums font-semibold text-base">
-        {formatCurrency(value)}
+      <div
+        className={cn(
+          "font-mono tabular-nums font-semibold text-base",
+          valueClassName,
+        )}
+      >
+        {display}
       </div>
     </div>
   );
