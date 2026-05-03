@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   useGetSettings,
   useUpdateSettings,
@@ -32,6 +32,7 @@ import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { OwnerInvitationsSection } from "@/components/owner-invitations";
 import {
   DEFAULT_DAYS_SINCE_TRACKERS,
+  compileMatcher,
   newTrackerId,
   type DaysSinceTracker,
 } from "@/lib/daysSinceTrackers";
@@ -220,6 +221,23 @@ export default function SettingsPage() {
   const resetTrackers = () => {
     setTrackers([...DEFAULT_DAYS_SINCE_TRACKERS]);
   };
+
+  const trackerErrors = useMemo(() => {
+    const catNameById = new Map<string, string>(
+      (categories ?? []).map((c) => [c.id, c.name]),
+    );
+    const errors: Record<string, string | null> = {};
+    for (const t of trackers) {
+      if (!t.matchValue.trim()) {
+        errors[t.id] = null;
+        continue;
+      }
+      errors[t.id] = compileMatcher(t, catNameById).error;
+    }
+    return errors;
+  }, [trackers, categories]);
+
+  const hasInvalidTracker = Object.values(trackerErrors).some((e) => e !== null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -563,7 +581,17 @@ export default function SettingsPage() {
                   list={t.matchType === "category" ? "tracker-category-suggestions" : undefined}
                   onChange={(e) => updateTracker(t.id, { matchValue: e.target.value })}
                   data-testid={`input-tracker-value-${t.id}`}
+                  aria-invalid={trackerErrors[t.id] ? true : undefined}
                 />
+                {trackerErrors[t.id] && (
+                  <p
+                    className="text-xs text-amber-700 dark:text-amber-400"
+                    data-testid={`tracker-value-error-${t.id}`}
+                    title={trackerErrors[t.id] ?? undefined}
+                  >
+                    Couldn't read this rule
+                  </p>
+                )}
               </div>
               <Button
                 type="button"
@@ -585,9 +613,21 @@ export default function SettingsPage() {
             <Button type="button" variant="outline" onClick={addTracker} data-testid="button-add-tracker">
               <Plus className="w-4 h-4 mr-1.5" /> Add tracker
             </Button>
-            <Button onClick={saveTrackers} disabled={updateSettings.isPending} data-testid="button-save-trackers">
+            <Button
+              onClick={saveTrackers}
+              disabled={updateSettings.isPending || hasInvalidTracker}
+              data-testid="button-save-trackers"
+            >
               Save Trackers
             </Button>
+            {hasInvalidTracker && (
+              <p
+                className="text-xs text-amber-700 dark:text-amber-400"
+                data-testid="tracker-save-blocked"
+              >
+                Fix the invalid rule before saving.
+              </p>
+            )}
             <Button type="button" variant="ghost" onClick={resetTrackers}>
               Reset to defaults
             </Button>
