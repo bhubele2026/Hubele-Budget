@@ -137,25 +137,55 @@ export default function TransactionsPage() {
   // running balance reconciles to bankSnapshot. When nothing is linked yet
   // (manual snapshot or no snapshot at all), fall back to manual rows so
   // the page still has something to show.
-  const chaseTransactions = useMemo(() => {
+  const accountTransactions = useMemo(() => {
     const all = transactions ?? [];
-    const inMonth = (t: Transaction) =>
-      t.occurredOn >= currentMonth && t.occurredOn <= monthEnd;
     if (chasePlaidAccountId) {
-      return all.filter(
-        (t) => t.plaidAccountId === chasePlaidAccountId && inMonth(t),
-      );
+      return all.filter((t) => t.plaidAccountId === chasePlaidAccountId);
     }
-    return all.filter((t) => !t.plaidAccountId && inMonth(t));
-  }, [transactions, chasePlaidAccountId, currentMonth, monthEnd]);
+    return all.filter((t) => !t.plaidAccountId);
+  }, [transactions, chasePlaidAccountId]);
+
+  const chaseTransactions = useMemo(
+    () =>
+      accountTransactions.filter(
+        (t) => t.occurredOn >= currentMonth && t.occurredOn <= monthEnd,
+      ),
+    [accountTransactions, currentMonth, monthEnd],
+  );
+
+  // The bank snapshot reflects the live balance (today). To get the ending
+  // balance for the *displayed* month, undo every transaction that occurred
+  // strictly after monthEnd. For the current/future month, this collapses
+  // to the live snapshot itself.
+  const monthEndingBalance = useMemo(() => {
+    if (!bankSnapshot) return null;
+    const anchor = Number(bankSnapshot.balance) || 0;
+    let bal = Math.round(anchor * 100) / 100;
+    for (const t of accountTransactions) {
+      if (t.occurredOn > monthEnd) {
+        bal = Math.round((bal - (Number(t.amount) || 0)) * 100) / 100;
+      }
+    }
+    return bal;
+  }, [accountTransactions, bankSnapshot, monthEnd]);
+
+  const monthNetChange = useMemo(() => {
+    let sum = 0;
+    for (const t of chaseTransactions) sum += Number(t.amount) || 0;
+    return Math.round(sum * 100) / 100;
+  }, [chaseTransactions]);
+
+  const monthOpeningBalance = useMemo(() => {
+    if (monthEndingBalance === null) return null;
+    return Math.round((monthEndingBalance - monthNetChange) * 100) / 100;
+  }, [monthEndingBalance, monthNetChange]);
 
   const runningBalances = useMemo(() => {
-    if (!bankSnapshot) return new Map<string, number>();
-    return computeRunningBalances(
-      chaseTransactions,
-      Number(bankSnapshot.balance) || 0,
-    );
-  }, [chaseTransactions, bankSnapshot]);
+    if (monthEndingBalance === null) return new Map<string, number>();
+    // Anchor on the displayed month's ending balance so historical months
+    // reconcile to that month rather than today's snapshot.
+    return computeRunningBalances(chaseTransactions, monthEndingBalance);
+  }, [chaseTransactions, monthEndingBalance]);
 
   const handleRefreshBank = () => {
     refreshBank.mutate(undefined, {
@@ -449,7 +479,7 @@ export default function TransactionsPage() {
       <Card data-testid="card-chase-balance">
         <CardHeader className="pb-2 flex-row items-center justify-between">
           <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-            <Landmark className="w-4 h-4" /> Chase checking balance
+            <Landmark className="w-4 h-4" /> {monthName} · Chase checking
           </CardTitle>
           {bankSnapshot && bankSnapshot.source === "plaid" && (
             <Button
@@ -465,9 +495,40 @@ export default function TransactionsPage() {
             </Button>
           )}
         </CardHeader>
-        <CardContent className="space-y-1">
-          <div className="text-2xl font-bold tabular-nums" data-testid="text-chase-balance">
-            {bankSnapshot ? formatCurrency(bankSnapshot.balance) : "—"}
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <div className="text-xs text-muted-foreground">Opening</div>
+              <div
+                className="text-lg font-semibold tabular-nums"
+                data-testid="text-month-opening-balance"
+              >
+                {monthOpeningBalance !== null
+                  ? formatCurrency(monthOpeningBalance)
+                  : "—"}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Net change</div>
+              <div
+                className={`text-lg font-semibold tabular-nums ${monthNetChange < 0 ? "text-red-600" : monthNetChange > 0 ? "text-emerald-600" : ""}`}
+                data-testid="text-month-net-change"
+              >
+                {monthNetChange > 0 ? "+" : ""}
+                {formatCurrency(monthNetChange)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Ending</div>
+              <div
+                className="text-2xl font-bold tabular-nums"
+                data-testid="text-chase-balance"
+              >
+                {monthEndingBalance !== null
+                  ? formatCurrency(monthEndingBalance)
+                  : "—"}
+              </div>
+            </div>
           </div>
           <div className="text-xs text-muted-foreground">
             {bankSnapshot ? (
@@ -475,7 +536,9 @@ export default function TransactionsPage() {
                 {bankSnapshot.source === "plaid" ? "Plaid" : "Manual"} ·{" "}
                 {bankSnapshot.name ?? "Checking"}
                 {bankSnapshot.mask ? ` ••${bankSnapshot.mask}` : ""} ·{" "}
-                Updated {formatDate(bankSnapshot.at.slice(0, 10))}
+                {bankSnapshot.source === "plaid" ? "Live" : "Snapshot"}{" "}
+                {formatCurrency(bankSnapshot.balance)} (updated{" "}
+                {formatDate(bankSnapshot.at.slice(0, 10))})
               </>
             ) : (
               <>Link a Chase checking account on the Forecast page to see a live balance.</>
