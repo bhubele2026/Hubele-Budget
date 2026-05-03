@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 pnpm install --frozen-lockfile
+# Task #150 — ensure Playwright's chromium browser is present so the
+# registered `e2e` validation step (artifacts/h2budget e2e suite) can run
+# on a fresh checkout / CI environment.
+pnpm --filter @workspace/h2budget exec playwright install chromium
 pnpm --filter db push
 # Re-run OpenAPI codegen + tsc --build so api-zod, api-client-react,
 # and lib/db dist outputs match current source.
