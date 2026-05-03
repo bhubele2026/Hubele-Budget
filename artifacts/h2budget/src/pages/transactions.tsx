@@ -283,12 +283,10 @@ export default function TransactionsPage() {
   }, [chaseTransactions]);
 
   const anchorBalance = bankSnapshot ? Number(bankSnapshot.balance) || 0 : null;
-  // Anchor the rolling balance at the bank snapshot's month, NOT today's
-  // month. The snapshot value is the known balance as of `bankSnapshot.at`,
-  // so end-of-snapshot-month MUST equal the snapshot. Anchoring to "today"
-  // caused months earlier than today (e.g., April when today is in May) to
-  // be computed as snapshot − netChange(May...today), which subtracts
-  // future activity from a known historical balance.
+  // Anchor the rolling balance at the bank snapshot's month. The snapshot
+  // value is the known balance as of `bankSnapshot.at` (typically a
+  // mid-month Plaid sync). End-of-anchor-month is reconstructed by the
+  // helper as snapshot + sum(post-snapshot txns in anchor month).
   const anchorMonth = useMemo<MonthKey>(() => {
     if (bankSnapshot?.at) return monthKeyFromISO(bankSnapshot.at);
     return currentMonth;

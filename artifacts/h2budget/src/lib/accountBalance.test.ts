@@ -96,6 +96,39 @@ describe("computeBalanceAtEndOf (snapshot-anchored)", () => {
     expect(result).toBeCloseTo(1100, 2);
   });
 
+  it("treats an anchorAt exactly at month-end as having zero post-anchor activity", () => {
+    // Anchor at end-of-day Apr 30; only April 28 txns exist (pre-anchor).
+    // End-of-April should equal the snapshot, with the txn ignored.
+    const aprEnd = "2026-04-30T23:59:59Z";
+    const result = computeBalanceAtEndOf({
+      anchorBalance: 500,
+      anchorMonth: monthKeyFromISO(aprEnd),
+      netChangeByMonth: new Map(),
+      target: monthKeyFromISO("2026-04-15"),
+      anchorAt: aprEnd,
+      anchorMonthTxns: [{ occurredOn: "2026-04-28", amount: -123.45 }],
+    });
+    expect(result).toBeCloseTo(500, 2);
+  });
+
+  it("rolls a mid-month-anchored balance forward to a later month", () => {
+    // Apr 15 / $1000 snapshot, post-anchor April activity = +150.
+    // End-of-April = 1150. May net = -300. End-of-May = 850.
+    const aprMid = "2026-04-15T12:00:00Z";
+    const result = computeBalanceAtEndOf({
+      anchorBalance: 1000,
+      anchorMonth: monthKeyFromISO(aprMid),
+      netChangeByMonth: new Map([["2026-4", -300]]),
+      target: monthKeyFromISO("2026-05-15"),
+      anchorAt: aprMid,
+      anchorMonthTxns: [
+        { occurredOn: "2026-04-20", amount: 200 },
+        { occurredOn: "2026-04-28", amount: -50 },
+      ],
+    });
+    expect(result).toBeCloseTo(850, 2);
+  });
+
   it("walks backward by subtracting net change for months before the anchor", () => {
     const netChangeByMonth = new Map<string, number>([
       ["2026-3", -200], // April
