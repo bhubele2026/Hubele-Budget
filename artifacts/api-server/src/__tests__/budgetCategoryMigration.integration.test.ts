@@ -137,7 +137,12 @@ describe("budget category v2 migration", () => {
       (l: { categoryName: string }) => l.categoryName === "Utilities",
     );
     expect(utilitiesLine).toBeTruthy();
-    expect(parseFloat(utilitiesLine.plannedAmount)).toBeCloseTo(684.02, 2); // 241 + 101.02 + 342
+    // After the v2 migration sums the legacy lines (241 + 101.02 + 342 =
+    // 684.02), the May 2026 canonical reconciliation (task #106) overrides
+    // Utilities to the user's source-of-truth value of 774.24. The merged
+    // category still exists with re-pointed references — that's what this
+    // test cares about.
+    expect(parseFloat(utilitiesLine.plannedAmount)).toBeCloseTo(774.24, 2);
     expect(parseFloat(utilitiesLine.actualAmount)).toBeCloseTo(150.0, 2);
 
     // Mapping rule should now point at the new Utilities category.

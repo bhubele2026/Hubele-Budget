@@ -413,6 +413,154 @@ async function migrateBudgetCategoriesV2(userId: string): Promise<void> {
   });
 }
 
+// One-time per-user reconciliation of the May 2026 budget planned amounts to
+// the user's canonical source-of-truth values (task #106). Idempotent: gated
+// by `settings.preferences.budgetMay2026AmountsV1`.
+//
+// For each consolidated category in the table, upsert the budget_lines row
+// for 2026-05-01 with the listed planned amount. Auto-pulled rows
+// (paychecks via Bills, debt minimums via the Debt Tracker) are only written
+// when the existing planned amount differs from canonical, so we don't fight
+// the auto-sync logic. Also sets avalanche_settings.manualExtra = 6225.00 and
+// re-syncs the managed Avalanche payment line.
+const MAY_2026_CANONICAL_PLANNED: Record<string, string> = {
+  "Hannah's paycheck (Exact)": "4499.99",
+  "Brad's paycheck (KFI)": "8100.00",
+  "Other Income": "88.00",
+  "Mortgage (Lakeview)": "1989.81",
+  "HELOC (Figure)": "677.40",
+  "Utilities": "774.24",
+  "Home Maintenance & Warranty": "53.85",
+  "Health": "0",
+  "Insurance": "345.13",
+  "Groceries": "460.00",
+  "Dining & Coffee": "460.00",
+  "Car Payments": "1324.35",
+  "Gas, Maintenance & Parking": "250.00",
+  "Childcare & Activities": "0",
+  "Pets": "0",
+  "Subscriptions": "315.62",
+  "Shopping": "0",
+  "Entertainment": "0",
+  "Charitable Giving & Education": "0",
+  "Misc / Buffer": "237.58",
+  "Emergency Fund": "0",
+  "Investments & Retirement": "0",
+  "Kids' Savings / 529": "0",
+  "Tax Sinking Fund": "0",
+};
+const MAY_2026_MONTH = "2026-05-01";
+const MAY_2026_AVALANCHE_MANUAL_EXTRA = "6225.00";
+
+async function reconcileMay2026Amounts(userId: string): Promise<void> {
+  const [s] = await db
+    .select()
+    .from(settingsTable)
+    .where(eq(settingsTable.userId, userId));
+  const prefs = (s?.preferences as Record<string, unknown> | null) ?? null;
+  if (prefs && prefs.budgetMay2026AmountsV1 === true) return;
+
+  await db.transaction(async (tx) => {
+    const cats = await tx
+      .select()
+      .from(budgetCategoriesTable)
+      .where(eq(budgetCategoriesTable.userId, userId));
+    const byName = new Map(cats.map((c) => [c.name, c]));
+
+    await tx
+      .insert(budgetMonthsTable)
+      .values({ userId, monthStart: MAY_2026_MONTH })
+      .onConflictDoNothing();
+
+    for (const [catName, canonical] of Object.entries(
+      MAY_2026_CANONICAL_PLANNED,
+    )) {
+      const cat = byName.get(catName);
+      if (!cat) continue;
+      const isAuto = cat.sourceKind === "auto_bills" || cat.sourceKind === "auto_debts";
+
+      const [existing] = await tx
+        .select()
+        .from(budgetLinesTable)
+        .where(
+          and(
+            eq(budgetLinesTable.userId, userId),
+            eq(budgetLinesTable.monthStart, MAY_2026_MONTH),
+            eq(budgetLinesTable.categoryId, cat.id),
+          ),
+        );
+
+      // For auto-pulled rows, leave alone if already canonical so we don't
+      // fight the auto-sync that will re-write these on the next request.
+      if (
+        isAuto &&
+        existing &&
+        parseFloat(existing.plannedAmount) === parseFloat(canonical)
+      ) {
+        continue;
+      }
+
+      await tx
+        .insert(budgetLinesTable)
+        .values({
+          userId,
+          monthStart: MAY_2026_MONTH,
+          categoryId: cat.id,
+          plannedAmount: canonical,
+        })
+        .onConflictDoUpdate({
+          target: [
+            budgetLinesTable.userId,
+            budgetLinesTable.monthStart,
+            budgetLinesTable.categoryId,
+          ],
+          set: { plannedAmount: canonical },
+        });
+    }
+
+    // Upsert avalanche manualExtra to the canonical $6,225.00 for this user.
+    const [existingAv] = await tx
+      .select()
+      .from(avalancheSettingsTable)
+      .where(eq(avalancheSettingsTable.userId, userId));
+    if (existingAv) {
+      await tx
+        .update(avalancheSettingsTable)
+        .set({
+          manualExtra: MAY_2026_AVALANCHE_MANUAL_EXTRA,
+          updatedAt: new Date(),
+        })
+        .where(eq(avalancheSettingsTable.userId, userId));
+    } else {
+      await tx
+        .insert(avalancheSettingsTable)
+        .values({
+          userId,
+          manualExtra: MAY_2026_AVALANCHE_MANUAL_EXTRA,
+        });
+    }
+
+    const nextPrefs = { ...(prefs ?? {}), budgetMay2026AmountsV1: true };
+    if (s) {
+      await tx
+        .update(settingsTable)
+        .set({ preferences: nextPrefs })
+        .where(eq(settingsTable.userId, userId));
+    } else {
+      await tx
+        .insert(settingsTable)
+        .values({ userId, preferences: nextPrefs })
+        .onConflictDoUpdate({
+          target: settingsTable.userId,
+          set: { preferences: nextPrefs },
+        });
+    }
+  });
+
+  // Re-sync the managed Avalanche payment line to reflect the new manualExtra.
+  await syncAvalanchePaymentCategory(userId, MAY_2026_MONTH);
+}
+
 router.get("/budget/categories", requireAuth, async (req, res): Promise<void> => {
   const rows = await db
     .select()
@@ -778,6 +926,13 @@ router.get(
     // Gated by a per-user flag, so it's a no-op on subsequent requests.
     await migrateBudgetCategoriesV2(req.userId!);
 
+    // One-time reconciliation of May 2026 planned amounts to the user's
+    // canonical source-of-truth values (task #106). Only runs when this
+    // request is for May 2026; gated by a per-user flag thereafter.
+    if (monthStart === MAY_2026_MONTH) {
+      await reconcileMay2026Amounts(req.userId!);
+    }
+
     // Pull the live Debts tracker into auto_debts categories/lines for this
     // month before reading anything back. Each call ensures the budget rows
     // match the current Debts state (adds, removes, renames, min changes).
@@ -1009,8 +1164,20 @@ router.get(
           ? inflowByCat.get(c.id) ?? 0
           : spendByCat.get(c.id) ?? 0;
       const derived = autoPlannedByCat.get(c.id);
-      const plannedAmount =
-        c.sourceKind !== "manual" && derived !== undefined
+      // For auto-pulled categories listed in the May 2026 canonical map, the
+      // user pinned a specific monthly amount (e.g. one paycheck of $4,499.99
+      // rather than the 2–3 biweekly events the recurring-item expansion
+      // would yield). Prefer the persisted budget_line so the UI matches the
+      // user's source-of-truth totals for that month. Other months continue
+      // to derive from Bills/Debts as usual. (task #106)
+      const useCanonicalLine =
+        monthStart === MAY_2026_MONTH &&
+        c.sourceKind !== "manual" &&
+        MAY_2026_CANONICAL_PLANNED[c.name] !== undefined &&
+        line !== undefined;
+      const plannedAmount = useCanonicalLine
+        ? line!.plannedAmount
+        : c.sourceKind !== "manual" && derived !== undefined
           ? derived
           : line?.plannedAmount ?? "0";
       const buckets = breakdownByCat.get(c.id) ?? [];

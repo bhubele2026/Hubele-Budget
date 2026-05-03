@@ -279,7 +279,7 @@ export const SEED_CATEGORIES: SeedCategory[] = [
   { groupName: "Lifestyle & Shopping", kind: "expense", sourceKind: "manual", name: "Shopping", planned: "0", note: "Amazon, Walmart/Target, clothing, electronics, home" },
   { groupName: "Lifestyle & Shopping", kind: "expense", sourceKind: "manual", name: "Entertainment", planned: "0", note: "Movies, concerts, fun" },
   { groupName: "Lifestyle & Shopping", kind: "expense", sourceKind: "manual", name: "Charitable Giving & Education", planned: "0", note: "Athenaeum + Becker/Eastern Univ" },
-  { groupName: "Lifestyle & Shopping", kind: "expense", sourceKind: "manual", name: "Misc / Buffer", planned: "0", note: "Catch-all small items" },
+  { groupName: "Lifestyle & Shopping", kind: "expense", sourceKind: "manual", name: "Misc / Buffer", planned: "237.58", note: "Catch-all small items + Nelnet student loan rolled in" },
 
   // 8. Savings & Debt Payoff
   { groupName: "Savings & Debt Payoff", kind: "expense", sourceKind: "manual", name: "Emergency Fund", planned: "0", note: "Build $1,000 starter first" },
