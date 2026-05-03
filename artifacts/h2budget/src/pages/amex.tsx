@@ -246,13 +246,32 @@ export default function AmexPage() {
     return m;
   }, [all]);
 
-  // Find the linked Amex debt (if any) for the anchor balance.
+  // Distinct Plaid account IDs present on the Amex-source transactions.
+  // These identify the actual Amex card account(s) feeding this page.
+  const amexPlaidAccountIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of all) {
+      if (t.plaidAccountId) s.add(t.plaidAccountId);
+    }
+    return s;
+  }, [all]);
+
+  // Find the linked Amex debt (if any) for the anchor balance. Prefer
+  // matching by the Plaid account that actually feeds this page's
+  // transactions so renaming the debt doesn't break the link. Fall back
+  // to the legacy name regex when no Plaid link exists on either side.
   const amexDebt = useMemo(() => {
     if (!debts) return null;
+    if (amexPlaidAccountIds.size > 0) {
+      const byAccount = debts.find(
+        (d) => d.plaidAccountId && amexPlaidAccountIds.has(d.plaidAccountId),
+      );
+      if (byAccount) return byAccount;
+    }
     return (
       debts.find((d) => /amex|american\s*express/i.test(d.name)) ?? null
     );
-  }, [debts]);
+  }, [debts, amexPlaidAccountIds]);
 
   const endingBalance = useMemo(() => {
     if (!amexDebt) {
