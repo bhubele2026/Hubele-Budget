@@ -147,6 +147,48 @@ export default function AmexPage() {
   const updateTx = useUpdateTransaction();
   const weeklyLabels = useWeeklyBucketLabels();
 
+  // "Set actual balance" popover (only surfaced when ending balance source
+  // is "computed"). Persists the typed value to the server-side anchor at
+  // settings.preferences.amexAnchor so the chip flips back to "From saved
+  // anchor" on next refresh.
+  const [anchorOpen, setAnchorOpen] = useState(false);
+  const [anchorInput, setAnchorInput] = useState("");
+  const [anchorSaving, setAnchorSaving] = useState(false);
+  const submitAnchor = async () => {
+    const n = Number(anchorInput);
+    if (!Number.isFinite(n)) {
+      toast({
+        title: "Enter a valid balance",
+        description: "Use a number like 1293.08.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setAnchorSaving(true);
+    try {
+      await customFetch("/api/amex/anchor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ balance: n, asOf: new Date().toISOString() }),
+      });
+      await qc.invalidateQueries({ queryKey: ["/api/amex/anchor"] });
+      setAnchorOpen(false);
+      setAnchorInput("");
+      toast({
+        title: "Saved actual balance",
+        description: "The chip now shows your saved anchor.",
+      });
+    } catch (e) {
+      toast({
+        title: "Couldn't save balance",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setAnchorSaving(false);
+    }
+  };
+
   const categoryById = useMemo(() => {
     const m = new Map<string, string>();
     for (const c of categories ?? []) m.set(c.id, c.name);
@@ -895,6 +937,78 @@ export default function AmexPage() {
               footer={endingBalanceMeta?.footer}
               tooltip={endingBalanceMeta?.tooltip}
               testId="stat-ending-balance"
+              action={
+                endingBalance.source === "computed" ? (
+                  <Popover
+                    open={anchorOpen}
+                    onOpenChange={(o) => {
+                      setAnchorOpen(o);
+                      if (o) {
+                        setAnchorInput(
+                          endingBalance.value != null
+                            ? endingBalance.value.toFixed(2)
+                            : "",
+                        );
+                      }
+                    }}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 text-[11px] border-amber-400 text-amber-900 bg-white/60 hover:bg-white"
+                        data-testid="button-set-actual-balance"
+                      >
+                        Set actual balance
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-3" align="start">
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium">
+                          Set actual Amex balance
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Enter the real card balance. We'll save it as your anchor.
+                        </div>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={anchorInput}
+                          onChange={(e) => setAnchorInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void submitAnchor();
+                            }
+                          }}
+                          placeholder="1293.08"
+                          autoFocus
+                          data-testid="input-actual-balance"
+                        />
+                        <div className="flex justify-end gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setAnchorOpen(false)}
+                            disabled={anchorSaving}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => void submitAnchor()}
+                            disabled={anchorSaving || !anchorInput.trim()}
+                            data-testid="button-save-actual-balance"
+                          >
+                            {anchorSaving ? "Saving…" : "Save"}
+                          </Button>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : null
+              }
             />
           )}
           <StatChip

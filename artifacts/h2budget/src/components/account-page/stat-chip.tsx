@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import {
@@ -16,6 +17,7 @@ export function StatChip({
   testId,
   footer,
   tooltip,
+  action,
 }: {
   label: string;
   value: number;
@@ -25,6 +27,7 @@ export function StatChip({
   testId?: string;
   footer?: string;
   tooltip?: string;
+  action?: ReactNode;
 }) {
   const display =
     signed && value > 0 ? `+${formatCurrency(value)}` : formatCurrency(value);
@@ -52,6 +55,7 @@ export function StatChip({
           {footer}
         </div>
       ) : null}
+      {action ? <div className="mt-1">{action}</div> : null}
     </div>
   );
   if (!tooltip) return body;

@@ -141,4 +141,68 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
+/**
+ * Persist a user-provided actual Amex balance to
+ * `settings.preferences.amexAnchor`. The Amex page exposes this when the
+ * computed/transaction-derived ending balance is the only thing available
+ * (no linked debt row, no prior anchor) so the user can pin reality and
+ * have the chip switch back to "From saved anchor".
+ *
+ * Body: { balance: number, asOf?: string (ISO) }
+ */
+router.post("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
+  const body = (req.body ?? {}) as { balance?: unknown; asOf?: unknown };
+  const balanceNum = Number(body.balance);
+  if (!Number.isFinite(balanceNum)) {
+    res.status(400).json({ error: "balance must be a finite number" });
+    return;
+  }
+  let asOf: string;
+  if (typeof body.asOf === "string" && body.asOf) {
+    const d = new Date(body.asOf);
+    if (Number.isNaN(d.getTime())) {
+      res.status(400).json({ error: "asOf must be a valid ISO date string" });
+      return;
+    }
+    asOf = d.toISOString();
+  } else {
+    asOf = new Date().toISOString();
+  }
+
+  await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ preferences: settingsTable.preferences })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, userId));
+    const prevPrefs =
+      (existing?.preferences as Record<string, unknown> | null | undefined) ??
+      {};
+    const nextPrefs = {
+      ...prevPrefs,
+      amexAnchor: { balance: balanceNum, asOf },
+    };
+    if (existing) {
+      await tx
+        .update(settingsTable)
+        .set({ preferences: nextPrefs, updatedAt: new Date() })
+        .where(eq(settingsTable.userId, userId));
+    } else {
+      await tx
+        .insert(settingsTable)
+        .values({ userId, preferences: nextPrefs })
+        .onConflictDoUpdate({
+          target: settingsTable.userId,
+          set: { preferences: nextPrefs, updatedAt: new Date() },
+        });
+    }
+  });
+
+  res.json({
+    amexEndingBalance: balanceNum,
+    asOf,
+    source: "anchor" as const,
+  });
+});
+
 export default router;
