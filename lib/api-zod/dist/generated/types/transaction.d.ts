@@ -37,5 +37,7 @@ export interface Transaction {
     plaidTransactionId?: string | null;
     /** @nullable */
     plaidAccountId?: string | null;
+    /** @nullable */
+    debtId?: string | null;
 }
 //# sourceMappingURL=transaction.d.ts.map

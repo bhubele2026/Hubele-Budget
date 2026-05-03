@@ -51,6 +51,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         owedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         occurredOn: string;
@@ -73,6 +74,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         owedBy?: string | null | undefined;
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
+        debtId?: string | null | undefined;
     }, {
         id: string;
         occurredOn: string;
@@ -95,6 +97,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         owedBy?: string | null | undefined;
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
+        debtId?: string | null | undefined;
     }>, "many">;
     topCategories: zod.ZodArray<zod.ZodObject<{
         categoryName: zod.ZodString;
@@ -125,9 +128,9 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         frequency: string;
         active: string;
         categoryId?: string | null | undefined;
+        debtId?: string | null | undefined;
         dayOfMonth?: number | null | undefined;
         anchorDate?: string | null | undefined;
-        debtId?: string | null | undefined;
     }, {
         id: string;
         amount: string;
@@ -136,9 +139,9 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         frequency: string;
         active: string;
         categoryId?: string | null | undefined;
+        debtId?: string | null | undefined;
         dayOfMonth?: number | null | undefined;
         anchorDate?: string | null | undefined;
-        debtId?: string | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     totalDebt: string;
@@ -172,6 +175,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         owedBy?: string | null | undefined;
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
+        debtId?: string | null | undefined;
     }[];
     topCategories: {
         categoryName: string;
@@ -185,9 +189,9 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         frequency: string;
         active: string;
         categoryId?: string | null | undefined;
+        debtId?: string | null | undefined;
         dayOfMonth?: number | null | undefined;
         anchorDate?: string | null | undefined;
-        debtId?: string | null | undefined;
     }[];
 }, {
     totalDebt: string;
@@ -221,6 +225,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         owedBy?: string | null | undefined;
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
+        debtId?: string | null | undefined;
     }[];
     topCategories: {
         categoryName: string;
@@ -234,9 +239,9 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         frequency: string;
         active: string;
         categoryId?: string | null | undefined;
+        debtId?: string | null | undefined;
         dayOfMonth?: number | null | undefined;
         anchorDate?: string | null | undefined;
-        debtId?: string | null | undefined;
     }[];
 }>;
 export declare const ListTransactionsQueryParams: zod.ZodObject<{
@@ -245,6 +250,7 @@ export declare const ListTransactionsQueryParams: zod.ZodObject<{
     limit: zod.ZodOptional<zod.ZodNumber>;
     source: zod.ZodOptional<zod.ZodString>;
     uncategorized: zod.ZodOptional<zod.ZodBoolean>;
+    excludeTransfers: zod.ZodOptional<zod.ZodBoolean>;
     search: zod.ZodOptional<zod.ZodString>;
     minAmount: zod.ZodOptional<zod.ZodString>;
     maxAmount: zod.ZodOptional<zod.ZodString>;
@@ -256,6 +262,7 @@ export declare const ListTransactionsQueryParams: zod.ZodObject<{
     to?: string | undefined;
     limit?: number | undefined;
     uncategorized?: boolean | undefined;
+    excludeTransfers?: boolean | undefined;
     search?: string | undefined;
     minAmount?: string | undefined;
     maxAmount?: string | undefined;
@@ -266,6 +273,7 @@ export declare const ListTransactionsQueryParams: zod.ZodObject<{
     to?: string | undefined;
     limit?: number | undefined;
     uncategorized?: boolean | undefined;
+    excludeTransfers?: boolean | undefined;
     search?: string | undefined;
     minAmount?: string | undefined;
     maxAmount?: string | undefined;
@@ -292,6 +300,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     owedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     occurredOn: string;
@@ -314,6 +323,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     owedBy?: string | null | undefined;
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
+    debtId?: string | null | undefined;
 }, {
     id: string;
     occurredOn: string;
@@ -336,6 +346,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     owedBy?: string | null | undefined;
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
+    debtId?: string | null | undefined;
 }>;
 export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -359,6 +370,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     owedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     occurredOn: string;
@@ -381,6 +393,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     owedBy?: string | null | undefined;
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
+    debtId?: string | null | undefined;
 }, {
     id: string;
     occurredOn: string;
@@ -403,6 +416,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     owedBy?: string | null | undefined;
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
+    debtId?: string | null | undefined;
 }>, "many">;
 export declare const CreateTransactionBody: zod.ZodObject<{
     occurredOn: zod.ZodString;
@@ -423,6 +437,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     source: zod.ZodOptional<zod.ZodString>;
     member: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     owedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     occurredOn: string;
     description: string;
@@ -442,6 +457,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     source?: string | undefined;
     member?: string | null | undefined;
     owedBy?: string | null | undefined;
+    debtId?: string | null | undefined;
 }, {
     occurredOn: string;
     description: string;
@@ -461,6 +477,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     source?: string | undefined;
     member?: string | null | undefined;
     owedBy?: string | null | undefined;
+    debtId?: string | null | undefined;
 }>;
 export declare const UpdateTransactionParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -488,6 +505,7 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     source: zod.ZodOptional<zod.ZodString>;
     member: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     owedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     rememberPattern: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     occurredOn?: string | undefined;
@@ -508,6 +526,7 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     source?: string | undefined;
     member?: string | null | undefined;
     owedBy?: string | null | undefined;
+    debtId?: string | null | undefined;
     rememberPattern?: string | null | undefined;
 }, {
     occurredOn?: string | undefined;
@@ -528,6 +547,7 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     source?: string | undefined;
     member?: string | null | undefined;
     owedBy?: string | null | undefined;
+    debtId?: string | null | undefined;
     rememberPattern?: string | null | undefined;
 }>;
 export declare const UpdateTransactionResponse: zod.ZodObject<{
@@ -552,6 +572,7 @@ export declare const UpdateTransactionResponse: zod.ZodObject<{
     owedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     occurredOn: string;
@@ -574,6 +595,7 @@ export declare const UpdateTransactionResponse: zod.ZodObject<{
     owedBy?: string | null | undefined;
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
+    debtId?: string | null | undefined;
 }, {
     id: string;
     occurredOn: string;
@@ -596,6 +618,7 @@ export declare const UpdateTransactionResponse: zod.ZodObject<{
     owedBy?: string | null | undefined;
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
+    debtId?: string | null | undefined;
 }>;
 export declare const DeleteTransactionParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -1701,9 +1724,9 @@ export declare const ListRecurringItemsResponseItem: zod.ZodObject<{
     frequency: string;
     active: string;
     categoryId?: string | null | undefined;
+    debtId?: string | null | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
-    debtId?: string | null | undefined;
 }, {
     id: string;
     amount: string;
@@ -1712,9 +1735,9 @@ export declare const ListRecurringItemsResponseItem: zod.ZodObject<{
     frequency: string;
     active: string;
     categoryId?: string | null | undefined;
+    debtId?: string | null | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
-    debtId?: string | null | undefined;
 }>;
 export declare const ListRecurringItemsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -1735,9 +1758,9 @@ export declare const ListRecurringItemsResponse: zod.ZodArray<zod.ZodObject<{
     frequency: string;
     active: string;
     categoryId?: string | null | undefined;
+    debtId?: string | null | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
-    debtId?: string | null | undefined;
 }, {
     id: string;
     amount: string;
@@ -1746,9 +1769,9 @@ export declare const ListRecurringItemsResponse: zod.ZodArray<zod.ZodObject<{
     frequency: string;
     active: string;
     categoryId?: string | null | undefined;
+    debtId?: string | null | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
-    debtId?: string | null | undefined;
 }>, "many">;
 export declare const CreateRecurringItemBody: zod.ZodObject<{
     name: zod.ZodString;
@@ -1764,22 +1787,22 @@ export declare const CreateRecurringItemBody: zod.ZodObject<{
     name: string;
     amount?: string | undefined;
     categoryId?: string | null | undefined;
+    debtId?: string | null | undefined;
     kind?: string | undefined;
     frequency?: string | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
     active?: string | undefined;
-    debtId?: string | null | undefined;
 }, {
     name: string;
     amount?: string | undefined;
     categoryId?: string | null | undefined;
+    debtId?: string | null | undefined;
     kind?: string | undefined;
     frequency?: string | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
     active?: string | undefined;
-    debtId?: string | null | undefined;
 }>;
 export declare const UpdateRecurringItemParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -1802,22 +1825,22 @@ export declare const UpdateRecurringItemBody: zod.ZodObject<{
     name: string;
     amount?: string | undefined;
     categoryId?: string | null | undefined;
+    debtId?: string | null | undefined;
     kind?: string | undefined;
     frequency?: string | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
     active?: string | undefined;
-    debtId?: string | null | undefined;
 }, {
     name: string;
     amount?: string | undefined;
     categoryId?: string | null | undefined;
+    debtId?: string | null | undefined;
     kind?: string | undefined;
     frequency?: string | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
     active?: string | undefined;
-    debtId?: string | null | undefined;
 }>;
 export declare const UpdateRecurringItemResponse: zod.ZodObject<{
     id: zod.ZodString;
@@ -1838,9 +1861,9 @@ export declare const UpdateRecurringItemResponse: zod.ZodObject<{
     frequency: string;
     active: string;
     categoryId?: string | null | undefined;
+    debtId?: string | null | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
-    debtId?: string | null | undefined;
 }, {
     id: string;
     amount: string;
@@ -1849,9 +1872,9 @@ export declare const UpdateRecurringItemResponse: zod.ZodObject<{
     frequency: string;
     active: string;
     categoryId?: string | null | undefined;
+    debtId?: string | null | undefined;
     dayOfMonth?: number | null | undefined;
     anchorDate?: string | null | undefined;
-    debtId?: string | null | undefined;
 }>;
 export declare const DeleteRecurringItemParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -2776,6 +2799,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         owedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         occurredOn: string;
@@ -2798,6 +2822,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         owedBy?: string | null | undefined;
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
+        debtId?: string | null | undefined;
     }, {
         id: string;
         occurredOn: string;
@@ -2820,6 +2845,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         owedBy?: string | null | undefined;
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
+        debtId?: string | null | undefined;
     }>, "many">;
     resolutions: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
@@ -2938,6 +2964,34 @@ export declare const GetForecastResponse: zod.ZodObject<{
         subtype?: string | null | undefined;
         institutionName?: string | null | undefined;
     }>, "many">;
+    monthSnapshots: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodObject<{
+        balance: zod.ZodString;
+        at: zod.ZodString;
+        gap: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        forecastEnd: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        bankEnd: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        pending: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        reconciled: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+        closedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        at: string;
+        balance: string;
+        gap?: string | null | undefined;
+        forecastEnd?: string | null | undefined;
+        bankEnd?: string | null | undefined;
+        pending?: number | null | undefined;
+        reconciled?: boolean | null | undefined;
+        closedAt?: string | null | undefined;
+    }, {
+        at: string;
+        balance: string;
+        gap?: string | null | undefined;
+        forecastEnd?: string | null | undefined;
+        bankEnd?: string | null | undefined;
+        pending?: number | null | undefined;
+        reconciled?: boolean | null | undefined;
+        closedAt?: string | null | undefined;
+    }>>>;
 }, "strip", zod.ZodTypeAny, {
     fromDate: string;
     toDate: string;
@@ -2970,6 +3024,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         owedBy?: string | null | undefined;
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
+        debtId?: string | null | undefined;
     }[];
     resolutions: {
         status: string;
@@ -3014,6 +3069,16 @@ export declare const GetForecastResponse: zod.ZodObject<{
         snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
     } | null | undefined;
+    monthSnapshots?: Record<string, {
+        at: string;
+        balance: string;
+        gap?: string | null | undefined;
+        forecastEnd?: string | null | undefined;
+        bankEnd?: string | null | undefined;
+        pending?: number | null | undefined;
+        reconciled?: boolean | null | undefined;
+        closedAt?: string | null | undefined;
+    }> | undefined;
 }, {
     fromDate: string;
     toDate: string;
@@ -3046,6 +3111,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         owedBy?: string | null | undefined;
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
+        debtId?: string | null | undefined;
     }[];
     resolutions: {
         status: string;
@@ -3090,6 +3156,16 @@ export declare const GetForecastResponse: zod.ZodObject<{
         snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
     } | null | undefined;
+    monthSnapshots?: Record<string, {
+        at: string;
+        balance: string;
+        gap?: string | null | undefined;
+        forecastEnd?: string | null | undefined;
+        bankEnd?: string | null | undefined;
+        pending?: number | null | undefined;
+        reconciled?: boolean | null | undefined;
+        closedAt?: string | null | undefined;
+    }> | undefined;
 }>;
 export declare const GetForecastSettingsResponse: zod.ZodObject<{
     daysAhead: zod.ZodNumber;
@@ -3268,10 +3344,25 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
 }>;
 export declare const CloseForecastMonthBody: zod.ZodObject<{
     monthKey: zod.ZodString;
+    gap: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    forecastEnd: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bankEnd: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pending: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    reconciled: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
 }, "strip", zod.ZodTypeAny, {
     monthKey: string;
+    gap?: string | null | undefined;
+    forecastEnd?: string | null | undefined;
+    bankEnd?: string | null | undefined;
+    pending?: number | null | undefined;
+    reconciled?: boolean | null | undefined;
 }, {
     monthKey: string;
+    gap?: string | null | undefined;
+    forecastEnd?: string | null | undefined;
+    bankEnd?: string | null | undefined;
+    pending?: number | null | undefined;
+    reconciled?: boolean | null | undefined;
 }>;
 export declare const CloseForecastMonthResponse: zod.ZodObject<{
     id: zod.ZodString;
@@ -3670,9 +3761,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             frequency: string;
             active: string;
             categoryId?: string | null | undefined;
+            debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
             anchorDate?: string | null | undefined;
-            debtId?: string | null | undefined;
         }, {
             id: string;
             amount: string;
@@ -3681,9 +3772,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             frequency: string;
             active: string;
             categoryId?: string | null | undefined;
+            debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
             anchorDate?: string | null | undefined;
-            debtId?: string | null | undefined;
         }>;
         nextOccurrence: zod.ZodNullable<zod.ZodString>;
         monthlyAmount: zod.ZodString;
@@ -3696,9 +3787,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             frequency: string;
             active: string;
             categoryId?: string | null | undefined;
+            debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
             anchorDate?: string | null | undefined;
-            debtId?: string | null | undefined;
         };
         nextOccurrence: string | null;
         monthlyAmount: string;
@@ -3711,9 +3802,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             frequency: string;
             active: string;
             categoryId?: string | null | undefined;
+            debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
             anchorDate?: string | null | undefined;
-            debtId?: string | null | undefined;
         };
         nextOccurrence: string | null;
         monthlyAmount: string;
@@ -3738,9 +3829,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             frequency: string;
             active: string;
             categoryId?: string | null | undefined;
+            debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
             anchorDate?: string | null | undefined;
-            debtId?: string | null | undefined;
         }, {
             id: string;
             amount: string;
@@ -3749,9 +3840,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             frequency: string;
             active: string;
             categoryId?: string | null | undefined;
+            debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
             anchorDate?: string | null | undefined;
-            debtId?: string | null | undefined;
         }>;
         nextOccurrence: zod.ZodNullable<zod.ZodString>;
         monthlyAmount: zod.ZodString;
@@ -3764,9 +3855,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             frequency: string;
             active: string;
             categoryId?: string | null | undefined;
+            debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
             anchorDate?: string | null | undefined;
-            debtId?: string | null | undefined;
         };
         nextOccurrence: string | null;
         monthlyAmount: string;
@@ -3779,9 +3870,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             frequency: string;
             active: string;
             categoryId?: string | null | undefined;
+            debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
             anchorDate?: string | null | undefined;
-            debtId?: string | null | undefined;
         };
         nextOccurrence: string | null;
         monthlyAmount: string;
@@ -3824,9 +3915,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             frequency: string;
             active: string;
             categoryId?: string | null | undefined;
+            debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
             anchorDate?: string | null | undefined;
-            debtId?: string | null | undefined;
         };
         nextOccurrence: string | null;
         monthlyAmount: string;
@@ -3840,9 +3931,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             frequency: string;
             active: string;
             categoryId?: string | null | undefined;
+            debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
             anchorDate?: string | null | undefined;
-            debtId?: string | null | undefined;
         };
         nextOccurrence: string | null;
         monthlyAmount: string;
@@ -3867,9 +3958,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             frequency: string;
             active: string;
             categoryId?: string | null | undefined;
+            debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
             anchorDate?: string | null | undefined;
-            debtId?: string | null | undefined;
         };
         nextOccurrence: string | null;
         monthlyAmount: string;
@@ -3883,9 +3974,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
             frequency: string;
             active: string;
             categoryId?: string | null | undefined;
+            debtId?: string | null | undefined;
             dayOfMonth?: number | null | undefined;
             anchorDate?: string | null | undefined;
-            debtId?: string | null | undefined;
         };
         nextOccurrence: string | null;
         monthlyAmount: string;

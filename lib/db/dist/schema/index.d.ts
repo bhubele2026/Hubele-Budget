@@ -1547,6 +1547,23 @@ export declare const transactionsTable: import("drizzle-orm/pg-core").PgTableWit
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        debtId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "debt_id";
+            tableName: "transactions";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
             tableName: "transactions";
@@ -2842,6 +2859,12 @@ export declare const forecastSettingsTable: import("drizzle-orm/pg-core").PgTabl
             data: Record<string, {
                 balance: string;
                 at: string;
+                gap?: string;
+                forecastEnd?: string;
+                bankEnd?: string;
+                pending?: number;
+                reconciled?: boolean;
+                closedAt?: string;
             }>;
             driverParam: unknown;
             notNull: false;
@@ -2857,6 +2880,12 @@ export declare const forecastSettingsTable: import("drizzle-orm/pg-core").PgTabl
             $type: Record<string, {
                 balance: string;
                 at: string;
+                gap?: string;
+                forecastEnd?: string;
+                bankEnd?: string;
+                pending?: number;
+                reconciled?: boolean;
+                closedAt?: string;
             }>;
         }>;
         updatedAt: import("drizzle-orm/pg-core").PgColumn<{
@@ -3054,6 +3083,7 @@ export declare const insertRecurringSchema: import("zod/v4").ZodObject<{
 export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
     notes: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     plaidAccountId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    debtId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     categoryId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     amount: import("zod/v4").ZodString;
     occurredOn: import("zod/v4").ZodString;

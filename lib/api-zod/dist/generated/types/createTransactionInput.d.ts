@@ -33,5 +33,7 @@ export interface CreateTransactionInput {
     member?: string | null;
     /** @nullable */
     owedBy?: string | null;
+    /** @nullable */
+    debtId?: string | null;
 }
 //# sourceMappingURL=createTransactionInput.d.ts.map

@@ -5,8 +5,9 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
-export type CloseForecastMonthBody = {
-    monthKey: string;
+export interface MonthSnapshot {
+    balance: string;
+    at: string;
     /** @nullable */
     gap?: string | null;
     /** @nullable */
@@ -17,5 +18,7 @@ export type CloseForecastMonthBody = {
     pending?: number | null;
     /** @nullable */
     reconciled?: boolean | null;
-};
-//# sourceMappingURL=closeForecastMonthBody.d.ts.map
+    /** @nullable */
+    closedAt?: string | null;
+}
+//# sourceMappingURL=monthSnapshot.d.ts.map

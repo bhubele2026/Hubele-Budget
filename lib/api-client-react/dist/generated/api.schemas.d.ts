@@ -49,6 +49,8 @@ export interface Transaction {
     plaidTransactionId?: string | null;
     /** @nullable */
     plaidAccountId?: string | null;
+    /** @nullable */
+    debtId?: string | null;
 }
 /**
  * @nullable
@@ -87,6 +89,8 @@ export interface CreateTransactionInput {
     member?: string | null;
     /** @nullable */
     owedBy?: string | null;
+    /** @nullable */
+    debtId?: string | null;
 }
 /**
  * @nullable
@@ -125,6 +129,8 @@ export interface TransactionInput {
     member?: string | null;
     /** @nullable */
     owedBy?: string | null;
+    /** @nullable */
+    debtId?: string | null;
     /**
      * When set together with `categoryId`, the server upserts a
   mapping_rule (matchType=contains, priority=100) so that future
@@ -681,6 +687,25 @@ export interface CashSignal {
     /** @nullable */
     snapshotSource?: string | null;
 }
+export interface MonthSnapshot {
+    balance: string;
+    at: string;
+    /** @nullable */
+    gap?: string | null;
+    /** @nullable */
+    forecastEnd?: string | null;
+    /** @nullable */
+    bankEnd?: string | null;
+    /** @nullable */
+    pending?: number | null;
+    /** @nullable */
+    reconciled?: boolean | null;
+    /** @nullable */
+    closedAt?: string | null;
+}
+export type ForecastBundleMonthSnapshots = {
+    [key: string]: MonthSnapshot;
+};
 export interface ForecastBundle {
     fromDate: string;
     toDate: string;
@@ -692,6 +717,7 @@ export interface ForecastBundle {
     bankSnapshot?: BankSnapshot | null;
     cashSignal?: CashSignal | null;
     plaidCheckingAccounts: PlaidCheckingAccount[];
+    monthSnapshots?: ForecastBundleMonthSnapshots;
 }
 export interface SetBankSnapshotInput {
     /** @nullable */
@@ -780,6 +806,7 @@ export type ListTransactionsParams = {
     limit?: number;
     source?: string;
     uncategorized?: boolean;
+    excludeTransfers?: boolean;
     search?: string;
     minAmount?: string;
     maxAmount?: string;
@@ -793,6 +820,16 @@ export type GetForecastParams = {
 };
 export type CloseForecastMonthBody = {
     monthKey: string;
+    /** @nullable */
+    gap?: string | null;
+    /** @nullable */
+    forecastEnd?: string | null;
+    /** @nullable */
+    bankEnd?: string | null;
+    /** @nullable */
+    pending?: number | null;
+    /** @nullable */
+    reconciled?: boolean | null;
 };
 export type ListDashboardBudgetsParams = {
     bucket?: string;

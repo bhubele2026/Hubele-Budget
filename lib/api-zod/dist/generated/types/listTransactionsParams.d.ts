@@ -11,6 +11,7 @@ export type ListTransactionsParams = {
     limit?: number;
     source?: string;
     uncategorized?: boolean;
+    excludeTransfers?: boolean;
     search?: string;
     minAmount?: string;
     maxAmount?: string;
