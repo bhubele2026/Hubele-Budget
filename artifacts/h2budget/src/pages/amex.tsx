@@ -469,7 +469,7 @@ export default function AmexPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap border-l-4 border-blue-600 pl-4">
         <div>
           <h1 className="text-3xl font-serif font-bold text-foreground flex items-center gap-2">
-            <CreditCard className="h-7 w-7 text-blue-600" /> Amex Daily
+            <CreditCard className="h-7 w-7 text-blue-600" /> American Express
           </h1>
           <p className="text-muted-foreground mt-1">
             Day-by-day card spending — categorized into your budget.

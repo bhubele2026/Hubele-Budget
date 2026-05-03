@@ -21,7 +21,7 @@ const navItems = [
   { name: "Forecast", href: "/forecast", icon: TrendingUp },
   { name: "Review", href: "/review", icon: Inbox, badge: "review" as const },
   { name: "Transactions", href: "/transactions", icon: Receipt },
-  { name: "Amex Daily", href: "/amex", icon: CreditCard },
+  { name: "American Express", href: "/amex", icon: CreditCard },
   { name: "Debts", href: "/debts", icon: CreditCard },
   { name: "Avalanche", href: "/avalanche", icon: Flame },
   { name: "Bills", href: "/bills", icon: CalendarDays },
