@@ -1594,7 +1594,7 @@ export default function ForecastPage() {
               <CardHeader className="pb-3 flex-row items-center justify-between flex-wrap gap-2">
                 <CardTitle className="flex items-center gap-2 flex-wrap">
                   <Landmark className="w-4 h-4" />
-                  From Bank · {monthFilter}
+                  Inbox from Chase · {monthFilter}
                   <Badge variant="outline" className="text-[10px] ml-1">
                     {bankReconcile.pending} pending
                   </Badge>

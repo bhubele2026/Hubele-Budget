@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useListTransactions, useCreateTransaction, useUpdateTransaction, useDeleteTransaction, useListCategories, getListTransactionsQueryKey, getGetForecastQueryKey } from "@workspace/api-client-react";
+import { useListTransactions, useCreateTransaction, useUpdateTransaction, useDeleteTransaction, useListCategories, useGetForecast, useRefreshForecastBank, getListTransactionsQueryKey, getGetForecastQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,18 +14,18 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit2, Trash2, Send, Inbox, Wand2 } from "lucide-react";
+import { Plus, Edit2, Trash2, Send, Inbox, Wand2, Landmark, RefreshCw } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import type { Transaction } from "@workspace/api-client-react";
+import { computeRunningBalances } from "@/lib/runningBalance";
 
 const formSchema = z.object({
   occurredOn: z.string().min(1, "Date is required"),
   description: z.string().min(1, "Description is required"),
   amount: z.string().min(1, "Amount is required"),
   kind: z.enum(["expense", "income"]).default("expense"),
-  forecastFlag: z.boolean().default(false),
   weeklyAllowance: z.boolean().default(false),
   monthlyAllowance: z.boolean().default(false),
   unplannedAllowance: z.boolean().default(false),
@@ -42,10 +42,60 @@ function normalizeAmount(raw: string, kind: "expense" | "income"): string {
 }
 
 export default function TransactionsPage() {
-  const { data: transactions, isLoading } = useListTransactions();
+  const { data: transactions, isLoading } = useListTransactions({ limit: 5000 });
   const { data: categories } = useListCategories();
+  const { data: forecastData } = useGetForecast();
+  const refreshBank = useRefreshForecastBank();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const bankSnapshot = forecastData?.bankSnapshot ?? null;
+  // Resolve the linked Chase checking account: bankSnapshot.accountId is the
+  // internal plaid_accounts UUID; cross-ref it to the Plaid account_id text
+  // that lives on transactionsTable.plaidAccountId.
+  const chasePlaidAccountId = useMemo(() => {
+    if (!bankSnapshot?.accountId) return null;
+    const acct = (forecastData?.plaidCheckingAccounts ?? []).find(
+      (a) => a.id === bankSnapshot.accountId,
+    );
+    return acct?.accountId ?? null;
+  }, [bankSnapshot?.accountId, forecastData?.plaidCheckingAccounts]);
+
+  // Scope the Chase page strictly to the linked checking account so the
+  // running balance reconciles to bankSnapshot. When nothing is linked yet
+  // (manual snapshot or no snapshot at all), fall back to manual rows so
+  // the page still has something to show.
+  const chaseTransactions = useMemo(() => {
+    const all = transactions ?? [];
+    if (chasePlaidAccountId) {
+      return all.filter((t) => t.plaidAccountId === chasePlaidAccountId);
+    }
+    return all.filter((t) => !t.plaidAccountId);
+  }, [transactions, chasePlaidAccountId]);
+
+  const runningBalances = useMemo(() => {
+    if (!bankSnapshot) return new Map<string, number>();
+    return computeRunningBalances(
+      chaseTransactions,
+      Number(bankSnapshot.balance) || 0,
+    );
+  }, [chaseTransactions, bankSnapshot]);
+
+  const handleRefreshBank = () => {
+    refreshBank.mutate(undefined, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+        toast({ title: "Refreshed from Plaid" });
+      },
+      onError: (e) => {
+        toast({
+          title: "Couldn't refresh",
+          description: (e as Error).message,
+          variant: "destructive",
+        });
+      },
+    });
+  };
 
   const categoryById = useMemo(() => {
     const m = new Map<string, string>();
@@ -67,7 +117,6 @@ export default function TransactionsPage() {
       description: "",
       amount: "",
       kind: "expense",
-      forecastFlag: false,
       weeklyAllowance: false,
       monthlyAllowance: false,
       unplannedAllowance: false,
@@ -83,7 +132,6 @@ export default function TransactionsPage() {
       description: "",
       amount: "",
       kind: "expense",
-      forecastFlag: false,
       weeklyAllowance: false,
       monthlyAllowance: false,
       unplannedAllowance: false,
@@ -101,7 +149,6 @@ export default function TransactionsPage() {
       description: tx.description,
       amount: Math.abs(numeric).toFixed(2),
       kind: numeric >= 0 ? "income" : "expense",
-      forecastFlag: tx.forecastFlag,
       weeklyAllowance: tx.weeklyAllowance,
       monthlyAllowance: tx.monthlyAllowance,
       unplannedAllowance: tx.unplannedAllowance,
@@ -135,6 +182,14 @@ export default function TransactionsPage() {
 
   const handleToggleForecast = (tx: Transaction) => {
     const next = !tx.forecastFlag;
+    if (next && !tx.categoryId) {
+      toast({
+        title: "Categorize this transaction first",
+        description: "Pick a category before sending it to Forecast.",
+        variant: "destructive",
+      });
+      return;
+    }
     updateTx.mutate(
       { id: tx.id, data: { forecastFlag: next } },
       {
@@ -172,8 +227,8 @@ export default function TransactionsPage() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const visibleIds = useMemo(
-    () => new Set((transactions ?? []).map((t) => t.id)),
-    [transactions],
+    () => new Set(chaseTransactions.map((t) => t.id)),
+    [chaseTransactions],
   );
   useEffect(() => {
     setSelected((prev) => {
@@ -200,15 +255,20 @@ export default function TransactionsPage() {
   const bulkSetForecast = async (next: boolean) => {
     const ids = Array.from(selected);
     if (!ids.length) return;
-    const byId = new Map((transactions ?? []).map((t) => [t.id, t] as const));
-    const targets = ids.filter((id) => {
-      const t = byId.get(id);
-      return t && t.forecastFlag !== next;
-    });
+    const byId = new Map(chaseTransactions.map((t) => [t.id, t] as const));
+    const candidates = ids
+      .map((id) => byId.get(id))
+      .filter((t): t is Transaction => !!t && t.forecastFlag !== next);
+    const targets = next
+      ? candidates.filter((t) => !!t.categoryId)
+      : candidates;
+    const skippedUncat = next ? candidates.length - targets.length : 0;
     if (!targets.length) {
       toast({
         title: next
-          ? "Selected items already in Forecast"
+          ? skippedUncat > 0
+            ? "Categorize these first to send them to Forecast"
+            : "Selected items already in Forecast"
           : "Selected items not in Forecast",
       });
       return;
@@ -220,7 +280,7 @@ export default function TransactionsPage() {
     const worker = async () => {
       while (cursor < targets.length) {
         const i = cursor++;
-        const id = targets[i];
+        const id = targets[i].id;
         try {
           await updateTx.mutateAsync({ id, data: { forecastFlag: next } });
           okCount += 1;
@@ -236,9 +296,10 @@ export default function TransactionsPage() {
     queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
     clearSelection();
     if (!failures.length) {
+      const suffix = skippedUncat > 0 ? ` · ${skippedUncat} skipped (uncategorized)` : "";
       toast({
         title: next
-          ? `Sent ${okCount} to Forecast`
+          ? `Sent ${okCount} to Forecast${suffix}`
           : `Removed ${okCount} from Forecast`,
       });
     } else {
@@ -269,11 +330,49 @@ export default function TransactionsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-serif font-bold text-foreground">Transactions</h1>
-          <p className="text-muted-foreground mt-1">Every dollar, accounted for.</p>
+          <h1 className="text-3xl font-serif font-bold text-foreground">Chase</h1>
+          <p className="text-muted-foreground mt-1">Your checking activity, reconciled.</p>
         </div>
         <Button onClick={handleOpenNew}><Plus className="w-4 h-4 mr-2" /> Add Transaction</Button>
       </div>
+
+      <Card data-testid="card-chase-balance">
+        <CardHeader className="pb-2 flex-row items-center justify-between">
+          <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+            <Landmark className="w-4 h-4" /> Chase checking balance
+          </CardTitle>
+          {bankSnapshot && bankSnapshot.source === "plaid" && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={handleRefreshBank}
+              disabled={refreshBank.isPending}
+              title="Refresh from Plaid"
+              data-testid="button-refresh-bank"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshBank.isPending ? "animate-spin" : ""}`} />
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-1">
+          <div className="text-2xl font-bold tabular-nums" data-testid="text-chase-balance">
+            {bankSnapshot ? formatCurrency(bankSnapshot.balance) : "—"}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {bankSnapshot ? (
+              <>
+                {bankSnapshot.source === "plaid" ? "Plaid" : "Manual"} ·{" "}
+                {bankSnapshot.name ?? "Checking"}
+                {bankSnapshot.mask ? ` ••${bankSnapshot.mask}` : ""} ·{" "}
+                Updated {formatDate(bankSnapshot.at.slice(0, 10))}
+              </>
+            ) : (
+              <>Link a Chase checking account on the Forecast page to see a live balance.</>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
@@ -305,9 +404,6 @@ export default function TransactionsPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <FormField control={form.control} name="forecastFlag" render={({ field }) => (
-                  <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Forecast</FormLabel></FormItem>
-                )} />
                 <FormField control={form.control} name="reimbursable" render={({ field }) => (
                   <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Reimbursable</FormLabel></FormItem>
                 )} />
@@ -366,7 +462,7 @@ export default function TransactionsPage() {
 
       <Card>
         <CardContent className="p-0">
-          {(transactions?.length ?? 0) > 0 && (
+          {chaseTransactions.length > 0 && (
             <div className="px-4 py-2 flex items-center gap-3 border-b bg-muted/30 text-xs text-muted-foreground">
               <Checkbox
                 checked={
@@ -384,8 +480,13 @@ export default function TransactionsPage() {
             </div>
           )}
           <div className="divide-y divide-border">
-            {transactions?.map((tx) => (
-              <div key={tx.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-muted/50 transition-colors">
+            {chaseTransactions.map((tx) => (
+              <div
+                key={tx.id}
+                className={`p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-muted/50 transition-colors ${tx.forecastFlag ? "opacity-60 bg-muted/30" : ""}`}
+                data-testid={`row-tx-${tx.id}`}
+                data-sent={tx.forecastFlag ? "true" : "false"}
+              >
                 <div className="flex items-start gap-3 flex-1">
                   <Checkbox
                     checked={selected.has(tx.id)}
@@ -423,8 +524,12 @@ export default function TransactionsPage() {
                       </Badge>
                     )}
                     {tx.forecastFlag && (
-                      <Badge variant="outline" className="text-xs border-emerald-200 text-emerald-700 bg-emerald-50">
-                        <Inbox className="w-3 h-3 mr-1" /> In forecast
+                      <Badge
+                        variant="outline"
+                        className="text-xs border-emerald-200 text-emerald-700 bg-emerald-50"
+                        data-testid={`badge-sent-${tx.id}`}
+                      >
+                        <Inbox className="w-3 h-3 mr-1" /> Sent · pending in Forecast
                       </Badge>
                     )}
                     {tx.weeklyAllowance && <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50">Weekly</Badge>}
@@ -436,25 +541,62 @@ export default function TransactionsPage() {
                 </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="font-medium text-foreground whitespace-nowrap">{formatCurrency(tx.amount)}</span>
+                  <div className="flex flex-col items-end">
+                    <span className="font-medium text-foreground whitespace-nowrap tabular-nums">{formatCurrency(tx.amount)}</span>
+                    {runningBalances.has(tx.id) && (
+                      <span
+                        className="text-xs text-muted-foreground tabular-nums"
+                        data-testid={`text-running-balance-${tx.id}`}
+                        title="Running balance after this transaction"
+                      >
+                        Bal {formatCurrency(runningBalances.get(tx.id)!)}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex gap-2 items-center">
-                    <Button
-                      variant={tx.forecastFlag ? "outline" : "secondary"}
-                      size="sm"
-                      onClick={() => handleToggleForecast(tx)}
-                      disabled={updateTx.isPending}
-                      title={tx.forecastFlag ? "Remove from Forecast" : "Send to Forecast"}
-                    >
-                      <Send className="w-3.5 h-3.5 mr-1.5" />
-                      {tx.forecastFlag ? "Remove from Forecast" : "Send to Forecast"}
-                    </Button>
+                    {tx.forecastFlag ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleToggleForecast(tx)}
+                        disabled={updateTx.isPending}
+                        title="Remove from Forecast"
+                        data-testid={`button-remove-forecast-${tx.id}`}
+                      >
+                        <Send className="w-3.5 h-3.5 mr-1.5" />
+                        Remove from Forecast
+                      </Button>
+                    ) : tx.categoryId ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleToggleForecast(tx)}
+                        disabled={updateTx.isPending}
+                        title="Send to Forecast"
+                        data-testid={`button-send-forecast-${tx.id}`}
+                      >
+                        <Send className="w-3.5 h-3.5 mr-1.5" />
+                        Send to Forecast
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled
+                        title="Categorize this transaction first"
+                        data-testid={`button-send-forecast-${tx.id}`}
+                      >
+                        <Send className="w-3.5 h-3.5 mr-1.5" />
+                        Categorize first
+                      </Button>
+                    )}
                     <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(tx)}><Edit2 className="w-4 h-4 text-muted-foreground" /></Button>
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(tx.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                   </div>
                 </div>
               </div>
             ))}
-            {transactions?.length === 0 && (
+            {chaseTransactions.length === 0 && (
               <div className="p-8 text-center text-muted-foreground">No transactions found.</div>
             )}
           </div>

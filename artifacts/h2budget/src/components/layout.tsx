@@ -11,16 +11,13 @@ import {
   TrendingUp,
   BarChart3,
   Flame,
-  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useListTransactions } from "@workspace/api-client-react";
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Forecast", href: "/forecast", icon: TrendingUp },
-  { name: "Review", href: "/review", icon: Inbox, badge: "review" as const },
-  { name: "Transactions", href: "/transactions", icon: Receipt },
+  { name: "Chase", href: "/transactions", icon: Receipt },
   { name: "American Express", href: "/amex", icon: CreditCard },
   { name: "Debts", href: "/debts", icon: CreditCard },
   { name: "Avalanche", href: "/avalanche", icon: Flame },
@@ -33,14 +30,6 @@ const navItems = [
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  // Match the Review page query exactly (server-side excludeTransfers) so
-  // the badge count is the true number of items the user will see there.
-  const { data: uncategorized } = useListTransactions({
-    uncategorized: true,
-    excludeTransfers: true,
-    limit: 5000,
-  });
-  const reviewCount = uncategorized?.length ?? 0;
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
@@ -62,19 +51,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 )}>
                   <item.icon className="w-4 h-4" />
                   <span className="flex-1">{item.name}</span>
-                  {item.badge === "review" && reviewCount > 0 && (
-                    <span
-                      className={cn(
-                        "ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold",
-                        isActive
-                          ? "bg-sidebar-primary-foreground text-sidebar-primary"
-                          : "bg-primary text-primary-foreground",
-                      )}
-                      data-testid="badge-review-count"
-                    >
-                      {reviewCount > 99 ? "99+" : reviewCount}
-                    </span>
-                  )}
                 </span>
               </Link>
             );
