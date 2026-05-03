@@ -1261,7 +1261,8 @@ export default function AmexPage() {
             onToggleAll={(on) => toggleDay(ids, on)}
             totalNode={formatCurrency(dayTotal)}
           >
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[720px]">
                   <tbody>
                     {items.map((t) => (
                       <tr key={t.id} className="border-t hover:bg-muted/30 transition-colors">
@@ -1376,6 +1377,7 @@ export default function AmexPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
           </DayGroup>
         );
       })}

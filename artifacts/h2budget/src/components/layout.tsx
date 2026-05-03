@@ -81,6 +81,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  const currentPageTitle =
+    navItems.find((item) => location.startsWith(item.href))?.name ?? "H2 Budget";
+
   return (
     <div className="h-screen overflow-hidden bg-background flex flex-col md:flex-row">
       {/* Desktop sidebar */}
@@ -89,13 +92,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile top bar */}
-      <header className="md:hidden flex items-center justify-between gap-3 px-4 h-14 bg-sidebar border-b border-sidebar-border shrink-0">
+      <header className="md:hidden flex items-center justify-between gap-2 px-3 h-14 bg-sidebar border-b border-sidebar-border shrink-0">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              className="text-sidebar-foreground"
+              className="text-sidebar-foreground shrink-0"
               aria-label="Open navigation menu"
               data-testid="button-mobile-menu"
             >
@@ -112,16 +115,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             />
           </SheetContent>
         </Sheet>
-        <div className="flex items-center gap-2">
-          <H2Logo className="w-7 h-7 rounded" />
-          <span className="font-serif font-bold text-base tracking-tight text-sidebar-foreground">
-            H2 Budget
-          </span>
+        <div
+          className="flex-1 min-w-0 text-center font-serif font-bold text-base tracking-tight text-sidebar-foreground truncate"
+          data-testid="text-mobile-page-title"
+        >
+          {currentPageTitle}
         </div>
-        <UserButton />
+        <div className="shrink-0">
+          <UserButton />
+        </div>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-y-auto">
+      <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         <div className="p-4 md:p-8 max-w-6xl mx-auto">{children}</div>
       </main>
     </div>
