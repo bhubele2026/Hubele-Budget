@@ -54,6 +54,8 @@ export interface Transaction {
   plaidTransactionId?: string | null;
   /** @nullable */
   plaidAccountId?: string | null;
+  /** @nullable */
+  debtId?: string | null;
 }
 
 /**
@@ -97,6 +99,8 @@ export interface CreateTransactionInput {
   member?: string | null;
   /** @nullable */
   owedBy?: string | null;
+  /** @nullable */
+  debtId?: string | null;
 }
 
 /**
@@ -140,6 +144,8 @@ export interface TransactionInput {
   member?: string | null;
   /** @nullable */
   owedBy?: string | null;
+  /** @nullable */
+  debtId?: string | null;
   /**
    * When set together with `categoryId`, the server upserts a
 mapping_rule (matchType=contains, priority=100) so that future

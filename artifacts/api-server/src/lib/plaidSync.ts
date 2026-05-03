@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import {
   db,
+  debtsTable,
   plaidItemsTable,
   plaidAccountsTable,
   transactionsTable,
@@ -73,6 +74,39 @@ export async function syncPlaidItem(
     checkingPlaidAccountId = acct?.accountId ?? null;
   }
 
+  // Build a map from Plaid's external account_id to the user's debt.id, so any
+  // transactions hitting a debt-linked Plaid account are auto-tagged with
+  // debtId. This is the "Plaid-imported payments" case the dashboard's
+  // paid-off totals previously missed.
+  const linkedDebts = await db
+    .select({
+      debtId: debtsTable.id,
+      plaidAccountRowId: debtsTable.plaidAccountId,
+    })
+    .from(debtsTable)
+    .where(eq(debtsTable.userId, userId));
+  const linkedAcctRowIds = linkedDebts
+    .map((d) => d.plaidAccountRowId)
+    .filter((v): v is string => !!v);
+  const debtAccountRows = linkedAcctRowIds.length
+    ? await db
+        .select({
+          rowId: plaidAccountsTable.id,
+          externalId: plaidAccountsTable.accountId,
+        })
+        .from(plaidAccountsTable)
+        .where(eq(plaidAccountsTable.userId, userId))
+    : [];
+  const externalByRowId = new Map(
+    debtAccountRows.map((r) => [r.rowId, r.externalId]),
+  );
+  const debtIdByPlaidAccount = new Map<string, string>();
+  for (const d of linkedDebts) {
+    if (!d.plaidAccountRowId) continue;
+    const ext = externalByRowId.get(d.plaidAccountRowId);
+    if (ext) debtIdByPlaidAccount.set(ext, d.debtId);
+  }
+
   let cursor = item.cursor ?? undefined;
   let added: PlaidTxn[] = [];
   let modified: PlaidTxn[] = [];
@@ -139,17 +173,29 @@ export async function syncPlaidItem(
       // circuiting on the first non-null value.
       const occurredAt =
         pickRealTime(t.datetime) ?? pickRealTime(t.authorized_datetime);
+      const signedAmount = plaidAmountToSigned(t);
+      // Only attribute a transaction to a debt when it is actually a
+      // balance-reducing PAYMENT on the linked liability account, never a
+      // purchase. Plaid uses positive=debit/charge on liability accounts; our
+      // convention flips the sign (`amount = -Plaid.amount`), so payments
+      // appear as POSITIVE amounts in our app and purchases as negative.
+      // Tagging purchases would make the dashboard double-count debt growth
+      // as "paid off" and worsen the original bug.
+      const linkedDebtId = debtIdByPlaidAccount.get(t.account_id) ?? null;
+      const debtId =
+        linkedDebtId && Number(signedAmount) > 0 ? linkedDebtId : null;
       const values = {
         userId,
         occurredOn: t.date,
         occurredAt,
         description,
-        amount: plaidAmountToSigned(t),
+        amount: signedAmount,
         categoryId: cat.categoryId,
         isTransfer: cat.isTransfer,
         source,
         plaidTransactionId: t.transaction_id,
         plaidAccountId: t.account_id,
+        debtId,
         notes: t.pending ? "[pending]" : null,
         forecastFlag: isChecking && !cat.isTransfer,
       };
@@ -159,7 +205,12 @@ export async function syncPlaidItem(
         .onConflictDoUpdate({
           target: transactionsTable.plaidTransactionId,
           // Preserve any manual override of categoryId — only refresh fields
-          // that come straight from Plaid.
+          // that come straight from Plaid. For debtId we ONLY write when our
+          // auto-detect computed a non-null link (positive payment on a
+          // debt-linked account). When auto-detect yields null we leave the
+          // existing debtId untouched, so manual /transactions PATCH overrides
+          // (e.g. linking a checking-side payment to a debt) are not wiped on
+          // the next Plaid sync.
           set: {
             occurredOn: values.occurredOn,
             occurredAt: values.occurredAt,
@@ -167,6 +218,7 @@ export async function syncPlaidItem(
             amount: values.amount,
             notes: values.notes,
             isTransfer: values.isTransfer,
+            ...(debtId ? { debtId } : {}),
             ...(isChecking && !cat.isTransfer ? { forecastFlag: true } : {}),
           },
         })

@@ -824,6 +824,7 @@ components:
         owedBy: { type: ["string", "null"] }
         plaidTransactionId: { type: ["string", "null"] }
         plaidAccountId: { type: ["string", "null"] }
+        debtId: { type: ["string", "null"] }
     CreateTransactionInput:
       type: object
       required: [occurredOn, description, amount]
@@ -846,6 +847,7 @@ components:
         source: { type: string }
         member: { type: ["string", "null"] }
         owedBy: { type: ["string", "null"] }
+        debtId: { type: ["string", "null"] }
     TransactionInput:
       type: object
       properties:
@@ -867,6 +869,7 @@ components:
         source: { type: string }
         member: { type: ["string", "null"] }
         owedBy: { type: ["string", "null"] }
+        debtId: { type: ["string", "null"] }
         rememberPattern:
           type: ["string", "null"]
           description: |

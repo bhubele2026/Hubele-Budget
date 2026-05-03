@@ -5,6 +5,7 @@ import {
   transactionsTable,
   forecastResolutionsTable,
   mappingRulesTable,
+  debtsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -60,10 +61,23 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   res.json(rows);
 });
 
+async function userOwnsDebt(userId: string, debtId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: debtsTable.id })
+    .from(debtsTable)
+    .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)))
+    .limit(1);
+  return !!row;
+}
+
 router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateTransactionBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  if (parsed.data.debtId && !(await userOwnsDebt(req.userId!, parsed.data.debtId))) {
+    res.status(400).json({ error: "Invalid debtId" });
     return;
   }
   const [row] = await db
@@ -93,6 +107,10 @@ router.patch(
     const { rememberPattern, ...patch } = parsed.data as typeof parsed.data & {
       rememberPattern?: string | null;
     };
+    if (patch.debtId && !(await userOwnsDebt(req.userId!, patch.debtId))) {
+      res.status(400).json({ error: "Invalid debtId" });
+      return;
+    }
     const [row] = await db
       .update(transactionsTable)
       .set(patch)

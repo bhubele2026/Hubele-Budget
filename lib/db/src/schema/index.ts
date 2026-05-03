@@ -167,12 +167,16 @@ export const transactionsTable = pgTable(
     owedBy: text("owed_by"),
     plaidTransactionId: text("plaid_transaction_id"),
     plaidAccountId: text("plaid_account_id"),
+    debtId: uuid("debt_id").references((): AnyPgColumn => debtsTable.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
     userIdx: index("transactions_user_idx").on(t.userId, t.occurredOn),
     sourceIdx: index("transactions_user_source_idx").on(t.userId, t.source),
     plaidTxnUq: uniqueIndex("transactions_plaid_txn_uq").on(t.plaidTransactionId),
+    debtIdx: index("transactions_debt_idx").on(t.userId, t.debtId),
   }),
 );
 

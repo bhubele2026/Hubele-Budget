@@ -15,6 +15,13 @@
       "when": 1777774152315,
       "tag": "0001_add_plaid_debt_link",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777774152316,
+      "tag": "0002_add_transactions_debt_link",
+      "breakpoints": true
     }
   ]
 }

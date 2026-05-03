@@ -31,16 +31,60 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     .from(debtsTable)
     .where(eq(debtsTable.userId, userId));
 
-  // A transaction is a debt payment if either:
-  //   (a) it's categorized to a budget_categories row with source_kind = 'auto_debts'
-  //       (the existing in-app debt-payment categorization), OR
-  //   (b) it was created by POST /debts/:id/payments, which writes a description
-  //       beginning with "Payment — " and may not be categorized.
-  // Both cases require amount < 0.
+  // A transaction counts toward debt-paid totals via two paths:
+  //   (a) Canonical: `transactions.debt_id` is non-null. This is set by
+  //       POST /debts/:id/payments, by /transactions POST/PATCH, and by
+  //       Plaid sync for true payments on linked liability accounts. It is
+  //       sign-agnostic and counts as `abs(amount)`.
+  //   (b) Legacy fallback: outflow rows (amount < 0) categorized as
+  //       'auto_debts' OR with description starting "Payment — ". These are
+  //       funding-side rows that pre-date the debt_id link or come from
+  //       accounts whose liability isn't Plaid-linked.
+  //
+  // De-dup rule (avoids double-counting when both sides of a payment are
+  // imported via Plaid): a legacy row is suppressed if a debt_id-tagged
+  // counterpart with the opposite sign and the same |amount| (within $0.01)
+  // exists for the same user within ±3 days. This keeps the totals at "one
+  // payment counted once" even when Plaid imports both the funding-account
+  // outflow and the liability-account inflow.
+  const legacyMatch = sql`(
+    ${transactionsTable.debtId} is null
+    and ${transactionsTable.amount} < 0
+    and (
+      ${budgetCategoriesTable.sourceKind} = 'auto_debts'
+      or ${transactionsTable.description} like 'Payment — %'
+    )
+    and not exists (
+      select 1 from ${transactionsTable} t2
+      where t2.user_id = ${transactionsTable.userId}
+        and t2.debt_id is not null
+        and t2.amount > 0
+        and abs(t2.amount + ${transactionsTable.amount}) < 0.01
+        and abs(t2.occurred_on - ${transactionsTable.occurredOn}) <= 3
+    )
+  )`;
   const [paidAgg] = await db
     .select({
-      paidThisMonth: sql<string>`coalesce(sum(case when ${transactionsTable.occurredOn} >= ${monthStart} and ${transactionsTable.occurredOn} < ${monthEnd} then -${transactionsTable.amount} else 0 end)::text, '0')`,
-      paidLifetime: sql<string>`coalesce(sum(-${transactionsTable.amount})::text, '0')`,
+      paidThisMonth: sql<string>`coalesce(sum(
+        case
+          when ${transactionsTable.occurredOn} >= ${monthStart}
+           and ${transactionsTable.occurredOn} < ${monthEnd}
+          then
+            case
+              when ${transactionsTable.debtId} is not null then abs(${transactionsTable.amount})
+              when ${legacyMatch} then -${transactionsTable.amount}
+              else 0
+            end
+          else 0
+        end
+      )::text, '0')`,
+      paidLifetime: sql<string>`coalesce(sum(
+        case
+          when ${transactionsTable.debtId} is not null then abs(${transactionsTable.amount})
+          when ${legacyMatch} then -${transactionsTable.amount}
+          else 0
+        end
+      )::text, '0')`,
     })
     .from(transactionsTable)
     .leftJoin(
@@ -50,8 +94,11 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     .where(
       and(
         eq(transactionsTable.userId, userId),
-        sql`${transactionsTable.amount} < 0`,
-        sql`(${budgetCategoriesTable.sourceKind} = 'auto_debts' or ${transactionsTable.description} like 'Payment — %')`,
+        sql`(
+          ${transactionsTable.debtId} is not null
+          or ${budgetCategoriesTable.sourceKind} = 'auto_debts'
+          or ${transactionsTable.description} like 'Payment — %'
+        )`,
       ),
     );
 

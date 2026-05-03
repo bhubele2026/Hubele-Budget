@@ -554,6 +554,7 @@ router.post(
           notes: mergedNotes,
           source: "manual",
           member: null,
+          debtId,
         })
         .returning();
       const [updated] = await tx
