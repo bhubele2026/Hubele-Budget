@@ -1,0 +1,638 @@
+import { useState } from "react";
+import { Link } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetBillsSummary,
+  useCreateRecurringItem,
+  useUpdateRecurringItem,
+  useDeleteRecurringItem,
+  getListRecurringItemsQueryKey,
+  getGetBillsSummaryQueryKey,
+  getGetForecastQueryKey,
+  getGetDashboardQueryKey,
+  type RecurringItem,
+  type RecurringItemInput,
+  type BillsSummaryRow,
+} from "@workspace/api-client-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  ArrowDownCircle,
+  ArrowUpCircle,
+  ArrowRight,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/utils";
+
+type Frequency =
+  | "weekly"
+  | "biweekly"
+  | "semimonthly"
+  | "monthly"
+  | "onetime";
+
+type ItemKind = "income" | "bill";
+
+type FormState = {
+  name: string;
+  kind: ItemKind;
+  amount: string;
+  frequency: Frequency;
+  dayOfMonth: string;
+  anchorDate: string;
+  oneTimeDate: string;
+  active: boolean;
+};
+
+function parseISODate(s: string): Date | null {
+  if (!s) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
+function formatDatePill(iso: string | null): { month: string; day: string } | null {
+  if (!iso) return null;
+  const d = parseISODate(iso);
+  if (!d) return null;
+  return {
+    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
+    day: String(d.getDate()),
+  };
+}
+
+function frequencyLabel(item: RecurringItem): string {
+  const f = item.frequency;
+  switch (f) {
+    case "weekly":
+      return "weekly";
+    case "biweekly":
+      return "biweekly";
+    case "semimonthly":
+      return "semi-monthly";
+    case "monthly":
+      return item.dayOfMonth ? `monthly · day ${item.dayOfMonth}` : "monthly";
+    case "onetime": {
+      const d = item.anchorDate ? parseISODate(item.anchorDate) : null;
+      if (d) {
+        return `one-time · ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+      }
+      return "one-time";
+    }
+    case "quarterly":
+      return "quarterly";
+    case "annual":
+      return "annual";
+    default:
+      return f;
+  }
+}
+
+function metaLine(item: RecurringItem): string {
+  const left = frequencyLabel(item);
+  const right = item.kind === "income" ? "Income" : "Bill";
+  return `${left} · ${right}`;
+}
+
+const isActive = (item: RecurringItem): boolean => item.active === "true";
+
+const DEFAULT_FORM: FormState = {
+  name: "",
+  kind: "bill",
+  amount: "",
+  frequency: "monthly",
+  dayOfMonth: "1",
+  anchorDate: "",
+  oneTimeDate: "",
+  active: true,
+};
+
+function buildPayload(form: FormState): RecurringItemInput {
+  const base: RecurringItemInput = {
+    name: form.name.trim(),
+    kind: form.kind,
+    amount: form.amount || "0",
+    frequency: form.frequency,
+    active: form.active ? "true" : "false",
+    dayOfMonth: null,
+    anchorDate: null,
+  };
+  if (form.frequency === "monthly" || form.frequency === "semimonthly") {
+    const day = parseInt(form.dayOfMonth, 10);
+    base.dayOfMonth = Number.isFinite(day) && day >= 1 && day <= 31 ? day : 1;
+    base.anchorDate = form.anchorDate || null;
+  } else if (form.frequency === "onetime") {
+    base.anchorDate = form.oneTimeDate || null;
+  } else {
+    base.anchorDate = form.anchorDate || null;
+  }
+  return base;
+}
+
+function toFormState(item: RecurringItem): FormState {
+  const freq = (["weekly", "biweekly", "semimonthly", "monthly", "onetime"].includes(item.frequency)
+    ? item.frequency
+    : "monthly") as Frequency;
+  return {
+    name: item.name,
+    kind: item.kind === "income" ? "income" : "bill",
+    amount: item.amount,
+    frequency: freq,
+    dayOfMonth: item.dayOfMonth ? String(item.dayOfMonth) : "1",
+    anchorDate: freq === "onetime" ? "" : item.anchorDate ?? "",
+    oneTimeDate: freq === "onetime" ? item.anchorDate ?? "" : "",
+    active: isActive(item),
+  };
+}
+
+export default function BillsPage() {
+  const { data: summary, isLoading } = useGetBillsSummary();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const createItem = useCreateRecurringItem();
+  const updateItem = useUpdateRecurringItem();
+  const deleteItem = useDeleteRecurringItem();
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<RecurringItem | null>(null);
+  const [form, setForm] = useState<FormState>(DEFAULT_FORM);
+
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
+    qc.invalidateQueries({ queryKey: getListRecurringItemsQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+  };
+
+  const openNew = () => {
+    setEditing(null);
+    setForm({ ...DEFAULT_FORM });
+    setDialogOpen(true);
+  };
+  const openEdit = (item: RecurringItem) => {
+    setEditing(item);
+    setForm(toFormState(item));
+    setDialogOpen(true);
+  };
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) {
+      toast({ title: "Name is required", variant: "destructive" });
+      return;
+    }
+    const amt = parseFloat(form.amount);
+    if (!Number.isFinite(amt) || amt < 0) {
+      toast({ title: "Amount must be a positive number", variant: "destructive" });
+      return;
+    }
+    if (form.frequency === "onetime" && !form.oneTimeDate) {
+      toast({ title: "Pick a date for the one-time item", variant: "destructive" });
+      return;
+    }
+    const payload = buildPayload(form);
+    if (editing) {
+      updateItem.mutate(
+        { id: editing.id, data: payload },
+        {
+          onSuccess: () => {
+            invalidateAll();
+            setDialogOpen(false);
+            toast({ title: "Saved" });
+          },
+        },
+      );
+    } else {
+      createItem.mutate(
+        { data: payload },
+        {
+          onSuccess: () => {
+            invalidateAll();
+            setDialogOpen(false);
+            toast({ title: "Added" });
+          },
+        },
+      );
+    }
+  };
+
+  const onDelete = () => {
+    if (!editing) return;
+    if (!confirm(`Delete "${editing.name}"?`)) return;
+    deleteItem.mutate(
+      { id: editing.id },
+      {
+        onSuccess: () => {
+          invalidateAll();
+          setDialogOpen(false);
+          toast({ title: "Deleted" });
+        },
+      },
+    );
+  };
+
+  if (isLoading || !summary) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-96 w-full" />
+      </div>
+    );
+  }
+
+  const incomeRows = summary.income;
+  const billRows = summary.bills;
+  const incomeMonthly = Number(summary.monthly.income) || 0;
+  const billsMonthly = Number(summary.monthly.bills) || 0;
+  const debtMin = Number(summary.monthly.debtMin) || 0;
+  const totalOutflow = Number(summary.monthly.totalOutflow) || 0;
+  const net = Number(summary.monthly.net) || 0;
+  const activeCount = summary.monthly.active;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-start gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-serif font-bold text-foreground tracking-tight">
+            Bills
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Every recurring dollar in and out. Edits here flow into the Forecast.
+          </p>
+        </div>
+        <Button onClick={openNew} data-testid="button-add-bill">
+          <Plus className="w-4 h-4 mr-2" /> Add income or bill
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <BillGroupCard
+            title="Income"
+            total={incomeMonthly}
+            tone="income"
+            rows={incomeRows}
+            onEdit={openEdit}
+          />
+          <BillGroupCard
+            title="Bills & Expenses"
+            total={billsMonthly}
+            tone="bill"
+            rows={billRows}
+            onEdit={openEdit}
+          />
+        </div>
+
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                Per month
+              </div>
+              <SummaryRow label="Income" amount={incomeMonthly} tone="income" />
+              <SummaryRow label="Bills" amount={-billsMonthly} tone="bill" />
+              <SummaryRow label="Debt minimums" amount={-debtMin} tone="bill" />
+              <div className="border-t pt-3 space-y-3">
+                <SummaryRow label="Total outflow" amount={-totalOutflow} tone="bill" />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">Net</span>
+                  <span
+                    className={`text-lg font-serif font-bold tabular-nums ${net >= 0 ? "text-emerald-700" : "text-destructive"}`}
+                    data-testid="text-net-monthly"
+                  >
+                    {net >= 0 ? "+" : ""}
+                    {formatCurrency(net)}
+                  </span>
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground border-t pt-3">
+                {activeCount} active item{activeCount === 1 ? "" : "s"}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Link href="/forecast" className="block group">
+            <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Next
+                  </div>
+                  <div className="text-sm font-semibold text-foreground">
+                    See cash forecast
+                  </div>
+                </div>
+                <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editing ? "Edit item" : "Add income or bill"}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, kind: "income" }))}
+                className={`px-3 py-2 rounded-md border text-sm font-medium flex items-center justify-center gap-2 transition-colors ${form.kind === "income" ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-border text-muted-foreground hover:bg-muted"}`}
+                data-testid="toggle-income"
+              >
+                <ArrowUpCircle className="w-4 h-4" /> Income
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, kind: "bill" }))}
+                className={`px-3 py-2 rounded-md border text-sm font-medium flex items-center justify-center gap-2 transition-colors ${form.kind === "bill" ? "border-rose-600 bg-rose-50 text-rose-800" : "border-border text-muted-foreground hover:bg-muted"}`}
+                data-testid="toggle-bill"
+              >
+                <ArrowDownCircle className="w-4 h-4" /> Bill
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="bill-name">Name</Label>
+              <Input
+                id="bill-name"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder={form.kind === "income" ? "Paycheck" : "Electric bill"}
+                data-testid="input-name"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="bill-amount">Amount</Label>
+                <Input
+                  id="bill-amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.amount}
+                  onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                  data-testid="input-amount"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Frequency</Label>
+                <Select
+                  value={form.frequency}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, frequency: v as Frequency }))
+                  }
+                >
+                  <SelectTrigger data-testid="select-frequency">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                    <SelectItem value="semimonthly">Semi-monthly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="onetime">One time</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {form.frequency === "monthly" || form.frequency === "semimonthly" ? (
+              <div className="space-y-2">
+                <Label htmlFor="bill-day">Day of month</Label>
+                <Input
+                  id="bill-day"
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={form.dayOfMonth}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, dayOfMonth: e.target.value }))
+                  }
+                  data-testid="input-day-of-month"
+                />
+              </div>
+            ) : form.frequency === "onetime" ? (
+              <div className="space-y-2">
+                <Label htmlFor="bill-onetime-date">Date</Label>
+                <Input
+                  id="bill-onetime-date"
+                  type="date"
+                  value={form.oneTimeDate}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, oneTimeDate: e.target.value }))
+                  }
+                  data-testid="input-onetime-date"
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="bill-anchor">Anchor date (first occurrence)</Label>
+                <Input
+                  id="bill-anchor"
+                  type="date"
+                  value={form.anchorDate}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, anchorDate: e.target.value }))
+                  }
+                  data-testid="input-anchor-date"
+                />
+              </div>
+            )}
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.active}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, active: e.target.checked }))
+                }
+                data-testid="checkbox-active"
+              />
+              Active
+            </label>
+
+            <DialogFooter className="!justify-between gap-2">
+              {editing ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={onDelete}
+                  className="text-destructive"
+                  data-testid="button-delete"
+                >
+                  <Trash2 className="w-4 h-4 mr-1" /> Delete
+                </Button>
+              ) : (
+                <span />
+              )}
+              <Button
+                type="submit"
+                disabled={createItem.isPending || updateItem.isPending}
+                data-testid="button-save"
+              >
+                {editing ? "Save changes" : "Add item"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function SummaryRow({
+  label,
+  amount,
+  tone,
+}: {
+  label: string;
+  amount: number;
+  tone: "income" | "bill";
+}) {
+  const positive = amount >= 0;
+  const colorClass = tone === "income" ? "text-emerald-700" : "text-destructive";
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={`tabular-nums font-medium ${colorClass}`}>
+        {positive && tone === "income" ? "+" : ""}
+        {formatCurrency(amount)}
+      </span>
+    </div>
+  );
+}
+
+function BillGroupCard({
+  title,
+  total,
+  tone,
+  rows,
+  onEdit,
+}: {
+  title: string;
+  total: number;
+  tone: "income" | "bill";
+  rows: BillsSummaryRow[];
+  onEdit: (item: RecurringItem) => void;
+}) {
+  const Icon = tone === "income" ? ArrowUpCircle : ArrowDownCircle;
+  const tint = tone === "income" ? "text-emerald-700" : "text-destructive";
+  const tintBg = tone === "income" ? "bg-emerald-50" : "bg-rose-50";
+  const sign = tone === "income" ? "+" : "−";
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <div className="px-5 py-4 flex items-center justify-between border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-full ${tintBg} flex items-center justify-center`}>
+              <Icon className={`w-5 h-5 ${tint}`} />
+            </div>
+            <div>
+              <div className="text-base font-serif font-semibold text-foreground">
+                {title}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {rows.length} item{rows.length === 1 ? "" : "s"} · per month
+              </div>
+            </div>
+          </div>
+          <div className={`text-base font-serif font-semibold tabular-nums ${tint}`}>
+            {sign}
+            {formatCurrency(total)}
+          </div>
+        </div>
+
+        {rows.length === 0 ? (
+          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+            No {title.toLowerCase()} yet.
+          </div>
+        ) : (
+          <ul className="divide-y divide-border">
+            {rows.map(({ item, nextOccurrence, monthlyAmount }) => {
+              const pill = formatDatePill(nextOccurrence);
+              const active = isActive(item);
+              const amt = Number(monthlyAmount) || 0;
+              return (
+                <li
+                  key={item.id}
+                  className={`px-5 py-3 flex items-center gap-4 hover:bg-muted/40 cursor-pointer transition-colors ${active ? "" : "opacity-60"}`}
+                  onClick={() => onEdit(item)}
+                  data-testid={`row-bill-${item.id}`}
+                >
+                  <div className="w-12 shrink-0 text-center">
+                    {pill ? (
+                      <>
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                          {pill.month}
+                        </div>
+                        <div className="text-lg font-serif font-semibold text-foreground leading-tight">
+                          {pill.day}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        —
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm font-medium truncate ${active ? "text-foreground" : "line-through"}`}>
+                      {item.name}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {metaLine(item)}
+                      {!active ? " · paused" : ""}
+                    </div>
+                  </div>
+                  <div className={`text-sm font-semibold tabular-nums ${tint}`}>
+                    {sign}
+                    {formatCurrency(amt)}
+                  </div>
+                  <button
+                    type="button"
+                    className="p-1.5 rounded hover:bg-background"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(item);
+                    }}
+                    aria-label={`Edit ${item.name}`}
+                  >
+                    <Pencil className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

@@ -1105,6 +1105,55 @@ export const SyncPlaidTransactionsResponse = zod.object({
   ),
 });
 
+export const GetBillsSummaryResponse = zod.object({
+  income: zod.array(
+    zod.object({
+      item: zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        kind: zod.string(),
+        amount: zod.string(),
+        frequency: zod.string(),
+        dayOfMonth: zod.number().nullish(),
+        anchorDate: zod.string().nullish(),
+        active: zod.string(),
+        categoryId: zod.string().nullish(),
+        debtId: zod.string().nullish(),
+      }),
+      nextOccurrence: zod.string().nullable(),
+      monthlyAmount: zod.string(),
+    }),
+  ),
+  bills: zod.array(
+    zod.object({
+      item: zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        kind: zod.string(),
+        amount: zod.string(),
+        frequency: zod.string(),
+        dayOfMonth: zod.number().nullish(),
+        anchorDate: zod.string().nullish(),
+        active: zod.string(),
+        categoryId: zod.string().nullish(),
+        debtId: zod.string().nullish(),
+      }),
+      nextOccurrence: zod.string().nullable(),
+      monthlyAmount: zod.string(),
+    }),
+  ),
+  monthly: zod.object({
+    income: zod.string(),
+    bills: zod.string(),
+    debtMin: zod.string(),
+    totalOutflow: zod.string(),
+    net: zod.string(),
+    active: zod.number(),
+    monthStart: zod.string(),
+    monthEnd: zod.string(),
+  }),
+});
+
 export const ImportWorkbookBody = zod.object({
   file: zod.instanceof(File),
 });

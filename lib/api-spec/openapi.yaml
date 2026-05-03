@@ -750,6 +750,17 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/PlaidSyncResult" }
 
+  /bills/summary:
+    get:
+      operationId: getBillsSummary
+      tags: [bills]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillsSummary" }
+
   /import/workbook:
     post:
       operationId: importWorkbook
@@ -1021,6 +1032,37 @@ components:
         active: { type: string }
         categoryId: { type: ["string", "null"] }
         debtId: { type: ["string", "null"] }
+
+    BillsSummaryRow:
+      type: object
+      required: [item, nextOccurrence, monthlyAmount]
+      properties:
+        item: { $ref: "#/components/schemas/RecurringItem" }
+        nextOccurrence: { type: ["string", "null"] }
+        monthlyAmount: { type: string }
+    BillsSummaryMonthly:
+      type: object
+      required: [income, bills, debtMin, totalOutflow, net, active, monthStart, monthEnd]
+      properties:
+        income: { type: string }
+        bills: { type: string }
+        debtMin: { type: string }
+        totalOutflow: { type: string }
+        net: { type: string }
+        active: { type: integer }
+        monthStart: { type: string }
+        monthEnd: { type: string }
+    BillsSummary:
+      type: object
+      required: [income, bills, monthly]
+      properties:
+        income:
+          type: array
+          items: { $ref: "#/components/schemas/BillsSummaryRow" }
+        bills:
+          type: array
+          items: { $ref: "#/components/schemas/BillsSummaryRow" }
+        monthly: { $ref: "#/components/schemas/BillsSummaryMonthly" }
 
     Category:
       type: object

@@ -21,6 +21,7 @@ import type {
   AvalancheSettings,
   AvalancheSettingsInput,
   BankSnapshot,
+  BillsSummary,
   BudgetLine,
   BudgetLineInput,
   BudgetMonthDetail,
@@ -4050,6 +4051,74 @@ export const useSyncPlaidTransactions = <
 > => {
   return useMutation(getSyncPlaidTransactionsMutationOptions(options));
 };
+
+export const getGetBillsSummaryUrl = () => {
+  return `/api/bills/summary`;
+};
+
+export const getBillsSummary = async (
+  options?: RequestInit,
+): Promise<BillsSummary> => {
+  return customFetch<BillsSummary>(getGetBillsSummaryUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBillsSummaryQueryKey = () => {
+  return [`/api/bills/summary`] as const;
+};
+
+export const getGetBillsSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBillsSummary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBillsSummary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBillsSummaryQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBillsSummary>>> = ({
+    signal,
+  }) => getBillsSummary({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBillsSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBillsSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBillsSummary>>
+>;
+export type GetBillsSummaryQueryError = ErrorType<unknown>;
+
+export function useGetBillsSummary<
+  TData = Awaited<ReturnType<typeof getBillsSummary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBillsSummary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBillsSummaryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 export const getImportWorkbookUrl = () => {
   return `/api/import/workbook`;

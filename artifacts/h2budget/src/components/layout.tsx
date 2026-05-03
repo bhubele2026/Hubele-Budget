@@ -24,7 +24,7 @@ const navItems = [
   { name: "Amex Daily", href: "/amex", icon: CreditCard },
   { name: "Debts", href: "/debts", icon: CreditCard },
   { name: "Avalanche", href: "/avalanche", icon: Flame },
-  { name: "Recurring", href: "/recurring", icon: CalendarDays },
+  { name: "Bills", href: "/bills", icon: CalendarDays },
   { name: "Budget", href: "/budget", icon: PieChart },
   { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Mapping Rules", href: "/mapping-rules", icon: GitMerge },

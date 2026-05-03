@@ -12,6 +12,7 @@ import forecastRouter from "./forecast";
 import dashboardBudgetsRouter from "./dashboardBudgets";
 import avalancheRouter from "./avalanche";
 import plaidRouter from "./plaid";
+import billsRouter from "./bills";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(forecastRouter);
 router.use(dashboardBudgetsRouter);
 router.use(avalancheRouter);
 router.use(plaidRouter);
+router.use(billsRouter);
 
 export default router;

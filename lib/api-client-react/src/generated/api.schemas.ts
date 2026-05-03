@@ -430,6 +430,30 @@ export interface RecurringItemInput {
   debtId?: string | null;
 }
 
+export interface BillsSummaryRow {
+  item: RecurringItem;
+  /** @nullable */
+  nextOccurrence: string | null;
+  monthlyAmount: string;
+}
+
+export interface BillsSummaryMonthly {
+  income: string;
+  bills: string;
+  debtMin: string;
+  totalOutflow: string;
+  net: string;
+  active: number;
+  monthStart: string;
+  monthEnd: string;
+}
+
+export interface BillsSummary {
+  income: BillsSummaryRow[];
+  bills: BillsSummaryRow[];
+  monthly: BillsSummaryMonthly;
+}
+
 export type CategorySourceKind =
   (typeof CategorySourceKind)[keyof typeof CategorySourceKind];
 

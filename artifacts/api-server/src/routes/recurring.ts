@@ -8,6 +8,7 @@ import {
   UpdateRecurringItemParams,
   DeleteRecurringItemParams,
 } from "@workspace/api-zod";
+import { archiveExpiredOneTime } from "./bills";
 
 const router: IRouter = Router();
 
@@ -21,6 +22,7 @@ async function userOwnsDebt(userId: string, debtId: string): Promise<boolean> {
 }
 
 router.get("/recurring-items", requireAuth, async (req, res): Promise<void> => {
+  await archiveExpiredOneTime(req.userId!);
   const rows = await db
     .select()
     .from(recurringItemsTable)

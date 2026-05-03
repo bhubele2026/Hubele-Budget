@@ -23,7 +23,7 @@ import DebtsPage from "./pages/debts";
 import AvalanchePage from "./pages/avalanche";
 import AmexPage from "./pages/amex";
 import TransactionsPage from "./pages/transactions";
-import RecurringPage from "./pages/recurring";
+import BillsPage from "./pages/bills";
 import BudgetPage from "./pages/budget";
 import ReviewPage from "./pages/review";
 import MappingRulesPage from "./pages/mapping-rules";
@@ -111,7 +111,10 @@ function ProtectedShell() {
             <Route path="/amex" component={AmexPage} />
             <Route path="/debts" component={DebtsPage} />
             <Route path="/avalanche" component={AvalanchePage} />
-            <Route path="/recurring" component={RecurringPage} />
+            <Route path="/bills" component={BillsPage} />
+            <Route path="/recurring">
+              <Redirect to="/bills" />
+            </Route>
             <Route path="/budget" component={BudgetPage} />
             <Route path="/review" component={ReviewPage} />
             <Route path="/mapping-rules" component={MappingRulesPage} />
