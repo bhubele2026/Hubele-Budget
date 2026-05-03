@@ -44,9 +44,20 @@ router.post("/admin/remap-user", async (req, res): Promise<void> => {
     return;
   }
 
+  const SINGLETON_TABLES = new Set([
+    "avalanche_settings",
+    "forecast_settings",
+    "settings",
+  ]);
+
   const counts: Record<string, number> = {};
   await db.transaction(async (tx) => {
     for (const t of USER_TABLES) {
+      if (SINGLETON_TABLES.has(t)) {
+        await tx.execute(
+          sql.raw(`DELETE FROM ${t} WHERE user_id = '${to}'`),
+        );
+      }
       const r = await tx.execute(
         sql.raw(
           `UPDATE ${t} SET user_id = '${to}' WHERE user_id = '${from}'`,
