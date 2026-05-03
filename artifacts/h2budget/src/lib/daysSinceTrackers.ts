@@ -18,32 +18,54 @@ export const DEFAULT_DAYS_SINCE_TRACKERS: DaysSinceTracker[] = [
   },
 ];
 
+export type CompiledMatcher = {
+  match: (t: Transaction) => boolean;
+  error: string | null;
+};
+
+export function compileMatcher(
+  tracker: DaysSinceTracker,
+  catNameById: Map<string, string>,
+): CompiledMatcher {
+  const value = tracker.matchValue.trim().toLowerCase();
+  if (!value) {
+    return { match: () => false, error: "Rule is empty." };
+  }
+  if (tracker.matchType === "category") {
+    return {
+      match: (t: Transaction) => {
+        if (Number(t.amount) >= 0) return false;
+        const cat = (t.categoryId ? catNameById.get(t.categoryId) ?? "" : "").toLowerCase();
+        return cat.includes(value);
+      },
+      error: null,
+    };
+  }
+  let re: RegExp | null = null;
+  let error: string | null = null;
+  try {
+    re = new RegExp(value, "i");
+  } catch (e) {
+    re = null;
+    error = e instanceof Error ? e.message : "Invalid pattern.";
+  }
+  return {
+    match: (t: Transaction) => {
+      if (Number(t.amount) >= 0) return false;
+      const desc = (t.description ?? "").toLowerCase();
+      const cat = (t.categoryId ? catNameById.get(t.categoryId) ?? "" : "").toLowerCase();
+      if (re) return re.test(desc) || re.test(cat);
+      return desc.includes(value) || cat.includes(value);
+    },
+    error,
+  };
+}
+
 export function makeMatcher(
   tracker: DaysSinceTracker,
   catNameById: Map<string, string>,
 ): (t: Transaction) => boolean {
-  const value = tracker.matchValue.trim().toLowerCase();
-  if (!value) return () => false;
-  if (tracker.matchType === "category") {
-    return (t: Transaction) => {
-      if (Number(t.amount) >= 0) return false;
-      const cat = (t.categoryId ? catNameById.get(t.categoryId) ?? "" : "").toLowerCase();
-      return cat.includes(value);
-    };
-  }
-  let re: RegExp | null = null;
-  try {
-    re = new RegExp(value, "i");
-  } catch {
-    re = null;
-  }
-  return (t: Transaction) => {
-    if (Number(t.amount) >= 0) return false;
-    const desc = (t.description ?? "").toLowerCase();
-    const cat = (t.categoryId ? catNameById.get(t.categoryId) ?? "" : "").toLowerCase();
-    if (re) return re.test(desc) || re.test(cat);
-    return desc.includes(value) || cat.includes(value);
-  };
+  return compileMatcher(tracker, catNameById).match;
 }
 
 export function newTrackerId(): string {

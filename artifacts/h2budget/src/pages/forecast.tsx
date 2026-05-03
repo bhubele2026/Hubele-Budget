@@ -1569,8 +1569,8 @@ export default function ForecastPage() {
               <Skeleton className="h-full w-full" />
             ) : dailySeries.length === 0 || proj?.status === "no_data" ? (
               <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground text-center px-4">
-                No projection data yet. Set a bank snapshot or add planned
-                items to see your projected balance.
+                All clear — set a bank snapshot or add planned items to
+                draw your projected balance.
               </div>
             ) : (
             <ResponsiveContainer width="100%" height="100%">
@@ -1891,7 +1891,7 @@ export default function ForecastPage() {
                 <div className="divide-y divide-border">
                   {planRows.length === 0 && (
                     <div className="p-12 text-center text-muted-foreground">
-                      Nothing planned in this window.
+                      All clear — nothing planned in this window.
                     </div>
                   )}
                   {(() => {

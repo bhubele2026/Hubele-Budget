@@ -496,7 +496,7 @@ export default function BudgetPage() {
                     <div className="divide-y divide-border">
                       {group.lines.length === 0 && (
                         <div className="px-4 py-6 text-sm text-muted-foreground italic">
-                          No categories in this group yet.
+                          All clear — no categories in this group yet.
                         </div>
                       )}
                       {group.lines.map((line) => (

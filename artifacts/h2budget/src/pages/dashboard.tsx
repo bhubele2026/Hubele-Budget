@@ -271,7 +271,7 @@ function WeeklyMonthlySection({
             </div>
             {monthTxns.length === 0 ? (
               <div className="text-xs text-muted-foreground py-2">
-                Nothing tagged yet. Tag charges as "weekly" on the{" "}
+                All clear — no weekly charges this month yet. Tag them on the{" "}
                 <Link href="/amex" className="text-amber-700 underline">Amex page</Link>.
               </div>
             ) : (
@@ -378,7 +378,7 @@ function MonthlyLikeSection({
             </div>
             {recent.length === 0 ? (
               <div className="text-sm text-muted-foreground py-2">
-                Nothing tagged yet. Tag charges as "{bucket}" on the{" "}
+                All clear — no {bucket} charges this month yet. Tag them on the{" "}
                 <Link href="/amex" className="text-amber-700 underline">Amex page</Link>.
               </div>
             ) : (
@@ -770,7 +770,7 @@ function ReimbursementsBox({
           </div>
         ) : reimbursable.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">
-            Nothing tagged reimbursable yet.
+            All clear — nothing waiting to be reimbursed.
           </p>
         ) : (
           <div className="max-h-[28rem] overflow-y-auto pr-1 space-y-4">
@@ -1400,7 +1400,7 @@ export default function DashboardPage() {
               ))}
               {data.recentTransactions.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-6">
-                  No recent transactions.
+                  All clear — no recent activity to show.
                 </p>
               )}
             </div>
@@ -1432,7 +1432,7 @@ export default function DashboardPage() {
               ))}
               {data.topCategories.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  No data available.
+                  All clear — no categories with spend yet this month.
                 </p>
               )}
             </div>
@@ -1461,7 +1461,7 @@ export default function DashboardPage() {
               ))}
               {data.upcomingBills.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  No recurring items yet.
+                  All clear — no recurring bills on the radar.
                 </p>
               )}
             </div>

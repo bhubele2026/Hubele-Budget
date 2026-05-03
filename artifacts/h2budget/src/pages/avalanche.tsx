@@ -1189,7 +1189,7 @@ export default function AvalanchePage() {
                   {sortedActive.length === 0 && (
                     <tr>
                       <td colSpan={11} className="text-center py-8 text-muted-foreground">
-                        No active debts. Add one to get started.
+                        All clear — no active debts. Add one above to get started.
                       </td>
                     </tr>
                   )}

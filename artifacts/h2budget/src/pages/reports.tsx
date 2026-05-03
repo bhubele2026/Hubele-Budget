@@ -17,7 +17,7 @@ import {
 } from "@workspace/api-client-react";
 import {
   DEFAULT_DAYS_SINCE_TRACKERS,
-  makeMatcher,
+  compileMatcher,
   type DaysSinceTracker,
 } from "@/lib/daysSinceTrackers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -664,7 +664,7 @@ function DebtSection({
           <CardContent>
             {progress.length === 0 ? (
               <div className="text-sm text-muted-foreground py-8 text-center">
-                Add a debt to see progress.
+                All clear — no debts to track yet.
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -731,7 +731,7 @@ function DebtSection({
         }
         empty={
           pastBalanceCurve.length === 0
-            ? "No history yet — the projection below shows where you're headed."
+            ? "All clear — no history yet. The projection below shows where you're headed."
             : null
         }
         height={220}
@@ -774,7 +774,7 @@ function DebtSection({
         title="Payoff timeline"
         caption="Stacked balance per debt over time. Each layer disappears as that debt is killed."
         empty={
-          activeDebts.length === 0 ? "Add a debt to see your projection." : null
+          activeDebts.length === 0 ? "All clear — no active debts to project." : null
         }
         height={340}
       >
@@ -830,7 +830,7 @@ function DebtSection({
         <ChartCard
           title="Snowball waterfall"
           caption="Freed-up minimums roll into the next debt as each one falls."
-          empty={waterfall.length === 0 ? "No projected payoffs in window." : null}
+          empty={waterfall.length === 0 ? "All clear — no projected payoffs in this window." : null}
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={waterfall} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -848,7 +848,7 @@ function DebtSection({
         <ChartCard
           title="Interest vs principal"
           caption="Stacked monthly payment split. The interest slice should shrink as smaller debts die."
-          empty={ipBars.length === 0 ? "No projection." : null}
+          empty={ipBars.length === 0 ? "All clear — no projection to draw yet." : null}
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={ipBars} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -869,7 +869,7 @@ function DebtSection({
         <ChartCard
           title="Debts killed — milestone timeline"
           caption="Projected payoff date for every debt, in order."
-          empty={killed.length === 0 ? "No projected payoffs yet." : null}
+          empty={killed.length === 0 ? "All clear — no projected payoffs yet." : null}
           height={Math.max(220, 60 + killed.length * 40)}
         >
           <div className="relative h-full overflow-y-auto pr-1">
@@ -901,7 +901,7 @@ function DebtSection({
         <ChartCard
           title="Per-debt months remaining"
           caption="How long each balance has left at your current plan. Shorter = closer to done."
-          empty={progress.length === 0 ? "No active debts." : null}
+          empty={progress.length === 0 ? "All clear — no active debts on the books." : null}
           height={Math.max(220, 40 + progress.length * 36)}
         >
           <div className="space-y-3 h-full overflow-y-auto pr-1">
@@ -1155,7 +1155,7 @@ function CashFlowSection({
             ? "Solid = current period. Dashed = previous period."
             : "The classic line — income up top, expense below."
         }
-        empty={series.length === 0 ? "No transactions in window." : null}
+        empty={series.length === 0 ? "All clear — no transactions in this window." : null}
       >
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={seriesWithPrev} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -1203,7 +1203,7 @@ function CashFlowSection({
             ? "Bars = current net. Solid line = running net. Dashed = previous-period net."
             : "Bars = net per period. The line = running cumulative net."
         }
-        empty={series.length === 0 ? "No transactions in window." : null}
+        empty={series.length === 0 ? "All clear — no transactions in this window." : null}
       >
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={seriesWithPrev} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -1264,7 +1264,7 @@ function CashFlowSection({
         <ChartCard
           title="Forecast balance (next 90 days)"
           caption="Projected cash balance from your forecast settings."
-          empty={forecastSeries.length === 0 ? "No forecast data yet." : null}
+          empty={forecastSeries.length === 0 ? "All clear — no forecast data yet." : null}
         >
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={forecastSeries} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -1296,7 +1296,7 @@ function CashFlowSection({
         <ChartCard
           title="Money flow this month"
           caption="Income sources → spending categories → savings/spent."
-          empty={flowBars.length === 0 ? "No transactions yet." : null}
+          empty={flowBars.length === 0 ? "All clear — no transactions yet." : null}
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={flowBars} margin={{ top: 10, right: 16, bottom: 24, left: 0 }} layout="vertical">
@@ -1320,7 +1320,7 @@ function CashFlowSection({
         <ChartCard
           title="Rolling 30-day burn rate"
           caption="Average daily spending — the smoothed signal under the noise."
-          empty={burn.length === 0 ? "No spending data." : null}
+          empty={burn.length === 0 ? "All clear — no spending data yet." : null}
         >
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={burn} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -1459,7 +1459,7 @@ function SpendingSection({
         <ChartCard
           title="Top categories"
           caption="The slice-pie of your spend in this window."
-          empty={top8.length === 0 ? "No spending in window." : null}
+          empty={top8.length === 0 ? "All clear — no spending in this window." : null}
         >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -1477,7 +1477,7 @@ function SpendingSection({
         <ChartCard
           title="Reimbursable vs personal"
           caption="On Amex: how much of the spend will come back vs. the true personal cost."
-          empty={reimDonut.length === 0 ? "No Amex spend tagged." : null}
+          empty={reimDonut.length === 0 ? "All clear — no Amex spend tagged yet." : null}
         >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -1498,7 +1498,7 @@ function SpendingSection({
         caption="Each square is one day. Darker = more spent."
         empty={
           heatCols.length === 0 || maxHeat === 0
-            ? "No spending in the last 12 weeks."
+            ? "All clear — no spending in the last 12 weeks."
             : null
         }
         height={180}
@@ -1537,7 +1537,7 @@ function SpendingSection({
         <ChartCard
           title="Day of week"
           caption="Average spend per weekday — exposes a Friday damage pattern."
-          empty={dow.every((d) => d.avg === 0) ? "No spending data." : null}
+          empty={dow.every((d) => d.avg === 0) ? "All clear — no spending data yet." : null}
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={dow} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -1557,7 +1557,7 @@ function SpendingSection({
         <ChartCard
           title="Top merchants"
           caption="Where your dollars actually land. Top 10 by total."
-          empty={merchants.length === 0 ? "No spending data." : null}
+          empty={merchants.length === 0 ? "All clear — no merchants tracked yet." : null}
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={merchants} layout="vertical" margin={{ top: 10, right: 16, bottom: 0, left: 0 }}>
@@ -1574,7 +1574,7 @@ function SpendingSection({
       <ChartCard
         title="Category trends — last 6 months"
         caption="One sparkline per top category. Watch for upward creep."
-        empty={trends.length === 0 ? "No category spending." : null}
+        empty={trends.length === 0 ? "All clear — no category spending yet." : null}
         height={260}
       >
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 h-full">
@@ -1717,7 +1717,7 @@ function BudgetSection({
       <ChartCard
         title={`Budgeted vs Actual — ${monthStart.slice(0, 7)}`}
         caption="The classic side-by-side; biggest planned categories first."
-        empty={barData.length === 0 ? "No budget set for this month." : null}
+        empty={barData.length === 0 ? "All clear — no budget set for this month." : null}
       >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={barData} margin={{ top: 10, right: 16, bottom: 60, left: 0 }}>
@@ -1735,7 +1735,7 @@ function BudgetSection({
       <ChartCard
         title="Variance — under vs over"
         caption="Bars that point right are over budget (bad). Left = under (good)."
-        empty={variance.length === 0 ? "Nothing to compare yet." : null}
+        empty={variance.length === 0 ? "All clear — nothing to compare yet." : null}
         height={Math.max(260, 30 + variance.length * 22)}
       >
         <ResponsiveContainer width="100%" height="100%">
@@ -1757,7 +1757,7 @@ function BudgetSection({
       <ChartCard
         title="Total burn-down"
         caption="Cumulative planned vs actual through the month — see if the household is pacing over."
-        empty={burndown.length === 0 ? "No budget set for this month." : null}
+        empty={burndown.length === 0 ? "All clear — no budget set for this month." : null}
       >
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={burndown} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -1777,7 +1777,7 @@ function BudgetSection({
         caption="One line per top-5 budgeted category. Dashed = paced plan, solid = actual cumulative."
         empty={
           perCatBurn.categories.length === 0
-            ? "No budget set for this month."
+            ? "All clear — no budget set for this month."
             : null
         }
         height={320}
@@ -1834,7 +1834,7 @@ function BudgetSection({
       <ChartCard
         title="6-month consistency"
         caption="Cells colored by % of budget used. Green = on plan. Red = blew it. Empty = no budget set that month."
-        empty={consistency.length === 0 ? "Set a budget across recent months to compare." : null}
+        empty={consistency.length === 0 ? "All clear — set a budget across recent months to compare." : null}
         height={Math.max(220, 60 + consistency.length * 28)}
       >
         <div className="overflow-y-auto pr-1 h-full">
@@ -1910,11 +1910,17 @@ function BehaviorSection({
 }) {
   const trackerTiles = useMemo(
     () =>
-      trackers.map((tr) => ({
-        id: tr.id,
-        label: tr.label,
-        days: daysSinceLast(yearTxns, makeMatcher(tr, catNameById), today),
-      })),
+      trackers.map((tr) => {
+        const compiled = compileMatcher(tr, catNameById);
+        return {
+          id: tr.id,
+          label: tr.label,
+          days: compiled.error
+            ? null
+            : daysSinceLast(yearTxns, compiled.match, today),
+          error: compiled.error,
+        };
+      }),
     [trackers, yearTxns, today, catNameById],
   );
 
@@ -1957,14 +1963,19 @@ function BehaviorSection({
       {trackerTiles.length === 0 ? (
         <Card className="rounded-2xl border-dashed">
           <CardContent className="p-5 text-center text-sm text-muted-foreground">
-            No "days since" trackers configured. Add some on the{" "}
+            All clear — no "days since" trackers configured. Add some on the{" "}
             <a href="/settings" className="text-primary underline">Settings</a> page.
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {trackerTiles.map((t) => (
-            <DaysSinceTile key={t.id} label={t.label} days={t.days} />
+            <DaysSinceTile
+              key={t.id}
+              label={t.label}
+              days={t.days}
+              error={t.error}
+            />
           ))}
         </div>
       )}
@@ -2036,9 +2047,9 @@ function BehaviorSection({
         caption="What hours of the day money actually leaves the account."
         empty={
           clock === null
-            ? "No transactions in the window have a time-of-day stamped (Plaid often only ships date). Once timed transactions arrive this fills in."
+            ? "All clear — no time-of-day data in this window yet (Plaid often ships date only)."
             : clock.every((c) => c.amount === 0)
-              ? "No spending in window."
+              ? "All clear — no spending in this window."
               : null
         }
         height={280}
@@ -2064,7 +2075,7 @@ function BehaviorSection({
         <ChartCard
           title="Spend by day of month"
           caption="Which days money tends to leave — payday, mid-month creep, end-of-month splurges."
-          empty={dayOfMonth.every((d) => d.amount === 0) ? "No spending data." : null}
+          empty={dayOfMonth.every((d) => d.amount === 0) ? "All clear — no spending data yet." : null}
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={dayOfMonth} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
@@ -2084,7 +2095,7 @@ function BehaviorSection({
         <ChartCard
           title="Money personality radar"
           caption="The shape of where your dollars go (relative, not absolute)."
-          empty={radar.every((r) => r.value === 0) ? "No spending data." : null}
+          empty={radar.every((r) => r.value === 0) ? "All clear — no spending data yet." : null}
         >
           <ResponsiveContainer width="100%" height="100%">
             <RadarChart data={radar}>
@@ -2151,8 +2162,37 @@ function StreakCard({
   );
 }
 
-function DaysSinceTile({ label, days }: { label: string; days: number | null }) {
+function DaysSinceTile({
+  label,
+  days,
+  error,
+}: {
+  label: string;
+  days: number | null;
+  error?: string | null;
+}) {
   const tone = days === null ? "default" : days >= 14 ? "good" : days >= 7 ? "amber" : "bad";
+  if (error) {
+    return (
+      <Card className="rounded-2xl border-dashed" data-testid={`tracker-tile-error-${label}`}>
+        <CardContent className="p-5 text-center">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Days since last
+          </div>
+          <div className="text-lg font-serif font-semibold mt-1">{label}</div>
+          <div className="text-sm text-amber-700 dark:text-amber-400 mt-3">
+            Couldn't read this rule
+          </div>
+          <div
+            className="text-[11px] text-muted-foreground mt-1 italic truncate"
+            title={error}
+          >
+            Edit it on the Settings page.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card className="rounded-2xl border-dashed">
       <CardContent className="p-5 text-center">
