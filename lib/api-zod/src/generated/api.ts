@@ -1163,6 +1163,7 @@ export const ListDashboardBudgetsResponseItem = zod.object({
   bucket: zod.string(),
   periodKey: zod.string(),
   amount: zod.string(),
+  isDefault: zod.boolean(),
 });
 export const ListDashboardBudgetsResponse = zod.array(
   ListDashboardBudgetsResponseItem,
@@ -1179,6 +1180,12 @@ export const UpsertDashboardBudgetResponse = zod.object({
   bucket: zod.string(),
   periodKey: zod.string(),
   amount: zod.string(),
+  isDefault: zod.boolean(),
+});
+
+export const DeleteDashboardBudgetQueryParams = zod.object({
+  bucket: zod.coerce.string(),
+  periodKey: zod.coerce.string(),
 });
 
 export const CreatePlaidLinkTokenResponse = zod.object({

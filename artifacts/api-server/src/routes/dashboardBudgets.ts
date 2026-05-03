@@ -42,12 +42,13 @@ router.get("/dashboard-budgets", requireAuth, async (req, res): Promise<void> =>
         bucket: bucketFilter,
         periodKey: periodKeyFilter,
         amount,
+        isDefault: true,
       },
     ]);
     return;
   }
 
-  res.json(rows);
+  res.json(rows.map((r) => ({ ...r, isDefault: false })));
 });
 
 router.put("/dashboard-budgets", requireAuth, async (req, res): Promise<void> => {
@@ -69,7 +70,27 @@ router.put("/dashboard-budgets", requireAuth, async (req, res): Promise<void> =>
       set: { amount, updatedAt: new Date() },
     })
     .returning();
-  res.json(row);
+  res.json({ ...row, isDefault: false });
+});
+
+router.delete("/dashboard-budgets", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
+  const bucket = typeof req.query.bucket === "string" ? req.query.bucket : undefined;
+  const periodKey = typeof req.query.periodKey === "string" ? req.query.periodKey : undefined;
+  if (!bucket || !periodKey) {
+    res.status(400).json({ error: "bucket, periodKey required" });
+    return;
+  }
+  await db
+    .delete(dashboardBudgetsTable)
+    .where(
+      and(
+        eq(dashboardBudgetsTable.userId, userId),
+        eq(dashboardBudgetsTable.bucket, bucket),
+        eq(dashboardBudgetsTable.periodKey, periodKey),
+      ),
+    );
+  res.status(204).end();
 });
 
 export { ALL_BUCKETS };

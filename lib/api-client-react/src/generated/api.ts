@@ -39,6 +39,7 @@ import type {
   DebtLinkInput,
   DebtPaymentInput,
   DebtPaymentResult,
+  DeleteDashboardBudgetParams,
   ForecastBundle,
   ForecastClosedMonth,
   ForecastResolution,
@@ -3775,6 +3776,98 @@ export const useUpsertDashboardBudget = <
   TContext
 > => {
   return useMutation(getUpsertDashboardBudgetMutationOptions(options));
+};
+
+export const getDeleteDashboardBudgetUrl = (
+  params: DeleteDashboardBudgetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/dashboard-budgets?${stringifiedParams}`
+    : `/api/dashboard-budgets`;
+};
+
+export const deleteDashboardBudget = async (
+  params: DeleteDashboardBudgetParams,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteDashboardBudgetUrl(params), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteDashboardBudgetMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDashboardBudget>>,
+    TError,
+    { params: DeleteDashboardBudgetParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteDashboardBudget>>,
+  TError,
+  { params: DeleteDashboardBudgetParams },
+  TContext
+> => {
+  const mutationKey = ["deleteDashboardBudget"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteDashboardBudget>>,
+    { params: DeleteDashboardBudgetParams }
+  > = (props) => {
+    const { params } = props ?? {};
+
+    return deleteDashboardBudget(params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteDashboardBudgetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteDashboardBudget>>
+>;
+
+export type DeleteDashboardBudgetMutationError = ErrorType<unknown>;
+
+export const useDeleteDashboardBudget = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDashboardBudget>>,
+    TError,
+    { params: DeleteDashboardBudgetParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteDashboardBudget>>,
+  TError,
+  { params: DeleteDashboardBudgetParams },
+  TContext
+> => {
+  return useMutation(getDeleteDashboardBudgetMutationOptions(options));
 };
 
 export const getCreatePlaidLinkTokenUrl = () => {

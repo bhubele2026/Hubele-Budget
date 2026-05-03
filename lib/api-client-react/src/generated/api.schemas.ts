@@ -896,6 +896,7 @@ export interface DashboardBudget {
   bucket: string;
   periodKey: string;
   amount: string;
+  isDefault: boolean;
 }
 
 export interface DashboardBudgetInput {
@@ -1019,6 +1020,11 @@ export type CloseForecastMonthBody = {
 export type ListDashboardBudgetsParams = {
   bucket?: string;
   periodKey?: string;
+};
+
+export type DeleteDashboardBudgetParams = {
+  bucket: string;
+  periodKey: string;
 };
 
 export type ImportWorkbookBody = {

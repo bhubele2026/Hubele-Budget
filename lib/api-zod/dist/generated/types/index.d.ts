@@ -60,6 +60,7 @@ export * from "./debtMinPaymentSource";
 export * from "./debtPaymentInput";
 export * from "./debtPaymentResult";
 export * from "./debtPlaidAccount";
+export * from "./deleteDashboardBudgetParams";
 export * from "./forecastBundle";
 export * from "./forecastBundleMonthSnapshots";
 export * from "./forecastClosedMonth";

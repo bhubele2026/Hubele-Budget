@@ -5,11 +5,8 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
-export interface DashboardBudget {
-    id: string;
+export type DeleteDashboardBudgetParams = {
     bucket: string;
     periodKey: string;
-    amount: string;
-    isDefault: boolean;
-}
-//# sourceMappingURL=dashboardBudget.d.ts.map
+};
+//# sourceMappingURL=deleteDashboardBudgetParams.d.ts.map

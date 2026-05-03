@@ -7,6 +7,7 @@ import {
   useListTransactions,
   useListDashboardBudgets,
   useUpsertDashboardBudget,
+  useDeleteDashboardBudget,
   useUpdateTransaction,
   getListDashboardBudgetsQueryKey,
   getListTransactionsQueryKey,
@@ -45,7 +46,10 @@ function useBudgetEditor(bucket: "weekly" | "monthly" | "unplanned", periodKey: 
   const { toast } = useToast();
   const { data: budgets } = useListDashboardBudgets({ bucket, periodKey });
   const upsert = useUpsertDashboardBudget();
-  const saved = Number(budgets?.[0]?.amount ?? 0);
+  const del = useDeleteDashboardBudget();
+  const row = budgets?.[0];
+  const saved = Number(row?.amount ?? 0);
+  const isDefault = row?.isDefault ?? true;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
@@ -67,18 +71,46 @@ function useBudgetEditor(bucket: "weekly" | "monthly" | "unplanned", periodKey: 
       },
     );
   };
-  return { saved, editing, draft, setDraft, beginEdit, save, setEditing, isPending: upsert.isPending };
+  const resetToDefault = () => {
+    del.mutate(
+      { params: { bucket, periodKey } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({
+            queryKey: getListDashboardBudgetsQueryKey({ bucket, periodKey }),
+          });
+          toast({ title: "Reverted to Settings default" });
+        },
+      },
+    );
+  };
+  return {
+    saved,
+    isDefault,
+    editing,
+    draft,
+    setDraft,
+    beginEdit,
+    save,
+    setEditing,
+    resetToDefault,
+    isPending: upsert.isPending,
+    isResetting: del.isPending,
+  };
 }
 
 function CapInline({
   saved,
+  isDefault,
   editing,
   draft,
   setDraft,
   beginEdit,
   save,
   setEditing,
+  resetToDefault,
   isPending,
+  isResetting,
 }: ReturnType<typeof useBudgetEditor>) {
   if (editing) {
     return (
@@ -102,14 +134,42 @@ function CapInline({
     );
   }
   return (
-    <button
-      type="button"
-      className="text-3xl md:text-4xl font-serif font-light text-muted-foreground hover:text-foreground transition-colors"
-      onClick={beginEdit}
-      title="Click to edit cap"
-    >
-      / {formatCurrency(saved)}
-    </button>
+    <span className="inline-flex items-baseline gap-2">
+      <button
+        type="button"
+        className="text-3xl md:text-4xl font-serif font-light text-muted-foreground hover:text-foreground transition-colors"
+        onClick={beginEdit}
+        title="Click to edit cap"
+      >
+        / {formatCurrency(saved)}
+      </button>
+      {isDefault ? (
+        <span
+          className="text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded border border-muted-foreground/30 text-muted-foreground"
+          title="Cap comes from your Settings allowance"
+        >
+          default
+        </span>
+      ) : (
+        <span className="inline-flex items-baseline gap-1">
+          <span
+            className="text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded border border-amber-700/40 text-amber-700"
+            title="Override set for this month"
+          >
+            override
+          </span>
+          <button
+            type="button"
+            className="text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground underline disabled:opacity-50"
+            onClick={resetToDefault}
+            disabled={isResetting}
+            title="Clear override and use the Settings default"
+          >
+            reset
+          </button>
+        </span>
+      )}
+    </span>
   );
 }
 

@@ -716,6 +716,20 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DashboardBudget" }
+    delete:
+      operationId: deleteDashboardBudget
+      tags: [dashboard-budgets]
+      parameters:
+        - in: query
+          name: bucket
+          required: true
+          schema: { type: string }
+        - in: query
+          name: periodKey
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
 
   /plaid/link-token:
     post:
@@ -1490,12 +1504,13 @@ components:
 
     DashboardBudget:
       type: object
-      required: [id, bucket, periodKey, amount]
+      required: [id, bucket, periodKey, amount, isDefault]
       properties:
         id: { type: string }
         bucket: { type: string }
         periodKey: { type: string }
         amount: { type: string }
+        isDefault: { type: boolean }
     DashboardBudgetInput:
       type: object
       required: [bucket, periodKey, amount]

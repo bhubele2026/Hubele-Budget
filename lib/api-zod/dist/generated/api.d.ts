@@ -3554,32 +3554,38 @@ export declare const ListDashboardBudgetsResponseItem: zod.ZodObject<{
     bucket: zod.ZodString;
     periodKey: zod.ZodString;
     amount: zod.ZodString;
+    isDefault: zod.ZodBoolean;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     amount: string;
     bucket: string;
     periodKey: string;
+    isDefault: boolean;
 }, {
     id: string;
     amount: string;
     bucket: string;
     periodKey: string;
+    isDefault: boolean;
 }>;
 export declare const ListDashboardBudgetsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
     bucket: zod.ZodString;
     periodKey: zod.ZodString;
     amount: zod.ZodString;
+    isDefault: zod.ZodBoolean;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     amount: string;
     bucket: string;
     periodKey: string;
+    isDefault: boolean;
 }, {
     id: string;
     amount: string;
     bucket: string;
     periodKey: string;
+    isDefault: boolean;
 }>, "many">;
 export declare const UpsertDashboardBudgetBody: zod.ZodObject<{
     bucket: zod.ZodString;
@@ -3599,14 +3605,27 @@ export declare const UpsertDashboardBudgetResponse: zod.ZodObject<{
     bucket: zod.ZodString;
     periodKey: zod.ZodString;
     amount: zod.ZodString;
+    isDefault: zod.ZodBoolean;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     amount: string;
     bucket: string;
     periodKey: string;
+    isDefault: boolean;
 }, {
     id: string;
     amount: string;
+    bucket: string;
+    periodKey: string;
+    isDefault: boolean;
+}>;
+export declare const DeleteDashboardBudgetQueryParams: zod.ZodObject<{
+    bucket: zod.ZodString;
+    periodKey: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    bucket: string;
+    periodKey: string;
+}, {
     bucket: string;
     periodKey: string;
 }>;
