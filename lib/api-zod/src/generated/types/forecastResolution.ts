@@ -16,6 +16,8 @@ export interface ForecastResolution {
   /** @nullable */
   matchedTxnId?: string | null;
   /** @nullable */
+  rescheduledTo?: string | null;
+  /** @nullable */
   txnDate?: string | null;
   /** @nullable */
   txnDescription?: string | null;

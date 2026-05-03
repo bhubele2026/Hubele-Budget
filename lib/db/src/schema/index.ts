@@ -305,6 +305,7 @@ export const forecastResolutionsTable = pgTable(
     occurrenceDate: date("occurrence_date"),
     status: text("status").notNull(),
     matchedTxnId: uuid("matched_txn_id"),
+    rescheduledTo: date("rescheduled_to"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({

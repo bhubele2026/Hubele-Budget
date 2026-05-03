@@ -1399,6 +1399,7 @@ components:
         occurrenceDate: { type: ["string", "null"] }
         status: { type: string }
         matchedTxnId: { type: ["string", "null"] }
+        rescheduledTo: { type: ["string", "null"] }
         txnDate: { type: ["string", "null"] }
         txnDescription: { type: ["string", "null"] }
         txnAmount: { type: ["string", "null"] }
@@ -1411,6 +1412,7 @@ components:
         occurrenceDate: { type: ["string", "null"] }
         status: { type: string }
         matchedTxnId: { type: ["string", "null"] }
+        rescheduledTo: { type: ["string", "null"] }
     ForecastClosedMonth:
       type: object
       required: [id, monthKey]

@@ -2897,6 +2897,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         occurrenceDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         status: zod.ZodString;
         matchedTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        rescheduledTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         txnDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         txnDescription: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         txnAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -2907,6 +2908,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         recurringItemId?: string | null | undefined;
         occurrenceDate?: string | null | undefined;
         matchedTxnId?: string | null | undefined;
+        rescheduledTo?: string | null | undefined;
         txnDate?: string | null | undefined;
         txnDescription?: string | null | undefined;
         txnAmount?: string | null | undefined;
@@ -2917,6 +2919,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         recurringItemId?: string | null | undefined;
         occurrenceDate?: string | null | undefined;
         matchedTxnId?: string | null | undefined;
+        rescheduledTo?: string | null | undefined;
         txnDate?: string | null | undefined;
         txnDescription?: string | null | undefined;
         txnAmount?: string | null | undefined;
@@ -3121,6 +3124,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         recurringItemId?: string | null | undefined;
         occurrenceDate?: string | null | undefined;
         matchedTxnId?: string | null | undefined;
+        rescheduledTo?: string | null | undefined;
         txnDate?: string | null | undefined;
         txnDescription?: string | null | undefined;
         txnAmount?: string | null | undefined;
@@ -3221,6 +3225,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         recurringItemId?: string | null | undefined;
         occurrenceDate?: string | null | undefined;
         matchedTxnId?: string | null | undefined;
+        rescheduledTo?: string | null | undefined;
         txnDate?: string | null | undefined;
         txnDescription?: string | null | undefined;
         txnAmount?: string | null | undefined;
@@ -3326,16 +3331,19 @@ export declare const UpsertForecastResolutionBody: zod.ZodObject<{
     occurrenceDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     status: zod.ZodString;
     matchedTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    rescheduledTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     status: string;
     recurringItemId?: string | null | undefined;
     occurrenceDate?: string | null | undefined;
     matchedTxnId?: string | null | undefined;
+    rescheduledTo?: string | null | undefined;
 }, {
     status: string;
     recurringItemId?: string | null | undefined;
     occurrenceDate?: string | null | undefined;
     matchedTxnId?: string | null | undefined;
+    rescheduledTo?: string | null | undefined;
 }>;
 export declare const UpsertForecastResolutionResponse: zod.ZodObject<{
     id: zod.ZodString;
@@ -3343,6 +3351,7 @@ export declare const UpsertForecastResolutionResponse: zod.ZodObject<{
     occurrenceDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     status: zod.ZodString;
     matchedTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    rescheduledTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     txnDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     txnDescription: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     txnAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -3353,6 +3362,7 @@ export declare const UpsertForecastResolutionResponse: zod.ZodObject<{
     recurringItemId?: string | null | undefined;
     occurrenceDate?: string | null | undefined;
     matchedTxnId?: string | null | undefined;
+    rescheduledTo?: string | null | undefined;
     txnDate?: string | null | undefined;
     txnDescription?: string | null | undefined;
     txnAmount?: string | null | undefined;
@@ -3363,6 +3373,7 @@ export declare const UpsertForecastResolutionResponse: zod.ZodObject<{
     recurringItemId?: string | null | undefined;
     occurrenceDate?: string | null | undefined;
     matchedTxnId?: string | null | undefined;
+    rescheduledTo?: string | null | undefined;
     txnDate?: string | null | undefined;
     txnDescription?: string | null | undefined;
     txnAmount?: string | null | undefined;

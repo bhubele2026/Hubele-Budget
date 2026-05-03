@@ -281,22 +281,35 @@ export async function computeCashSignal(
     .where(eq(forecastResolutionsTable.userId, userId));
   const matchedPlanKeys = new Set<string>();
   const matchedTxnIds = new Set<string>();
+  const rescheduledByKey = new Map<string, string>();
   for (const r of resolutions) {
     if (r.status === "matched") {
       if (r.recurringItemId && r.occurrenceDate) {
         matchedPlanKeys.add(`${r.recurringItemId}|${r.occurrenceDate}`);
       }
       if (r.matchedTxnId) matchedTxnIds.add(r.matchedTxnId);
+    } else if (
+      r.status === "rescheduled" &&
+      r.recurringItemId &&
+      r.occurrenceDate &&
+      r.rescheduledTo
+    ) {
+      rescheduledByKey.set(
+        `${r.recurringItemId}|${r.occurrenceDate}`,
+        r.rescheduledTo,
+      );
     }
   }
 
   type Item = { date: string; amount: number; matched: boolean };
   const items: Item[] = [];
   for (const ev of events) {
-    if (ev.date <= anchorISO) continue; // already baked into snapshot
-    const matched = matchedPlanKeys.has(`${ev.itemId}|${ev.date}`);
+    const origKey = `${ev.itemId}|${ev.date}`;
+    const effectiveDate = rescheduledByKey.get(origKey) ?? ev.date;
+    if (effectiveDate <= anchorISO) continue; // already baked into snapshot
+    const matched = matchedPlanKeys.has(origKey);
     if (matched) continue;
-    items.push({ date: ev.date, amount: ev.amount, matched: false });
+    items.push({ date: effectiveDate, amount: ev.amount, matched: false });
   }
   for (const t of txns) {
     if (t.occurredOn <= anchorISO) continue;

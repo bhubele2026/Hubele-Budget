@@ -14,4 +14,6 @@ export interface ForecastResolutionInput {
   status: string;
   /** @nullable */
   matchedTxnId?: string | null;
+  /** @nullable */
+  rescheduledTo?: string | null;
 }

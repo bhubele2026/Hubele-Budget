@@ -43,6 +43,7 @@ export type Resolution = {
   occurrenceDate: string | null;
   status: string;
   matchedTxnId: string | null;
+  rescheduledTo?: string | null;
   txnDate?: string | null;
   txnDescription?: string | null;
   txnAmount?: string | null;
@@ -61,6 +62,8 @@ export type PlanLine = {
   status: PlanLineStatus;
   resolutionId?: string;
   matchedTxnId?: string | null;
+  /** Original occurrence date when the row has been rescheduled. */
+  originalDate?: string;
 };
 
 export type BankLine = {
@@ -75,6 +78,20 @@ export type BankLine = {
 export type LineRow = (PlanLine | BankLine) & { runningBalance?: number };
 
 const DAY = 86_400_000;
+
+/**
+ * Gate condition for the "inbox cleared" confetti celebration. We only
+ * fire when both:
+ *   1. The pending-bank inbox is empty, and
+ *   2. The forecast end balance reconciles to the live bank snapshot
+ *      (so the user has fully closed the loop, not just hidden cards).
+ */
+export function shouldCelebrateClear(opts: {
+  inboxCount: number;
+  isReconciledToBank: boolean;
+}): boolean {
+  return opts.inboxCount === 0 && opts.isReconciledToBank;
+}
 
 function parseISO(s: string) {
   const [y, m, d] = s.split("-").map(Number);
@@ -120,23 +137,32 @@ export function buildLineRegister(opts: {
   }
 
   const allPlan: PlanLine[] = events.map((ev) => {
-    const evMs = parseISO(ev.date);
-    const key = `${ev.itemId}|${ev.date}`;
-    const stored = byEventKey.get(key);
+    const origKey = `${ev.itemId}|${ev.date}`;
+    const origRes = byEventKey.get(origKey);
+    let date = ev.date;
+    let stored: Resolution | undefined = origRes;
+    if (origRes?.status === "rescheduled" && origRes.rescheduledTo) {
+      date = origRes.rescheduledTo;
+      const atNew = byEventKey.get(`${ev.itemId}|${date}`);
+      if (atNew && atNew.id !== origRes.id) stored = atNew;
+    }
+    const evMs = parseISO(date);
     let status: PlanLineStatus;
     if (stored?.status === "matched") status = "matched";
-    else if (stored?.status === "missed" || stored?.status === "dismissed") status = "missed";
+    else if (stored?.status === "missed" || stored?.status === "dismissed")
+      status = "missed";
     else if (evMs > todayMs) status = "future";
     else status = "pending_plan";
     return {
       kind: "plan" as const,
-      date: ev.date,
+      date,
       itemId: ev.itemId,
       label: ev.label,
       amount: ev.amount,
       status,
       resolutionId: stored?.id,
       matchedTxnId: stored?.matchedTxnId ?? null,
+      originalDate: date !== ev.date ? ev.date : undefined,
     };
   });
 

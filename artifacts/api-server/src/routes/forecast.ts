@@ -152,6 +152,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
       occurrenceDate: forecastResolutionsTable.occurrenceDate,
       status: forecastResolutionsTable.status,
       matchedTxnId: forecastResolutionsTable.matchedTxnId,
+      rescheduledTo: forecastResolutionsTable.rescheduledTo,
       txnDate: transactionsTable.occurredOn,
       txnDescription: transactionsTable.description,
       txnAmount: transactionsTable.amount,
@@ -213,7 +214,7 @@ router.put("/forecast/settings", requireAuth, async (req, res): Promise<void> =>
   res.json(presentSettings(row));
 });
 
-const ALLOWED_HORIZON_DAYS = new Set([30, 60, 90, 183, 365]);
+const ALLOWED_HORIZON_DAYS = new Set([30, 90, 120, 183, 365]);
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 router.get("/forecast/cash-signal", requireAuth, async (req, res): Promise<void> => {
@@ -222,7 +223,7 @@ router.get("/forecast/cash-signal", requireAuth, async (req, res): Promise<void>
     const n = Number(req.query.horizonDays);
     if (!Number.isFinite(n) || !ALLOWED_HORIZON_DAYS.has(n)) {
       res.status(400).json({
-        error: "invalid horizonDays (allowed: 30, 60, 90, 183, 365)",
+        error: "invalid horizonDays (allowed: 30, 90, 120, 183, 365)",
       });
       return;
     }
@@ -392,10 +393,31 @@ router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<voi
 
 router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
-  const { recurringItemId, occurrenceDate, status, matchedTxnId } = req.body ?? {};
+  const { recurringItemId, occurrenceDate, status, matchedTxnId, rescheduledTo } =
+    req.body ?? {};
   if (!status) {
     res.status(400).json({ error: "status required" });
     return;
+  }
+  if (rescheduledTo != null) {
+    if (typeof rescheduledTo !== "string" || !ISO_DATE_RE.test(rescheduledTo)) {
+      res.status(400).json({ error: "invalid rescheduledTo (YYYY-MM-DD)" });
+      return;
+    }
+  }
+  if (status === "rescheduled") {
+    if (!recurringItemId || !occurrenceDate || !rescheduledTo) {
+      res.status(400).json({
+        error: "rescheduled requires recurringItemId, occurrenceDate, rescheduledTo",
+      });
+      return;
+    }
+    if (rescheduledTo <= occurrenceDate) {
+      res
+        .status(400)
+        .json({ error: "rescheduledTo must be after occurrenceDate" });
+      return;
+    }
   }
 
   if (recurringItemId && occurrenceDate) {
@@ -428,6 +450,7 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
       occurrenceDate: occurrenceDate ?? null,
       status,
       matchedTxnId: matchedTxnId ?? null,
+      rescheduledTo: rescheduledTo ?? null,
     })
     .returning();
   res.json(row);

@@ -958,6 +958,7 @@ export const GetForecastResponse = zod.object({
       occurrenceDate: zod.string().nullish(),
       status: zod.string(),
       matchedTxnId: zod.string().nullish(),
+      rescheduledTo: zod.string().nullish(),
       txnDate: zod.string().nullish(),
       txnDescription: zod.string().nullish(),
       txnAmount: zod.string().nullish(),
@@ -1065,6 +1066,7 @@ export const UpsertForecastResolutionBody = zod.object({
   occurrenceDate: zod.string().nullish(),
   status: zod.string(),
   matchedTxnId: zod.string().nullish(),
+  rescheduledTo: zod.string().nullish(),
 });
 
 export const UpsertForecastResolutionResponse = zod.object({
@@ -1073,6 +1075,7 @@ export const UpsertForecastResolutionResponse = zod.object({
   occurrenceDate: zod.string().nullish(),
   status: zod.string(),
   matchedTxnId: zod.string().nullish(),
+  rescheduledTo: zod.string().nullish(),
   txnDate: zod.string().nullish(),
   txnDescription: zod.string().nullish(),
   txnAmount: zod.string().nullish(),

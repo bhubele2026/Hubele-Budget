@@ -2691,6 +2691,23 @@ export declare const forecastResolutionsTable: import("drizzle-orm/pg-core").PgT
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        rescheduledTo: import("drizzle-orm/pg-core").PgColumn<{
+            name: "rescheduled_to";
+            tableName: "forecast_resolutions";
+            dataType: "string";
+            columnType: "PgDateString";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
             tableName: "forecast_resolutions";

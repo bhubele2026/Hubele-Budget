@@ -79,6 +79,7 @@ import {
   isBankTxn,
   suggestPlanMatchesForBank,
   pickConfidentBankMatches,
+  shouldCelebrateClear,
   type LineRow,
   type PlanLine,
   type BankLine,
@@ -380,11 +381,13 @@ function CashFreedBanner({ transition }: { transition: PayoffTransition }) {
 function PlanDropRow({
   row,
   onSelect,
+  onMove,
   activeDragId,
   payoff,
 }: {
   row: PlanLine;
   onSelect: (row: PlanLine) => void;
+  onMove?: (row: PlanLine) => void;
   activeDragId: string | null;
   payoff?: PayoffInfo;
 }) {
@@ -394,11 +397,21 @@ function PlanDropRow({
     disabled: row.status === "matched" || row.status === "missed",
   });
   const isOver = droppable.isOver && activeDragId !== null;
+  const canMove =
+    !!onMove && (row.status === "pending_plan" || row.status === "future");
   return (
-    <button
+    <div
       ref={droppable.setNodeRef}
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(row)}
-      className={`w-full text-left p-4 flex items-center justify-between transition-colors ${
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(row);
+        }
+      }}
+      className={`w-full text-left p-4 flex items-center justify-between transition-colors cursor-pointer ${
         isOver
           ? "bg-primary/10 ring-2 ring-primary ring-inset"
           : "hover:bg-muted/50"
@@ -447,16 +460,31 @@ function PlanDropRow({
         >
           {formatCurrency(row.amount)}
         </span>
+        {canMove && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMove?.(row);
+            }}
+            data-testid={`move-plan-${row.itemId}-${row.date}`}
+            title="Move this occurrence to a future date"
+          >
+            Move to…
+          </Button>
+        )}
       </div>
-    </button>
+    </div>
   );
 }
 
 type HorizonOpt = { label: string; days: number };
 const HORIZON_OPTS: HorizonOpt[] = [
   { label: "30 DAYS", days: 30 },
-  { label: "60 DAYS", days: 60 },
   { label: "90 DAYS", days: 90 },
+  { label: "120 DAYS", days: 120 },
   { label: "6 MONTHS", days: 183 },
   { label: "1 YEAR", days: 365 },
 ];
@@ -543,6 +571,9 @@ export default function ForecastPage() {
   const [draftSnapshot, setDraftSnapshot] = useState("");
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [reconciledNow, setReconciledNow] = useState(false);
+  const [moveTarget, setMoveTarget] = useState<PlanLine | null>(null);
+  const [moveDateDraft, setMoveDateDraft] = useState<string>("");
+  const [moveError, setMoveError] = useState<string | null>(null);
 
   const today = useMemo(() => new Date(), []);
   const currentMonth = useMemo(
@@ -861,44 +892,48 @@ export default function ForecastPage() {
   // Window key for confetti persistence: from→to
   const windowKey = data ? `${data.fromDate}_${data.toDate}` : null;
   const inboxCount = inbox.length;
-  const prevInboxCountRef = useRef<number | null>(null);
+  const cleared = shouldCelebrateClear({ inboxCount, isReconciledToBank });
+  const prevClearedRef = useRef<boolean | null>(null);
 
   // Hydrate "reconciled" state from local storage when window changes
   useEffect(() => {
     if (!windowKey) return;
     const map = readReconciledMap();
-    setReconciledNow(!!map[windowKey] && inboxCount === 0);
-    prevInboxCountRef.current = inboxCount;
+    setReconciledNow(!!map[windowKey] && cleared);
+    prevClearedRef.current = cleared;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [windowKey]);
 
   // Watch transitions
   useEffect(() => {
     if (!windowKey) return;
-    const prev = prevInboxCountRef.current;
+    const prev = prevClearedRef.current;
     if (prev === null) {
-      prevInboxCountRef.current = inboxCount;
+      prevClearedRef.current = cleared;
       return;
     }
     const map = readReconciledMap();
-    if (prev > 0 && inboxCount === 0) {
-      // transitioned to zero — celebrate (only if not already celebrated)
+    if (!prev && cleared) {
+      // transitioned to fully cleared — celebrate (only if not already celebrated)
       if (!map[windowKey]) {
         fireConfetti();
         map[windowKey] = true;
         writeReconciledMap(map);
       }
       setReconciledNow(true);
-    } else if (inboxCount > 0 && map[windowKey]) {
-      // re-opened: clear the celebrated flag for this window
+    } else if (!cleared && map[windowKey]) {
+      // re-opened (inbox grew or balance fell out of sync): clear the
+      // celebrated flag for this window so the next clear celebrates again.
       delete map[windowKey];
       writeReconciledMap(map);
       setReconciledNow(false);
-    } else if (inboxCount > 0) {
+    } else if (!cleared) {
       setReconciledNow(false);
+    } else {
+      setReconciledNow(true);
     }
-    prevInboxCountRef.current = inboxCount;
-  }, [inboxCount, windowKey]);
+    prevClearedRef.current = cleared;
+  }, [cleared, windowKey]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
@@ -919,7 +954,7 @@ export default function ForecastPage() {
         data: {
           status: "matched",
           recurringItemId: planRow.itemId,
-          occurrenceDate: planRow.date,
+          occurrenceDate: planRow.originalDate ?? planRow.date,
           matchedTxnId: txnId,
         },
       },
@@ -1012,7 +1047,7 @@ export default function ForecastPage() {
             data: {
               status: "matched",
               recurringItemId: it.plan.itemId,
-              occurrenceDate: it.plan.date,
+              occurrenceDate: it.plan.originalDate ?? it.plan.date,
               matchedTxnId: it.txnId,
             },
           });
@@ -1049,7 +1084,7 @@ export default function ForecastPage() {
           data: {
             status: "missed",
             recurringItemId: row.itemId,
-            occurrenceDate: row.date,
+            occurrenceDate: row.originalDate ?? row.date,
           },
         },
         {
@@ -1060,6 +1095,54 @@ export default function ForecastPage() {
         },
       );
     }
+  };
+
+  const onMoveStart = (row: PlanLine) => {
+    setMoveTarget(row);
+    setMoveDateDraft("");
+    setMoveError(null);
+  };
+  const onMoveSave = () => {
+    if (!moveTarget) return;
+    if (!moveDateDraft) {
+      setMoveError("Pick a date.");
+      return;
+    }
+    const t = new Date();
+    const todayIso = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    if (moveDateDraft <= todayIso) {
+      setMoveError("Pick a date after today.");
+      return;
+    }
+    const occurrenceDate = moveTarget.originalDate ?? moveTarget.date;
+    if (moveDateDraft <= occurrenceDate) {
+      setMoveError("Pick a date after the original occurrence.");
+      return;
+    }
+    upsertResolution.mutate(
+      {
+        data: {
+          status: "rescheduled",
+          recurringItemId: moveTarget.itemId,
+          occurrenceDate,
+          rescheduledTo: moveDateDraft,
+        },
+      },
+      {
+        onSuccess: () => {
+          invalidate();
+          toast({
+            title: `Moved to ${formatDate(moveDateDraft)}`,
+          });
+          setMoveTarget(null);
+          setMoveDateDraft("");
+          setMoveError(null);
+        },
+        onError: (e: unknown) => {
+          setMoveError((e as Error).message ?? "Failed to move occurrence");
+        },
+      },
+    );
   };
 
   const onUndo = (resolutionId: string) => {
@@ -1373,10 +1456,29 @@ export default function ForecastPage() {
                 </Badge>
               </div>
               {inboxCount === 0 && reconciledNow && (
-                <Badge className="bg-primary/15 text-primary border-primary/30">
+                <Badge
+                  className="bg-primary/15 text-primary border-primary/30"
+                  data-testid="badge-inbox-cleared"
+                >
                   <PartyPopper className="w-3.5 h-3.5 mr-1" /> Inbox cleared
                 </Badge>
               )}
+              {inboxCount === 0 &&
+                !reconciledNow &&
+                bankReconcile.hasBank &&
+                !bankReconcile.isPriorMonth &&
+                Math.abs(bankReconcile.gap) >= 0.01 && (
+                  <Badge
+                    variant="outline"
+                    className="bg-amber-50 text-amber-900 border-amber-200 max-w-[260px] whitespace-normal text-right"
+                    data-testid="badge-balance-mismatch"
+                  >
+                    <AlertCircle className="w-3.5 h-3.5 mr-1 flex-none" />
+                    Inbox clear, but forecast end balance is off by{" "}
+                    {formatCurrency(bankReconcile.gap)} from the bank — match
+                    the rest or mark them unplanned.
+                  </Badge>
+                )}
             </div>
           </div>
         </CardContent>
@@ -1842,6 +1944,7 @@ export default function ForecastPage() {
                           key={`${row.itemId}-${row.date}-${i}`}
                           row={row}
                           onSelect={onSelectPlan}
+                          onMove={onMoveStart}
                           activeDragId={activeDragId}
                           payoff={payoffsByItem.get(row.itemId)}
                         />,
@@ -1868,6 +1971,64 @@ export default function ForecastPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {(() => {
+              const missed = bucket.filter((b) => b.status === "missed");
+              if (missed.length === 0) return null;
+              return (
+                <Card data-testid="missed-bucket-panel">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-amber-600" />
+                      Missed in {monthFilter}
+                      <Badge variant="outline" className="ml-1 text-[10px]">
+                        {missed.length}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="divide-y divide-border">
+                      {missed.map((b) => (
+                        <div
+                          key={b.id}
+                          className="p-4 flex items-center justify-between gap-3"
+                          data-testid={`missed-row-${b.id}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {statusBadge(b.status)}
+                            <div className="min-w-0">
+                              <div className="font-medium text-sm truncate">
+                                {b.label || "—"}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {formatDate(b.date)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span
+                              className={`font-medium tabular-nums ${
+                                b.amount < 0 ? "text-destructive" : "text-primary"
+                              }`}
+                            >
+                              {formatCurrency(b.amount)}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onUndo(b.id)}
+                              data-testid={`missed-undo-${b.id}`}
+                            >
+                              Undo
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             <DragOverlay>
               {activeCard && (
@@ -2172,6 +2333,91 @@ export default function ForecastPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={moveTarget !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setMoveTarget(null);
+            setMoveDateDraft("");
+            setMoveError(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move occurrence to a future date</DialogTitle>
+          </DialogHeader>
+          {moveTarget && (
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                <div className="font-medium text-foreground truncate">
+                  {moveTarget.label || "—"}
+                </div>
+                <div>
+                  Currently planned for {formatDate(moveTarget.date)} ·{" "}
+                  <span
+                    className={`tabular-nums ${
+                      moveTarget.amount < 0 ? "text-destructive" : "text-primary"
+                    }`}
+                  >
+                    {formatCurrency(moveTarget.amount)}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="move-date">New date</Label>
+                <Input
+                  id="move-date"
+                  type="date"
+                  value={moveDateDraft}
+                  min={(() => {
+                    const t = new Date();
+                    t.setDate(t.getDate() + 1);
+                    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+                  })()}
+                  onChange={(e) => {
+                    setMoveDateDraft(e.target.value);
+                    setMoveError(null);
+                  }}
+                  data-testid="input-move-date"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Must be after today. Creates a one-off override for this
+                  occurrence only.
+                </p>
+                {moveError && (
+                  <p
+                    className="text-xs text-destructive mt-1"
+                    data-testid="move-error"
+                  >
+                    {moveError}
+                  </p>
+                )}
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setMoveTarget(null);
+                    setMoveDateDraft("");
+                    setMoveError(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={onMoveSave}
+                  disabled={upsertResolution.isPending}
+                  data-testid="button-save-move"
+                >
+                  Move occurrence
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
