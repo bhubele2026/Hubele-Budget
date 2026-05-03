@@ -4,7 +4,7 @@ import {
   db,
   transactionsTable,
   forecastResolutionsTable,
-  mappingRulesTable,
+  upsertMappingRule,
   debtsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -155,31 +155,13 @@ router.patch(
         typeof rememberPattern === "string" ? rememberPattern : null;
       const source = explicit ?? derivePatternFromDescription(row.description);
       const pattern = (source ?? "").trim().slice(0, 60);
-      if (pattern.length >= 3) {
-        const existing = await db
-          .select({ id: mappingRulesTable.id })
-          .from(mappingRulesTable)
-          .where(
-            and(
-              eq(mappingRulesTable.userId, req.userId!),
-              eq(mappingRulesTable.pattern, pattern),
-            ),
-          );
-        if (existing.length > 0) {
-          await db
-            .update(mappingRulesTable)
-            .set({ categoryId: patch.categoryId, priority: 100 })
-            .where(eq(mappingRulesTable.id, existing[0].id));
-        } else {
-          await db.insert(mappingRulesTable).values({
-            userId: req.userId!,
-            pattern,
-            matchType: "contains",
-            categoryId: patch.categoryId,
-            priority: 100,
-          });
-        }
-      }
+      await upsertMappingRule(db, {
+        userId: req.userId!,
+        pattern,
+        matchType: "contains",
+        categoryId: patch.categoryId,
+        priority: 100,
+      });
     }
     // If forecast_flag was turned off, drop any forecast resolution that
     // points to this txn so the Forecast inbox/bucket stays consistent.
