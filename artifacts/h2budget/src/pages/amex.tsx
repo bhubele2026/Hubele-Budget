@@ -182,7 +182,8 @@ export default function AmexPage() {
     });
   }, [monthScoped, search, memberFilter, categoryFilter, categoryById, from, to]);
 
-  // Group by day (descending).
+  // Group by day (descending). Within each day, sort by a stable key
+  // (occurredOn desc, then id asc) so refetches can't swap row order.
   const groups = useMemo(() => {
     const map = new Map<string, Transaction[]>();
     for (const t of filtered) {
@@ -190,6 +191,13 @@ export default function AmexPage() {
       const arr = map.get(k);
       if (arr) arr.push(t);
       else map.set(k, [t]);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => {
+        if (a.occurredOn !== b.occurredOn)
+          return a.occurredOn < b.occurredOn ? 1 : -1;
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+      });
     }
     return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
   }, [filtered]);
@@ -403,6 +411,102 @@ export default function AmexPage() {
     }
   };
 
+  // Per-row mutation queue: serialize bubble mutations for the same
+  // transaction so the server processes rapid clicks in click order.
+  // Mutations for different rows still run in parallel.
+  const bubbleQueueRef = useRef<Map<string, Promise<unknown>>>(new Map());
+  const queueBubbleMutation = <T,>(
+    id: string,
+    fn: () => Promise<T>,
+  ): Promise<T> => {
+    const prev = bubbleQueueRef.current.get(id) ?? Promise.resolve();
+    const p: Promise<T> = prev.catch(() => undefined).then(fn);
+    bubbleQueueRef.current.set(id, p);
+    p.finally(() => {
+      if (bubbleQueueRef.current.get(id) === p)
+        bubbleQueueRef.current.delete(id);
+    });
+    return p;
+  };
+
+  // Optimistically patch a single transaction across every cached
+  // listTransactions query. Returns a snapshot of the previous values for
+  // the patched fields so callers can revert on error.
+  const patchTransactionInCache = (
+    id: string,
+    patch: Partial<Transaction>,
+  ): Partial<Transaction> | null => {
+    let prev: Partial<Transaction> | null = null;
+    qc.setQueriesData<Transaction[] | undefined>(
+      { queryKey: [`/api/transactions`] },
+      (data) => {
+        if (!data) return data;
+        let changed = false;
+        const next = data.map((t) => {
+          if (t.id !== id) return t;
+          if (!prev) {
+            const snap: Partial<Transaction> = {};
+            for (const k of Object.keys(patch) as (keyof Transaction)[]) {
+              (snap as Record<string, unknown>)[k as string] = t[k];
+            }
+            prev = snap;
+          }
+          changed = true;
+          return { ...t, ...patch } as Transaction;
+        });
+        return changed ? next : data;
+      },
+    );
+    return prev;
+  };
+
+  // Conditionally patch a transaction's fields, but only for those whose
+  // current cache value still equals `expected`. Used both to revert
+  // failed optimistic edits (expected = our optimistic patch, replacement
+  // = the pre-edit snapshot) and to reconcile successful ones to the
+  // server's confirmed values (expected = our optimistic patch,
+  // replacement = the server response). Fields that a newer click has
+  // since changed are left alone, so concurrent edits to the same row
+  // never trample the user's latest intent.
+  const patchTransactionIfMatching = (
+    id: string,
+    expected: Partial<Transaction>,
+    replacement: Partial<Transaction>,
+  ): boolean => {
+    let didChange = false;
+    qc.setQueriesData<Transaction[] | undefined>(
+      { queryKey: [`/api/transactions`] },
+      (data) => {
+        if (!data) return data;
+        let changed = false;
+        const next = data.map((t) => {
+          if (t.id !== id) return t;
+          const merged: Record<string, unknown> = { ...t };
+          let rowChanged = false;
+          for (const k of Object.keys(expected) as (keyof Transaction)[]) {
+            const key = k as string;
+            if (
+              (merged[key] as unknown) ===
+              (expected as Record<string, unknown>)[key]
+            ) {
+              const repl = (replacement as Record<string, unknown>)[key];
+              if (merged[key] !== repl) {
+                merged[key] = repl;
+                rowChanged = true;
+              }
+            }
+          }
+          if (!rowChanged) return t;
+          changed = true;
+          didChange = true;
+          return merged as unknown as Transaction;
+        });
+        return changed ? next : data;
+      },
+    );
+    return didChange;
+  };
+
   const setRowBucket = async (
     t: Transaction,
     bucket: "" | "weekly" | "monthly" | "unplanned",
@@ -415,40 +519,77 @@ export default function AmexPage() {
         t.weeklyBucket ??
         defaultWeeklyBucketFor(categoryById.get(t.categoryId ?? "") ?? "");
     }
-    try {
-      await updateTx.mutateAsync({
-        id: t.id,
-        data: {
-          weeklyAllowance: bucket === "weekly",
-          monthlyAllowance: bucket === "monthly",
-          unplannedAllowance: bucket === "unplanned",
-          weeklyBucket: wb,
-        },
-      });
-      invalidateTxns();
-    } catch (e) {
-      toast({
-        title: "Couldn't update bucket",
-        description: (e as Error).message,
-        variant: "destructive",
-      });
-    }
+    const patch: Partial<Transaction> = {
+      weeklyAllowance: bucket === "weekly",
+      monthlyAllowance: bucket === "monthly",
+      unplannedAllowance: bucket === "unplanned",
+      weeklyBucket: wb ?? null,
+    };
+    // Stop any in-flight transactions refetch from racing the optimistic
+    // write — otherwise a stale server payload could overwrite it.
+    await qc.cancelQueries({ queryKey: [`/api/transactions`] });
+    const prev = patchTransactionInCache(t.id, patch);
+    queueBubbleMutation(t.id, async () => {
+      try {
+        const updated = await updateTx.mutateAsync({
+          id: t.id,
+          data: {
+            weeklyAllowance: patch.weeklyAllowance,
+            monthlyAllowance: patch.monthlyAllowance,
+            unplannedAllowance: patch.unplannedAllowance,
+            weeklyBucket: wb,
+          },
+        });
+        // Reconcile to the server's confirmed values, but only for
+        // fields whose cache value still equals our optimistic write.
+        // Fields a newer click has changed are left alone.
+        patchTransactionIfMatching(t.id, patch, {
+          weeklyAllowance: updated.weeklyAllowance,
+          monthlyAllowance: updated.monthlyAllowance,
+          unplannedAllowance: updated.unplannedAllowance,
+          weeklyBucket: updated.weeklyBucket,
+        });
+      } catch (e) {
+        // Field-level revert: only restore fields whose cache value is
+        // still our optimistic value. A newer click's optimistic edit
+        // on a different field is preserved, while the rejected fields
+        // snap back so the bubble visibly reverts.
+        if (prev) patchTransactionIfMatching(t.id, patch, prev);
+        toast({
+          title: "Couldn't update bucket",
+          description: (e as Error).message,
+          variant: "destructive",
+        });
+      }
+    });
   };
 
   const setRowReimbursable = async (t: Transaction, next: boolean) => {
-    try {
-      await updateTx.mutateAsync({
-        id: t.id,
-        data: { reimbursable: next, ...(next ? {} : { reimbursed: false }) },
-      });
-      invalidateTxns();
-    } catch (e) {
-      toast({
-        title: "Couldn't update reimbursable",
-        description: (e as Error).message,
-        variant: "destructive",
-      });
-    }
+    const patch: Partial<Transaction> = {
+      reimbursable: next,
+      ...(next ? {} : { reimbursed: false }),
+    };
+    await qc.cancelQueries({ queryKey: [`/api/transactions`] });
+    const prev = patchTransactionInCache(t.id, patch);
+    queueBubbleMutation(t.id, async () => {
+      try {
+        const updated = await updateTx.mutateAsync({
+          id: t.id,
+          data: { reimbursable: next, ...(next ? {} : { reimbursed: false }) },
+        });
+        patchTransactionIfMatching(t.id, patch, {
+          reimbursable: updated.reimbursable,
+          reimbursed: updated.reimbursed,
+        });
+      } catch (e) {
+        if (prev) patchTransactionIfMatching(t.id, patch, prev);
+        toast({
+          title: "Couldn't update reimbursable",
+          description: (e as Error).message,
+          variant: "destructive",
+        });
+      }
+    });
   };
 
   const setRowOwedBy = async (t: Transaction, raw: string) => {
