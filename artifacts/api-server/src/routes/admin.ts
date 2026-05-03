@@ -44,20 +44,36 @@ router.post("/admin/remap-user", async (req, res): Promise<void> => {
     return;
   }
 
-  const SINGLETON_TABLES = new Set([
-    "avalanche_settings",
+  // Order matters for FKs: child tables before parents.
+  const DELETE_ORDER = [
+    "debt_balance_history",
+    "forecast_resolutions",
+    "forecast_closed_months",
     "forecast_settings",
+    "dashboard_budgets",
+    "budget_lines",
+    "budget_months",
+    "budget_categories",
+    "mapping_rules",
+    "transactions",
+    "import_batches",
+    "monthly_snapshots",
+    "recurring_items",
+    "debts",
+    "plaid_accounts",
+    "plaid_items",
+    "avalanche_settings",
     "settings",
-  ]);
+  ];
 
   const counts: Record<string, number> = {};
   await db.transaction(async (tx) => {
+    // Wipe destination user's auto-seeded data first.
+    for (const t of DELETE_ORDER) {
+      await tx.execute(sql.raw(`DELETE FROM ${t} WHERE user_id = '${to}'`));
+    }
+    // Now reassign all source rows to destination.
     for (const t of USER_TABLES) {
-      if (SINGLETON_TABLES.has(t)) {
-        await tx.execute(
-          sql.raw(`DELETE FROM ${t} WHERE user_id = '${to}'`),
-        );
-      }
       const r = await tx.execute(
         sql.raw(
           `UPDATE ${t} SET user_id = '${to}' WHERE user_id = '${from}'`,
