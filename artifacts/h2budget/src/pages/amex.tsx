@@ -38,6 +38,7 @@ import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, cn } from "@/lib/utils";
 import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
+import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 
 const AMEX_SOURCE = "amex";
 
@@ -260,6 +261,35 @@ export default function AmexPage() {
         description: (e as Error).message,
         variant: "destructive",
       });
+    }
+  };
+
+  const setRowReimbursable = async (t: Transaction, next: boolean) => {
+    try {
+      await updateTx.mutateAsync({
+        id: t.id,
+        data: { reimbursable: next, ...(next ? {} : { reimbursed: false }) },
+      });
+      invalidateTxns();
+    } catch (e) {
+      toast({
+        title: "Couldn't update reimbursable",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const onBubbleToggle = (t: Transaction, bucket: BucketKey, next: boolean) => {
+    if (bucket === "reimbursable") {
+      setRowReimbursable(t, next);
+      return;
+    }
+    if (next) {
+      setRowBucket(t, bucket);
+    } else {
+      // Toggling off — only clear if this bubble was the active bucket.
+      if (currentBucket(t) === bucket) setRowBucket(t, "");
     }
   };
 
@@ -607,19 +637,16 @@ export default function AmexPage() {
                           </Select>
                         </td>
                         <td className="px-3 py-2">
-                          <div className="flex items-center gap-1">
-                            <Select
-                              value={currentBucket(t) || "none"}
-                              onValueChange={(v) => setRowBucket(t, v === "none" ? "" : (v as "weekly" | "monthly" | "unplanned"))}
-                            >
-                              <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">—</SelectItem>
-                                <SelectItem value="weekly">Weekly</SelectItem>
-                                <SelectItem value="monthly">Monthly</SelectItem>
-                                <SelectItem value="unplanned">Unplanned</SelectItem>
-                              </SelectContent>
-                            </Select>
+                          <div className="flex items-center gap-2">
+                            <BucketBubbles
+                              flags={{
+                                weekly: t.weeklyAllowance,
+                                monthly: t.monthlyAllowance,
+                                unplanned: t.unplannedAllowance,
+                                reimbursable: t.reimbursable,
+                              }}
+                              onToggle={(b, next) => onBubbleToggle(t, b, next)}
+                            />
                             {t.weeklyAllowance && (
                               <Select
                                 value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}

@@ -6,16 +6,19 @@ import {
   useListTransactions,
   useListDashboardBudgets,
   useUpsertDashboardBudget,
+  useUpdateTransaction,
   getListDashboardBudgetsQueryKey,
+  getListTransactionsQueryKey,
   type Transaction,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardKillOrder } from "@/components/dashboard-kill-order";
@@ -134,12 +137,14 @@ function LifeThisWeek({
 
   const editor = useBudgetEditor("weekly", periodKey);
 
-  const { totals, total } = useMemo(() => {
+  const { totals, total, weekTxns } = useMemo(() => {
     const t: Record<SubBucket, number> = { groceries: 0, dining: 0, entertainment: 0, misc: 0 };
     let sum = 0;
     const startIso = fmtISO(weekStart);
     const endIso = fmtISO(weekEnd);
+    const list: Transaction[] = [];
     for (const tx of transactions) {
+      if (tx.source !== "amex") continue;
       if (!tx.weeklyAllowance) continue;
       if (tx.occurredOn < startIso || tx.occurredOn > endIso) continue;
       const amt = expenseAmount(tx);
@@ -147,8 +152,10 @@ function LifeThisWeek({
       if (SUB_BUCKETS.includes(bucket)) t[bucket] += amt;
       else t.misc += amt;
       sum += amt;
+      list.push(tx);
     }
-    return { totals: t, total: sum };
+    list.sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
+    return { totals: t, total: sum, weekTxns: list };
   }, [transactions, weekStart, weekEnd]);
 
   const cap = editor.saved;
@@ -210,9 +217,35 @@ function LifeThisWeek({
               </div>
             ))}
           </div>
-          <div className="text-xs text-muted-foreground border-t pt-3">
-            Tag any other Amex charge as "weekly" on the{" "}
-            <Link href="/amex" className="text-amber-700 underline">Amex page</Link> to add it to {SUB_LABEL.misc}.
+          <div className="border-t pt-3">
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+              This week ({weekTxns.length})
+            </div>
+            {weekTxns.length === 0 ? (
+              <div className="text-xs text-muted-foreground py-2">
+                Nothing tagged yet. Tag charges as "weekly" on the{" "}
+                <Link href="/amex" className="text-amber-700 underline">Amex page</Link>.
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {weekTxns.map((t) => {
+                  const amt = Number(t.amount) || 0;
+                  return (
+                    <div key={t.id} className="flex items-center justify-between gap-3 text-sm">
+                      <div className="flex items-baseline gap-3 min-w-0">
+                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground w-12 shrink-0">
+                          {new Date(t.occurredOn + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </span>
+                        <span className="truncate">{t.description}</span>
+                      </div>
+                      <span className={`tabular-nums font-mono ${amt < 0 ? "text-destructive" : "text-foreground"}`}>
+                        {amt < 0 ? "-" : ""}{formatCurrency(Math.abs(amt))}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -250,12 +283,13 @@ function MonthlyLikeSection({
 
   const { total, recent } = useMemo(() => {
     const filtered = transactions.filter((t) => {
+      if (t.source !== "amex") return false;
       const matches = bucket === "monthly" ? t.monthlyAllowance : t.unplannedAllowance;
       if (!matches) return false;
       return t.occurredOn >= monthStartISO && t.occurredOn <= monthEndISO;
     });
     const sum = filtered.reduce((s, t) => s + expenseAmount(t), 0);
-    const sorted = [...filtered].sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1)).slice(0, 8);
+    const sorted = [...filtered].sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
     return { total: sum, recent: sorted };
   }, [transactions, bucket, monthStartISO, monthEndISO]);
 
@@ -305,7 +339,7 @@ function MonthlyLikeSection({
           {cap > 0 && <Progress value={pct} className={overspent ? "[&>div]:bg-destructive" : ""} />}
           <div className="border-t pt-3">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-              Recent ({recent.length})
+              This month ({recent.length})
             </div>
             {recent.length === 0 ? (
               <div className="text-sm text-muted-foreground py-2">
@@ -313,7 +347,7 @@ function MonthlyLikeSection({
                 <Link href="/amex" className="text-amber-700 underline">Amex page</Link>.
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                 {recent.map((t) => {
                   const amt = Number(t.amount) || 0;
                   return (
@@ -339,12 +373,120 @@ function MonthlyLikeSection({
   );
 }
 
+function ReimbursementsBox({
+  transactions,
+}: {
+  transactions: Transaction[];
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const updateTx = useUpdateTransaction();
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+
+  const items = useMemo(() => {
+    return [...transactions]
+      .filter((t) => t.source === "amex" && t.reimbursable)
+      .sort((a, b) => {
+        if (a.reimbursed !== b.reimbursed) return a.reimbursed ? 1 : -1;
+        return a.occurredOn < b.occurredOn ? 1 : -1;
+      });
+  }, [transactions]);
+
+  const outstanding = useMemo(
+    () => items.filter((t) => !t.reimbursed).reduce((s, t) => s + expenseAmount(t), 0),
+    [items],
+  );
+
+  const onToggle = async (t: Transaction, next: boolean) => {
+    setPendingIds((prev) => {
+      const n = new Set(prev);
+      n.add(t.id);
+      return n;
+    });
+    try {
+      await updateTx.mutateAsync({ id: t.id, data: { reimbursed: next } });
+      qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+    } catch (e) {
+      toast({
+        title: "Couldn't update reimbursement",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setPendingIds((prev) => {
+        const n = new Set(prev);
+        n.delete(t.id);
+        return n;
+      });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Receipt className="w-4 h-4" /> Reimbursements
+        </CardTitle>
+        <Badge variant="outline" className="font-mono tabular-nums">
+          Outstanding: {formatCurrency(outstanding)}
+        </Badge>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+          {items.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-6">
+              Nothing flagged as reimbursable.
+            </p>
+          )}
+          {items.map((t) => {
+            const amt = expenseAmount(t);
+            const dim = t.reimbursed;
+            return (
+              <div
+                key={t.id}
+                className={cn(
+                  "flex items-center gap-3 text-sm py-1",
+                  dim && "opacity-50",
+                )}
+              >
+                <Checkbox
+                  checked={t.reimbursed}
+                  disabled={pendingIds.has(t.id)}
+                  onCheckedChange={(v) => onToggle(t, !!v)}
+                  aria-label="Mark reimbursed"
+                />
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={cn(
+                      "font-medium truncate",
+                      dim && "line-through",
+                    )}
+                  >
+                    {t.description}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(t.occurredOn)}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "font-medium tabular-nums font-mono",
+                    dim && "line-through",
+                  )}
+                >
+                  {formatCurrency(amt)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function DashboardPage() {
   const today = useMemo(() => new Date(), []);
-  const currentMonthStartISO = useMemo(
-    () => fmtISO(new Date(today.getFullYear(), today.getMonth(), 1)),
-    [today],
-  );
   // Pull a wider window so prev/next week navigation has data.
   const fromISO = useMemo(() => {
     const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
@@ -355,24 +497,20 @@ export default function DashboardPage() {
     const start = new Date(today.getFullYear(), today.getMonth() - 12, 1);
     return fmtISO(start);
   }, [today]);
+  // Far-back date for all-time reimbursables list.
+  const reimbFromISO = useMemo(() => {
+    const start = new Date(today.getFullYear() - 5, 0, 1);
+    return fmtISO(start);
+  }, [today]);
 
   const { data, isLoading } = useGetDashboard();
   const { data: txns } = useListTransactions({ from: fromISO, limit: 1000 });
   const { data: monthTxns } = useListTransactions({ from: monthlyFromISO, limit: 5000 });
+  const { data: reimbTxns } = useListTransactions({ from: reimbFromISO, limit: 5000 });
 
   const allTxns = txns ?? [];
   const monthlyTagged = useMemo(() => monthTxns ?? [], [monthTxns]);
-
-  const reimbursables = useMemo(
-    () => monthlyTagged.filter(
-      (t) => t.reimbursable && !t.reimbursed && t.occurredOn >= currentMonthStartISO,
-    ),
-    [monthlyTagged, currentMonthStartISO],
-  );
-  const reimbursableTotal = useMemo(
-    () => reimbursables.reduce((s, t) => s + expenseAmount(t), 0),
-    [reimbursables],
-  );
+  const reimbursementsAll = useMemo(() => reimbTxns ?? [], [reimbTxns]);
 
   if (isLoading || !data) {
     return (
@@ -486,34 +624,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="flex items-center gap-2">
-              <Receipt className="w-4 h-4" /> Reimbursables
-            </CardTitle>
-            <Badge variant="outline">{formatCurrency(reimbursableTotal)}</Badge>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3 max-h-72 overflow-y-auto">
-              {reimbursables.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-6">
-                  None outstanding.
-                </p>
-              )}
-              {reimbursables.map((tx) => (
-                <div key={tx.id} className="flex justify-between items-center text-sm">
-                  <div className="min-w-0">
-                    <p className="font-medium truncate">{tx.description}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(tx.occurredOn)}</p>
-                  </div>
-                  <span className="font-medium tabular-nums">
-                    {formatCurrency(Math.abs(Number(tx.amount) || 0))}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <ReimbursementsBox transactions={reimbursementsAll} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
