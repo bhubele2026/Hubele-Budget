@@ -21,7 +21,7 @@ import {
 // `access-production-...`). We use that prefix to detect which existing
 // `plaid_items` rows came from a non-production environment so they can
 // be cleaned up after the production cutover.
-function tokenEnv(token: string | null | undefined): string | null {
+export function tokenEnv(token: string | null | undefined): string | null {
   if (!token) return null;
   const m = /^access-([^-]+)-/.exec(token);
   return m ? m[1].toLowerCase() : null;

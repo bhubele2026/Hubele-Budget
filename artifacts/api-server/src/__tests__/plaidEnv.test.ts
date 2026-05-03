@@ -1,0 +1,69 @@
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { getPlaidEnv, PLAID_VALID_ENVS } from "../lib/plaid";
+import { tokenEnv } from "../routes/plaid";
+
+describe("getPlaidEnv", () => {
+  const original = process.env.PLAID_ENV;
+  beforeEach(() => {
+    delete process.env.PLAID_ENV;
+  });
+  afterEach(() => {
+    if (original === undefined) delete process.env.PLAID_ENV;
+    else process.env.PLAID_ENV = original;
+  });
+
+  it("throws when PLAID_ENV is missing", () => {
+    expect(() => getPlaidEnv()).toThrow(/PLAID_ENV is required/);
+  });
+
+  it("throws when PLAID_ENV is empty string", () => {
+    process.env.PLAID_ENV = "";
+    expect(() => getPlaidEnv()).toThrow(/PLAID_ENV is required/);
+  });
+
+  it("throws when PLAID_ENV is invalid", () => {
+    process.env.PLAID_ENV = "staging";
+    expect(() => getPlaidEnv()).toThrow(/PLAID_ENV="staging" is invalid/);
+  });
+
+  it("accepts and lowercases each valid env", () => {
+    for (const env of PLAID_VALID_ENVS) {
+      process.env.PLAID_ENV = env;
+      expect(getPlaidEnv()).toBe(env);
+      process.env.PLAID_ENV = env.toUpperCase();
+      expect(getPlaidEnv()).toBe(env);
+    }
+  });
+});
+
+describe("tokenEnv", () => {
+  it("returns 'sandbox' for sandbox-prefixed tokens", () => {
+    expect(tokenEnv("access-sandbox-abc123")).toBe("sandbox");
+  });
+
+  it("returns 'development' for development-prefixed tokens", () => {
+    expect(tokenEnv("access-development-deadbeef")).toBe("development");
+  });
+
+  it("returns 'production' for production-prefixed tokens", () => {
+    expect(tokenEnv("access-production-cafef00d")).toBe("production");
+  });
+
+  it("lowercases the env segment", () => {
+    expect(tokenEnv("access-SANDBOX-xyz")).toBe("sandbox");
+  });
+
+  it("returns null for null/undefined/empty tokens", () => {
+    expect(tokenEnv(null)).toBeNull();
+    expect(tokenEnv(undefined)).toBeNull();
+    expect(tokenEnv("")).toBeNull();
+  });
+
+  it("returns null for malformed tokens that don't match the prefix", () => {
+    expect(tokenEnv("nope")).toBeNull();
+    expect(tokenEnv("synthetic-no-access")).toBeNull();
+    expect(tokenEnv("access-")).toBeNull();
+    expect(tokenEnv("accesssandbox-foo")).toBeNull();
+    expect(tokenEnv("ACCESS-sandbox-foo")).toBeNull();
+  });
+});
