@@ -501,13 +501,13 @@ function BudgetLineRow({
 
   return (
     <div
-      className="grid grid-cols-12 gap-4 px-4 py-3 items-center hover:bg-muted/10"
+      className="group grid grid-cols-12 gap-4 px-4 py-3 items-center hover:bg-muted/10"
       data-testid={`row-budget-${line.categoryId}`}
     >
       <div className="col-span-12 md:col-span-5 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium truncate">{line.categoryName}</span>
-          <SourceBadge kind={sourceKind} />
+          {sourceKind !== "manual" && <SourceBadge kind={sourceKind} />}
           {(line.sourceBreakdown ?? []).map((b) => (
             <Badge
               key={b.source}
@@ -528,7 +528,7 @@ function BudgetLineRow({
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 ml-auto md:ml-0"
+            className="h-6 w-6 ml-auto md:ml-0 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
             onClick={() => onDelete(line.categoryId)}
             data-testid={`button-delete-${line.categoryId}`}
             title={
@@ -537,7 +537,7 @@ function BudgetLineRow({
                 : "Delete this line"
             }
           >
-            <Trash2 className="w-3 h-3 text-destructive" />
+            <Trash2 className="w-3 h-3" />
           </Button>
         </div>
         {line.note && (
