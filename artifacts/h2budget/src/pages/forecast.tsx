@@ -513,10 +513,11 @@ export default function ForecastPage() {
   }, [forecastFromDate]);
 
   const { data, isLoading } = useGetForecast({ days: horizonDays });
-  const { data: cashProjection } = useGetForecastCashSignal({
-    horizonDays,
-    fromDate: forecastFromDate,
-  });
+  const { data: cashProjection, isLoading: cashProjectionLoading } =
+    useGetForecastCashSignal({
+      horizonDays,
+      fromDate: forecastFromDate,
+    });
   const { data: categories } = useListCategories();
   const { data: debts } = useListDebts();
   const { data: recurringItems } = useListRecurringItems();
@@ -1246,11 +1247,13 @@ export default function ForecastPage() {
   const proj = cashProjection;
   const endingNum = proj?.endingBalance ? Number(proj.endingBalance) : NaN;
   const lowestNum = proj?.lowestProjected ? Number(proj.lowestProjected) : NaN;
-  const dailySeries = (proj?.daily ?? []).map((d: { date: string; balance: string | number }) => ({
-    date: shortDate(d.date),
-    rawDate: d.date,
-    balance: Number(d.balance),
-  }));
+  const dailySeries = (proj?.daily ?? [])
+    .map((d: { date: string; balance: string | number }) => ({
+      date: shortDate(d.date),
+      rawDate: d.date,
+      balance: Number(d.balance),
+    }))
+    .filter((d) => Number.isFinite(d.balance));
 
   return (
     <div className="space-y-6">
@@ -1460,6 +1463,14 @@ export default function ForecastPage() {
         </CardHeader>
         <CardContent>
           <div className="h-[280px] w-full">
+            {cashProjectionLoading && dailySeries.length === 0 ? (
+              <Skeleton className="h-full w-full" />
+            ) : dailySeries.length === 0 || proj?.status === "no_data" ? (
+              <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground text-center px-4">
+                No projection data yet. Set a bank snapshot or add planned
+                items to see your projected balance.
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={dailySeries}
@@ -1505,9 +1516,11 @@ export default function ForecastPage() {
                   strokeWidth={2}
                   fill="url(#projectedBalanceGrad)"
                   name="Projected balance"
+                  isAnimationActive={false}
                 />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </div>
         </CardContent>
       </Card>
