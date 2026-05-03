@@ -681,16 +681,196 @@ export default function AmexPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap border-l-4 border-blue-600 pl-4">
-        <div>
-          <h1 className="text-3xl font-serif font-bold text-foreground flex items-center gap-2">
-            <CreditCard className="h-7 w-7 text-blue-600" /> American Express
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Day-by-day card spending — categorized into your budget.
-          </p>
+      {/* Frozen top pane: header + month/stats + filter row + bulk bar */}
+      <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-4 flex-wrap border-l-4 border-blue-600 pl-4">
+          <div>
+            <h1 className="text-3xl font-serif font-bold text-foreground flex items-center gap-2">
+              <CreditCard className="h-7 w-7 text-blue-600" /> American Express
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Day-by-day card spending — categorized into your budget.
+            </p>
+          </div>
         </div>
+
+        {/* Month selector + per-month totals */}
+        <div className="flex items-stretch gap-4 flex-wrap">
+          <div className="flex items-center gap-2 rounded-md border bg-card px-2 py-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setSelectedMonth((m) => shiftMonth(m, -1))}
+              aria-label="Previous month"
+              data-testid="button-prev-month"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div
+              className="min-w-[88px] text-center font-mono text-sm font-semibold tabular-nums"
+              data-testid="text-selected-month"
+            >
+              {formatMonthLabel(selectedMonth)}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setSelectedMonth((m) => shiftMonth(m, 1))}
+              aria-label="Next month"
+              data-testid="button-next-month"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 min-w-[280px]">
+            {endingBalance.source === "missing" ? (
+              <div
+                className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900"
+                data-testid="stat-ending-balance"
+              >
+                <div className="text-[10px] uppercase tracking-widest text-amber-700 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" /> Ending balance
+                </div>
+                <div className="font-mono tabular-nums font-semibold text-base">
+                  Unavailable
+                </div>
+                <div className="text-[10px] leading-tight mt-0.5">
+                  Link an Amex debt in Debts to see the balance.
+                </div>
+              </div>
+            ) : (
+              <StatChip
+                label="Ending balance"
+                value={endingBalance.value ?? 0}
+                accent="bg-blue-50 text-blue-900 border-blue-200"
+                testId="stat-ending-balance"
+              />
+            )}
+            <StatChip
+              label="Charges"
+              value={monthTotals.charges}
+              testId="stat-charges"
+            />
+            <StatChip
+              label="Payments & credits"
+              value={Math.abs(monthTotals.paymentsAndCredits)}
+              valueClassName="text-emerald-700"
+              testId="stat-payments-credits"
+            />
+            <StatChip
+              label="Net change"
+              value={monthTotals.netChange}
+              valueClassName={
+                monthTotals.netChange > 0
+                  ? "text-rose-700"
+                  : monthTotals.netChange < 0
+                    ? "text-emerald-700"
+                    : undefined
+              }
+              signed
+              testId="stat-net-change"
+            />
+          </div>
+        </div>
+
+        {/* Filter bar */}
+        <Card>
+          <CardContent className="p-4 flex flex-wrap items-end gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search description or category…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 h-9"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">From</label>
+              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40" />
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">To</label>
+              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" />
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Source</label>
+              <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={AMEX_SOURCE}>amex</SelectItem>
+                  <SelectItem value="manual">manual</SelectItem>
+                  <SelectItem value="import">import</SelectItem>
+                  <SelectItem value="all">All sources</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Category</label>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                  {(categories ?? []).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {members.length > 0 && (
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Member</label>
+                <Select value={memberFilter} onValueChange={setMemberFilter}>
+                  <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All members</SelectItem>
+                    {members.map((m) => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="text-xs text-muted-foreground ml-auto" data-testid="text-row-count">
+              {filtered.length} of {monthScoped.length} txns
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Bulk action bar */}
+        {selected.size > 0 && (
+          <div className="flex items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-2 shadow-sm">
+            <span className="text-sm font-medium text-blue-900">
+              {selected.size} selected
+            </span>
+            <BulkCategoryPicker
+              categories={categories ?? []}
+              onPick={bulkSetCategory}
+            />
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-blue-900 mr-1">Bucket:</span>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("")}>
+                —
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("weekly")}>
+                Weekly
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("monthly")}>
+                Monthly
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("unplanned")}>
+                Unplanned
+              </Button>
+            </div>
+            <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
+              Clear
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* 12-month ending balance trend */}
@@ -772,183 +952,6 @@ export default function AmexPage() {
         </Card>
       )}
 
-      {/* Month selector + per-month totals */}
-      <div className="flex items-stretch gap-4 flex-wrap">
-        <div className="flex items-center gap-2 rounded-md border bg-card px-2 py-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setSelectedMonth((m) => shiftMonth(m, -1))}
-            aria-label="Previous month"
-            data-testid="button-prev-month"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div
-            className="min-w-[88px] text-center font-mono text-sm font-semibold tabular-nums"
-            data-testid="text-selected-month"
-          >
-            {formatMonthLabel(selectedMonth)}
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setSelectedMonth((m) => shiftMonth(m, 1))}
-            aria-label="Next month"
-            data-testid="button-next-month"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 min-w-[280px]">
-          {endingBalance.source === "missing" ? (
-            <div
-              className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900"
-              data-testid="stat-ending-balance"
-            >
-              <div className="text-[10px] uppercase tracking-widest text-amber-700 flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" /> Ending balance
-              </div>
-              <div className="font-mono tabular-nums font-semibold text-base">
-                Unavailable
-              </div>
-              <div className="text-[10px] leading-tight mt-0.5">
-                Link an Amex debt in Debts to see the balance.
-              </div>
-            </div>
-          ) : (
-            <StatChip
-              label="Ending balance"
-              value={endingBalance.value ?? 0}
-              accent="bg-blue-50 text-blue-900 border-blue-200"
-              testId="stat-ending-balance"
-            />
-          )}
-          <StatChip
-            label="Charges"
-            value={monthTotals.charges}
-            testId="stat-charges"
-          />
-          <StatChip
-            label="Payments & credits"
-            value={Math.abs(monthTotals.paymentsAndCredits)}
-            valueClassName="text-emerald-700"
-            testId="stat-payments-credits"
-          />
-          <StatChip
-            label="Net change"
-            value={monthTotals.netChange}
-            valueClassName={
-              monthTotals.netChange > 0
-                ? "text-rose-700"
-                : monthTotals.netChange < 0
-                  ? "text-emerald-700"
-                  : undefined
-            }
-            signed
-            testId="stat-net-change"
-          />
-        </div>
-      </div>
-
-      {/* Filter bar */}
-      <Card>
-        <CardContent className="p-4 flex flex-wrap items-end gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search description or category…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-9"
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">From</label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40" />
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">To</label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" />
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Source</label>
-            <Select value={sourceFilter} onValueChange={setSourceFilter}>
-              <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={AMEX_SOURCE}>amex</SelectItem>
-                <SelectItem value="manual">manual</SelectItem>
-                <SelectItem value="import">import</SelectItem>
-                <SelectItem value="all">All sources</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Category</label>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                {(categories ?? []).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {members.length > 0 && (
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Member</label>
-              <Select value={memberFilter} onValueChange={setMemberFilter}>
-                <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All members</SelectItem>
-                  {members.map((m) => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <div className="text-xs text-muted-foreground ml-auto" data-testid="text-row-count">
-            {filtered.length} of {monthScoped.length} txns
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Bulk action bar */}
-      {selected.size > 0 && (
-        <div className="sticky top-0 z-20 flex items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-2 shadow-sm">
-          <span className="text-sm font-medium text-blue-900">
-            {selected.size} selected
-          </span>
-          <BulkCategoryPicker
-            categories={categories ?? []}
-            onPick={bulkSetCategory}
-          />
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-blue-900 mr-1">Bucket:</span>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("")}>
-              —
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("weekly")}>
-              Weekly
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("monthly")}>
-              Monthly
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("unplanned")}>
-              Unplanned
-            </Button>
-          </div>
-          <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
-            Clear
-          </Button>
-        </div>
-      )}
-
       {/* Day groups */}
       {groups.length === 0 && (
         <Card><CardContent className="p-8 text-center text-muted-foreground">
@@ -968,7 +971,7 @@ export default function AmexPage() {
             className="space-y-2"
           >
             <div className={cn(
-              "sticky top-0 z-10 flex items-center justify-between gap-3 rounded-md border bg-background/95 backdrop-blur px-3 py-2",
+              "flex items-center justify-between gap-3 rounded-md border bg-background/95 backdrop-blur px-3 py-2",
               isToday && "border-blue-300 bg-blue-50/80",
             )}>
               <div className="flex items-center gap-3">

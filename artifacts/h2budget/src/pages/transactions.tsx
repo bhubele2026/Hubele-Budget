@@ -431,12 +431,31 @@ export default function TransactionsPage() {
     }
   };
 
+  // Measure the frozen top pane so the bulk-action bar can stick directly
+  // beneath it without overlapping. The pane height changes with viewport
+  // wrapping (mobile) and when the dynamic balance card resizes.
+  const frozenPaneRef = useRef<HTMLDivElement | null>(null);
+  const [frozenPaneHeight, setFrozenPaneHeight] = useState(0);
+  useEffect(() => {
+    const el = frozenPaneRef.current;
+    if (!el) return;
+    const update = () => setFrozenPaneHeight(el.getBoundingClientRect().height);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   if (isLoading) {
     return <div className="space-y-4"><Skeleton className="h-10 w-48" /><Skeleton className="h-64 w-full" /></div>;
   }
 
   return (
     <div className="space-y-6">
+      <div
+        ref={frozenPaneRef}
+        className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-4"
+      >
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-serif font-bold text-foreground">Chase</h1>
@@ -547,6 +566,28 @@ export default function TransactionsPage() {
         </CardContent>
       </Card>
 
+        {chaseTransactions.length > 0 && (
+          <div
+            className="flex items-center gap-3 rounded-md border bg-muted/30 px-4 py-2 text-xs text-muted-foreground"
+            data-testid="select-all-row"
+          >
+            <Checkbox
+              checked={
+                visibleIds.size > 0 && selected.size === visibleIds.size
+                  ? true
+                  : selected.size > 0
+                    ? "indeterminate"
+                    : false
+              }
+              onCheckedChange={(v) => toggleAll(!!v)}
+              aria-label="Select all"
+              data-testid="select-all"
+            />
+            <span>Select all on page</span>
+          </div>
+        )}
+      </div>
+
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -604,7 +645,8 @@ export default function TransactionsPage() {
 
       {selected.size > 0 && (
         <div
-          className="sticky top-0 z-20 flex items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 shadow-sm"
+          className="sticky z-20 flex items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 shadow-sm"
+          style={{ top: frozenPaneHeight }}
           data-testid="bulk-bar"
         >
           <span className="text-sm font-medium text-emerald-900">
@@ -635,23 +677,6 @@ export default function TransactionsPage() {
 
       <Card>
         <CardContent className="p-0">
-          {chaseTransactions.length > 0 && (
-            <div className="px-4 py-2 flex items-center gap-3 border-b bg-muted/30 text-xs text-muted-foreground">
-              <Checkbox
-                checked={
-                  visibleIds.size > 0 && selected.size === visibleIds.size
-                    ? true
-                    : selected.size > 0
-                      ? "indeterminate"
-                      : false
-                }
-                onCheckedChange={(v) => toggleAll(!!v)}
-                aria-label="Select all"
-                data-testid="select-all"
-              />
-              <span>Select all on page</span>
-            </div>
-          )}
           <div className="divide-y divide-border">
             {chaseTransactions.map((tx) => (
               <div
