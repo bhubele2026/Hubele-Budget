@@ -4,6 +4,7 @@ import {
   useUpdateSettings,
   useImportWorkbook,
   getGetSettingsQueryKey,
+  getListDashboardBudgetsQueryKey,
   useListPlaidItems,
   useDeletePlaidItem,
   useSyncPlaidTransactions,
@@ -137,6 +138,9 @@ export default function SettingsPage() {
     updateSettings.mutate({ data: values }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+        // Allowance changes flow into Dashboard bucket caps for any month
+        // without an override, so refresh those caches too.
+        queryClient.invalidateQueries({ queryKey: getListDashboardBudgetsQueryKey() });
         toast({ title: "Settings updated successfully" });
       }
     });

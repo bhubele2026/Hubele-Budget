@@ -27,21 +27,13 @@ import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
 
 import { SUB_BUCKETS, type SubBucket, useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 
-function startOfWeek(d: Date): Date {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  x.setDate(x.getDate() - x.getDay());
-  return x;
-}
-
-function addDays(d: Date, n: number): Date {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-
 function fmtISO(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+// Earliest month the dashboard month-cycler is allowed to navigate back to.
+const FLOOR_YEAR = 2026;
+const FLOOR_MONTH_INDEX = 3; // April (0-indexed)
 
 function expenseAmount(t: Transaction): number {
   const a = Number(t.amount) || 0;
@@ -121,45 +113,36 @@ function CapInline({
   );
 }
 
-function LifeThisWeek({
+function WeeklyMonthlySection({
   transactions,
+  viewMonth,
   today,
 }: {
   transactions: Transaction[];
+  viewMonth: Date;
   today: Date;
 }) {
   const SUB_LABEL = useWeeklyBucketLabels();
-  const [weekOffset, setWeekOffset] = useState(0);
-  const currentWeekStart = useMemo(() => startOfWeek(today), [today]);
-  const earliestWeekStart = useMemo(
-    () => startOfWeek(new Date(2026, 3, 1)),
-    [],
+  const monthKey = useMemo(
+    () => `${viewMonth.getFullYear()}-${String(viewMonth.getMonth() + 1).padStart(2, "0")}`,
+    [viewMonth],
   );
-  const minOffset = useMemo(() => {
-    const ms = earliestWeekStart.getTime() - currentWeekStart.getTime();
-    return Math.round(ms / (7 * 24 * 60 * 60 * 1000));
-  }, [currentWeekStart, earliestWeekStart]);
-  const weekStart = useMemo(
-    () => addDays(currentWeekStart, weekOffset * 7),
-    [currentWeekStart, weekOffset],
+  const monthStartISO = useMemo(() => fmtISO(viewMonth), [viewMonth]);
+  const monthEndISO = useMemo(
+    () => fmtISO(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0)),
+    [viewMonth],
   );
-  const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
-  const periodKey = fmtISO(weekStart);
-  const canGoBack = weekOffset > minOffset;
-  const canGoForward = weekOffset < 0;
 
-  const editor = useBudgetEditor("weekly", periodKey);
+  const editor = useBudgetEditor("weekly", monthKey);
 
-  const { totals, total, weekTxns } = useMemo(() => {
+  const { totals, total, monthTxns } = useMemo(() => {
     const t: Record<SubBucket, number> = { groceries: 0, dining: 0, entertainment: 0, misc: 0 };
     let sum = 0;
-    const startIso = fmtISO(weekStart);
-    const endIso = fmtISO(weekEnd);
     const list: Transaction[] = [];
     for (const tx of transactions) {
       if (tx.source !== "amex") continue;
       if (!tx.weeklyAllowance) continue;
-      if (tx.occurredOn < startIso || tx.occurredOn > endIso) continue;
+      if (tx.occurredOn < monthStartISO || tx.occurredOn > monthEndISO) continue;
       const amt = expenseAmount(tx);
       const bucket = (tx.weeklyBucket as SubBucket | null | undefined) ?? "misc";
       if (SUB_BUCKETS.includes(bucket)) t[bucket] += amt;
@@ -168,20 +151,19 @@ function LifeThisWeek({
       list.push(tx);
     }
     list.sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
-    return { totals: t, total: sum, weekTxns: list };
-  }, [transactions, weekStart, weekEnd]);
+    return { totals: t, total: sum, monthTxns: list };
+  }, [transactions, monthStartISO, monthEndISO]);
 
   const cap = editor.saved;
   const remaining = Math.max(0, cap - total);
   const pct = cap > 0 ? Math.min(100, (total / cap) * 100) : 0;
   const overspent = cap > 0 && total > cap;
 
-  const isCurrentWeek = weekOffset === 0;
-  const dayOfWeek = isCurrentWeek
-    ? Math.min(7, Math.max(1, today.getDay() + 1))
-    : 7;
-
-  const rangeLabel = `${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
+  const isCurrentMonth =
+    viewMonth.getFullYear() === today.getFullYear() &&
+    viewMonth.getMonth() === today.getMonth();
+  const dayOfMonth = isCurrentMonth ? today.getDate() : daysInMonth;
 
   return (
     <section>
@@ -190,39 +172,7 @@ function LifeThisWeek({
           <div className="text-[11px] uppercase tracking-widest text-amber-700 font-medium">
             WEEKLY {formatCurrency(cap)}
           </div>
-          <h2 className="text-2xl font-serif font-bold text-foreground">Life this week</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          {!isCurrentWeek && (
-            <button
-              type="button"
-              onClick={() => setWeekOffset(0)}
-              className="text-[11px] uppercase tracking-widest text-amber-700 hover:underline"
-            >
-              This week
-            </button>
-          )}
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8 rounded-full"
-            disabled={!canGoBack}
-            onClick={() => setWeekOffset((w) => Math.max(minOffset, w - 1))}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="text-xs uppercase tracking-widest text-muted-foreground min-w-[110px] text-center">
-            {rangeLabel}
-          </span>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8 rounded-full"
-            disabled={!canGoForward}
-            onClick={() => setWeekOffset((w) => Math.min(0, w + 1))}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <h2 className="text-2xl font-serif font-bold text-foreground">Life spending</h2>
         </div>
       </div>
       <Card>
@@ -235,7 +185,7 @@ function LifeThisWeek({
               <CapInline {...editor} />
             </div>
             <div className="text-xs text-muted-foreground tabular-nums">
-              {formatCurrency(remaining)} left · day {dayOfWeek} of 7
+              {formatCurrency(remaining)} left · day {dayOfMonth} of {daysInMonth}
             </div>
           </div>
           <Progress value={pct} className={overspent ? "[&>div]:bg-destructive" : ""} />
@@ -253,16 +203,16 @@ function LifeThisWeek({
           </div>
           <div className="border-t pt-3">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-              This week ({weekTxns.length})
+              This month ({monthTxns.length})
             </div>
-            {weekTxns.length === 0 ? (
+            {monthTxns.length === 0 ? (
               <div className="text-xs text-muted-foreground py-2">
                 Nothing tagged yet. Tag charges as "weekly" on the{" "}
                 <Link href="/amex" className="text-amber-700 underline">Amex page</Link>.
               </div>
             ) : (
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {weekTxns.map((t) => {
+                {monthTxns.map((t) => {
                   const amt = Number(t.amount) || 0;
                   return (
                     <div key={t.id} className="flex items-center justify-between gap-3 text-sm">
@@ -291,19 +241,15 @@ function MonthlyLikeSection({
   title,
   bucket,
   transactions,
+  viewMonth,
   today,
-  monthOffset,
 }: {
   title: string;
   bucket: "monthly" | "unplanned";
   transactions: Transaction[];
+  viewMonth: Date;
   today: Date;
-  monthOffset: number;
 }) {
-  const viewMonth = useMemo(
-    () => new Date(today.getFullYear(), today.getMonth() + monthOffset, 1),
-    [today, monthOffset],
-  );
   const monthKey = useMemo(
     () => `${viewMonth.getFullYear()}-${String(viewMonth.getMonth() + 1).padStart(2, "0")}`,
     [viewMonth],
@@ -332,7 +278,9 @@ function MonthlyLikeSection({
   const overspent = cap > 0 && total > cap;
   const pct = cap > 0 ? Math.min(100, (total / cap) * 100) : 0;
   const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
-  const isCurrentMonth = monthOffset === 0;
+  const isCurrentMonth =
+    viewMonth.getFullYear() === today.getFullYear() &&
+    viewMonth.getMonth() === today.getMonth();
   const dayOfMonth = isCurrentMonth ? today.getDate() : daysInMonth;
 
   return (
@@ -793,59 +741,15 @@ function ReimbursementsBox({
   );
 }
 
-function DashboardMonthlySections({
-  today,
-  transactions,
-}: {
-  today: Date;
-  transactions: Transaction[];
-}) {
-  const [monthOffset, setMonthOffset] = useState(0);
-  const viewMonth = useMemo(
-    () => new Date(today.getFullYear(), today.getMonth() + monthOffset, 1),
-    [today, monthOffset],
-  );
-  const monthLabel = viewMonth
-    .toLocaleDateString("en-US", { month: "long", year: "numeric" })
-    .toUpperCase();
-
+function SummaryCell({ label, value }: { label: string; value: number }) {
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-end gap-2">
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 rounded-full"
-          onClick={() => setMonthOffset((m) => m - 1)}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span className="text-xs uppercase tracking-widest text-muted-foreground min-w-[140px] text-center">
-          {monthLabel}
-        </span>
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 rounded-full"
-          onClick={() => setMonthOffset((m) => m + 1)}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+    <div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+        {label}
       </div>
-      <MonthlyLikeSection
-        title="Monthly spending"
-        bucket="monthly"
-        transactions={transactions}
-        today={today}
-        monthOffset={monthOffset}
-      />
-      <MonthlyLikeSection
-        title="Unplanned spending"
-        bucket="unplanned"
-        transactions={transactions}
-        today={today}
-        monthOffset={monthOffset}
-      />
+      <div className="text-sm font-serif font-semibold tabular-nums">
+        {formatCurrency(value)}
+      </div>
     </div>
   );
 }
@@ -1151,16 +1055,23 @@ function MonthlySnapshot({
 
 export default function DashboardPage() {
   const today = useMemo(() => new Date(), []);
-  // Anchor weekly fetch to the April 2026 floor so the weekly cycler
-  // can reach every selectable past week, regardless of today's date.
-  const fromISO = useMemo(() => fmtISO(new Date(2026, 3, 1)), []);
+  const [monthOffset, setMonthOffset] = useState(0);
+  const viewMonth = useMemo(
+    () => new Date(today.getFullYear(), today.getMonth() + monthOffset, 1),
+    [today, monthOffset],
+  );
+  const isAtFloor =
+    viewMonth.getFullYear() === FLOOR_YEAR &&
+    viewMonth.getMonth() === FLOOR_MONTH_INDEX;
+  const monthLabel = viewMonth
+    .toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    .toUpperCase();
   // Pull 12 months back so prev-month navigation in monthly sections has data.
   const monthlyFromISO = useMemo(() => {
     const start = new Date(today.getFullYear(), today.getMonth() - 12, 1);
     return fmtISO(start);
   }, [today]);
   const { data, isLoading } = useGetDashboard();
-  const { data: txns } = useListTransactions({ from: fromISO, limit: 1000 });
   const { data: monthTxns } = useListTransactions({ from: monthlyFromISO, limit: 5000 });
   // All-time reimbursables — no date window, server filters by reimbursable=true.
   const { data: reimbTxns, isLoading: reimbLoading } = useListTransactions({
@@ -1168,7 +1079,6 @@ export default function DashboardPage() {
     limit: 100000,
   });
 
-  const allTxns = txns ?? [];
   const monthlyTagged = useMemo(() => monthTxns ?? [], [monthTxns]);
   const reimbursementsAll = useMemo(() => reimbTxns ?? [], [reimbTxns]);
 
@@ -1191,10 +1101,52 @@ export default function DashboardPage() {
         activeDebtCount={data.activeDebtCount}
       />
 
-      <LifeThisWeek transactions={allTxns} today={today} />
-      <DashboardMonthlySections
-        today={today}
+      <div className="flex items-center justify-end gap-2" data-testid="dashboard-month-cycler">
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 rounded-full"
+          onClick={() => setMonthOffset((m) => m - 1)}
+          disabled={isAtFloor}
+          data-testid="button-month-prev"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span
+          className="text-xs uppercase tracking-widest text-muted-foreground min-w-[140px] text-center"
+          data-testid="text-month-label"
+        >
+          {monthLabel}
+        </span>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 rounded-full"
+          onClick={() => setMonthOffset((m) => m + 1)}
+          data-testid="button-month-next"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <WeeklyMonthlySection
         transactions={monthlyTagged}
+        viewMonth={viewMonth}
+        today={today}
+      />
+      <MonthlyLikeSection
+        title="Monthly spending"
+        bucket="monthly"
+        transactions={monthlyTagged}
+        viewMonth={viewMonth}
+        today={today}
+      />
+      <MonthlyLikeSection
+        title="Unplanned spending"
+        bucket="unplanned"
+        transactions={monthlyTagged}
+        viewMonth={viewMonth}
+        today={today}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
