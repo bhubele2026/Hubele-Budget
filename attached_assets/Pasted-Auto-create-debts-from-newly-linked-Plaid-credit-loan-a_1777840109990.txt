@@ -1,0 +1,90 @@
+Auto-create debts from newly linked Plaid credit/loan accounts
+View plan
+
+Show Plaid-imported Amex transactions on the Amex Daily page
+View plan
+
+Auto-categorize new Plaid transactions using existing rules
+View plan
+
+Handle Plaid webhooks for near-realtime transaction updates
+View plan
+
+Auto-refresh the bank balance on a schedule
+View plan
+
+Show debt sync history & errors when Plaid refresh fails
+View plan
+
+Update auto-categorization rules to point at the new shorter category list
+View plan
+
+Keep generated API types fresh after every merge
+View plan
+
+Show the user's actual Weekly/Monthly Spend amounts on Bills
+View plan
+
+Show a 'no projection' nudge with a 1-click way to set a bank snapshot
+View plan
+
+Show real running balance per Chase transaction row
+View plan
+
+Show the running balance trend on the Forecast page
+View plan
+
+Bulk-send and bulk-resolve from the Transactions and Forecast pages
+View plan
+
+Bulk-tag selected charges as reimbursable from the Amex page
+View plan
+
+Bulk-mark reimbursements as paid from the dashboard bucket
+View plan
+
+Suggest likely Amex matches automatically when reconciling
+View plan
+
+Let bubbles work on non-Amex transactions too
+View plan
+
+Show paid-off debts as auto-archived in the Bills locked list
+View plan
+
+Add an avalanche page focus highlight when arriving from a Bills row
+View plan
+
+Search and filter the Mapping Rules page
+View plan
+
+Edit a mapping rule's category or pattern in place
+View plan
+
+Inline categorize from the Budget page
+View plan
+
+Show actuals breakdown popover (which transactions count?)
+View plan
+
+Let users pick which bank account powers the Chase page
+View plan
+
+Show rescheduled overrides in the bucket panel with their own Undo
+View plan
+
+Make chart colors match the brand instead of hardcoded blue and orange
+View plan
+
+Show all targets per month in the Avalanche projection table
+View plan
+
+Add tests for the cash signal projection math
+View plan
+
+End-to-end test for the Bills → Avalanche locked-row flow
+View plan
+
+Test the Move-to date picker end-to-end in the forecast
+View plan
+
