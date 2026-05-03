@@ -625,7 +625,7 @@ function DebtSection({
                   className="absolute inset-x-0 bottom-0 transition-[height] duration-[1400ms] ease-out"
                   style={{
                     height: `${gaugeFill}%`,
-                    background: `linear-gradient(to top, ${H2_PALETTE.red}, ${H2_PALETTE.amber}, ${H2_PALETTE.green})`,
+                    background: `linear-gradient(to top, ${H2_PALETTE.red}, ${H2_PALETTE.amber}, ${H2_PALETTE.primary})`,
                   }}
                 />
                 <div className="absolute inset-x-0 bottom-2 w-3 h-3 rounded-full bg-red-500 mx-auto shadow" />
@@ -743,8 +743,8 @@ function DebtSection({
           >
             <defs>
               <linearGradient id="past-balance" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={H2_PALETTE.green} stopOpacity={0.7} />
-                <stop offset="100%" stopColor={H2_PALETTE.green} stopOpacity={0.1} />
+                <stop offset="0%" stopColor={H2_PALETTE.primary} stopOpacity={0.7} />
+                <stop offset="100%" stopColor={H2_PALETTE.primary} stopOpacity={0.1} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
@@ -760,7 +760,7 @@ function DebtSection({
             <Area
               type="monotone"
               dataKey="total"
-              stroke={H2_PALETTE.green}
+              stroke={H2_PALETTE.primary}
               fill="url(#past-balance)"
               strokeWidth={2}
               name="Total balance"
@@ -840,7 +840,7 @@ function DebtSection({
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="freed" fill={H2_PALETTE.amber} name="Freed this kill" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="cumulative" fill={H2_PALETTE.green} name="Snowball total" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="cumulative" fill={H2_PALETTE.primary} name="Snowball total" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -857,7 +857,7 @@ function DebtSection({
               <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v}`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="principal" stackId="1" fill={H2_PALETTE.green} name="Principal" />
+              <Bar dataKey="principal" stackId="1" fill={H2_PALETTE.primary} name="Principal" />
               <Bar dataKey="interest" stackId="1" fill={H2_PALETTE.red} name="Interest" />
             </BarChart>
           </ResponsiveContainer>
@@ -1164,13 +1164,13 @@ function CashFlowSection({
             <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Line type="monotone" dataKey="income" stroke={H2_PALETTE.green} strokeWidth={2.5} dot={false} name="Income" />
+            <Line type="monotone" dataKey="income" stroke={H2_PALETTE.primary} strokeWidth={2.5} dot={false} name="Income" />
             <Line type="monotone" dataKey="expense" stroke={H2_PALETTE.red} strokeWidth={2.5} dot={false} name="Expense" />
             {compareToPrev && (
               <Line
                 type="monotone"
                 dataKey="prevIncome"
-                stroke={H2_PALETTE.green}
+                stroke={H2_PALETTE.primary}
                 strokeWidth={1.5}
                 strokeDasharray="4 3"
                 strokeOpacity={0.6}
@@ -1482,7 +1482,7 @@ function SpendingSection({
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie data={reimDonut} dataKey="value" nameKey="name" innerRadius={60} outerRadius={110}>
-                <Cell fill={H2_PALETTE.green} />
+                <Cell fill={H2_PALETTE.primary} />
                 <Cell fill={H2_PALETTE.amber} />
                 <Cell fill={H2_PALETTE.violet} />
               </Pie>
@@ -1518,7 +1518,7 @@ function SpendingSection({
                 const bg =
                   cell.amount === 0
                     ? "hsl(var(--muted))"
-                    : `hsla(160, 50%, ${Math.max(20, 60 - intensity * 40)}%, ${0.25 + intensity * 0.75})`;
+                    : `hsl(var(--chart-1) / ${0.25 + intensity * 0.75})`;
                 return (
                   <div
                     key={dow}
@@ -1547,7 +1547,7 @@ function SpendingSection({
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               <Bar dataKey="avg" radius={[6, 6, 0, 0]}>
                 {dow.map((d, i) => (
-                  <Cell key={i} fill={d.dow === 5 || d.dow === 6 ? H2_PALETTE.amber : H2_PALETTE.green} />
+                  <Cell key={i} fill={d.dow === 5 || d.dow === 6 ? H2_PALETTE.amber : H2_PALETTE.primary} />
                 ))}
               </Bar>
             </BarChart>
@@ -1565,7 +1565,7 @@ function SpendingSection({
               <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
               <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={130} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
-              <Bar dataKey="total" fill={H2_PALETTE.green} radius={[0, 6, 6, 0]} />
+              <Bar dataKey="total" fill={H2_PALETTE.primary} radius={[0, 6, 6, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -1726,8 +1726,8 @@ function BudgetSection({
             <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar dataKey="Budgeted" fill={H2_PALETTE.greenSoft} radius={[4, 4, 0, 0]} />
-            <Bar dataKey="Actual" fill={H2_PALETTE.green} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Budgeted" fill={H2_PALETTE.primarySoft} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Actual" fill={H2_PALETTE.primary} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
@@ -1766,8 +1766,8 @@ function BudgetSection({
             <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Line type="monotone" dataKey="planned" stroke={H2_PALETTE.greenSoft} strokeWidth={2} strokeDasharray="6 4" dot={false} name="Planned (paced)" />
-            <Line type="monotone" dataKey="actual" stroke={H2_PALETTE.green} strokeWidth={2.5} dot={false} name="Actual" connectNulls={false} />
+            <Line type="monotone" dataKey="planned" stroke={H2_PALETTE.primarySoft} strokeWidth={2} strokeDasharray="6 4" dot={false} name="Planned (paced)" />
+            <Line type="monotone" dataKey="actual" stroke={H2_PALETTE.primary} strokeWidth={2.5} dot={false} name="Actual" connectNulls={false} />
           </LineChart>
         </ResponsiveContainer>
       </ChartCard>
@@ -2094,8 +2094,8 @@ function BehaviorSection({
               <Radar
                 name="This window"
                 dataKey="value"
-                stroke={H2_PALETTE.green}
-                fill={H2_PALETTE.green}
+                stroke={H2_PALETTE.primary}
+                fill={H2_PALETTE.primary}
                 fillOpacity={0.35}
               />
               <Tooltip contentStyle={tooltipStyle} />

@@ -1035,7 +1035,7 @@ export default function AvalanchePage() {
                       type="monotone"
                       dataKey="balance"
                       name="Remaining balance"
-                      stroke="hsl(160, 45%, 22%)"
+                      stroke="hsl(var(--chart-1))"
                       strokeWidth={2}
                       dot={false}
                     />

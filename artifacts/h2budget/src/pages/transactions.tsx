@@ -621,8 +621,8 @@ export default function TransactionsPage() {
       <AccountPageHeader
         title="Chase"
         subtitle="Your checking activity, day by day."
-        icon={<Landmark className="h-7 w-7 text-emerald-600" />}
-        accentBorderClass="border-emerald-600"
+        icon={<Landmark className="h-7 w-7 text-primary" />}
+        accentBorderClass="border-primary"
         actions={
           <>
             {isPlaidLinked && (
@@ -748,7 +748,7 @@ export default function TransactionsPage() {
       <BalanceTrendChart
         caption="Checking balance · trailing 12 months"
         data={balanceTrend}
-        color="#16a34a"
+        color="hsl(var(--chart-1))"
         valueLabel="Ending balance"
       />
 

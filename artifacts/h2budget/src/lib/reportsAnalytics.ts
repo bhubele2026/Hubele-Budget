@@ -9,28 +9,33 @@ import type {
 } from "@workspace/api-client-react";
 import { simulate, type SimResult, type Strategy, type SimDebt } from "./avalanche";
 
+// H2 brand palette: orange + purple anchored, with semantic supports.
+// `emerald` is intentionally kept green because it is used as the
+// semantic "positive / net surplus" indicator, not as a brand color.
 export const H2_PALETTE = {
-  green: "hsl(160, 45%, 32%)",
-  greenSoft: "hsl(160, 35%, 55%)",
-  amber: "hsl(40, 75%, 50%)",
-  amberSoft: "hsl(40, 70%, 70%)",
+  primary: "hsl(22, 92%, 52%)",
+  primarySoft: "hsl(22, 90%, 70%)",
+  purple: "hsl(260, 55%, 62%)",
+  purpleSoft: "hsl(260, 60%, 78%)",
+  amber: "hsl(38, 88%, 56%)",
+  amberSoft: "hsl(38, 85%, 72%)",
   red: "hsl(0, 65%, 52%)",
   rose: "hsl(340, 60%, 55%)",
-  sky: "hsl(200, 55%, 48%)",
-  violet: "hsl(280, 40%, 55%)",
+  sky: "hsl(200, 65%, 50%)",
+  violet: "hsl(285, 50%, 58%)",
   emerald: "hsl(150, 55%, 42%)",
   slate: "hsl(220, 15%, 55%)",
 };
 
 export const CHART_SERIES: string[] = [
-  H2_PALETTE.green,
+  H2_PALETTE.primary,
+  H2_PALETTE.purple,
   H2_PALETTE.amber,
   H2_PALETTE.sky,
   H2_PALETTE.violet,
   H2_PALETTE.rose,
-  H2_PALETTE.emerald,
-  H2_PALETTE.red,
-  H2_PALETTE.greenSoft,
+  H2_PALETTE.primarySoft,
+  H2_PALETTE.purpleSoft,
   H2_PALETTE.amberSoft,
   H2_PALETTE.slate,
 ];
