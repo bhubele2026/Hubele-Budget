@@ -41,6 +41,10 @@ Currently hosts the **H2 Family Budget** application — a personal/family budge
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
+## One-shot cleanups
+
+- `artifacts/api-server/scripts/clear-non-checking-forecast-flag.ts` (task #120) — clears legacy `forecast_flag = true` on any transaction whose account isn't the user's configured Chase checking account. Safe to re-run; mirrors the read-time `isBankRow` filter in `routes/forecast.ts` and `lib/cashSignal.ts`. Going forward this state is impossible: `plaidSync.ts` only sets `forecastFlag` on the configured checking account, and the Forecast read paths re-filter at query time. Run with `./scripts/node_modules/.bin/tsx artifacts/api-server/scripts/clear-non-checking-forecast-flag.ts [--apply]`.
+
 ## Workbook Import
 
 Sample workbook lives at `artifacts/h2budget/public/sample/Hubele_Family_Budget_v36.xlsx` and is downloadable from the Settings page. Upload uses `POST /api/import/workbook` (multipart `file` field). Import is per-user destructive: it wipes the caller's transactions/budget/recurring/mapping/debts/categories and re-seeds from the workbook.
