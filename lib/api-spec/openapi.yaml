@@ -828,6 +828,18 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ImportSummary" }
 
+  /seed/april-chase:
+    post:
+      operationId: seedAprilChase
+      tags: [import]
+      summary: Seed the user's Chase checking with April 2026 transactions (idempotent)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AprilChaseSeedResult" }
+
 components:
   schemas:
     HealthStatus:
@@ -1263,6 +1275,19 @@ components:
         linesInserted: { type: integer }
         mappingRulesInserted: { type: integer }
         alreadySeeded: { type: boolean }
+    AprilChaseSeedResult:
+      type: object
+      required: [alreadySeeded, inserted, skipped, categorized, transfers, rulesAdded, endingBalance, syntheticAccount, accountId]
+      properties:
+        alreadySeeded: { type: boolean }
+        inserted: { type: integer }
+        skipped: { type: integer }
+        categorized: { type: integer }
+        transfers: { type: integer }
+        rulesAdded: { type: integer }
+        endingBalance: { type: string }
+        syntheticAccount: { type: boolean }
+        accountId: { type: string }
 
     MappingRule:
       type: object

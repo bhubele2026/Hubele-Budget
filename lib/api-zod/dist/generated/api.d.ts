@@ -4251,4 +4251,38 @@ export declare const ImportWorkbookResponse: zod.ZodObject<{
     batchId: string;
     counts: Record<string, number>;
 }>;
+/**
+ * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
+ */
+export declare const SeedAprilChaseResponse: zod.ZodObject<{
+    alreadySeeded: zod.ZodBoolean;
+    inserted: zod.ZodNumber;
+    skipped: zod.ZodNumber;
+    categorized: zod.ZodNumber;
+    transfers: zod.ZodNumber;
+    rulesAdded: zod.ZodNumber;
+    endingBalance: zod.ZodString;
+    syntheticAccount: zod.ZodBoolean;
+    accountId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    accountId: string;
+    alreadySeeded: boolean;
+    endingBalance: string;
+    inserted: number;
+    skipped: number;
+    categorized: number;
+    transfers: number;
+    rulesAdded: number;
+    syntheticAccount: boolean;
+}, {
+    accountId: string;
+    alreadySeeded: boolean;
+    endingBalance: string;
+    inserted: number;
+    skipped: number;
+    categorized: number;
+    transfers: number;
+    rulesAdded: number;
+    syntheticAccount: boolean;
+}>;
 //# sourceMappingURL=api.d.ts.map

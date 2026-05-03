@@ -1,1 +1,0 @@
-{"version":3,"file":"debtPaymentResult.d.ts","sourceRoot":"","sources":["../../../src/generated/types/debtPaymentResult.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,IAAI,EAAE,MAAM,QAAQ,CAAC;AACnC,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,eAAe,CAAC;AAEjD,MAAM,WAAW,iBAAiB;IAChC,IAAI,EAAE,IAAI,CAAC;IACX,WAAW,EAAE,WAAW,CAAC;IACzB,MAAM,EAAE,OAAO,CAAC;CACjB"}

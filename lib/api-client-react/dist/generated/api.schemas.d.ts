@@ -551,6 +551,17 @@ export interface SeedDefaultBudgetResult {
     mappingRulesInserted?: number;
     alreadySeeded: boolean;
 }
+export interface AprilChaseSeedResult {
+    alreadySeeded: boolean;
+    inserted: number;
+    skipped: number;
+    categorized: number;
+    transfers: number;
+    rulesAdded: number;
+    endingBalance: string;
+    syntheticAccount: boolean;
+    accountId: string;
+}
 export interface MappingRule {
     id: string;
     pattern: string;

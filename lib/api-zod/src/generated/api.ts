@@ -1338,3 +1338,18 @@ export const ImportWorkbookResponse = zod.object({
   batchId: zod.string(),
   counts: zod.record(zod.string(), zod.number()),
 });
+
+/**
+ * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
+ */
+export const SeedAprilChaseResponse = zod.object({
+  alreadySeeded: zod.boolean(),
+  inserted: zod.number(),
+  skipped: zod.number(),
+  categorized: zod.number(),
+  transfers: zod.number(),
+  rulesAdded: zod.number(),
+  endingBalance: zod.string(),
+  syntheticAccount: zod.boolean(),
+  accountId: zod.string(),
+});

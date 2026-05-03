@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useListTransactions, useCreateTransaction, useUpdateTransaction, useDeleteTransaction, useListCategories, useGetForecast, useRefreshForecastBank, getListTransactionsQueryKey, getGetForecastQueryKey, getGetBudgetMonthQueryKey } from "@workspace/api-client-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useListTransactions, useCreateTransaction, useUpdateTransaction, useDeleteTransaction, useListCategories, useGetForecast, useRefreshForecastBank, useSeedAprilChase, getListTransactionsQueryKey, getGetForecastQueryKey, getGetBudgetMonthQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit2, Trash2, Send, Inbox, Wand2, Landmark, RefreshCw } from "lucide-react";
+import { Plus, Edit2, Trash2, Send, Inbox, Wand2, Landmark, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
@@ -41,13 +41,85 @@ function normalizeAmount(raw: string, kind: "expense" | "income"): string {
   return (kind === "income" ? num : -num).toFixed(2);
 }
 
+const MIN_MONTH = "2026-04-01";
+
+function thisMonthStart(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function addMonths(monthStart: string, offset: number): string {
+  const d = new Date(monthStart + "T00:00:00");
+  d.setMonth(d.getMonth() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function endOfMonth(monthStart: string): string {
+  const next = addMonths(monthStart, 1);
+  const d = new Date(next + "T00:00:00");
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function TransactionsPage() {
   const { data: transactions, isLoading } = useListTransactions({ limit: 5000 });
   const { data: categories } = useListCategories();
   const { data: forecastData } = useGetForecast();
   const refreshBank = useRefreshForecastBank();
+  const seedAprilChase = useSeedAprilChase();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const tm = thisMonthStart();
+    return tm < MIN_MONTH ? MIN_MONTH : tm;
+  });
+  const atFloor = currentMonth <= MIN_MONTH;
+  const changeMonth = (offset: number) => {
+    const next = addMonths(currentMonth, offset);
+    setCurrentMonth(next < MIN_MONTH ? MIN_MONTH : next);
+  };
+  const monthName = useMemo(() => {
+    const d = new Date(currentMonth + "T00:00:00");
+    return new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      year: "numeric",
+    }).format(d);
+  }, [currentMonth]);
+  const monthEnd = useMemo(() => endOfMonth(currentMonth), [currentMonth]);
+
+  // One-shot seed of the user's April 2026 Chase activity. Idempotent on the
+  // server (skips rows whose plaid_transaction_id already exists), so it's
+  // safe to fire on every initial mount.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current) return;
+    if (isLoading) return;
+    seededRef.current = true;
+    seedAprilChase.mutate(undefined, {
+      onSuccess: (res) => {
+        if (res.inserted > 0 || res.rulesAdded > 0) {
+          queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+          queryClient.invalidateQueries({
+            queryKey: getGetBudgetMonthQueryKey("2026-04-01"),
+          });
+          if (res.inserted > 0) {
+            toast({
+              title: `Loaded ${res.inserted} April Chase transactions`,
+              description: `Ending balance ${formatCurrency(res.endingBalance)}`,
+            });
+          }
+        }
+      },
+      onError: (e) => {
+        // Non-fatal — page still renders whatever the user already has.
+        // eslint-disable-next-line no-console
+        console.warn("April Chase seed failed:", (e as Error).message);
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading]);
 
   const bankSnapshot = forecastData?.bankSnapshot ?? null;
   // Resolve the linked Chase checking account: bankSnapshot.accountId is the
@@ -67,11 +139,15 @@ export default function TransactionsPage() {
   // the page still has something to show.
   const chaseTransactions = useMemo(() => {
     const all = transactions ?? [];
+    const inMonth = (t: Transaction) =>
+      t.occurredOn >= currentMonth && t.occurredOn <= monthEnd;
     if (chasePlaidAccountId) {
-      return all.filter((t) => t.plaidAccountId === chasePlaidAccountId);
+      return all.filter(
+        (t) => t.plaidAccountId === chasePlaidAccountId && inMonth(t),
+      );
     }
-    return all.filter((t) => !t.plaidAccountId);
-  }, [transactions, chasePlaidAccountId]);
+    return all.filter((t) => !t.plaidAccountId && inMonth(t));
+  }, [transactions, chasePlaidAccountId, currentMonth, monthEnd]);
 
   const runningBalances = useMemo(() => {
     if (!bankSnapshot) return new Map<string, number>();
@@ -331,12 +407,43 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-serif font-bold text-foreground">Chase</h1>
           <p className="text-muted-foreground mt-1">Your checking activity, reconciled.</p>
         </div>
-        <Button onClick={handleOpenNew}><Plus className="w-4 h-4 mr-2" /> Add Transaction</Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-card px-3 py-1.5 rounded-md shadow-sm border border-border">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => changeMonth(-1)}
+              disabled={atFloor}
+              aria-disabled={atFloor}
+              title={atFloor ? "April 2026 is the earliest month" : undefined}
+              data-testid="button-prev-month"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span
+              className="font-medium text-sm w-32 text-center"
+              data-testid="text-current-month"
+            >
+              {monthName}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => changeMonth(1)}
+              data-testid="button-next-month"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+          <Button onClick={handleOpenNew}><Plus className="w-4 h-4 mr-2" /> Add Transaction</Button>
+        </div>
       </div>
 
       <Card data-testid="card-chase-balance">

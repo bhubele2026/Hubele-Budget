@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AprilChaseSeedResult,
   AvalancheExtra,
   AvalancheSettings,
   AvalancheSettingsInput,
@@ -4399,4 +4400,85 @@ export const useImportWorkbook = <
   TContext
 > => {
   return useMutation(getImportWorkbookMutationOptions(options));
+};
+
+/**
+ * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
+ */
+export const getSeedAprilChaseUrl = () => {
+  return `/api/seed/april-chase`;
+};
+
+export const seedAprilChase = async (
+  options?: RequestInit,
+): Promise<AprilChaseSeedResult> => {
+  return customFetch<AprilChaseSeedResult>(getSeedAprilChaseUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSeedAprilChaseMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof seedAprilChase>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof seedAprilChase>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["seedAprilChase"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof seedAprilChase>>,
+    void
+  > = () => {
+    return seedAprilChase(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SeedAprilChaseMutationResult = NonNullable<
+  Awaited<ReturnType<typeof seedAprilChase>>
+>;
+
+export type SeedAprilChaseMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
+ */
+export const useSeedAprilChase = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof seedAprilChase>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof seedAprilChase>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSeedAprilChaseMutationOptions(options));
 };
