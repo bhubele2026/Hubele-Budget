@@ -1635,25 +1635,30 @@ export default function MappingRulesPage() {
                     category to assign them.
                   </span>
                 )}
-                {categoryId && (
-                  <button
-                    type="button"
-                    className="shrink-0 underline underline-offset-2 hover:text-foreground"
-                    data-testid="link-show-rule-matches-add"
-                    onClick={() =>
-                      setMatchesDialog({
-                        pattern: addPreview.pattern,
-                        candidateCount: addPreview.candidateCount,
-                        sampleTransactions: addPreview.sampleTransactions,
-                        toCategoryName:
-                          catById.get(categoryId)?.name ??
-                          "the new category",
-                      })
-                    }
-                  >
-                    Show matches
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="shrink-0 underline underline-offset-2 hover:text-foreground"
+                  data-testid="link-show-rule-matches-add"
+                  onClick={() =>
+                    setMatchesDialog({
+                      pattern: addPreview.pattern,
+                      candidateCount: addPreview.candidateCount,
+                      sampleTransactions: addPreview.sampleTransactions,
+                      // Omit toCategoryName when no category is picked
+                      // yet so the dialog renders the no-destination
+                      // copy and hides its Apply button (Task #246).
+                      ...(categoryId
+                        ? {
+                            toCategoryName:
+                              catById.get(categoryId)?.name ??
+                              "the new category",
+                          }
+                        : {}),
+                    })
+                  }
+                >
+                  Show matches
+                </button>
               </div>
             )}
         </CardContent>

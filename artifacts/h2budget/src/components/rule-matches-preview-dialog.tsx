@@ -14,7 +14,12 @@ export type RuleMatchesPreviewState = {
   pattern: string;
   candidateCount: number;
   sampleTransactions: RepointedRuleSample[];
-  toCategoryName: string;
+  // Optional: when omitted the dialog renders a category-agnostic
+  // "inspecting matches before picking a category" variant used by the
+  // Mapping Rules Add-form preview banner (Task #246). The Apply button
+  // is hidden in that variant since there's nothing to commit to until
+  // a destination category is chosen on the form.
+  toCategoryName?: string;
 };
 
 export type RuleMatchesPreviewDialogProps = {
@@ -62,12 +67,16 @@ export function RuleMatchesPreviewDialog({
         <DialogHeader>
           <DialogTitle>
             {state
-              ? `Move ${state.candidateCount} past payment${state.candidateCount === 1 ? "" : "s"} into ${state.toCategoryName}?`
+              ? state.toCategoryName
+                ? `Move ${state.candidateCount} past payment${state.candidateCount === 1 ? "" : "s"} into ${state.toCategoryName}?`
+                : `${state.candidateCount} uncategorized match${state.candidateCount === 1 ? "" : "es"}`
               : ""}
           </DialogTitle>
           <DialogDescription>
             {state
-              ? `These transactions still match "${state.pattern}" and sit in the rule's previous category. Confirm to move them all into ${state.toCategoryName}.`
+              ? state.toCategoryName
+                ? `These transactions still match "${state.pattern}" and sit in the rule's previous category. Confirm to move them all into ${state.toCategoryName}.`
+                : `These uncategorized transactions match "${state.pattern}". Pick a category in the form to assign them.`
               : ""}
           </DialogDescription>
         </DialogHeader>
@@ -107,8 +116,10 @@ export function RuleMatchesPreviewDialog({
           state.sampleTransactions.length < state.candidateCount && (
             <p className="text-xs text-muted-foreground">
               Showing the {state.sampleTransactions.length} most-recent of{" "}
-              {state.candidateCount} matches. Apply will move all{" "}
-              {state.candidateCount}.
+              {state.candidateCount} matches.
+              {state.toCategoryName
+                ? ` Apply will move all ${state.candidateCount}.`
+                : ""}
             </p>
           )}
         <DialogFooter className="gap-2">
@@ -117,16 +128,18 @@ export function RuleMatchesPreviewDialog({
             onClick={() => onOpenChange(false)}
             data-testid="button-rule-matches-cancel"
           >
-            Cancel
+            {state && !state.toCategoryName ? "Close" : "Cancel"}
           </Button>
-          <Button
-            onClick={onApply}
-            disabled={applyDisabled}
-            data-testid="button-rule-matches-apply"
-          >
-            Move {state?.candidateCount ?? 0} transaction
-            {state?.candidateCount === 1 ? "" : "s"}
-          </Button>
+          {state?.toCategoryName && (
+            <Button
+              onClick={onApply}
+              disabled={applyDisabled}
+              data-testid="button-rule-matches-apply"
+            >
+              Move {state.candidateCount} transaction
+              {state.candidateCount === 1 ? "" : "s"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
