@@ -10,7 +10,11 @@ import {
   useListCategories,
   getListMappingRulesQueryKey,
 } from "@workspace/api-client-react";
-import type { MappingRule, Category } from "@workspace/api-client-react";
+import type {
+  MappingRule,
+  MappingRuleInput,
+  Category,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -240,14 +244,174 @@ export default function MappingRulesPage() {
   const { data: rules, isLoading: rulesLoading } = useListMappingRules();
   const { data: categories, isLoading: catsLoading } = useListCategories();
 
-  const createRule = useCreateMappingRule();
-  const updateRule = useUpdateMappingRule();
-  const deleteRule = useDeleteMappingRule();
-  const reorderRules = useReorderMappingRules();
-  const testRules = useTestMappingRules();
-
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const rulesQueryKey = getListMappingRulesQueryKey();
+
+  const invalidateRules = () =>
+    queryClient.invalidateQueries({ queryKey: rulesQueryKey });
+
+  // Snapshot the current rule list, cancel any in-flight refetch so it
+  // can't overwrite the optimistic state we're about to write, and return
+  // the snapshot for rollback.
+  const beginOptimistic = async () => {
+    await queryClient.cancelQueries({ queryKey: rulesQueryKey });
+    const previous =
+      queryClient.getQueryData<MappingRule[]>(rulesQueryKey) ?? [];
+    return { previous };
+  };
+
+  const rollback = (previous: MappingRule[] | undefined) => {
+    if (previous) queryClient.setQueryData(rulesQueryKey, previous);
+  };
+
+  const createRule = useCreateMappingRule({
+    mutation: {
+      onMutate: async ({ data }: { data: MappingRuleInput }) => {
+        const { previous } = await beginOptimistic();
+        // Use a temp id so React keys + the SortableContext stay stable
+        // until the server response replaces the row via invalidation.
+        const tempId = `temp-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}`;
+        const optimistic: MappingRule = {
+          id: tempId,
+          pattern: data.pattern,
+          matchType: data.matchType ?? "contains",
+          categoryId: data.categoryId ?? null,
+          priority: data.priority ?? 0,
+        };
+        queryClient.setQueryData<MappingRule[]>(rulesQueryKey, [
+          ...previous,
+          optimistic,
+        ]);
+        return { previous };
+      },
+      onError: (err, _vars, context) => {
+        rollback(context?.previous);
+        toast({
+          title: "Couldn't add rule",
+          description: (err as Error).message,
+          variant: "destructive",
+        });
+      },
+      onSettled: () => {
+        invalidateRules();
+      },
+    },
+  });
+
+  const updateRule = useUpdateMappingRule({
+    mutation: {
+      onMutate: async ({
+        id,
+        data,
+      }: {
+        id: string;
+        data: MappingRuleInput;
+      }) => {
+        const { previous } = await beginOptimistic();
+        queryClient.setQueryData<MappingRule[]>(
+          rulesQueryKey,
+          previous.map((r) =>
+            r.id === id
+              ? {
+                  ...r,
+                  pattern: data.pattern ?? r.pattern,
+                  matchType: data.matchType ?? r.matchType,
+                  categoryId:
+                    data.categoryId === undefined
+                      ? r.categoryId
+                      : data.categoryId,
+                  priority: data.priority ?? r.priority,
+                }
+              : r,
+          ),
+        );
+        return { previous };
+      },
+      onError: (err, _vars, context) => {
+        rollback(context?.previous);
+        toast({
+          title: "Couldn't update rule",
+          description: (err as Error).message,
+          variant: "destructive",
+        });
+      },
+      onSettled: () => {
+        invalidateRules();
+      },
+    },
+  });
+
+  const deleteRule = useDeleteMappingRule({
+    mutation: {
+      onMutate: async ({ id }: { id: string }) => {
+        const { previous } = await beginOptimistic();
+        queryClient.setQueryData<MappingRule[]>(
+          rulesQueryKey,
+          previous.filter((r) => r.id !== id),
+        );
+        return { previous };
+      },
+      onError: (err, _vars, context) => {
+        rollback(context?.previous);
+        toast({
+          title: "Couldn't delete rule",
+          description: (err as Error).message,
+          variant: "destructive",
+        });
+      },
+      onSettled: () => {
+        invalidateRules();
+      },
+    },
+  });
+
+  const reorderRules = useReorderMappingRules({
+    mutation: {
+      onMutate: async ({
+        data: { orderedIds },
+      }: {
+        data: { orderedIds: string[] };
+      }) => {
+        const { previous } = await beginOptimistic();
+        // Mirror what the server does: rewrite priorities to a contiguous
+        // descending sequence (10, 20, 30, ...) so the sorted view picks
+        // up the new order immediately. The follow-up invalidation will
+        // overwrite this with the server's authoritative numbers.
+        const byId = new Map(previous.map((r) => [r.id, r] as const));
+        const N = orderedIds.length;
+        const next: MappingRule[] = [];
+        orderedIds.forEach((id, idx) => {
+          const r = byId.get(id);
+          if (r) {
+            next.push({ ...r, priority: (N - idx) * 10 });
+            byId.delete(id);
+          }
+        });
+        // Anything not in orderedIds (shouldn't normally happen) keeps
+        // its existing priority and is appended so we don't drop rows.
+        for (const leftover of byId.values()) next.push(leftover);
+        queryClient.setQueryData<MappingRule[]>(rulesQueryKey, next);
+        return { previous };
+      },
+      onError: (err, _vars, context) => {
+        rollback(context?.previous);
+        toast({
+          title: "Couldn't reorder",
+          description: (err as Error).message,
+          variant: "destructive",
+        });
+      },
+      onSettled: () => {
+        invalidateRules();
+      },
+    },
+  });
+
+  const testRules = useTestMappingRules();
 
   const [pattern, setPattern] = useState("");
   const [matchType, setMatchType] = useState("contains");
@@ -261,9 +425,6 @@ export default function MappingRulesPage() {
   const [editCategoryId, setEditCategoryId] = useState("");
   const [editPriority, setEditPriority] = useState<string>("");
 
-  const invalidateRules = () =>
-    queryClient.invalidateQueries({ queryKey: getListMappingRulesQueryKey() });
-
   const handleAddRule = () => {
     if (!pattern || !categoryId) return;
     // New manually-added rules go above any auto-learned ones (which top out
@@ -273,21 +434,19 @@ export default function MappingRulesPage() {
       (m, r) => Math.max(m, r.priority),
       100,
     );
+    const data: MappingRuleInput = {
+      pattern,
+      matchType,
+      categoryId,
+      priority: topPriority + 10,
+    };
+    // Clear the form right away so the input feels responsive — the
+    // optimistic row already shows the new rule in the list below.
+    setPattern("");
     createRule.mutate(
+      { data },
       {
-        data: {
-          pattern,
-          matchType,
-          categoryId,
-          priority: topPriority + 10,
-        },
-      },
-      {
-        onSuccess: () => {
-          invalidateRules();
-          setPattern("");
-          toast({ title: "Rule added" });
-        },
+        onSuccess: () => toast({ title: "Rule added" }),
       },
     );
   };
@@ -296,10 +455,7 @@ export default function MappingRulesPage() {
     deleteRule.mutate(
       { id },
       {
-        onSuccess: () => {
-          invalidateRules();
-          toast({ title: "Rule deleted" });
-        },
+        onSuccess: () => toast({ title: "Rule deleted" }),
       },
     );
   };
@@ -317,6 +473,9 @@ export default function MappingRulesPage() {
   const saveEdit = (id: string) => {
     if (!editPattern || !editCategoryId) return;
     const priorityNum = Number.parseInt(editPriority, 10);
+    // Close the editor immediately — the optimistic update will repaint
+    // the read-only row with the new values before the server replies.
+    setEditingId(null);
     updateRule.mutate(
       {
         id,
@@ -328,18 +487,7 @@ export default function MappingRulesPage() {
         },
       },
       {
-        onSuccess: () => {
-          invalidateRules();
-          setEditingId(null);
-          toast({ title: "Rule updated" });
-        },
-        onError: (e) => {
-          toast({
-            title: "Couldn't update rule",
-            description: (e as Error).message,
-            variant: "destructive",
-          });
-        },
+        onSuccess: () => toast({ title: "Rule updated" }),
       },
     );
   };
@@ -349,21 +497,7 @@ export default function MappingRulesPage() {
   }, [rules]);
 
   const persistOrder = (orderedIds: string[]) => {
-    reorderRules.mutate(
-      { data: { orderedIds } },
-      {
-        onSuccess: () => invalidateRules(),
-        onError: (e) => {
-          // Refetch so we revert any optimistic UI change.
-          invalidateRules();
-          toast({
-            title: "Couldn't reorder",
-            description: (e as Error).message,
-            variant: "destructive",
-          });
-        },
-      },
-    );
+    reorderRules.mutate({ data: { orderedIds } });
   };
 
   const moveRule = (id: string, direction: -1 | 1) => {
