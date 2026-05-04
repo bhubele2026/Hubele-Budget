@@ -51,6 +51,7 @@ export * from "./closeForecastMonthBody";
 export * from "./createInvitationInput";
 export * from "./createTransactionInput";
 export * from "./createTransactionInputWeeklyBucket";
+export * from "./createTransactionResponse";
 export * from "./dashboardBudget";
 export * from "./dashboardBudgetInput";
 export * from "./dashboardSummary";

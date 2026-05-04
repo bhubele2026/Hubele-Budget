@@ -1538,9 +1538,23 @@ describe("categorization pipeline (integration)", () => {
       id: string;
       categoryId: string | null;
       isTransfer: boolean;
+      autoCategorizedRuleId: string | null;
     };
     expect(createdRow.categoryId).toBe(coffeeCat!.id);
     expect(createdRow.isTransfer).toBe(false);
+    // Task #218 — POST should report which mapping rule auto-attributed
+    // the row so the Add-Transaction client can show a "matched by rule
+    // X" confirmation toast and offer Undo to clear the auto-pick.
+    const [matchedRuleRow] = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(
+        and(
+          eq(mappingRulesTable.userId, TEST_USER),
+          eq(mappingRulesTable.pattern, merchant),
+        ),
+      );
+    expect(createdRow.autoCategorizedRuleId).toBe(matchedRuleRow!.id);
 
     // 2) POST a description that trips the transfer-detection regex →
     //    isTransfer should be true (and categoryId stays null because
@@ -1557,9 +1571,12 @@ describe("categorization pipeline (integration)", () => {
       id: string;
       categoryId: string | null;
       isTransfer: boolean;
+      autoCategorizedRuleId: string | null;
     };
     expect(transferRow.isTransfer).toBe(true);
     expect(transferRow.categoryId).toBeNull();
+    // No rule matched, so no auto-attribution to surface.
+    expect(transferRow.autoCategorizedRuleId).toBeNull();
     // Budget actuals exclude isTransfer rows the same way Plaid sync does
     // — confirm the row really did land with isTransfer=true on disk.
     const [persistedTransfer] = await db

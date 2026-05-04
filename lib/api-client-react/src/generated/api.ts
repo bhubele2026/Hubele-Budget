@@ -37,6 +37,7 @@ import type {
   CloseForecastMonthBody,
   CreateInvitationInput,
   CreateTransactionInput,
+  CreateTransactionResponse,
   DashboardBudget,
   DashboardBudgetInput,
   DashboardSummary,
@@ -350,8 +351,8 @@ export const getCreateTransactionUrl = () => {
 export const createTransaction = async (
   createTransactionInput: CreateTransactionInput,
   options?: RequestInit,
-): Promise<Transaction> => {
-  return customFetch<Transaction>(getCreateTransactionUrl(), {
+): Promise<CreateTransactionResponse> => {
+  return customFetch<CreateTransactionResponse>(getCreateTransactionUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },

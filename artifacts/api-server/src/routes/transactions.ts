@@ -164,6 +164,16 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     req.body ?? {},
     "isTransfer",
   );
+  // `autoCategorizedRuleId` is the id of the mapping rule that the
+  // categorize() pipeline used to auto-attribute the new row's category.
+  // Set only when the body OMITTED categoryId AND a rule matched — an
+  // explicit user-supplied categoryId takes precedence and is reported
+  // as `null` (no auto-attribution happened). Surfacing the rule id
+  // back to the Add-Transaction client lets it show a small "matched
+  // by rule X" toast (mirroring the PATCH `ruleAction` toast) with an
+  // Undo affordance that clears the auto-picked category from the new
+  // row without deleting the row itself.
+  let autoCategorizedRuleId: string | null = null;
   if (!bodyHasCategoryId || !bodyHasIsTransfer) {
     const rules = await loadUserRules(req.userId!);
     const result = categorize(
@@ -176,6 +186,11 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     );
     if (!bodyHasCategoryId && result.categoryId) {
       insertValues.categoryId = result.categoryId;
+      autoCategorizedRuleId = findMatchedRuleId(
+        parsed.data.description,
+        result.categoryId,
+        rules,
+      );
     }
     if (!bodyHasIsTransfer) {
       insertValues.isTransfer = result.isTransfer;
@@ -185,7 +200,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     .insert(transactionsTable)
     .values(insertValues as typeof transactionsTable.$inferInsert)
     .returning();
-  res.status(201).json(row);
+  res.status(201).json({ ...row, autoCategorizedRuleId });
 });
 
 router.patch(

@@ -338,6 +338,24 @@ export type UpdateTransactionResponse = Transaction & {
     repointedRules: RepointedRule[];
     ruleAction: RuleAction;
 };
+export type CreateTransactionResponse = Transaction & {
+    /**
+     * Id of the mapping rule that auto-attributed this row's
+  `categoryId` during POST /transactions. Set only when the
+  client OMITTED `categoryId` from the body AND the
+  auto-categorize pipeline matched a rule. Null when the
+  client passed an explicit categoryId, when no rule
+  matched, or when the description was empty. The Add-
+  Transaction client uses this to surface a small
+  "matched by rule X" confirmation toast that links to the
+  Mapping Rules page and offers an Undo affordance to
+  clear the auto-picked category from the new row (without
+  deleting the row itself).
+  
+     * @nullable
+     */
+    autoCategorizedRuleId: string | null;
+};
 export type RecategorizeByPatternInputMatchType = (typeof RecategorizeByPatternInputMatchType)[keyof typeof RecategorizeByPatternInputMatchType];
 export declare const RecategorizeByPatternInputMatchType: {
     readonly contains: "contains";

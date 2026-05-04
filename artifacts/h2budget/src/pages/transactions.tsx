@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "wouter";
 import {
   useListTransactions,
   useCreateTransaction,
@@ -472,10 +473,88 @@ export default function TransactionsPage() {
       createTx.mutate(
         { data: payload },
         {
-          onSuccess: () => {
+          onSuccess: (created) => {
             queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
             setIsDialogOpen(false);
-            toast({ title: "Transaction created" });
+            // Task #218 — POST /transactions runs the same auto-categorize
+            // pipeline import / Plaid-sync uses (Task #207). When that
+            // pipeline filled in the new row's category from a mapping
+            // rule, the server returns the rule's id as
+            // `autoCategorizedRuleId`. Surface a small "Categorized"
+            // toast naming the rule (linking to the Mapping Rules page)
+            // with an Undo affordance that PATCHes the new row to clear
+            // the auto-picked category — without deleting the row
+            // itself. Mirrors the PATCH `ruleAction` toast on the
+            // quick-categorize flow. When there's no auto-attribution
+            // (explicit categoryId, no rule matched) we fall back to
+            // the plain "Transaction created" toast so the user still
+            // gets a confirmation.
+            const ruleId = created.autoCategorizedRuleId;
+            const matchedRule = ruleId
+              ? (mappingRules ?? []).find((r) => r.id === ruleId) ?? null
+              : null;
+            if (matchedRule) {
+              // Pass the Undo action directly into the initial toast()
+              // call rather than via the toast().update() pattern used
+              // by the PATCH ruleAction toast. The update path closes
+              // over the toast id so it can self-dismiss on click, but
+              // with TOAST_LIMIT=1 it can race a re-render and hide
+              // the action button before the user can hit it. Skipping
+              // the explicit dismiss is fine here — the follow-up
+              // "Cleared the auto-picked category" toast displaces the
+              // parent automatically (LIMIT=1).
+              toast({
+                title: "Categorized",
+                description: (
+                  <span>
+                    Matched by your{" "}
+                    <Link
+                      href={`/mapping-rules?focus=${encodeURIComponent(matchedRule.id)}`}
+                      className="underline underline-offset-2 hover:text-foreground"
+                      data-testid="link-auto-categorized-rule"
+                    >
+                      <span className="font-mono">"{matchedRule.pattern}"</span>
+                    </Link>{" "}
+                    rule.
+                  </span>
+                ),
+                action: (
+                  <ToastAction
+                    altText="Undo auto-categorize"
+                    data-testid="action-undo-auto-categorize"
+                    onClick={() => {
+                      updateTx.mutate(
+                        { id: created.id, data: { categoryId: null } },
+                        {
+                          onSuccess: () => {
+                            queryClient.invalidateQueries({
+                              queryKey: getListTransactionsQueryKey(),
+                            });
+                            queryClient.invalidateQueries({
+                              queryKey: getGetBudgetMonthQueryKey(
+                                `${created.occurredOn.slice(0, 7)}-01`,
+                              ),
+                            });
+                            toast({ title: "Cleared the auto-picked category" });
+                          },
+                          onError: (e) => {
+                            toast({
+                              title: "Couldn't undo",
+                              description: (e as Error).message,
+                              variant: "destructive",
+                            });
+                          },
+                        },
+                      );
+                    }}
+                  >
+                    Undo
+                  </ToastAction>
+                ),
+              });
+            } else {
+              toast({ title: "Transaction created" });
+            }
           },
         },
       );
