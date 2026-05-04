@@ -13,6 +13,7 @@ import { plaid, institutionSlug, type PlaidTxn } from "./plaid";
 import { loadUserRules, categorize } from "./autoCategorize";
 import { expandItem, parseISO, addDays, fmtISO } from "./cashSignal";
 import { refreshAmexAnchor } from "./amexAnchor";
+import { logger } from "./logger";
 
 export type RuleAttribution = {
   ruleId: string;
@@ -584,4 +585,159 @@ export async function syncAllForAllUsers(): Promise<void> {
       // continue
     }
   }
+}
+
+export type ConsentRefreshResult = {
+  itemRowId: string;
+  itemId: string;
+  institutionName: string | null;
+  consentExpirationAt: string | null;
+  changed: boolean;
+  error: string | null;
+};
+
+/**
+ * (#253) Refresh the cached `consent_expiration_time` for a single Plaid
+ * item by calling /item/get and persisting whatever Plaid currently
+ * reports. Best-effort: any error is captured on the returned record but
+ * never thrown — callers (the daily cron, the admin endpoint) should not
+ * have one bad item poison the whole batch.
+ *
+ * Why this exists separately from the on-sync refresh path:
+ *   - syncPlaidItem() already refreshes consent_expiration_time when sync
+ *     hits PENDING_EXPIRATION / PENDING_DISCONNECT, but a healthy item
+ *     that is silently approaching its cutoff never lands in that branch.
+ *   - Plaid sometimes rolls the cutoff forward when the user partially
+ *     re-consents in another flow, so the stored value can drift even on
+ *     items we never get a sync error for.
+ * Running this once a day keeps the dated banner copy ("Chase will
+ * disconnect on May 21") honest regardless of whether the user opens the
+ * app or sync ever errors.
+ */
+export async function refreshConsentExpirationForItem(
+  itemRowId: string,
+): Promise<ConsentRefreshResult> {
+  const [item] = await db
+    .select()
+    .from(plaidItemsTable)
+    .where(eq(plaidItemsTable.id, itemRowId));
+  if (!item) {
+    return {
+      itemRowId,
+      itemId: itemRowId,
+      institutionName: null,
+      consentExpirationAt: null,
+      changed: false,
+      error: "Item not found",
+    };
+  }
+  try {
+    const itemResp = await plaid().itemGet({ access_token: item.accessToken });
+    const cet = (itemResp.data.item as unknown as {
+      consent_expiration_time?: string | null;
+    }).consent_expiration_time;
+    let next: Date | null = null;
+    if (cet) {
+      const parsed = new Date(cet);
+      if (!Number.isNaN(parsed.getTime())) next = parsed;
+    }
+    const prev = item.consentExpirationAt
+      ? item.consentExpirationAt.getTime()
+      : null;
+    const nextMs = next ? next.getTime() : null;
+    const changed = prev !== nextMs;
+    if (changed) {
+      await db
+        .update(plaidItemsTable)
+        .set({ consentExpirationAt: next })
+        .where(eq(plaidItemsTable.id, itemRowId));
+    }
+    return {
+      itemRowId: item.id,
+      itemId: item.itemId,
+      institutionName: item.institutionName,
+      consentExpirationAt: next ? next.toISOString() : null,
+      changed,
+      error: null,
+    };
+  } catch (e) {
+    const { message } = extractPlaidError(e);
+    return {
+      itemRowId: item.id,
+      itemId: item.itemId,
+      institutionName: item.institutionName,
+      consentExpirationAt: item.consentExpirationAt
+        ? item.consentExpirationAt.toISOString()
+        : null,
+      changed: false,
+      error: message,
+    };
+  }
+}
+
+/**
+ * (#253) Refresh consent_expiration_time for every Plaid item belonging
+ * to a single user. Best-effort: per-item failures are captured on the
+ * returned record list but never thrown.
+ */
+export async function refreshConsentExpirationForUser(
+  userId: string,
+): Promise<ConsentRefreshResult[]> {
+  const items = await db
+    .select({ id: plaidItemsTable.id })
+    .from(plaidItemsTable)
+    .where(eq(plaidItemsTable.userId, userId));
+  const out: ConsentRefreshResult[] = [];
+  for (const it of items) {
+    out.push(await refreshConsentExpirationForItem(it.id));
+  }
+  return out;
+}
+
+/**
+ * (#253) Daily background job: walk every active Plaid item across every
+ * user and refresh the cached consent_expiration_time. Errors are logged
+ * (per-item) but never thrown — the cron must never crash the process or
+ * abort early on a single bad item.
+ */
+export async function refreshConsentExpirationForAllItems(): Promise<{
+  scanned: number;
+  updated: number;
+  failed: number;
+}> {
+  const items = await db
+    .select({ id: plaidItemsTable.id })
+    .from(plaidItemsTable);
+  let updated = 0;
+  let failed = 0;
+  for (const it of items) {
+    try {
+      const result = await refreshConsentExpirationForItem(it.id);
+      if (result.error) {
+        failed++;
+        // Log per-item context so support can trace which institution
+        // failed when the daily summary shows a non-zero `failed` count.
+        // Aggregate counts alone make it impossible to diagnose whether
+        // one bad item is failing every day or different items rotate.
+        logger.warn(
+          {
+            itemRowId: result.itemRowId,
+            itemId: result.itemId,
+            institutionName: result.institutionName,
+            err: result.error,
+          },
+          "Plaid consent_expiration_time refresh failed for item",
+        );
+      } else if (result.changed) {
+        updated++;
+      }
+    } catch (err) {
+      failed++;
+      logger.warn(
+        { itemRowId: it.id, err },
+        "Plaid consent_expiration_time refresh threw unexpectedly",
+      );
+    }
+  }
+  return { scanned: items.length, updated, failed };
 }

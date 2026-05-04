@@ -1,7 +1,10 @@
 import cron from "node-cron";
 import app from "./app";
 import { logger } from "./lib/logger";
-import { syncAllForAllUsers } from "./lib/plaidSync";
+import {
+  refreshConsentExpirationForAllItems,
+  syncAllForAllUsers,
+} from "./lib/plaidSync";
 import { getPlaidEnv } from "./lib/plaid";
 
 // Plaid configuration validation:
@@ -70,6 +73,39 @@ app.listen(port, (err) => {
       });
     });
     logger.info("Plaid hourly sync scheduled");
+
+    // (#253) Daily consent_expiration_time refresh. The on-sync path only
+    // refreshes the cutoff when sync hits PENDING_EXPIRATION /
+    // PENDING_DISCONNECT, so a healthy item silently approaching its
+    // cutoff (or one whose date Plaid rolled forward after a partial
+    // re-consent) can drift. Walking every active item once a day keeps
+    // the dated banner copy ("Chase will disconnect on May 21") honest
+    // even when the user never opens the app and sync never errors.
+    // Runs at 03:17 UTC to avoid colliding with the top-of-hour sync.
+    // The explicit `timezone: "UTC"` is important — node-cron defaults to
+    // the host's local timezone, which would shift the actual run time
+    // depending on where the container is provisioned and silently
+    // contradict the 03:17 UTC documented above.
+    cron.schedule(
+      "17 3 * * *",
+      () => {
+        refreshConsentExpirationForAllItems()
+          .then((summary) => {
+            logger.info(
+              summary,
+              "Daily Plaid consent_expiration_time refresh complete",
+            );
+          })
+          .catch((err) => {
+            logger.error(
+              { err },
+              "Daily Plaid consent_expiration_time refresh failed",
+            );
+          });
+      },
+      { timezone: "UTC" },
+    );
+    logger.info("Plaid daily consent refresh scheduled");
   } else {
     logger.warn("Plaid credentials missing — scheduled sync disabled");
   }

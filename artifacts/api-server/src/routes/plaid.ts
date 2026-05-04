@@ -26,7 +26,11 @@ export function tokenEnv(token: string | null | undefined): string | null {
   const m = /^access-([^-]+)-/.exec(token);
   return m ? m[1].toLowerCase() : null;
 }
-import { syncPlaidItem, syncAllForUser } from "../lib/plaidSync";
+import {
+  refreshConsentExpirationForUser,
+  syncPlaidItem,
+  syncAllForUser,
+} from "../lib/plaidSync";
 import { fetchLiabilitiesForUser } from "../lib/plaidLiabilities";
 import { debtsTable } from "@workspace/db";
 
@@ -647,6 +651,32 @@ router.post("/plaid/webhook", async (req, res): Promise<void> => {
   }
   res.sendStatus(200);
 });
+
+// (#253) Manual trigger for the daily consent_expiration_time refresh
+// job. The same code path runs unattended at 03:17 UTC (see index.ts);
+// this endpoint exists so an operator (or an integration test) can
+// kick it for the caller's items on demand and inspect the per-item
+// outcome. Best-effort by design: per-item failures surface in the
+// response body but never fail the request.
+router.post(
+  "/plaid/refresh-consent-expirations",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    try {
+      const results = await refreshConsentExpirationForUser(req.userId!);
+      res.json({
+        scanned: results.length,
+        updated: results.filter((r) => r.changed && !r.error).length,
+        failed: results.filter((r) => !!r.error).length,
+        items: results,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Refresh failed";
+      req.log.error({ err: e }, "Plaid consent refresh failed");
+      res.status(500).json({ error: msg });
+    }
+  },
+);
 
 router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
   const { itemId } = req.body ?? {};
