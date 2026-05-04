@@ -532,6 +532,60 @@ export default function TransactionsPage() {
 
   const recategorizeBulk = useRecategorizeTransactionsByPattern();
 
+  // Reverts a bulk recategorize by re-running the same endpoint with
+  // from/to swapped and scoped to the affected ids. Rows the user has
+  // since edited away from `toCategoryId` naturally drop out (the server
+  // only touches rows whose categoryId still equals the swapped
+  // `fromCategoryId`). Surfaces the count of rows that actually reverted
+  // so the user can tell when an Undo was a no-op because they'd
+  // already moved everything elsewhere.
+  const undoBulkRecategorize = (
+    rule: Pick<RepointedRule, "pattern" | "matchType" | "fromCategoryId" | "toCategoryId">,
+    affectedIds: string[],
+  ) => {
+    if (affectedIds.length === 0) return;
+    recategorizeBulk.mutate(
+      {
+        data: {
+          pattern: rule.pattern,
+          matchType: rule.matchType,
+          // Swap from/to so we move the rows back to their original
+          // category. The `ids` whitelist plus the server-side
+          // categoryId == fromCategoryId filter makes this safely
+          // skip anything the user has since re-edited.
+          fromCategoryId: rule.toCategoryId,
+          toCategoryId: rule.fromCategoryId,
+          ids: affectedIds,
+        },
+      },
+      {
+        onSuccess: (res) => {
+          queryClient.invalidateQueries({
+            queryKey: getListTransactionsQueryKey(),
+          });
+          for (const m of res.affectedMonths) {
+            queryClient.invalidateQueries({
+              queryKey: getGetBudgetMonthQueryKey(m),
+            });
+          }
+          toast({
+            title:
+              res.updated === 0
+                ? "Nothing to undo"
+                : `Reverted ${res.updated} transaction${res.updated === 1 ? "" : "s"}`,
+          });
+        },
+        onError: (e) => {
+          toast({
+            title: "Couldn't undo",
+            description: (e as Error).message,
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
   const offerBulkRecategorize = (rule: RepointedRule) => {
     // Surfaces the "apply this rule to past transactions too" prompt after
     // PATCH /transactions/:id repointed an existing seed mapping rule onto
@@ -566,11 +620,27 @@ export default function TransactionsPage() {
                       queryKey: getGetBudgetMonthQueryKey(m),
                     });
                   }
+                  if (res.updated === 0) {
+                    toast({ title: "Nothing to update" });
+                    return;
+                  }
+                  // Surface a follow-up toast with a one-click Undo so
+                  // the user can roll back the bulk move without
+                  // touching every row individually. The Undo is
+                  // scoped to the exact ids we just flipped, so any
+                  // row the user re-edits in the meantime is left
+                  // alone.
                   toast({
-                    title:
-                      res.updated === 0
-                        ? "Nothing to update"
-                        : `Re-categorized ${res.updated} past transaction${res.updated === 1 ? "" : "s"}`,
+                    title: `Re-categorized ${res.updated} past transaction${res.updated === 1 ? "" : "s"}`,
+                    action: (
+                      <ToastAction
+                        altText="Undo bulk recategorize"
+                        data-testid="action-undo-bulk-recategorize"
+                        onClick={() => undoBulkRecategorize(rule, res.affectedIds)}
+                      >
+                        Undo
+                      </ToastAction>
+                    ),
                   });
                 },
                 onError: (e) => {

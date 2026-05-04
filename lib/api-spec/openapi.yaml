@@ -1225,10 +1225,20 @@ components:
             Transactions manually re-categorized to a different category
             are skipped to preserve explicit user intent.
         toCategoryId: { type: string }
+        ids:
+          type: array
+          description: |
+            Optional whitelist of transaction ids to scope the bulk
+            update to. When provided, the server only flips rows whose
+            id is in this list AND whose categoryId still equals
+            `fromCategoryId`. Used by the client's "Undo" affordance to
+            revert exactly the rows that the original bulk touched,
+            skipping any the user has since re-edited.
+          items: { type: string }
 
     RecategorizeByPatternResult:
       type: object
-      required: [updated, affectedMonths]
+      required: [updated, affectedMonths, affectedIds]
       properties:
         updated:
           type: integer
@@ -1239,6 +1249,14 @@ components:
             Distinct YYYY-MM-01 month-start strings spanning the updated
             transactions. Clients invalidate the corresponding budget month
             queries so per-line actuals refresh.
+          items: { type: string }
+        affectedIds:
+          type: array
+          description: |
+            Ids of the transactions whose categoryId was flipped. The
+            client passes these back into the same endpoint with `from`
+            and `to` swapped (and `ids` set) to implement one-click
+            "Undo" of a bulk recategorization.
           items: { type: string }
 
     Debt:

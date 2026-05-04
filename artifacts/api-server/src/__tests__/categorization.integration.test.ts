@@ -580,9 +580,18 @@ describe("categorization pipeline (integration)", () => {
       toCategoryId: reported.toCategoryId,
     });
     expect(bulk.status).toBe(200);
-    const bulkBody = bulk.json as { updated: number; affectedMonths: string[] };
+    const bulkBody = bulk.json as {
+      updated: number;
+      affectedMonths: string[];
+      affectedIds: string[];
+    };
     expect(bulkBody.updated).toBe(2);
     expect(bulkBody.affectedMonths).toEqual([currentMonthStart()]);
+    // The flipped ids are exactly the two remaining Misc rows (the
+    // trigger row was already on debtCat before this call).
+    expect(new Set(bulkBody.affectedIds)).toEqual(
+      new Set(olderIds.slice(1)),
+    );
 
     // The two historical Misc rows are now on debtCat.
     const finalRows = await db
@@ -616,6 +625,126 @@ describe("categorization pipeline (integration)", () => {
     });
     const replayBody = replay.json as { updated: number };
     expect(replayBody.updated).toBe(0);
+
+    // Undo flow — re-run the same endpoint with from/to swapped and
+    // scoped to the affectedIds. Should move exactly those two rows
+    // back to miscCat. Then simulate the user editing one of those
+    // reverted rows to a different category before clicking Undo a
+    // second time — the second Undo must skip that re-edited row.
+    const undo = await api("POST", `/transactions/recategorize-by-pattern`, {
+      pattern: reported.pattern,
+      matchType: reported.matchType,
+      fromCategoryId: reported.toCategoryId,
+      toCategoryId: reported.fromCategoryId,
+      ids: bulkBody.affectedIds,
+    });
+    expect(undo.status).toBe(200);
+    const undoBody = undo.json as {
+      updated: number;
+      affectedIds: string[];
+    };
+    expect(undoBody.updated).toBe(2);
+    expect(new Set(undoBody.affectedIds)).toEqual(
+      new Set(bulkBody.affectedIds),
+    );
+    const afterUndoRows = await db
+      .select()
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.userId, TEST_USER),
+          inArray(transactionsTable.id, olderIds),
+        ),
+      );
+    const afterUndoById = new Map(
+      afterUndoRows.map((r) => [r.id, r]),
+    );
+    // The trigger row stays on debtCat (it wasn't in affectedIds); the
+    // two formerly-bulk-flipped rows are back on miscCat.
+    expect(afterUndoById.get(triggerId!)!.categoryId).toBe(debtCat!.id);
+    for (const id of olderIds.slice(1)) {
+      expect(afterUndoById.get(id)!.categoryId).toBe(miscCat!.id);
+    }
+
+    // Now redo the bulk again, then have the user manually move one of
+    // the two flipped rows to `otherCat`. A subsequent Undo (again
+    // scoped to the original affectedIds) should leave the manually
+    // re-edited row alone and only revert the untouched one.
+    const redo = await api("POST", `/transactions/recategorize-by-pattern`, {
+      pattern: reported.pattern,
+      matchType: reported.matchType,
+      fromCategoryId: reported.fromCategoryId,
+      toCategoryId: reported.toCategoryId,
+    });
+    const redoBody = redo.json as {
+      updated: number;
+      affectedIds: string[];
+    };
+    expect(redoBody.updated).toBe(2);
+    const userEditedId = redoBody.affectedIds[0]!;
+    const stillOnDebtId = redoBody.affectedIds[1]!;
+    await db
+      .update(transactionsTable)
+      .set({ categoryId: otherCat!.id })
+      .where(eq(transactionsTable.id, userEditedId));
+    const undo2 = await api("POST", `/transactions/recategorize-by-pattern`, {
+      pattern: reported.pattern,
+      matchType: reported.matchType,
+      fromCategoryId: reported.toCategoryId,
+      toCategoryId: reported.fromCategoryId,
+      ids: redoBody.affectedIds,
+    });
+    const undo2Body = undo2.json as {
+      updated: number;
+      affectedIds: string[];
+    };
+    expect(undo2Body.updated).toBe(1);
+    expect(undo2Body.affectedIds).toEqual([stillOnDebtId]);
+    const finalAfterPartialUndo = await db
+      .select()
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.userId, TEST_USER),
+          inArray(transactionsTable.id, [userEditedId, stillOnDebtId]),
+        ),
+      );
+    const finalById = new Map(
+      finalAfterPartialUndo.map((r) => [r.id, r]),
+    );
+    expect(finalById.get(userEditedId)!.categoryId).toBe(otherCat!.id);
+    expect(finalById.get(stillOnDebtId)!.categoryId).toBe(miscCat!.id);
+
+    // Defensive: an explicit empty `ids` array must be treated as a
+    // no-op. Otherwise a degenerate Undo payload (no rows to revert)
+    // would silently re-flip every pattern match in the category.
+    const noopRow = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.id, stillOnDebtId))
+      .limit(1);
+    const noopBefore = noopRow[0]!.categoryId;
+    const noop = await api("POST", `/transactions/recategorize-by-pattern`, {
+      pattern: reported.pattern,
+      matchType: reported.matchType,
+      fromCategoryId: reported.fromCategoryId,
+      toCategoryId: reported.toCategoryId,
+      ids: [],
+    });
+    const noopBody = noop.json as {
+      updated: number;
+      affectedIds: string[];
+      affectedMonths: string[];
+    };
+    expect(noopBody.updated).toBe(0);
+    expect(noopBody.affectedIds).toEqual([]);
+    expect(noopBody.affectedMonths).toEqual([]);
+    const noopAfterRow = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.id, stillOnDebtId))
+      .limit(1);
+    expect(noopAfterRow[0]!.categoryId).toBe(noopBefore);
   });
 
   it("PATCH /transactions/:id auto-relearns: repoints an existing matching rule onto the new category instead of creating a duplicate", async () => {

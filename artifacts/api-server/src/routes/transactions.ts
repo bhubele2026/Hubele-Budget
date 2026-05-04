@@ -373,21 +373,40 @@ router.post(
       return;
     }
     const userId = req.userId!;
-    const { pattern, matchType, fromCategoryId, toCategoryId } = parsed.data;
+    const { pattern, matchType, fromCategoryId, toCategoryId, ids } =
+      parsed.data;
     if (fromCategoryId === toCategoryId) {
-      res.json({ updated: 0, affectedMonths: [] });
+      res.json({ updated: 0, affectedMonths: [], affectedIds: [] });
       return;
     }
-    const candidates = await selectPatternCandidates(
+    // Optional id whitelist — used by the client's "Undo" affordance
+    // to revert exactly the rows the original bulk touched. Anything
+    // the user has since re-edited (away from `fromCategoryId`) is
+    // already filtered out by the `categoryId == fromCategoryId`
+    // guard inside `selectPatternCandidates` and the UPDATE; the
+    // whitelist additionally guarantees we don't sweep up unrelated
+    // rows that happen to match the pattern. An explicitly-supplied
+    // empty array is treated as a no-op so callers can pass through
+    // a known-empty list (e.g. a degenerate Undo payload) without
+    // accidentally affecting every matching row.
+    if (ids && ids.length === 0) {
+      res.json({ updated: 0, affectedMonths: [], affectedIds: [] });
+      return;
+    }
+    let candidates = await selectPatternCandidates(
       userId,
       { pattern, matchType },
       fromCategoryId,
     );
+    if (ids && ids.length > 0) {
+      const allow = new Set(ids);
+      candidates = candidates.filter((c) => allow.has(c.id));
+    }
     if (!candidates.length) {
-      res.json({ updated: 0, affectedMonths: [] });
+      res.json({ updated: 0, affectedMonths: [], affectedIds: [] });
       return;
     }
-    const ids = candidates.map((c) => c.id);
+    const candidateIds = candidates.map((c) => c.id);
     const monthSet = new Set<string>();
     for (const c of candidates) {
       const m = `${c.occurredOn.slice(0, 7)}-01`;
@@ -400,13 +419,14 @@ router.post(
         and(
           eq(transactionsTable.userId, userId),
           eq(transactionsTable.categoryId, fromCategoryId),
-          inArray(transactionsTable.id, ids),
+          inArray(transactionsTable.id, candidateIds),
         ),
       )
       .returning({ id: transactionsTable.id });
     res.json({
       updated: updated.length,
       affectedMonths: Array.from(monthSet).sort(),
+      affectedIds: updated.map((r) => r.id),
     });
   },
 );

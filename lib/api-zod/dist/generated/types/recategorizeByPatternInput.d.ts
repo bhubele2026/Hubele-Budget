@@ -16,5 +16,13 @@ export interface RecategorizeByPatternInput {
    */
     fromCategoryId: string;
     toCategoryId: string;
+    /** Optional whitelist of transaction ids to scope the bulk
+  update to. When provided, the server only flips rows whose
+  id is in this list AND whose categoryId still equals
+  `fromCategoryId`. Used by the client's "Undo" affordance to
+  revert exactly the rows that the original bulk touched,
+  skipping any the user has since re-edited.
+   */
+    ids?: string[];
 }
 //# sourceMappingURL=recategorizeByPatternInput.d.ts.map

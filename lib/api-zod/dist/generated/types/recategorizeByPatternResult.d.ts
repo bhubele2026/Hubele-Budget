@@ -13,5 +13,11 @@ export interface RecategorizeByPatternResult {
   queries so per-line actuals refresh.
    */
     affectedMonths: string[];
+    /** Ids of the transactions whose categoryId was flipped. The
+  client passes these back into the same endpoint with `from`
+  and `to` swapped (and `ids` set) to implement one-click
+  "Undo" of a bulk recategorization.
+   */
+    affectedIds: string[];
 }
 //# sourceMappingURL=recategorizeByPatternResult.d.ts.map

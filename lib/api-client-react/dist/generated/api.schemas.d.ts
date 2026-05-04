@@ -190,6 +190,14 @@ export interface RecategorizeByPatternInput {
    */
     fromCategoryId: string;
     toCategoryId: string;
+    /** Optional whitelist of transaction ids to scope the bulk
+  update to. When provided, the server only flips rows whose
+  id is in this list AND whose categoryId still equals
+  `fromCategoryId`. Used by the client's "Undo" affordance to
+  revert exactly the rows that the original bulk touched,
+  skipping any the user has since re-edited.
+   */
+    ids?: string[];
 }
 export interface RecategorizeByPatternResult {
     /** Number of transactions whose categoryId was flipped. */
@@ -199,6 +207,12 @@ export interface RecategorizeByPatternResult {
   queries so per-line actuals refresh.
    */
     affectedMonths: string[];
+    /** Ids of the transactions whose categoryId was flipped. The
+  client passes these back into the same endpoint with `from`
+  and `to` swapped (and `ids` set) to implement one-click
+  "Undo" of a bulk recategorization.
+   */
+    affectedIds: string[];
 }
 export type DebtBalanceSource = (typeof DebtBalanceSource)[keyof typeof DebtBalanceSource];
 export declare const DebtBalanceSource: {

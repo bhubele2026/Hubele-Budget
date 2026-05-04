@@ -685,26 +685,32 @@ export declare const RecategorizeTransactionsByPatternBody: zod.ZodObject<{
     matchType: zod.ZodEnum<["contains", "exact", "starts_with"]>;
     fromCategoryId: zod.ZodString;
     toCategoryId: zod.ZodString;
+    ids: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
 }, "strip", zod.ZodTypeAny, {
     pattern: string;
     matchType: "exact" | "contains" | "starts_with";
     fromCategoryId: string;
     toCategoryId: string;
+    ids?: string[] | undefined;
 }, {
     pattern: string;
     matchType: "exact" | "contains" | "starts_with";
     fromCategoryId: string;
     toCategoryId: string;
+    ids?: string[] | undefined;
 }>;
 export declare const RecategorizeTransactionsByPatternResponse: zod.ZodObject<{
     updated: zod.ZodNumber;
     affectedMonths: zod.ZodArray<zod.ZodString, "many">;
+    affectedIds: zod.ZodArray<zod.ZodString, "many">;
 }, "strip", zod.ZodTypeAny, {
     updated: number;
     affectedMonths: string[];
+    affectedIds: string[];
 }, {
     updated: number;
     affectedMonths: string[];
+    affectedIds: string[];
 }>;
 export declare const ListDebtsResponseItem: zod.ZodObject<{
     id: zod.ZodString;

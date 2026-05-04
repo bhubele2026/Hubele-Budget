@@ -280,6 +280,12 @@ export const RecategorizeTransactionsByPatternBody = zod.object({
       "Only transactions currently in this category are touched.\nTransactions manually re-categorized to a different category\nare skipped to preserve explicit user intent.\n",
     ),
   toCategoryId: zod.string(),
+  ids: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      'Optional whitelist of transaction ids to scope the bulk\nupdate to. When provided, the server only flips rows whose\nid is in this list AND whose categoryId still equals\n`fromCategoryId`. Used by the client\'s \"Undo\" affordance to\nrevert exactly the rows that the original bulk touched,\nskipping any the user has since re-edited.\n',
+    ),
 });
 
 export const RecategorizeTransactionsByPatternResponse = zod.object({
@@ -290,6 +296,11 @@ export const RecategorizeTransactionsByPatternResponse = zod.object({
     .array(zod.string())
     .describe(
       "Distinct YYYY-MM-01 month-start strings spanning the updated\ntransactions. Clients invalidate the corresponding budget month\nqueries so per-line actuals refresh.\n",
+    ),
+  affectedIds: zod
+    .array(zod.string())
+    .describe(
+      'Ids of the transactions whose categoryId was flipped. The\nclient passes these back into the same endpoint with `from`\nand `to` swapped (and `ids` set) to implement one-click\n\"Undo\" of a bulk recategorization.\n',
     ),
 });
 
