@@ -29,10 +29,18 @@ export function useRuleActionUndo() {
   const deleteRule = useDeleteMappingRule();
   const updateRule = useUpdateMappingRule();
   const qc = useQueryClient();
-  const { toast } = useToast();
+  const { toast, dismiss } = useToast();
 
+  // `parentToastId` is the id of the "Categorized" toast that hosts the
+  // Undo action button. Task #209 — once Undo has been tapped, the
+  // original toast no longer represents anything actionable, so we
+  // dismiss it immediately on click. The follow-up "Removed the new
+  // rule" / "Restored the previous rule" toast is fired from the
+  // mutation's onSuccess so the user still gets confirmation that the
+  // undo went through.
   function buildUndoAction(
     action: RuleAction | undefined,
+    parentToastId: string,
   ): ToastActionElement | null {
     if (!action) return null;
     const invalidateRules = () =>
@@ -49,6 +57,7 @@ export function useRuleActionUndo() {
           altText="Undo rule"
           data-testid="action-undo-rule"
           onClick={() => {
+            dismiss(parentToastId);
             deleteRule.mutate(
               { id: ruleId },
               {
@@ -86,6 +95,7 @@ export function useRuleActionUndo() {
           altText="Undo rule"
           data-testid="action-undo-rule"
           onClick={() => {
+            dismiss(parentToastId);
             updateRule.mutate(
               {
                 id: ruleId,

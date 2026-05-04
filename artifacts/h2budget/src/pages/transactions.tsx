@@ -736,12 +736,24 @@ export default function TransactionsPage() {
       // we don't show a misleading "will auto-categorize" promise when
       // the server actually did nothing (e.g. clobber-guard kicked in).
       const ruleDescription = ruleActionMessage(updated.ruleAction);
-      const undoAction = buildRuleUndoAction(updated.ruleAction);
-      toast({
+      // Task #209 — create the toast first so we have its id, then
+      // attach the Undo action that knows how to dismiss this exact
+      // toast on click. Avoids the parent toast lingering after Undo
+      // is consumed.
+      const categorizedToast = toast({
         title: "Categorized",
         ...(ruleDescription ? { description: ruleDescription } : {}),
-        ...(undoAction ? { action: undoAction } : {}),
       });
+      const undoAction = buildRuleUndoAction(
+        updated.ruleAction,
+        categorizedToast.id,
+      );
+      if (undoAction) {
+        categorizedToast.update({
+          id: categorizedToast.id,
+          action: undoAction,
+        });
+      }
       // If the auto-learn flow repointed an existing seed rule (e.g. an
       // Amex / Cap One / Discover debt-payment rule pre-pointed at
       // "Misc / Buffer"), surface a follow-up prompt offering to also

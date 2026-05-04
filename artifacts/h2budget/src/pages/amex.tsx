@@ -605,19 +605,33 @@ export default function AmexPage() {
       // only when the user explicitly opted in via rememberPattern.
       if (categoryId) {
         const ruleDescription = ruleActionMessage(updated.ruleAction);
-        const undoAction = buildRuleUndoAction(updated.ruleAction);
+        // Task #209 — create the toast first so we have its id, then
+        // attach the Undo action that knows how to dismiss this exact
+        // toast on click. Avoids the parent toast lingering after Undo
+        // is consumed.
+        let categorizedToast: ReturnType<typeof toast> | null = null;
         if (ruleDescription) {
-          toast({
+          categorizedToast = toast({
             title: "Categorized",
             description: ruleDescription,
-            ...(undoAction ? { action: undoAction } : {}),
           });
         } else if (rememberPattern) {
-          toast({
+          categorizedToast = toast({
             title: "Categorized & remembered",
             description: `Future "${rememberPattern}" will auto-categorize.`,
-            ...(undoAction ? { action: undoAction } : {}),
           });
+        }
+        if (categorizedToast) {
+          const undoAction = buildRuleUndoAction(
+            updated.ruleAction,
+            categorizedToast.id,
+          );
+          if (undoAction) {
+            categorizedToast.update({
+              id: categorizedToast.id,
+              action: undoAction,
+            });
+          }
         }
       }
     } catch (e) {
