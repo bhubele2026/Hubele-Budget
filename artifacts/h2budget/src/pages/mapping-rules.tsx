@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearch } from "wouter";
+import { useSearch, useLocation } from "wouter";
 import {
   useListMappingRules,
   useCreateMappingRule,
@@ -1250,18 +1250,104 @@ export default function MappingRulesPage() {
     [activeDragId, rules],
   );
 
+  // ?focus=<ruleId>[,<ruleId>...] deep-link support — clicked from the
+  // "rule: 'PATTERN'" chip on the Transactions / Amex pages, or from the
+  // "View" action on the post-sync / post-import toast (which can pass
+  // multiple ids when several rules contributed to a single batch). We
+  // scroll the FIRST matched row into view and briefly flash a ring
+  // around every matched row so the user spots all of them in a long
+  // list, then drop the highlight after a few seconds. The focus also
+  // forces the search to be cleared so the rows can never be filtered out
+  // before we can scroll to them.
+  //
+  // Declared up here (before `filtered`) because the Task #236 "Show
+  // only these" toggle below feeds back into the rules-list filtering
+  // pipeline.
+  const search = useSearch();
+  const [, navigate] = useLocation();
+  const focusIds = useMemo(() => {
+    const params = new URLSearchParams(search);
+    const raw = params.get("focus");
+    if (!raw) return [] as string[];
+    return raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  }, [search]);
+  const focusIdSet = useMemo(() => new Set(focusIds), [focusIds]);
+  // Backwards-compat alias for the existing single-id call sites
+  // (`isFocused = rule.id === focusId`) so the membership check below
+  // can stay a one-liner.
+  const focusId = focusIds[0] ?? null;
+
+  // Task #236 — when the post-sync / post-import toast deep-links here
+  // with multiple ids, surface a "N rules matched..." pill so the user
+  // can collapse the list to just those rows instead of scanning a
+  // long list for highlighted rings. The pill is only worth showing
+  // when 2+ ids actually exist in the current rules — a single id is
+  // already trivially in view because we scroll it into the viewport.
+  const matchedFocusIds = useMemo(() => {
+    if (focusIds.length === 0 || !rules) return [] as string[];
+    const live = new Set(rules.map((r) => r.id));
+    return focusIds.filter((id) => live.has(id));
+  }, [focusIds, rules]);
+  const [pillDismissed, setPillDismissed] = useState(false);
+  const [showOnlyFocused, setShowOnlyFocused] = useState(false);
+  // Reset the dismissed/toggle flags whenever the focus param changes
+  // (e.g. the user clicks "View" on a fresh sync toast) so the pill
+  // reappears for the new batch.
+  useEffect(() => {
+    setPillDismissed(false);
+    setShowOnlyFocused(false);
+  }, [search]);
+  // Spec (Task #236): pill shows when the URL carries 2+ focus ids and
+  // *at least one* of them still exists in the current rules. The
+  // count rendered in the pill is the matched-live count (which can
+  // legitimately be 1 if the others were since deleted).
+  const showFocusPill =
+    focusIds.length >= 2 && matchedFocusIds.length >= 1 && !pillDismissed;
+  // The "Show only these" toggle hides everything except the matched
+  // focused rules. We collapse it back when the pill is dismissed (or
+  // when no live ids remain) so the user can never end up looking at
+  // an empty list with no obvious way out.
+  const focusFilterActive =
+    showOnlyFocused && showFocusPill && matchedFocusIds.length > 0;
+  const dismissFocusPill = () => {
+    setPillDismissed(true);
+    setShowOnlyFocused(false);
+    // Strip just the focus param while preserving anything else the
+    // caller stuffed into the URL (none today, but cheap insurance).
+    const params = new URLSearchParams(search);
+    params.delete("focus");
+    const qs = params.toString();
+    navigate(qs ? `/mapping-rules?${qs}` : `/mapping-rules`, {
+      replace: true,
+    });
+  };
+
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return sorted;
-    return sorted.filter((r) => {
-      const catName = catById.get(r.categoryId ?? "")?.name ?? "";
-      return (
-        r.pattern.toLowerCase().includes(q) ||
-        catName.toLowerCase().includes(q) ||
-        r.matchType.toLowerCase().includes(q)
-      );
-    });
-  }, [sorted, catById, searchQuery]);
+    let base = sorted;
+    if (q) {
+      base = base.filter((r) => {
+        const catName = catById.get(r.categoryId ?? "")?.name ?? "";
+        return (
+          r.pattern.toLowerCase().includes(q) ||
+          catName.toLowerCase().includes(q) ||
+          r.matchType.toLowerCase().includes(q)
+        );
+      });
+    }
+    // Task #236 — when the "Show only these" pill toggle is active,
+    // collapse to just the rules deep-linked from the most recent
+    // sync/import toast. Done last so it composes correctly with any
+    // other filter (today only the search box).
+    if (focusFilterActive) {
+      const focusOnly = new Set(matchedFocusIds);
+      base = base.filter((r) => focusOnly.has(r.id));
+    }
+    return base;
+  }, [sorted, catById, searchQuery, focusFilterActive, matchedFocusIds]);
 
   // Drop selection ids that no longer exist in the server data so a
   // stale id can never linger in the set after a delete (single or
@@ -1316,30 +1402,10 @@ export default function MappingRulesPage() {
     return new Set(data.matches.map((m) => m.rule.id));
   }, [testRules.data]);
 
-  // ?focus=<ruleId>[,<ruleId>...] deep-link support — clicked from the
-  // "rule: 'PATTERN'" chip on the Transactions / Amex pages, or from the
-  // "View" action on the post-sync / post-import toast (which can pass
-  // multiple ids when several rules contributed to a single batch). We
-  // scroll the FIRST matched row into view and briefly flash a ring
-  // around every matched row so the user spots all of them in a long
-  // list, then drop the highlight after a few seconds. The focus also
-  // forces the search to be cleared so the rows can never be filtered out
-  // before we can scroll to them.
-  const search = useSearch();
-  const focusIds = useMemo(() => {
-    const params = new URLSearchParams(search);
-    const raw = params.get("focus");
-    if (!raw) return [] as string[];
-    return raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-  }, [search]);
-  const focusIdSet = useMemo(() => new Set(focusIds), [focusIds]);
-  // Backwards-compat alias for the existing single-id call sites
-  // (`isFocused = rule.id === focusId`) so the membership check below
-  // can stay a one-liner.
-  const focusId = focusIds[0] ?? null;
+  // The transient highlight ring + scroll-into-view side effects live
+  // here (after `filtered`) because they only need to fire once the
+  // rules query has resolved. The state lookup keys (`focusIds`,
+  // `rules`, `searchQuery`) are all in scope from above.
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -1381,9 +1447,11 @@ export default function MappingRulesPage() {
   }
 
   // Drag-and-drop reorders the full sorted list, so we must disable it
-  // whenever a search filter is hiding rules — otherwise dropping would
-  // misplace items relative to the hidden ones.
-  const dragDisabled = !!searchQuery || reorderRules.isPending;
+  // whenever a filter is hiding rules — otherwise dropping would
+  // misplace items relative to the hidden ones. The "Show only these"
+  // focus filter is treated the same as the search filter for this.
+  const dragDisabled =
+    !!searchQuery || focusFilterActive || reorderRules.isPending;
   const sortableIds = sorted.map((r) => r.id);
 
   return (
@@ -1601,6 +1669,38 @@ export default function MappingRulesPage() {
         </CardContent>
       </Card>
 
+      {showFocusPill && (
+        <div
+          className="flex items-center gap-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
+          data-testid="focus-pill"
+        >
+          <span className="flex-1">
+            <span className="font-medium" data-testid="focus-pill-count">
+              {matchedFocusIds.length}
+            </span>{" "}
+            rule{matchedFocusIds.length === 1 ? "" : "s"} matched your recent
+            sync/import
+          </span>
+          <button
+            type="button"
+            className="text-xs font-medium underline underline-offset-2 hover:text-foreground"
+            onClick={() => setShowOnlyFocused((v) => !v)}
+            data-testid="focus-pill-toggle"
+          >
+            {focusFilterActive ? "Show all rules" : "Show only these"}
+          </button>
+          <button
+            type="button"
+            aria-label="Dismiss matched-rules pill"
+            className="text-amber-700 dark:text-amber-300 hover:text-foreground"
+            onClick={dismissFocusPill}
+            data-testid="focus-pill-dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
@@ -1631,7 +1731,9 @@ export default function MappingRulesPage() {
               <span>Rules in priority order</span>
               <span className="text-xs font-normal text-muted-foreground">
                 {sorted.length} total{" "}
-                {searchQuery ? `· ${filtered.length} shown` : ""}
+                {searchQuery || focusFilterActive
+                  ? `· ${filtered.length} shown`
+                  : ""}
               </span>
             </CardTitle>
           </CardHeader>
