@@ -2,6 +2,7 @@ import { useCallback, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useRecategorizeTransactionsByPattern,
+  useListMappingRules,
   getListTransactionsQueryKey,
   getGetBudgetMonthQueryKey,
   type RuleAction,
@@ -19,6 +20,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 
 function parseSigned(amount: string | number): number {
@@ -140,6 +142,12 @@ export function useBulkRecategorizePrompt(): {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const recategorizeBulk = useRecategorizeTransactionsByPattern();
+  // Drives the MatchedRuleChip in the preview dialog rows so each
+  // sample renders the same "rule: <pattern>" deep-link or "manually
+  // categorized" hint as the Transactions / Amex / Dashboard surfaces
+  // (Task #208). Loaded once at the hook level since the dialog
+  // typically only opens once per prompt.
+  const { data: mappingRules } = useListMappingRules();
   const [previewState, setPreviewState] = useState<BulkRecategorizeRule | null>(
     null,
   );
@@ -365,6 +373,15 @@ export function useBulkRecategorizePrompt(): {
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {formatDate(s.occurredOn)}
+                  </div>
+                  <div className="mt-0.5">
+                    <MatchedRuleChip
+                      categoryId={previewState.fromCategoryId}
+                      matchedRuleId={s.matchedRuleId}
+                      rules={mappingRules}
+                      testIdSuffix={`rule-match-${s.id}`}
+                      variant="compact"
+                    />
                   </div>
                 </div>
                 <span

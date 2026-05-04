@@ -8,6 +8,7 @@ import {
   budgetCategoriesTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
+import { findMatchedRuleId, loadUserRules } from "../lib/autoCategorize";
 
 const router: IRouter = Router();
 
@@ -124,6 +125,19 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     .orderBy(desc(transactionsTable.occurredOn), desc(transactionsTable.createdAt))
     .limit(8);
 
+  // Annotate each row with the mapping rule that auto-categorize would
+  // currently attribute, mirroring GET /transactions, so the Dashboard's
+  // recent-activity widget can render the same MatchedRuleChip
+  // ("rule: <pattern> · jump to it" / "manually categorized") as the
+  // Transactions and Amex pages. Computed lazily per response rather
+  // than persisted on the row so editing a rule's pattern reflects on
+  // every existing transaction without a backfill.
+  const userRules = await loadUserRules(userId);
+  const recentAnnotated = recent.map((r) => ({
+    ...r,
+    matchedRuleId: findMatchedRuleId(r.description, r.categoryId, userRules),
+  }));
+
   const topRows = await db
     .select({
       categoryId: transactionsTable.categoryId,
@@ -177,7 +191,7 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     paidThisMonth: paidAgg?.paidThisMonth ?? "0",
     paidLifetime: paidAgg?.paidLifetime ?? "0",
     transactionCount: txAgg?.cnt ?? 0,
-    recentTransactions: recent,
+    recentTransactions: recentAnnotated,
     topCategories: topRows.map((r) => ({
       categoryName: r.categoryName ?? "Uncategorized",
       total: r.total,

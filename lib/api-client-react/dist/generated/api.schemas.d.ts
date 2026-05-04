@@ -165,6 +165,18 @@ export interface RepointedRuleSample {
     description: string;
     occurredOn: string;
     amount: string;
+    /**
+     * Id of the mapping rule that auto-categorize would currently
+  attribute for this sample row in its *present* category, or
+  null when no rule matches. Computed server-side identically
+  to the GET /transactions annotation so the "Show matches"
+  preview dialog can render the same MatchedRuleChip
+  (deep-link to /mapping-rules?focus=<id> or "manually
+  categorized" hint) as every other transaction-list surface.
+  
+     * @nullable
+     */
+    matchedRuleId?: string | null;
 }
 /**
  * Reported by PATCH /transactions/:id when the auto-learn flow

@@ -649,16 +649,19 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
             description: zod.ZodString;
             occurredOn: zod.ZodString;
             amount: zod.ZodString;
+            matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         }, "strip", zod.ZodTypeAny, {
             id: string;
             occurredOn: string;
             description: string;
             amount: string;
+            matchedRuleId?: string | null | undefined;
         }, {
             id: string;
             occurredOn: string;
             description: string;
             amount: string;
+            matchedRuleId?: string | null | undefined;
         }>, "many">;
     }, "strip", zod.ZodTypeAny, {
         ruleId: string;
@@ -672,6 +675,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
             occurredOn: string;
             description: string;
             amount: string;
+            matchedRuleId?: string | null | undefined;
         }[];
     }, {
         ruleId: string;
@@ -685,6 +689,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
             occurredOn: string;
             description: string;
             amount: string;
+            matchedRuleId?: string | null | undefined;
         }[];
     }>, "many">;
     ruleAction: zod.ZodObject<{
@@ -728,6 +733,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
             occurredOn: string;
             description: string;
             amount: string;
+            matchedRuleId?: string | null | undefined;
         }[];
     }[];
     ruleAction: {
@@ -753,6 +759,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
             occurredOn: string;
             description: string;
             amount: string;
+            matchedRuleId?: string | null | undefined;
         }[];
     }[];
     ruleAction: {

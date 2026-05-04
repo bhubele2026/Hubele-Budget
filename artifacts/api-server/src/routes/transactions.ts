@@ -286,6 +286,18 @@ router.patch(
       description: string;
       occurredOn: string;
       amount: string;
+      // Id of the mapping rule that auto-categorize currently attributes
+      // for this sample in its *present* (pre-bulk-flip) category, or
+      // null when no rule matches. Surfaces the same MatchedRuleChip
+      // affordance in the "Show matches" preview dialog as the
+      // Transactions / Amex / Dashboard surfaces. Note: by the time we
+      // compute this the originating rule has *already* been repointed
+      // away from `fromCategoryId`, so for samples whose only matching
+      // rule was the one we just moved this is null — i.e. the chip
+      // reads "manually categorized" until the user clicks Apply, which
+      // moves the row into the rule's new category and restores
+      // attribution.
+      matchedRuleId: string | null;
     };
     type RepointedRule = {
       ruleId: string;
@@ -408,6 +420,11 @@ router.patch(
           fromCategoryId,
         );
         const remaining = candidates.filter((c) => c.id !== row.id);
+        // Re-load rules *after* the repoint so `matchedRuleId` reflects
+        // the post-PATCH world the user will see in the preview dialog.
+        // Cheap (handful of rows) and keeps the chip's semantics
+        // consistent with GET /transactions.
+        const rulesAfterRepoint = await loadUserRules(userId);
         const sampleTransactions: RepointedRuleSample[] = remaining
           .slice(0, 10)
           .map((c) => ({
@@ -415,6 +432,11 @@ router.patch(
             description: c.description ?? "",
             occurredOn: c.occurredOn,
             amount: c.amount,
+            matchedRuleId: findMatchedRuleId(
+              c.description,
+              fromCategoryId,
+              rulesAfterRepoint,
+            ),
           }));
         repointedRules.push({
           ruleId: r.id,

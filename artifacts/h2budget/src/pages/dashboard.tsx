@@ -6,6 +6,7 @@ import {
   useGetBudgetMonth,
   useGetForecast,
   useListTransactions,
+  useListMappingRules,
   useListDashboardBudgets,
   useListDebts,
   useUpsertDashboardBudget,
@@ -14,7 +15,9 @@ import {
   getListDashboardBudgetsQueryKey,
   getListTransactionsQueryKey,
   type Transaction,
+  type MappingRule,
 } from "@workspace/api-client-react";
+import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { computeBalanceAtEndOf } from "@/lib/accountBalance";
 import { monthKeyFromISO, type MonthKey } from "@/components/account-page";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -475,10 +478,12 @@ function ReimbursementsBox({
   transactions,
   isLoading,
   today,
+  mappingRules,
 }: {
   transactions: Transaction[];
   isLoading?: boolean;
   today: Date;
+  mappingRules: readonly MappingRule[] | undefined;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -793,6 +798,15 @@ function ReimbursementsBox({
             {formatDate(t.occurredOn)}
             {t.source ? ` · ${t.source}` : ""}
           </p>
+          <div className="mt-0.5">
+            <MatchedRuleChip
+              categoryId={t.categoryId}
+              matchedRuleId={t.matchedRuleId}
+              rules={mappingRules}
+              testIdSuffix={`reimburse-${t.id}`}
+              variant="compact"
+            />
+          </div>
         </div>
         <Input
           key={t.owedBy ?? ""}
@@ -1518,6 +1532,10 @@ export default function DashboardPage() {
     reimbursable: true,
     limit: 100000,
   });
+  // Mapping rules feed the MatchedRuleChip on Recent Transactions and
+  // ReimbursementsBox rows; the chip looks up the rule by id to render
+  // its pattern. Same source of truth as the Transactions / Amex pages.
+  const { data: mappingRules } = useListMappingRules();
 
   const monthlyTagged = useMemo(() => monthTxns ?? [], [monthTxns]);
   const reimbursementsAll = useMemo(() => reimbTxns ?? [], [reimbTxns]);
@@ -1606,10 +1624,20 @@ export default function DashboardPage() {
                 <div
                   key={tx.id}
                   className="flex justify-between items-center pb-3 border-b border-border last:border-0 last:pb-0"
+                  data-testid={`row-recent-${tx.id}`}
                 >
                   <div className="min-w-0">
                     <p className="font-medium text-sm text-foreground truncate">{tx.description}</p>
                     <p className="text-xs text-muted-foreground">{formatDate(tx.occurredOn)}</p>
+                    <div className="mt-0.5">
+                      <MatchedRuleChip
+                        categoryId={tx.categoryId}
+                        matchedRuleId={tx.matchedRuleId}
+                        rules={mappingRules}
+                        testIdSuffix={`recent-${tx.id}`}
+                        variant="compact"
+                      />
+                    </div>
                   </div>
                   <div className={`font-medium text-sm tabular-nums ${Number(tx.amount) < 0 ? "text-destructive" : "text-primary"}`}>
                     {formatCurrency(tx.amount)}
@@ -1629,6 +1657,7 @@ export default function DashboardPage() {
           transactions={reimbursementsAll}
           isLoading={reimbLoading}
           today={today}
+          mappingRules={mappingRules}
         />
       </div>
 

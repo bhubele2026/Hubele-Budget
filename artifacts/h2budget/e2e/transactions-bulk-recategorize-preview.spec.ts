@@ -184,6 +184,12 @@ test.describe("Transactions bulk re-categorize preview (#187)", () => {
         occurredOn: isoDay(-1),
         description: `${pattern} PMT TRIGGER`,
         amount: "-150.00",
+        // Server-side auto-categorize on POST /transactions (added in
+        // main-repl/main) would otherwise pre-assign this row via the
+        // mapping rule we just created. Pass an explicit null so the
+        // trigger stays uncategorized and the test can drive the
+        // CategorizeChip via `badge-uncategorized-…`.
+        categoryId: null,
       },
     );
 

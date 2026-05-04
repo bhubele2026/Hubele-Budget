@@ -271,6 +271,12 @@ export const UpdateTransactionResponse = zod
                     description: zod.string(),
                     occurredOn: zod.string(),
                     amount: zod.string(),
+                    matchedRuleId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Id of the mapping rule that auto-categorize would currently\nattribute for this sample row in its \*present\* category, or\nnull when no rule matches. Computed server-side identically\nto the GET \/transactions annotation so the \"Show matches\"\npreview dialog can render the same MatchedRuleChip\n(deep-link to \/mapping-rules?focus=<id> or \"manually\ncategorized\" hint) as every other transaction-list surface.\n',
+                      ),
                   }),
                 )
                 .describe(
