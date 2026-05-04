@@ -685,6 +685,38 @@ export interface MappingRuleInput {
     categoryId?: string | null;
     priority?: number;
 }
+export interface ReorderMappingRulesInput {
+    /** Rule IDs in the desired display order, highest priority first.
+  IDs not belonging to the calling user are ignored. IDs of rules
+  the user owns but that are missing from this list keep their
+  existing priorities and rank below the reordered set.
+   */
+    orderedIds: string[];
+}
+export interface TestMappingRulesInput {
+    /** Transaction description fragment to test against the user's rules. */
+    description: string;
+}
+export interface TestMappingRulesMatch {
+    rule: MappingRule;
+    /** True for the single rule the auto-categorize flow would pick
+  (highest-priority match with a non-null categoryId).
+   */
+    winner: boolean;
+}
+export interface TestMappingRulesResult {
+    /** Every rule whose pattern matches the description, sorted by
+  priority descending — same order the categorize() hot path uses.
+   */
+    matches: TestMappingRulesMatch[];
+    /**
+     * The category that auto-categorize would assign, or null when no
+  matching rule has a category.
+  
+     * @nullable
+     */
+    winningCategoryId: string | null;
+}
 export interface WeeklyBucketLabels {
     groceries?: string;
     dining?: string;

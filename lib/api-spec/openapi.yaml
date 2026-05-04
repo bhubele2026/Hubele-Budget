@@ -604,6 +604,51 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /mapping-rules/reorder:
+    put:
+      operationId: reorderMappingRules
+      tags: [mapping]
+      description: |
+        Replace the priority of every rule whose id appears in `orderedIds`.
+        The first id is treated as the highest-priority rule. The server
+        rewrites priorities to a contiguous descending sequence so subsequent
+        single-rule edits and the auto-learn flow have plenty of headroom on
+        either side. Returns the full updated rule list (priority-sorted,
+        same shape as GET /mapping-rules).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReorderMappingRulesInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MappingRule" }
+
+  /mapping-rules/test:
+    post:
+      operationId: testMappingRules
+      tags: [mapping]
+      description: |
+        Preview which of the user's mapping rules would match the given
+        description, in priority order. The first entry (if any) is the rule
+        the auto-categorize flow would actually pick.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TestMappingRulesInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestMappingRulesResult" }
+
   /settings:
     get:
       operationId: getSettings
@@ -1679,6 +1724,54 @@ components:
         matchType: { type: string }
         categoryId: { type: ["string", "null"] }
         priority: { type: integer }
+
+    ReorderMappingRulesInput:
+      type: object
+      required: [orderedIds]
+      properties:
+        orderedIds:
+          type: array
+          description: |
+            Rule IDs in the desired display order, highest priority first.
+            IDs not belonging to the calling user are ignored. IDs of rules
+            the user owns but that are missing from this list keep their
+            existing priorities and rank below the reordered set.
+          items: { type: string }
+
+    TestMappingRulesInput:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+          description: Transaction description fragment to test against the user's rules.
+
+    TestMappingRulesMatch:
+      type: object
+      required: [rule, winner]
+      properties:
+        rule: { $ref: "#/components/schemas/MappingRule" }
+        winner:
+          type: boolean
+          description: |
+            True for the single rule the auto-categorize flow would pick
+            (highest-priority match with a non-null categoryId).
+
+    TestMappingRulesResult:
+      type: object
+      required: [matches, winningCategoryId]
+      properties:
+        matches:
+          type: array
+          description: |
+            Every rule whose pattern matches the description, sorted by
+            priority descending — same order the categorize() hot path uses.
+          items: { $ref: "#/components/schemas/TestMappingRulesMatch" }
+        winningCategoryId:
+          type: ["string", "null"]
+          description: |
+            The category that auto-categorize would assign, or null when no
+            matching rule has a category.
 
     WeeklyBucketLabels:
       type: object

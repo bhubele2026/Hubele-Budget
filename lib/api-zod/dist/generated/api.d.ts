@@ -2722,6 +2722,140 @@ export declare const DeleteMappingRuleParams: zod.ZodObject<{
 }, {
     id: string;
 }>;
+/**
+ * Replace the priority of every rule whose id appears in `orderedIds`.
+The first id is treated as the highest-priority rule. The server
+rewrites priorities to a contiguous descending sequence so subsequent
+single-rule edits and the auto-learn flow have plenty of headroom on
+either side. Returns the full updated rule list (priority-sorted,
+same shape as GET /mapping-rules).
+
+ */
+export declare const ReorderMappingRulesBody: zod.ZodObject<{
+    orderedIds: zod.ZodArray<zod.ZodString, "many">;
+}, "strip", zod.ZodTypeAny, {
+    orderedIds: string[];
+}, {
+    orderedIds: string[];
+}>;
+export declare const ReorderMappingRulesResponseItem: zod.ZodObject<{
+    id: zod.ZodString;
+    pattern: zod.ZodString;
+    matchType: zod.ZodString;
+    categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    priority: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    pattern: string;
+    matchType: string;
+    priority: number;
+    categoryId?: string | null | undefined;
+}, {
+    id: string;
+    pattern: string;
+    matchType: string;
+    priority: number;
+    categoryId?: string | null | undefined;
+}>;
+export declare const ReorderMappingRulesResponse: zod.ZodArray<zod.ZodObject<{
+    id: zod.ZodString;
+    pattern: zod.ZodString;
+    matchType: zod.ZodString;
+    categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    priority: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    pattern: string;
+    matchType: string;
+    priority: number;
+    categoryId?: string | null | undefined;
+}, {
+    id: string;
+    pattern: string;
+    matchType: string;
+    priority: number;
+    categoryId?: string | null | undefined;
+}>, "many">;
+/**
+ * Preview which of the user's mapping rules would match the given
+description, in priority order. The first entry (if any) is the rule
+the auto-categorize flow would actually pick.
+
+ */
+export declare const TestMappingRulesBody: zod.ZodObject<{
+    description: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    description: string;
+}, {
+    description: string;
+}>;
+export declare const TestMappingRulesResponse: zod.ZodObject<{
+    matches: zod.ZodArray<zod.ZodObject<{
+        rule: zod.ZodObject<{
+            id: zod.ZodString;
+            pattern: zod.ZodString;
+            matchType: zod.ZodString;
+            categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            priority: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            pattern: string;
+            matchType: string;
+            priority: number;
+            categoryId?: string | null | undefined;
+        }, {
+            id: string;
+            pattern: string;
+            matchType: string;
+            priority: number;
+            categoryId?: string | null | undefined;
+        }>;
+        winner: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        rule: {
+            id: string;
+            pattern: string;
+            matchType: string;
+            priority: number;
+            categoryId?: string | null | undefined;
+        };
+        winner: boolean;
+    }, {
+        rule: {
+            id: string;
+            pattern: string;
+            matchType: string;
+            priority: number;
+            categoryId?: string | null | undefined;
+        };
+        winner: boolean;
+    }>, "many">;
+    winningCategoryId: zod.ZodNullable<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    matches: {
+        rule: {
+            id: string;
+            pattern: string;
+            matchType: string;
+            priority: number;
+            categoryId?: string | null | undefined;
+        };
+        winner: boolean;
+    }[];
+    winningCategoryId: string | null;
+}, {
+    matches: {
+        rule: {
+            id: string;
+            pattern: string;
+            matchType: string;
+            priority: number;
+            categoryId?: string | null | undefined;
+        };
+        winner: boolean;
+    }[];
+    winningCategoryId: string | null;
+}>;
 export declare const GetSettingsResponse: zod.ZodObject<{
     weeklyAllowanceAmount: zod.ZodString;
     monthlyAllowanceAmount: zod.ZodString;

@@ -980,6 +980,77 @@ export const DeleteMappingRuleParams = zod.object({
   id: zod.coerce.string(),
 });
 
+/**
+ * Replace the priority of every rule whose id appears in `orderedIds`.
+The first id is treated as the highest-priority rule. The server
+rewrites priorities to a contiguous descending sequence so subsequent
+single-rule edits and the auto-learn flow have plenty of headroom on
+either side. Returns the full updated rule list (priority-sorted,
+same shape as GET /mapping-rules).
+
+ */
+export const ReorderMappingRulesBody = zod.object({
+  orderedIds: zod
+    .array(zod.string())
+    .describe(
+      "Rule IDs in the desired display order, highest priority first.\nIDs not belonging to the calling user are ignored. IDs of rules\nthe user owns but that are missing from this list keep their\nexisting priorities and rank below the reordered set.\n",
+    ),
+});
+
+export const ReorderMappingRulesResponseItem = zod.object({
+  id: zod.string(),
+  pattern: zod.string(),
+  matchType: zod.string(),
+  categoryId: zod.string().nullish(),
+  priority: zod.number(),
+});
+export const ReorderMappingRulesResponse = zod.array(
+  ReorderMappingRulesResponseItem,
+);
+
+/**
+ * Preview which of the user's mapping rules would match the given
+description, in priority order. The first entry (if any) is the rule
+the auto-categorize flow would actually pick.
+
+ */
+export const TestMappingRulesBody = zod.object({
+  description: zod
+    .string()
+    .describe(
+      "Transaction description fragment to test against the user's rules.",
+    ),
+});
+
+export const TestMappingRulesResponse = zod.object({
+  matches: zod
+    .array(
+      zod.object({
+        rule: zod.object({
+          id: zod.string(),
+          pattern: zod.string(),
+          matchType: zod.string(),
+          categoryId: zod.string().nullish(),
+          priority: zod.number(),
+        }),
+        winner: zod
+          .boolean()
+          .describe(
+            "True for the single rule the auto-categorize flow would pick\n(highest-priority match with a non-null categoryId).\n",
+          ),
+      }),
+    )
+    .describe(
+      "Every rule whose pattern matches the description, sorted by\npriority descending — same order the categorize() hot path uses.\n",
+    ),
+  winningCategoryId: zod
+    .string()
+    .nullable()
+    .describe(
+      "The category that auto-categorize would assign, or null when no\nmatching rule has a category.\n",
+    ),
+});
+
 export const GetSettingsResponse = zod.object({
   weeklyAllowanceAmount: zod.string(),
   monthlyAllowanceAmount: zod.string(),

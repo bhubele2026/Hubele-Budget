@@ -7,7 +7,10 @@ import {
   UpdateMappingRuleBody,
   UpdateMappingRuleParams,
   DeleteMappingRuleParams,
+  ReorderMappingRulesBody,
+  TestMappingRulesBody,
 } from "@workspace/api-zod";
+import { findMatchingRules, type RuleRow } from "../lib/autoCategorize";
 
 const router: IRouter = Router();
 
@@ -32,6 +35,124 @@ router.post("/mapping-rules", requireAuth, async (req, res): Promise<void> => {
     .returning();
   res.status(201).json(row);
 });
+
+/**
+ * Bulk reorder. Rewrites the priority of every rule in `orderedIds` to a
+ * descending sequence starting at `BASE` so the front-of-list rule has the
+ * highest priority. We leave large gaps (`STEP=10`) so the auto-learn flow,
+ * which bumps individual rule priorities by single digits, has plenty of
+ * headroom to insert new rules between user-pinned positions without
+ * triggering an immediate re-shuffle.
+ *
+ * Rules the user owns but doesn't include in `orderedIds` keep their
+ * existing priorities. We push the reordered window above them by computing
+ * BASE = max(existing priorities of the omitted set) + STEP * (1 + ordered count)
+ * so the explicit ordering always wins.
+ *
+ * IDs that don't belong to the calling user are silently ignored — important
+ * because the client posts whatever was on screen and we don't want a hostile
+ * user to bump someone else's rules.
+ */
+router.put(
+  "/mapping-rules/reorder",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const parsed = ReorderMappingRulesBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const { orderedIds } = parsed.data;
+
+    const userId = req.userId!;
+    const owned = await db
+      .select({
+        id: mappingRulesTable.id,
+        priority: mappingRulesTable.priority,
+      })
+      .from(mappingRulesTable)
+      .where(eq(mappingRulesTable.userId, userId));
+    const ownedIds = new Set(owned.map((r) => r.id));
+
+    const filtered: string[] = [];
+    const seen = new Set<string>();
+    for (const id of orderedIds) {
+      if (!ownedIds.has(id) || seen.has(id)) continue;
+      seen.add(id);
+      filtered.push(id);
+    }
+
+    if (filtered.length === 0) {
+      const rows = await db
+        .select()
+        .from(mappingRulesTable)
+        .where(eq(mappingRulesTable.userId, userId))
+        .orderBy(desc(mappingRulesTable.priority));
+      res.json(rows);
+      return;
+    }
+
+    const STEP = 10;
+    const orderedSet = new Set(filtered);
+    const omittedMaxPriority = owned.reduce((max, r) => {
+      if (orderedSet.has(r.id)) return max;
+      return Math.max(max, r.priority);
+    }, 0);
+    const base = omittedMaxPriority + STEP * (filtered.length + 1);
+
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < filtered.length; i++) {
+        const id = filtered[i]!;
+        const newPriority = base - i * STEP;
+        await tx
+          .update(mappingRulesTable)
+          .set({ priority: newPriority })
+          .where(
+            and(
+              eq(mappingRulesTable.userId, userId),
+              eq(mappingRulesTable.id, id),
+            ),
+          );
+      }
+    });
+
+    const rows = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(eq(mappingRulesTable.userId, userId))
+      .orderBy(desc(mappingRulesTable.priority));
+    res.json(rows);
+  },
+);
+
+router.post(
+  "/mapping-rules/test",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const parsed = TestMappingRulesBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const userId = req.userId!;
+    const rows = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(eq(mappingRulesTable.userId, userId));
+    const sorted: RuleRow[] = [...rows].sort(
+      (a, b) => b.priority - a.priority,
+    );
+    const matches = findMatchingRules(parsed.data.description, sorted);
+    const winner = matches.find((m) => m.categoryId) ?? null;
+    res.json({
+      matches: matches.map((rule) => ({
+        rule,
+        winner: winner !== null && rule.id === winner.id,
+      })),
+      winningCategoryId: winner?.categoryId ?? null,
+    });
+  },
+);
 
 router.patch(
   "/mapping-rules/:id",

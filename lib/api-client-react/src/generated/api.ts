@@ -78,11 +78,14 @@ import type {
   RecategorizeByPatternResult,
   RecurringItem,
   RecurringItemInput,
+  ReorderMappingRulesInput,
   SeedDefaultBudgetResult,
   SetBankSnapshotInput,
   Settings,
   SettingsInput,
   SyncMinimumsResult,
+  TestMappingRulesInput,
+  TestMappingRulesResult,
   Transaction,
   TransactionInput,
   UpdateTransactionResponse,
@@ -3044,6 +3047,182 @@ export const useDeleteMappingRule = <
   TContext
 > => {
   return useMutation(getDeleteMappingRuleMutationOptions(options));
+};
+
+/**
+ * Replace the priority of every rule whose id appears in `orderedIds`.
+The first id is treated as the highest-priority rule. The server
+rewrites priorities to a contiguous descending sequence so subsequent
+single-rule edits and the auto-learn flow have plenty of headroom on
+either side. Returns the full updated rule list (priority-sorted,
+same shape as GET /mapping-rules).
+
+ */
+export const getReorderMappingRulesUrl = () => {
+  return `/api/mapping-rules/reorder`;
+};
+
+export const reorderMappingRules = async (
+  reorderMappingRulesInput: ReorderMappingRulesInput,
+  options?: RequestInit,
+): Promise<MappingRule[]> => {
+  return customFetch<MappingRule[]>(getReorderMappingRulesUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(reorderMappingRulesInput),
+  });
+};
+
+export const getReorderMappingRulesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reorderMappingRules>>,
+    TError,
+    { data: BodyType<ReorderMappingRulesInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reorderMappingRules>>,
+  TError,
+  { data: BodyType<ReorderMappingRulesInput> },
+  TContext
+> => {
+  const mutationKey = ["reorderMappingRules"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reorderMappingRules>>,
+    { data: BodyType<ReorderMappingRulesInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return reorderMappingRules(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReorderMappingRulesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reorderMappingRules>>
+>;
+export type ReorderMappingRulesMutationBody =
+  BodyType<ReorderMappingRulesInput>;
+export type ReorderMappingRulesMutationError = ErrorType<unknown>;
+
+export const useReorderMappingRules = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reorderMappingRules>>,
+    TError,
+    { data: BodyType<ReorderMappingRulesInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reorderMappingRules>>,
+  TError,
+  { data: BodyType<ReorderMappingRulesInput> },
+  TContext
+> => {
+  return useMutation(getReorderMappingRulesMutationOptions(options));
+};
+
+/**
+ * Preview which of the user's mapping rules would match the given
+description, in priority order. The first entry (if any) is the rule
+the auto-categorize flow would actually pick.
+
+ */
+export const getTestMappingRulesUrl = () => {
+  return `/api/mapping-rules/test`;
+};
+
+export const testMappingRules = async (
+  testMappingRulesInput: TestMappingRulesInput,
+  options?: RequestInit,
+): Promise<TestMappingRulesResult> => {
+  return customFetch<TestMappingRulesResult>(getTestMappingRulesUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(testMappingRulesInput),
+  });
+};
+
+export const getTestMappingRulesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof testMappingRules>>,
+    TError,
+    { data: BodyType<TestMappingRulesInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof testMappingRules>>,
+  TError,
+  { data: BodyType<TestMappingRulesInput> },
+  TContext
+> => {
+  const mutationKey = ["testMappingRules"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof testMappingRules>>,
+    { data: BodyType<TestMappingRulesInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return testMappingRules(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TestMappingRulesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof testMappingRules>>
+>;
+export type TestMappingRulesMutationBody = BodyType<TestMappingRulesInput>;
+export type TestMappingRulesMutationError = ErrorType<unknown>;
+
+export const useTestMappingRules = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof testMappingRules>>,
+    TError,
+    { data: BodyType<TestMappingRulesInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof testMappingRules>>,
+  TError,
+  { data: BodyType<TestMappingRulesInput> },
+  TContext
+> => {
+  return useMutation(getTestMappingRulesMutationOptions(options));
 };
 
 export const getGetSettingsUrl = () => {
