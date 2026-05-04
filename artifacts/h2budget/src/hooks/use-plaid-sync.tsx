@@ -1,11 +1,17 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import {
   useSyncPlaidTransactions,
   getListPlaidItemsQueryKey,
   getListTransactionsQueryKey,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+import {
+  buildRuleAttributionSummary,
+  type RuleAttributionSummary,
+} from "@/lib/rule-attribution-summary";
 
 export type SyncTotals = {
   added: number;
@@ -17,6 +23,10 @@ export type SyncTotals = {
   // for a freshly linked item. The UI treats this as a neutral, encouraging
   // state rather than a destructive error.
   stillPreparing: boolean;
+  // Summary of which mapping_rules auto-categorized newly-added rows across
+  // every item in this sync. Aggregated by ruleId so a sync that touches two
+  // banks doesn't double-count "STARBUCKS" once per item.
+  ruleAttribution: RuleAttributionSummary;
 };
 
 const ZERO: SyncTotals = {
@@ -25,6 +35,7 @@ const ZERO: SyncTotals = {
   removed: 0,
   errors: [],
   stillPreparing: false,
+  ruleAttribution: { totalAttributed: 0, top: [], extraRules: 0, ruleIds: [] },
 };
 
 const STILL_PREPARING_MESSAGE =
@@ -48,6 +59,7 @@ export function usePlaidSync() {
   const sync = useSyncPlaidTransactions();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
   const runSync = useCallback(
     (opts: RunSyncOptions = {}): Promise<SyncTotals> => {
@@ -58,6 +70,14 @@ export function usePlaidSync() {
           {
             onSuccess: (res) => {
               const items = res.items ?? [];
+              // Aggregate per-rule attribution counts across every item.
+              // Two items that both auto-categorized via the same ruleId
+              // (e.g. shared "STARBUCKS" rule across two banks) collapse
+              // into a single row whose count is the sum.
+              const aggregatedAttr = new Map<
+                string,
+                { ruleId: string; pattern: string; count: number }
+              >();
               const totals = items.reduce<SyncTotals>(
                 (acc, r) => {
                   acc.added += r.added ?? 0;
@@ -65,6 +85,18 @@ export function usePlaidSync() {
                   acc.removed += r.removed ?? 0;
                   if (r.error) acc.errors.push(r.error);
                   if (r.stillPreparing) acc.stillPreparing = true;
+                  for (const a of r.ruleAttributions ?? []) {
+                    const existing = aggregatedAttr.get(a.ruleId);
+                    if (existing) {
+                      existing.count += a.count;
+                    } else {
+                      aggregatedAttr.set(a.ruleId, {
+                        ruleId: a.ruleId,
+                        pattern: a.pattern,
+                        count: a.count,
+                      });
+                    }
+                  }
                   return acc;
                 },
                 {
@@ -73,7 +105,13 @@ export function usePlaidSync() {
                   removed: 0,
                   errors: [],
                   stillPreparing: false,
+                  ruleAttribution: ZERO.ruleAttribution,
                 },
+              );
+              totals.ruleAttribution = buildRuleAttributionSummary(
+                Array.from(aggregatedAttr.values()).sort(
+                  (a, b) => b.count - a.count,
+                ),
               );
               qc.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
               if (totals.added + totals.modified + totals.removed > 0) {
@@ -111,9 +149,37 @@ export function usePlaidSync() {
                   if (totals.added > 0) parts.push(`Added ${totals.added}`);
                   if (totals.modified > 0) parts.push(`updated ${totals.modified}`);
                   if (totals.removed > 0) parts.push(`removed ${totals.removed}`);
+                  // Append the per-rule attribution line and a "View"
+                  // ToastAction that deep-links to mapping-rules with the
+                  // touched rule ids in `?focus=` so the user can audit
+                  // which rules silently grabbed the chunk of new rows.
+                  const summary = totals.ruleAttribution;
+                  const description = summary.totalAttributed
+                    ? `${parts.join(", ")}. Auto-categorized ${summary.totalAttributed} new ${
+                        summary.totalAttributed === 1 ? "transaction" : "transactions"
+                      }: ${summary.top
+                        .map((r) => `${r.count} via '${r.pattern}'`)
+                        .join(", ")}${summary.extraRules > 0 ? `, +${summary.extraRules} more` : ""}.`
+                    : `${parts.join(", ")}.`;
                   toast({
                     title: "Sync complete",
-                    description: `${parts.join(", ")}.`,
+                    description,
+                    action:
+                      summary.totalAttributed && summary.ruleIds.length > 0 ? (
+                        <ToastAction
+                          altText="View matched rules"
+                          onClick={() =>
+                            navigate(
+                              `/mapping-rules?focus=${summary.ruleIds
+                                .map((id) => encodeURIComponent(id))
+                                .join(",")}`,
+                            )
+                          }
+                          data-testid="button-toast-view-matched-rules"
+                        >
+                          View
+                        </ToastAction>
+                      ) : undefined,
                   });
                 }
               }
@@ -134,7 +200,7 @@ export function usePlaidSync() {
         );
       });
     },
-    [sync, qc, toast],
+    [sync, qc, toast, navigate],
   );
 
   return { runSync, isPending: sync.isPending };

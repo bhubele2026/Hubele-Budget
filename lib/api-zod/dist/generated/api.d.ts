@@ -4600,6 +4600,19 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         modified: zod.ZodNumber;
         removed: zod.ZodNumber;
         autoCategorized: zod.ZodNumber;
+        ruleAttributions: zod.ZodArray<zod.ZodObject<{
+            ruleId: zod.ZodString;
+            pattern: zod.ZodString;
+            count: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            ruleId: string;
+            pattern: string;
+            count: number;
+        }, {
+            ruleId: string;
+            pattern: string;
+            count: number;
+        }>, "many">;
         error: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         stillPreparing: zod.ZodOptional<zod.ZodBoolean>;
     }, "strip", zod.ZodTypeAny, {
@@ -4608,6 +4621,11 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         modified: number;
         removed: number;
         autoCategorized: number;
+        ruleAttributions: {
+            ruleId: string;
+            pattern: string;
+            count: number;
+        }[];
         institutionName?: string | null | undefined;
         stillPreparing?: boolean | undefined;
         error?: string | null | undefined;
@@ -4617,6 +4635,11 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         modified: number;
         removed: number;
         autoCategorized: number;
+        ruleAttributions: {
+            ruleId: string;
+            pattern: string;
+            count: number;
+        }[];
         institutionName?: string | null | undefined;
         stillPreparing?: boolean | undefined;
         error?: string | null | undefined;
@@ -4628,6 +4651,11 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         modified: number;
         removed: number;
         autoCategorized: number;
+        ruleAttributions: {
+            ruleId: string;
+            pattern: string;
+            count: number;
+        }[];
         institutionName?: string | null | undefined;
         stillPreparing?: boolean | undefined;
         error?: string | null | undefined;
@@ -4639,6 +4667,11 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         modified: number;
         removed: number;
         autoCategorized: number;
+        ruleAttributions: {
+            ruleId: string;
+            pattern: string;
+            count: number;
+        }[];
         institutionName?: string | null | undefined;
         stillPreparing?: boolean | undefined;
         error?: string | null | undefined;
@@ -5005,10 +5038,33 @@ export declare const ImportWorkbookBody: zod.ZodObject<{
 export declare const ImportWorkbookResponse: zod.ZodObject<{
     batchId: zod.ZodString;
     counts: zod.ZodRecord<zod.ZodString, zod.ZodNumber>;
+    ruleAttributions: zod.ZodArray<zod.ZodObject<{
+        ruleId: zod.ZodString;
+        pattern: zod.ZodString;
+        count: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        ruleId: string;
+        pattern: string;
+        count: number;
+    }, {
+        ruleId: string;
+        pattern: string;
+        count: number;
+    }>, "many">;
 }, "strip", zod.ZodTypeAny, {
+    ruleAttributions: {
+        ruleId: string;
+        pattern: string;
+        count: number;
+    }[];
     batchId: string;
     counts: Record<string, number>;
 }, {
+    ruleAttributions: {
+        ruleId: string;
+        pattern: string;
+        count: number;
+    }[];
     batchId: string;
     counts: Record<string, number>;
 }>;

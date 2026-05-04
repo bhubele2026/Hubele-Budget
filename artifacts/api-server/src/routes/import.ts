@@ -31,8 +31,12 @@ router.post(
           filename: req.file.originalname ?? null,
         })
         .returning();
-      const counts = await importWorkbook(req.userId!, wb, batch!.id);
-      res.json({ batchId: batch!.id, counts });
+      const result = await importWorkbook(req.userId!, wb, batch!.id);
+      res.json({
+        batchId: batch!.id,
+        counts: result.counts,
+        ruleAttributions: result.ruleAttributions,
+      });
     } catch (e) {
       req.log.error({ err: e }, "Workbook import failed");
       const msg = e instanceof Error ? e.message : "Import failed";

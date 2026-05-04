@@ -14,6 +14,12 @@ import { loadUserRules, categorize } from "./autoCategorize";
 import { expandItem, parseISO, addDays, fmtISO } from "./cashSignal";
 import { refreshAmexAnchor } from "./amexAnchor";
 
+export type RuleAttribution = {
+  ruleId: string;
+  pattern: string;
+  count: number;
+};
+
 export type SyncResult = {
   itemId: string;
   institutionName: string | null;
@@ -21,6 +27,15 @@ export type SyncResult = {
   modified: number;
   removed: number;
   autoCategorized: number;
+  // Per-rule attribution breakdown for *newly added* rows that landed in a
+  // category via the user's mapping_rules (i.e. one entry per winning rule,
+  // sorted by count descending). Used by the frontend to surface a summary
+  // toast like "Auto-categorized 12 new transactions: 5 via 'STARBUCKS', 4
+  // via 'AMAZON', …" with a "View" link to the Mapping Rules page so users
+  // notice when a stale rule is mis-routing a chunk of their feed.
+  // Modified rows are intentionally excluded — Plaid surfaces them when
+  // metadata changes upstream, not when their categorization first fired.
+  ruleAttributions: RuleAttribution[];
   error: string | null;
   // True when Plaid responded with PRODUCT_NOT_READY (a freshly linked item
   // whose historical batch is still being staged). Treated as a transient,
@@ -80,6 +95,7 @@ export async function syncPlaidItem(
       modified: 0,
       removed: 0,
       autoCategorized: 0,
+      ruleAttributions: [],
       error: "Item not found",
     };
   }
@@ -143,6 +159,15 @@ export async function syncPlaidItem(
   let removed: { transaction_id: string }[] = [];
   let hasMore = true;
   let autoCategorized = 0;
+  // Per-rule attribution counter — only credited for rows in the `added`
+  // array (Plaid's "first time we've seen this txn") so the summary toast
+  // doesn't double-count when Plaid replays a `modified` event for an
+  // already-categorized historical row. The map's insertion order also
+  // gives us a stable tiebreaker when multiple rules tie on count.
+  const attributionCounts = new Map<
+    string,
+    { ruleId: string; pattern: string; count: number }
+  >();
 
   try {
     while (hasMore) {
@@ -160,6 +185,10 @@ export async function syncPlaidItem(
 
     // Upsert added/modified
     const insertedCheckingTxns: { id: string; amount: number; date: string }[] = [];
+    // Set of `transaction_id`s Plaid considers brand-new this batch — used
+    // below to credit per-rule attribution counts to first-sight rows only,
+    // even though we walk added+modified together for the upsert.
+    const addedTxnIds = new Set(added.map((t) => t.transaction_id));
     for (const t of [...added, ...modified]) {
       const description = t.merchant_name || t.name || "(no description)";
       // `personal_finance_category` is the modern Plaid taxonomy used to
@@ -177,6 +206,27 @@ export async function syncPlaidItem(
         rules,
       );
       if (cat.categoryId) autoCategorized++;
+      // Credit the per-rule attribution counter ONLY for first-sight rows
+      // (Plaid's `added` array). `modified` events fire when upstream
+      // metadata changes on a row we've already categorized — counting
+      // them here would inflate the toast every time a merchant rename
+      // or pending→posted flip rolled through.
+      if (
+        cat.matchedRuleId &&
+        cat.matchedRulePattern &&
+        addedTxnIds.has(t.transaction_id)
+      ) {
+        const existing = attributionCounts.get(cat.matchedRuleId);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          attributionCounts.set(cat.matchedRuleId, {
+            ruleId: cat.matchedRuleId,
+            pattern: cat.matchedRulePattern,
+            count: 1,
+          });
+        }
+      }
       const isChecking =
         checkingPlaidAccountId !== null && t.account_id === checkingPlaidAccountId;
       // Plaid `datetime` / `authorized_datetime` are ISO 8601 strings that
@@ -417,6 +467,12 @@ export async function syncPlaidItem(
         .where(eq(plaidItemsTable.id, itemRowId));
     }
 
+    // Sort attributions by count desc; insertion order (rule-first-hit
+    // order) is the natural tiebreaker because Map preserves it.
+    const ruleAttributions: RuleAttribution[] = Array.from(
+      attributionCounts.values(),
+    ).sort((a, b) => b.count - a.count);
+
     return {
       itemId: item.itemId,
       institutionName: item.institutionName,
@@ -424,6 +480,7 @@ export async function syncPlaidItem(
       modified: modified.length,
       removed: removed.length,
       autoCategorized,
+      ruleAttributions,
       error: balanceRefreshError,
     };
   } catch (e) {
@@ -449,6 +506,7 @@ export async function syncPlaidItem(
         modified: 0,
         removed: 0,
         autoCategorized: 0,
+        ruleAttributions: [],
         error: null,
         stillPreparing: true,
       };
@@ -464,6 +522,7 @@ export async function syncPlaidItem(
       modified: 0,
       removed: 0,
       autoCategorized: 0,
+      ruleAttributions: [],
       error: message,
     };
   }

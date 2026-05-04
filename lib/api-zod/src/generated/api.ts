@@ -1815,6 +1815,13 @@ export const SyncPlaidTransactionsResponse = zod.object({
       modified: zod.number(),
       removed: zod.number(),
       autoCategorized: zod.number(),
+      ruleAttributions: zod.array(
+        zod.object({
+          ruleId: zod.string(),
+          pattern: zod.string(),
+          count: zod.number(),
+        }),
+      ),
       error: zod.string().nullish(),
       stillPreparing: zod.boolean().optional(),
     }),
@@ -1915,6 +1922,13 @@ export const ImportWorkbookBody = zod.object({
 export const ImportWorkbookResponse = zod.object({
   batchId: zod.string(),
   counts: zod.record(zod.string(), zod.number()),
+  ruleAttributions: zod.array(
+    zod.object({
+      ruleId: zod.string(),
+      pattern: zod.string(),
+      count: zod.number(),
+    }),
+  ),
 });
 
 /**

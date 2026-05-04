@@ -1314,9 +1314,15 @@ export interface DashboardBudgetInput {
 export type ImportSummaryCounts = {
     [key: string]: number;
 };
+export interface RuleAttribution {
+    ruleId: string;
+    pattern: string;
+    count: number;
+}
 export interface ImportSummary {
     batchId: string;
     counts: ImportSummaryCounts;
+    ruleAttributions: RuleAttribution[];
 }
 export interface PlaidLinkToken {
     linkToken: string;
@@ -1390,6 +1396,7 @@ export type PlaidSyncResultItemsItem = {
     modified: number;
     removed: number;
     autoCategorized: number;
+    ruleAttributions: RuleAttribution[];
     /** @nullable */
     error?: string | null;
     stillPreparing?: boolean;

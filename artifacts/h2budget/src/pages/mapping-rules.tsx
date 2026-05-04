@@ -1126,39 +1126,54 @@ export default function MappingRulesPage() {
     return new Set(data.matches.map((m) => m.rule.id));
   }, [testRules.data]);
 
-  // ?focus=<ruleId> deep-link support — clicked from the "rule: 'PATTERN'"
-  // chip on the Transactions / Amex pages to land directly on the rule
-  // responsible for a row's category. We scroll the row into view and
-  // briefly flash a ring around it so the user actually spots it in a long
+  // ?focus=<ruleId>[,<ruleId>...] deep-link support — clicked from the
+  // "rule: 'PATTERN'" chip on the Transactions / Amex pages, or from the
+  // "View" action on the post-sync / post-import toast (which can pass
+  // multiple ids when several rules contributed to a single batch). We
+  // scroll the FIRST matched row into view and briefly flash a ring
+  // around every matched row so the user spots all of them in a long
   // list, then drop the highlight after a few seconds. The focus also
-  // forces the search to be cleared so the row can never be filtered out
-  // before we can scroll to it.
+  // forces the search to be cleared so the rows can never be filtered out
+  // before we can scroll to them.
   const search = useSearch();
-  const focusId = useMemo(() => {
+  const focusIds = useMemo(() => {
     const params = new URLSearchParams(search);
-    return params.get("focus");
+    const raw = params.get("focus");
+    if (!raw) return [] as string[];
+    return raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
   }, [search]);
-  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const focusIdSet = useMemo(() => new Set(focusIds), [focusIds]);
+  // Backwards-compat alias for the existing single-id call sites
+  // (`isFocused = rule.id === focusId`) so the membership check below
+  // can stay a one-liner.
+  const focusId = focusIds[0] ?? null;
+  const [highlightedIds, setHighlightedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const focusRowRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (!focusId) return;
+    if (focusIds.length === 0) return;
     if (!rules || rules.length === 0) return;
-    if (!rules.some((r) => r.id === focusId)) return;
+    const matched = focusIds.filter((id) => rules.some((r) => r.id === id));
+    if (matched.length === 0) return;
     if (searchQuery) setSearchQuery("");
-    setHighlightedId(focusId);
+    setHighlightedIds(new Set(matched));
     const t = window.setTimeout(() => {
       focusRowRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "center",
       });
     }, 50);
-    const clear = window.setTimeout(() => setHighlightedId(null), 4000);
+    const clear = window.setTimeout(() => setHighlightedIds(new Set()), 4000);
     return () => {
       window.clearTimeout(t);
       window.clearTimeout(clear);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusId, rules]);
+  }, [focusIds, rules]);
 
   const winningId = useMemo(() => {
     const data = testRules.data;
@@ -1602,7 +1617,12 @@ export default function MappingRulesPage() {
                           </div>
                         );
                       }
-                      const isFocused = rule.id === focusId;
+                      const isFocused = focusIdSet.has(rule.id);
+                      // Only the first matched focus id receives the
+                      // scroll-target ref so we don't bounce around
+                      // jumping to multiple rows when the toast deep-link
+                      // included several rule ids.
+                      const isScrollTarget = rule.id === focusId;
                       return (
                         <SortableRuleRow
                           key={rule.id}
@@ -1615,9 +1635,9 @@ export default function MappingRulesPage() {
                           reorderDisabled={reorderDisabled}
                           dragDisabled={dragDisabled}
                           isFocused={isFocused}
-                          isHighlighted={highlightedId === rule.id}
+                          isHighlighted={highlightedIds.has(rule.id)}
                           setFocusRef={
-                            isFocused
+                            isScrollTarget
                               ? (el) => {
                                   focusRowRef.current = el;
                                 }

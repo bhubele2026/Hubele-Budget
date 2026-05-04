@@ -135,11 +135,29 @@ const sheet = (wb: XLSX.WorkBook, name: string): Row[] => {
   }) as Row[];
 };
 
+export type ImportRuleAttribution = {
+  ruleId: string;
+  pattern: string;
+  count: number;
+};
+
+export type ImportResult = {
+  counts: Record<string, number>;
+  // Per-rule attribution breakdown for transactions auto-categorized by the
+  // user's mapping_rules during this import. Mirrors the Plaid sync result so
+  // the client can render the same "Auto-categorized N: X via 'STARBUCKS', Y
+  // via 'AMAZON', …" summary toast with a "View" link to the touched rules
+  // on the Mapping Rules page. Excludes rows where the workbook's Target
+  // column explicitly named the category (those aren't rule attributions)
+  // and rows where a user's manual override was preserved.
+  ruleAttributions: ImportRuleAttribution[];
+};
+
 export async function importWorkbook(
   userId: string,
   wb: XLSX.WorkBook,
   batchId: string,
-): Promise<Record<string, number>> {
+): Promise<ImportResult> {
   const REQUIRED = [
     "Debt Tracker",
     "Monthly Budget",
@@ -155,6 +173,16 @@ export async function importWorkbook(
   }
 
   const counts: Record<string, number> = {};
+  // Per-rule attribution counter — credited only for rows where the
+  // workbook's Target column was empty AND the auto-categorize pipeline
+  // matched a rule. Rows whose Target was hard-coded in the spreadsheet
+  // and rows where a manual override was preserved are NOT attributed
+  // (the user didn't rely on the rule there). Map insertion order acts
+  // as a stable tiebreaker when counts tie.
+  const attributionCounts = new Map<
+    string,
+    { ruleId: string; pattern: string; count: number }
+  >();
 
   return await db.transaction(async (tx) => {
     // Snapshot data we want to merge BEFORE wiping, so user-edited mapping
@@ -415,7 +443,12 @@ export async function importWorkbook(
       const signed = amexSignedAmount(typeStr, num);
       const explicitCat = target ? catByName.get(target) ?? null : null;
       const auto = explicitCat
-        ? { categoryId: explicitCat, isTransfer: false }
+        ? {
+            categoryId: explicitCat,
+            isTransfer: false,
+            matchedRuleId: null as string | null,
+            matchedRulePattern: null as string | null,
+          }
         : categorize({ description }, ruleRows);
 
       // Preserve manual category overrides: if the prior transaction with
@@ -425,6 +458,7 @@ export async function importWorkbook(
       // on rows imported under the pre-Task-#130 (flipped) convention still
       // survive the first re-import after the sign normalization.
       let finalCategoryId = auto.categoryId;
+      let manualOverrideKept = false;
       const flippedSigned = (-Number(signed)).toFixed(2);
       let priorCatId = priorTxByKey.get(`${date}|${description}|${signed}|amex`);
       if (priorCatId === undefined) {
@@ -438,6 +472,30 @@ export async function importWorkbook(
         if ((remappedPrior ?? null) !== (auto.categoryId ?? null)) {
           finalCategoryId = remappedPrior;
           preservedTxOverrides++;
+          manualOverrideKept = true;
+        }
+      }
+
+      // Credit per-rule attribution only when the auto-categorize pipeline
+      // actually decided this row's category — i.e. no explicit Target
+      // column override and no preserved manual override. Otherwise the
+      // toast would mislead users into thinking the rule covered rows it
+      // never touched.
+      if (
+        !manualOverrideKept &&
+        !explicitCat &&
+        auto.matchedRuleId &&
+        auto.matchedRulePattern
+      ) {
+        const existing = attributionCounts.get(auto.matchedRuleId);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          attributionCounts.set(auto.matchedRuleId, {
+            ruleId: auto.matchedRuleId,
+            pattern: auto.matchedRulePattern,
+            count: 1,
+          });
         }
       }
 
@@ -517,6 +575,12 @@ export async function importWorkbook(
     const anchor = await refreshAmexAnchor(userId, tx, { adopt: true });
     counts.amex_anchor_updated = anchor.changed ? 1 : 0;
 
-    return counts;
+    // Sort attributions by count desc; insertion order (rule-first-hit
+    // order) is the natural tiebreaker because Map preserves it.
+    const ruleAttributions: ImportRuleAttribution[] = Array.from(
+      attributionCounts.values(),
+    ).sort((a, b) => b.count - a.count);
+
+    return { counts, ruleAttributions };
   });
 }

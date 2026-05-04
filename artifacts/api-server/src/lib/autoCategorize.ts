@@ -45,6 +45,25 @@ export function matchRule(
 }
 
 /**
+ * Same priority-walk semantics as `matchRule`, but returns the entire winning
+ * rule (id + categoryId + pattern). Used by `categorize` so attribution
+ * pipelines (Plaid sync / XLSX import) can build per-rule "matched by your X
+ * rule" toasts without a second pass over the rule list.
+ */
+export function matchRuleEntry(
+  description: string,
+  rules: RuleRow[],
+): RuleRow | null {
+  if (!description) return null;
+  const hay = description.toLowerCase();
+  for (const r of rules) {
+    if (!r.categoryId) continue;
+    if (ruleMatchesDescription(r, hay)) return r;
+  }
+  return null;
+}
+
+/**
  * Returns the id of the rule that auto-categorize would currently attribute
  * for the given transaction. The intent is "which rule is responsible for
  * this row sitting in this category" — surfaced on Transactions / Amex rows
@@ -131,6 +150,13 @@ export type CategorizeInput = {
 export type CategorizeResult = {
   categoryId: string | null;
   isTransfer: boolean;
+  // Id + pattern of the mapping_rule that won the priority walk and assigned
+  // `categoryId`. Null when no description rule matched (e.g. the row is an
+  // un-categorized transfer or no rule's pattern was hit). Surfaced by Plaid
+  // sync / XLSX import so the client can build a per-rule attribution
+  // breakdown ("Auto-categorized 12 new transactions: 5 via 'STARBUCKS', …").
+  matchedRuleId: string | null;
+  matchedRulePattern: string | null;
 };
 
 /**
@@ -151,8 +177,20 @@ export function categorize(
     TRANSFER_DESC_PATTERNS.some((p) => haystack.includes(p));
 
   // Description rules.
-  const fromDesc = matchRule(desc, rules);
-  if (fromDesc) return { categoryId: fromDesc, isTransfer };
+  const matched = matchRuleEntry(desc, rules);
+  if (matched && matched.categoryId) {
+    return {
+      categoryId: matched.categoryId,
+      isTransfer,
+      matchedRuleId: matched.id,
+      matchedRulePattern: matched.pattern,
+    };
+  }
 
-  return { categoryId: null, isTransfer };
+  return {
+    categoryId: null,
+    isTransfer,
+    matchedRuleId: null,
+    matchedRulePattern: null,
+  };
 }

@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { RuleAttribution } from "./ruleAttribution";
 export type PlaidSyncResultItemsItem = {
     itemId: string;
     /** @nullable */
@@ -13,6 +14,7 @@ export type PlaidSyncResultItemsItem = {
     modified: number;
     removed: number;
     autoCategorized: number;
+    ruleAttributions: RuleAttribution[];
     /** @nullable */
     error?: string | null;
     stillPreparing?: boolean;

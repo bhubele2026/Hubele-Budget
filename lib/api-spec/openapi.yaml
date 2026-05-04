@@ -2453,13 +2453,32 @@ components:
 
     ImportSummary:
       type: object
-      required: [batchId, counts]
+      required: [batchId, counts, ruleAttributions]
       properties:
         batchId: { type: string }
         counts:
           type: object
           additionalProperties:
             type: integer
+        # Per-rule attribution breakdown for transactions auto-categorized by
+        # the user's mapping_rules during this import. Sorted by count
+        # descending. Used by the Settings page to render a summary toast like
+        # "Auto-categorized 12 transactions: 5 via 'STARBUCKS', 4 via
+        # 'AMAZON', …" with a "View" link to the touched rules on the Mapping
+        # Rules page so users can spot stale rules mis-routing chunks of the
+        # workbook. Excludes rows whose Target column hard-coded the category
+        # and rows where a manual override was preserved.
+        ruleAttributions:
+          type: array
+          items: { $ref: "#/components/schemas/RuleAttribution" }
+
+    RuleAttribution:
+      type: object
+      required: [ruleId, pattern, count]
+      properties:
+        ruleId: { type: string }
+        pattern: { type: string }
+        count: { type: integer }
 
     PlaidLinkToken:
       type: object
@@ -2542,7 +2561,7 @@ components:
           type: array
           items:
             type: object
-            required: [itemId, added, modified, removed, autoCategorized]
+            required: [itemId, added, modified, removed, autoCategorized, ruleAttributions]
             properties:
               itemId: { type: string }
               institutionName: { type: ["string", "null"] }
@@ -2550,6 +2569,17 @@ components:
               modified: { type: integer }
               removed: { type: integer }
               autoCategorized: { type: integer }
+              # Per-rule attribution breakdown for *newly added* rows that
+              # the auto-categorize pipeline routed via one of the user's
+              # mapping_rules. Sorted by count descending. Drives the
+              # "Auto-categorized N new transactions: 5 via 'STARBUCKS', …"
+              # summary toast with a "View" link to the touched rules on
+              # the Mapping Rules page. `modified` rows are excluded so the
+              # toast never inflates when Plaid replays metadata changes
+              # for already-categorized historical rows.
+              ruleAttributions:
+                type: array
+                items: { $ref: "#/components/schemas/RuleAttribution" }
               error: { type: ["string", "null"] }
               # True when Plaid responded with PRODUCT_NOT_READY (i.e. it is
               # still staging the historical batch for a freshly linked

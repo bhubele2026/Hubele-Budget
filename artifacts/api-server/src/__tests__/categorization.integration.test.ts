@@ -180,10 +180,21 @@ describe("categorization pipeline (integration)", () => {
       .values({ userId: TEST_USER, filename: "test.xlsx" })
       .returning();
     const wb = buildAmexWorkbook();
-    const counts = await importWorkbook(TEST_USER, wb, batch!.id);
+    const { counts, ruleAttributions } = await importWorkbook(
+      TEST_USER,
+      wb,
+      batch!.id,
+    );
     expect(counts.budget_categories).toBe(3);
     expect(counts.mapping_rules).toBe(3);
     expect(counts.transactions).toBe(2);
+    // Both Payments rows leave Target empty, so the Mapping rules should
+    // attribute one each: STARBUCKS → Coffee and AMAZON → Amazon Misc.
+    const attrByPattern = new Map(
+      ruleAttributions.map((a) => [a.pattern, a.count]),
+    );
+    expect(attrByPattern.get("STARBUCKS")).toBe(1);
+    expect(attrByPattern.get("AMAZON")).toBe(1);
 
     // 2) Insert a fake plaid_items row so syncPlaidItem can find it.
     const [item] = await db

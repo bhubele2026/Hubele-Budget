@@ -13,8 +13,11 @@ import {
   useListCategories,
   getListPlaidItemsQueryKey,
 } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
 import { usePlaidSync, formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
 import { useQueryClient } from "@tanstack/react-query";
+import { ToastAction } from "@/components/ui/toast";
+import { buildRuleAttributionSummary } from "@/lib/rule-attribution-summary";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,6 +99,7 @@ export default function SettingsPage() {
   const cleanupNonProd = useCleanupNonProdPlaidItems();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
   const handleSync = (itemId?: string) => {
     if (itemId) setSyncingItemId(itemId);
@@ -267,7 +271,41 @@ export default function SettingsPage() {
               `Preserved ${rulesKept} of your mapping rule${rulesKept === 1 ? "" : "s"} and ${txKept} manual category edit${txKept === 1 ? "" : "s"}.`,
             );
           }
-          toast({ title: "Import complete", description: parts.join(" ") });
+          // Append a per-rule attribution line + a "View" deep-link to the
+          // Mapping Rules page so users can immediately spot stale rules
+          // mis-routing big chunks of the freshly imported workbook.
+          const summary = buildRuleAttributionSummary(
+            res.ruleAttributions ?? [],
+          );
+          if (summary.totalAttributed > 0) {
+            parts.push(
+              `Auto-categorized ${summary.totalAttributed} ${
+                summary.totalAttributed === 1 ? "transaction" : "transactions"
+              }: ${summary.top
+                .map((r) => `${r.count} via '${r.pattern}'`)
+                .join(", ")}${summary.extraRules > 0 ? `, +${summary.extraRules} more` : ""}.`,
+            );
+          }
+          toast({
+            title: "Import complete",
+            description: parts.join(" "),
+            action:
+              summary.totalAttributed > 0 && summary.ruleIds.length > 0 ? (
+                <ToastAction
+                  altText="View matched rules"
+                  onClick={() =>
+                    navigate(
+                      `/mapping-rules?focus=${summary.ruleIds
+                        .map((id) => encodeURIComponent(id))
+                        .join(",")}`,
+                    )
+                  }
+                  data-testid="button-toast-view-import-matched-rules"
+                >
+                  View
+                </ToastAction>
+              ) : undefined,
+          });
         }
         e.target.value = ''; // reset input
       },
