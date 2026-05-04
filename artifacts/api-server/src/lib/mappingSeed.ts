@@ -7,26 +7,35 @@ export const SEED_MAPPING_RULES: SeedMappingRule[] = [
   { pattern: "KFI STAFFING", categoryName: "Brad's paycheck (KFI)" },
   { pattern: "EXACT SCIENCES", categoryName: "Hannah's paycheck (Exact)" },
 
-  { pattern: "AMERICAN EXPRESS ACH", categoryName: "Amex Delta SkyMiles Gold (28.49%)" },
-  { pattern: "AMEX ACH PMT", categoryName: "Amex Delta SkyMiles Gold (28.49%)" },
-  { pattern: "AMEX EPAYMENT", categoryName: "Amex Delta SkyMiles Gold (28.49%)" },
+  // Credit-card / installment debt payment patterns. Each one points at the
+  // catch-all "Misc / Buffer" category so a fresh user gets every rule wired
+  // up at seed time (the per-debt categories — e.g. "Amex Delta SkyMiles Gold
+  // (28.49%)" — are created lazily by syncAutoDebtCategories only after the
+  // user has actually added that debt to the Debts tracker, so we cannot
+  // reference them by name from the static seed without silently skipping).
+  // The auto-learn / inline categorize flow will repoint individual rules at
+  // the real debt category the first time the user re-categorizes one of
+  // these transactions.
+  { pattern: "AMERICAN EXPRESS ACH", categoryName: "Misc / Buffer" },
+  { pattern: "AMEX ACH PMT", categoryName: "Misc / Buffer" },
+  { pattern: "AMEX EPAYMENT", categoryName: "Misc / Buffer" },
 
-  { pattern: "CAPITAL ONE CRCARDPMT", categoryName: "Capital One Platinum (28.74%)" },
-  { pattern: "CAPITAL ONE MOBILE PYMT", categoryName: "Capital One Platinum (28.74%)" },
+  { pattern: "CAPITAL ONE CRCARDPMT", categoryName: "Misc / Buffer" },
+  { pattern: "CAPITAL ONE MOBILE PYMT", categoryName: "Misc / Buffer" },
 
-  { pattern: "APPLECARD GSBANK", categoryName: "Apple Card (Goldman Sachs)" },
-  { pattern: "GOLDMAN SACHS APPLE", categoryName: "Apple Card (Goldman Sachs)" },
+  { pattern: "APPLECARD GSBANK", categoryName: "Misc / Buffer" },
+  { pattern: "GOLDMAN SACHS APPLE", categoryName: "Misc / Buffer" },
 
-  { pattern: "PAYPAL PAYMTHLY", categoryName: "PayPal Credit — Brad / Synchrony (27.49%)" },
-  { pattern: "SYNCHRONY PAYPAL", categoryName: "PayPal Credit — Brad / Synchrony (27.49%)" },
+  { pattern: "PAYPAL PAYMTHLY", categoryName: "Misc / Buffer" },
+  { pattern: "SYNCHRONY PAYPAL", categoryName: "Misc / Buffer" },
 
-  { pattern: "DISCOVER E-PAYMENT", categoryName: "Discover (27.99%)" },
-  { pattern: "CITI CARD ONLINE", categoryName: "Best Buy / Citi (29.99%)" },
-  { pattern: "CREDIT ONE BANK", categoryName: "Credit One Bank (27.99%)" },
-  { pattern: "SYNCHRONY ASHLEY", categoryName: "Ashley Furniture / Synchrony (34.99%)" },
-  { pattern: "MATTRESS FIRM", categoryName: "Mattress Firm / Synchrony (34.99%)" },
-  { pattern: "MENARDS BIG CARD", categoryName: "Menards Big Card (28.49%)" },
-  { pattern: "AFFIRM", categoryName: "Affirm — Best Buy Dec (28.32%)" },
+  { pattern: "DISCOVER E-PAYMENT", categoryName: "Misc / Buffer" },
+  { pattern: "CITI CARD ONLINE", categoryName: "Misc / Buffer" },
+  { pattern: "CREDIT ONE BANK", categoryName: "Misc / Buffer" },
+  { pattern: "SYNCHRONY ASHLEY", categoryName: "Misc / Buffer" },
+  { pattern: "MATTRESS FIRM", categoryName: "Misc / Buffer" },
+  { pattern: "MENARDS BIG CARD", categoryName: "Misc / Buffer" },
+  { pattern: "AFFIRM", categoryName: "Misc / Buffer" },
 
   { pattern: "MGE", categoryName: "Utilities" },
   { pattern: "CITY OF MADISON", categoryName: "Utilities" },

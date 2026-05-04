@@ -10,10 +10,12 @@ import {
   usePinBudgetMonth,
   usePinBudgetLine,
   useListTransactions,
+  useListMappingRules,
   useUpdateTransaction,
   getGetBudgetMonthQueryKey,
   getListCategoriesQueryKey,
   getListTransactionsQueryKey,
+  type MappingRule,
   type Transaction,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -176,6 +178,11 @@ export default function BudgetPage() {
   // #90 — pull all transactions to surface uncategorized rows for inline
   // categorization from each Budget row.
   const { data: allTxns } = useListTransactions({ limit: 5000 });
+  // #176 — used both for the actuals-breakdown popover (per-row contributing
+  // transactions) and for ranking which uncategorized transactions to suggest
+  // for a given budget row (any rule whose pattern matches the description
+  // and points at this row's categoryId surfaces it as a hint).
+  const { data: mappingRules } = useListMappingRules();
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -306,26 +313,66 @@ export default function BudgetPage() {
     );
   };
 
+  // Bounds of the currently viewed budget month, used to scope both the
+  // uncategorized-this-month list and the per-row contributing-txn popover.
+  const monthBounds = useMemo(() => {
+    const start = currentMonth;
+    const d = new Date(currentMonth + "T00:00:00");
+    const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    const end = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
+    return { start, end };
+  }, [currentMonth]);
+
   // #90 — uncategorized transactions in the currently viewed budget month,
   // skipping transfers (they're excluded from budget actuals server-side
   // anyway). Sorted newest-first so the most recent unassigned charges
   // surface first.
   const uncategorizedThisMonth = useMemo<Transaction[]>(() => {
     if (!allTxns) return [];
-    const start = currentMonth;
-    const d = new Date(currentMonth + "T00:00:00");
-    const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-    const end = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
     return allTxns
       .filter(
         (t) =>
           !t.categoryId &&
           !t.isTransfer &&
-          t.occurredOn >= start &&
-          t.occurredOn < end,
+          t.occurredOn >= monthBounds.start &&
+          t.occurredOn < monthBounds.end,
       )
       .sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
-  }, [allTxns, currentMonth]);
+  }, [allTxns, monthBounds]);
+
+  // Categorized transactions this month, indexed by categoryId. Powers the
+  // actuals-breakdown popover on each row (Item 5) — same scope/exclusion
+  // rules as the server-side actuals total in /budget/months (skip transfers).
+  const txnsByCategoryThisMonth = useMemo<Map<string, Transaction[]>>(() => {
+    const map = new Map<string, Transaction[]>();
+    if (!allTxns) return map;
+    for (const t of allTxns) {
+      if (t.isTransfer) continue;
+      if (!t.categoryId) continue;
+      if (t.occurredOn < monthBounds.start || t.occurredOn >= monthBounds.end) continue;
+      const arr = map.get(t.categoryId) ?? [];
+      arr.push(t);
+      map.set(t.categoryId, arr);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
+    }
+    return map;
+  }, [allTxns, monthBounds]);
+
+  // Mapping rules grouped by the categoryId they assign to. Used to decide
+  // which uncategorized rows should be surfaced as suggestions on a given
+  // budget row (Item 4 hint).
+  const rulesByCategory = useMemo<Map<string, MappingRule[]>>(() => {
+    const map = new Map<string, MappingRule[]>();
+    for (const r of mappingRules ?? []) {
+      if (!r.categoryId) continue;
+      const arr = map.get(r.categoryId) ?? [];
+      arr.push(r);
+      map.set(r.categoryId, arr);
+    }
+    return map;
+  }, [mappingRules]);
 
   const handleAssignTxn = async (txId: string, categoryId: string) => {
     try {
@@ -554,11 +601,14 @@ export default function BudgetPage() {
                           key={line.categoryId}
                           line={line}
                           monthPinned={monthPinned}
+                          monthStart={currentMonth}
                           onUpdatePlanned={handleUpdatePlanned}
                           onDelete={handleDeleteCategory}
                           onTogglePin={handleTogglePinLine}
                           pinDisabled={pinLine.isPending}
                           uncategorizedTxns={uncategorizedThisMonth}
+                          categoryRules={rulesByCategory.get(line.categoryId) ?? []}
+                          contributingTxns={txnsByCategoryThisMonth.get(line.categoryId) ?? []}
                           onAssignTxn={handleAssignTxn}
                           assigning={updateTx.isPending}
                         />
@@ -628,28 +678,115 @@ export default function BudgetPage() {
   );
 }
 
+// Single uncategorized-transaction row inside the inline-categorize popover.
+// `highlight` adds a subtle violet tint when the row is in the "Suggested"
+// section (matched a rule or category-name substring).
+function UncategorizedRow({
+  tx,
+  categoryId,
+  onAssign,
+  assigning,
+  highlight = false,
+}: {
+  tx: Transaction;
+  categoryId: string;
+  onAssign: (txId: string, categoryId: string) => void;
+  assigning: boolean;
+  highlight?: boolean;
+}) {
+  const amt = Number(tx.amount);
+  return (
+    <button
+      type="button"
+      disabled={assigning}
+      onClick={() => onAssign(tx.id, categoryId)}
+      className={cn(
+        "w-full flex items-start justify-between gap-2 text-left px-2 py-1.5 rounded hover:bg-muted/50 disabled:opacity-50",
+        highlight && "bg-violet-50/60 dark:bg-violet-950/20",
+      )}
+      data-testid={`button-assign-${tx.id}-to-${categoryId}`}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-medium truncate">{tx.description}</div>
+        <div className="text-[10px] text-muted-foreground">
+          {tx.occurredOn}
+          {tx.source ? ` · ${tx.source}` : ""}
+        </div>
+      </div>
+      <div
+        className={cn(
+          "text-xs font-mono tabular-nums whitespace-nowrap",
+          amt < 0 ? "text-rose-700" : "text-emerald-700",
+        )}
+      >
+        {formatCurrency(amt)}
+      </div>
+    </button>
+  );
+}
+
+// Returns true when `description` matches `rule` per its matchType.
+function ruleMatches(description: string, rule: MappingRule): boolean {
+  const pattern = rule.pattern.toLowerCase();
+  if (!pattern) return false;
+  const hay = (description ?? "").toLowerCase();
+  switch (rule.matchType) {
+    case "starts_with":
+      return hay.startsWith(pattern);
+    case "exact":
+      return hay === pattern;
+    case "contains":
+    default:
+      return hay.includes(pattern);
+  }
+}
+
 function BudgetLineRow({
   line,
   monthPinned,
+  monthStart,
   onUpdatePlanned,
   onDelete,
   onTogglePin,
   pinDisabled,
   uncategorizedTxns,
+  categoryRules,
+  contributingTxns,
   onAssignTxn,
   assigning,
 }: {
   line: BudgetLineWithActual;
   monthPinned: boolean;
+  monthStart: string;
   onUpdatePlanned: (categoryId: string, amount: string) => void;
   onDelete: (id: string) => void;
   onTogglePin: (categoryId: string, currentlyPinned: boolean) => void;
   pinDisabled: boolean;
   uncategorizedTxns: Transaction[];
+  categoryRules: MappingRule[];
+  contributingTxns: Transaction[];
   onAssignTxn: (txId: string, categoryId: string) => void;
   assigning: boolean;
 }) {
   const [, navigate] = useLocation();
+  // #176 (Item 4) — split uncategorized into "suggested" (descriptions that
+  // match an existing rule for this category, or contain the row's category
+  // name as a fallback) vs the rest. Surfaces the rule-based hint without
+  // hiding the long tail the user may still want to triage manually.
+  const { suggestedTxns, otherTxns } = useMemo(() => {
+    const catNeedle = (line.categoryName ?? "").toLowerCase().trim();
+    const suggested: Transaction[] = [];
+    const other: Transaction[] = [];
+    for (const t of uncategorizedTxns) {
+      const ruleHit = categoryRules.some((r) => ruleMatches(t.description, r));
+      const nameHit =
+        catNeedle.length >= 3 &&
+        (t.description ?? "").toLowerCase().includes(catNeedle);
+      if (ruleHit || nameHit) suggested.push(t);
+      else other.push(t);
+    }
+    return { suggestedTxns: suggested, otherTxns: other };
+  }, [uncategorizedTxns, categoryRules, line.categoryName]);
   const planned = parseFloat(line.plannedAmount) || 0;
   const actual = parseFloat(line.actualAmount) || 0;
   const isIncome = line.kind === "income";
@@ -717,67 +854,86 @@ function BudgetLineRow({
               Pinned
             </Badge>
           )}
-          {/* #90 — inline categorize from Budget. Surfaces uncategorized
-              transactions in the current month and lets the user assign
-              them to this row's category in one click. Only shown when
-              there is something to assign. */}
+          {/* #90 / #176 — inline categorize from Budget. Surfaces
+              uncategorized transactions in the current month and lets the
+              user assign one to this row's category in one click. Item 4
+              hint: when one or more descriptions match an existing rule for
+              this category (or contain the category name), the badge turns
+              violet and shows the suggested count; otherwise it falls back
+              to a neutral "+N other" affordance. */}
           {uncategorizedTxns.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
                 <Badge
                   variant="outline"
-                  className="text-[10px] font-normal cursor-pointer border-dashed border-muted-foreground/40 hover:border-foreground hover:text-foreground"
-                  title={`${uncategorizedTxns.length} uncategorized transaction${uncategorizedTxns.length === 1 ? "" : "s"} this month — assign one to ${line.categoryName}.`}
+                  className={cn(
+                    "text-[10px] font-normal cursor-pointer border-dashed",
+                    suggestedTxns.length > 0
+                      ? "border-violet-300 text-violet-700 bg-violet-50 hover:border-violet-500 dark:bg-violet-950/30 dark:text-violet-300"
+                      : "border-muted-foreground/40 hover:border-foreground hover:text-foreground",
+                  )}
+                  title={
+                    suggestedTxns.length > 0
+                      ? `${suggestedTxns.length} uncategorized transaction${suggestedTxns.length === 1 ? "" : "s"} look like ${line.categoryName} (rule or name match) — click to assign.`
+                      : `${uncategorizedTxns.length} uncategorized transaction${uncategorizedTxns.length === 1 ? "" : "s"} this month — assign one to ${line.categoryName}.`
+                  }
                   data-testid={`button-categorize-${line.categoryId}`}
+                  data-suggested-count={suggestedTxns.length}
                 >
                   <Tag className="w-3 h-3 mr-1" />
-                  +{uncategorizedTxns.length}
+                  {suggestedTxns.length > 0
+                    ? `${suggestedTxns.length} match${suggestedTxns.length === 1 ? "" : "es"}`
+                    : `+${uncategorizedTxns.length}`}
                 </Badge>
               </PopoverTrigger>
               <PopoverContent className="w-80 p-3" align="start">
                 <div className="text-xs font-medium mb-2">
                   Assign to {line.categoryName}
                 </div>
-                <div className="text-[11px] text-muted-foreground mb-2">
-                  {uncategorizedTxns.length} uncategorized this month
-                </div>
                 <div
-                  className="space-y-1 max-h-64 overflow-y-auto pr-1"
+                  className="space-y-3 max-h-72 overflow-y-auto pr-1"
                   data-testid={`uncategorized-list-${line.categoryId}`}
                 >
-                  {uncategorizedTxns.slice(0, 50).map((t) => {
-                    const amt = Number(t.amount);
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        disabled={assigning}
-                        onClick={() => onAssignTxn(t.id, line.categoryId)}
-                        className="w-full flex items-start justify-between gap-2 text-left px-2 py-1.5 rounded hover:bg-muted/50 disabled:opacity-50"
-                        data-testid={`button-assign-${t.id}-to-${line.categoryId}`}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="text-xs font-medium truncate">
-                            {t.description}
+                  {suggestedTxns.length > 0 && (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-violet-700 dark:text-violet-300 mb-1">
+                        Suggested · matches rule or name
+                      </div>
+                      <div className="space-y-1">
+                        {suggestedTxns.slice(0, 25).map((t) => (
+                          <UncategorizedRow
+                            key={t.id}
+                            tx={t}
+                            categoryId={line.categoryId}
+                            onAssign={onAssignTxn}
+                            assigning={assigning}
+                            highlight
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {otherTxns.length > 0 && (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                        {suggestedTxns.length > 0 ? "Other uncategorized" : "Uncategorized this month"}
+                      </div>
+                      <div className="space-y-1">
+                        {otherTxns.slice(0, 50).map((t) => (
+                          <UncategorizedRow
+                            key={t.id}
+                            tx={t}
+                            categoryId={line.categoryId}
+                            onAssign={onAssignTxn}
+                            assigning={assigning}
+                          />
+                        ))}
+                        {otherTxns.length > 50 && (
+                          <div className="text-[10px] text-muted-foreground text-center pt-1">
+                            Showing 50 of {otherTxns.length}
                           </div>
-                          <div className="text-[10px] text-muted-foreground">
-                            {t.occurredOn}
-                          </div>
-                        </div>
-                        <div
-                          className={cn(
-                            "text-xs font-mono tabular-nums whitespace-nowrap",
-                            amt < 0 ? "text-rose-700" : "text-emerald-700",
-                          )}
-                        >
-                          {formatCurrency(amt)}
-                        </div>
-                      </button>
-                    );
-                  })}
-                  {uncategorizedTxns.length > 50 && (
-                    <div className="text-[10px] text-muted-foreground text-center pt-1">
-                      Showing 50 of {uncategorizedTxns.length}
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -865,20 +1021,88 @@ function BudgetLineRow({
           <PopoverTrigger asChild>
             <button
               className="hover:underline decoration-dotted underline-offset-2 cursor-pointer tabular-nums"
-              title="View breakdown"
+              title="View contributing transactions"
+              data-testid={`button-actuals-${line.categoryId}`}
             >
               {formatCurrency(line.actualAmount)}
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-56 p-3" align="end">
-            <div className="text-xs font-medium mb-2">Actuals breakdown</div>
-            {(line.sourceBreakdown ?? []).length === 0 ? (
-              <div className="text-xs text-muted-foreground">No transactions yet</div>
+          {/* #176 (Item 5) — actuals breakdown popover. Lists every
+              transaction that contributed to this row's actual total this
+              month (newest first), plus a deep link into the Transactions
+              page filtered to the same category + month for the full view. */}
+          <PopoverContent className="w-80 p-3" align="end">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-medium">{line.categoryName}</div>
+              <div className="text-[10px] text-muted-foreground">
+                {contributingTxns.length} txn{contributingTxns.length === 1 ? "" : "s"} · {formatCurrency(line.actualAmount)}
+              </div>
+            </div>
+            {contributingTxns.length === 0 ? (
+              <div className="text-xs text-muted-foreground py-2">
+                No transactions contributed to this line this month.
+              </div>
             ) : (
-              <div className="space-y-1.5">
+              <>
+                <div
+                  className="space-y-0.5 max-h-64 overflow-y-auto pr-1"
+                  data-testid={`actuals-list-${line.categoryId}`}
+                >
+                  {contributingTxns.slice(0, 25).map((t) => {
+                    const amt = Number(t.amount);
+                    return (
+                      <div
+                        key={t.id}
+                        className="flex items-start justify-between gap-2 px-2 py-1.5 rounded hover:bg-muted/40"
+                        data-testid={`actuals-row-${t.id}`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-medium truncate">{t.description}</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {t.occurredOn}
+                            {t.source ? ` · ${t.source}` : ""}
+                          </div>
+                        </div>
+                        <div
+                          className={cn(
+                            "text-xs font-mono tabular-nums whitespace-nowrap",
+                            amt < 0 ? "text-rose-700" : "text-emerald-700",
+                          )}
+                        >
+                          {formatCurrency(amt)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {contributingTxns.length > 25 && (
+                    <div className="text-[10px] text-muted-foreground text-center pt-1">
+                      Showing 25 of {contributingTxns.length}
+                    </div>
+                  )}
+                </div>
+                <div className="border-t mt-2 pt-2">
+                  <button
+                    type="button"
+                    className="text-xs text-violet-700 hover:underline dark:text-violet-300"
+                    onClick={() =>
+                      navigate(
+                        `/transactions?category=${encodeURIComponent(line.categoryName)}&month=${monthStart}`,
+                      )
+                    }
+                    data-testid={`button-view-all-${line.categoryId}`}
+                  >
+                    View all in Transactions →
+                  </button>
+                </div>
+              </>
+            )}
+            {/* Source split — kept for at-a-glance Bank vs Amex parity but
+                now subordinate to the txn list above. */}
+            {(line.sourceBreakdown ?? []).length > 0 && (
+              <div className="border-t mt-2 pt-2 space-y-1">
                 {(line.sourceBreakdown ?? []).map((b) => (
-                  <div key={b.source} className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">{b.source}</span>
+                  <div key={b.source} className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>{b.source}</span>
                     <span className="tabular-nums font-mono">
                       {b.count} txn · {formatCurrency(b.amount)}
                     </span>

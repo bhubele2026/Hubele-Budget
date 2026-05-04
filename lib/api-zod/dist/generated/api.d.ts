@@ -2591,6 +2591,48 @@ export declare const CreateMappingRuleBody: zod.ZodObject<{
     matchType?: string | undefined;
     priority?: number | undefined;
 }>;
+export declare const UpdateMappingRuleParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const UpdateMappingRuleBody: zod.ZodObject<{
+    pattern: zod.ZodString;
+    matchType: zod.ZodOptional<zod.ZodString>;
+    categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    priority: zod.ZodOptional<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    pattern: string;
+    categoryId?: string | null | undefined;
+    matchType?: string | undefined;
+    priority?: number | undefined;
+}, {
+    pattern: string;
+    categoryId?: string | null | undefined;
+    matchType?: string | undefined;
+    priority?: number | undefined;
+}>;
+export declare const UpdateMappingRuleResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    pattern: zod.ZodString;
+    matchType: zod.ZodString;
+    categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    priority: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    pattern: string;
+    matchType: string;
+    priority: number;
+    categoryId?: string | null | undefined;
+}, {
+    id: string;
+    pattern: string;
+    matchType: string;
+    priority: number;
+    categoryId?: string | null | undefined;
+}>;
 export declare const DeleteMappingRuleParams: zod.ZodObject<{
     id: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {

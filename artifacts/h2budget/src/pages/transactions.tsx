@@ -192,7 +192,18 @@ export default function TransactionsPage() {
 
   // ---- Filters & month navigation ----
   const currentMonth = useMemo<MonthKey>(() => monthKeyOf(new Date()), []);
-  const [selectedMonth, setSelectedMonth] = useState<MonthKey>(currentMonth);
+  // Seed selectedMonth from a `?month=YYYY-MM-01` URL param (used by Budget
+  // page deep-links), falling back to the current month.
+  const [selectedMonth, setSelectedMonth] = useState<MonthKey>(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const m = params.get("month");
+      if (m && /^\d{4}-\d{2}-01$/.test(m)) {
+        return monthKeyFromISO(m);
+      }
+    }
+    return currentMonth;
+  });
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");

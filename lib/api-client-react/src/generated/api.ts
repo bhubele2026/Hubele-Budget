@@ -2780,6 +2780,87 @@ export const useCreateMappingRule = <
   return useMutation(getCreateMappingRuleMutationOptions(options));
 };
 
+export const getUpdateMappingRuleUrl = (id: string) => {
+  return `/api/mapping-rules/${id}`;
+};
+
+export const updateMappingRule = async (
+  id: string,
+  mappingRuleInput: MappingRuleInput,
+  options?: RequestInit,
+): Promise<MappingRule> => {
+  return customFetch<MappingRule>(getUpdateMappingRuleUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(mappingRuleInput),
+  });
+};
+
+export const getUpdateMappingRuleMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMappingRule>>,
+    TError,
+    { id: string; data: BodyType<MappingRuleInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateMappingRule>>,
+  TError,
+  { id: string; data: BodyType<MappingRuleInput> },
+  TContext
+> => {
+  const mutationKey = ["updateMappingRule"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateMappingRule>>,
+    { id: string; data: BodyType<MappingRuleInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateMappingRule(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateMappingRuleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateMappingRule>>
+>;
+export type UpdateMappingRuleMutationBody = BodyType<MappingRuleInput>;
+export type UpdateMappingRuleMutationError = ErrorType<unknown>;
+
+export const useUpdateMappingRule = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMappingRule>>,
+    TError,
+    { id: string; data: BodyType<MappingRuleInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateMappingRule>>,
+  TError,
+  { id: string; data: BodyType<MappingRuleInput> },
+  TContext
+> => {
+  return useMutation(getUpdateMappingRuleMutationOptions(options));
+};
+
 export const getDeleteMappingRuleUrl = (id: string) => {
   return `/api/mapping-rules/${id}`;
 };

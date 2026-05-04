@@ -891,6 +891,25 @@ export const CreateMappingRuleBody = zod.object({
   priority: zod.number().optional(),
 });
 
+export const UpdateMappingRuleParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdateMappingRuleBody = zod.object({
+  pattern: zod.string(),
+  matchType: zod.string().optional(),
+  categoryId: zod.string().nullish(),
+  priority: zod.number().optional(),
+});
+
+export const UpdateMappingRuleResponse = zod.object({
+  id: zod.string(),
+  pattern: zod.string(),
+  matchType: zod.string(),
+  categoryId: zod.string().nullish(),
+  priority: zod.number(),
+});
+
 export const DeleteMappingRuleParams = zod.object({
   id: zod.coerce.string(),
 });

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useListMappingRules, useCreateMappingRule, useDeleteMappingRule, useListCategories, getListMappingRulesQueryKey } from "@workspace/api-client-react";
+import { useListMappingRules, useCreateMappingRule, useUpdateMappingRule, useDeleteMappingRule, useListCategories, getListMappingRulesQueryKey } from "@workspace/api-client-react";
 import type { MappingRule, Category } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ export default function MappingRulesPage() {
   const { data: categories, isLoading: catsLoading } = useListCategories();
 
   const createRule = useCreateMappingRule();
+  const updateRule = useUpdateMappingRule();
   const deleteRule = useDeleteMappingRule();
 
   const queryClient = useQueryClient();
@@ -61,19 +62,32 @@ export default function MappingRulesPage() {
     setEditingId(null);
   };
 
-  const saveEdit = (oldId: string) => {
+  const saveEdit = (id: string) => {
     if (!editPattern || !editCategoryId) return;
-    deleteRule.mutate({ id: oldId }, {
-      onSuccess: () => {
-        createRule.mutate({ data: { pattern: editPattern, matchType: editMatchType, categoryId: editCategoryId, priority: 10 } }, {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: getListMappingRulesQueryKey() });
-            setEditingId(null);
-            toast({ title: "Rule updated" });
-          }
-        });
-      }
-    });
+    updateRule.mutate(
+      {
+        id,
+        data: {
+          pattern: editPattern,
+          matchType: editMatchType,
+          categoryId: editCategoryId,
+        },
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListMappingRulesQueryKey() });
+          setEditingId(null);
+          toast({ title: "Rule updated" });
+        },
+        onError: (e) => {
+          toast({
+            title: "Couldn't update rule",
+            description: (e as Error).message,
+            variant: "destructive",
+          });
+        },
+      },
+    );
   };
 
   const catById = useMemo(() => {
@@ -229,7 +243,14 @@ export default function MappingRulesPage() {
                               ))}
                             </SelectContent>
                           </Select>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => saveEdit(rule.id)} disabled={!editPattern || !editCategoryId}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => saveEdit(rule.id)}
+                            disabled={!editPattern || !editCategoryId || updateRule.isPending}
+                            data-testid={`rule-save-${rule.id}`}
+                          >
                             <Check className="w-3.5 h-3.5 text-emerald-600" />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={cancelEdit}>
