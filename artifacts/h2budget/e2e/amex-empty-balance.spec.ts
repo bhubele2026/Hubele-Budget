@@ -27,14 +27,12 @@ test.afterAll(async () => {
 
 test.describe("Amex page — empty balance self-heal flow", () => {
   test("shows missing-state tile, saves an anchor, and re-renders the chip in place with 'From saved anchor'", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "amex-self-heal",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     await signInAndOpen(page, email, password, "/amex");
 
@@ -72,12 +70,10 @@ test.describe("Amex page — empty balance self-heal flow", () => {
     await expect(page.getByTestId("button-set-amex-balance")).toHaveCount(0);
     await expect(page.getByTestId("link-amex-debts")).toHaveCount(0);
     expect(new URL(page.url()).pathname).toBe("/amex");
-
-    await context.close();
   });
 
   test("the secondary 'or link an Amex debt in Debts' link navigates to /debts", async ({
-    browser,
+    page,
   }) => {
     // A fresh user is needed because the first test's save flips the
     // tile out of the missing state, hiding the secondary link.
@@ -85,8 +81,6 @@ test.describe("Amex page — empty balance self-heal flow", () => {
       "amex-self-heal",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     await signInAndOpen(page, email, password, "/amex");
 
@@ -100,7 +94,5 @@ test.describe("Amex page — empty balance self-heal flow", () => {
     expect(new URL(page.url()).pathname).toBe("/debts");
     // Sanity check the Debts page actually rendered (not a 404 / blank shell).
     await expect(page.locator("body")).toContainText(/debt/i);
-
-    await context.close();
   });
 });
