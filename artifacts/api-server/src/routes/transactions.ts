@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
+  categorize,
   findMatchedRuleId,
   findMatchingRules,
   loadUserRules,
@@ -139,9 +140,49 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid debtId" });
     return;
   }
+  // Mirror the import / Plaid-sync auto-categorize pipeline so a hand-typed
+  // "STARBUCKS COFFEE #221" expense lands in the same category an imported
+  // row would (and so the Transactions page's "matched by rule X" chip
+  // lights up automatically). Only fill in fields the client OMITTED:
+  //   - `categoryId` — only auto-fill when the body did not pass one. An
+  //     explicit categoryId (including null, which the user might pass to
+  //     deliberately leave the row uncategorized) wins.
+  //   - `isTransfer` — only auto-fill when the body did not pass one.
+  //     Explicit `true`/`false` from the client stays authoritative.
+  // PFC fields aren't part of CreateTransactionBody (manual entries don't
+  // come from Plaid) so categorize() here just runs the description path.
+  const insertValues: Record<string, unknown> = {
+    ...parsed.data,
+    userId: req.userId!,
+  };
+  const bodyHasCategoryId = Object.prototype.hasOwnProperty.call(
+    req.body ?? {},
+    "categoryId",
+  );
+  const bodyHasIsTransfer = Object.prototype.hasOwnProperty.call(
+    req.body ?? {},
+    "isTransfer",
+  );
+  if (!bodyHasCategoryId || !bodyHasIsTransfer) {
+    const rules = await loadUserRules(req.userId!);
+    const result = categorize(
+      {
+        description: parsed.data.description,
+        pfcPrimary: null,
+        pfcDetailed: null,
+      },
+      rules,
+    );
+    if (!bodyHasCategoryId && result.categoryId) {
+      insertValues.categoryId = result.categoryId;
+    }
+    if (!bodyHasIsTransfer) {
+      insertValues.isTransfer = result.isTransfer;
+    }
+  }
   const [row] = await db
     .insert(transactionsTable)
-    .values({ ...parsed.data, userId: req.userId! })
+    .values(insertValues as typeof transactionsTable.$inferInsert)
     .returning();
   res.status(201).json(row);
 });

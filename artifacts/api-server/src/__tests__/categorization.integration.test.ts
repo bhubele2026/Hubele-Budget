@@ -1304,4 +1304,102 @@ describe("categorization pipeline (integration)", () => {
       );
     expect(rules.length).toBe(0);
   });
+
+  it("POST /transactions auto-categorizes hand-entered rows via the existing rules", async () => {
+    // Task #207 — POST should mirror the import / Plaid-sync auto-
+    // categorize pipeline so a hand-typed merchant lands in the same
+    // category an imported row would. Cover three branches in one test:
+    //   1. body omits categoryId → server fills it from the matching rule
+    //   2. description mentions "online transfer to savings" → isTransfer
+    //      flips to true so the row is excluded from budget actuals
+    //   3. body explicitly passes a categoryId → that wins, even when a
+    //      rule would have picked something different
+    const [coffeeCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Manual Coffee ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+    const [otherCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Manual Other ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+    const merchant = `MANUALMERCH${randomUUID().slice(0, 6).toUpperCase()}`;
+    await db.insert(mappingRulesTable).values({
+      userId: TEST_USER,
+      pattern: merchant,
+      matchType: "contains",
+      categoryId: coffeeCat!.id,
+      priority: 100,
+    });
+
+    // 1) POST without categoryId → categorize() picks coffeeCat from the rule.
+    const created = await api("POST", "/transactions", {
+      occurredOn: dateInCurrentMonth(11),
+      description: `${merchant} STORE #221`,
+      amount: "-4.25",
+      source: "manual",
+    });
+    expect(created.status).toBe(201);
+    const createdRow = created.json as {
+      id: string;
+      categoryId: string | null;
+      isTransfer: boolean;
+    };
+    expect(createdRow.categoryId).toBe(coffeeCat!.id);
+    expect(createdRow.isTransfer).toBe(false);
+
+    // 2) POST a description that trips the transfer-detection regex →
+    //    isTransfer should be true (and categoryId stays null because
+    //    no rule matches that description). The transfer flag is what
+    //    keeps the row out of the budget actuals aggregation.
+    const transfer = await api("POST", "/transactions", {
+      occurredOn: dateInCurrentMonth(12),
+      description: "ONLINE TRANSFER TO SAVINGS XXXX9999",
+      amount: "-500.00",
+      source: "manual",
+    });
+    expect(transfer.status).toBe(201);
+    const transferRow = transfer.json as {
+      id: string;
+      categoryId: string | null;
+      isTransfer: boolean;
+    };
+    expect(transferRow.isTransfer).toBe(true);
+    expect(transferRow.categoryId).toBeNull();
+    // Budget actuals exclude isTransfer rows the same way Plaid sync does
+    // — confirm the row really did land with isTransfer=true on disk.
+    const [persistedTransfer] = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.id, transferRow.id));
+    expect(persistedTransfer!.isTransfer).toBe(true);
+
+    // 3) POST with an explicit categoryId → server must NOT silently
+    //    overwrite it with the rule's pick (otherCat wins even though
+    //    the merchant matches a coffeeCat rule).
+    const overridden = await api("POST", "/transactions", {
+      occurredOn: dateInCurrentMonth(13),
+      description: `${merchant} STORE #444`,
+      amount: "-9.99",
+      source: "manual",
+      categoryId: otherCat!.id,
+    });
+    expect(overridden.status).toBe(201);
+    const overriddenRow = overridden.json as {
+      id: string;
+      categoryId: string | null;
+    };
+    expect(overriddenRow.categoryId).toBe(otherCat!.id);
+  });
 });
