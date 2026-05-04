@@ -158,6 +158,74 @@ Transactions and Amex pages.
   rememberPattern?: string | null;
 }
 
+export type RepointedRuleMatchType =
+  (typeof RepointedRuleMatchType)[keyof typeof RepointedRuleMatchType];
+
+export const RepointedRuleMatchType = {
+  contains: "contains",
+  exact: "exact",
+  starts_with: "starts_with",
+} as const;
+
+/**
+ * Reported by PATCH /transactions/:id when the auto-learn flow
+repoints an existing mapping rule onto a new category. `candidateCount`
+is the number of older transactions that match this rule's pattern
+and currently sit in the rule's old category, i.e. the count that
+would be flipped if the user accepts the "apply to past transactions
+too" prompt and POSTs to /transactions/recategorize-by-pattern with
+these fields.
+
+ */
+export interface RepointedRule {
+  ruleId: string;
+  pattern: string;
+  matchType: RepointedRuleMatchType;
+  fromCategoryId: string;
+  toCategoryId: string;
+  candidateCount: number;
+}
+
+export type UpdateTransactionResponse = Transaction & {
+  /** Empty unless this PATCH triggered the auto-learn flow to
+repoint one or more existing mapping rules onto a new
+category. The client surfaces this as a "apply to past
+transactions too" prompt.
+ */
+  repointedRules: RepointedRule[];
+};
+
+export type RecategorizeByPatternInputMatchType =
+  (typeof RecategorizeByPatternInputMatchType)[keyof typeof RecategorizeByPatternInputMatchType];
+
+export const RecategorizeByPatternInputMatchType = {
+  contains: "contains",
+  exact: "exact",
+  starts_with: "starts_with",
+} as const;
+
+export interface RecategorizeByPatternInput {
+  /** @minLength 1 */
+  pattern: string;
+  matchType: RecategorizeByPatternInputMatchType;
+  /** Only transactions currently in this category are touched.
+Transactions manually re-categorized to a different category
+are skipped to preserve explicit user intent.
+ */
+  fromCategoryId: string;
+  toCategoryId: string;
+}
+
+export interface RecategorizeByPatternResult {
+  /** Number of transactions whose categoryId was flipped. */
+  updated: number;
+  /** Distinct YYYY-MM-01 month-start strings spanning the updated
+transactions. Clients invalidate the corresponding budget month
+queries so per-line actuals refresh.
+ */
+  affectedMonths: string[];
+}
+
 export type DebtBalanceSource =
   (typeof DebtBalanceSource)[keyof typeof DebtBalanceSource];
 

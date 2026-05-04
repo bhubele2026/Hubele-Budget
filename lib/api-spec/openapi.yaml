@@ -125,7 +125,7 @@ paths:
           description: OK
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Transaction" }
+              schema: { $ref: "#/components/schemas/UpdateTransactionResponse" }
     delete:
       operationId: deleteTransaction
       tags: [transactions]
@@ -136,6 +136,29 @@ paths:
           schema: { type: string }
       responses:
         "204": { description: Deleted }
+
+  /transactions/recategorize-by-pattern:
+    post:
+      operationId: recategorizeTransactionsByPattern
+      tags: [transactions]
+      summary: |
+        Bulk re-categorize past transactions whose description matches a
+        mapping rule's pattern and that currently sit in the rule's old
+        category. Used by the "apply this rule to past transactions too"
+        prompt that surfaces after the auto-relearn flow repoints a seed
+        rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
+        "Misc / Buffer" onto the user's real per-debt category).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecategorizeByPatternInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecategorizeByPatternResult" }
 
   /debts:
     get:
@@ -1154,6 +1177,69 @@ components:
             transactions with this description fragment auto-categorize the
             same way. Used by the "Categorize + remember" affordance on the
             Transactions and Amex pages.
+
+    RepointedRule:
+      type: object
+      required: [ruleId, pattern, matchType, fromCategoryId, toCategoryId, candidateCount]
+      description: |
+        Reported by PATCH /transactions/:id when the auto-learn flow
+        repoints an existing mapping rule onto a new category. `candidateCount`
+        is the number of older transactions that match this rule's pattern
+        and currently sit in the rule's old category, i.e. the count that
+        would be flipped if the user accepts the "apply to past transactions
+        too" prompt and POSTs to /transactions/recategorize-by-pattern with
+        these fields.
+      properties:
+        ruleId: { type: string }
+        pattern: { type: string }
+        matchType: { type: string, enum: [contains, exact, starts_with] }
+        fromCategoryId: { type: string }
+        toCategoryId: { type: string }
+        candidateCount: { type: integer }
+
+    UpdateTransactionResponse:
+      allOf:
+        - $ref: "#/components/schemas/Transaction"
+        - type: object
+          required: [repointedRules]
+          properties:
+            repointedRules:
+              type: array
+              items: { $ref: "#/components/schemas/RepointedRule" }
+              description: |
+                Empty unless this PATCH triggered the auto-learn flow to
+                repoint one or more existing mapping rules onto a new
+                category. The client surfaces this as a "apply to past
+                transactions too" prompt.
+
+    RecategorizeByPatternInput:
+      type: object
+      required: [pattern, matchType, fromCategoryId, toCategoryId]
+      properties:
+        pattern: { type: string, minLength: 1 }
+        matchType: { type: string, enum: [contains, exact, starts_with] }
+        fromCategoryId:
+          type: string
+          description: |
+            Only transactions currently in this category are touched.
+            Transactions manually re-categorized to a different category
+            are skipped to preserve explicit user intent.
+        toCategoryId: { type: string }
+
+    RecategorizeByPatternResult:
+      type: object
+      required: [updated, affectedMonths]
+      properties:
+        updated:
+          type: integer
+          description: Number of transactions whose categoryId was flipped.
+        affectedMonths:
+          type: array
+          description: |
+            Distinct YYYY-MM-01 month-start strings spanning the updated
+            transactions. Clients invalidate the corresponding budget month
+            queries so per-line actuals refresh.
+          items: { type: string }
 
     Debt:
       type: object

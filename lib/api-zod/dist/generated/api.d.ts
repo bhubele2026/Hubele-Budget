@@ -553,7 +553,7 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     debtId?: string | null | undefined;
     rememberPattern?: string | null | undefined;
 }>;
-export declare const UpdateTransactionResponse: zod.ZodObject<{
+export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObject<{
     id: zod.ZodString;
     occurredOn: zod.ZodString;
     occurredAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -622,13 +622,89 @@ export declare const UpdateTransactionResponse: zod.ZodObject<{
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
-}>;
+}>, zod.ZodObject<{
+    repointedRules: zod.ZodArray<zod.ZodObject<{
+        ruleId: zod.ZodString;
+        pattern: zod.ZodString;
+        matchType: zod.ZodEnum<["contains", "exact", "starts_with"]>;
+        fromCategoryId: zod.ZodString;
+        toCategoryId: zod.ZodString;
+        candidateCount: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        ruleId: string;
+        pattern: string;
+        matchType: "exact" | "contains" | "starts_with";
+        fromCategoryId: string;
+        toCategoryId: string;
+        candidateCount: number;
+    }, {
+        ruleId: string;
+        pattern: string;
+        matchType: "exact" | "contains" | "starts_with";
+        fromCategoryId: string;
+        toCategoryId: string;
+        candidateCount: number;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    repointedRules: {
+        ruleId: string;
+        pattern: string;
+        matchType: "exact" | "contains" | "starts_with";
+        fromCategoryId: string;
+        toCategoryId: string;
+        candidateCount: number;
+    }[];
+}, {
+    repointedRules: {
+        ruleId: string;
+        pattern: string;
+        matchType: "exact" | "contains" | "starts_with";
+        fromCategoryId: string;
+        toCategoryId: string;
+        candidateCount: number;
+    }[];
+}>>;
 export declare const DeleteTransactionParams: zod.ZodObject<{
     id: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
     id: string;
 }, {
     id: string;
+}>;
+/**
+ * @summary Bulk re-categorize past transactions whose description matches a
+mapping rule's pattern and that currently sit in the rule's old
+category. Used by the "apply this rule to past transactions too"
+prompt that surfaces after the auto-relearn flow repoints a seed
+rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
+"Misc / Buffer" onto the user's real per-debt category).
+
+ */
+export declare const RecategorizeTransactionsByPatternBody: zod.ZodObject<{
+    pattern: zod.ZodString;
+    matchType: zod.ZodEnum<["contains", "exact", "starts_with"]>;
+    fromCategoryId: zod.ZodString;
+    toCategoryId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    pattern: string;
+    matchType: "exact" | "contains" | "starts_with";
+    fromCategoryId: string;
+    toCategoryId: string;
+}, {
+    pattern: string;
+    matchType: "exact" | "contains" | "starts_with";
+    fromCategoryId: string;
+    toCategoryId: string;
+}>;
+export declare const RecategorizeTransactionsByPatternResponse: zod.ZodObject<{
+    updated: zod.ZodNumber;
+    affectedMonths: zod.ZodArray<zod.ZodString, "many">;
+}, "strip", zod.ZodTypeAny, {
+    updated: number;
+    affectedMonths: string[];
+}, {
+    updated: number;
+    affectedMonths: string[];
 }>;
 export declare const ListDebtsResponseItem: zod.ZodObject<{
     id: zod.ZodString;

@@ -74,6 +74,8 @@ import type {
   PlaidLinkToken,
   PlaidSyncInput,
   PlaidSyncResult,
+  RecategorizeByPatternInput,
+  RecategorizeByPatternResult,
   RecurringItem,
   RecurringItemInput,
   SeedDefaultBudgetResult,
@@ -83,6 +85,7 @@ import type {
   SyncMinimumsResult,
   Transaction,
   TransactionInput,
+  UpdateTransactionResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -422,8 +425,8 @@ export const updateTransaction = async (
   id: string,
   transactionInput: TransactionInput,
   options?: RequestInit,
-): Promise<Transaction> => {
-  return customFetch<Transaction>(getUpdateTransactionUrl(id), {
+): Promise<UpdateTransactionResponse> => {
+  return customFetch<UpdateTransactionResponse>(getUpdateTransactionUrl(id), {
     ...options,
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...options?.headers },
@@ -571,6 +574,110 @@ export const useDeleteTransaction = <
   TContext
 > => {
   return useMutation(getDeleteTransactionMutationOptions(options));
+};
+
+/**
+ * @summary Bulk re-categorize past transactions whose description matches a
+mapping rule's pattern and that currently sit in the rule's old
+category. Used by the "apply this rule to past transactions too"
+prompt that surfaces after the auto-relearn flow repoints a seed
+rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
+"Misc / Buffer" onto the user's real per-debt category).
+
+ */
+export const getRecategorizeTransactionsByPatternUrl = () => {
+  return `/api/transactions/recategorize-by-pattern`;
+};
+
+export const recategorizeTransactionsByPattern = async (
+  recategorizeByPatternInput: RecategorizeByPatternInput,
+  options?: RequestInit,
+): Promise<RecategorizeByPatternResult> => {
+  return customFetch<RecategorizeByPatternResult>(
+    getRecategorizeTransactionsByPatternUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(recategorizeByPatternInput),
+    },
+  );
+};
+
+export const getRecategorizeTransactionsByPatternMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>,
+    TError,
+    { data: BodyType<RecategorizeByPatternInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>,
+  TError,
+  { data: BodyType<RecategorizeByPatternInput> },
+  TContext
+> => {
+  const mutationKey = ["recategorizeTransactionsByPattern"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>,
+    { data: BodyType<RecategorizeByPatternInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return recategorizeTransactionsByPattern(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecategorizeTransactionsByPatternMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>
+>;
+export type RecategorizeTransactionsByPatternMutationBody =
+  BodyType<RecategorizeByPatternInput>;
+export type RecategorizeTransactionsByPatternMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Bulk re-categorize past transactions whose description matches a
+mapping rule's pattern and that currently sit in the rule's old
+category. Used by the "apply this rule to past transactions too"
+prompt that surfaces after the auto-relearn flow repoints a seed
+rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
+"Misc / Buffer" onto the user's real per-debt category).
+
+ */
+export const useRecategorizeTransactionsByPattern = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>,
+    TError,
+    { data: BodyType<RecategorizeByPatternInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>,
+  TError,
+  { data: BodyType<RecategorizeByPatternInput> },
+  TContext
+> => {
+  return useMutation(
+    getRecategorizeTransactionsByPatternMutationOptions(options),
+  );
 };
 
 export const getListDebtsUrl = () => {

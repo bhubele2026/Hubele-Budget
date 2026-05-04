@@ -16,6 +16,7 @@ import {
   UpdateTransactionParams,
   DeleteTransactionParams,
   ListTransactionsQueryParams,
+  RecategorizeTransactionsByPatternBody,
 } from "@workspace/api-zod";
 
 void UpdateTransactionBody;
@@ -174,13 +175,22 @@ router.patch(
     //      duplicates (e.g. seed "AMERICAN EXPRESS ACH" alongside an auto
     //      "AMERICAN EXPRESS"). Existing rules' priorities are preserved so
     //      they continue to win on auto-categorize for new transactions.
+    type RepointedRule = {
+      ruleId: string;
+      pattern: string;
+      matchType: "contains" | "exact" | "starts_with";
+      fromCategoryId: string;
+      toCategoryId: string;
+      candidateCount: number;
+    };
+    const repointedRules: RepointedRule[] = [];
     if (patch.categoryId && !row.isTransfer) {
       const userId = req.userId!;
       const description = row.description ?? "";
       const allRules = await loadUserRules(userId);
       const matching = findMatchingRules(description, allRules);
       const toRepoint = matching.filter(
-        (r) => r.categoryId !== patch.categoryId,
+        (r) => r.categoryId && r.categoryId !== patch.categoryId,
       );
       for (const r of toRepoint) {
         await db
@@ -192,6 +202,29 @@ router.patch(
               eq(mappingRulesTable.userId, userId),
             ),
           );
+        // Count older transactions still sitting in the rule's old
+        // category that match this rule's pattern. Surfacing this count
+        // lets the client offer a "apply to past transactions too" prompt
+        // so the user doesn't have to touch every prior payment one at a
+        // time. We scope to rows currently in `fromCategoryId` so manual
+        // edits to a different category are preserved.
+        const fromCategoryId = r.categoryId as string;
+        const candidates = await selectPatternCandidates(
+          userId,
+          r,
+          fromCategoryId,
+        );
+        const candidateCount = candidates.filter(
+          (c) => c.id !== row.id,
+        ).length;
+        repointedRules.push({
+          ruleId: r.id,
+          pattern: r.pattern,
+          matchType: normalizeMatchType(r.matchType),
+          fromCategoryId,
+          toCategoryId: patch.categoryId,
+          candidateCount,
+        });
       }
       if (matching.length === 0) {
         const explicit =
@@ -220,7 +253,110 @@ router.patch(
           ),
         );
     }
-    res.json(row);
+    res.json({ ...row, repointedRules });
+  },
+);
+
+function normalizeMatchType(
+  raw: string,
+): "contains" | "exact" | "starts_with" {
+  if (raw === "exact" || raw === "starts_with") return raw;
+  return "contains";
+}
+
+/**
+ * Build the SQL pattern for ilike from a mapping rule's matchType. Mirrors
+ * `ruleMatchesDescription`'s semantics (case-insensitive substring/exact/
+ * prefix) but uses Postgres ilike so we can do the candidate scan in a
+ * single query instead of pulling rows back to JS.
+ */
+function ilikePatternFor(rule: { matchType: string; pattern: string }): string {
+  const safe = rule.pattern.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
+  switch (rule.matchType) {
+    case "exact":
+      return safe;
+    case "starts_with":
+      return `${safe}%`;
+    case "contains":
+    default:
+      return `%${safe}%`;
+  }
+}
+
+async function selectPatternCandidates(
+  userId: string,
+  rule: { pattern: string; matchType: string },
+  fromCategoryId: string,
+): Promise<{ id: string; occurredOn: string }[]> {
+  return db
+    .select({
+      id: transactionsTable.id,
+      occurredOn: transactionsTable.occurredOn,
+    })
+    .from(transactionsTable)
+    .where(
+      and(
+        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.categoryId, fromCategoryId),
+        eq(transactionsTable.isTransfer, false),
+        ilike(transactionsTable.description, ilikePatternFor(rule)),
+      ),
+    );
+}
+
+/**
+ * Bulk re-categorize past transactions whose description matches a mapping
+ * rule's pattern AND that currently sit in the rule's old category. Used
+ * by the "apply this rule to past transactions too" prompt that fires
+ * after PATCH /transactions/:id repoints a seed rule onto the user's real
+ * category. Transactions manually re-categorized to some other category
+ * are skipped (we only touch rows whose categoryId == fromCategoryId).
+ */
+router.post(
+  "/transactions/recategorize-by-pattern",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const parsed = RecategorizeTransactionsByPatternBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const userId = req.userId!;
+    const { pattern, matchType, fromCategoryId, toCategoryId } = parsed.data;
+    if (fromCategoryId === toCategoryId) {
+      res.json({ updated: 0, affectedMonths: [] });
+      return;
+    }
+    const candidates = await selectPatternCandidates(
+      userId,
+      { pattern, matchType },
+      fromCategoryId,
+    );
+    if (!candidates.length) {
+      res.json({ updated: 0, affectedMonths: [] });
+      return;
+    }
+    const ids = candidates.map((c) => c.id);
+    const monthSet = new Set<string>();
+    for (const c of candidates) {
+      const m = `${c.occurredOn.slice(0, 7)}-01`;
+      monthSet.add(m);
+    }
+    const updated = await db
+      .update(transactionsTable)
+      .set({ categoryId: toCategoryId })
+      .where(
+        and(
+          eq(transactionsTable.userId, userId),
+          eq(transactionsTable.categoryId, fromCategoryId),
+          inArray(transactionsTable.id, ids),
+        ),
+      )
+      .returning({ id: transactionsTable.id });
+    res.json({
+      updated: updated.length,
+      affectedMonths: Array.from(monthSet).sort(),
+    });
   },
 );
 

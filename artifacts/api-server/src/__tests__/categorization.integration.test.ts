@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import express from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import * as XLSX from "xlsx";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
@@ -437,6 +437,181 @@ describe("categorization pipeline (integration)", () => {
     expect(rules[0]!.pattern).toBe(`${merchant} STORE`);
     expect(rules[0]!.matchType).toBe("contains");
     expect(rules[0]!.priority).toBe(100);
+  });
+
+  it("PATCH /transactions/:id reports repointedRules with a candidateCount and POST /transactions/recategorize-by-pattern bulk-flips the historical rows", async () => {
+    // Mirror the production "AMERICAN EXPRESS ACH → Misc/Buffer" seed
+    // scenario: a mapping rule was pre-pointed at Misc/Buffer, several
+    // older payments were already auto-categorized into Misc/Buffer, and
+    // the user picks the real per-debt category for one of them. The
+    // PATCH response should include the repointed rule + candidate count
+    // for the remaining historical rows, and POSTing to the bulk
+    // endpoint should flip exactly those rows (skipping any manually
+    // categorized to a different category and leaving the originally
+    // edited row alone).
+    const [miscCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Misc Buffer Bulk ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+    const [debtCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Amex Bulk ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Debt",
+        sourceKind: "manual",
+      })
+      .returning();
+    const [otherCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Other Bulk ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+
+    const seedPattern = `BULKAMEX-${randomUUID().slice(0, 6).toUpperCase()}`;
+    const [seedRule] = await db
+      .insert(mappingRulesTable)
+      .values({
+        userId: TEST_USER,
+        pattern: seedPattern,
+        matchType: "contains",
+        categoryId: miscCat!.id,
+        priority: 50,
+      })
+      .returning();
+
+    // Three older payments already auto-categorized into Misc/Buffer
+    // (the rule's old category) — these should snap onto debtCat in bulk.
+    const olderIds: string[] = [];
+    for (let day = 5; day <= 7; day++) {
+      const [r] = await db
+        .insert(transactionsTable)
+        .values({
+          userId: TEST_USER,
+          occurredOn: dateInCurrentMonth(day),
+          description: `${seedPattern} PMT XXXX${1000 + day}`,
+          amount: "-150.00",
+          source: "bank",
+          categoryId: miscCat!.id,
+        })
+        .returning();
+      olderIds.push(r!.id);
+    }
+
+    // One matching payment that the user manually re-categorized to a
+    // different non-Misc category — must be preserved.
+    const [manualOther] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: dateInCurrentMonth(8),
+        description: `${seedPattern} PMT MANUAL`,
+        amount: "-99.00",
+        source: "bank",
+        categoryId: otherCat!.id,
+      })
+      .returning();
+
+    // One uncategorized matching payment — also must be left alone (we
+    // only touch rows currently in fromCategoryId).
+    const [uncatRow] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: dateInCurrentMonth(9),
+        description: `${seedPattern} PMT UNCAT`,
+        amount: "-12.00",
+        source: "bank",
+      })
+      .returning();
+
+    // The "trigger" txn — the user picks the real debt category for one
+    // of the historical rows. Server should repoint the seed rule and
+    // report 2 remaining candidates (3 older - 1 just edited).
+    const triggerId = olderIds[0];
+    const patch = await api("PATCH", `/transactions/${triggerId}`, {
+      categoryId: debtCat!.id,
+    });
+    expect(patch.status).toBe(200);
+    const patchBody = patch.json as {
+      id: string;
+      categoryId: string;
+      repointedRules: {
+        ruleId: string;
+        pattern: string;
+        matchType: string;
+        fromCategoryId: string;
+        toCategoryId: string;
+        candidateCount: number;
+      }[];
+    };
+    expect(patchBody.categoryId).toBe(debtCat!.id);
+    expect(patchBody.repointedRules.length).toBe(1);
+    const reported = patchBody.repointedRules[0]!;
+    expect(reported.ruleId).toBe(seedRule!.id);
+    expect(reported.pattern).toBe(seedPattern);
+    expect(reported.matchType).toBe("contains");
+    expect(reported.fromCategoryId).toBe(miscCat!.id);
+    expect(reported.toCategoryId).toBe(debtCat!.id);
+    expect(reported.candidateCount).toBe(2);
+
+    // POST the bulk re-categorize and verify only the 2 remaining
+    // Misc/Buffer rows flipped onto debtCat.
+    const bulk = await api("POST", `/transactions/recategorize-by-pattern`, {
+      pattern: reported.pattern,
+      matchType: reported.matchType,
+      fromCategoryId: reported.fromCategoryId,
+      toCategoryId: reported.toCategoryId,
+    });
+    expect(bulk.status).toBe(200);
+    const bulkBody = bulk.json as { updated: number; affectedMonths: string[] };
+    expect(bulkBody.updated).toBe(2);
+    expect(bulkBody.affectedMonths).toEqual([currentMonthStart()]);
+
+    // The two historical Misc rows are now on debtCat.
+    const finalRows = await db
+      .select()
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.userId, TEST_USER),
+          inArray(transactionsTable.id, [
+            ...olderIds,
+            manualOther!.id,
+            uncatRow!.id,
+          ]),
+        ),
+      );
+    const byId = new Map(finalRows.map((r) => [r.id, r]));
+    for (const id of olderIds) {
+      expect(byId.get(id)!.categoryId).toBe(debtCat!.id);
+    }
+    // Manual edits and uncategorized rows are preserved.
+    expect(byId.get(manualOther!.id)!.categoryId).toBe(otherCat!.id);
+    expect(byId.get(uncatRow!.id)!.categoryId).toBeNull();
+
+    // A re-fired bulk on the same pattern is now idempotent — nothing in
+    // fromCategoryId still matches.
+    const replay = await api("POST", `/transactions/recategorize-by-pattern`, {
+      pattern: reported.pattern,
+      matchType: reported.matchType,
+      fromCategoryId: reported.fromCategoryId,
+      toCategoryId: reported.toCategoryId,
+    });
+    const replayBody = replay.json as { updated: number };
+    expect(replayBody.updated).toBe(0);
   });
 
   it("PATCH /transactions/:id auto-relearns: repoints an existing matching rule onto the new category instead of creating a duplicate", async () => {

@@ -8,11 +8,14 @@ import {
   useGetForecast,
   useRefreshForecastBank,
   useSeedAprilChase,
+  useRecategorizeTransactionsByPattern,
   getListTransactionsQueryKey,
   getGetForecastQueryKey,
   getGetBudgetMonthQueryKey,
   type Transaction,
+  type RepointedRule,
 } from "@workspace/api-client-react";
+import { ToastAction } from "@/components/ui/toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -527,9 +530,72 @@ export default function TransactionsPage() {
     );
   };
 
+  const recategorizeBulk = useRecategorizeTransactionsByPattern();
+
+  const offerBulkRecategorize = (rule: RepointedRule) => {
+    // Surfaces the "apply this rule to past transactions too" prompt after
+    // PATCH /transactions/:id repointed an existing seed mapping rule onto
+    // the user's freshly chosen category. The `candidateCount` is the
+    // number of older transactions still sitting in the rule's previous
+    // category (e.g. "Misc / Buffer") that would snap onto the new one.
+    if (rule.candidateCount <= 0) return;
+    toast({
+      title: "Apply to past too?",
+      description: `${rule.candidateCount} older "${rule.pattern}" transaction${rule.candidateCount === 1 ? "" : "s"} can move to this category.`,
+      action: (
+        <ToastAction
+          altText="Apply to past transactions too"
+          data-testid="action-apply-rule-past"
+          onClick={() => {
+            recategorizeBulk.mutate(
+              {
+                data: {
+                  pattern: rule.pattern,
+                  matchType: rule.matchType,
+                  fromCategoryId: rule.fromCategoryId,
+                  toCategoryId: rule.toCategoryId,
+                },
+              },
+              {
+                onSuccess: (res) => {
+                  queryClient.invalidateQueries({
+                    queryKey: getListTransactionsQueryKey(),
+                  });
+                  for (const m of res.affectedMonths) {
+                    queryClient.invalidateQueries({
+                      queryKey: getGetBudgetMonthQueryKey(m),
+                    });
+                  }
+                  toast({
+                    title:
+                      res.updated === 0
+                        ? "Nothing to update"
+                        : `Re-categorized ${res.updated} past transaction${res.updated === 1 ? "" : "s"}`,
+                  });
+                },
+                onError: (e) => {
+                  toast({
+                    title: "Couldn't apply to past",
+                    description: (e as Error).message,
+                    variant: "destructive",
+                  });
+                },
+              },
+            );
+          }}
+        >
+          Apply
+        </ToastAction>
+      ),
+    });
+  };
+
   const handleQuickCategorize = async (tx: Transaction, categoryId: string) => {
     try {
-      await updateTx.mutateAsync({ id: tx.id, data: { categoryId } });
+      const updated = await updateTx.mutateAsync({
+        id: tx.id,
+        data: { categoryId },
+      });
       queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
       queryClient.invalidateQueries({
         queryKey: getGetBudgetMonthQueryKey(`${tx.occurredOn.slice(0, 7)}-01`),
@@ -538,6 +604,16 @@ export default function TransactionsPage() {
         title: "Categorized",
         description: "Future similar transactions will auto-categorize.",
       });
+      // If the auto-learn flow repointed an existing seed rule (e.g. an
+      // Amex / Cap One / Discover debt-payment rule pre-pointed at
+      // "Misc / Buffer"), surface a follow-up prompt offering to also
+      // re-categorize the historical transactions still sitting in the
+      // rule's old category. We prompt for each repointed rule that has
+      // remaining candidates so the user can fix all of them in one go.
+      const repointedRules: RepointedRule[] = updated.repointedRules ?? [];
+      for (const rule of repointedRules) {
+        if (rule.candidateCount > 0) offerBulkRecategorize(rule);
+      }
     } catch (e) {
       toast({
         title: "Couldn't categorize",

@@ -201,41 +201,96 @@ export const UpdateTransactionBody = zod.object({
     ),
 });
 
-export const UpdateTransactionResponse = zod.object({
-  id: zod.string(),
-  occurredOn: zod.string(),
-  occurredAt: zod.string().nullish(),
-  description: zod.string(),
-  amount: zod.string(),
-  account: zod.string().nullish(),
-  categoryId: zod.string().nullish(),
-  forecastFlag: zod.boolean(),
-  weeklyAllowance: zod.boolean(),
-  weeklyBucket: zod
-    .union([
-      zod.literal("groceries"),
-      zod.literal("dining"),
-      zod.literal("entertainment"),
-      zod.literal("misc"),
-      zod.literal(null),
-    ])
-    .nullish(),
-  monthlyAllowance: zod.boolean(),
-  unplannedAllowance: zod.boolean(),
-  reimbursable: zod.boolean(),
-  reimbursed: zod.boolean(),
-  isTransfer: zod.boolean(),
-  notes: zod.string().nullish(),
-  source: zod.string(),
-  member: zod.string().nullish(),
-  owedBy: zod.string().nullish(),
-  plaidTransactionId: zod.string().nullish(),
-  plaidAccountId: zod.string().nullish(),
-  debtId: zod.string().nullish(),
-});
+export const UpdateTransactionResponse = zod
+  .object({
+    id: zod.string(),
+    occurredOn: zod.string(),
+    occurredAt: zod.string().nullish(),
+    description: zod.string(),
+    amount: zod.string(),
+    account: zod.string().nullish(),
+    categoryId: zod.string().nullish(),
+    forecastFlag: zod.boolean(),
+    weeklyAllowance: zod.boolean(),
+    weeklyBucket: zod
+      .union([
+        zod.literal("groceries"),
+        zod.literal("dining"),
+        zod.literal("entertainment"),
+        zod.literal("misc"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    monthlyAllowance: zod.boolean(),
+    unplannedAllowance: zod.boolean(),
+    reimbursable: zod.boolean(),
+    reimbursed: zod.boolean(),
+    isTransfer: zod.boolean(),
+    notes: zod.string().nullish(),
+    source: zod.string(),
+    member: zod.string().nullish(),
+    owedBy: zod.string().nullish(),
+    plaidTransactionId: zod.string().nullish(),
+    plaidAccountId: zod.string().nullish(),
+    debtId: zod.string().nullish(),
+  })
+  .and(
+    zod.object({
+      repointedRules: zod
+        .array(
+          zod
+            .object({
+              ruleId: zod.string(),
+              pattern: zod.string(),
+              matchType: zod.enum(["contains", "exact", "starts_with"]),
+              fromCategoryId: zod.string(),
+              toCategoryId: zod.string(),
+              candidateCount: zod.number(),
+            })
+            .describe(
+              "Reported by PATCH \/transactions\/:id when the auto-learn flow\nrepoints an existing mapping rule onto a new category. `candidateCount`\nis the number of older transactions that match this rule's pattern\nand currently sit in the rule's old category, i.e. the count that\nwould be flipped if the user accepts the \"apply to past transactions\ntoo\" prompt and POSTs to \/transactions\/recategorize-by-pattern with\nthese fields.\n",
+            ),
+        )
+        .describe(
+          'Empty unless this PATCH triggered the auto-learn flow to\nrepoint one or more existing mapping rules onto a new\ncategory. The client surfaces this as a \"apply to past\ntransactions too\" prompt.\n',
+        ),
+    }),
+  );
 
 export const DeleteTransactionParams = zod.object({
   id: zod.coerce.string(),
+});
+
+/**
+ * @summary Bulk re-categorize past transactions whose description matches a
+mapping rule's pattern and that currently sit in the rule's old
+category. Used by the "apply this rule to past transactions too"
+prompt that surfaces after the auto-relearn flow repoints a seed
+rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
+"Misc / Buffer" onto the user's real per-debt category).
+
+ */
+
+export const RecategorizeTransactionsByPatternBody = zod.object({
+  pattern: zod.string().min(1),
+  matchType: zod.enum(["contains", "exact", "starts_with"]),
+  fromCategoryId: zod
+    .string()
+    .describe(
+      "Only transactions currently in this category are touched.\nTransactions manually re-categorized to a different category\nare skipped to preserve explicit user intent.\n",
+    ),
+  toCategoryId: zod.string(),
+});
+
+export const RecategorizeTransactionsByPatternResponse = zod.object({
+  updated: zod
+    .number()
+    .describe("Number of transactions whose categoryId was flipped."),
+  affectedMonths: zod
+    .array(zod.string())
+    .describe(
+      "Distinct YYYY-MM-01 month-start strings spanning the updated\ntransactions. Clients invalidate the corresponding budget month\nqueries so per-line actuals refresh.\n",
+    ),
 });
 
 export const ListDebtsResponseItem = zod.object({

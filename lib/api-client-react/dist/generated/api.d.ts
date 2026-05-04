@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, RecurringItem, RecurringItemInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, Transaction, TransactionInput } from "./api.schemas";
+import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, Transaction, TransactionInput, UpdateTransactionResponse } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -90,7 +90,7 @@ export declare const useCreateTransaction: <TError = ErrorType<unknown>, TContex
     data: BodyType<CreateTransactionInput>;
 }, TContext>;
 export declare const getUpdateTransactionUrl: (id: string) => string;
-export declare const updateTransaction: (id: string, transactionInput: TransactionInput, options?: RequestInit) => Promise<Transaction>;
+export declare const updateTransaction: (id: string, transactionInput: TransactionInput, options?: RequestInit) => Promise<UpdateTransactionResponse>;
 export declare const getUpdateTransactionMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateTransaction>>, TError, {
         id: string;
@@ -133,6 +133,45 @@ export declare const useDeleteTransaction: <TError = ErrorType<unknown>, TContex
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof deleteTransaction>>, TError, {
     id: string;
+}, TContext>;
+/**
+ * @summary Bulk re-categorize past transactions whose description matches a
+mapping rule's pattern and that currently sit in the rule's old
+category. Used by the "apply this rule to past transactions too"
+prompt that surfaces after the auto-relearn flow repoints a seed
+rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
+"Misc / Buffer" onto the user's real per-debt category).
+
+ */
+export declare const getRecategorizeTransactionsByPatternUrl: () => string;
+export declare const recategorizeTransactionsByPattern: (recategorizeByPatternInput: RecategorizeByPatternInput, options?: RequestInit) => Promise<RecategorizeByPatternResult>;
+export declare const getRecategorizeTransactionsByPatternMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>, TError, {
+        data: BodyType<RecategorizeByPatternInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>, TError, {
+    data: BodyType<RecategorizeByPatternInput>;
+}, TContext>;
+export type RecategorizeTransactionsByPatternMutationResult = NonNullable<Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>>;
+export type RecategorizeTransactionsByPatternMutationBody = BodyType<RecategorizeByPatternInput>;
+export type RecategorizeTransactionsByPatternMutationError = ErrorType<unknown>;
+/**
+ * @summary Bulk re-categorize past transactions whose description matches a
+mapping rule's pattern and that currently sit in the rule's old
+category. Used by the "apply this rule to past transactions too"
+prompt that surfaces after the auto-relearn flow repoints a seed
+rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
+"Misc / Buffer" onto the user's real per-debt category).
+
+ */
+export declare const useRecategorizeTransactionsByPattern: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>, TError, {
+        data: BodyType<RecategorizeByPatternInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>, TError, {
+    data: BodyType<RecategorizeByPatternInput>;
 }, TContext>;
 export declare const getListDebtsUrl: () => string;
 export declare const listDebts: (options?: RequestInit) => Promise<Debt[]>;
