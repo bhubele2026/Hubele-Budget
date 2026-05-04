@@ -87,6 +87,65 @@ import { CSS } from "@dnd-kit/utilities";
 
 const CATEGORY_DROP_PREFIX = "category:";
 
+// Task #244 — persist "I've already reviewed this batch" across reloads
+// and repeat clicks of the post-sync / post-import toast's "View" link.
+// The pill is dismissible per visit (in component state), but without
+// persistence a reload or a second "View" click for the same batch of
+// rule ids re-shows the pill even though the user has already audited
+// those rules. We key the dismissal by a hash of the sorted focus ids
+// so a *different* combination (a genuinely new sync/import batch)
+// still triggers the pill.
+const FOCUS_PILL_DISMISSED_STORAGE_KEY =
+  "h2budget:mappingRules:dismissedFocusBatches";
+// Cap the persisted list so it can't grow unbounded over months of
+// syncs. 50 is plenty for the "did I already see this?" check — older
+// batches that fall off the list will just re-show the pill once,
+// which is the same as never having dismissed them.
+const FOCUS_PILL_DISMISSED_MAX = 50;
+
+function focusBatchKey(ids: readonly string[]): string {
+  // Sort so the URL's id ordering doesn't matter — `?focus=a,b` and
+  // `?focus=b,a` are the same audit batch from the user's POV.
+  return [...ids].sort().join(",");
+}
+
+function loadDismissedFocusBatches(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(FOCUS_PILL_DISMISSED_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((s): s is string => typeof s === "string");
+  } catch {
+    return [];
+  }
+}
+
+function isFocusBatchDismissed(ids: readonly string[]): boolean {
+  if (ids.length === 0) return false;
+  return loadDismissedFocusBatches().includes(focusBatchKey(ids));
+}
+
+function rememberDismissedFocusBatch(ids: readonly string[]): void {
+  if (typeof window === "undefined" || ids.length === 0) return;
+  const key = focusBatchKey(ids);
+  try {
+    const existing = loadDismissedFocusBatches();
+    if (existing.includes(key)) return;
+    const next = [...existing, key];
+    if (next.length > FOCUS_PILL_DISMISSED_MAX) {
+      next.splice(0, next.length - FOCUS_PILL_DISMISSED_MAX);
+    }
+    window.localStorage.setItem(
+      FOCUS_PILL_DISMISSED_STORAGE_KEY,
+      JSON.stringify(next),
+    );
+  } catch {
+    /* ignore quota / disabled storage */
+  }
+}
+
 // The DragOverlay shows a compact card while the user drags a rule, but
 // dnd-kit's `closestCenter` compares the OVERLAY's center against each
 // droppable's center. Since the cursor is anchored near the overlay's
@@ -1357,14 +1416,24 @@ export default function MappingRulesPage() {
     const live = new Set(rules.map((r) => r.id));
     return focusIds.filter((id) => live.has(id));
   }, [focusIds, rules]);
-  const [pillDismissed, setPillDismissed] = useState(false);
+  // Task #244 — initial dismissal state is sourced from localStorage
+  // so the pill stays dismissed for batches the user has already
+  // audited (across reloads and repeat clicks of the toast's "View"
+  // link). A *different* combination of focus ids hashes to a
+  // different key and so still shows the pill.
+  const [pillDismissed, setPillDismissed] = useState(() =>
+    isFocusBatchDismissed(focusIds),
+  );
   const [showOnlyFocused, setShowOnlyFocused] = useState(false);
   // Reset the dismissed/toggle flags whenever the focus param changes
-  // (e.g. the user clicks "View" on a fresh sync toast) so the pill
-  // reappears for the new batch.
+  // (e.g. the user clicks "View" on a fresh sync toast). For dismissal
+  // we re-consult persisted storage so a previously-audited batch
+  // stays dismissed even when the user navigates back to it; new
+  // batches get a fresh pill.
   useEffect(() => {
-    setPillDismissed(false);
+    setPillDismissed(isFocusBatchDismissed(focusIds));
     setShowOnlyFocused(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
   // Spec (Task #236): pill shows when the URL carries 2+ focus ids and
   // *at least one* of them still exists in the current rules. The
@@ -1379,6 +1448,10 @@ export default function MappingRulesPage() {
   const focusFilterActive =
     showOnlyFocused && showFocusPill && matchedFocusIds.length > 0;
   const dismissFocusPill = () => {
+    // Task #244 — remember this batch so re-opening the page or
+    // re-clicking the toast's "View" link with the same focus ids
+    // doesn't re-show the pill.
+    rememberDismissedFocusBatch(focusIds);
     setPillDismissed(true);
     setShowOnlyFocused(false);
     // Strip just the focus param while preserving anything else the
