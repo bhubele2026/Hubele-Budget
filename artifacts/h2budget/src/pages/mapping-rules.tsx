@@ -564,6 +564,47 @@ export default function MappingRulesPage() {
 
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
+  // Both the "Add" form and the Undo-after-delete toast funnel through
+  // POST /mapping-rules, but they have different intents:
+  //   - "create": the user is declaring fresh categorization intent, so
+  //     we follow up with the "Apply to past too?" prompt when the
+  //     server reports older matching transactions.
+  //   - "restore": the user is undoing a deletion they just made, so we
+  //     deliberately do NOT re-prompt — they're reverting state, not
+  //     making a new decision, and asking again would be confusing.
+  // Funneling both call sites through this helper makes that contract
+  // explicit at the call site (instead of being implicit in which
+  // onSuccess handler the caller happened to pass) so future changes
+  // can't accidentally reintroduce the prompt on restore.
+  const submitMappingRule = (
+    data: MappingRuleInput,
+    source: "create" | "restore",
+    toCategoryName?: string,
+  ) => {
+    createRule.mutate(
+      { data },
+      {
+        onSuccess: (created) => {
+          if (source === "restore") {
+            toast({ title: "Rule restored" });
+            return;
+          }
+          toast({ title: "Rule added" });
+          // Surface the same "Apply to past too?" toast as the
+          // Transactions / Amex auto-learn flow when the freshly
+          // created rule has older uncategorized matches. Hook
+          // returns early when candidate count is 0, so we don't
+          // need to gate it here.
+          const bulkRule = bulkRuleFromRuleAction(
+            created.ruleAction,
+            toCategoryName,
+          );
+          if (bulkRule) offerBulkRecategorize(bulkRule);
+        },
+      },
+    );
+  };
+
   const handleAddRule = () => {
     if (!pattern || !categoryId) return;
     // New manually-added rules go above any auto-learned ones (which top out
@@ -582,25 +623,10 @@ export default function MappingRulesPage() {
     // Clear the form right away so the input feels responsive — the
     // optimistic row already shows the new rule in the list below.
     setPattern("");
-    createRule.mutate(
-      { data },
-      {
-        onSuccess: (created) => {
-          toast({ title: "Rule added" });
-          // Surface the same "Apply to past too?" toast as the
-          // Transactions / Amex auto-learn flow when the freshly
-          // created rule has older uncategorized matches. Hook
-          // returns early when candidate count is 0, so we don't
-          // need to gate it here.
-          const bulkRule = bulkRuleFromRuleAction(
-            created.ruleAction,
-            categoryId
-              ? catById.get(categoryId)?.name ?? undefined
-              : undefined,
-          );
-          if (bulkRule) offerBulkRecategorize(bulkRule);
-        },
-      },
+    submitMappingRule(
+      data,
+      "create",
+      catById.get(categoryId)?.name ?? undefined,
     );
   };
 
@@ -732,18 +758,17 @@ export default function MappingRulesPage() {
                 data-testid={`action-undo-delete-rule-${deleted.id}`}
                 onClick={() => {
                   dismiss();
-                  createRule.mutate(
+                  // source: "restore" suppresses the "Apply to past too?"
+                  // prompt — the user is undoing, not making fresh
+                  // categorization intent. See submitMappingRule above.
+                  submitMappingRule(
                     {
-                      data: {
-                        pattern: deleted.pattern,
-                        matchType: deleted.matchType,
-                        categoryId: deleted.categoryId,
-                        priority: deleted.priority,
-                      },
+                      pattern: deleted.pattern,
+                      matchType: deleted.matchType,
+                      categoryId: deleted.categoryId,
+                      priority: deleted.priority,
                     },
-                    {
-                      onSuccess: () => toast({ title: "Rule restored" }),
-                    },
+                    "restore",
                   );
                 }}
               >
