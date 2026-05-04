@@ -62,6 +62,16 @@ export default function SettingsPage() {
   const updateSettings = useUpdateSettings();
   const importWorkbook = useImportWorkbook();
   const { data: plaidItems } = useListPlaidItems();
+  // Bumped ~once a minute while any item is still preparing so the
+  // "Still preparing · Xm" badge and the 6h stalled hint update without a
+  // page reload. Reads Date.now() inline at render time via the helpers.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const hasPreparingItem = (plaidItems ?? []).some((it) => it.stillPreparing);
+  useEffect(() => {
+    if (!hasPreparingItem) return;
+    const id = window.setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, [hasPreparingItem]);
   const deletePlaidItem = useDeletePlaidItem();
   const { runSync, isPending: isSyncPending } = usePlaidSync();
   // Track which row's per-item Sync button was just clicked so only THAT
@@ -438,7 +448,7 @@ export default function SettingsPage() {
                             title="Plaid is still staging the historical batch for this freshly linked bank — try Sync again in a minute."
                           >
                             {(() => {
-                              const elapsed = formatPreparingElapsed(item.stillPreparingSince);
+                              const elapsed = formatPreparingElapsed(item.stillPreparingSince, nowTick);
                               return elapsed
                                 ? `Still preparing · ${elapsed}`
                                 : "Still preparing";
@@ -451,7 +461,7 @@ export default function SettingsPage() {
                           ? `Last synced ${new Date(item.lastSyncedAt).toLocaleString()}`
                           : "Not yet synced"}
                       </div>
-                      {item.stillPreparing && isPreparingStalled(item.stillPreparingSince) && (
+                      {item.stillPreparing && isPreparingStalled(item.stillPreparingSince, nowTick) && (
                         <div
                           className="text-xs text-amber-700 dark:text-amber-400 mt-1"
                           data-testid={`text-preparing-stalled-${item.id}`}
