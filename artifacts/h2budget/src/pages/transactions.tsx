@@ -166,13 +166,19 @@ export default function TransactionsPage() {
   }, [isLoading]);
 
   const bankSnapshot = forecastData?.bankSnapshot ?? null;
+  // #103 — multi-checking households: let the user override the snapshot
+  // account and view a different linked checking on the Chase page. The
+  // override is local UI state; Forecast / balance math still anchors to
+  // the configured snapshot account.
+  const [chaseAccountOverride, setChaseAccountOverride] = useState<string | null>(null);
+  const effectiveAccountInternalId = chaseAccountOverride ?? bankSnapshot?.accountId ?? null;
   const chasePlaidAccountId = useMemo(() => {
-    if (!bankSnapshot?.accountId) return null;
+    if (!effectiveAccountInternalId) return null;
     const acct = (forecastData?.plaidCheckingAccounts ?? []).find(
-      (a) => a.id === bankSnapshot.accountId,
+      (a) => a.id === effectiveAccountInternalId,
     );
     return acct?.accountId ?? null;
-  }, [bankSnapshot?.accountId, forecastData?.plaidCheckingAccounts]);
+  }, [effectiveAccountInternalId, forecastData?.plaidCheckingAccounts]);
 
   // Scope to the linked checking account (or manual rows when nothing linked).
   const chaseTransactions = useMemo(() => {
@@ -793,6 +799,41 @@ export default function TransactionsPage() {
           {bankSnapshot.mask ? ` ••${bankSnapshot.mask}` : ""} · Updated{" "}
           {formatDate(bankSnapshot.at.slice(0, 10))} · Current balance{" "}
           {formatCurrency(bankSnapshot.balance)}
+        </div>
+      )}
+      {(forecastData?.plaidCheckingAccounts?.length ?? 0) > 1 && (
+        <div className="flex items-center gap-2" data-testid="chase-account-picker">
+          <span className="text-xs text-muted-foreground">View account:</span>
+          <Select
+            value={chaseAccountOverride ?? "_default"}
+            onValueChange={(v) =>
+              setChaseAccountOverride(v === "_default" ? null : v)
+            }
+          >
+            <SelectTrigger className="h-7 text-xs w-64" data-testid="select-chase-account">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_default">
+                Default (snapshot account)
+              </SelectItem>
+              {(forecastData?.plaidCheckingAccounts ?? []).map((a) => {
+                const name = (a as { name?: string }).name ?? "Checking";
+                const mask = (a as { mask?: string }).mask ?? null;
+                return (
+                  <SelectItem key={a.id} value={a.id}>
+                    {name}
+                    {mask ? ` ••${mask}` : ""}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+          {chaseAccountOverride && (
+            <span className="text-[10px] uppercase tracking-wider text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+              View only · balance math still uses snapshot account
+            </span>
+          )}
         </div>
       )}
 

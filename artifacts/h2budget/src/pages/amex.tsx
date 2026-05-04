@@ -480,6 +480,54 @@ export default function AmexPage() {
   }, [all]);
   const owedByListId = "amex-owed-by-suggestions";
 
+  // #26 — auto-suggest owedBy by learning from past charges. Build a
+  // signature → most-common owedBy index using the first 3 alpha-numeric
+  // tokens of the description (so "STARBUCKS #4521 MADISON WI" and
+  // "STARBUCKS #1287 SEATTLE WA" share the same key). For each charge
+  // with no owedBy, surface the top suggestion as a one-click chip.
+  const owedBySuggestionByDesc = useMemo(() => {
+    const sig = (s: string) =>
+      s
+        .toLowerCase()
+        .replace(/[^a-z0-9 ]+/g, " ")
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(" ");
+    const counts = new Map<string, Map<string, number>>();
+    for (const t of all) {
+      const owed = (t.owedBy ?? "").trim();
+      if (!owed) continue;
+      const k = sig(t.description ?? "");
+      if (!k) continue;
+      let m = counts.get(k);
+      if (!m) {
+        m = new Map();
+        counts.set(k, m);
+      }
+      m.set(owed, (m.get(owed) ?? 0) + 1);
+    }
+    const top = new Map<string, string>();
+    for (const [k, m] of counts) {
+      let best: string | null = null;
+      let bestN = 0;
+      for (const [owed, n] of m) {
+        if (n > bestN) {
+          bestN = n;
+          best = owed;
+        }
+      }
+      if (best) top.set(k, best);
+    }
+    return { sig, top };
+  }, [all]);
+
+  const suggestOwedByFor = (description: string | null | undefined): string | null => {
+    if (!description) return null;
+    const k = owedBySuggestionByDesc.sig(description);
+    return owedBySuggestionByDesc.top.get(k) ?? null;
+  };
+
   // Bulk selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const toggleOne = (id: string) =>
@@ -1363,6 +1411,22 @@ export default function AmexPage() {
                           }
                         }}
                       />
+                      {/* #26 — owedBy auto-suggest from prior charges */}
+                      {!t.owedBy && (() => {
+                        const s = suggestOwedByFor(t.description);
+                        if (!s) return null;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setRowOwedBy(t, s)}
+                            className="text-[10px] uppercase tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200"
+                            title={`Past charges like this were owed by ${s}. Click to apply.`}
+                            data-testid={`button-suggest-owedby-${t.id}`}
+                          >
+                            ↳ {s}
+                          </button>
+                        );
+                      })()}
                       <CategoryPicker
                         value={t.categoryId ?? null}
                         categories={categories ?? []}
@@ -1448,27 +1512,45 @@ export default function AmexPage() {
                           {t.member ?? "—"}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          <Input
-                            key={t.owedBy ?? ""}
-                            defaultValue={t.owedBy ?? ""}
-                            placeholder="Owed by…"
-                            list={owedByListId}
-                            aria-label={`Owed by for ${t.description}`}
-                            className="h-7 w-32 text-xs"
-                            onBlur={(e) => {
-                              if ((e.currentTarget.value.trim() || null) !== (t.owedBy ?? null)) {
-                                setRowOwedBy(t, e.currentTarget.value);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                (e.currentTarget as HTMLInputElement).blur();
-                              } else if (e.key === "Escape") {
-                                (e.currentTarget as HTMLInputElement).value = t.owedBy ?? "";
-                                (e.currentTarget as HTMLInputElement).blur();
-                              }
-                            }}
-                          />
+                          <div className="flex items-center gap-1">
+                            <Input
+                              key={t.owedBy ?? ""}
+                              defaultValue={t.owedBy ?? ""}
+                              placeholder="Owed by…"
+                              list={owedByListId}
+                              aria-label={`Owed by for ${t.description}`}
+                              className="h-7 w-32 text-xs"
+                              onBlur={(e) => {
+                                if ((e.currentTarget.value.trim() || null) !== (t.owedBy ?? null)) {
+                                  setRowOwedBy(t, e.currentTarget.value);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  (e.currentTarget as HTMLInputElement).blur();
+                                } else if (e.key === "Escape") {
+                                  (e.currentTarget as HTMLInputElement).value = t.owedBy ?? "";
+                                  (e.currentTarget as HTMLInputElement).blur();
+                                }
+                              }}
+                            />
+                            {/* #26 — owedBy auto-suggest from prior charges */}
+                            {!t.owedBy && (() => {
+                              const s = suggestOwedByFor(t.description);
+                              if (!s) return null;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => setRowOwedBy(t, s)}
+                                  className="text-[10px] uppercase tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200"
+                                  title={`Past charges like this were owed by ${s}. Click to apply.`}
+                                  data-testid={`button-suggest-owedby-desktop-${t.id}`}
+                                >
+                                  ↳ {s}
+                                </button>
+                              );
+                            })()}
+                          </div>
                         </td>
                         <td className="px-3 py-2">
                           <CategoryPicker

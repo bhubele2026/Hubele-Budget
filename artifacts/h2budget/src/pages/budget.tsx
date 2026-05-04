@@ -9,8 +9,12 @@ import {
   useSeedDefaultBudget,
   usePinBudgetMonth,
   usePinBudgetLine,
+  useListTransactions,
+  useUpdateTransaction,
   getGetBudgetMonthQueryKey,
   getListCategoriesQueryKey,
+  getListTransactionsQueryKey,
+  type Transaction,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -48,6 +52,7 @@ import {
   ChevronUp,
   Pin,
   PinOff,
+  Tag,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -167,6 +172,10 @@ export default function BudgetPage() {
   const seedDefaults = useSeedDefaultBudget();
   const pinMonth = usePinBudgetMonth();
   const pinLine = usePinBudgetLine();
+  const updateTx = useUpdateTransaction();
+  // #90 — pull all transactions to surface uncategorized rows for inline
+  // categorization from each Budget row.
+  const { data: allTxns } = useListTransactions({ limit: 5000 });
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -295,6 +304,42 @@ export default function BudgetPage() {
         },
       },
     );
+  };
+
+  // #90 — uncategorized transactions in the currently viewed budget month,
+  // skipping transfers (they're excluded from budget actuals server-side
+  // anyway). Sorted newest-first so the most recent unassigned charges
+  // surface first.
+  const uncategorizedThisMonth = useMemo<Transaction[]>(() => {
+    if (!allTxns) return [];
+    const start = currentMonth;
+    const d = new Date(currentMonth + "T00:00:00");
+    const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    const end = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
+    return allTxns
+      .filter(
+        (t) =>
+          !t.categoryId &&
+          !t.isTransfer &&
+          t.occurredOn >= start &&
+          t.occurredOn < end,
+      )
+      .sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
+  }, [allTxns, currentMonth]);
+
+  const handleAssignTxn = async (txId: string, categoryId: string) => {
+    try {
+      await updateTx.mutateAsync({ id: txId, data: { categoryId } });
+      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      invalidate();
+      toast({ title: "Categorized" });
+    } catch (e) {
+      toast({
+        title: "Couldn't categorize",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDeleteCategory = (id: string) => {
@@ -513,6 +558,9 @@ export default function BudgetPage() {
                           onDelete={handleDeleteCategory}
                           onTogglePin={handleTogglePinLine}
                           pinDisabled={pinLine.isPending}
+                          uncategorizedTxns={uncategorizedThisMonth}
+                          onAssignTxn={handleAssignTxn}
+                          assigning={updateTx.isPending}
                         />
                       ))}
                     </div>
@@ -587,6 +635,9 @@ function BudgetLineRow({
   onDelete,
   onTogglePin,
   pinDisabled,
+  uncategorizedTxns,
+  onAssignTxn,
+  assigning,
 }: {
   line: BudgetLineWithActual;
   monthPinned: boolean;
@@ -594,6 +645,9 @@ function BudgetLineRow({
   onDelete: (id: string) => void;
   onTogglePin: (categoryId: string, currentlyPinned: boolean) => void;
   pinDisabled: boolean;
+  uncategorizedTxns: Transaction[];
+  onAssignTxn: (txId: string, categoryId: string) => void;
+  assigning: boolean;
 }) {
   const [, navigate] = useLocation();
   const planned = parseFloat(line.plannedAmount) || 0;
@@ -662,6 +716,73 @@ function BudgetLineRow({
               <Pin className="w-3 h-3 mr-1 fill-current" />
               Pinned
             </Badge>
+          )}
+          {/* #90 — inline categorize from Budget. Surfaces uncategorized
+              transactions in the current month and lets the user assign
+              them to this row's category in one click. Only shown when
+              there is something to assign. */}
+          {uncategorizedTxns.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-normal cursor-pointer border-dashed border-muted-foreground/40 hover:border-foreground hover:text-foreground"
+                  title={`${uncategorizedTxns.length} uncategorized transaction${uncategorizedTxns.length === 1 ? "" : "s"} this month — assign one to ${line.categoryName}.`}
+                  data-testid={`button-categorize-${line.categoryId}`}
+                >
+                  <Tag className="w-3 h-3 mr-1" />
+                  +{uncategorizedTxns.length}
+                </Badge>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-3" align="start">
+                <div className="text-xs font-medium mb-2">
+                  Assign to {line.categoryName}
+                </div>
+                <div className="text-[11px] text-muted-foreground mb-2">
+                  {uncategorizedTxns.length} uncategorized this month
+                </div>
+                <div
+                  className="space-y-1 max-h-64 overflow-y-auto pr-1"
+                  data-testid={`uncategorized-list-${line.categoryId}`}
+                >
+                  {uncategorizedTxns.slice(0, 50).map((t) => {
+                    const amt = Number(t.amount);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        disabled={assigning}
+                        onClick={() => onAssignTxn(t.id, line.categoryId)}
+                        className="w-full flex items-start justify-between gap-2 text-left px-2 py-1.5 rounded hover:bg-muted/50 disabled:opacity-50"
+                        data-testid={`button-assign-${t.id}-to-${line.categoryId}`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-medium truncate">
+                            {t.description}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {t.occurredOn}
+                          </div>
+                        </div>
+                        <div
+                          className={cn(
+                            "text-xs font-mono tabular-nums whitespace-nowrap",
+                            amt < 0 ? "text-rose-700" : "text-emerald-700",
+                          )}
+                        >
+                          {formatCurrency(amt)}
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {uncategorizedTxns.length > 50 && (
+                    <div className="text-[10px] text-muted-foreground text-center pt-1">
+                      Showing 50 of {uncategorizedTxns.length}
+                    </div>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
           )}
           {isAvalanchePayment ? (
             <Badge

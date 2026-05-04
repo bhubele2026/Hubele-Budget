@@ -7,6 +7,7 @@ import {
   useUpdateRecurringItem,
   useDeleteRecurringItem,
   useListDebts,
+  useListTransactions,
   useGetAvalancheSettings,
   useGetAvalancheExtra,
   getListRecurringItemsQueryKey,
@@ -320,6 +321,9 @@ export default function BillsPage() {
     [debts],
   );
 
+  // #70 — pull all transactions to compute actual income/spend this month.
+  const { data: allTxns } = useListTransactions({ limit: 5000 });
+
   const allDebtMinRows = summary?.debtMins ?? [];
   const debtMinRows = useMemo(
     () => filterDebtMinRowsByPayoff(allDebtMinRows, payoffsByDebt),
@@ -347,6 +351,30 @@ export default function BillsPage() {
   );
   const totalOutflow = billsMonthly + debtMin;
   const net = incomeMonthly - totalOutflow;
+
+  // #70 — real spend amounts. Compare planned ("Per month") against what
+  // actually happened so far this calendar month: sum positive amounts as
+  // income and the absolute value of negatives as spend, skipping
+  // transfers (already excluded from budget actuals server-side).
+  const actualThisMonth = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const monthStart = `${y}-${String(m + 1).padStart(2, "0")}-01`;
+    const next = new Date(y, m + 1, 1);
+    const monthEnd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
+    let income = 0;
+    let spend = 0;
+    for (const t of allTxns ?? []) {
+      if (t.occurredOn < monthStart || t.occurredOn >= monthEnd) continue;
+      if (t.isTransfer) continue;
+      const a = Number(t.amount);
+      if (!Number.isFinite(a)) continue;
+      if (a > 0) income += a;
+      else spend += -a;
+    }
+    return { income, spend, net: income - spend };
+  }, [allTxns]);
 
   return (
     <div className="space-y-6">
@@ -457,6 +485,42 @@ export default function BillsPage() {
               </div>
               <div className="text-xs text-muted-foreground border-t pt-3">
                 {activeCount} active item{activeCount === 1 ? "" : "s"}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="card-actual-this-month">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-baseline justify-between">
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                  Actual this month
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  {new Date().toLocaleDateString("en-US", { month: "long" })} so far
+                </div>
+              </div>
+              <SummaryRow
+                label="Income"
+                amount={actualThisMonth.income}
+                tone="income"
+              />
+              <SummaryRow
+                label="Spend"
+                amount={-actualThisMonth.spend}
+                tone="bill"
+              />
+              <div className="border-t pt-3 flex items-center justify-between">
+                <span className="text-sm font-semibold">Net</span>
+                <span
+                  className={`text-lg font-serif font-bold tabular-nums ${actualThisMonth.net >= 0 ? "text-emerald-700" : "text-destructive"}`}
+                  data-testid="text-actual-net"
+                >
+                  {actualThisMonth.net >= 0 ? "+" : ""}
+                  {formatCurrency(actualThisMonth.net)}
+                </span>
+              </div>
+              <div className="text-xs text-muted-foreground border-t pt-3">
+                Real transactions, transfers excluded.
               </div>
             </CardContent>
           </Card>
