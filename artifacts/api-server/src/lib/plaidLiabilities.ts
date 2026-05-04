@@ -5,6 +5,7 @@ import {
   plaidAccountsTable,
 } from "@workspace/db";
 import { plaid } from "./plaid";
+import { logger } from "./logger";
 
 export type LiabilityRow = {
   accountId: string;
@@ -77,7 +78,12 @@ export async function fetchLiabilitiesForItem(
     // liabilities product — that's an expected state for the bank-only
     // configuration. Don't treat it as a fatal error; fall through with
     // whatever /accounts/get returned so balance refresh still works.
-    if (!isLiabilitiesNotEnabled(e)) {
+    if (isLiabilitiesNotEnabled(e)) {
+      logger.warn(
+        { userId, itemRowId },
+        "Liabilities not enabled on this Plaid client — falling back to /accounts/get balances only",
+      );
+    } else {
       liabErr = e;
     }
   }
