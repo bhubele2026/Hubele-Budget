@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RepointedRule } from "./repointedRule";
+import type { RuleAction } from "./ruleAction";
 import type { Transaction } from "./transaction";
 
 export type UpdateTransactionResponse = Transaction & {
@@ -15,4 +16,5 @@ category. The client surfaces this as a "apply to past
 transactions too" prompt.
  */
   repointedRules: RepointedRule[];
+  ruleAction: RuleAction;
 };

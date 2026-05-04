@@ -166,6 +166,73 @@ export interface RepointedRule {
     toCategoryId: string;
     candidateCount: number;
 }
+/**
+ * * `created` — a new specific mapping rule was added for the
+  derived pattern.
+* `created_priority_bump` — a new specific rule was added
+  and given a priority above an existing generic rule that
+  also matches; both rules are kept and the specific one
+  wins on future similar charges.
+* `skipped_generic` — the auto-derived pattern would have
+  clobbered an existing generic rule, so no rule was
+  created. The generic rule is unchanged.
+* `repointed` — at least one existing matching specific
+  rule was repointed onto the new category; no new rule was
+  created (the repoint covers it).
+* `none` — nothing interesting happened (e.g. transfer,
+  same-category no-op, or no derivable pattern).
+
+ */
+export type RuleActionKind = (typeof RuleActionKind)[keyof typeof RuleActionKind];
+export declare const RuleActionKind: {
+    readonly created: "created";
+    readonly created_priority_bump: "created_priority_bump";
+    readonly skipped_generic: "skipped_generic";
+    readonly repointed: "repointed";
+    readonly none: "none";
+};
+/**
+ * Summary of what the auto-learn flow did to the user's mapping
+rules in response to this PATCH. Surfaced as a small toast/note
+so the user understands why future similar charges will (or
+won't) auto-categorize. The repoint case is also reported in
+more detail via `repointedRules` (which drives the "apply to
+past transactions too" prompt).
+
+ */
+export interface RuleAction {
+    /** * `created` — a new specific mapping rule was added for the
+    derived pattern.
+  * `created_priority_bump` — a new specific rule was added
+    and given a priority above an existing generic rule that
+    also matches; both rules are kept and the specific one
+    wins on future similar charges.
+  * `skipped_generic` — the auto-derived pattern would have
+    clobbered an existing generic rule, so no rule was
+    created. The generic rule is unchanged.
+  * `repointed` — at least one existing matching specific
+    rule was repointed onto the new category; no new rule was
+    created (the repoint covers it).
+  * `none` — nothing interesting happened (e.g. transfer,
+    same-category no-op, or no derivable pattern).
+   */
+    kind: RuleActionKind;
+    /**
+     * Pattern for the new or repointed rule. Set for `created`,
+  `created_priority_bump`, `skipped_generic`, and `repointed`.
+  
+     * @nullable
+     */
+    pattern?: string | null;
+    /**
+     * For `created_priority_bump` and `skipped_generic` — the
+  existing generic (1-token) pattern that already matches
+  this description and was deliberately left alone.
+  
+     * @nullable
+     */
+    genericPattern?: string | null;
+}
 export type UpdateTransactionResponse = Transaction & {
     /** Empty unless this PATCH triggered the auto-learn flow to
   repoint one or more existing mapping rules onto a new
@@ -173,6 +240,7 @@ export type UpdateTransactionResponse = Transaction & {
   transactions too" prompt.
    */
     repointedRules: RepointedRule[];
+    ruleAction: RuleAction;
 };
 export type RecategorizeByPatternInputMatchType = (typeof RecategorizeByPatternInputMatchType)[keyof typeof RecategorizeByPatternInputMatchType];
 export declare const RecategorizeByPatternInputMatchType: {

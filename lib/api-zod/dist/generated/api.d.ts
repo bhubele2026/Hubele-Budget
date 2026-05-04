@@ -645,6 +645,19 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         toCategoryId: string;
         candidateCount: number;
     }>, "many">;
+    ruleAction: zod.ZodObject<{
+        kind: zod.ZodEnum<["created", "created_priority_bump", "skipped_generic", "repointed", "none"]>;
+        pattern: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        genericPattern: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";
+        pattern?: string | null | undefined;
+        genericPattern?: string | null | undefined;
+    }, {
+        kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";
+        pattern?: string | null | undefined;
+        genericPattern?: string | null | undefined;
+    }>;
 }, "strip", zod.ZodTypeAny, {
     repointedRules: {
         ruleId: string;
@@ -654,6 +667,11 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         toCategoryId: string;
         candidateCount: number;
     }[];
+    ruleAction: {
+        kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";
+        pattern?: string | null | undefined;
+        genericPattern?: string | null | undefined;
+    };
 }, {
     repointedRules: {
         ruleId: string;
@@ -663,6 +681,11 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         toCategoryId: string;
         candidateCount: number;
     }[];
+    ruleAction: {
+        kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";
+        pattern?: string | null | undefined;
+        genericPattern?: string | null | undefined;
+    };
 }>>;
 export declare const DeleteTransactionParams: zod.ZodObject<{
     id: zod.ZodString;

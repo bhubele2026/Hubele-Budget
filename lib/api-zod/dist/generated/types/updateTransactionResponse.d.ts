@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RepointedRule } from "./repointedRule";
+import type { RuleAction } from "./ruleAction";
 import type { Transaction } from "./transaction";
 export type UpdateTransactionResponse = Transaction & {
     /** Empty unless this PATCH triggered the auto-learn flow to
@@ -14,5 +15,6 @@ export type UpdateTransactionResponse = Transaction & {
   transactions too" prompt.
    */
     repointedRules: RepointedRule[];
+    ruleAction: RuleAction;
 };
 //# sourceMappingURL=updateTransactionResponse.d.ts.map

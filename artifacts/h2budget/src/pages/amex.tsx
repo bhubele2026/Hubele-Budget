@@ -41,6 +41,7 @@ import { CreditCard } from "lucide-react";
 import { CategoryPicker } from "@/components/category-picker";
 import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { formatCurrency } from "@/lib/utils";
 import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
@@ -581,7 +582,7 @@ export default function AmexPage() {
   ) => {
     const tx = all.find((t) => t.id === id);
     try {
-      await updateTx.mutateAsync({
+      const updated = await updateTx.mutateAsync({
         id,
         data: {
           categoryId,
@@ -590,11 +591,23 @@ export default function AmexPage() {
       });
       invalidateTxns();
       if (tx) invalidateBudgetMonths([monthStartOf(tx.occurredOn)]);
-      if (rememberPattern && categoryId) {
-        toast({
-          title: "Categorized & remembered",
-          description: `Future "${rememberPattern}" will auto-categorize.`,
-        });
+      // Task #185 — surface what the auto-learn flow did to the user's
+      // mapping rules. The legacy `rememberPattern` (explicit "remember
+      // this") path produced a hand-rolled toast describing the new
+      // rule. Now we always prefer the server's RuleAction summary
+      // (covers created / created-over-generic / skipped-generic /
+      // repointed) and fall back to the legacy explicit-remember toast
+      // only when the user explicitly opted in via rememberPattern.
+      if (categoryId) {
+        const ruleDescription = ruleActionMessage(updated.ruleAction);
+        if (ruleDescription) {
+          toast({ title: "Categorized", description: ruleDescription });
+        } else if (rememberPattern) {
+          toast({
+            title: "Categorized & remembered",
+            description: `Future "${rememberPattern}" will auto-categorize.`,
+          });
+        }
       }
     } catch (e) {
       toast({

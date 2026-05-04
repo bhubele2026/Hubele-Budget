@@ -254,6 +254,35 @@ export const UpdateTransactionResponse = zod
         .describe(
           'Empty unless this PATCH triggered the auto-learn flow to\nrepoint one or more existing mapping rules onto a new\ncategory. The client surfaces this as a \"apply to past\ntransactions too\" prompt.\n',
         ),
+      ruleAction: zod
+        .object({
+          kind: zod
+            .enum([
+              "created",
+              "created_priority_bump",
+              "skipped_generic",
+              "repointed",
+              "none",
+            ])
+            .describe(
+              "\* `created` — a new specific mapping rule was added for the\n  derived pattern.\n\* `created_priority_bump` — a new specific rule was added\n  and given a priority above an existing generic rule that\n  also matches; both rules are kept and the specific one\n  wins on future similar charges.\n\* `skipped_generic` — the auto-derived pattern would have\n  clobbered an existing generic rule, so no rule was\n  created. The generic rule is unchanged.\n\* `repointed` — at least one existing matching specific\n  rule was repointed onto the new category; no new rule was\n  created (the repoint covers it).\n\* `none` — nothing interesting happened (e.g. transfer,\n  same-category no-op, or no derivable pattern).\n",
+            ),
+          pattern: zod
+            .string()
+            .nullish()
+            .describe(
+              "Pattern for the new or repointed rule. Set for `created`,\n`created_priority_bump`, `skipped_generic`, and `repointed`.\n",
+            ),
+          genericPattern: zod
+            .string()
+            .nullish()
+            .describe(
+              "For `created_priority_bump` and `skipped_generic` — the\nexisting generic (1-token) pattern that already matches\nthis description and was deliberately left alone.\n",
+            ),
+        })
+        .describe(
+          "Summary of what the auto-learn flow did to the user's mapping\nrules in response to this PATCH. Surfaced as a small toast\/note\nso the user understands why future similar charges will (or\nwon't) auto-categorize. The repoint case is also reported in\nmore detail via `repointedRules` (which drives the \"apply to\npast transactions too\" prompt).\n",
+        ),
     }),
   );
 

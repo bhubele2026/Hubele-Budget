@@ -214,7 +214,22 @@ router.patch(
       toCategoryId: string;
       candidateCount: number;
     };
+    type RuleAction =
+      | { kind: "none"; pattern: null; genericPattern: null }
+      | { kind: "created"; pattern: string; genericPattern: null }
+      | {
+          kind: "created_priority_bump";
+          pattern: string;
+          genericPattern: string;
+        }
+      | { kind: "skipped_generic"; pattern: string; genericPattern: string }
+      | { kind: "repointed"; pattern: string; genericPattern: null };
     const repointedRules: RepointedRule[] = [];
+    let ruleAction: RuleAction = {
+      kind: "none",
+      pattern: null,
+      genericPattern: null,
+    };
     if (patch.categoryId && !row.isTransfer) {
       const userId = req.userId!;
       const description = row.description ?? "";
@@ -271,25 +286,65 @@ router.patch(
           ? rememberPattern!
           : derivePatternFromDescription(row.description);
         const pattern = (source ?? "").trim().slice(0, 60);
-        const wouldClobberGeneric =
-          !isExplicit &&
-          matchingGeneric.some(
-            (r) => r.pattern.trim().toLowerCase() === pattern.toLowerCase(),
-          );
-        if (pattern && !wouldClobberGeneric) {
+        const collidingGeneric = !isExplicit
+          ? matchingGeneric.find(
+              (r) => r.pattern.trim().toLowerCase() === pattern.toLowerCase(),
+            )
+          : undefined;
+        if (pattern && !collidingGeneric) {
           const maxGenericPriority = matchingGeneric.reduce(
             (acc, r) => Math.max(acc, r.priority),
             0,
           );
           const newPriority = Math.max(100, maxGenericPriority + 1);
-          await upsertMappingRule(db, {
+          const upsertResult = await upsertMappingRule(db, {
             userId,
             pattern,
             matchType: "contains",
             categoryId: patch.categoryId,
             priority: newPriority,
           });
+          // `upsertMappingRule` is keyed on (userId, pattern). If it
+          // returned "updated"/"noop" the pattern already had a rule —
+          // the explicit-remember case where the user re-categorizes a
+          // single-token merchant they previously remembered. That's
+          // semantically a repoint of the same rule, not a "new specific
+          // alongside a different generic", so report it as such even
+          // when the pre-existing rule was classified generic.
+          if (upsertResult !== "inserted") {
+            ruleAction = { kind: "repointed", pattern, genericPattern: null };
+          } else if (matchingGeneric.length > 0) {
+            // A different (non-colliding) generic rule still matches —
+            // we left it alone and gave the new specific rule a higher
+            // priority. Tell the user so they understand both rules
+            // coexist and which one wins on future similar charges.
+            const generic = matchingGeneric[0]!;
+            ruleAction = {
+              kind: "created_priority_bump",
+              pattern,
+              genericPattern: generic.pattern,
+            };
+          } else {
+            ruleAction = { kind: "created", pattern, genericPattern: null };
+          }
+        } else if (pattern && collidingGeneric) {
+          ruleAction = {
+            kind: "skipped_generic",
+            pattern,
+            genericPattern: collidingGeneric.pattern,
+          };
         }
+      } else if (repointedRules.length > 0) {
+        // At least one specific matching rule was repointed onto the
+        // chosen category. The "apply to past" prompt covers the
+        // candidate-count side; this summary just lets the client tell
+        // the user which existing rule was reused.
+        const first = repointedRules[0]!;
+        ruleAction = {
+          kind: "repointed",
+          pattern: first.pattern,
+          genericPattern: null,
+        };
       }
     }
     // If forecast_flag was turned off, drop any forecast resolution that
@@ -304,7 +359,7 @@ router.patch(
           ),
         );
     }
-    res.json({ ...row, repointedRules });
+    res.json({ ...row, repointedRules, ruleAction });
   },
 );
 

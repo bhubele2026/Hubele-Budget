@@ -14,6 +14,7 @@ import {
   getGetBudgetMonthQueryKey,
   type Transaction,
   type RepointedRule,
+  type RuleAction,
 } from "@workspace/api-client-react";
 import { ToastAction } from "@/components/ui/toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -64,6 +65,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { isBankTxn } from "@/lib/forecastMatch";
+import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { BucketBubbles, type BucketFlags, type BucketKey } from "@/components/bucket-bubbles";
 import { computeBalanceAtEndOf } from "@/lib/accountBalance";
 import { computeRunningBalances } from "@/lib/runningBalance";
@@ -670,9 +672,15 @@ export default function TransactionsPage() {
       queryClient.invalidateQueries({
         queryKey: getGetBudgetMonthQueryKey(`${tx.occurredOn.slice(0, 7)}-01`),
       });
+      // Task #185 — describe what the auto-learn flow actually did to
+      // the user's mapping rules (created / created-over-generic /
+      // skipped / repointed). Skips the description on no-op cases so
+      // we don't show a misleading "will auto-categorize" promise when
+      // the server actually did nothing (e.g. clobber-guard kicked in).
+      const ruleDescription = ruleActionMessage(updated.ruleAction);
       toast({
         title: "Categorized",
-        description: "Future similar transactions will auto-categorize.",
+        ...(ruleDescription ? { description: ruleDescription } : {}),
       });
       // If the auto-learn flow repointed an existing seed rule (e.g. an
       // Amex / Cap One / Discover debt-payment rule pre-pointed at

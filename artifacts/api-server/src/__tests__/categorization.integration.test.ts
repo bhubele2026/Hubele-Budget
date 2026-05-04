@@ -339,6 +339,13 @@ describe("categorization pipeline (integration)", () => {
       rememberPattern: merchant,
     });
     expect(patch.status).toBe(200);
+    // Task #185 — explicit-remember path creates a brand-new specific
+    // rule and reports it back to the client so it can show a toast.
+    const patchBody = patch.json as {
+      ruleAction: { kind: string; pattern: string | null };
+    };
+    expect(patchBody.ruleAction.kind).toBe("created");
+    expect(patchBody.ruleAction.pattern).toBe(merchant);
 
     const rules = await db
       .select()
@@ -378,6 +385,14 @@ describe("categorization pipeline (integration)", () => {
       rememberPattern: merchant,
     });
     expect(patch2.status).toBe(200);
+    // Second PATCH matches the existing specific rule (the one we just
+    // created above) so the auto-relearn flow repoints it instead of
+    // creating a duplicate. RuleAction reflects that.
+    const patch2Body = patch2.json as {
+      ruleAction: { kind: string; pattern: string | null };
+    };
+    expect(patch2Body.ruleAction.kind).toBe("repointed");
+    expect(patch2Body.ruleAction.pattern).toBe(merchant);
     const rules2 = await db
       .select()
       .from(mappingRulesTable)
@@ -422,6 +437,14 @@ describe("categorization pipeline (integration)", () => {
       categoryId: cat!.id,
     });
     expect(patch.status).toBe(200);
+    // Task #185 — auto-derived path with no generic conflict reports
+    // `created` so the client toast can say "Future 'X' charges will
+    // auto-categorize here."
+    const patchBody = patch.json as {
+      ruleAction: { kind: string; pattern: string | null };
+    };
+    expect(patchBody.ruleAction.kind).toBe("created");
+    expect(patchBody.ruleAction.pattern).toBe(`${merchant} STORE`);
 
     const rules = await db
       .select()
@@ -560,9 +583,16 @@ describe("categorization pipeline (integration)", () => {
         toCategoryId: string;
         candidateCount: number;
       }[];
+      ruleAction: { kind: string; pattern: string | null };
     };
     expect(patchBody.categoryId).toBe(debtCat!.id);
     expect(patchBody.repointedRules.length).toBe(1);
+    // Task #185 — when an existing specific rule is repointed (no new
+    // rule created), ruleAction.kind is "repointed" and pattern echoes
+    // the rule's pattern so the client can show "Updated your '...' rule
+    // to point here." alongside the existing "apply to past" prompt.
+    expect(patchBody.ruleAction.kind).toBe("repointed");
+    expect(patchBody.ruleAction.pattern).toBe(seedPattern);
     const reported = patchBody.repointedRules[0]!;
     expect(reported.ruleId).toBe(seedRule!.id);
     expect(reported.pattern).toBe(seedPattern);
@@ -803,6 +833,13 @@ describe("categorization pipeline (integration)", () => {
       categoryId: debtCat!.id,
     });
     expect(patch.status).toBe(200);
+    // Task #185 — auto-relearn repoint produces ruleAction.kind="repointed"
+    // so the client can confirm the existing rule was reused.
+    const patchBody = patch.json as {
+      ruleAction: { kind: string; pattern: string | null };
+    };
+    expect(patchBody.ruleAction.kind).toBe("repointed");
+    expect(patchBody.ruleAction.pattern).toBe(seedPattern);
 
     // The seed rule's pattern is unchanged; only its categoryId moved.
     // Priority is preserved (still 50, not bumped to 100).
@@ -898,6 +935,21 @@ describe("categorization pipeline (integration)", () => {
       categoryId: groceriesCat!.id,
     });
     expect(patch.status).toBe(200);
+    // Task #185 — a new specific rule is created with priority above
+    // the existing generic rule. ruleAction is "created_priority_bump"
+    // and includes both patterns so the client can show
+    // "Future 'X FRESH' charges will auto-categorize here. Your 'X'
+    // rule is unchanged."
+    const patchBody = patch.json as {
+      ruleAction: {
+        kind: string;
+        pattern: string | null;
+        genericPattern: string | null;
+      };
+    };
+    expect(patchBody.ruleAction.kind).toBe("created_priority_bump");
+    expect(patchBody.ruleAction.pattern).toBe(`${merchantTag} FRESH`);
+    expect(patchBody.ruleAction.genericPattern).toBe(merchantTag);
 
     // The broad rule still routes to Shopping, untouched.
     const merchantRules = await db
@@ -999,6 +1051,19 @@ describe("categorization pipeline (integration)", () => {
       categoryId: otherCat!.id,
     });
     expect(patch.status).toBe(200);
+    // Task #185 — clobber-guard fires; ruleAction tells the client the
+    // generic rule was deliberately preserved so the toast can say
+    // "Your 'X' rule already routes 'X' — edit it to change that."
+    const patchBody = patch.json as {
+      ruleAction: {
+        kind: string;
+        pattern: string | null;
+        genericPattern: string | null;
+      };
+    };
+    expect(patchBody.ruleAction.kind).toBe("skipped_generic");
+    expect(patchBody.ruleAction.pattern).toBe(merchantTag);
+    expect(patchBody.ruleAction.genericPattern).toBe(merchantTag);
 
     // The generic rule is unchanged.
     const rules = await db
@@ -1043,6 +1108,14 @@ describe("categorization pipeline (integration)", () => {
       categoryId: cat!.id,
     });
     expect(patch.status).toBe(200);
+    // Task #185 — transfers skip the auto-learn flow entirely, so
+    // ruleAction is "none" and the client suppresses the rule-status
+    // toast description.
+    const patchBody = patch.json as {
+      ruleAction: { kind: string; pattern: string | null };
+    };
+    expect(patchBody.ruleAction.kind).toBe("none");
+    expect(patchBody.ruleAction.pattern).toBeNull();
 
     const rules = await db
       .select()
