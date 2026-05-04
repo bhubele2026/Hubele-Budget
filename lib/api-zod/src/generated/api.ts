@@ -1313,6 +1313,80 @@ export const PreviewMappingRuleRecategorizeResponse = zod
     "Read-only preview of the bulk-recategorize that would happen if the\nMapping Rules edit UI saved a new `categoryId` for this rule and then\ncalled POST \/transactions\/recategorize-by-pattern with the same\n`{ pattern, matchType, fromCategoryId, toCategoryId }`. Mirrors the\n`RepointedRule` shape so the same preview Dialog can render either.\n",
   );
 
+/**
+ * Read-only preview of the bulk-recategorize that *would* happen if the
+Mapping Rules "Add New Rule" form created a rule with the given
+`{ pattern, matchType, toCategoryId }` and then chained
+POST /transactions/recategorize-by-pattern against the older
+*uncategorized* rows it would match. Lets the Add form surface the
+same "N past transactions will move into <new category>" inline banner
++ "Show matches" affordance the edit flow already shows, before the
+user clicks Add.
+
+`fromCategoryId` is implicitly `null` (uncategorized rows only) since
+no rule exists yet to scope by — mirrors how the post-create
+`ruleAction` toast already counts candidates for brand-new rules.
+
+Read-only — no rule is created and no transactions are touched.
+
+ */
+export const PreviewMappingRuleRecategorizeByPatternBody = zod
+  .object({
+    pattern: zod
+      .string()
+      .describe(
+        "The literal pattern the unsaved rule would match against\ntransaction descriptions.\n",
+      ),
+    matchType: zod.enum(["contains", "exact", "starts_with"]),
+    toCategoryId: zod
+      .string()
+      .describe(
+        "The category the unsaved rule would assign matching rows to.\n",
+      ),
+  })
+  .describe(
+    'Pattern shape used by the \"Add New Rule\" form\'s inline preview.\nCarries the unsaved rule directly so the server can compute\nthe candidate count + sample list against older \*uncategorized\*\nrows without persisting anything.\n',
+  );
+
+export const PreviewMappingRuleRecategorizeByPatternResponse = zod
+  .object({
+    pattern: zod.string(),
+    matchType: zod.enum(["contains", "exact", "starts_with"]),
+    fromCategoryId: zod
+      .string()
+      .nullable()
+      .describe(
+        "Always `null` for the by-pattern preview — the Add flow scopes\nits bulk recategorize to uncategorized rows only, so explicit\nuser category edits aren't trampled. Surfaced as an explicit\nfield for symmetry with `MappingRuleRecategorizePreview`.\n",
+      ),
+    toCategoryId: zod.string(),
+    candidateCount: zod
+      .number()
+      .describe(
+        "Number of \*uncategorized\* transactions whose description matches\nthe unsaved rule's pattern. `0` when no historical rows match.\n",
+      ),
+    sampleTransactions: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          description: zod.string(),
+          occurredOn: zod.string(),
+          amount: zod.string(),
+          matchedRuleId: zod
+            .string()
+            .nullish()
+            .describe(
+              'Id of the mapping rule that auto-categorize would currently\nattribute for this sample row in its \*present\* category, or\nnull when no rule matches. Computed server-side identically\nto the GET \/transactions annotation so the \"Show matches\"\npreview dialog can render the same MatchedRuleChip\n(deep-link to \/mapping-rules?focus=<id> or \"manually\ncategorized\" hint) as every other transaction-list surface.\n',
+            ),
+        }),
+      )
+      .describe(
+        "First ~10 affected transactions, ordered most-recent first. Same\nthin slice (id, description, occurredOn, amount) used by\n`RepointedRule.sampleTransactions`.\n",
+      ),
+  })
+  .describe(
+    'Read-only preview of the bulk-recategorize that \*would\* happen if the\nMapping Rules \"Add New Rule\" form created a rule with the given\n`{ pattern, matchType, toCategoryId }` and then chained\nPOST \/transactions\/recategorize-by-pattern against the older\nuncategorized rows it would match. Mirrors `MappingRuleRecategorizePreview`\nminus the `ruleId` (no rule exists yet) so the same preview banner +\n\"Show matches\" Dialog can render either.\n',
+  );
+
 export const GetSettingsResponse = zod.object({
   weeklyAllowanceAmount: zod.string(),
   monthlyAllowanceAmount: zod.string(),

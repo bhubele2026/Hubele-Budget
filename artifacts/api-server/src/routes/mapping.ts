@@ -11,6 +11,7 @@ import {
   TestMappingRulesBody,
   PreviewMappingRuleRecategorizeBody,
   PreviewMappingRuleRecategorizeParams,
+  PreviewMappingRuleRecategorizeByPatternBody,
 } from "@workspace/api-zod";
 import { findMatchingRules, type RuleRow } from "../lib/autoCategorize";
 import {
@@ -225,6 +226,77 @@ router.post(
  * matches by segment count so the routing isn't ambiguous, but we keep
  * the preview definition adjacent to the rule mutators for grep-ability.
  */
+/**
+ * Variant of /mapping-rules/:id/recategorize-preview that takes the
+ * unsaved rule's `{ pattern, matchType, toCategoryId }` directly so the
+ * "Add New Rule" form on the Mapping Rules page can surface the same
+ * "N past transactions will move into <category>" inline banner +
+ * "Show matches" affordance the edit flow shows — *before* the user
+ * clicks Add. `fromCategoryId` is implicitly `null` (uncategorized rows
+ * only) since no rule exists yet to scope by; this mirrors how the
+ * post-create `ruleAction` toast already counts candidates for
+ * brand-new rules.
+ *
+ * Mounted before the more-generic PATCH /mapping-rules/:id route. The
+ * literal "recategorize-preview-by-pattern" segment can't collide with a
+ * UUID id thanks to Express's exact-match routing, but we keep the
+ * preview definitions adjacent for grep-ability.
+ */
+router.post(
+  "/mapping-rules/recategorize-preview-by-pattern",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const body = PreviewMappingRuleRecategorizeByPatternBody.safeParse(
+      req.body,
+    );
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const userId = req.userId!;
+    const { pattern, matchType, toCategoryId } = body.data;
+    // Empty pattern means the user hasn't typed anything yet — return
+    // an empty preview so the client can avoid showing a stale banner
+    // without a separate guard.
+    if (!pattern.trim()) {
+      res.json({
+        pattern,
+        matchType,
+        fromCategoryId: null,
+        toCategoryId,
+        candidateCount: 0,
+        sampleTransactions: [],
+      });
+      return;
+    }
+    const candidates = await selectPatternCandidates(
+      userId,
+      { pattern, matchType },
+      null,
+    );
+    const sampleTransactions = candidates.slice(0, 10).map((c) => ({
+      id: c.id,
+      description: c.description ?? "",
+      occurredOn: c.occurredOn,
+      amount: c.amount,
+      // Uncategorized rows by definition haven't been auto-categorized
+      // by any existing rule, so `matchedRuleId` is always null here.
+      // Keeping the field present (rather than omitting) matches the
+      // RepointedRuleSample shape so the shared MatchesPreview Dialog
+      // can render either preview without a special case.
+      matchedRuleId: null as string | null,
+    }));
+    res.json({
+      pattern,
+      matchType,
+      fromCategoryId: null,
+      toCategoryId,
+      candidateCount: candidates.length,
+      sampleTransactions,
+    });
+  },
+);
+
 router.post(
   "/mapping-rules/:id/recategorize-preview",
   requireAuth,

@@ -66,6 +66,8 @@ import type {
   ListTransactionsParams,
   MappingRule,
   MappingRuleInput,
+  MappingRulePatternRecategorizePreview,
+  MappingRulePatternRecategorizePreviewInput,
   MappingRuleRecategorizePreview,
   MappingRuleRecategorizePreviewInput,
   MeResponse,
@@ -3423,6 +3425,110 @@ export const usePreviewMappingRuleRecategorize = <
   TContext
 > => {
   return useMutation(getPreviewMappingRuleRecategorizeMutationOptions(options));
+};
+
+/**
+ * Read-only preview of the bulk-recategorize that *would* happen if the
+Mapping Rules "Add New Rule" form created a rule with the given
+`{ pattern, matchType, toCategoryId }` and then chained
+POST /transactions/recategorize-by-pattern against the older
+*uncategorized* rows it would match. Lets the Add form surface the
+same "N past transactions will move into <new category>" inline banner
++ "Show matches" affordance the edit flow already shows, before the
+user clicks Add.
+
+`fromCategoryId` is implicitly `null` (uncategorized rows only) since
+no rule exists yet to scope by — mirrors how the post-create
+`ruleAction` toast already counts candidates for brand-new rules.
+
+Read-only — no rule is created and no transactions are touched.
+
+ */
+export const getPreviewMappingRuleRecategorizeByPatternUrl = () => {
+  return `/api/mapping-rules/recategorize-preview-by-pattern`;
+};
+
+export const previewMappingRuleRecategorizeByPattern = async (
+  mappingRulePatternRecategorizePreviewInput: MappingRulePatternRecategorizePreviewInput,
+  options?: RequestInit,
+): Promise<MappingRulePatternRecategorizePreview> => {
+  return customFetch<MappingRulePatternRecategorizePreview>(
+    getPreviewMappingRuleRecategorizeByPatternUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(mappingRulePatternRecategorizePreviewInput),
+    },
+  );
+};
+
+export const getPreviewMappingRuleRecategorizeByPatternMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof previewMappingRuleRecategorizeByPattern>>,
+    TError,
+    { data: BodyType<MappingRulePatternRecategorizePreviewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof previewMappingRuleRecategorizeByPattern>>,
+  TError,
+  { data: BodyType<MappingRulePatternRecategorizePreviewInput> },
+  TContext
+> => {
+  const mutationKey = ["previewMappingRuleRecategorizeByPattern"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof previewMappingRuleRecategorizeByPattern>>,
+    { data: BodyType<MappingRulePatternRecategorizePreviewInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return previewMappingRuleRecategorizeByPattern(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PreviewMappingRuleRecategorizeByPatternMutationResult = NonNullable<
+  Awaited<ReturnType<typeof previewMappingRuleRecategorizeByPattern>>
+>;
+export type PreviewMappingRuleRecategorizeByPatternMutationBody =
+  BodyType<MappingRulePatternRecategorizePreviewInput>;
+export type PreviewMappingRuleRecategorizeByPatternMutationError =
+  ErrorType<unknown>;
+
+export const usePreviewMappingRuleRecategorizeByPattern = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof previewMappingRuleRecategorizeByPattern>>,
+    TError,
+    { data: BodyType<MappingRulePatternRecategorizePreviewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof previewMappingRuleRecategorizeByPattern>>,
+  TError,
+  { data: BodyType<MappingRulePatternRecategorizePreviewInput> },
+  TContext
+> => {
+  return useMutation(
+    getPreviewMappingRuleRecategorizeByPatternMutationOptions(options),
+  );
 };
 
 export const getGetSettingsUrl = () => {

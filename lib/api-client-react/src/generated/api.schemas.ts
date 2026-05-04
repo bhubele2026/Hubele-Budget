@@ -1160,6 +1160,76 @@ thin slice (id, description, occurredOn, amount) used by
   sampleTransactions: RepointedRuleSample[];
 }
 
+export type MappingRulePatternRecategorizePreviewInputMatchType =
+  (typeof MappingRulePatternRecategorizePreviewInputMatchType)[keyof typeof MappingRulePatternRecategorizePreviewInputMatchType];
+
+export const MappingRulePatternRecategorizePreviewInputMatchType = {
+  contains: "contains",
+  exact: "exact",
+  starts_with: "starts_with",
+} as const;
+
+/**
+ * Pattern shape used by the "Add New Rule" form's inline preview.
+Carries the unsaved rule directly so the server can compute
+the candidate count + sample list against older *uncategorized*
+rows without persisting anything.
+
+ */
+export interface MappingRulePatternRecategorizePreviewInput {
+  /** The literal pattern the unsaved rule would match against
+transaction descriptions.
+ */
+  pattern: string;
+  matchType: MappingRulePatternRecategorizePreviewInputMatchType;
+  /** The category the unsaved rule would assign matching rows to.
+   */
+  toCategoryId: string;
+}
+
+export type MappingRulePatternRecategorizePreviewMatchType =
+  (typeof MappingRulePatternRecategorizePreviewMatchType)[keyof typeof MappingRulePatternRecategorizePreviewMatchType];
+
+export const MappingRulePatternRecategorizePreviewMatchType = {
+  contains: "contains",
+  exact: "exact",
+  starts_with: "starts_with",
+} as const;
+
+/**
+ * Read-only preview of the bulk-recategorize that *would* happen if the
+Mapping Rules "Add New Rule" form created a rule with the given
+`{ pattern, matchType, toCategoryId }` and then chained
+POST /transactions/recategorize-by-pattern against the older
+uncategorized rows it would match. Mirrors `MappingRuleRecategorizePreview`
+minus the `ruleId` (no rule exists yet) so the same preview banner +
+"Show matches" Dialog can render either.
+
+ */
+export interface MappingRulePatternRecategorizePreview {
+  pattern: string;
+  matchType: MappingRulePatternRecategorizePreviewMatchType;
+  /**
+   * Always `null` for the by-pattern preview — the Add flow scopes
+its bulk recategorize to uncategorized rows only, so explicit
+user category edits aren't trampled. Surfaced as an explicit
+field for symmetry with `MappingRuleRecategorizePreview`.
+
+   * @nullable
+   */
+  fromCategoryId: string | null;
+  toCategoryId: string;
+  /** Number of *uncategorized* transactions whose description matches
+the unsaved rule's pattern. `0` when no historical rows match.
+ */
+  candidateCount: number;
+  /** First ~10 affected transactions, ordered most-recent first. Same
+thin slice (id, description, occurredOn, amount) used by
+`RepointedRule.sampleTransactions`.
+ */
+  sampleTransactions: RepointedRuleSample[];
+}
+
 export interface TestMappingRulesResult {
   /** Every rule whose pattern matches the description, sorted by
 priority descending — same order the categorize() hot path uses.

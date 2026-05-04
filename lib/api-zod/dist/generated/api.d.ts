@@ -3124,6 +3124,88 @@ export declare const PreviewMappingRuleRecategorizeResponse: zod.ZodObject<{
         matchedRuleId?: string | null | undefined;
     }[];
 }>;
+/**
+ * Read-only preview of the bulk-recategorize that *would* happen if the
+Mapping Rules "Add New Rule" form created a rule with the given
+`{ pattern, matchType, toCategoryId }` and then chained
+POST /transactions/recategorize-by-pattern against the older
+*uncategorized* rows it would match. Lets the Add form surface the
+same "N past transactions will move into <new category>" inline banner
++ "Show matches" affordance the edit flow already shows, before the
+user clicks Add.
+
+`fromCategoryId` is implicitly `null` (uncategorized rows only) since
+no rule exists yet to scope by — mirrors how the post-create
+`ruleAction` toast already counts candidates for brand-new rules.
+
+Read-only — no rule is created and no transactions are touched.
+
+ */
+export declare const PreviewMappingRuleRecategorizeByPatternBody: zod.ZodObject<{
+    pattern: zod.ZodString;
+    matchType: zod.ZodEnum<["contains", "exact", "starts_with"]>;
+    toCategoryId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    pattern: string;
+    matchType: "exact" | "contains" | "starts_with";
+    toCategoryId: string;
+}, {
+    pattern: string;
+    matchType: "exact" | "contains" | "starts_with";
+    toCategoryId: string;
+}>;
+export declare const PreviewMappingRuleRecategorizeByPatternResponse: zod.ZodObject<{
+    pattern: zod.ZodString;
+    matchType: zod.ZodEnum<["contains", "exact", "starts_with"]>;
+    fromCategoryId: zod.ZodNullable<zod.ZodString>;
+    toCategoryId: zod.ZodString;
+    candidateCount: zod.ZodNumber;
+    sampleTransactions: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        description: zod.ZodString;
+        occurredOn: zod.ZodString;
+        amount: zod.ZodString;
+        matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        occurredOn: string;
+        description: string;
+        amount: string;
+        matchedRuleId?: string | null | undefined;
+    }, {
+        id: string;
+        occurredOn: string;
+        description: string;
+        amount: string;
+        matchedRuleId?: string | null | undefined;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    pattern: string;
+    matchType: "exact" | "contains" | "starts_with";
+    fromCategoryId: string | null;
+    toCategoryId: string;
+    candidateCount: number;
+    sampleTransactions: {
+        id: string;
+        occurredOn: string;
+        description: string;
+        amount: string;
+        matchedRuleId?: string | null | undefined;
+    }[];
+}, {
+    pattern: string;
+    matchType: "exact" | "contains" | "starts_with";
+    fromCategoryId: string | null;
+    toCategoryId: string;
+    candidateCount: number;
+    sampleTransactions: {
+        id: string;
+        occurredOn: string;
+        description: string;
+        amount: string;
+        matchedRuleId?: string | null | undefined;
+    }[];
+}>;
 export declare const GetSettingsResponse: zod.ZodObject<{
     weeklyAllowanceAmount: zod.ZodString;
     monthlyAllowanceAmount: zod.ZodString;

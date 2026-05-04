@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkSetForecastFlagInput, BulkSetForecastFlagResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UpdateTransactionResponse } from "./api.schemas";
+import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkSetForecastFlagInput, BulkSetForecastFlagResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UpdateTransactionResponse } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -942,6 +942,44 @@ export declare const usePreviewMappingRuleRecategorize: <TError = ErrorType<void
 }) => UseMutationResult<Awaited<ReturnType<typeof previewMappingRuleRecategorize>>, TError, {
     id: string;
     data: BodyType<MappingRuleRecategorizePreviewInput>;
+}, TContext>;
+/**
+ * Read-only preview of the bulk-recategorize that *would* happen if the
+Mapping Rules "Add New Rule" form created a rule with the given
+`{ pattern, matchType, toCategoryId }` and then chained
+POST /transactions/recategorize-by-pattern against the older
+*uncategorized* rows it would match. Lets the Add form surface the
+same "N past transactions will move into <new category>" inline banner
++ "Show matches" affordance the edit flow already shows, before the
+user clicks Add.
+
+`fromCategoryId` is implicitly `null` (uncategorized rows only) since
+no rule exists yet to scope by — mirrors how the post-create
+`ruleAction` toast already counts candidates for brand-new rules.
+
+Read-only — no rule is created and no transactions are touched.
+
+ */
+export declare const getPreviewMappingRuleRecategorizeByPatternUrl: () => string;
+export declare const previewMappingRuleRecategorizeByPattern: (mappingRulePatternRecategorizePreviewInput: MappingRulePatternRecategorizePreviewInput, options?: RequestInit) => Promise<MappingRulePatternRecategorizePreview>;
+export declare const getPreviewMappingRuleRecategorizeByPatternMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof previewMappingRuleRecategorizeByPattern>>, TError, {
+        data: BodyType<MappingRulePatternRecategorizePreviewInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof previewMappingRuleRecategorizeByPattern>>, TError, {
+    data: BodyType<MappingRulePatternRecategorizePreviewInput>;
+}, TContext>;
+export type PreviewMappingRuleRecategorizeByPatternMutationResult = NonNullable<Awaited<ReturnType<typeof previewMappingRuleRecategorizeByPattern>>>;
+export type PreviewMappingRuleRecategorizeByPatternMutationBody = BodyType<MappingRulePatternRecategorizePreviewInput>;
+export type PreviewMappingRuleRecategorizeByPatternMutationError = ErrorType<unknown>;
+export declare const usePreviewMappingRuleRecategorizeByPattern: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof previewMappingRuleRecategorizeByPattern>>, TError, {
+        data: BodyType<MappingRulePatternRecategorizePreviewInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof previewMappingRuleRecategorizeByPattern>>, TError, {
+    data: BodyType<MappingRulePatternRecategorizePreviewInput>;
 }, TContext>;
 export declare const getGetSettingsUrl: () => string;
 export declare const getSettings: (options?: RequestInit) => Promise<Settings>;

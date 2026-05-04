@@ -9,6 +9,7 @@ import {
   useTestMappingRules,
   useListCategories,
   usePreviewMappingRuleRecategorize,
+  usePreviewMappingRuleRecategorizeByPattern,
   useRecategorizeTransactionsByPattern,
   getListMappingRulesQueryKey,
   createMappingRule,
@@ -21,6 +22,7 @@ import type {
   MappingRuleInput,
   Category,
   MappingRuleRecategorizePreview,
+  MappingRulePatternRecategorizePreview,
 } from "@workspace/api-client-react";
 import {
   useBulkRecategorizePrompt,
@@ -499,6 +501,8 @@ export default function MappingRulesPage() {
 
   const testRules = useTestMappingRules();
   const previewRecategorize = usePreviewMappingRuleRecategorize();
+  const previewRecategorizeByPattern =
+    usePreviewMappingRuleRecategorizeByPattern();
   const recategorizeBulk = useRecategorizeTransactionsByPattern();
 
   const [pattern, setPattern] = useState("");
@@ -506,6 +510,12 @@ export default function MappingRulesPage() {
   const [categoryId, setCategoryId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [testInput, setTestInput] = useState("");
+  // Latest preview returned by POST /mapping-rules/recategorize-preview-by-pattern
+  // for the unsaved Add-form rule. Stored alongside the inputs that
+  // produced it so we can drop a stale response when the user has
+  // since edited the pattern / matchType / category.
+  const [addPreview, setAddPreview] =
+    useState<MappingRulePatternRecategorizePreview | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editPattern, setEditPattern] = useState("");
@@ -566,12 +576,16 @@ export default function MappingRulesPage() {
 
   // Both the "Add" form and the Undo-after-delete toast funnel through
   // POST /mapping-rules, but they have different intents:
-  //   - "create": the user is declaring fresh categorization intent, so
-  //     we follow up with the "Apply to past too?" prompt when the
-  //     server reports older matching transactions.
+  //   - "create": the user is declaring fresh categorization intent.
+  //     If we have a fresh Task #220 preview snapshot for the pattern
+  //     they're adding, chain the bulk recategorize directly so past
+  //     uncategorized rows snap onto the new category in one user
+  //     action. Otherwise fall back to the "Apply to past too?" toast
+  //     prompt driven by the server's `ruleAction`.
   //   - "restore": the user is undoing a deletion they just made, so we
-  //     deliberately do NOT re-prompt — they're reverting state, not
-  //     making a new decision, and asking again would be confusing.
+  //     deliberately do NOT re-prompt or chain a recategorize — they're
+  //     reverting state, not making a new decision, and asking again
+  //     would be confusing.
   // Funneling both call sites through this helper makes that contract
   // explicit at the call site (instead of being implicit in which
   // onSuccess handler the caller happened to pass) so future changes
@@ -579,8 +593,13 @@ export default function MappingRulesPage() {
   const submitMappingRule = (
     data: MappingRuleInput,
     source: "create" | "restore",
-    toCategoryName?: string,
+    options?: {
+      toCategoryName?: string;
+      previewSnapshot?: MappingRulePatternRecategorizePreview | null;
+    },
   ) => {
+    const toCategoryName = options?.toCategoryName;
+    const previewSnapshot = options?.previewSnapshot ?? null;
     createRule.mutate(
       { data },
       {
@@ -589,21 +608,126 @@ export default function MappingRulesPage() {
             toast({ title: "Rule restored" });
             return;
           }
-          toast({ title: "Rule added" });
-          // Surface the same "Apply to past too?" toast as the
-          // Transactions / Amex auto-learn flow when the freshly
-          // created rule has older uncategorized matches. Hook
-          // returns early when candidate count is 0, so we don't
-          // need to gate it here.
-          const bulkRule = bulkRuleFromRuleAction(
-            created.ruleAction,
-            toCategoryName,
+          if (!previewSnapshot) {
+            toast({ title: "Rule added" });
+            // Surface the same "Apply to past too?" toast as the
+            // Transactions / Amex auto-learn flow when the freshly
+            // created rule has older uncategorized matches. Hook
+            // returns early when candidate count is 0, so we don't
+            // need to gate it here.
+            const bulkRule = bulkRuleFromRuleAction(
+              created.ruleAction,
+              toCategoryName,
+            );
+            if (bulkRule) offerBulkRecategorize(bulkRule);
+            return;
+          }
+          // Task #220 — chain the bulk recategorize so past
+          // uncategorized rows snap onto the new category in one
+          // user action — same single-step UX the edit flow gives
+          // the user on Save.
+          const displayName = toCategoryName ?? "the new category";
+          recategorizeBulk.mutate(
+            {
+              data: {
+                pattern: previewSnapshot.pattern,
+                matchType: previewSnapshot.matchType,
+                // The Add preview always scopes to uncategorized
+                // rows (`fromCategoryId: null`) — explicit user
+                // category edits are preserved by the server's
+                // same guard.
+                fromCategoryId: null,
+                toCategoryId: previewSnapshot.toCategoryId,
+              },
+            },
+            {
+              onSuccess: (res) => {
+                queryClient.invalidateQueries({
+                  queryKey: getListTransactionsQueryKey(),
+                });
+                for (const m of res.affectedMonths) {
+                  queryClient.invalidateQueries({
+                    queryKey: getGetBudgetMonthQueryKey(m),
+                  });
+                }
+                // No Undo affordance: the swap would require
+                // flipping these rows back to a `null` category,
+                // which the bulk endpoint rejects. The user can
+                // manually re-edit a row if needed; the rule
+                // itself can be deleted via the row-level Trash
+                // with its own Undo.
+                toast({
+                  title: `Rule added · moved ${res.updated} past transaction${res.updated === 1 ? "" : "s"} into ${displayName}`,
+                });
+              },
+              onError: (e) => {
+                toast({
+                  title: "Rule saved, but couldn't move past transactions",
+                  description: (e as Error).message,
+                  variant: "destructive",
+                });
+              },
+            },
           );
-          if (bulkRule) offerBulkRecategorize(bulkRule);
         },
       },
     );
   };
+
+  // Task #220 — debounced preview of older *uncategorized* transactions
+  // that an unsaved Add-form rule would match. Fires whenever the user
+  // has both a non-empty pattern and a target category typed in.
+  // We debounce to avoid a request on every keystroke and we always
+  // verify the response shape still matches the latest inputs before
+  // committing it to state — otherwise an in-flight response could
+  // overwrite a fresh one if the user is still editing.
+  useEffect(() => {
+    const trimmed = pattern.trim();
+    if (!trimmed || !categoryId) {
+      setAddPreview(null);
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      previewRecategorizeByPattern.mutate(
+        {
+          data: {
+            pattern: trimmed,
+            // The matchType state is a plain string for parity with
+            // the edit-row Select; cast at the call site instead of
+            // narrowing the state type so the Add card's Select can
+            // keep using the same value-type its onValueChange ships.
+            matchType: matchType as "contains" | "exact" | "starts_with",
+            toCategoryId: categoryId,
+          },
+        },
+        {
+          onSuccess: (res) => {
+            // Drop late responses if the user has since edited the
+            // form so a stale preview can never get pinned to the UI.
+            if (
+              res.pattern !== trimmed ||
+              res.matchType !== matchType ||
+              res.toCategoryId !== categoryId
+            ) {
+              return;
+            }
+            setAddPreview(res);
+          },
+          onError: () => {
+            // Fail silently — a transient preview failure shouldn't
+            // block the user from clicking Add. The Add path stays
+            // functional without the banner.
+            setAddPreview(null);
+          },
+        },
+      );
+    }, 300);
+    return () => window.clearTimeout(handle);
+    // The mutation hook reference is stable across renders so it's
+    // safe to omit from the deps; including it would re-arm the
+    // debounce timer on every render and defeat the debounce.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pattern, matchType, categoryId]);
 
   const handleAddRule = () => {
     if (!pattern || !categoryId) return;
@@ -620,14 +744,32 @@ export default function MappingRulesPage() {
       categoryId,
       priority: topPriority + 10,
     };
+    // Snapshot what we'll need *after* the form clears so the chained
+    // bulk recategorize and toast still know which pattern + category
+    // to act on. Mirrors the edit flow's `previewSnapshot` capture in
+    // `saveEdit` — fire the bulk only when the latest preview lines up
+    // with what the user is about to save (else the preview is stale
+    // and the user might reasonably expect no past rows to move).
+    const trimmedPattern = pattern.trim();
+    const previewSnapshot =
+      addPreview &&
+      addPreview.pattern === trimmedPattern &&
+      addPreview.matchType === matchType &&
+      addPreview.toCategoryId === categoryId &&
+      addPreview.candidateCount > 0
+        ? addPreview
+        : null;
+    const toCategoryName = catById.get(categoryId)?.name ?? "the new category";
     // Clear the form right away so the input feels responsive — the
     // optimistic row already shows the new rule in the list below.
     setPattern("");
-    submitMappingRule(
-      data,
-      "create",
-      catById.get(categoryId)?.name ?? undefined,
-    );
+    // Drop the preview snapshot from state too — the form is empty so
+    // the banner shouldn't linger after the user has acted on it.
+    setAddPreview(null);
+    submitMappingRule(data, "create", {
+      toCategoryName,
+      previewSnapshot,
+    });
   };
 
   // Bulk delete the currently selected rules with a single Undo toast
@@ -1261,6 +1403,55 @@ export default function MappingRulesPage() {
               <Plus className="w-4 h-4 mr-2" /> Add
             </Button>
           </div>
+          {/*
+            * Task #220 — preview banner for the unsaved Add-form rule.
+            * Mirrors the same shape and copy as the edit-row banner so
+            * users see consistent affordances whichever path they used,
+            * with "Show matches" opening the shared dialog.
+            */}
+          {addPreview &&
+            addPreview.pattern === pattern.trim() &&
+            addPreview.matchType === matchType &&
+            addPreview.toCategoryId === categoryId &&
+            addPreview.candidateCount > 0 && (
+              <div
+                className="mt-3 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
+                data-testid="rule-add-preview"
+              >
+                <span>
+                  <span
+                    className="font-medium"
+                    data-testid="rule-add-preview-count"
+                  >
+                    {addPreview.candidateCount}
+                  </span>{" "}
+                  past transaction
+                  {addPreview.candidateCount === 1 ? "" : "s"} will move into{" "}
+                  <span className="font-medium">
+                    {catById.get(addPreview.toCategoryId)?.name ??
+                      "the new category"}
+                  </span>{" "}
+                  when you add this rule.
+                </span>
+                <button
+                  type="button"
+                  className="shrink-0 underline underline-offset-2 hover:text-foreground"
+                  data-testid="link-show-rule-matches-add"
+                  onClick={() =>
+                    setMatchesDialog({
+                      pattern: addPreview.pattern,
+                      candidateCount: addPreview.candidateCount,
+                      sampleTransactions: addPreview.sampleTransactions,
+                      toCategoryName:
+                        catById.get(addPreview.toCategoryId)?.name ??
+                        "the new category",
+                    })
+                  }
+                >
+                  Show matches
+                </button>
+              </div>
+            )}
         </CardContent>
       </Card>
 
