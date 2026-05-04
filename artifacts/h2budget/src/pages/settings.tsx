@@ -528,6 +528,32 @@ export default function SettingsPage() {
                           ? `Last synced ${new Date(item.lastSyncedAt).toLocaleString()}`
                           : "Not yet synced"}
                       </div>
+                      {/* (#258) Show when the disconnect-cutoff was last
+                          verified against Plaid so users (and support)
+                          can confirm the countdown above the "Needs
+                          reconnect" badge is fresh — distinct from the
+                          last-synced timestamp, which only reflects the
+                          /transactions/sync call. Hidden until the row
+                          has been refreshed at least once (e.g. items
+                          linked before this column existed). */}
+                      {item.consentExpirationLastRefreshedAt && (
+                        <div
+                          className="text-xs text-muted-foreground"
+                          data-testid={`text-consent-refreshed-${item.id}`}
+                          title={
+                            item.consentExpirationAt
+                              ? `Disconnect date on file: ${new Date(
+                                  item.consentExpirationAt,
+                                ).toLocaleString()}`
+                              : "Plaid does not report a disconnect date for this item."
+                          }
+                        >
+                          Disconnect date checked{" "}
+                          {new Date(
+                            item.consentExpirationLastRefreshedAt,
+                          ).toLocaleString()}
+                        </div>
+                      )}
                       {item.stillPreparing && isPreparingStalled(item.stillPreparingSince, nowTick) && (
                         <div
                           className="text-xs text-amber-700 dark:text-amber-400 mt-1"

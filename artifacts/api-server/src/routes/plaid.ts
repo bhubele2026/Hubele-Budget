@@ -160,6 +160,11 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     // of the date-less fallback copy. Most non-OAuth institutions do not
     // populate this field, so leave it null when absent.
     let consentExpirationAt: Date | null = null;
+    // (#258) Tracks whether /item/get succeeded so we can stamp
+    // `consent_expiration_last_refreshed_at` only when we actually
+    // verified the cutoff against Plaid (not when the call failed and
+    // we fell back to defaults).
+    let consentRefreshedAt: Date | null = null;
     try {
       const itemResp = await plaid().itemGet({ access_token: accessToken });
       resolvedInstId = itemResp.data.item.institution_id ?? resolvedInstId;
@@ -170,6 +175,7 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
         const parsed = new Date(cet);
         if (!Number.isNaN(parsed.getTime())) consentExpirationAt = parsed;
       }
+      consentRefreshedAt = new Date();
       if (resolvedInstId && !resolvedName) {
         const inst = await plaid().institutionsGetById({
           institution_id: resolvedInstId,
@@ -192,6 +198,7 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
         institutionName: resolvedName,
         institutionSlug: slug,
         consentExpirationAt,
+        consentExpirationLastRefreshedAt: consentRefreshedAt,
       })
       .onConflictDoUpdate({
         target: plaidItemsTable.itemId,
@@ -201,6 +208,11 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
           institutionName: resolvedName,
           institutionSlug: slug,
           consentExpirationAt,
+          // Only bump the freshness timestamp when /item/get actually
+          // succeeded above; otherwise leave any prior value alone.
+          ...(consentRefreshedAt
+            ? { consentExpirationLastRefreshedAt: consentRefreshedAt }
+            : {}),
         },
       })
       .returning();
@@ -292,6 +304,10 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       consentExpirationAt: item!.consentExpirationAt
         ? item!.consentExpirationAt.toISOString()
         : null,
+      // (#258) When the cutoff was last verified against Plaid.
+      consentExpirationLastRefreshedAt: item!.consentExpirationLastRefreshedAt
+        ? item!.consentExpirationLastRefreshedAt.toISOString()
+        : null,
       accounts: accounts.map((a) => ({
         id: a.id,
         accountId: a.accountId,
@@ -345,6 +361,16 @@ router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
       // and the Settings tooltip. Null when Plaid does not provide one.
       consentExpirationAt: it.consentExpirationAt
         ? it.consentExpirationAt.toISOString()
+        : null,
+      // (#258) Wall-clock timestamp of when we last successfully
+      // verified `consentExpirationAt` against Plaid (any path: link
+      // exchange, sync's PENDING_EXPIRATION refresh, or the daily
+      // cron). The Settings page surfaces this so users and support
+      // can confirm the disconnect countdown is fresh ("checked just
+      // now" vs. "we have not been able to reach Plaid for this item
+      // in a week"). Null until the first successful refresh.
+      consentExpirationLastRefreshedAt: it.consentExpirationLastRefreshedAt
+        ? it.consentExpirationLastRefreshedAt.toISOString()
         : null,
       accounts: (byItem.get(it.id) ?? []).map((a) => ({
         id: a.id,

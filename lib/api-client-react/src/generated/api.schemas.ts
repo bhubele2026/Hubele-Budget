@@ -1701,6 +1701,8 @@ sync chip.
   stillPreparingSince?: string | null;
   /** @nullable */
   consentExpirationAt?: string | null;
+  /** @nullable */
+  consentExpirationLastRefreshedAt?: string | null;
   accounts: PlaidAccount[];
 }
 

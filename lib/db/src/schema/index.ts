@@ -233,6 +233,18 @@ export const plaidItemsTable = pgTable(
     // institutions). Powers the dated PENDING_EXPIRATION /
     // PENDING_DISCONNECT subline copy on the reconnect banners.
     consentExpirationAt: timestamp("consent_expiration_at", { withTimezone: true }),
+    // (#258) Wall-clock timestamp of when we last successfully verified
+    // `consent_expiration_at` against Plaid (any path: exchange, on-sync
+    // refresh, or the daily cron). Updated on every successful /item/get
+    // call regardless of whether the cutoff value actually changed, so
+    // support can answer "did the daily refresh run today?" and "is the
+    // disconnect countdown the user is seeing fresh?" without diffing
+    // logs. Null until the first successful refresh (e.g. for items
+    // linked before this column existed).
+    consentExpirationLastRefreshedAt: timestamp(
+      "consent_expiration_last_refreshed_at",
+      { withTimezone: true },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({

@@ -119,16 +119,34 @@ describe("(#253) refreshConsentExpirationForItem", () => {
       data: { item: { item_id: "x", consent_expiration_time: fresh } },
     });
 
+    const before = Date.now();
     const result = await refreshConsentExpirationForItem(itemRowId);
+    const after = Date.now();
     expect(result.error).toBeNull();
     expect(result.changed).toBe(true);
     expect(result.consentExpirationAt).toBe(fresh);
+    // (#258) The result must echo back the same freshness timestamp we
+    // wrote to the row so the manual-trigger response can render it
+    // without a follow-up GET.
+    expect(result.consentExpirationLastRefreshedAt).not.toBeNull();
+    const refreshedAtMs = new Date(
+      result.consentExpirationLastRefreshedAt!,
+    ).getTime();
+    expect(refreshedAtMs).toBeGreaterThanOrEqual(before);
+    expect(refreshedAtMs).toBeLessThanOrEqual(after);
 
     const [row] = await db
-      .select({ consentExpirationAt: plaidItemsTable.consentExpirationAt })
+      .select({
+        consentExpirationAt: plaidItemsTable.consentExpirationAt,
+        consentExpirationLastRefreshedAt:
+          plaidItemsTable.consentExpirationLastRefreshedAt,
+      })
       .from(plaidItemsTable)
       .where(eq(plaidItemsTable.id, itemRowId));
     expect(row?.consentExpirationAt?.toISOString()).toBe(fresh);
+    expect(
+      row?.consentExpirationLastRefreshedAt?.toISOString(),
+    ).toBe(result.consentExpirationLastRefreshedAt);
   });
 
   it("rolls a stored cutoff forward when Plaid reports a later one (the drift the cron exists to fix)", async () => {
@@ -168,24 +186,61 @@ describe("(#253) refreshConsentExpirationForItem", () => {
     expect(row?.consentExpirationAt).toBeNull();
   });
 
-  it("reports changed=false and skips the write when the cutoff matches what we already stored", async () => {
+  it("reports changed=false when the cutoff matches but still bumps the freshness timestamp (#258 — the audit trail the task added)", async () => {
     const same = "2026-06-30T00:00:00.000Z";
+    // Seed a stale freshness timestamp from "a week ago" so we can
+    // prove the no-change path still moves it forward.
+    const staleRefresh = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const { itemRowId } = await seedItem({
       consentExpirationAt: new Date(same),
     });
+    await db
+      .update(plaidItemsTable)
+      .set({ consentExpirationLastRefreshedAt: staleRefresh })
+      .where(eq(plaidItemsTable.id, itemRowId));
     itemGetMock = async () => ({
       data: { item: { item_id: "x", consent_expiration_time: same } },
     });
 
+    const before = Date.now();
     const result = await refreshConsentExpirationForItem(itemRowId);
     expect(result.error).toBeNull();
     expect(result.changed).toBe(false);
     expect(result.consentExpirationAt).toBe(same);
+    // (#258) Even when nothing moved we MUST advance the freshness
+    // timestamp — that is the whole point of the column. Without this
+    // assertion we'd regress to "support cannot tell whether the cron
+    // ran today" the moment a bank's cutoff stops changing.
+    expect(result.consentExpirationLastRefreshedAt).not.toBeNull();
+    const refreshedAtMs = new Date(
+      result.consentExpirationLastRefreshedAt!,
+    ).getTime();
+    expect(refreshedAtMs).toBeGreaterThanOrEqual(before);
+    expect(refreshedAtMs).toBeGreaterThan(staleRefresh.getTime());
+
+    const [row] = await db
+      .select({
+        consentExpirationAt: plaidItemsTable.consentExpirationAt,
+        consentExpirationLastRefreshedAt:
+          plaidItemsTable.consentExpirationLastRefreshedAt,
+      })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    // Cutoff itself must not have moved (avoids needless tuple churn).
+    expect(row?.consentExpirationAt?.toISOString()).toBe(same);
+    expect(
+      row?.consentExpirationLastRefreshedAt?.getTime(),
+    ).toBeGreaterThan(staleRefresh.getTime());
   });
 
   it("captures /item/get failures on the result without throwing and leaves the stored value alone", async () => {
     const stored = new Date("2026-05-21T15:30:00.000Z");
+    const priorRefresh = new Date("2026-04-01T00:00:00.000Z");
     const { itemRowId } = await seedItem({ consentExpirationAt: stored });
+    await db
+      .update(plaidItemsTable)
+      .set({ consentExpirationLastRefreshedAt: priorRefresh })
+      .where(eq(plaidItemsTable.id, itemRowId));
     itemGetMock = async () => {
       throw new Error("plaid unreachable");
     };
@@ -193,12 +248,28 @@ describe("(#253) refreshConsentExpirationForItem", () => {
     const result = await refreshConsentExpirationForItem(itemRowId);
     expect(result.error).toMatch(/plaid unreachable/);
     expect(result.changed).toBe(false);
+    // (#258) When /item/get fails the cutoff is exactly as stale as
+    // before this call — the freshness timestamp on the result must
+    // echo the previously stored value, NOT pretend a fresh check
+    // happened, or support would lose the ability to spot a bank
+    // that hasn't been verifiable in days.
+    expect(result.consentExpirationLastRefreshedAt).toBe(
+      priorRefresh.toISOString(),
+    );
 
     const [row] = await db
-      .select({ consentExpirationAt: plaidItemsTable.consentExpirationAt })
+      .select({
+        consentExpirationAt: plaidItemsTable.consentExpirationAt,
+        consentExpirationLastRefreshedAt:
+          plaidItemsTable.consentExpirationLastRefreshedAt,
+      })
       .from(plaidItemsTable)
       .where(eq(plaidItemsTable.id, itemRowId));
     expect(row?.consentExpirationAt?.toISOString()).toBe(stored.toISOString());
+    // The row's timestamp must not have advanced either.
+    expect(row?.consentExpirationLastRefreshedAt?.toISOString()).toBe(
+      priorRefresh.toISOString(),
+    );
   });
 });
 

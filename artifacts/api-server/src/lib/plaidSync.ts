@@ -546,8 +546,15 @@ export async function syncPlaidItem(
       .set({
         lastSyncError: message,
         lastSyncErrorCode: code,
+        // (#258) Stamp the freshness timestamp whenever /item/get
+        // succeeded, regardless of whether the cutoff value actually
+        // moved. Lets support tell "the cutoff is current" apart from
+        // "we have not been able to reach Plaid for this item lately".
         ...(refreshedConsentExpirationAt !== undefined
-          ? { consentExpirationAt: refreshedConsentExpirationAt }
+          ? {
+              consentExpirationAt: refreshedConsentExpirationAt,
+              consentExpirationLastRefreshedAt: new Date(),
+            }
           : {}),
       })
       .where(eq(plaidItemsTable.id, itemRowId));
@@ -592,6 +599,12 @@ export type ConsentRefreshResult = {
   itemId: string;
   institutionName: string | null;
   consentExpirationAt: string | null;
+  // (#258) Wall-clock timestamp of when this refresh completed (i.e. the
+  // value we just wrote into `consent_expiration_last_refreshed_at`).
+  // Null when the refresh failed before /item/get returned, so callers
+  // can tell "Plaid said nothing changed" apart from "we never reached
+  // Plaid this run". Useful for the manual-trigger response and tests.
+  consentExpirationLastRefreshedAt: string | null;
   changed: boolean;
   error: string | null;
 };
@@ -627,6 +640,7 @@ export async function refreshConsentExpirationForItem(
       itemId: itemRowId,
       institutionName: null,
       consentExpirationAt: null,
+      consentExpirationLastRefreshedAt: null,
       changed: false,
       error: "Item not found",
     };
@@ -646,17 +660,27 @@ export async function refreshConsentExpirationForItem(
       : null;
     const nextMs = next ? next.getTime() : null;
     const changed = prev !== nextMs;
-    if (changed) {
-      await db
-        .update(plaidItemsTable)
-        .set({ consentExpirationAt: next })
-        .where(eq(plaidItemsTable.id, itemRowId));
-    }
+    // (#258) Always stamp the freshness timestamp on a successful
+    // /item/get — even when `changed=false`. The whole point of the
+    // column is to let support answer "did the daily refresh actually
+    // run for this item today?" without diffing logs, so skipping the
+    // write on no-change would defeat the purpose. The cutoff value
+    // itself is only re-written when it actually moved (avoids needless
+    // row churn / tuple bloat on stable items).
+    const refreshedAt = new Date();
+    await db
+      .update(plaidItemsTable)
+      .set({
+        consentExpirationLastRefreshedAt: refreshedAt,
+        ...(changed ? { consentExpirationAt: next } : {}),
+      })
+      .where(eq(plaidItemsTable.id, itemRowId));
     return {
       itemRowId: item.id,
       itemId: item.itemId,
       institutionName: item.institutionName,
       consentExpirationAt: next ? next.toISOString() : null,
+      consentExpirationLastRefreshedAt: refreshedAt.toISOString(),
       changed,
       error: null,
     };
@@ -668,6 +692,13 @@ export async function refreshConsentExpirationForItem(
       institutionName: item.institutionName,
       consentExpirationAt: item.consentExpirationAt
         ? item.consentExpirationAt.toISOString()
+        : null,
+      // (#258) /item/get failed, so the stored cutoff is exactly as
+      // stale as before this call. Echo back whatever timestamp we
+      // already had on the row (or null) so the manual-trigger UI does
+      // not falsely advertise a fresh verification.
+      consentExpirationLastRefreshedAt: item.consentExpirationLastRefreshedAt
+        ? item.consentExpirationLastRefreshedAt.toISOString()
         : null,
       changed: false,
       error: message,
