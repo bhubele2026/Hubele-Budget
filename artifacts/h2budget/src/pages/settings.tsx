@@ -61,7 +61,21 @@ export default function SettingsPage() {
   const { data: settings, isLoading } = useGetSettings();
   const updateSettings = useUpdateSettings();
   const importWorkbook = useImportWorkbook();
-  const { data: plaidItems } = useListPlaidItems();
+  const { data: plaidItems } = useListPlaidItems({
+    query: {
+      queryKey: getListPlaidItemsQueryKey(),
+      // While any linked item is still in Plaid's historical-staging phase,
+      // silently refetch every 90s so the "Still preparing" badge disappears
+      // on its own once the server flips `stillPreparing` to false. Returning
+      // `false` once no item is preparing stops the polling — same gating
+      // pattern as the live timer tick below.
+      refetchInterval: (query) => {
+        const items = query.state.data;
+        if (items?.some((it) => it.stillPreparing)) return 90_000;
+        return false;
+      },
+    },
+  });
   // Bumped ~once a minute while any item is still preparing so the
   // "Still preparing · Xm" badge and the 6h stalled hint update without a
   // page reload. Reads Date.now() inline at render time via the helpers.
