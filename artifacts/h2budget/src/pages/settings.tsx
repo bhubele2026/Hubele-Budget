@@ -29,6 +29,10 @@ import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus } from "lucid
 import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { formatPreparingElapsed, isPreparingStalled } from "@/lib/plaidPreparing";
+import {
+  PlaidReconnectButton,
+  isPlaidReauthCode,
+} from "@/components/plaid-reconnect-button";
 import { OwnerInvitationsSection } from "@/components/owner-invitations";
 import {
   DEFAULT_DAYS_SINCE_TRACKERS,
@@ -405,6 +409,7 @@ export default function SettingsPage() {
           {(plaidItems ?? []).map((item) => {
             const isSyncing = isSyncPending && syncingItemId === item.id;
             const isAnySyncing = isSyncPending;
+            const needsReconnect = isPlaidReauthCode(item.lastSyncErrorCode);
             return (
               <div
                 key={item.id}
@@ -417,6 +422,15 @@ export default function SettingsPage() {
                     <div>
                       <div className="font-medium flex items-center gap-2 flex-wrap">
                         <span>{item.institutionName || "Linked institution"}</span>
+                        {needsReconnect && (
+                          <span
+                            className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-destructive/50 text-destructive bg-destructive/10"
+                            data-testid={`badge-needs-reconnect-${item.id}`}
+                            title="Plaid says this bank needs you to re-enter credentials. Click Reconnect to fix it."
+                          >
+                            Needs reconnect
+                          </span>
+                        )}
                         {item.stillPreparing && (
                           <span
                             className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-700 dark:text-amber-400"
@@ -457,6 +471,13 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {needsReconnect && (
+                      <PlaidReconnectButton
+                        itemId={item.id}
+                        institutionName={item.institutionName ?? null}
+                        size="sm"
+                      />
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
