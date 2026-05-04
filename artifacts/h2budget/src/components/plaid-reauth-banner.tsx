@@ -92,7 +92,14 @@ export function PlaidReauthBannerView({
   // the user knows what to expect from the Plaid Link popup. Falls back to
   // the generic "needs to re-authorize" copy via plaidReauthReason() when
   // the code is unknown.
-  const subline = plaidReauthReason(worst.lastSyncErrorCode);
+  // (#238) Pass the institution's `consent_expiration_time` cutoff so
+  // PENDING_EXPIRATION / PENDING_DISCONNECT subline copy is dated
+  // ("Chase will disconnect on May 21 — reconnect now to keep it
+  // linked.") when Plaid actually reports one.
+  const subline = plaidReauthReason(worst.lastSyncErrorCode, {
+    consentExpirationAt: worst.consentExpirationAt,
+    institutionName: worst.institutionName,
+  });
 
   return (
     <div

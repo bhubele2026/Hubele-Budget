@@ -433,6 +433,14 @@ export type ReauthInstitution = {
    * subline copy via plaidReauthReason().
    */
   lastSyncErrorCode: string | null;
+  /**
+   * (#238) Plaid's `consent_expiration_time` cutoff for this institution
+   * (mirrored from the parent item via `Debt.plaidConsentExpirationAt`).
+   * Drives the dated PENDING_EXPIRATION / PENDING_DISCONNECT subline copy
+   * ("Chase will disconnect on May 21 — reconnect now to keep it
+   * linked."). Null when Plaid never reported a cutoff for the item.
+   */
+  consentExpirationAt: string | null;
   debts: Debt[];
 };
 
@@ -462,6 +470,10 @@ export function findDebtsNeedingReauth(
         // server writes the same lastSyncErrorCode on every account under
         // an item, so any debt is representative.
         lastSyncErrorCode: d.plaidLastSyncErrorCode ?? null,
+        // (#238) Same item-level invariant: every debt under an item
+        // shares the parent item's consent_expiration_time, so the first
+        // debt's value is representative.
+        consentExpirationAt: d.plaidConsentExpirationAt ?? null,
         debts: [d],
       });
     }
@@ -518,7 +530,14 @@ export function DebtReauthBanner({ debts }: { debts: Debt[] | null | undefined }
   // the Plaid Link popup is going to ask for. The debt-count fragment
   // stays on its own line so the debt-specific impact ("balance, APR,
   // and minimum payment may be out of date") is still visible.
-  const reason = plaidReauthReason(worst.lastSyncErrorCode);
+  // (#238) Pass the institution's `consent_expiration_time` cutoff so
+  // the dated PENDING_EXPIRATION / PENDING_DISCONNECT subline copy
+  // ("Chase will disconnect on May 21 — reconnect now to keep it
+  // linked.") fires when Plaid actually reports a date.
+  const reason = plaidReauthReason(worst.lastSyncErrorCode, {
+    consentExpirationAt: worst.consentExpirationAt,
+    institutionName: worst.institutionName,
+  });
   const debtImpact = `${debtCount} debt${debtCount === 1 ? "" : "s"} may be out of date — reconnect to refresh balance, APR, and minimum payment.`;
 
   return (

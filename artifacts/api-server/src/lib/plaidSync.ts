@@ -511,9 +511,44 @@ export async function syncPlaidItem(
         stillPreparing: true,
       };
     }
+    // (#238) When Plaid returns a re-auth code that carries a consent
+    // cutoff (PENDING_EXPIRATION / PENDING_DISCONNECT) refresh the stored
+    // `consent_expiration_time` so the dated banner copy ("Chase will
+    // disconnect on May 21") reflects the latest cutoff Plaid reports.
+    // Best-effort: any failure here must not mask the original sync
+    // error we still need to write below.
+    let refreshedConsentExpirationAt: Date | null | undefined = undefined;
+    if (code === "PENDING_EXPIRATION" || code === "PENDING_DISCONNECT") {
+      try {
+        const itemResp = await plaid().itemGet({
+          access_token: item.accessToken,
+        });
+        const cet = (itemResp.data.item as unknown as {
+          consent_expiration_time?: string | null;
+        }).consent_expiration_time;
+        if (cet) {
+          const parsed = new Date(cet);
+          if (!Number.isNaN(parsed.getTime())) {
+            refreshedConsentExpirationAt = parsed;
+          } else {
+            refreshedConsentExpirationAt = null;
+          }
+        } else {
+          refreshedConsentExpirationAt = null;
+        }
+      } catch {
+        // Leave the previously stored value alone if /item/get fails.
+      }
+    }
     await db
       .update(plaidItemsTable)
-      .set({ lastSyncError: message, lastSyncErrorCode: code })
+      .set({
+        lastSyncError: message,
+        lastSyncErrorCode: code,
+        ...(refreshedConsentExpirationAt !== undefined
+          ? { consentExpirationAt: refreshedConsentExpirationAt }
+          : {}),
+      })
       .where(eq(plaidItemsTable.id, itemRowId));
     return {
       itemId: item.itemId,

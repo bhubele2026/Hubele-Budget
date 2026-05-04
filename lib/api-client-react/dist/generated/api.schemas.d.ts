@@ -574,6 +574,18 @@ export interface Debt {
      * @nullable
      */
     plaidLastSyncErrorCode?: string | null;
+    /**
+     * (#238) ISO timestamp mirroring the parent Plaid item's
+  `consent_expiration_time` — the cutoff after which the bank
+  will be auto-disconnected unless the user re-consents. Powers
+  the dated PENDING_EXPIRATION / PENDING_DISCONNECT subline copy
+  on the DebtReauthBanner ("Chase will disconnect on May 21 —
+  reconnect now to keep it linked."). Null when the debt isn't
+  Plaid-linked or Plaid never reported a cutoff for the item.
+  
+     * @nullable
+     */
+    plaidConsentExpirationAt?: string | null;
     balanceSource: DebtBalanceSource;
     aprSource: DebtAprSource;
     minPaymentSource: DebtMinPaymentSource;
@@ -1500,6 +1512,8 @@ export interface PlaidItemDetail {
     stillPreparing?: boolean;
     /** @nullable */
     stillPreparingSince?: string | null;
+    /** @nullable */
+    consentExpirationAt?: string | null;
     accounts: PlaidAccount[];
 }
 export interface PlaidSyncInput {

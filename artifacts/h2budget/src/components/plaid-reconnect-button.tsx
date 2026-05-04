@@ -57,13 +57,70 @@ const PLAID_REAUTH_FALLBACK_REASON =
   "Plaid needs you to re-authorize this bank.";
 
 /**
+ * (#238) Format a Plaid `consent_expiration_time` ISO string into the
+ * short, locale-aware date the dated PENDING_EXPIRATION /
+ * PENDING_DISCONNECT subline copy uses ("May 21" when same calendar
+ * year as today, "May 21, 2027" otherwise so an out-of-year cutoff
+ * isn't ambiguous). Returns null for any unparseable / missing input
+ * so callers can safely fall back to the date-less copy.
+ */
+export function formatPlaidConsentExpirationDate(
+  iso: string | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const sameYear = d.getFullYear() === now.getFullYear();
+  return sameYear
+    ? d.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    : d.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+}
+
+/**
  * Returns a one-line, user-facing reason explaining why an item needs to be
  * reconnected. Falls back to a generic "needs re-authorization" message for
  * any code we don't have specific copy for (including null / unknown codes
  * that still landed in a re-auth state via some other signal).
+ *
+ * (#238) When `consentExpirationAt` is provided AND the code is one of the
+ * dated re-auth states (PENDING_EXPIRATION / PENDING_DISCONNECT) the copy
+ * inlines the actual cutoff date so the user knows how urgent the
+ * reconnect is ("Chase will disconnect on May 21 — reconnect now to keep
+ * it linked.") instead of the vague "soon". For any other code, or when
+ * Plaid did not report a cutoff for this item, falls back to the original
+ * date-less per-code copy.
+ *
+ * `institutionName` makes the dated copy name the actual bank ("Chase
+ * will disconnect on May 21") instead of a generic pronoun. Falls back
+ * to "This bank" when the caller has no institution name to thread
+ * through (e.g. an unnamed item).
  */
-export function plaidReauthReason(code: string | null | undefined): string {
+export function plaidReauthReason(
+  code: string | null | undefined,
+  opts: {
+    consentExpirationAt?: string | null;
+    institutionName?: string | null;
+  } = {},
+): string {
   if (!code) return PLAID_REAUTH_FALLBACK_REASON;
+  const dated =
+    code === "PENDING_EXPIRATION" || code === "PENDING_DISCONNECT";
+  if (dated) {
+    const dateLabel = formatPlaidConsentExpirationDate(
+      opts.consentExpirationAt,
+    );
+    if (dateLabel) {
+      const subject = opts.institutionName?.trim() || "This bank";
+      const verb =
+        code === "PENDING_DISCONNECT" ? "disconnect" : "expire";
+      return `${subject} will ${verb} on ${dateLabel} — reconnect now to keep it linked.`;
+    }
+  }
   return PLAID_REAUTH_ERROR_REASONS[code] ?? PLAID_REAUTH_FALLBACK_REASON;
 }
 

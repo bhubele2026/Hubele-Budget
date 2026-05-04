@@ -37,6 +37,7 @@ type LinkTokenCreateFn = (args: {
   country_codes: unknown;
   language: string;
 }) => Promise<unknown>;
+type ItemGetFn = (args: { access_token: string }) => Promise<unknown>;
 
 let transactionsSyncMock: TxnsSyncFn = async () => ({
   data: { added: [], modified: [], removed: [], next_cursor: "", has_more: false },
@@ -46,6 +47,12 @@ let accountsBalanceGetMock: AccountsBalanceGetFn = async () => ({
 });
 let linkTokenCreateMock: LinkTokenCreateFn = async () => ({
   data: { link_token: "link-sandbox-default", expiration: "2030-01-01T00:00:00Z" },
+});
+// (#238) Mocked /item/get — defaults to no consent_expiration_time so the
+// existing ITEM_LOGIN_REQUIRED / PRODUCT_NOT_READY tests behave exactly as
+// they did before the dated-cutoff sync refresh path was added.
+let itemGetMock: ItemGetFn = async () => ({
+  data: { item: { item_id: "item-default", consent_expiration_time: null } },
 });
 let lastLinkTokenCreateArgs: Parameters<LinkTokenCreateFn>[0] | null = null;
 
@@ -64,6 +71,7 @@ vi.mock("../lib/plaid", async () => {
         lastLinkTokenCreateArgs = args;
         return linkTokenCreateMock(args);
       },
+      itemGet: (args: Parameters<ItemGetFn>[0]) => itemGetMock(args),
     }),
   };
 });
@@ -129,6 +137,9 @@ beforeEach(async () => {
   accountsBalanceGetMock = async () => ({ data: { accounts: [] } });
   linkTokenCreateMock = async () => ({
     data: { link_token: "link-sandbox-default", expiration: "2030-01-01T00:00:00Z" },
+  });
+  itemGetMock = async () => ({
+    data: { item: { item_id: "item-default", consent_expiration_time: null } },
   });
   lastLinkTokenCreateArgs = null;
 });
@@ -283,6 +294,112 @@ describe("/plaid/sync error unwrapping", () => {
     // But we DO want to remember the still-preparing state so the Settings
     // page can render a per-item badge until the next successful sync.
     expect(row?.stillPreparingSince).toBeInstanceOf(Date);
+  });
+
+  it("(#238) refreshes consentExpirationAt on PENDING_EXPIRATION so the dated banner copy stays current", async () => {
+    // Seed an item with a stale (or missing) consent cutoff so we can
+    // assert the catch branch actually called itemGet and persisted the
+    // value Plaid returns alongside the PENDING_EXPIRATION code.
+    const { itemRowId } = await seedItem();
+    const cutoff = "2026-05-21T15:30:00.000Z";
+    itemGetMock = async () => ({
+      data: {
+        item: {
+          item_id: "item-from-mock",
+          consent_expiration_time: cutoff,
+        },
+      },
+    });
+    transactionsSyncMock = async () => {
+      throw {
+        message: "Request failed with status code 400",
+        response: {
+          status: 400,
+          data: {
+            error_code: "PENDING_EXPIRATION",
+            error_message:
+              "the access_token is approaching its expiration time and should be updated",
+            error_type: "ITEM_ERROR",
+          },
+        },
+      };
+    };
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId);
+    expect(result.error).toMatch(/expiration/i);
+
+    const [row] = await db
+      .select({
+        lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+        consentExpirationAt: plaidItemsTable.consentExpirationAt,
+      })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    expect(row?.lastSyncErrorCode).toBe("PENDING_EXPIRATION");
+    // The whole point of #238: when sync hits PENDING_EXPIRATION we MUST
+    // refresh the consent cutoff so the banner copy ("Chase will
+    // disconnect on May 21") reflects what Plaid currently reports.
+    expect(row?.consentExpirationAt).toBeInstanceOf(Date);
+    expect(row?.consentExpirationAt?.toISOString()).toBe(cutoff);
+  });
+
+  it("(#238) leaves consentExpirationAt untouched on PENDING_EXPIRATION when /item/get itself fails (best-effort)", async () => {
+    // If the /item/get refresh throws (e.g. transient Plaid outage), we
+    // must still persist the lastSyncErrorCode so the page-top reconnect
+    // banner appears — just without bumping the consent date. The
+    // previously stored value (or null) must remain.
+    const { itemRowId } = await seedItem();
+    itemGetMock = async () => {
+      throw new Error("simulated /item/get failure");
+    };
+    transactionsSyncMock = async () => {
+      throw {
+        message: "Request failed with status code 400",
+        response: {
+          status: 400,
+          data: {
+            error_code: "PENDING_EXPIRATION",
+            error_message: "the access_token is approaching its expiration time",
+            error_type: "ITEM_ERROR",
+          },
+        },
+      };
+    };
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId);
+    // The original sync error must still surface — itemGet is best-effort.
+    expect(result.error).toMatch(/expiration/i);
+
+    const [row] = await db
+      .select({
+        lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+        consentExpirationAt: plaidItemsTable.consentExpirationAt,
+      })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    expect(row?.lastSyncErrorCode).toBe("PENDING_EXPIRATION");
+    // Best-effort means: leave the previously stored value alone.
+    // The seedItem helper doesn't set one, so it stays null.
+    expect(row?.consentExpirationAt).toBeNull();
+  });
+
+  it("(#238) GET /plaid/items exposes consentExpirationAt so the banner can render the dated copy", async () => {
+    const { itemRowId } = await seedItem();
+    const cutoff = new Date("2026-05-21T15:30:00.000Z");
+    await db
+      .update(plaidItemsTable)
+      .set({ consentExpirationAt: cutoff })
+      .where(eq(plaidItemsTable.id, itemRowId));
+
+    const res = await fetch(`${baseUrl}/plaid/items`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      id: string;
+      consentExpirationAt: string | null;
+    }>;
+    const found = body.find((b) => b.id === itemRowId);
+    expect(found).toBeTruthy();
+    expect(found?.consentExpirationAt).toBe(cutoff.toISOString());
   });
 
   it("clears lastSyncError + lastSyncErrorCode back to null on a healthy sync (regression check)", async () => {

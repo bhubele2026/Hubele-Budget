@@ -1738,6 +1738,16 @@ components:
             value on the parent PlaidItem so the Debts / Avalanche UI can
             decide when to render an inline "Reconnect" affordance on the
             row. null when sync is healthy or the debt isn't Plaid-linked.
+        plaidConsentExpirationAt:
+          type: ["string", "null"]
+          description: |
+            (#238) ISO timestamp mirroring the parent Plaid item's
+            `consent_expiration_time` — the cutoff after which the bank
+            will be auto-disconnected unless the user re-consents. Powers
+            the dated PENDING_EXPIRATION / PENDING_DISCONNECT subline copy
+            on the DebtReauthBanner ("Chase will disconnect on May 21 —
+            reconnect now to keep it linked."). Null when the debt isn't
+            Plaid-linked or Plaid never reported a cutoff for the item.
         balanceSource: { type: string, enum: [plaid, manual] }
         aprSource: { type: string, enum: [plaid, manual] }
         minPaymentSource: { type: string, enum: [plaid, manual] }
@@ -2739,6 +2749,17 @@ components:
         # the user can tell a freshly linked bank from one that's stalled.
         # Null whenever stillPreparing is false.
         stillPreparingSince: { type: ["string", "null"] }
+        # (#238) Plaid's `consent_expiration_time` cutoff for this item —
+        # the date after which the bank link is auto-disconnected unless
+        # the user re-consents. Captured at exchange time and refreshed
+        # when sync hits PENDING_EXPIRATION / PENDING_DISCONNECT so the
+        # value tracks Plaid's latest reported cutoff. Powers the dated
+        # subline copy on the page-top reconnect banner, the
+        # DebtReauthBanner, and the Settings "Needs reconnect" tooltip
+        # ("Chase will disconnect on May 21 — reconnect now to keep it
+        # linked."). Null when Plaid does not report a cutoff for this
+        # item (most non-OAuth institutions).
+        consentExpirationAt: { type: ["string", "null"] }
         accounts:
           type: array
           items: { $ref: "#/components/schemas/PlaidAccount" }

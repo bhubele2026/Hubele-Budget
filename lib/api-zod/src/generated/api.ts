@@ -514,6 +514,12 @@ export const ListDebtsResponseItem = zod.object({
     .describe(
       "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
     ),
+  plaidConsentExpirationAt: zod
+    .string()
+    .nullish()
+    .describe(
+      "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -593,6 +599,12 @@ export const LinkDebtToPlaidResponse = zod.object({
     .describe(
       "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
     ),
+  plaidConsentExpirationAt: zod
+    .string()
+    .nullish()
+    .describe(
+      "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -652,6 +664,12 @@ export const UnlinkDebtFromPlaidResponse = zod.object({
     .describe(
       "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
     ),
+  plaidConsentExpirationAt: zod
+    .string()
+    .nullish()
+    .describe(
+      "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -710,6 +728,12 @@ export const RefreshDebtFromPlaidResponse = zod.object({
     .nullish()
     .describe(
       "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidConsentExpirationAt: zod
+    .string()
+    .nullish()
+    .describe(
+      "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
     ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
@@ -902,6 +926,12 @@ export const UpdateDebtResponse = zod.object({
     .nullish()
     .describe(
       "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidConsentExpirationAt: zod
+    .string()
+    .nullish()
+    .describe(
+      "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
     ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
@@ -1877,6 +1907,7 @@ export const ExchangePlaidPublicTokenResponse = zod.object({
     ),
   stillPreparing: zod.boolean().optional(),
   stillPreparingSince: zod.string().nullish(),
+  consentExpirationAt: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),
@@ -1906,6 +1937,7 @@ export const ListPlaidItemsResponseItem = zod.object({
     ),
   stillPreparing: zod.boolean().optional(),
   stillPreparingSince: zod.string().nullish(),
+  consentExpirationAt: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),

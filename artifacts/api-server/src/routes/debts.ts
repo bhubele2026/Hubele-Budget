@@ -159,6 +159,16 @@ function shapeDebt(
       d.plaidAccountId && item?.lastSyncErrorCode
         ? item.lastSyncErrorCode
         : null,
+    // (#238) Mirror the parent Plaid item's `consent_expiration_time` so
+    // the inline DebtReauthBanner can show the dated PENDING_EXPIRATION /
+    // PENDING_DISCONNECT subline ("Chase will disconnect on May 21 —
+    // reconnect now to keep it linked.") instead of the date-less
+    // fallback. Null when the debt isn't Plaid-linked or Plaid never
+    // reported a cutoff for this item.
+    plaidConsentExpirationAt:
+      d.plaidAccountId && item?.consentExpirationAt
+        ? item.consentExpirationAt.toISOString()
+        : null,
     plaidAccount: acct
       ? {
           id: acct.id,

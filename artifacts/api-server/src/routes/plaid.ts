@@ -149,9 +149,23 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       typeof institutionName === "string" ? institutionName : null;
     let resolvedInstId: string | null =
       typeof institutionId === "string" ? institutionId : null;
+    // (#238) Plaid's /item/get returns `consent_expiration_time` as the
+    // cutoff after which the bank link will be auto-disconnected unless
+    // the user re-consents. Capture it here so the PENDING_EXPIRATION /
+    // PENDING_DISCONNECT reconnect banners can show the real date instead
+    // of the date-less fallback copy. Most non-OAuth institutions do not
+    // populate this field, so leave it null when absent.
+    let consentExpirationAt: Date | null = null;
     try {
       const itemResp = await plaid().itemGet({ access_token: accessToken });
       resolvedInstId = itemResp.data.item.institution_id ?? resolvedInstId;
+      const cet = (itemResp.data.item as unknown as {
+        consent_expiration_time?: string | null;
+      }).consent_expiration_time;
+      if (cet) {
+        const parsed = new Date(cet);
+        if (!Number.isNaN(parsed.getTime())) consentExpirationAt = parsed;
+      }
       if (resolvedInstId && !resolvedName) {
         const inst = await plaid().institutionsGetById({
           institution_id: resolvedInstId,
@@ -173,6 +187,7 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
         institutionId: resolvedInstId,
         institutionName: resolvedName,
         institutionSlug: slug,
+        consentExpirationAt,
       })
       .onConflictDoUpdate({
         target: plaidItemsTable.itemId,
@@ -181,6 +196,7 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
           institutionId: resolvedInstId,
           institutionName: resolvedName,
           institutionSlug: slug,
+          consentExpirationAt,
         },
       })
       .returning();
@@ -269,6 +285,9 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
         : new Date().toISOString(),
       lastSyncError: null,
       lastSyncErrorCode: null,
+      consentExpirationAt: item!.consentExpirationAt
+        ? item!.consentExpirationAt.toISOString()
+        : null,
       accounts: accounts.map((a) => ({
         id: a.id,
         accountId: a.accountId,
@@ -314,6 +333,14 @@ router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
       stillPreparing: it.stillPreparingSince != null,
       stillPreparingSince: it.stillPreparingSince
         ? it.stillPreparingSince.toISOString()
+        : null,
+      // (#238) Plaid's `consent_expiration_time` cutoff for this item.
+      // Powers the dated PENDING_EXPIRATION / PENDING_DISCONNECT subline
+      // copy ("Chase will disconnect on May 21 — reconnect now to keep
+      // it linked.") on the page-top reauth banner, the DebtReauthBanner,
+      // and the Settings tooltip. Null when Plaid does not provide one.
+      consentExpirationAt: it.consentExpirationAt
+        ? it.consentExpirationAt.toISOString()
         : null,
       accounts: (byItem.get(it.id) ?? []).map((a) => ({
         id: a.id,

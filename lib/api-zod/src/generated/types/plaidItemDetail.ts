@@ -33,5 +33,7 @@ sync chip.
   stillPreparing?: boolean;
   /** @nullable */
   stillPreparingSince?: string | null;
+  /** @nullable */
+  consentExpirationAt?: string | null;
   accounts: PlaidAccount[];
 }

@@ -225,6 +225,14 @@ export const plaidItemsTable = pgTable(
     // "Still preparing" badge so the user knows which institution is in the
     // transient warm-up window vs. genuinely healthy.
     stillPreparingSince: timestamp("still_preparing_since", { withTimezone: true }),
+    // (#238) Plaid's `consent_expiration_time` from /item/get — the cutoff
+    // date after which the bank link will be auto-disconnected unless the
+    // user re-consents. Captured at exchange time and refreshed during
+    // every sync (the value can move forward as the user re-consents).
+    // Null when Plaid does not report a date for this item (most non-OAuth
+    // institutions). Powers the dated PENDING_EXPIRATION /
+    // PENDING_DISCONNECT subline copy on the reconnect banners.
+    consentExpirationAt: timestamp("consent_expiration_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({

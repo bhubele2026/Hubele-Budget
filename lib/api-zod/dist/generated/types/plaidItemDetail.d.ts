@@ -32,6 +32,8 @@ export interface PlaidItemDetail {
     stillPreparing?: boolean;
     /** @nullable */
     stillPreparingSince?: string | null;
+    /** @nullable */
+    consentExpirationAt?: string | null;
     accounts: PlaidAccount[];
 }
 //# sourceMappingURL=plaidItemDetail.d.ts.map

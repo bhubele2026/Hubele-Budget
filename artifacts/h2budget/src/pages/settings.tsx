@@ -493,7 +493,17 @@ export default function SettingsPage() {
                             // explains *why* (saved login expired vs.
                             // consent expiring vs. pending disconnect)
                             // before the user clicks Reconnect.
-                            title={`${plaidReauthReason(item.lastSyncErrorCode)} Click Reconnect to fix it.`}
+                            // (#238) Pass the item's
+                            // `consent_expiration_time` cutoff so
+                            // PENDING_EXPIRATION / PENDING_DISCONNECT
+                            // tooltips name the actual disconnect date
+                            // ("Chase will disconnect on May 21 —
+                            // reconnect now to keep it linked.")
+                            // instead of vague "soon" copy.
+                            title={`${plaidReauthReason(item.lastSyncErrorCode, {
+                              consentExpirationAt: item.consentExpirationAt,
+                              institutionName: item.institutionName,
+                            })} Click Reconnect to fix it.`}
                           >
                             Needs reconnect
                           </span>
