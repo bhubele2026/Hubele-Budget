@@ -55,6 +55,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { SyncButton } from "@/components/sync-button";
 import { computeBalanceAtEndOf } from "@/lib/accountBalance";
 import {
@@ -1079,6 +1080,7 @@ export default function AmexPage() {
       className="space-y-6"
       style={{ ["--pinned-pane-h" as string]: `${paneH}px` } as React.CSSProperties}
     >
+      <PlaidReauthBanner />
       <div
         ref={paneRef}
         className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-4"

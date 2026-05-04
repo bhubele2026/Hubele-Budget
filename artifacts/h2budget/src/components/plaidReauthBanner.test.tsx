@@ -1,0 +1,238 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import React from "react";
+
+vi.mock("@workspace/api-client-react", () => ({
+  useListPlaidItems: () => ({ data: [], isLoading: false }),
+  useCreatePlaidUpdateLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
+  getListTransactionsQueryKey: () => ["/api/transactions"],
+  getListDebtsQueryKey: () => ["/api/debts"],
+  getGetBillsSummaryQueryKey: () => ["/api/bills/summary"],
+  getGetForecastQueryKey: () => ["/api/forecast"],
+  getGetDashboardQueryKey: () => ["/api/dashboard"],
+}));
+vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock("@/hooks/use-plaid-sync", () => ({
+  usePlaidSync: () => ({ runSync: vi.fn(), isPending: false }),
+  formatPlaidErrorForDisplay: (s: string) => s,
+}));
+vi.mock("react-plaid-link", () => ({
+  usePlaidLink: () => ({ open: vi.fn(), ready: false }),
+}));
+
+import {
+  PlaidReauthBannerView,
+  findPlaidItemsNeedingReauth,
+} from "./plaid-reauth-banner";
+import type { PlaidItemDetail } from "@workspace/api-client-react";
+
+function makeItem(overrides: Partial<PlaidItemDetail> & { id: string }): PlaidItemDetail {
+  return {
+    itemId: `external-${overrides.id}`,
+    institutionId: null,
+    institutionName: "Chase",
+    institutionSlug: "chase",
+    lastSyncedAt: null,
+    lastSyncError: null,
+    lastSyncErrorCode: null,
+    stillPreparing: false,
+    stillPreparingSince: null,
+    accounts: [],
+    ...overrides,
+  } as PlaidItemDetail;
+}
+
+function renderBanner(items: PlaidItemDetail[] | null | undefined) {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <PlaidReauthBannerView items={items} />
+    </QueryClientProvider>,
+  );
+}
+
+beforeEach(() => {
+  cleanup();
+});
+
+describe("(#217) findPlaidItemsNeedingReauth", () => {
+  it("returns empty when no item has a re-auth code", () => {
+    const summary = findPlaidItemsNeedingReauth([
+      makeItem({ id: "i1" }),
+      makeItem({ id: "i2", lastSyncErrorCode: "RATE_LIMIT_EXCEEDED" }),
+    ]);
+    expect(summary.items).toEqual([]);
+    expect(summary.worst).toBeNull();
+  });
+
+  it("includes any item whose lastSyncErrorCode is a Plaid re-auth code", () => {
+    const summary = findPlaidItemsNeedingReauth([
+      makeItem({ id: "i1", lastSyncErrorCode: "ITEM_LOGIN_REQUIRED" }),
+      makeItem({
+        id: "i2",
+        institutionName: "Bank of America",
+        lastSyncErrorCode: "PENDING_EXPIRATION",
+      }),
+      makeItem({
+        id: "i3",
+        institutionName: "Amex",
+        lastSyncErrorCode: "PENDING_DISCONNECT",
+      }),
+    ]);
+    expect(summary.items).toHaveLength(3);
+    // Sorted alphabetically by institution name → Amex first.
+    expect(summary.worst?.id).toBe("i3");
+    expect(summary.items.map((i) => i.institutionName)).toEqual([
+      "Amex",
+      "Bank of America",
+      "Chase",
+    ]);
+  });
+
+  it("treats null / undefined item lists as empty", () => {
+    expect(findPlaidItemsNeedingReauth(null).worst).toBeNull();
+    expect(findPlaidItemsNeedingReauth(undefined).items).toEqual([]);
+  });
+});
+
+describe("(#217) PlaidReauthBannerView", () => {
+  it("renders nothing when no item is in re-auth", () => {
+    renderBanner([makeItem({ id: "i1" })]);
+    expect(screen.queryByTestId("banner-plaid-reauth")).toBeNull();
+  });
+
+  it("renders nothing for an empty / undefined item list", () => {
+    renderBanner(undefined);
+    expect(screen.queryByTestId("banner-plaid-reauth")).toBeNull();
+  });
+
+  it("does NOT depend on the item being tied to a debt — works for plain checking items too", () => {
+    // The item below has no debt linkage at all (it's a checking account).
+    // The earlier <DebtReauthBanner> would have ignored this; the new
+    // banner is exactly here so the user notices.
+    renderBanner([
+      makeItem({
+        id: "i-checking",
+        institutionName: "Chase",
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+        accounts: [
+          {
+            id: "a1",
+            accountId: "ext-a1",
+            name: "Chase Checking",
+            officialName: null,
+            mask: "1234",
+            type: "depository",
+            subtype: "checking",
+          },
+        ],
+      }),
+    ]);
+    const banner = screen.getByTestId("banner-plaid-reauth");
+    expect(banner.textContent).toContain("Chase needs reconnecting");
+    expect(
+      screen.getByTestId("button-plaid-reconnect-i-checking"),
+    ).toBeTruthy();
+  });
+
+  it("uses 'and N more banks' wording when several institutions are failing", () => {
+    renderBanner([
+      makeItem({ id: "i1", lastSyncErrorCode: "ITEM_LOGIN_REQUIRED" }),
+      makeItem({
+        id: "i2",
+        institutionName: "Bank of America",
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+      }),
+      makeItem({
+        id: "i3",
+        institutionName: "Amex",
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+      }),
+    ]);
+    const banner = screen.getByTestId("banner-plaid-reauth");
+    expect(banner.textContent).toContain(
+      "Amex and 2 more banks need reconnecting",
+    );
+    // Reconnect button targets the alphabetically-first institution (Amex).
+    expect(screen.getByTestId("button-plaid-reconnect-i3")).toBeTruthy();
+    expect(screen.queryByTestId("button-plaid-reconnect-i1")).toBeNull();
+  });
+
+  it("falls back to 'Your bank' when institutionName is missing", () => {
+    renderBanner([
+      makeItem({
+        id: "i1",
+        institutionName: null,
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+      }),
+    ]);
+    const banner = screen.getByTestId("banner-plaid-reauth");
+    expect(banner.textContent).toContain("Your bank needs reconnecting");
+  });
+
+  it("hides itself when the user clicks the dismiss button", () => {
+    renderBanner([
+      makeItem({ id: "i1", lastSyncErrorCode: "ITEM_LOGIN_REQUIRED" }),
+    ]);
+    expect(screen.getByTestId("banner-plaid-reauth")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("button-plaid-reauth-dismiss"));
+    expect(screen.queryByTestId("banner-plaid-reauth")).toBeNull();
+  });
+
+  it("re-shows the banner when a NEW institution starts failing after dismissal", () => {
+    const qc = new QueryClient();
+    const { rerender } = render(
+      <QueryClientProvider client={qc}>
+        <PlaidReauthBannerView
+          items={[
+            makeItem({ id: "i1", lastSyncErrorCode: "ITEM_LOGIN_REQUIRED" }),
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByTestId("button-plaid-reauth-dismiss"));
+    expect(screen.queryByTestId("banner-plaid-reauth")).toBeNull();
+
+    // A second institution starts failing — banner reappears even though
+    // the user dismissed the earlier snapshot.
+    rerender(
+      <QueryClientProvider client={qc}>
+        <PlaidReauthBannerView
+          items={[
+            makeItem({ id: "i1", lastSyncErrorCode: "ITEM_LOGIN_REQUIRED" }),
+            makeItem({
+              id: "i2",
+              institutionName: "Bank of America",
+              lastSyncErrorCode: "PENDING_EXPIRATION",
+            }),
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByTestId("banner-plaid-reauth")).toBeTruthy();
+  });
+
+  it("disappears once the items list reports everything healthy again", () => {
+    const qc = new QueryClient();
+    const { rerender } = render(
+      <QueryClientProvider client={qc}>
+        <PlaidReauthBannerView
+          items={[
+            makeItem({ id: "i1", lastSyncErrorCode: "ITEM_LOGIN_REQUIRED" }),
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByTestId("banner-plaid-reauth")).toBeTruthy();
+    rerender(
+      <QueryClientProvider client={qc}>
+        <PlaidReauthBannerView
+          items={[makeItem({ id: "i1", lastSyncErrorCode: null })]}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByTestId("banner-plaid-reauth")).toBeNull();
+  });
+});
