@@ -13,6 +13,13 @@ Carries the unsaved rule directly so the server can compute
 the candidate count + sample list against older *uncategorized*
 rows without persisting anything.
 
+`toCategoryId` is optional: the candidate count + samples only
+depend on `pattern` + `matchType` (the bulk recategorize always
+scopes to uncategorized rows), so the Add form can fire the
+same request as soon as the user has typed a pattern — before
+they pick a destination category — and avoid a refetch when
+the category is then chosen.
+
  */
 export interface MappingRulePatternRecategorizePreviewInput {
   /** The literal pattern the unsaved rule would match against
@@ -20,7 +27,10 @@ transaction descriptions.
  */
   pattern: string;
   matchType: MappingRulePatternRecategorizePreviewInputMatchType;
-  /** The category the unsaved rule would assign matching rows to.
-   */
-  toCategoryId: string;
+  /** Optional. The category the unsaved rule would assign
+matching rows to. Echoed back in the response when supplied
+so the client can confirm the preview lines up with the
+currently-picked category, but doesn't affect the count.
+ */
+  toCategoryId?: string;
 }

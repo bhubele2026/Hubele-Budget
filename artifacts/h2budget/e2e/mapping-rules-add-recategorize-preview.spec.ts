@@ -6,23 +6,29 @@ import {
 } from "./helpers/clerk";
 
 /**
- * End-to-end coverage for task #220:
+ * End-to-end coverage for tasks #220 + #243:
  *
  * On the Mapping Rules page's "Add New Rule" form, when the user types a
- * pattern + picks a category for an unsaved rule:
+ * pattern (with or without a destination category) for an unsaved rule:
  *
- *   1. The page fires
- *      POST /api/mapping-rules/recategorize-preview-by-pattern with
- *      `{ pattern, matchType, toCategoryId }` and surfaces an inline
- *      banner reading "N past transactions will move into <category>
- *      when you add this rule."
- *   2. A "Show matches" link opens the same Dialog used on every other
- *      surface (`dialog-rule-matches-preview`) listing the
- *      uncategorized historical rows that match.
- *   3. Clicking Add POSTs the rule AND chains
+ *   1. As soon as the user types a pattern — *before* picking a
+ *      destination category — the page fires
+ *      POST /api/mapping-rules/recategorize-preview-by-pattern (with
+ *      `toCategoryId` omitted) and surfaces a neutral banner reading
+ *      "This would match N uncategorized past transactions. Pick a
+ *      category to assign them." (Task #243)
+ *   2. Picking a category upgrades the banner copy to "N past
+ *      transactions will move into <category> when you add this rule."
+ *      and reveals the "Show matches" link — without firing another
+ *      preview request, since count + samples don't depend on the
+ *      destination. (Task #243)
+ *   3. The "Show matches" link opens the same Dialog used on every
+ *      other surface (`dialog-rule-matches-preview`) listing the
+ *      uncategorized historical rows that match. (Task #220)
+ *   4. Clicking Add POSTs the rule AND chains
  *      POST /api/transactions/recategorize-by-pattern with
  *      `fromCategoryId: null`, so the past *uncategorized* rows snap
- *      onto the new category in one user action.
+ *      onto the new category in one user action. (Task #220)
  */
 
 const provisionedUserIds: string[] = [];
@@ -82,7 +88,7 @@ function isoDay(offsetDays: number): string {
   return `${year}-${month}-${day}`;
 }
 
-test.describe("Mapping Rules add recategorize-preview (#220)", () => {
+test.describe("Mapping Rules add recategorize-preview (#220 + #243)", () => {
   test("Add form previews uncategorized matches, Show-matches lists them, and Add chains the bulk recategorize with fromCategoryId=null", async ({
     browser,
   }) => {
@@ -141,8 +147,23 @@ test.describe("Mapping Rules add recategorize-preview (#220)", () => {
       page.getByRole("heading", { name: /mapping rules/i }),
     ).toBeVisible({ timeout: 15_000 });
 
-    // --- Type the pattern and pick the new category in the Add form.
-    const previewResponsePromise = page.waitForResponse(
+    // --- Task #243: type a pattern *before* picking a category. The
+    // preview should fire with `toCategoryId` omitted and surface the
+    // neutral "would match N uncategorized past transactions" banner.
+    // We also keep a count of every preview request so we can later
+    // assert that picking a category does NOT trigger a refetch.
+    let previewRequestCount = 0;
+    page.on("request", (req) => {
+      if (
+        req.method() === "POST" &&
+        new URL(req.url()).pathname ===
+          "/api/mapping-rules/recategorize-preview-by-pattern"
+      ) {
+        previewRequestCount += 1;
+      }
+    });
+
+    const neutralPreviewResponsePromise = page.waitForResponse(
       (res) =>
         res.request().method() === "POST" &&
         new URL(res.url()).pathname ===
@@ -151,6 +172,43 @@ test.describe("Mapping Rules add recategorize-preview (#220)", () => {
     );
 
     await page.getByTestId("input-add-pattern").fill(pattern);
+
+    const neutralPreviewRes = await neutralPreviewResponsePromise;
+    expect(neutralPreviewRes.status()).toBe(200);
+    const neutralPreviewBody = await neutralPreviewRes.json();
+    expect(neutralPreviewBody.candidateCount).toBe(2);
+    expect(neutralPreviewBody.fromCategoryId).toBeNull();
+    // Server echoes back null since the client didn't send it yet.
+    expect(neutralPreviewBody.toCategoryId).toBeNull();
+    expect(neutralPreviewBody.pattern).toBe(pattern);
+    // Confirm the request body really did omit toCategoryId — guards
+    // against a regression that would refetch on every category pick.
+    const neutralReqBody = JSON.parse(
+      neutralPreviewRes.request().postData() ?? "{}",
+    );
+    expect(neutralReqBody).toEqual({
+      pattern,
+      matchType: "contains",
+    });
+
+    const previewBanner = page.getByTestId("rule-add-preview");
+    await expect(previewBanner).toBeVisible({ timeout: 5_000 });
+    await expect(previewBanner).toContainText(
+      "This would match 2 uncategorized past transactions",
+    );
+    await expect(previewBanner).toContainText("Pick a category");
+    await expect(page.getByTestId("rule-add-preview-count")).toHaveText("2");
+    // The Show-matches affordance should be hidden until a category
+    // is picked (the upgraded copy is what surfaces it).
+    await expect(page.getByTestId("link-show-rule-matches-add")).toHaveCount(
+      0,
+    );
+
+    // Snapshot the count *after* the neutral preview has settled so any
+    // additional fetch from picking the category would visibly bump it.
+    const previewRequestsBeforeCategoryPick = previewRequestCount;
+
+    // --- Now pick the category. The banner should upgrade in place.
     // Radix Select renders the trigger as role=combobox with the
     // placeholder text inside it. Filter on that text to grab the
     // Add card's category trigger specifically.
@@ -160,20 +218,15 @@ test.describe("Mapping Rules add recategorize-preview (#220)", () => {
       .click();
     await page.getByRole("option", { name: debtName }).first().click();
 
-    const previewRes = await previewResponsePromise;
-    expect(previewRes.status()).toBe(200);
-    const previewBody = await previewRes.json();
-    expect(previewBody.candidateCount).toBe(2);
-    expect(previewBody.fromCategoryId).toBeNull();
-    expect(previewBody.toCategoryId).toBe(debtCat.id);
-    expect(previewBody.pattern).toBe(pattern);
-
-    const previewBanner = page.getByTestId("rule-add-preview");
-    await expect(previewBanner).toBeVisible({ timeout: 5_000 });
     await expect(previewBanner).toContainText(
       `2 past transactions will move into ${debtName}`,
     );
     await expect(page.getByTestId("rule-add-preview-count")).toHaveText("2");
+
+    // Give any rogue debounced refetch a chance to fire and assert
+    // we still only saw the original preview request.
+    await page.waitForTimeout(500);
+    expect(previewRequestCount).toBe(previewRequestsBeforeCategoryPick);
 
     // --- "Show matches" opens the shared dialog with both historical rows.
     await page.getByTestId("link-show-rule-matches-add").click();

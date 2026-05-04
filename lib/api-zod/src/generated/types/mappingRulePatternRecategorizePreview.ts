@@ -30,7 +30,18 @@ field for symmetry with `MappingRuleRecategorizePreview`.
    * @nullable
    */
   fromCategoryId: string | null;
-  toCategoryId: string;
+  /**
+   * Echo of the request's `toCategoryId`. `null` when the caller
+previewed before picking a destination category — the
+candidate count + samples are still meaningful (they only
+depend on pattern + matchType against uncategorized rows),
+but the client should render a neutral "would match N
+uncategorized past transactions" banner instead of the
+"will move into <category>" copy.
+
+   * @nullable
+   */
+  toCategoryId: string | null;
   /** Number of *uncategorized* transactions whose description matches
 the unsaved rule's pattern. `0` when no historical rows match.
  */

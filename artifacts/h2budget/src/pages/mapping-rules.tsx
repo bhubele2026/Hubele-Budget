@@ -627,6 +627,16 @@ export default function MappingRulesPage() {
           // user action — same single-step UX the edit flow gives
           // the user on Save.
           const displayName = toCategoryName ?? "the new category";
+          // Task #243 — the preview is now fired without a
+          // `toCategoryId` (so it can run before the user has picked
+          // one), so the snapshot's `toCategoryId` is `null`. The
+          // destination is whatever the user picked on the form,
+          // which is exactly `data.categoryId` (we already gated the
+          // submit on it being set in handleAddRule). Fall back to
+          // the snapshot value as a defensive belt-and-suspenders.
+          const bulkToCategoryId =
+            data.categoryId ?? previewSnapshot.toCategoryId;
+          if (!bulkToCategoryId) return;
           recategorizeBulk.mutate(
             {
               data: {
@@ -637,7 +647,7 @@ export default function MappingRulesPage() {
                 // category edits are preserved by the server's
                 // same guard.
                 fromCategoryId: null,
-                toCategoryId: previewSnapshot.toCategoryId,
+                toCategoryId: bulkToCategoryId,
               },
             },
             {
@@ -674,16 +684,23 @@ export default function MappingRulesPage() {
     );
   };
 
-  // Task #220 — debounced preview of older *uncategorized* transactions
-  // that an unsaved Add-form rule would match. Fires whenever the user
-  // has both a non-empty pattern and a target category typed in.
+  // Task #220 / Task #243 — debounced preview of older *uncategorized*
+  // transactions an unsaved Add-form rule would match. Fires as soon
+  // as the user has a non-empty pattern, *before* they've picked a
+  // destination category, so they can see "this would match N rows"
+  // and refine the pattern (e.g. tighten "AMZN" to "AMZN MARKETPLACE")
+  // before committing. The candidate count + samples only depend on
+  // pattern + matchType (the bulk recategorize always scopes to
+  // uncategorized rows), so picking a category afterwards just
+  // upgrades the banner copy — it does not refetch.
+  //
   // We debounce to avoid a request on every keystroke and we always
   // verify the response shape still matches the latest inputs before
   // committing it to state — otherwise an in-flight response could
   // overwrite a fresh one if the user is still editing.
   useEffect(() => {
     const trimmed = pattern.trim();
-    if (!trimmed || !categoryId) {
+    if (!trimmed) {
       setAddPreview(null);
       return;
     }
@@ -697,18 +714,20 @@ export default function MappingRulesPage() {
             // narrowing the state type so the Add card's Select can
             // keep using the same value-type its onValueChange ships.
             matchType: matchType as "contains" | "exact" | "starts_with",
-            toCategoryId: categoryId,
+            // Deliberately omit `toCategoryId` so the request shape
+            // stays stable across category picks — the server returns
+            // the same count + samples whether or not it's supplied.
+            // The `categoryId` state controls which banner copy renders
+            // at paint time, not which preview we fetched.
           },
         },
         {
           onSuccess: (res) => {
             // Drop late responses if the user has since edited the
-            // form so a stale preview can never get pinned to the UI.
-            if (
-              res.pattern !== trimmed ||
-              res.matchType !== matchType ||
-              res.toCategoryId !== categoryId
-            ) {
+            // pattern/matchType so a stale preview can never get
+            // pinned to the UI. We don't gate on `categoryId` here:
+            // the response is independent of it.
+            if (res.pattern !== trimmed || res.matchType !== matchType) {
               return;
             }
             setAddPreview(res);
@@ -726,8 +745,10 @@ export default function MappingRulesPage() {
     // The mutation hook reference is stable across renders so it's
     // safe to omit from the deps; including it would re-arm the
     // debounce timer on every render and defeat the debounce.
+    // categoryId is intentionally NOT a dep — picking/changing the
+    // category shouldn't refetch a preview that doesn't depend on it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pattern, matchType, categoryId]);
+  }, [pattern, matchType]);
 
   const handleAddRule = () => {
     if (!pattern || !categoryId) return;
@@ -751,11 +772,16 @@ export default function MappingRulesPage() {
     // with what the user is about to save (else the preview is stale
     // and the user might reasonably expect no past rows to move).
     const trimmedPattern = pattern.trim();
+    // The preview no longer carries `toCategoryId` (Task #243 — it's
+    // fired before the user has picked one and reused after), so the
+    // snapshot only needs to line up with the pattern + matchType the
+    // user is about to save. The destination is whatever `categoryId`
+    // they ended up picking; we pass it explicitly to the chained
+    // bulk recategorize below.
     const previewSnapshot =
       addPreview &&
       addPreview.pattern === trimmedPattern &&
       addPreview.matchType === matchType &&
-      addPreview.toCategoryId === categoryId &&
       addPreview.candidateCount > 0
         ? addPreview
         : null;
@@ -1426,52 +1452,74 @@ export default function MappingRulesPage() {
             </Button>
           </div>
           {/*
-            * Task #220 — preview banner for the unsaved Add-form rule.
-            * Mirrors the same shape and copy as the edit-row banner so
-            * users see consistent affordances whichever path they used,
-            * with "Show matches" opening the shared dialog.
+            * Task #220 / Task #243 — preview banner for the unsaved
+            * Add-form rule. Two variants:
+            *   - Pattern only (no category yet): neutral count so the
+            *     user can refine the pattern before picking a
+            *     destination.
+            *   - Pattern + category: the existing "N will move into
+            *     <category>" copy with a "Show matches" link that
+            *     opens the shared dialog.
+            * Both variants reuse the same response — picking a
+            * category does not trigger a refetch.
             */}
           {addPreview &&
             addPreview.pattern === pattern.trim() &&
             addPreview.matchType === matchType &&
-            addPreview.toCategoryId === categoryId &&
             addPreview.candidateCount > 0 && (
               <div
                 className="mt-3 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
                 data-testid="rule-add-preview"
               >
-                <span>
-                  <span
-                    className="font-medium"
-                    data-testid="rule-add-preview-count"
+                {categoryId ? (
+                  <span>
+                    <span
+                      className="font-medium"
+                      data-testid="rule-add-preview-count"
+                    >
+                      {addPreview.candidateCount}
+                    </span>{" "}
+                    past transaction
+                    {addPreview.candidateCount === 1 ? "" : "s"} will move
+                    into{" "}
+                    <span className="font-medium">
+                      {catById.get(categoryId)?.name ?? "the new category"}
+                    </span>{" "}
+                    when you add this rule.
+                  </span>
+                ) : (
+                  <span>
+                    This would match{" "}
+                    <span
+                      className="font-medium"
+                      data-testid="rule-add-preview-count"
+                    >
+                      {addPreview.candidateCount}
+                    </span>{" "}
+                    uncategorized past transaction
+                    {addPreview.candidateCount === 1 ? "" : "s"}. Pick a
+                    category to assign them.
+                  </span>
+                )}
+                {categoryId && (
+                  <button
+                    type="button"
+                    className="shrink-0 underline underline-offset-2 hover:text-foreground"
+                    data-testid="link-show-rule-matches-add"
+                    onClick={() =>
+                      setMatchesDialog({
+                        pattern: addPreview.pattern,
+                        candidateCount: addPreview.candidateCount,
+                        sampleTransactions: addPreview.sampleTransactions,
+                        toCategoryName:
+                          catById.get(categoryId)?.name ??
+                          "the new category",
+                      })
+                    }
                   >
-                    {addPreview.candidateCount}
-                  </span>{" "}
-                  past transaction
-                  {addPreview.candidateCount === 1 ? "" : "s"} will move into{" "}
-                  <span className="font-medium">
-                    {catById.get(addPreview.toCategoryId)?.name ??
-                      "the new category"}
-                  </span>{" "}
-                  when you add this rule.
-                </span>
-                <button
-                  type="button"
-                  className="shrink-0 underline underline-offset-2 hover:text-foreground"
-                  data-testid="link-show-rule-matches-add"
-                  onClick={() =>
-                    setMatchesDialog({
-                      pattern: addPreview.pattern,
-                      candidateCount: addPreview.candidateCount,
-                      sampleTransactions: addPreview.sampleTransactions,
-                      toCategoryName:
-                        catById.get(addPreview.toCategoryId)?.name ??
-                        "the new category",
-                    })
-                  }
-                >
-                  Show matches
-                </button>
+                    Show matches
+                  </button>
+                )}
               </div>
             )}
         </CardContent>

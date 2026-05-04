@@ -255,6 +255,15 @@ router.post(
     }
     const userId = req.userId!;
     const { pattern, matchType, toCategoryId } = body.data;
+    // `toCategoryId` is optional in the request: the candidate count +
+    // samples only depend on pattern + matchType (the bulk recategorize
+    // always scopes to uncategorized rows), so the Add form can fire
+    // this preview as soon as the user types a pattern — before they
+    // pick a destination — and reuse the same response after the
+    // category is chosen. Echo back `null` when omitted so the client
+    // can render the neutral "would match N uncategorized past
+    // transactions" banner without a separate field.
+    const echoedToCategoryId = toCategoryId ?? null;
     // Empty pattern means the user hasn't typed anything yet — return
     // an empty preview so the client can avoid showing a stale banner
     // without a separate guard.
@@ -263,7 +272,7 @@ router.post(
         pattern,
         matchType,
         fromCategoryId: null,
-        toCategoryId,
+        toCategoryId: echoedToCategoryId,
         candidateCount: 0,
         sampleTransactions: [],
       });
@@ -290,7 +299,7 @@ router.post(
       pattern,
       matchType,
       fromCategoryId: null,
-      toCategoryId,
+      toCategoryId: echoedToCategoryId,
       candidateCount: candidates.length,
       sampleTransactions,
     });

@@ -1040,6 +1040,13 @@ Carries the unsaved rule directly so the server can compute
 the candidate count + sample list against older *uncategorized*
 rows without persisting anything.
 
+`toCategoryId` is optional: the candidate count + samples only
+depend on `pattern` + `matchType` (the bulk recategorize always
+scopes to uncategorized rows), so the Add form can fire the
+same request as soon as the user has typed a pattern — before
+they pick a destination category — and avoid a refetch when
+the category is then chosen.
+
  */
 export interface MappingRulePatternRecategorizePreviewInput {
     /** The literal pattern the unsaved rule would match against
@@ -1047,9 +1054,12 @@ export interface MappingRulePatternRecategorizePreviewInput {
    */
     pattern: string;
     matchType: MappingRulePatternRecategorizePreviewInputMatchType;
-    /** The category the unsaved rule would assign matching rows to.
-     */
-    toCategoryId: string;
+    /** Optional. The category the unsaved rule would assign
+  matching rows to. Echoed back in the response when supplied
+  so the client can confirm the preview lines up with the
+  currently-picked category, but doesn't affect the count.
+   */
+    toCategoryId?: string;
 }
 export type MappingRulePatternRecategorizePreviewMatchType = (typeof MappingRulePatternRecategorizePreviewMatchType)[keyof typeof MappingRulePatternRecategorizePreviewMatchType];
 export declare const MappingRulePatternRecategorizePreviewMatchType: {
@@ -1079,7 +1089,18 @@ export interface MappingRulePatternRecategorizePreview {
      * @nullable
      */
     fromCategoryId: string | null;
-    toCategoryId: string;
+    /**
+     * Echo of the request's `toCategoryId`. `null` when the caller
+  previewed before picking a destination category — the
+  candidate count + samples are still meaningful (they only
+  depend on pattern + matchType against uncategorized rows),
+  but the client should render a neutral "would match N
+  uncategorized past transactions" banner instead of the
+  "will move into <category>" copy.
+  
+     * @nullable
+     */
+    toCategoryId: string | null;
     /** Number of *uncategorized* transactions whose description matches
   the unsaved rule's pattern. `0` when no historical rows match.
    */

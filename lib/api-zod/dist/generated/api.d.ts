@@ -3144,21 +3144,21 @@ Read-only — no rule is created and no transactions are touched.
 export declare const PreviewMappingRuleRecategorizeByPatternBody: zod.ZodObject<{
     pattern: zod.ZodString;
     matchType: zod.ZodEnum<["contains", "exact", "starts_with"]>;
-    toCategoryId: zod.ZodString;
+    toCategoryId: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     pattern: string;
     matchType: "exact" | "contains" | "starts_with";
-    toCategoryId: string;
+    toCategoryId?: string | undefined;
 }, {
     pattern: string;
     matchType: "exact" | "contains" | "starts_with";
-    toCategoryId: string;
+    toCategoryId?: string | undefined;
 }>;
 export declare const PreviewMappingRuleRecategorizeByPatternResponse: zod.ZodObject<{
     pattern: zod.ZodString;
     matchType: zod.ZodEnum<["contains", "exact", "starts_with"]>;
     fromCategoryId: zod.ZodNullable<zod.ZodString>;
-    toCategoryId: zod.ZodString;
+    toCategoryId: zod.ZodNullable<zod.ZodString>;
     candidateCount: zod.ZodNumber;
     sampleTransactions: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
@@ -3183,7 +3183,7 @@ export declare const PreviewMappingRuleRecategorizeByPatternResponse: zod.ZodObj
     pattern: string;
     matchType: "exact" | "contains" | "starts_with";
     fromCategoryId: string | null;
-    toCategoryId: string;
+    toCategoryId: string | null;
     candidateCount: number;
     sampleTransactions: {
         id: string;
@@ -3196,7 +3196,7 @@ export declare const PreviewMappingRuleRecategorizeByPatternResponse: zod.ZodObj
     pattern: string;
     matchType: "exact" | "contains" | "starts_with";
     fromCategoryId: string | null;
-    toCategoryId: string;
+    toCategoryId: string | null;
     candidateCount: number;
     sampleTransactions: {
         id: string;

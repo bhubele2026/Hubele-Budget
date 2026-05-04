@@ -1340,12 +1340,13 @@ export const PreviewMappingRuleRecategorizeByPatternBody = zod
     matchType: zod.enum(["contains", "exact", "starts_with"]),
     toCategoryId: zod
       .string()
+      .optional()
       .describe(
-        "The category the unsaved rule would assign matching rows to.\n",
+        "Optional. The category the unsaved rule would assign\nmatching rows to. Echoed back in the response when supplied\nso the client can confirm the preview lines up with the\ncurrently-picked category, but doesn't affect the count.\n",
       ),
   })
   .describe(
-    'Pattern shape used by the \"Add New Rule\" form\'s inline preview.\nCarries the unsaved rule directly so the server can compute\nthe candidate count + sample list against older \*uncategorized\*\nrows without persisting anything.\n',
+    'Pattern shape used by the \"Add New Rule\" form\'s inline preview.\nCarries the unsaved rule directly so the server can compute\nthe candidate count + sample list against older \*uncategorized\*\nrows without persisting anything.\n\n`toCategoryId` is optional: the candidate count + samples only\ndepend on `pattern` + `matchType` (the bulk recategorize always\nscopes to uncategorized rows), so the Add form can fire the\nsame request as soon as the user has typed a pattern — before\nthey pick a destination category — and avoid a refetch when\nthe category is then chosen.\n',
   );
 
 export const PreviewMappingRuleRecategorizeByPatternResponse = zod
@@ -1358,7 +1359,12 @@ export const PreviewMappingRuleRecategorizeByPatternResponse = zod
       .describe(
         "Always `null` for the by-pattern preview — the Add flow scopes\nits bulk recategorize to uncategorized rows only, so explicit\nuser category edits aren't trampled. Surfaced as an explicit\nfield for symmetry with `MappingRuleRecategorizePreview`.\n",
       ),
-    toCategoryId: zod.string(),
+    toCategoryId: zod
+      .string()
+      .nullable()
+      .describe(
+        'Echo of the request\'s `toCategoryId`. `null` when the caller\npreviewed before picking a destination category — the\ncandidate count + samples are still meaningful (they only\ndepend on pattern + matchType against uncategorized rows),\nbut the client should render a neutral \"would match N\nuncategorized past transactions\" banner instead of the\n\"will move into <category>\" copy.\n',
+      ),
     candidateCount: zod
       .number()
       .describe(
