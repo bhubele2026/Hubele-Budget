@@ -558,11 +558,17 @@ export default function TransactionsPage() {
   // from/to swapped and scoped to the affected ids. Rows the user has
   // since edited away from `toCategoryId` naturally drop out (the server
   // only touches rows whose categoryId still equals the swapped
-  // `fromCategoryId`). Surfaces the count of rows that actually reverted
-  // so the user can tell when an Undo was a no-op because they'd
-  // already moved everything elsewhere.
+  // `fromCategoryId`). Also re-points the originating mapping rule back
+  // to its previous category by passing `ruleId` along with the swapped
+  // from/to — without this, future matching charges would keep snapping
+  // onto the user's accidental category pick. Surfaces the count of
+  // rows that actually reverted so the user can tell when an Undo was a
+  // no-op because they'd already moved everything elsewhere.
   const undoBulkRecategorize = (
-    rule: Pick<RepointedRule, "pattern" | "matchType" | "fromCategoryId" | "toCategoryId">,
+    rule: Pick<
+      RepointedRule,
+      "ruleId" | "pattern" | "matchType" | "fromCategoryId" | "toCategoryId"
+    >,
     affectedIds: string[],
   ) => {
     if (affectedIds.length === 0) return;
@@ -578,6 +584,10 @@ export default function TransactionsPage() {
           fromCategoryId: rule.toCategoryId,
           toCategoryId: rule.fromCategoryId,
           ids: affectedIds,
+          // Re-point the mapping rule back to its previous category
+          // so future matching transactions don't keep auto-flipping
+          // onto the user's mistaken pick.
+          ruleId: rule.ruleId,
         },
       },
       {
@@ -594,7 +604,7 @@ export default function TransactionsPage() {
             title:
               res.updated === 0
                 ? "Nothing to undo"
-                : `Reverted ${res.updated} transaction${res.updated === 1 ? "" : "s"}`,
+                : `Restored ${res.updated} transaction${res.updated === 1 ? "" : "s"}`,
           });
         },
         onError: (e) => {

@@ -25,4 +25,13 @@ revert exactly the rows that the original bulk touched,
 skipping any the user has since re-edited.
  */
   ids?: string[];
+  /** Optional id of the mapping rule whose previous re-point
+should be reversed alongside the transaction flip. When
+provided, the server also updates that rule's categoryId
+to `toCategoryId` (after verifying ownership). The "Undo"
+affordance passes the original rule id with `from`/`to`
+swapped so future matching transactions stop snapping
+onto the user's accidental category pick.
+ */
+  ruleId?: string;
 }

@@ -357,6 +357,12 @@ export const RecategorizeTransactionsByPatternBody = zod.object({
     .describe(
       'Optional whitelist of transaction ids to scope the bulk\nupdate to. When provided, the server only flips rows whose\nid is in this list AND whose categoryId still equals\n`fromCategoryId`. Used by the client\'s \"Undo\" affordance to\nrevert exactly the rows that the original bulk touched,\nskipping any the user has since re-edited.\n',
     ),
+  ruleId: zod
+    .string()
+    .optional()
+    .describe(
+      "Optional id of the mapping rule whose previous re-point\nshould be reversed alongside the transaction flip. When\nprovided, the server also updates that rule's categoryId\nto `toCategoryId` (after verifying ownership). The \"Undo\"\naffordance passes the original rule id with `from`\/`to`\nswapped so future matching transactions stop snapping\nonto the user's accidental category pick.\n",
+    ),
 });
 
 export const RecategorizeTransactionsByPatternResponse = zod.object({

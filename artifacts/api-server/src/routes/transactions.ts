@@ -549,7 +549,7 @@ router.post(
       return;
     }
     const userId = req.userId!;
-    const { pattern, matchType, fromCategoryId, toCategoryId, ids } =
+    const { pattern, matchType, fromCategoryId, toCategoryId, ids, ruleId } =
       parsed.data;
     if (fromCategoryId === toCategoryId) {
       res.json({ updated: 0, affectedMonths: [], affectedIds: [] });
@@ -568,6 +568,28 @@ router.post(
     if (ids && ids.length === 0) {
       res.json({ updated: 0, affectedMonths: [], affectedIds: [] });
       return;
+    }
+    // Optional rule re-point — used by the client's "Undo" affordance so
+    // that reverting a bulk recategorize also reverses the mapping-rule
+    // repoint that triggered it. Without this, future matching charges
+    // would keep snapping onto the user's accidental category pick. We
+    // do this unconditionally when `ruleId` is supplied (and we're past
+    // the empty-ids degenerate-no-op guard above) so an Undo still
+    // resets the rule even if the user has already manually re-edited
+    // every affected row away from `fromCategoryId`. The ownership
+    // filter on the UPDATE makes a stale or foreign `ruleId` a silent
+    // no-op rather than an error, so callers can pass it
+    // unconditionally.
+    if (ruleId) {
+      await db
+        .update(mappingRulesTable)
+        .set({ categoryId: toCategoryId })
+        .where(
+          and(
+            eq(mappingRulesTable.id, ruleId),
+            eq(mappingRulesTable.userId, userId),
+          ),
+        );
     }
     let candidates = await selectPatternCandidates(
       userId,

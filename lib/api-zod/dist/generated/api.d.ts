@@ -773,17 +773,20 @@ export declare const RecategorizeTransactionsByPatternBody: zod.ZodObject<{
     fromCategoryId: zod.ZodString;
     toCategoryId: zod.ZodString;
     ids: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
+    ruleId: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     pattern: string;
     matchType: "exact" | "contains" | "starts_with";
     fromCategoryId: string;
     toCategoryId: string;
+    ruleId?: string | undefined;
     ids?: string[] | undefined;
 }, {
     pattern: string;
     matchType: "exact" | "contains" | "starts_with";
     fromCategoryId: string;
     toCategoryId: string;
+    ruleId?: string | undefined;
     ids?: string[] | undefined;
 }>;
 export declare const RecategorizeTransactionsByPatternResponse: zod.ZodObject<{

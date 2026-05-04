@@ -774,15 +774,29 @@ describe("categorization pipeline (integration)", () => {
 
     // Undo flow — re-run the same endpoint with from/to swapped and
     // scoped to the affectedIds. Should move exactly those two rows
-    // back to miscCat. Then simulate the user editing one of those
-    // reverted rows to a different category before clicking Undo a
-    // second time — the second Undo must skip that re-edited row.
+    // back to miscCat AND re-point the originating mapping rule back
+    // to miscCat (passed via `ruleId`) so future matching charges
+    // stop snapping onto the user's accidental category pick. Then
+    // simulate the user editing one of those reverted rows to a
+    // different category before clicking Undo a second time — the
+    // second Undo must skip that re-edited row.
+    //
+    // Confirm the rule is currently still pointed at debtCat (the
+    // PATCH that opened this whole flow repointed it), so the
+    // assertion below isn't trivially true.
+    const ruleBeforeUndo = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(eq(mappingRulesTable.id, seedRule!.id))
+      .limit(1);
+    expect(ruleBeforeUndo[0]!.categoryId).toBe(debtCat!.id);
     const undo = await api("POST", `/transactions/recategorize-by-pattern`, {
       pattern: reported.pattern,
       matchType: reported.matchType,
       fromCategoryId: reported.toCategoryId,
       toCategoryId: reported.fromCategoryId,
       ids: bulkBody.affectedIds,
+      ruleId: reported.ruleId,
     });
     expect(undo.status).toBe(200);
     const undoBody = undo.json as {
@@ -811,6 +825,14 @@ describe("categorization pipeline (integration)", () => {
     for (const id of olderIds.slice(1)) {
       expect(afterUndoById.get(id)!.categoryId).toBe(miscCat!.id);
     }
+    // The mapping rule is also back on miscCat so future matching
+    // payments no longer auto-snap onto debtCat.
+    const ruleAfterUndo = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(eq(mappingRulesTable.id, seedRule!.id))
+      .limit(1);
+    expect(ruleAfterUndo[0]!.categoryId).toBe(miscCat!.id);
 
     // Now redo the bulk again, then have the user manually move one of
     // the two flipped rows to `otherCat`. A subsequent Undo (again
@@ -827,6 +849,15 @@ describe("categorization pipeline (integration)", () => {
       affectedIds: string[];
     };
     expect(redoBody.updated).toBe(2);
+    // Manually re-point the rule back onto debtCat to mirror the state
+    // the client would be in after a fresh Apply (the redo POST above
+    // doesn't include `ruleId`, so it left the rule alone). The second
+    // Undo below passes `ruleId` and should snap the rule back to
+    // miscCat regardless of how many txn rows still match.
+    await db
+      .update(mappingRulesTable)
+      .set({ categoryId: debtCat!.id })
+      .where(eq(mappingRulesTable.id, seedRule!.id));
     const userEditedId = redoBody.affectedIds[0]!;
     const stillOnDebtId = redoBody.affectedIds[1]!;
     await db
@@ -839,6 +870,7 @@ describe("categorization pipeline (integration)", () => {
       fromCategoryId: reported.toCategoryId,
       toCategoryId: reported.fromCategoryId,
       ids: redoBody.affectedIds,
+      ruleId: reported.ruleId,
     });
     const undo2Body = undo2.json as {
       updated: number;
@@ -860,10 +892,31 @@ describe("categorization pipeline (integration)", () => {
     );
     expect(finalById.get(userEditedId)!.categoryId).toBe(otherCat!.id);
     expect(finalById.get(stillOnDebtId)!.categoryId).toBe(miscCat!.id);
+    // Even though only one txn actually flipped (the other was
+    // manually re-edited), the rule still snaps back to miscCat —
+    // Undo expresses intent on the whole batch, not just the rows
+    // that happened to still match.
+    const ruleAfterUndo2 = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(eq(mappingRulesTable.id, seedRule!.id))
+      .limit(1);
+    expect(ruleAfterUndo2[0]!.categoryId).toBe(miscCat!.id);
+
+    // Re-point the rule manually one more time so the next assertion
+    // (that an empty-ids no-op leaves the rule alone) isn't trivially
+    // satisfied by it already being on miscCat.
+    await db
+      .update(mappingRulesTable)
+      .set({ categoryId: debtCat!.id })
+      .where(eq(mappingRulesTable.id, seedRule!.id));
 
     // Defensive: an explicit empty `ids` array must be treated as a
     // no-op. Otherwise a degenerate Undo payload (no rows to revert)
-    // would silently re-flip every pattern match in the category.
+    // would silently re-flip every pattern match in the category. The
+    // rule must also be left alone — the empty-ids guard short-circuits
+    // before any rule touch — so a degenerate retry never silently
+    // re-points the mapping rule either.
     const noopRow = await db
       .select()
       .from(transactionsTable)
@@ -876,6 +929,7 @@ describe("categorization pipeline (integration)", () => {
       fromCategoryId: reported.fromCategoryId,
       toCategoryId: reported.toCategoryId,
       ids: [],
+      ruleId: reported.ruleId,
     });
     const noopBody = noop.json as {
       updated: number;
@@ -891,6 +945,12 @@ describe("categorization pipeline (integration)", () => {
       .where(eq(transactionsTable.id, stillOnDebtId))
       .limit(1);
     expect(noopAfterRow[0]!.categoryId).toBe(noopBefore);
+    const ruleAfterNoop = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(eq(mappingRulesTable.id, seedRule!.id))
+      .limit(1);
+    expect(ruleAfterNoop[0]!.categoryId).toBe(debtCat!.id);
   });
 
   it("PATCH /transactions/:id auto-relearns: repoints an existing matching rule onto the new category instead of creating a duplicate", async () => {

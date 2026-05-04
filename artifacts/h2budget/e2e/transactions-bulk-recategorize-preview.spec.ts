@@ -293,6 +293,72 @@ test.describe("Transactions bulk re-categorize preview (#187)", () => {
     expect(byId.get(hist1.id)).toBe(debtCat.id);
     expect(byId.get(hist2.id)).toBe(debtCat.id);
 
+    // --- Task #199: the success toast also offers an Undo button so the
+    // user can back out of a wrong-category bulk in one click. Clicking
+    // it should restore each affected transaction to its previous
+    // category AND re-point the originating mapping rule back so future
+    // matching charges no longer auto-snap onto the mistaken category.
+    const undoAction = page.getByTestId("action-undo-bulk-recategorize");
+    await expect(undoAction).toBeVisible({ timeout: 5_000 });
+
+    const undoRequestPromise = page.waitForRequest(
+      (req) =>
+        req.method() === "POST" &&
+        new URL(req.url()).pathname ===
+          "/api/transactions/recategorize-by-pattern",
+      { timeout: 10_000 },
+    );
+    const undoResponsePromise = page.waitForResponse(
+      (res) =>
+        res.request().method() === "POST" &&
+        new URL(res.url()).pathname ===
+          "/api/transactions/recategorize-by-pattern",
+      { timeout: 10_000 },
+    );
+
+    await undoAction.click();
+
+    const undoReq = await undoRequestPromise;
+    const undoRes = await undoResponsePromise;
+    expect(undoRes.status()).toBe(200);
+    const undoSent = JSON.parse(undoReq.postData() ?? "{}");
+    // The Undo POST mirrors the Apply POST with from/to swapped, the
+    // affected ids whitelisted, and the originating rule's id passed
+    // through so the server can also re-point it back.
+    expect(undoSent.pattern).toBe(pattern);
+    expect(undoSent.matchType).toBe("contains");
+    expect(undoSent.fromCategoryId).toBe(debtCat.id);
+    expect(undoSent.toCategoryId).toBe(miscCat.id);
+    expect(typeof undoSent.ruleId).toBe("string");
+    expect((undoSent.ruleId as string).length).toBeGreaterThan(0);
+    expect(new Set(undoSent.ids)).toEqual(new Set([hist1.id, hist2.id]));
+
+    await expect(
+      notifications.getByText(/Restored 2 transactions/i),
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Both historical txns are back on miscCat.
+    const afterUndoTxns = await apiCall<
+      Array<{ id: string; categoryId: string | null }>
+    >(page, "GET", "/api/transactions?limit=500");
+    const afterUndoById = new Map(
+      afterUndoTxns.map((t) => [t.id, t.categoryId] as const),
+    );
+    expect(afterUndoById.get(hist1.id)).toBe(miscCat.id);
+    expect(afterUndoById.get(hist2.id)).toBe(miscCat.id);
+    // The trigger row was the user's explicit single-row pick — it
+    // stays on debtCat because it wasn't part of the bulk affectedIds.
+    expect(afterUndoById.get(trigger.id)).toBe(debtCat.id);
+
+    // The mapping rule itself is also back on miscCat — without this,
+    // future matching payments would keep auto-snapping onto debtCat.
+    const rulesAfterUndo = await apiCall<
+      Array<{ id: string; pattern: string; categoryId: string | null }>
+    >(page, "GET", "/api/mapping-rules");
+    const seedRule = rulesAfterUndo.find((r) => r.pattern === pattern);
+    expect(seedRule).toBeDefined();
+    expect(seedRule!.categoryId).toBe(miscCat.id);
+
     await context.close();
   });
 });
