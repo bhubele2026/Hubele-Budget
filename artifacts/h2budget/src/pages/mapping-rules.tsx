@@ -1074,11 +1074,33 @@ export default function MappingRulesPage() {
                                   queryKey: getGetBudgetMonthQueryKey(m),
                                 });
                               }
+                              // The server-side `ruleId` re-point on the
+                              // bulk endpoint also flipped the mapping
+                              // rule's categoryId back to its pre-edit
+                              // value (see Task #199 widening of
+                              // /transactions/recategorize-by-pattern).
+                              // Without invalidating the rules cache
+                              // here the page would keep showing the
+                              // rule pointed at the just-undone
+                              // category until the next refetch — so
+                              // the visible "Undo" outcome would be
+                              // asymmetric with Save (txns snap back,
+                              // rule appears unchanged). Invalidate so
+                              // the read-only rule row repaints with
+                              // the restored category badge.
+                              invalidateRules();
                               toast({
                                 title:
                                   undoRes.updated === 0
-                                    ? "Nothing to undo"
-                                    : `Reverted ${undoRes.updated} transaction${undoRes.updated === 1 ? "" : "s"}`,
+                                    ? "Rule reverted"
+                                    : `Reverted ${undoRes.updated} transaction${undoRes.updated === 1 ? "" : "s"} and rule`,
+                              });
+                            },
+                            onError: (e) => {
+                              toast({
+                                title: "Couldn't undo",
+                                description: (e as Error).message,
+                                variant: "destructive",
                               });
                             },
                           },
