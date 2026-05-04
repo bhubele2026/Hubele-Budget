@@ -15,6 +15,10 @@ import type {
   MappingRuleInput,
   Category,
 } from "@workspace/api-client-react";
+import {
+  useBulkRecategorizePrompt,
+  bulkRuleFromRuleAction,
+} from "@/hooks/use-bulk-recategorize-prompt";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -426,6 +430,17 @@ export default function MappingRulesPage() {
   const [editCategoryId, setEditCategoryId] = useState("");
   const [editPriority, setEditPriority] = useState<string>("");
 
+  // Task #212 — wire the auto-learn flow's "apply to past charges?"
+  // prompt into the Mapping Rules page's hand-create path. The server's
+  // POST /mapping-rules response now mirrors the same `ruleAction`
+  // shape the auto-learn flow uses on PATCH /transactions/:id, so we
+  // can reuse `useBulkRecategorizePrompt` verbatim. The hook returns
+  // a `previewDialog` we still need to render (rendered at the bottom
+  // of the page); created-rule prompts don't ship sample transactions
+  // so the dialog is effectively a no-op for this path, but rendering
+  // it keeps the hook usable if we later add per-pattern previews.
+  const { offerBulkRecategorize, previewDialog } = useBulkRecategorizePrompt();
+
   const handleAddRule = () => {
     if (!pattern || !categoryId) return;
     // New manually-added rules go above any auto-learned ones (which top out
@@ -447,7 +462,21 @@ export default function MappingRulesPage() {
     createRule.mutate(
       { data },
       {
-        onSuccess: () => toast({ title: "Rule added" }),
+        onSuccess: (created) => {
+          toast({ title: "Rule added" });
+          // Surface the same "Apply to past too?" toast as the
+          // Transactions / Amex auto-learn flow when the freshly
+          // created rule has older uncategorized matches. Hook
+          // returns early when candidate count is 0, so we don't
+          // need to gate it here.
+          const bulkRule = bulkRuleFromRuleAction(
+            created.ruleAction,
+            categoryId
+              ? catById.get(categoryId)?.name ?? undefined
+              : undefined,
+          );
+          if (bulkRule) offerBulkRecategorize(bulkRule);
+        },
       },
     );
   };
@@ -984,6 +1013,7 @@ export default function MappingRulesPage() {
           </CardContent>
         </Card>
       )}
+      {previewDialog}
     </div>
   );
 }

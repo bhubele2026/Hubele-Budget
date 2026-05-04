@@ -36,6 +36,7 @@ import type {
   CleanupNonProdPlaidItems200,
   CloseForecastMonthBody,
   CreateInvitationInput,
+  CreateMappingRuleResponse,
   CreateTransactionInput,
   CreateTransactionResponse,
   DashboardBudget,
@@ -2918,8 +2919,8 @@ export const getCreateMappingRuleUrl = () => {
 export const createMappingRule = async (
   mappingRuleInput: MappingRuleInput,
   options?: RequestInit,
-): Promise<MappingRule> => {
-  return customFetch<MappingRule>(getCreateMappingRuleUrl(), {
+): Promise<CreateMappingRuleResponse> => {
+  return customFetch<CreateMappingRuleResponse>(getCreateMappingRuleUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },

@@ -15,6 +15,7 @@ import {
   findMatchingRules,
   loadUserRules,
 } from "../lib/autoCategorize";
+import { selectPatternCandidates } from "../lib/patternCandidates";
 import {
   CreateTransactionBody,
   UpdateTransactionBody,
@@ -588,69 +589,6 @@ function normalizeMatchType(
 ): "contains" | "exact" | "starts_with" {
   if (raw === "exact" || raw === "starts_with") return raw;
   return "contains";
-}
-
-/**
- * Build the SQL pattern for ilike from a mapping rule's matchType. Mirrors
- * `ruleMatchesDescription`'s semantics (case-insensitive substring/exact/
- * prefix) but uses Postgres ilike so we can do the candidate scan in a
- * single query instead of pulling rows back to JS.
- */
-function ilikePatternFor(rule: { matchType: string; pattern: string }): string {
-  const safe = rule.pattern.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
-  switch (rule.matchType) {
-    case "exact":
-      return safe;
-    case "starts_with":
-      return `${safe}%`;
-    case "contains":
-    default:
-      return `%${safe}%`;
-  }
-}
-
-async function selectPatternCandidates(
-  userId: string,
-  rule: { pattern: string; matchType: string },
-  fromCategoryId: string | null,
-): Promise<
-  {
-    id: string;
-    occurredOn: string;
-    description: string | null;
-    amount: string;
-  }[]
-> {
-  // Ordered most-recent first so the first N rows can be served straight
-  // through to the client as the "Show matches" preview list. Bulk
-  // re-categorize callers don't care about order (they just need the
-  // full id set) so this is safe to apply unconditionally.
-  //
-  // `fromCategoryId === null` targets currently-uncategorized rows. Used by
-  // the "apply to past charges?" prompt that fires after the auto-learn flow
-  // creates a brand-new specific rule — older uncategorized rows matching
-  // the new pattern are exactly the ones the user would otherwise have to
-  // categorize by hand. Manually-categorized rows are deliberately excluded
-  // so explicit user intent is preserved.
-  return db
-    .select({
-      id: transactionsTable.id,
-      occurredOn: transactionsTable.occurredOn,
-      description: transactionsTable.description,
-      amount: transactionsTable.amount,
-    })
-    .from(transactionsTable)
-    .where(
-      and(
-        eq(transactionsTable.userId, userId),
-        fromCategoryId === null
-          ? isNull(transactionsTable.categoryId)
-          : eq(transactionsTable.categoryId, fromCategoryId),
-        eq(transactionsTable.isTransfer, false),
-        ilike(transactionsTable.description, ilikePatternFor(rule)),
-      ),
-    )
-    .orderBy(desc(transactionsTable.occurredOn));
 }
 
 /**

@@ -11,6 +11,14 @@ import {
   TestMappingRulesBody,
 } from "@workspace/api-zod";
 import { findMatchingRules, type RuleRow } from "../lib/autoCategorize";
+import { countPatternCandidates } from "../lib/patternCandidates";
+
+function normalizeMatchType(
+  raw: string | null | undefined,
+): "contains" | "exact" | "starts_with" {
+  if (raw === "exact" || raw === "starts_with") return raw;
+  return "contains";
+}
 
 const router: IRouter = Router();
 
@@ -29,11 +37,56 @@ router.post("/mapping-rules", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const userId = req.userId!;
   const [row] = await db
     .insert(mappingRulesTable)
-    .values({ ...parsed.data, userId: req.userId! })
+    .values({ ...parsed.data, userId })
     .returning();
-  res.status(201).json(row);
+  // Mirror the auto-learn flow's `ruleAction` shape so the Mapping Rules
+  // page can reuse the existing `useBulkRecategorizePrompt` helper. We
+  // count older *uncategorized* transactions matching the new rule's
+  // pattern + matchType and surface that as a `kind: "created"` action
+  // — same shape PATCH /transactions/:id ships when the auto-learn flow
+  // mints a brand-new specific rule. Manually-categorized rows are
+  // deliberately excluded (the bulk endpoint enforces the same guard)
+  // so explicit user intent is preserved.
+  //
+  // Skip the count when the rule has no category (nothing to flip rows
+  // onto) — the prompt would be meaningless and the bulk endpoint
+  // requires a non-null toCategoryId anyway.
+  const matchType = normalizeMatchType(row.matchType);
+  const toCategoryId = row.categoryId ?? null;
+  let candidateCount = 0;
+  if (toCategoryId) {
+    candidateCount = await countPatternCandidates(
+      userId,
+      { pattern: row.pattern, matchType },
+      null,
+    );
+  }
+  const ruleAction =
+    toCategoryId && candidateCount > 0
+      ? {
+          kind: "created" as const,
+          pattern: row.pattern,
+          genericPattern: null,
+          ruleId: row.id,
+          previousCategoryId: null,
+          matchType,
+          toCategoryId,
+          candidateCount,
+        }
+      : {
+          kind: "none" as const,
+          pattern: null,
+          genericPattern: null,
+          ruleId: null,
+          previousCategoryId: null,
+          matchType: null,
+          toCategoryId: null,
+          candidateCount: null,
+        };
+  res.status(201).json({ ...row, ruleAction });
 });
 
 /**

@@ -1047,6 +1047,23 @@ export interface MappingRule {
   priority: number;
 }
 
+export type CreateMappingRuleResponse = MappingRule & {
+  /** Mirrors the auto-learn flow's `ruleAction` shape so the
+Mapping Rules page can reuse the same client-side
+"apply to past charges?" prompt as PATCH
+/transactions/{id}.
+
+For a hand-created rule with a chosen category, this
+surfaces a `kind: "created"` action carrying the
+pattern, matchType, toCategoryId, and the count of
+older *uncategorized* transactions matching the new
+rule. Returns `kind: "none"` when the new rule has no
+category (nothing to flip rows onto) or when no
+uncategorized rows would match.
+ */
+  ruleAction: RuleAction;
+};
+
 export interface MappingRuleInput {
   pattern: string;
   matchType?: string;

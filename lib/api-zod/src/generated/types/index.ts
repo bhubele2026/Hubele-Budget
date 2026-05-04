@@ -50,6 +50,7 @@ export * from "./checkInvitationResult";
 export * from "./cleanupNonProdPlaidItems200";
 export * from "./closeForecastMonthBody";
 export * from "./createInvitationInput";
+export * from "./createMappingRuleResponse";
 export * from "./createTransactionInput";
 export * from "./createTransactionInputWeeklyBucket";
 export * from "./createTransactionResponse";

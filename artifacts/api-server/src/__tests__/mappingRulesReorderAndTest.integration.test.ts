@@ -26,7 +26,7 @@ vi.mock("../middlewares/requireAuth", () => ({
   },
 }));
 
-import { db, mappingRulesTable } from "@workspace/db";
+import { db, mappingRulesTable, transactionsTable } from "@workspace/db";
 import mappingRouter from "../routes/mapping";
 
 const app = express();
@@ -43,6 +43,12 @@ async function deleteAll(): Promise<void> {
   await db
     .delete(mappingRulesTable)
     .where(eq(mappingRulesTable.userId, OTHER_USER));
+  await db
+    .delete(transactionsTable)
+    .where(eq(transactionsTable.userId, TEST_USER));
+  await db
+    .delete(transactionsTable)
+    .where(eq(transactionsTable.userId, OTHER_USER));
 }
 
 beforeAll(async () => {
@@ -180,6 +186,161 @@ describe("PUT /mapping-rules/reorder", () => {
   it("400s on a bad payload", async () => {
     const res = await api("PUT", "/mapping-rules/reorder", {});
     expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /mapping-rules", () => {
+  // Task #212 — POST /mapping-rules now mirrors the auto-learn flow's
+  // `ruleAction` shape so the Mapping Rules page can reuse the
+  // existing "apply to past charges?" prompt for hand-created rules.
+  async function seedTransaction(opts: {
+    description: string;
+    occurredOn?: string;
+    amount?: string;
+    categoryId?: string | null;
+    isTransfer?: boolean;
+    userId?: string;
+  }): Promise<string> {
+    const [row] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: opts.userId ?? TEST_USER,
+        occurredOn: opts.occurredOn ?? "2026-04-15",
+        description: opts.description,
+        amount: opts.amount ?? "-12.34",
+        categoryId: opts.categoryId ?? null,
+        isTransfer: opts.isTransfer ?? false,
+        source: "manual",
+      })
+      .returning();
+    return row!.id;
+  }
+
+  type CreateResponse = RuleShape & {
+    ruleAction: {
+      kind: string;
+      pattern: string | null;
+      matchType: string | null;
+      toCategoryId: string | null;
+      candidateCount: number | null;
+      ruleId: string | null;
+    };
+  };
+
+  it("returns a `created` ruleAction with the count of older uncategorized matches", async () => {
+    await seedTransaction({ description: "STARBUCKS #123 SEATTLE WA" });
+    await seedTransaction({ description: "starbucks card reload" });
+    // Already categorized — must be excluded so explicit user picks
+    // are preserved.
+    await seedTransaction({
+      description: "STARBUCKS COFFEE",
+      categoryId: randomUUID(),
+    });
+    // Transfer — must be excluded.
+    await seedTransaction({
+      description: "STARBUCKS REFUND",
+      isTransfer: true,
+    });
+    // Doesn't match the pattern.
+    await seedTransaction({ description: "PETSMART #4321" });
+
+    const cat = randomUUID();
+    const res = await api("POST", "/mapping-rules", {
+      pattern: "STARBUCKS",
+      matchType: "contains",
+      categoryId: cat,
+      priority: 110,
+    });
+
+    expect(res.status).toBe(201);
+    const body = res.json as CreateResponse;
+    expect(body.pattern).toBe("STARBUCKS");
+    expect(body.matchType).toBe("contains");
+    expect(body.categoryId).toBe(cat);
+    expect(body.ruleAction.kind).toBe("created");
+    expect(body.ruleAction.pattern).toBe("STARBUCKS");
+    expect(body.ruleAction.matchType).toBe("contains");
+    expect(body.ruleAction.toCategoryId).toBe(cat);
+    expect(body.ruleAction.candidateCount).toBe(2);
+    expect(body.ruleAction.ruleId).toBe(body.id);
+  });
+
+  it("emits a `none` ruleAction when no uncategorized rows match", async () => {
+    await seedTransaction({
+      description: "STARBUCKS COFFEE",
+      categoryId: randomUUID(),
+    });
+    await seedTransaction({ description: "PETSMART" });
+
+    const cat = randomUUID();
+    const res = await api("POST", "/mapping-rules", {
+      pattern: "STARBUCKS",
+      matchType: "contains",
+      categoryId: cat,
+      priority: 110,
+    });
+
+    expect(res.status).toBe(201);
+    const body = res.json as CreateResponse;
+    expect(body.ruleAction.kind).toBe("none");
+    expect(body.ruleAction.candidateCount).toBeNull();
+    expect(body.ruleAction.toCategoryId).toBeNull();
+  });
+
+  it("emits a `none` ruleAction when the new rule has no category", async () => {
+    await seedTransaction({ description: "STARBUCKS RESERVE" });
+
+    const res = await api("POST", "/mapping-rules", {
+      pattern: "STARBUCKS",
+      matchType: "contains",
+      categoryId: null,
+      priority: 110,
+    });
+
+    expect(res.status).toBe(201);
+    const body = res.json as CreateResponse;
+    expect(body.ruleAction.kind).toBe("none");
+    expect(body.ruleAction.candidateCount).toBeNull();
+  });
+
+  it("does not count other users' uncategorized rows", async () => {
+    await seedTransaction({
+      description: "STARBUCKS DRIVE-THRU",
+      userId: OTHER_USER,
+    });
+
+    const cat = randomUUID();
+    const res = await api("POST", "/mapping-rules", {
+      pattern: "STARBUCKS",
+      matchType: "contains",
+      categoryId: cat,
+      priority: 110,
+    });
+
+    expect(res.status).toBe(201);
+    const body = res.json as CreateResponse;
+    expect(body.ruleAction.kind).toBe("none");
+  });
+
+  it("respects matchType when counting (starts_with example)", async () => {
+    // matchType=starts_with should only match descriptions that begin
+    // with the pattern. The first row matches; the second does not.
+    await seedTransaction({ description: "AMZN MKTP US*ABC" });
+    await seedTransaction({ description: "STORE - AMZN MKTP" });
+
+    const cat = randomUUID();
+    const res = await api("POST", "/mapping-rules", {
+      pattern: "AMZN",
+      matchType: "starts_with",
+      categoryId: cat,
+      priority: 110,
+    });
+
+    expect(res.status).toBe(201);
+    const body = res.json as CreateResponse;
+    expect(body.ruleAction.kind).toBe("created");
+    expect(body.ruleAction.matchType).toBe("starts_with");
+    expect(body.ruleAction.candidateCount).toBe(1);
   });
 });
 
