@@ -1515,6 +1515,7 @@ export const ExchangePlaidPublicTokenResponse = zod.object({
       'Plaid\'s structured `error_code` from the most recent failed\nsync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,\nPENDING_EXPIRATION). Null when sync is healthy or when the\nprevious failure had no structured code. Used by the UI to\ndecide when to surface the \"Reconnect\" button next to the\nsync chip.\n',
     ),
   stillPreparing: zod.boolean().optional(),
+  stillPreparingSince: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),
@@ -1543,6 +1544,7 @@ export const ListPlaidItemsResponseItem = zod.object({
       'Plaid\'s structured `error_code` from the most recent failed\nsync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,\nPENDING_EXPIRATION). Null when sync is healthy or when the\nprevious failure had no structured code. Used by the UI to\ndecide when to surface the \"Reconnect\" button next to the\nsync chip.\n',
     ),
   stillPreparing: zod.boolean().optional(),
+  stillPreparingSince: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),

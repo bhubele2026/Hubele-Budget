@@ -4107,6 +4107,7 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     lastSyncError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastSyncErrorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     stillPreparing: zod.ZodOptional<zod.ZodBoolean>;
+    stillPreparingSince: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -4151,6 +4152,7 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
     stillPreparing?: boolean | undefined;
+    stillPreparingSince?: string | null | undefined;
 }, {
     id: string;
     institutionSlug: string;
@@ -4170,6 +4172,7 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
     stillPreparing?: boolean | undefined;
+    stillPreparingSince?: string | null | undefined;
 }>;
 export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     id: zod.ZodString;
@@ -4181,6 +4184,7 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     lastSyncError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastSyncErrorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     stillPreparing: zod.ZodOptional<zod.ZodBoolean>;
+    stillPreparingSince: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -4225,6 +4229,7 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
     stillPreparing?: boolean | undefined;
+    stillPreparingSince?: string | null | undefined;
 }, {
     id: string;
     institutionSlug: string;
@@ -4244,6 +4249,7 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
     stillPreparing?: boolean | undefined;
+    stillPreparingSince?: string | null | undefined;
 }>;
 export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -4255,6 +4261,7 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     lastSyncError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastSyncErrorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     stillPreparing: zod.ZodOptional<zod.ZodBoolean>;
+    stillPreparingSince: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -4299,6 +4306,7 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
     stillPreparing?: boolean | undefined;
+    stillPreparingSince?: string | null | undefined;
 }, {
     id: string;
     institutionSlug: string;
@@ -4318,6 +4326,7 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     lastSyncError?: string | null | undefined;
     lastSyncErrorCode?: string | null | undefined;
     stillPreparing?: boolean | undefined;
+    stillPreparingSince?: string | null | undefined;
 }>, "many">;
 export declare const DeletePlaidItemParams: zod.ZodObject<{
     id: zod.ZodString;

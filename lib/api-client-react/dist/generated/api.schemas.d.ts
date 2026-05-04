@@ -1118,6 +1118,8 @@ export interface PlaidItemDetail {
      */
     lastSyncErrorCode?: string | null;
     stillPreparing?: boolean;
+    /** @nullable */
+    stillPreparingSince?: string | null;
     accounts: PlaidAccount[];
 }
 export interface PlaidSyncInput {

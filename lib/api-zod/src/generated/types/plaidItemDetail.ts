@@ -31,5 +31,7 @@ sync chip.
    */
   lastSyncErrorCode?: string | null;
   stillPreparing?: boolean;
+  /** @nullable */
+  stillPreparingSince?: string | null;
   accounts: PlaidAccount[];
 }

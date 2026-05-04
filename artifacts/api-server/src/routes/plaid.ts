@@ -312,6 +312,9 @@ router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
       lastSyncError: it.lastSyncError,
       lastSyncErrorCode: it.lastSyncErrorCode,
       stillPreparing: it.stillPreparingSince != null,
+      stillPreparingSince: it.stillPreparingSince
+        ? it.stillPreparingSince.toISOString()
+        : null,
       accounts: (byItem.get(it.id) ?? []).map((a) => ({
         id: a.id,
         accountId: a.accountId,

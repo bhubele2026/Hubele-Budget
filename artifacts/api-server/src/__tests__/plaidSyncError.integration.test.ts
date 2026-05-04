@@ -452,4 +452,30 @@ describe("/plaid/link-token/update (re-auth in update mode)", () => {
     expect(byId.get(healthyId)?.stillPreparing).toBe(false);
     expect(byId.get(preparingId)?.stillPreparing).toBe(true);
   });
+
+  it("GET /plaid/items exposes stillPreparingSince so the UI can show elapsed time", async () => {
+    // The Settings page renders "Preparing for 12m / 3h" using this
+    // timestamp so the user can tell a freshly linked bank from one that
+    // has been stuck for hours. Healthy items must not leak a timestamp.
+    const { itemRowId: healthyId } = await seedItem();
+    const { itemRowId: preparingId } = await seedItem();
+    const since = new Date(Date.now() - 90 * 60 * 1000); // 90 minutes ago
+    await db
+      .update(plaidItemsTable)
+      .set({ stillPreparingSince: since })
+      .where(eq(plaidItemsTable.id, preparingId));
+
+    const res = await fetch(`${baseUrl}/plaid/items`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      id: string;
+      stillPreparing: boolean;
+      stillPreparingSince: string | null;
+    }>;
+    const byId = new Map(body.map((b) => [b.id, b]));
+    expect(byId.get(healthyId)?.stillPreparingSince ?? null).toBeNull();
+    const exposed = byId.get(preparingId)?.stillPreparingSince;
+    expect(typeof exposed).toBe("string");
+    expect(new Date(exposed!).toISOString()).toBe(since.toISOString());
+  });
 });

@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus } from "lucide-react";
 import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import { formatPreparingElapsed, isPreparingStalled } from "@/lib/plaidPreparing";
 import { OwnerInvitationsSection } from "@/components/owner-invitations";
 import {
   DEFAULT_DAYS_SINCE_TRACKERS,
@@ -422,7 +423,12 @@ export default function SettingsPage() {
                             data-testid={`badge-still-preparing-${item.id}`}
                             title="Plaid is still staging the historical batch for this freshly linked bank — try Sync again in a minute."
                           >
-                            Still preparing
+                            {(() => {
+                              const elapsed = formatPreparingElapsed(item.stillPreparingSince);
+                              return elapsed
+                                ? `Still preparing · ${elapsed}`
+                                : "Still preparing";
+                            })()}
                           </span>
                         )}
                       </div>
@@ -431,6 +437,15 @@ export default function SettingsPage() {
                           ? `Last synced ${new Date(item.lastSyncedAt).toLocaleString()}`
                           : "Not yet synced"}
                       </div>
+                      {item.stillPreparing && isPreparingStalled(item.stillPreparingSince) && (
+                        <div
+                          className="text-xs text-amber-700 dark:text-amber-400 mt-1"
+                          data-testid={`text-preparing-stalled-${item.id}`}
+                        >
+                          This is taking longer than usual. Try unlinking and
+                          relinking this bank.
+                        </div>
+                      )}
                       {item.lastSyncError && (
                         <div
                           className="text-xs text-destructive mt-1"

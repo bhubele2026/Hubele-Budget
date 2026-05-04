@@ -2205,6 +2205,12 @@ components:
         # which institution is in the warm-up window vs. genuinely healthy.
         # Cleared on the next successful sync.
         stillPreparing: { type: boolean }
+        # ISO timestamp of when this item first entered the still-preparing
+        # state (i.e. when Plaid first returned PRODUCT_NOT_READY for it).
+        # The Settings page uses this to render "Preparing for 12m / 3h" so
+        # the user can tell a freshly linked bank from one that's stalled.
+        # Null whenever stillPreparing is false.
+        stillPreparingSince: { type: ["string", "null"] }
         accounts:
           type: array
           items: { $ref: "#/components/schemas/PlaidAccount" }

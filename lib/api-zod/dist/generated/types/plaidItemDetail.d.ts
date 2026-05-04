@@ -30,6 +30,8 @@ export interface PlaidItemDetail {
      */
     lastSyncErrorCode?: string | null;
     stillPreparing?: boolean;
+    /** @nullable */
+    stillPreparingSince?: string | null;
     accounts: PlaidAccount[];
 }
 //# sourceMappingURL=plaidItemDetail.d.ts.map
