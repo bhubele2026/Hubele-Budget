@@ -72,7 +72,7 @@ export const PLAID_PRODUCTS = [Products.Transactions];
 const VALID_OPTIONAL_PRODUCT_NAMES = new Set<string>(
   Object.values(Products) as string[],
 );
-function parseOptionalProductsFromEnv(): Products[] {
+export function parseOptionalProductsFromEnv(): Products[] {
   const raw = process.env.PLAID_OPTIONAL_PRODUCTS_CSV?.trim();
   if (!raw) return [];
   const out: Products[] = [];
