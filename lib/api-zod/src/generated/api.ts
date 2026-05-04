@@ -1460,6 +1460,7 @@ export const ExchangePlaidPublicTokenResponse = zod.object({
   institutionSlug: zod.string(),
   lastSyncedAt: zod.string().nullish(),
   lastSyncError: zod.string().nullish(),
+  stillPreparing: zod.boolean().optional(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),
@@ -1481,6 +1482,7 @@ export const ListPlaidItemsResponseItem = zod.object({
   institutionSlug: zod.string(),
   lastSyncedAt: zod.string().nullish(),
   lastSyncError: zod.string().nullish(),
+  stillPreparing: zod.boolean().optional(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),

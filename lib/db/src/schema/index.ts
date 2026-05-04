@@ -218,6 +218,12 @@ export const plaidItemsTable = pgTable(
     cursor: text("cursor"),
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
     lastSyncError: text("last_sync_error"),
+    // Set whenever a Plaid call returns PRODUCT_NOT_READY (the bank is still
+    // staging the historical batch for a freshly linked item) and cleared on
+    // the next successful sync. Lets the Settings page show a per-item
+    // "Still preparing" badge so the user knows which institution is in the
+    // transient warm-up window vs. genuinely healthy.
+    stillPreparingSince: timestamp("still_preparing_since", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({

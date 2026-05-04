@@ -1918,6 +1918,23 @@ export declare const plaidItemsTable: import("drizzle-orm/pg-core").PgTableWithC
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        stillPreparingSince: import("drizzle-orm/pg-core").PgColumn<{
+            name: "still_preparing_since";
+            tableName: "plaid_items";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
             tableName: "plaid_items";

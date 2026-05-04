@@ -4059,6 +4059,7 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     institutionSlug: zod.ZodString;
     lastSyncedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastSyncError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    stillPreparing: zod.ZodOptional<zod.ZodBoolean>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -4101,6 +4102,7 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     institutionId?: string | null | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
+    stillPreparing?: boolean | undefined;
 }, {
     id: string;
     institutionSlug: string;
@@ -4118,6 +4120,7 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     institutionId?: string | null | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
+    stillPreparing?: boolean | undefined;
 }>;
 export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     id: zod.ZodString;
@@ -4127,6 +4130,7 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     institutionSlug: zod.ZodString;
     lastSyncedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastSyncError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    stillPreparing: zod.ZodOptional<zod.ZodBoolean>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -4169,6 +4173,7 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     institutionId?: string | null | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
+    stillPreparing?: boolean | undefined;
 }, {
     id: string;
     institutionSlug: string;
@@ -4186,6 +4191,7 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     institutionId?: string | null | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
+    stillPreparing?: boolean | undefined;
 }>;
 export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -4195,6 +4201,7 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     institutionSlug: zod.ZodString;
     lastSyncedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     lastSyncError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    stillPreparing: zod.ZodOptional<zod.ZodBoolean>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -4237,6 +4244,7 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     institutionId?: string | null | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
+    stillPreparing?: boolean | undefined;
 }, {
     id: string;
     institutionSlug: string;
@@ -4254,6 +4262,7 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     institutionId?: string | null | undefined;
     lastSyncedAt?: string | null | undefined;
     lastSyncError?: string | null | undefined;
+    stillPreparing?: boolean | undefined;
 }>, "many">;
 export declare const DeletePlaidItemParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -4286,8 +4295,8 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         removed: number;
         autoCategorized: number;
         institutionName?: string | null | undefined;
-        error?: string | null | undefined;
         stillPreparing?: boolean | undefined;
+        error?: string | null | undefined;
     }, {
         itemId: string;
         added: number;
@@ -4295,8 +4304,8 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         removed: number;
         autoCategorized: number;
         institutionName?: string | null | undefined;
-        error?: string | null | undefined;
         stillPreparing?: boolean | undefined;
+        error?: string | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     items: {
@@ -4306,8 +4315,8 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         removed: number;
         autoCategorized: number;
         institutionName?: string | null | undefined;
-        error?: string | null | undefined;
         stillPreparing?: boolean | undefined;
+        error?: string | null | undefined;
     }[];
 }, {
     items: {
@@ -4317,8 +4326,8 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         removed: number;
         autoCategorized: number;
         institutionName?: string | null | undefined;
-        error?: string | null | undefined;
         stillPreparing?: boolean | undefined;
+        error?: string | null | undefined;
     }[];
 }>;
 export declare const GetPlaidEnvironmentResponse: zod.ZodObject<{

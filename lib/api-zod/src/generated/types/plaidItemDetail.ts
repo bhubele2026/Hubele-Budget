@@ -19,5 +19,6 @@ export interface PlaidItemDetail {
   lastSyncedAt?: string | null;
   /** @nullable */
   lastSyncError?: string | null;
+  stillPreparing?: boolean;
   accounts: PlaidAccount[];
 }

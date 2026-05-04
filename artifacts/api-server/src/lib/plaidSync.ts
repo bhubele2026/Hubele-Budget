@@ -348,6 +348,10 @@ export async function syncPlaidItem(
         cursor,
         lastSyncedAt: new Date(),
         lastSyncError: null,
+        // The bank successfully returned a /transactions/sync result, so
+        // it is no longer "still preparing". Clear the badge so Settings
+        // shows this item as healthy again on the next list refresh.
+        stillPreparingSince: null,
       })
       .where(eq(plaidItemsTable.id, itemRowId));
 
@@ -424,6 +428,14 @@ export async function syncPlaidItem(
     // don't surface a destructive `error` to the client; instead flag it as
     // "still preparing" so the UI can render an encouraging neutral toast.
     if (code === "PRODUCT_NOT_READY") {
+      // Stamp a "still preparing since" timestamp so the Settings page can
+      // surface a per-item badge until the next successful sync clears it.
+      // We deliberately do NOT touch lastSyncError — PRODUCT_NOT_READY is
+      // transient and would clobber a real, actionable error from a prior run.
+      await db
+        .update(plaidItemsTable)
+        .set({ stillPreparingSince: new Date() })
+        .where(eq(plaidItemsTable.id, itemRowId));
       return {
         itemId: item.itemId,
         institutionName: item.institutionName,

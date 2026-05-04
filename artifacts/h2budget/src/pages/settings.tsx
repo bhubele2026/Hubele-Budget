@@ -13,7 +13,7 @@ import {
   useListCategories,
   getListPlaidItemsQueryKey,
 } from "@workspace/api-client-react";
-import { usePlaidSync } from "@/hooks/use-plaid-sync";
+import { usePlaidSync, formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,13 +59,20 @@ export default function SettingsPage() {
   const { data: plaidItems } = useListPlaidItems();
   const deletePlaidItem = useDeletePlaidItem();
   const { runSync, isPending: isSyncPending } = usePlaidSync();
+  // Track which row's per-item Sync button was just clicked so only THAT
+  // row's spinner spins (the underlying mutation is global, so without this
+  // every row would animate at once).
+  const [syncingItemId, setSyncingItemId] = useState<string | null>(null);
   const { data: plaidEnv } = useGetPlaidEnvironment();
   const cleanupNonProd = useCleanupNonProdPlaidItems();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const handleSync = (itemId?: string) => {
-    void runSync(itemId ? { itemId } : {});
+    if (itemId) setSyncingItemId(itemId);
+    void runSync(itemId ? { itemId } : {}).finally(() => {
+      if (itemId) setSyncingItemId((curr) => (curr === itemId ? null : curr));
+    });
   };
 
   const handleUnlink = (id: string, name: string | null | undefined) => {
@@ -395,7 +402,8 @@ export default function SettingsPage() {
             </p>
           )}
           {(plaidItems ?? []).map((item) => {
-            const isSyncing = isSyncPending;
+            const isSyncing = isSyncPending && syncingItemId === item.id;
+            const isAnySyncing = isSyncPending;
             return (
               <div
                 key={item.id}
@@ -406,14 +414,30 @@ export default function SettingsPage() {
                   <div className="flex items-start gap-3">
                     <Building2 className="w-5 h-5 mt-0.5 text-muted-foreground" />
                     <div>
-                      <div className="font-medium">{item.institutionName || "Linked institution"}</div>
+                      <div className="font-medium flex items-center gap-2 flex-wrap">
+                        <span>{item.institutionName || "Linked institution"}</span>
+                        {item.stillPreparing && (
+                          <span
+                            className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-700 dark:text-amber-400"
+                            data-testid={`badge-still-preparing-${item.id}`}
+                            title="Plaid is still staging the historical batch for this freshly linked bank — try Sync again in a minute."
+                          >
+                            Still preparing
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {item.lastSyncedAt
                           ? `Last synced ${new Date(item.lastSyncedAt).toLocaleString()}`
                           : "Not yet synced"}
                       </div>
                       {item.lastSyncError && (
-                        <div className="text-xs text-destructive mt-1">{item.lastSyncError}</div>
+                        <div
+                          className="text-xs text-destructive mt-1"
+                          data-testid={`text-last-sync-error-${item.id}`}
+                        >
+                          {formatPlaidErrorForDisplay(item.lastSyncError)}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -422,7 +446,7 @@ export default function SettingsPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => handleSync(item.id)}
-                      disabled={isSyncing}
+                      disabled={isAnySyncing}
                       data-testid={`button-sync-${item.id}`}
                     >
                       <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isSyncing ? "animate-spin" : ""}`} />

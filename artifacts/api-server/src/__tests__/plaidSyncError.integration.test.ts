@@ -237,12 +237,18 @@ describe("/plaid/sync error unwrapping", () => {
     expect(result.modified).toBe(0);
 
     const [row] = await db
-      .select({ lastSyncError: plaidItemsTable.lastSyncError })
+      .select({
+        lastSyncError: plaidItemsTable.lastSyncError,
+        stillPreparingSince: plaidItemsTable.stillPreparingSince,
+      })
       .from(plaidItemsTable)
       .where(eq(plaidItemsTable.id, itemRowId));
     // The previous lastSyncError must NOT be overwritten by a transient
     // PRODUCT_NOT_READY response — that's the whole point of the branch.
     expect(row?.lastSyncError).toBe(previousError);
+    // But we DO want to remember the still-preparing state so the Settings
+    // page can render a per-item badge until the next successful sync.
+    expect(row?.stillPreparingSince).toBeInstanceOf(Date);
   });
 
   it("clears lastSyncError back to null on a healthy sync (regression check)", async () => {
@@ -269,5 +275,57 @@ describe("/plaid/sync error unwrapping", () => {
       .from(plaidItemsTable)
       .where(eq(plaidItemsTable.id, itemRowId));
     expect(row?.lastSyncError).toBeNull();
+  });
+
+  it("clears stillPreparingSince on a healthy sync so the Settings badge goes away", async () => {
+    // Seed the item already flagged as still-preparing (i.e. a previous
+    // sync hit PRODUCT_NOT_READY). The next successful sync MUST drop the
+    // flag so the per-item badge disappears.
+    const { itemRowId } = await seedItem();
+    await db
+      .update(plaidItemsTable)
+      .set({ stillPreparingSince: new Date() })
+      .where(eq(plaidItemsTable.id, itemRowId));
+
+    transactionsSyncMock = async () => ({
+      data: {
+        added: [],
+        modified: [],
+        removed: [],
+        next_cursor: "ok-cursor",
+        has_more: false,
+      },
+    });
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId);
+    expect(result.error).toBeNull();
+    expect(result.stillPreparing).toBeFalsy();
+
+    const [row] = await db
+      .select({ stillPreparingSince: plaidItemsTable.stillPreparingSince })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    expect(row?.stillPreparingSince).toBeNull();
+  });
+
+  it("GET /plaid/items exposes a per-item stillPreparing flag", async () => {
+    // Two items: one healthy, one currently flagged still-preparing. The
+    // Settings page reads this list to render the per-item status row.
+    const { itemRowId: healthyId } = await seedItem();
+    const { itemRowId: preparingId } = await seedItem();
+    await db
+      .update(plaidItemsTable)
+      .set({ stillPreparingSince: new Date() })
+      .where(eq(plaidItemsTable.id, preparingId));
+
+    const res = await fetch(`${baseUrl}/plaid/items`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      id: string;
+      stillPreparing: boolean;
+    }>;
+    const byId = new Map(body.map((b) => [b.id, b]));
+    expect(byId.get(healthyId)?.stillPreparing).toBe(false);
+    expect(byId.get(preparingId)?.stillPreparing).toBe(true);
   });
 });

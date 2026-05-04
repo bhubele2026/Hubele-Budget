@@ -2113,6 +2113,12 @@ components:
         institutionSlug: { type: string }
         lastSyncedAt: { type: ["string", "null"] }
         lastSyncError: { type: ["string", "null"] }
+        # True when Plaid most recently returned PRODUCT_NOT_READY for this
+        # item — the bank is still staging its historical batch. The Settings
+        # page renders a neutral "Still preparing" badge so the user can tell
+        # which institution is in the warm-up window vs. genuinely healthy.
+        # Cleared on the next successful sync.
+        stillPreparing: { type: boolean }
         accounts:
           type: array
           items: { $ref: "#/components/schemas/PlaidAccount" }
