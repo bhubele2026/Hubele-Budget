@@ -121,7 +121,25 @@ vi.mock("@workspace/api-client-react", () => ({
     reset: vi.fn(),
     isPending: false,
   }),
+  // mapping-rules.tsx also imports these hooks at module load time. The
+  // restore-path test doesn't actually exercise them, but they must
+  // exist on the mocked module or the page renders to a TypeError when
+  // it calls undefined as a hook.
+  usePreviewMappingRuleRecategorize: () => ({
+    mutate: vi.fn(),
+    data: undefined,
+    reset: vi.fn(),
+    isPending: false,
+  }),
+  useRecategorizeTransactionsByPattern: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
   getListMappingRulesQueryKey: () => ["/api/mapping-rules"],
+  getListTransactionsQueryKey: () => ["/api/transactions"],
+  getGetBudgetMonthQueryKey: (m: string) => ["/api/budget-month", m],
+  createMappingRule: vi.fn(),
+  deleteMappingRule: vi.fn(),
 }));
 
 import MappingRulesPage from "./mapping-rules";
