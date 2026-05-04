@@ -16,6 +16,7 @@ import {
   getGetBudgetMonthQueryKey,
   type Transaction,
   type RepointedRule,
+  type MappingRule,
 } from "@workspace/api-client-react";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import {
@@ -112,12 +113,44 @@ const formSchema = z.object({
   description: z.string().min(1, "Description is required"),
   amount: z.string().min(1, "Amount is required"),
   kind: z.enum(["expense", "income"]).default("expense"),
+  categoryId: z.string().nullable().optional(),
   weeklyAllowance: z.boolean().default(false),
   monthlyAllowance: z.boolean().default(false),
   unplannedAllowance: z.boolean().default(false),
   reimbursable: z.boolean().default(false),
   reimbursed: z.boolean().default(false),
 });
+
+/**
+ * Mirrors the server-side `matchRule` (autoCategorize.ts) for the
+ * Add-Transaction dialog's live "as you type" auto-pick. Walks the user's
+ * mapping rules in priority-descending order and returns the rule whose
+ * pattern matches the description (only rules with a non-null categoryId
+ * count, matching server semantics). Returns null when nothing fires.
+ *
+ * Kept inline rather than imported from `@workspace/api-server` because
+ * the client artifact doesn't depend on the api-server package and the
+ * pure matching logic is small enough to duplicate.
+ */
+function matchRuleClient(
+  description: string,
+  rules: readonly MappingRule[] | undefined,
+): MappingRule | null {
+  if (!description || !rules?.length) return null;
+  const hay = description.toLowerCase();
+  const sorted = [...rules].sort((a, b) => b.priority - a.priority);
+  for (const r of sorted) {
+    if (!r.categoryId) continue;
+    const needle = r.pattern.toLowerCase();
+    if (!needle) continue;
+    let hit = false;
+    if (r.matchType === "exact") hit = hay === needle;
+    else if (r.matchType === "starts_with") hit = hay.startsWith(needle);
+    else hit = hay.includes(needle);
+    if (hit) return r;
+  }
+  return null;
+}
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -415,6 +448,7 @@ export default function TransactionsPage() {
       description: "",
       amount: "",
       kind: "expense",
+      categoryId: null,
       weeklyAllowance: false,
       monthlyAllowance: false,
       unplannedAllowance: false,
@@ -423,13 +457,22 @@ export default function TransactionsPage() {
     },
   });
 
+  // Tracks whether the user has manually picked a category in the
+  // Add-Transaction dialog. Once true, the live "as you type" auto-pick
+  // (the description -> matching rule effect) stops overwriting their
+  // pick — including the empty/cleared state. Reset whenever the dialog
+  // is reopened so the next entry starts fresh.
+  const categoryManuallyPickedRef = useRef(false);
+
   const handleOpenNew = () => {
     setEditingTx(null);
+    categoryManuallyPickedRef.current = false;
     form.reset({
       occurredOn: new Date().toISOString().split("T")[0],
       description: "",
       amount: "",
       kind: "expense",
+      categoryId: null,
       weeklyAllowance: false,
       monthlyAllowance: false,
       unplannedAllowance: false,
@@ -441,12 +484,18 @@ export default function TransactionsPage() {
 
   const handleOpenEdit = (tx: Transaction) => {
     setEditingTx(tx);
+    // Edit dialog doesn't expose the Category field (the category is set
+    // by the row's own quick-categorize chip / Mapping Rules), so the
+    // auto-pick effect short-circuits on `editingTx`. Pre-fill the form
+    // value anyway so the field stays consistent if it's later surfaced.
+    categoryManuallyPickedRef.current = true;
     const numeric = parseFloat(tx.amount);
     form.reset({
       occurredOn: tx.occurredOn.split("T")[0],
       description: tx.description,
       amount: Math.abs(numeric).toFixed(2),
       kind: numeric >= 0 ? "income" : "expense",
+      categoryId: tx.categoryId ?? null,
       weeklyAllowance: tx.weeklyAllowance,
       monthlyAllowance: tx.monthlyAllowance,
       unplannedAllowance: tx.unplannedAllowance,
@@ -456,12 +505,43 @@ export default function TransactionsPage() {
     setIsDialogOpen(true);
   };
 
+  // Live "as you type" auto-pick for the new-transaction dialog: re-run
+  // the same priority-ordered matchRule the server uses (Tasks #207 /
+  // #218) every time the description changes, and keep the Category
+  // combobox in sync until the user manually picks something. Mirrors
+  // POST /transactions's auto-categorize semantics so the preview the
+  // user sees in the dialog matches what the server would have picked
+  // on submit.
+  const watchedDescription = form.watch("description");
+  const dialogAutoMatchedRule = useMemo(
+    () => (isDialogOpen && !editingTx ? matchRuleClient(watchedDescription ?? "", mappingRules) : null),
+    [isDialogOpen, editingTx, watchedDescription, mappingRules],
+  );
+  useEffect(() => {
+    if (!isDialogOpen || editingTx) return;
+    if (categoryManuallyPickedRef.current) return;
+    const next = dialogAutoMatchedRule?.categoryId ?? null;
+    const current = form.getValues("categoryId") ?? null;
+    if (next !== current) {
+      form.setValue("categoryId", next, { shouldDirty: false });
+    }
+  }, [isDialogOpen, editingTx, dialogAutoMatchedRule, form]);
+
   const onSubmit = (values: FormValues) => {
-    const { kind, ...rest } = values;
-    const payload = { ...rest, amount: normalizeAmount(values.amount, kind) };
+    const { kind, categoryId, ...rest } = values;
+    const basePayload = { ...rest, amount: normalizeAmount(values.amount, kind) };
     if (editingTx) {
+      // Edit dialog doesn't expose the Category field today (the row's
+      // own quick-categorize chip handles that). Only forward the
+      // pre-filled categoryId when it actually changed, to avoid
+      // tripping PATCH /transactions's mapping-rule-repoint side effect
+      // on no-op edits.
+      const editPayload =
+        (categoryId ?? null) !== (editingTx.categoryId ?? null)
+          ? { ...basePayload, categoryId: categoryId ?? null }
+          : basePayload;
       updateTx.mutate(
-        { id: editingTx.id, data: payload },
+        { id: editingTx.id, data: editPayload },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
@@ -471,6 +551,15 @@ export default function TransactionsPage() {
         },
       );
     } else {
+      // New transactions always include `categoryId` in the POST body so
+      // the server respects an explicit pick from the dialog combobox
+      // (including a deliberate "leave uncategorized" null). The
+      // server's auto-categorize fallback only fires when the body
+      // omits the key — so a user-confirmed pick (even if it matches
+      // what auto-categorize would have chosen) bypasses that fallback
+      // and keeps `autoCategorizedRuleId` null in the response, which
+      // suppresses the redundant "Categorized by rule X" toast.
+      const payload = { ...basePayload, categoryId: categoryId ?? null };
       createTx.mutate(
         { data: payload },
         {
@@ -1092,6 +1181,30 @@ export default function TransactionsPage() {
               <FormField control={form.control} name="description" render={({ field }) => (
                 <FormItem><FormLabel>Description</FormLabel><FormControl><Input placeholder="Trader Joe's" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
+              {!editingTx && (
+                <FormField
+                  control={form.control}
+                  name="categoryId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <FormControl>
+                        <NewTransactionCategoryPicker
+                          value={field.value ?? null}
+                          onChange={(next) => {
+                            categoryManuallyPickedRef.current = true;
+                            field.onChange(next);
+                          }}
+                          categories={categories ?? []}
+                          autoMatchedRule={dialogAutoMatchedRule}
+                          mappingRules={mappingRules}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               <div className="grid grid-cols-3 gap-3">
                 <FormField control={form.control} name="kind" render={({ field }) => (
                   <FormItem className="col-span-1"><FormLabel>Kind</FormLabel>
@@ -1546,5 +1659,111 @@ function CategorizeChip({
         </Command>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * Category combobox surfaced inside the Add-Transaction dialog (Task #230).
+ * Shows the live auto-pick under the trigger as a `MatchedRuleChip` so the
+ * user can see *why* a category was suggested (and click straight to the
+ * Mapping Rules page to inspect the rule). Picking from the list flips the
+ * parent's "manually picked" flag so subsequent description edits stop
+ * overwriting the explicit choice. A "Clear" affordance lets the user
+ * deliberately submit the row uncategorized — POST /transactions treats an
+ * explicit `categoryId: null` as authoritative and skips the auto-pick.
+ */
+function NewTransactionCategoryPicker({
+  value,
+  onChange,
+  categories,
+  autoMatchedRule,
+  mappingRules,
+}: {
+  value: string | null;
+  onChange: (next: string | null) => void;
+  categories: { id: string; name: string }[];
+  autoMatchedRule: MappingRule | null;
+  mappingRules: readonly MappingRule[] | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = useMemo(
+    () => categories.find((c) => c.id === value) ?? null,
+    [categories, value],
+  );
+  // Surface the chip whenever the live auto-pick attributes the current
+  // value to a rule — same semantics as the Transactions / Amex row chip.
+  const matchedRuleId =
+    autoMatchedRule && autoMatchedRule.categoryId === value
+      ? autoMatchedRule.id
+      : null;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-expanded={open}
+              className="flex-1 justify-between font-normal"
+              data-testid="combobox-new-tx-category"
+            >
+              {selected ? (
+                <span className="truncate">{selected.name}</span>
+              ) : (
+                <span className="text-muted-foreground">Uncategorized</span>
+              )}
+              <Wand2 className="w-3.5 h-3.5 ml-2 shrink-0 text-muted-foreground" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Search category…" />
+              <CommandList>
+                <CommandEmpty>No category</CommandEmpty>
+                <CommandGroup>
+                  {categories.map((c) => (
+                    <CommandItem
+                      key={c.id}
+                      value={c.name}
+                      onSelect={() => {
+                        onChange(c.id);
+                        setOpen(false);
+                      }}
+                      data-testid={`option-new-tx-category-${c.id}`}
+                    >
+                      {c.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+        {value && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9 px-2 text-xs text-muted-foreground"
+            onClick={() => onChange(null)}
+            data-testid="button-new-tx-category-clear"
+            title="Leave uncategorized"
+          >
+            Clear
+          </Button>
+        )}
+      </div>
+      <div className="min-h-[18px]">
+        <MatchedRuleChip
+          categoryId={value}
+          matchedRuleId={matchedRuleId}
+          rules={mappingRules}
+          testIdSuffix="new-tx-dialog"
+          variant="compact"
+        />
+      </div>
+    </div>
   );
 }
