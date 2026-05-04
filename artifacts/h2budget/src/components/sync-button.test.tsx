@@ -8,6 +8,7 @@ type Item = {
   institutionName: string | null;
   lastSyncedAt: string | null;
   lastSyncError: string | null;
+  lastSyncErrorCode?: string | null;
 };
 
 let plaidItems: Item[] | undefined = [];
@@ -43,6 +44,18 @@ vi.mock("@workspace/api-client-react", () => ({
   useSyncPlaidTransactions: () => ({ mutate: mutateMock, isPending: false }),
   getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
   getListTransactionsQueryKey: () => ["/api/transactions"],
+  // Stub the update-link-token mutation used by PlaidReconnectButton so we
+  // don't need to mount real react-plaid-link in these unit tests.
+  useCreatePlaidUpdateLinkToken: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+}));
+
+// Stub react-plaid-link so PlaidReconnectButton can render without trying to
+// load the real Plaid Link script.
+vi.mock("react-plaid-link", () => ({
+  usePlaidLink: () => ({ open: vi.fn(), ready: false }),
 }));
 
 import { SyncButton } from "./sync-button";
@@ -201,6 +214,68 @@ describe("SyncButton", () => {
         }),
       );
     });
+  });
+
+  it("shows a Reconnect button next to the chip when an item has lastSyncErrorCode === 'ITEM_LOGIN_REQUIRED'", () => {
+    plaidItems = [
+      {
+        id: "i-bad",
+        institutionName: "Chase",
+        lastSyncedAt: new Date().toISOString(),
+        lastSyncError: "the login details of this item have changed",
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+      },
+    ];
+    renderButton();
+    // Reconnect button is keyed off the item id so multi-bank users get the
+    // right link_token. It must render alongside the existing Sync button.
+    expect(screen.getByTestId("button-plaid-reconnect-i-bad")).toBeTruthy();
+    expect(screen.getByTestId("button-sync-plaid")).toBeTruthy();
+    expect(screen.getByTestId("text-sync-error")).toBeTruthy();
+  });
+
+  it("shows a Reconnect button for PENDING_EXPIRATION too (other re-auth code)", () => {
+    plaidItems = [
+      {
+        id: "i-pending",
+        institutionName: "Wells Fargo",
+        lastSyncedAt: new Date().toISOString(),
+        lastSyncError: "your bank requires re-auth before access expires",
+        lastSyncErrorCode: "PENDING_EXPIRATION",
+      },
+    ];
+    renderButton();
+    expect(screen.getByTestId("button-plaid-reconnect-i-pending")).toBeTruthy();
+  });
+
+  it("does NOT show a Reconnect button for non-reauth errors (e.g. RATE_LIMIT_EXCEEDED)", () => {
+    plaidItems = [
+      {
+        id: "i-rate",
+        institutionName: "Chase",
+        lastSyncedAt: new Date().toISOString(),
+        lastSyncError: "rate limit exceeded",
+        lastSyncErrorCode: "RATE_LIMIT_EXCEEDED",
+      },
+    ];
+    renderButton();
+    // The chip still shows, but no Reconnect — re-auth wouldn't fix this.
+    expect(screen.queryByTestId("button-plaid-reconnect-i-rate")).toBeNull();
+    expect(screen.getByTestId("text-sync-error")).toBeTruthy();
+  });
+
+  it("does NOT show a Reconnect button when an item is healthy (no error code)", () => {
+    plaidItems = [
+      {
+        id: "i-ok",
+        institutionName: "Chase",
+        lastSyncedAt: new Date().toISOString(),
+        lastSyncError: null,
+        lastSyncErrorCode: null,
+      },
+    ];
+    renderButton();
+    expect(screen.queryByTestId("button-plaid-reconnect-i-ok")).toBeNull();
   });
 
   it("shows a neutral 'Still preparing' toast (NOT destructive) when the per-item stillPreparing flag is set", async () => {

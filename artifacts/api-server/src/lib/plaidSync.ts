@@ -348,6 +348,7 @@ export async function syncPlaidItem(
         cursor,
         lastSyncedAt: new Date(),
         lastSyncError: null,
+        lastSyncErrorCode: null,
         // The bank successfully returned a /transactions/sync result, so
         // it is no longer "still preparing". Clear the badge so Settings
         // shows this item as healthy again on the next list refresh.
@@ -370,6 +371,7 @@ export async function syncPlaidItem(
     // Auto-refresh bank snapshot balance if a Plaid checking account is
     // configured (#45). Keeps the forecast anchor fresh on every sync.
     let balanceRefreshError: string | null = null;
+    let balanceRefreshErrorCode: string | null = null;
     if (checkingPlaidAccountId && forecastSettings?.bankSnapshotAccountId) {
       try {
         const resp = await plaid().accountsBalanceGet({
@@ -400,6 +402,7 @@ export async function syncPlaidItem(
         // hard error chip.
         if (code !== "PRODUCT_NOT_READY") {
           balanceRefreshError = `Balance refresh failed: ${message}`;
+          balanceRefreshErrorCode = code;
         }
       }
     }
@@ -407,7 +410,10 @@ export async function syncPlaidItem(
     if (balanceRefreshError) {
       await db
         .update(plaidItemsTable)
-        .set({ lastSyncError: balanceRefreshError })
+        .set({
+          lastSyncError: balanceRefreshError,
+          lastSyncErrorCode: balanceRefreshErrorCode,
+        })
         .where(eq(plaidItemsTable.id, itemRowId));
     }
 
@@ -449,7 +455,7 @@ export async function syncPlaidItem(
     }
     await db
       .update(plaidItemsTable)
-      .set({ lastSyncError: message })
+      .set({ lastSyncError: message, lastSyncErrorCode: code })
       .where(eq(plaidItemsTable.id, itemRowId));
     return {
       itemId: item.itemId,

@@ -106,6 +106,7 @@ export * from "./plaidLinkToken";
 export * from "./plaidSyncInput";
 export * from "./plaidSyncResult";
 export * from "./plaidSyncResultItemsItem";
+export * from "./plaidUpdateLinkTokenInput";
 export * from "./recategorizeByPatternInput";
 export * from "./recategorizeByPatternInputMatchType";
 export * from "./recategorizeByPatternResult";

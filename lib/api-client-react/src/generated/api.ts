@@ -74,6 +74,7 @@ import type {
   PlaidLinkToken,
   PlaidSyncInput,
   PlaidSyncResult,
+  PlaidUpdateLinkTokenInput,
   RecategorizeByPatternInput,
   RecategorizeByPatternResult,
   RecurringItem,
@@ -4511,6 +4512,99 @@ export const useCreatePlaidLinkToken = <
   TContext
 > => {
   return useMutation(getCreatePlaidLinkTokenMutationOptions(options));
+};
+
+/**
+ * @summary Create a Plaid Link token in update mode for an existing item, so the
+user can re-authenticate the bank when Plaid reports
+ITEM_LOGIN_REQUIRED (or another re-auth code).
+
+ */
+export const getCreatePlaidUpdateLinkTokenUrl = () => {
+  return `/api/plaid/link-token/update`;
+};
+
+export const createPlaidUpdateLinkToken = async (
+  plaidUpdateLinkTokenInput: PlaidUpdateLinkTokenInput,
+  options?: RequestInit,
+): Promise<PlaidLinkToken> => {
+  return customFetch<PlaidLinkToken>(getCreatePlaidUpdateLinkTokenUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(plaidUpdateLinkTokenInput),
+  });
+};
+
+export const getCreatePlaidUpdateLinkTokenMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPlaidUpdateLinkToken>>,
+    TError,
+    { data: BodyType<PlaidUpdateLinkTokenInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPlaidUpdateLinkToken>>,
+  TError,
+  { data: BodyType<PlaidUpdateLinkTokenInput> },
+  TContext
+> => {
+  const mutationKey = ["createPlaidUpdateLinkToken"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPlaidUpdateLinkToken>>,
+    { data: BodyType<PlaidUpdateLinkTokenInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createPlaidUpdateLinkToken(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePlaidUpdateLinkTokenMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPlaidUpdateLinkToken>>
+>;
+export type CreatePlaidUpdateLinkTokenMutationBody =
+  BodyType<PlaidUpdateLinkTokenInput>;
+export type CreatePlaidUpdateLinkTokenMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a Plaid Link token in update mode for an existing item, so the
+user can re-authenticate the bank when Plaid reports
+ITEM_LOGIN_REQUIRED (or another re-auth code).
+
+ */
+export const useCreatePlaidUpdateLinkToken = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPlaidUpdateLinkToken>>,
+    TError,
+    { data: BodyType<PlaidUpdateLinkTokenInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPlaidUpdateLinkToken>>,
+  TError,
+  { data: BodyType<PlaidUpdateLinkTokenInput> },
+  TContext
+> => {
+  return useMutation(getCreatePlaidUpdateLinkTokenMutationOptions(options));
 };
 
 export const getExchangePlaidPublicTokenUrl = () => {

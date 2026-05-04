@@ -878,6 +878,25 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PlaidLinkToken" }
+  /plaid/link-token/update:
+    post:
+      operationId: createPlaidUpdateLinkToken
+      tags: [plaid]
+      summary: |
+        Create a Plaid Link token in update mode for an existing item, so the
+        user can re-authenticate the bank when Plaid reports
+        ITEM_LOGIN_REQUIRED (or another re-auth code).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlaidUpdateLinkTokenInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlaidLinkToken" }
   /plaid/exchange:
     post:
       operationId: exchangePlaidPublicToken
@@ -2132,6 +2151,16 @@ components:
       properties:
         linkToken: { type: string }
         expiration: { type: string }
+    PlaidUpdateLinkTokenInput:
+      type: object
+      required: [itemId]
+      properties:
+        itemId:
+          type: string
+          description: |
+            Internal Plaid item row id (UUID) of the item that needs
+            re-authentication. Used to look up the stored access_token and
+            create a Plaid Link token in update mode.
     PlaidExchangeInput:
       type: object
       required: [publicToken]
@@ -2161,6 +2190,15 @@ components:
         institutionSlug: { type: string }
         lastSyncedAt: { type: ["string", "null"] }
         lastSyncError: { type: ["string", "null"] }
+        lastSyncErrorCode:
+          type: ["string", "null"]
+          description: |
+            Plaid's structured `error_code` from the most recent failed
+            sync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,
+            PENDING_EXPIRATION). Null when sync is healthy or when the
+            previous failure had no structured code. Used by the UI to
+            decide when to surface the "Reconnect" button next to the
+            sync chip.
         # True when Plaid most recently returned PRODUCT_NOT_READY for this
         # item — the bank is still staging its historical batch. The Settings
         # page renders a neutral "Still preparing" badge so the user can tell

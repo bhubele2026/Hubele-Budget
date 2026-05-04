@@ -4,6 +4,10 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, AlertTriangle } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { usePlaidSync, formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
+import {
+  PlaidReconnectButton,
+  isPlaidReauthCode,
+} from "@/components/plaid-reconnect-button";
 
 export function SyncButton({
   size = "sm",
@@ -15,14 +19,26 @@ export function SyncButton({
   const { data: plaidItems } = useListPlaidItems();
   const { runSync, isPending } = usePlaidSync();
 
-  const { mostRecent, hasItems, latestError } = useMemo(() => {
+  const { mostRecent, hasItems, latestError, reauthItem } = useMemo(() => {
     const items = plaidItems ?? [];
     if (items.length === 0) {
-      return { mostRecent: null as Date | null, hasItems: false, latestError: null as string | null };
+      return {
+        mostRecent: null as Date | null,
+        hasItems: false,
+        latestError: null as string | null,
+        reauthItem: null as
+          | { id: string; institutionName: string | null }
+          | null,
+      };
     }
     let recent: Date | null = null;
     let recentForError: Date | null = null;
     let latest: string | null = null;
+    // Pick the first item that needs re-authentication so we can render a
+    // single Reconnect button next to the chip. (Multi-item users with two
+    // simultaneously-broken banks are extremely rare; one button is fine
+    // and the second will surface on the next sync after the first is fixed.)
+    let reauth: { id: string; institutionName: string | null } | null = null;
     for (const it of items) {
       if (it.lastSyncedAt) {
         const d = new Date(it.lastSyncedAt);
@@ -36,8 +52,11 @@ export function SyncButton({
           if (stamp) recentForError = stamp;
         }
       }
+      if (!reauth && isPlaidReauthCode(it.lastSyncErrorCode)) {
+        reauth = { id: it.id, institutionName: it.institutionName ?? null };
+      }
     }
-    return { mostRecent: recent, hasItems: true, latestError: latest };
+    return { mostRecent: recent, hasItems: true, latestError: latest, reauthItem: reauth };
   }, [plaidItems]);
 
   if (!hasItems) return null;
@@ -53,20 +72,29 @@ export function SyncButton({
 
   return (
     <div className="flex flex-col items-end leading-tight">
-      <Button
-        type="button"
-        variant={variant}
-        size={size}
-        onClick={() => {
-          void runSync();
-        }}
-        disabled={isPending}
-        title={displayError ?? relative}
-        data-testid="button-sync-plaid"
-      >
-        <RefreshCw className={`w-4 h-4 mr-1.5 ${isPending ? "animate-spin" : ""}`} />
-        {isPending ? "Syncing…" : "Sync"}
-      </Button>
+      <div className="flex items-center gap-1.5">
+        {reauthItem ? (
+          <PlaidReconnectButton
+            itemId={reauthItem.id}
+            institutionName={reauthItem.institutionName}
+            size={size}
+          />
+        ) : null}
+        <Button
+          type="button"
+          variant={variant}
+          size={size}
+          onClick={() => {
+            void runSync();
+          }}
+          disabled={isPending}
+          title={displayError ?? relative}
+          data-testid="button-sync-plaid"
+        >
+          <RefreshCw className={`w-4 h-4 mr-1.5 ${isPending ? "animate-spin" : ""}`} />
+          {isPending ? "Syncing…" : "Sync"}
+        </Button>
+      </div>
       <span className="text-[10px] text-muted-foreground mt-1">{relative}</span>
       {displayError ? (
         <span

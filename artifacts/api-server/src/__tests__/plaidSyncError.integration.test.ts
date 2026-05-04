@@ -30,6 +30,13 @@ type AccountsBalanceGetFn = (args: {
   access_token: string;
   options?: { account_ids?: string[] };
 }) => Promise<unknown>;
+type LinkTokenCreateFn = (args: {
+  user: { client_user_id: string };
+  client_name: string;
+  access_token?: string;
+  country_codes: unknown;
+  language: string;
+}) => Promise<unknown>;
 
 let transactionsSyncMock: TxnsSyncFn = async () => ({
   data: { added: [], modified: [], removed: [], next_cursor: "", has_more: false },
@@ -37,6 +44,10 @@ let transactionsSyncMock: TxnsSyncFn = async () => ({
 let accountsBalanceGetMock: AccountsBalanceGetFn = async () => ({
   data: { accounts: [] },
 });
+let linkTokenCreateMock: LinkTokenCreateFn = async () => ({
+  data: { link_token: "link-sandbox-default", expiration: "2030-01-01T00:00:00Z" },
+});
+let lastLinkTokenCreateArgs: Parameters<LinkTokenCreateFn>[0] | null = null;
 
 vi.mock("../lib/plaid", async () => {
   const actual = await vi.importActual<typeof import("../lib/plaid")>(
@@ -49,6 +60,10 @@ vi.mock("../lib/plaid", async () => {
         transactionsSyncMock(args),
       accountsBalanceGet: (args: Parameters<AccountsBalanceGetFn>[0]) =>
         accountsBalanceGetMock(args),
+      linkTokenCreate: (args: Parameters<LinkTokenCreateFn>[0]) => {
+        lastLinkTokenCreateArgs = args;
+        return linkTokenCreateMock(args);
+      },
     }),
   };
 });
@@ -112,24 +127,32 @@ beforeEach(async () => {
     },
   });
   accountsBalanceGetMock = async () => ({ data: { accounts: [] } });
+  linkTokenCreateMock = async () => ({
+    data: { link_token: "link-sandbox-default", expiration: "2030-01-01T00:00:00Z" },
+  });
+  lastLinkTokenCreateArgs = null;
 });
 
 async function seedItem(opts?: {
   lastSyncError?: string | null;
-}): Promise<{ itemRowId: string; itemId: string }> {
+  lastSyncErrorCode?: string | null;
+  accessToken?: string;
+}): Promise<{ itemRowId: string; itemId: string; accessToken: string }> {
   const externalItemId = `item-${randomUUID()}`;
+  const accessToken = opts?.accessToken ?? `access-sandbox-${randomUUID()}`;
   const [item] = await db
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
       itemId: externalItemId,
-      accessToken: `access-sandbox-${randomUUID()}`,
+      accessToken,
       institutionName: "Chase",
       institutionSlug: "chase",
       lastSyncError: opts?.lastSyncError ?? null,
+      lastSyncErrorCode: opts?.lastSyncErrorCode ?? null,
     })
     .returning();
-  return { itemRowId: item!.id, itemId: externalItemId };
+  return { itemRowId: item!.id, itemId: externalItemId, accessToken };
 }
 
 describe("extractPlaidError helper", () => {
@@ -199,13 +222,20 @@ describe("/plaid/sync error unwrapping", () => {
     expect(body.items[0].stillPreparing).toBeFalsy();
 
     const [row] = await db
-      .select({ lastSyncError: plaidItemsTable.lastSyncError })
+      .select({
+        lastSyncError: plaidItemsTable.lastSyncError,
+        lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+      })
       .from(plaidItemsTable)
       .where(eq(plaidItemsTable.id, itemRowId));
     expect(row?.lastSyncError).toMatch(
       /login details of this item have changed/,
     );
     expect(row?.lastSyncError).not.toBe("Request failed with status code 400");
+    // (#43 follow-up) Persist Plaid's structured error_code so the UI can
+    // decide when to render the "Reconnect" button without string-matching
+    // the human-readable message.
+    expect(row?.lastSyncErrorCode).toBe("ITEM_LOGIN_REQUIRED");
   });
 
   it("treats PRODUCT_NOT_READY as transient: per-item stillPreparing=true, error=null, and lastSyncError is NOT overwritten", async () => {
@@ -239,6 +269,7 @@ describe("/plaid/sync error unwrapping", () => {
     const [row] = await db
       .select({
         lastSyncError: plaidItemsTable.lastSyncError,
+        lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
         stillPreparingSince: plaidItemsTable.stillPreparingSince,
       })
       .from(plaidItemsTable)
@@ -246,14 +277,18 @@ describe("/plaid/sync error unwrapping", () => {
     // The previous lastSyncError must NOT be overwritten by a transient
     // PRODUCT_NOT_READY response — that's the whole point of the branch.
     expect(row?.lastSyncError).toBe(previousError);
+    // Likewise, the (still-null) error code must remain untouched so the
+    // Reconnect-button decision stays driven by the previous real failure.
+    expect(row?.lastSyncErrorCode).toBeNull();
     // But we DO want to remember the still-preparing state so the Settings
     // page can render a per-item badge until the next successful sync.
     expect(row?.stillPreparingSince).toBeInstanceOf(Date);
   });
 
-  it("clears lastSyncError back to null on a healthy sync (regression check)", async () => {
+  it("clears lastSyncError + lastSyncErrorCode back to null on a healthy sync (regression check)", async () => {
     const { itemRowId } = await seedItem({
       lastSyncError: "stale error from a previous run",
+      lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
     });
 
     transactionsSyncMock = async () => ({
@@ -271,10 +306,99 @@ describe("/plaid/sync error unwrapping", () => {
     expect(result.stillPreparing).toBeFalsy();
 
     const [row] = await db
-      .select({ lastSyncError: plaidItemsTable.lastSyncError })
+      .select({
+        lastSyncError: plaidItemsTable.lastSyncError,
+        lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+      })
       .from(plaidItemsTable)
       .where(eq(plaidItemsTable.id, itemRowId));
     expect(row?.lastSyncError).toBeNull();
+    // The Reconnect button hides the moment the next sync goes through, so
+    // the code column MUST also be wiped — not just the message.
+    expect(row?.lastSyncErrorCode).toBeNull();
+  });
+});
+
+describe("/plaid/link-token/update (re-auth in update mode)", () => {
+  it("400s when itemId is missing", async () => {
+    const res = await fetch(`${baseUrl}/plaid/link-token/update`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("404s when the item doesn't belong to the caller (or doesn't exist)", async () => {
+    const res = await fetch(`${baseUrl}/plaid/link-token/update`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      // Random UUID — there's no row for this user.
+      body: JSON.stringify({ itemId: randomUUID() }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("creates a Plaid Link token in update mode using the item's stored access_token", async () => {
+    const { itemRowId, accessToken } = await seedItem({
+      lastSyncError: "the login details of this item have changed",
+      lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+    });
+    linkTokenCreateMock = async () => ({
+      data: {
+        link_token: "link-sandbox-update-mode-abc",
+        expiration: "2030-01-01T00:00:00Z",
+      },
+    });
+
+    const res = await fetch(`${baseUrl}/plaid/link-token/update`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ itemId: itemRowId }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { linkToken: string; expiration: string };
+    expect(body.linkToken).toBe("link-sandbox-update-mode-abc");
+
+    // The point of "update mode" is that we pass `access_token` to Plaid's
+    // /link/token/create — that's what tells Plaid Link to skip institution
+    // selection and re-auth this specific item. Without it, the user would
+    // get the normal "pick your bank" flow and end up with a duplicate item.
+    expect(lastLinkTokenCreateArgs).toBeTruthy();
+    expect(lastLinkTokenCreateArgs?.access_token).toBe(accessToken);
+    expect(lastLinkTokenCreateArgs?.user.client_user_id).toBe(TEST_USER);
+    // `products` MUST be omitted in update mode — passing it makes Plaid
+    // reject the request with INVALID_FIELD.
+    expect(
+      (lastLinkTokenCreateArgs as unknown as { products?: unknown }).products,
+    ).toBeUndefined();
+  });
+
+  it("surfaces Plaid's structured error_code/error_message when /link/token/create fails", async () => {
+    const { itemRowId } = await seedItem();
+    linkTokenCreateMock = async () => {
+      throw {
+        message: "Request failed with status code 400",
+        response: {
+          status: 400,
+          data: {
+            error_code: "INVALID_ACCESS_TOKEN",
+            error_message: "the access_token is no longer valid",
+            error_type: "INVALID_INPUT",
+          },
+        },
+      };
+    };
+
+    const res = await fetch(`${baseUrl}/plaid/link-token/update`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ itemId: itemRowId }),
+    });
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: string; code?: string };
+    expect(body.error).toMatch(/the access_token is no longer valid/);
+    expect(body.code).toBe("INVALID_ACCESS_TOKEN");
   });
 
   it("clears stillPreparingSince on a healthy sync so the Settings badge goes away", async () => {

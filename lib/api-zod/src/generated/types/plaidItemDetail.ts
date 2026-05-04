@@ -19,6 +19,17 @@ export interface PlaidItemDetail {
   lastSyncedAt?: string | null;
   /** @nullable */
   lastSyncError?: string | null;
+  /**
+   * Plaid's structured `error_code` from the most recent failed
+sync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,
+PENDING_EXPIRATION). Null when sync is healthy or when the
+previous failure had no structured code. Used by the UI to
+decide when to surface the "Reconnect" button next to the
+sync chip.
+
+   * @nullable
+   */
+  lastSyncErrorCode?: string | null;
   stillPreparing?: boolean;
   accounts: PlaidAccount[];
 }

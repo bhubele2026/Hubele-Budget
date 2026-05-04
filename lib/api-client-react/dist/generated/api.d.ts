@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UpdateTransactionResponse } from "./api.schemas";
+import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UpdateTransactionResponse } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -1165,6 +1165,39 @@ export declare const useCreatePlaidLinkToken: <TError = ErrorType<unknown>, TCon
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof createPlaidLinkToken>>, TError, void, TContext>;
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof createPlaidLinkToken>>, TError, void, TContext>;
+/**
+ * @summary Create a Plaid Link token in update mode for an existing item, so the
+user can re-authenticate the bank when Plaid reports
+ITEM_LOGIN_REQUIRED (or another re-auth code).
+
+ */
+export declare const getCreatePlaidUpdateLinkTokenUrl: () => string;
+export declare const createPlaidUpdateLinkToken: (plaidUpdateLinkTokenInput: PlaidUpdateLinkTokenInput, options?: RequestInit) => Promise<PlaidLinkToken>;
+export declare const getCreatePlaidUpdateLinkTokenMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof createPlaidUpdateLinkToken>>, TError, {
+        data: BodyType<PlaidUpdateLinkTokenInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof createPlaidUpdateLinkToken>>, TError, {
+    data: BodyType<PlaidUpdateLinkTokenInput>;
+}, TContext>;
+export type CreatePlaidUpdateLinkTokenMutationResult = NonNullable<Awaited<ReturnType<typeof createPlaidUpdateLinkToken>>>;
+export type CreatePlaidUpdateLinkTokenMutationBody = BodyType<PlaidUpdateLinkTokenInput>;
+export type CreatePlaidUpdateLinkTokenMutationError = ErrorType<unknown>;
+/**
+ * @summary Create a Plaid Link token in update mode for an existing item, so the
+user can re-authenticate the bank when Plaid reports
+ITEM_LOGIN_REQUIRED (or another re-auth code).
+
+ */
+export declare const useCreatePlaidUpdateLinkToken: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof createPlaidUpdateLinkToken>>, TError, {
+        data: BodyType<PlaidUpdateLinkTokenInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof createPlaidUpdateLinkToken>>, TError, {
+    data: BodyType<PlaidUpdateLinkTokenInput>;
+}, TContext>;
 export declare const getExchangePlaidPublicTokenUrl: () => string;
 export declare const exchangePlaidPublicToken: (plaidExchangeInput: PlaidExchangeInput, options?: RequestInit) => Promise<PlaidItemDetail>;
 export declare const getExchangePlaidPublicTokenMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {

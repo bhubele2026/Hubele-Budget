@@ -70,6 +70,68 @@ router.post("/plaid/link-token", requireAuth, async (req, res): Promise<void> =>
   }
 });
 
+// Plaid error codes that indicate the only fix is for the user to
+// re-authenticate the bank via Plaid Link in update mode. The frontend
+// keys off this set to decide when to render the "Reconnect" button.
+export const PLAID_REAUTH_ERROR_CODES = new Set<string>([
+  "ITEM_LOGIN_REQUIRED",
+  "PENDING_EXPIRATION",
+  "PENDING_DISCONNECT",
+]);
+
+router.post(
+  "/plaid/link-token/update",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const { itemId } = req.body ?? {};
+    if (!itemId || typeof itemId !== "string") {
+      res.status(400).json({ error: "itemId is required" });
+      return;
+    }
+    const [item] = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(
+        and(
+          eq(plaidItemsTable.id, itemId),
+          eq(plaidItemsTable.userId, req.userId!),
+        ),
+      );
+    if (!item) {
+      res.status(404).json({ error: "Plaid item not found" });
+      return;
+    }
+    try {
+      const redirectUri = process.env.PLAID_REDIRECT_URI?.trim();
+      const resp = await plaid().linkTokenCreate({
+        user: { client_user_id: req.userId! },
+        client_name: "H2 Family Budget",
+        // Update mode: pass the existing access_token, omit `products`.
+        access_token: item.accessToken,
+        country_codes: PLAID_COUNTRY_CODES,
+        language: "en",
+        ...(redirectUri ? { redirect_uri: redirectUri } : {}),
+      });
+      res.json({
+        linkToken: resp.data.link_token,
+        expiration: resp.data.expiration,
+      });
+    } catch (e) {
+      const ax = e as {
+        response?: { data?: { error_code?: string; error_message?: string } };
+      };
+      const plaidCode = ax?.response?.data?.error_code;
+      const plaidMsg = ax?.response?.data?.error_message;
+      const msg = plaidMsg ?? (e instanceof Error ? e.message : "Plaid error");
+      req.log.error({ err: e }, "Plaid update link token failed");
+      res.status(500).json({
+        error: msg,
+        ...(plaidCode ? { code: plaidCode } : {}),
+      });
+    }
+  },
+);
+
 router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
   const { publicToken, institutionId, institutionName } = req.body ?? {};
   if (!publicToken || typeof publicToken !== "string") {
@@ -206,6 +268,7 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
         ? item!.lastSyncedAt.toISOString()
         : new Date().toISOString(),
       lastSyncError: null,
+      lastSyncErrorCode: null,
       accounts: accounts.map((a) => ({
         id: a.id,
         accountId: a.accountId,
@@ -247,6 +310,7 @@ router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
       institutionSlug: it.institutionSlug,
       lastSyncedAt: it.lastSyncedAt ? it.lastSyncedAt.toISOString() : null,
       lastSyncError: it.lastSyncError,
+      lastSyncErrorCode: it.lastSyncErrorCode,
       stillPreparing: it.stillPreparingSince != null,
       accounts: (byItem.get(it.id) ?? []).map((a) => ({
         id: a.id,

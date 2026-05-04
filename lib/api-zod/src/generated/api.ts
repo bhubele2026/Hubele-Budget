@@ -1475,6 +1475,25 @@ export const CreatePlaidLinkTokenResponse = zod.object({
   expiration: zod.string(),
 });
 
+/**
+ * @summary Create a Plaid Link token in update mode for an existing item, so the
+user can re-authenticate the bank when Plaid reports
+ITEM_LOGIN_REQUIRED (or another re-auth code).
+
+ */
+export const CreatePlaidUpdateLinkTokenBody = zod.object({
+  itemId: zod
+    .string()
+    .describe(
+      "Internal Plaid item row id (UUID) of the item that needs\nre-authentication. Used to look up the stored access_token and\ncreate a Plaid Link token in update mode.\n",
+    ),
+});
+
+export const CreatePlaidUpdateLinkTokenResponse = zod.object({
+  linkToken: zod.string(),
+  expiration: zod.string(),
+});
+
 export const ExchangePlaidPublicTokenBody = zod.object({
   publicToken: zod.string(),
   institutionId: zod.string().nullish(),
@@ -1489,6 +1508,12 @@ export const ExchangePlaidPublicTokenResponse = zod.object({
   institutionSlug: zod.string(),
   lastSyncedAt: zod.string().nullish(),
   lastSyncError: zod.string().nullish(),
+  lastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      'Plaid\'s structured `error_code` from the most recent failed\nsync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,\nPENDING_EXPIRATION). Null when sync is healthy or when the\nprevious failure had no structured code. Used by the UI to\ndecide when to surface the \"Reconnect\" button next to the\nsync chip.\n',
+    ),
   stillPreparing: zod.boolean().optional(),
   accounts: zod.array(
     zod.object({
@@ -1511,6 +1536,12 @@ export const ListPlaidItemsResponseItem = zod.object({
   institutionSlug: zod.string(),
   lastSyncedAt: zod.string().nullish(),
   lastSyncError: zod.string().nullish(),
+  lastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      'Plaid\'s structured `error_code` from the most recent failed\nsync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,\nPENDING_EXPIRATION). Null when sync is healthy or when the\nprevious failure had no structured code. Used by the UI to\ndecide when to surface the \"Reconnect\" button next to the\nsync chip.\n',
+    ),
   stillPreparing: zod.boolean().optional(),
   accounts: zod.array(
     zod.object({
