@@ -246,9 +246,21 @@ export const UpdateTransactionResponse = zod
               fromCategoryId: zod.string(),
               toCategoryId: zod.string(),
               candidateCount: zod.number(),
+              sampleTransactions: zod
+                .array(
+                  zod.object({
+                    id: zod.string(),
+                    description: zod.string(),
+                    occurredOn: zod.string(),
+                    amount: zod.string(),
+                  }),
+                )
+                .describe(
+                  'First ~10 affected transactions, ordered most-recent first.\nEach entry is a thin slice (id, description, occurredOn, amount)\nsufficient for the toast\'s \"Show matches\" preview dialog.\n',
+                ),
             })
             .describe(
-              "Reported by PATCH \/transactions\/:id when the auto-learn flow\nrepoints an existing mapping rule onto a new category. `candidateCount`\nis the number of older transactions that match this rule's pattern\nand currently sit in the rule's old category, i.e. the count that\nwould be flipped if the user accepts the \"apply to past transactions\ntoo\" prompt and POSTs to \/transactions\/recategorize-by-pattern with\nthese fields.\n",
+              'Reported by PATCH \/transactions\/:id when the auto-learn flow\nrepoints an existing mapping rule onto a new category. `candidateCount`\nis the number of older transactions that match this rule\'s pattern\nand currently sit in the rule\'s old category, i.e. the count that\nwould be flipped if the user accepts the \"apply to past transactions\ntoo\" prompt and POSTs to \/transactions\/recategorize-by-pattern with\nthese fields. `sampleTransactions` is a small preview (most-recent\nfirst, capped at 10) so the client can render a \"Show matches\" list\nbefore the user confirms the bulk re-categorize.\n',
             ),
         )
         .describe(

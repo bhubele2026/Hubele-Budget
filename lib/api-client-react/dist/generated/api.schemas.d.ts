@@ -148,6 +148,12 @@ export declare const RepointedRuleMatchType: {
     readonly exact: "exact";
     readonly starts_with: "starts_with";
 };
+export interface RepointedRuleSample {
+    id: string;
+    description: string;
+    occurredOn: string;
+    amount: string;
+}
 /**
  * Reported by PATCH /transactions/:id when the auto-learn flow
 repoints an existing mapping rule onto a new category. `candidateCount`
@@ -155,7 +161,9 @@ is the number of older transactions that match this rule's pattern
 and currently sit in the rule's old category, i.e. the count that
 would be flipped if the user accepts the "apply to past transactions
 too" prompt and POSTs to /transactions/recategorize-by-pattern with
-these fields.
+these fields. `sampleTransactions` is a small preview (most-recent
+first, capped at 10) so the client can render a "Show matches" list
+before the user confirms the bulk re-categorize.
 
  */
 export interface RepointedRule {
@@ -165,6 +173,11 @@ export interface RepointedRule {
     fromCategoryId: string;
     toCategoryId: string;
     candidateCount: number;
+    /** First ~10 affected transactions, ordered most-recent first.
+  Each entry is a thin slice (id, description, occurredOn, amount)
+  sufficient for the toast's "Show matches" preview dialog.
+   */
+    sampleTransactions: RepointedRuleSample[];
 }
 /**
  * * `created` — a new specific mapping rule was added for the

@@ -582,6 +582,12 @@ describe("categorization pipeline (integration)", () => {
         fromCategoryId: string;
         toCategoryId: string;
         candidateCount: number;
+        sampleTransactions: {
+          id: string;
+          description: string;
+          occurredOn: string;
+          amount: string;
+        }[];
       }[];
       ruleAction: { kind: string; pattern: string | null };
     };
@@ -600,6 +606,23 @@ describe("categorization pipeline (integration)", () => {
     expect(reported.fromCategoryId).toBe(miscCat!.id);
     expect(reported.toCategoryId).toBe(debtCat!.id);
     expect(reported.candidateCount).toBe(2);
+    // sampleTransactions powers the toast's "Show matches" preview dialog.
+    // It excludes the row the user just edited (the trigger txn) and is
+    // ordered most-recent first, capped at 10. With 2 remaining candidates
+    // we expect both, sorted descending by occurredOn.
+    expect(reported.sampleTransactions.length).toBe(2);
+    expect(reported.sampleTransactions.map((s) => s.id)).not.toContain(
+      triggerId,
+    );
+    const sampleDates = reported.sampleTransactions.map((s) => s.occurredOn);
+    const sortedDescDates = [...sampleDates].sort().reverse();
+    expect(sampleDates).toEqual(sortedDescDates);
+    for (const s of reported.sampleTransactions) {
+      expect(typeof s.description).toBe("string");
+      expect(s.description).toContain(seedPattern);
+      expect(s.amount).toBe("-150.00");
+      expect(s.occurredOn).toMatch(/^\d{4}-\d{2}-\d{2}/);
+    }
 
     // POST the bulk re-categorize and verify only the 2 remaining
     // Misc/Buffer rows flipped onto debtCat.

@@ -1244,7 +1244,7 @@ components:
 
     RepointedRule:
       type: object
-      required: [ruleId, pattern, matchType, fromCategoryId, toCategoryId, candidateCount]
+      required: [ruleId, pattern, matchType, fromCategoryId, toCategoryId, candidateCount, sampleTransactions]
       description: |
         Reported by PATCH /transactions/:id when the auto-learn flow
         repoints an existing mapping rule onto a new category. `candidateCount`
@@ -1252,7 +1252,9 @@ components:
         and currently sit in the rule's old category, i.e. the count that
         would be flipped if the user accepts the "apply to past transactions
         too" prompt and POSTs to /transactions/recategorize-by-pattern with
-        these fields.
+        these fields. `sampleTransactions` is a small preview (most-recent
+        first, capped at 10) so the client can render a "Show matches" list
+        before the user confirms the bulk re-categorize.
       properties:
         ruleId: { type: string }
         pattern: { type: string }
@@ -1260,6 +1262,22 @@ components:
         fromCategoryId: { type: string }
         toCategoryId: { type: string }
         candidateCount: { type: integer }
+        sampleTransactions:
+          type: array
+          description: |
+            First ~10 affected transactions, ordered most-recent first.
+            Each entry is a thin slice (id, description, occurredOn, amount)
+            sufficient for the toast's "Show matches" preview dialog.
+          items: { $ref: "#/components/schemas/RepointedRuleSample" }
+
+    RepointedRuleSample:
+      type: object
+      required: [id, description, occurredOn, amount]
+      properties:
+        id: { type: string }
+        description: { type: string }
+        occurredOn: { type: string }
+        amount: { type: string }
 
     RuleAction:
       type: object

@@ -630,6 +630,22 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         fromCategoryId: zod.ZodString;
         toCategoryId: zod.ZodString;
         candidateCount: zod.ZodNumber;
+        sampleTransactions: zod.ZodArray<zod.ZodObject<{
+            id: zod.ZodString;
+            description: zod.ZodString;
+            occurredOn: zod.ZodString;
+            amount: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            occurredOn: string;
+            description: string;
+            amount: string;
+        }, {
+            id: string;
+            occurredOn: string;
+            description: string;
+            amount: string;
+        }>, "many">;
     }, "strip", zod.ZodTypeAny, {
         ruleId: string;
         pattern: string;
@@ -637,6 +653,12 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         fromCategoryId: string;
         toCategoryId: string;
         candidateCount: number;
+        sampleTransactions: {
+            id: string;
+            occurredOn: string;
+            description: string;
+            amount: string;
+        }[];
     }, {
         ruleId: string;
         pattern: string;
@@ -644,6 +666,12 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         fromCategoryId: string;
         toCategoryId: string;
         candidateCount: number;
+        sampleTransactions: {
+            id: string;
+            occurredOn: string;
+            description: string;
+            amount: string;
+        }[];
     }>, "many">;
     ruleAction: zod.ZodObject<{
         kind: zod.ZodEnum<["created", "created_priority_bump", "skipped_generic", "repointed", "none"]>;
@@ -666,6 +694,12 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         fromCategoryId: string;
         toCategoryId: string;
         candidateCount: number;
+        sampleTransactions: {
+            id: string;
+            occurredOn: string;
+            description: string;
+            amount: string;
+        }[];
     }[];
     ruleAction: {
         kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";
@@ -680,6 +714,12 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         fromCategoryId: string;
         toCategoryId: string;
         candidateCount: number;
+        sampleTransactions: {
+            id: string;
+            occurredOn: string;
+            description: string;
+            amount: string;
+        }[];
     }[];
     ruleAction: {
         kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";

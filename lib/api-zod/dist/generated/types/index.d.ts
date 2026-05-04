@@ -115,6 +115,7 @@ export * from "./recurringItemInput";
 export * from "./reorderMappingRulesInput";
 export * from "./repointedRule";
 export * from "./repointedRuleMatchType";
+export * from "./repointedRuleSample";
 export * from "./ruleAction";
 export * from "./ruleActionKind";
 export * from "./seedDefaultBudgetResult";

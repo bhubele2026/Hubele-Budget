@@ -191,9 +191,11 @@ router.patch(
     //      them when the user picks Groceries for an "AMAZON FRESH 123"
     //      charge would break their general behavior. Each repointed
     //      specific rule is tracked in `repointedRules` along with a count
-    //      of older transactions still sitting in the rule's old category,
-    //      so the client can offer a "apply to past transactions too"
-    //      prompt instead of making the user touch every prior payment.
+    //      of older transactions still sitting in the rule's old category
+    //      AND a small `sampleTransactions` preview list (most-recent
+    //      first, capped at 10), so the client can offer a "apply to
+    //      past transactions too" prompt with a "Show matches" link
+    //      instead of making the user touch every prior payment.
     //   2. INSERT — derive a fresh pattern from the description and upsert
     //      a more-specific rule, *unless* a specific matching rule already
     //      points at the new category (the repoint in step 1 is sufficient
@@ -206,6 +208,12 @@ router.patch(
     //      generic rules; an explicit `rememberPattern` body field
     //      (legacy UI affordance) still bypasses that guard since it
     //      represents user-stated intent.
+    type RepointedRuleSample = {
+      id: string;
+      description: string;
+      occurredOn: string;
+      amount: string;
+    };
     type RepointedRule = {
       ruleId: string;
       pattern: string;
@@ -213,6 +221,7 @@ router.patch(
       fromCategoryId: string;
       toCategoryId: string;
       candidateCount: number;
+      sampleTransactions: RepointedRuleSample[];
     };
     type RuleAction =
       | { kind: "none"; pattern: null; genericPattern: null }
@@ -255,26 +264,35 @@ router.patch(
           );
         // Count older transactions still sitting in the rule's old
         // category that match this rule's pattern. Surfacing this count
-        // lets the client offer a "apply to past transactions too" prompt
-        // so the user doesn't have to touch every prior payment one at a
-        // time. We scope to rows currently in `fromCategoryId` so manual
-        // edits to a different category are preserved.
+        // (and a small preview list) lets the client offer a "apply to
+        // past transactions too" prompt — with a "Show matches" link
+        // that opens a small dialog — so the user doesn't have to touch
+        // every prior payment one at a time. We scope to rows currently
+        // in `fromCategoryId` so manual edits to a different category
+        // are preserved.
         const fromCategoryId = r.categoryId as string;
         const candidates = await selectPatternCandidates(
           userId,
           r,
           fromCategoryId,
         );
-        const candidateCount = candidates.filter(
-          (c) => c.id !== row.id,
-        ).length;
+        const remaining = candidates.filter((c) => c.id !== row.id);
+        const sampleTransactions: RepointedRuleSample[] = remaining
+          .slice(0, 10)
+          .map((c) => ({
+            id: c.id,
+            description: c.description ?? "",
+            occurredOn: c.occurredOn,
+            amount: c.amount,
+          }));
         repointedRules.push({
           ruleId: r.id,
           pattern: r.pattern,
           matchType: normalizeMatchType(r.matchType),
           fromCategoryId,
           toCategoryId: patch.categoryId,
-          candidateCount,
+          candidateCount: remaining.length,
+          sampleTransactions,
         });
       }
 
@@ -393,11 +411,24 @@ async function selectPatternCandidates(
   userId: string,
   rule: { pattern: string; matchType: string },
   fromCategoryId: string,
-): Promise<{ id: string; occurredOn: string }[]> {
+): Promise<
+  {
+    id: string;
+    occurredOn: string;
+    description: string | null;
+    amount: string;
+  }[]
+> {
+  // Ordered most-recent first so the first N rows can be served straight
+  // through to the client as the "Show matches" preview list. Bulk
+  // re-categorize callers don't care about order (they just need the
+  // full id set) so this is safe to apply unconditionally.
   return db
     .select({
       id: transactionsTable.id,
       occurredOn: transactionsTable.occurredOn,
+      description: transactionsTable.description,
+      amount: transactionsTable.amount,
     })
     .from(transactionsTable)
     .where(
@@ -407,7 +438,8 @@ async function selectPatternCandidates(
         eq(transactionsTable.isTransfer, false),
         ilike(transactionsTable.description, ilikePatternFor(rule)),
       ),
-    );
+    )
+    .orderBy(desc(transactionsTable.occurredOn));
 }
 
 /**
