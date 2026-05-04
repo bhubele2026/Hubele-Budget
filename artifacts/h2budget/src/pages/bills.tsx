@@ -324,6 +324,32 @@ export default function BillsPage() {
   // #70 — pull all transactions to compute actual income/spend this month.
   const { data: allTxns } = useListTransactions({ limit: 5000 });
 
+  // #70 — real spend amounts. Compare planned ("Per month") against what
+  // actually happened so far this calendar month: sum positive amounts as
+  // income and the absolute value of negatives as spend, skipping
+  // transfers (already excluded from budget actuals server-side). Computed
+  // here so the hook always runs before the loading-state early return
+  // below — moving it after that return broke the rules of hooks.
+  const actualThisMonth = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const monthStart = `${y}-${String(m + 1).padStart(2, "0")}-01`;
+    const next = new Date(y, m + 1, 1);
+    const monthEnd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
+    let income = 0;
+    let spend = 0;
+    for (const t of allTxns ?? []) {
+      if (t.occurredOn < monthStart || t.occurredOn >= monthEnd) continue;
+      if (t.isTransfer) continue;
+      const a = Number(t.amount);
+      if (!Number.isFinite(a)) continue;
+      if (a > 0) income += a;
+      else spend += -a;
+    }
+    return { income, spend, net: income - spend };
+  }, [allTxns]);
+
   const allDebtMinRows = summary?.debtMins ?? [];
   const debtMinRows = useMemo(
     () => filterDebtMinRowsByPayoff(allDebtMinRows, payoffsByDebt),
@@ -351,30 +377,6 @@ export default function BillsPage() {
   );
   const totalOutflow = billsMonthly + debtMin;
   const net = incomeMonthly - totalOutflow;
-
-  // #70 — real spend amounts. Compare planned ("Per month") against what
-  // actually happened so far this calendar month: sum positive amounts as
-  // income and the absolute value of negatives as spend, skipping
-  // transfers (already excluded from budget actuals server-side).
-  const actualThisMonth = useMemo(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth();
-    const monthStart = `${y}-${String(m + 1).padStart(2, "0")}-01`;
-    const next = new Date(y, m + 1, 1);
-    const monthEnd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
-    let income = 0;
-    let spend = 0;
-    for (const t of allTxns ?? []) {
-      if (t.occurredOn < monthStart || t.occurredOn >= monthEnd) continue;
-      if (t.isTransfer) continue;
-      const a = Number(t.amount);
-      if (!Number.isFinite(a)) continue;
-      if (a > 0) income += a;
-      else spend += -a;
-    }
-    return { income, spend, net: income - spend };
-  }, [allTxns]);
 
   return (
     <div className="space-y-6">
