@@ -52,6 +52,7 @@ vi.mock("@/components/debt-plaid-link", () => ({
   DebtPlaidIndicator: () => null,
   DebtLastSynced: () => null,
   DebtPlaidSource: () => null,
+  DebtReauthBanner: () => null,
 }));
 vi.mock("recharts", () => ({
   LineChart: () => null,

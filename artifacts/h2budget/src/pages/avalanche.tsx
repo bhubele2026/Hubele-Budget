@@ -76,6 +76,7 @@ import {
   DebtPlaidIndicator,
   DebtLastSynced,
   DebtPlaidSource,
+  DebtReauthBanner,
 } from "@/components/debt-plaid-link";
 
 const MANUAL_EXTRA_CAP = 5000;
@@ -501,6 +502,7 @@ export default function AvalanchePage() {
 
   return (
     <div className="space-y-6">
+      <DebtReauthBanner debts={debts} />
       {killedBanner && (
         <div className="relative flex items-center gap-3 rounded-lg border border-emerald-300/60 bg-gradient-to-r from-emerald-50 to-amber-50 p-4 text-emerald-900 dark:border-emerald-700/60 dark:from-emerald-950/40 dark:to-amber-950/40 dark:text-emerald-100 animate-in fade-in slide-in-from-top-2">
           <PartyPopper className="h-6 w-6 shrink-0 text-emerald-600 dark:text-emerald-400" />

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListPlaidLiabilityAccounts,
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Link2, Unlink, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
+import { Link2, Unlink, RefreshCw, Loader2, AlertTriangle, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import {
@@ -412,5 +412,126 @@ function PlaidAccountPicker({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * (#211) Page-level grouping of Plaid-linked debts whose parent item is in
+ * a re-auth state (ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION, etc.). Powers
+ * the page-top reconnect banner so the user doesn't have to scroll the
+ * debt table to discover the inline Reconnect button added in #198.
+ */
+export type ReauthInstitution = {
+  itemId: string;
+  institutionName: string | null;
+  debts: Debt[];
+};
+
+export type DebtsReauthSummary = {
+  institutions: ReauthInstitution[];
+  totalDebts: number;
+  /** The institution with the most affected debts — the Reconnect button targets this one. */
+  worst: ReauthInstitution | null;
+};
+
+export function findDebtsNeedingReauth(
+  debts: Debt[] | null | undefined,
+): DebtsReauthSummary {
+  const groups = new Map<string, ReauthInstitution>();
+  for (const d of debts ?? []) {
+    if (!isPlaidReauthCode(d.plaidLastSyncErrorCode)) continue;
+    const itemId = d.plaidAccount?.itemId;
+    if (!itemId) continue;
+    const existing = groups.get(itemId);
+    if (existing) {
+      existing.debts.push(d);
+    } else {
+      groups.set(itemId, {
+        itemId,
+        institutionName: d.plaidAccount?.institutionName ?? null,
+        debts: [d],
+      });
+    }
+  }
+  const institutions = Array.from(groups.values()).sort(
+    (a, b) => b.debts.length - a.debts.length,
+  );
+  const totalDebts = institutions.reduce((s, g) => s + g.debts.length, 0);
+  return {
+    institutions,
+    totalDebts,
+    worst: institutions[0] ?? null,
+  };
+}
+
+/**
+ * Page-top banner that surfaces "your bank needs reconnecting" without
+ * requiring the user to scroll the debt table. Renders nothing when no
+ * Plaid-linked debt is in a re-auth state. Auto-clears after a successful
+ * reconnect (the underlying error code goes away on the next sync). The
+ * dismiss × hides the banner for the current snapshot of affected items;
+ * if a *new* institution starts failing, the banner reappears.
+ */
+export function DebtReauthBanner({ debts }: { debts: Debt[] | null | undefined }) {
+  const summary = useMemo(() => findDebtsNeedingReauth(debts), [debts]);
+  const dismissKey = useMemo(
+    () => summary.institutions.map((i) => i.itemId).sort().join("|"),
+    [summary.institutions],
+  );
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+
+  // Reset dismissal whenever the set of affected items changes — a newly
+  // failing institution should re-show the banner even if the user
+  // dismissed an earlier one.
+  useEffect(() => {
+    if (dismissedKey && dismissedKey !== dismissKey) {
+      setDismissedKey(null);
+    }
+  }, [dismissKey, dismissedKey]);
+
+  if (!summary.worst || summary.totalDebts === 0) return null;
+  if (dismissedKey === dismissKey) return null;
+
+  const worst = summary.worst;
+  const worstName = worst.institutionName ?? "Your bank";
+  const otherCount = summary.institutions.length - 1;
+  const headline =
+    otherCount > 0
+      ? `${worstName} and ${otherCount} more bank${otherCount === 1 ? "" : "s"} need reconnecting`
+      : `${worstName} needs reconnecting`;
+  const debtCount = summary.totalDebts;
+  const subline = `${debtCount} debt${debtCount === 1 ? "" : "s"} may be out of date`;
+
+  return (
+    <div
+      className="relative flex items-center gap-3 rounded-lg border border-amber-400/60 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100"
+      data-testid="banner-debt-reauth"
+      role="alert"
+    >
+      <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+      <div className="flex-1 min-w-0">
+        <div className="font-medium" data-testid="text-debt-reauth-headline">
+          {headline}
+        </div>
+        <div className="text-sm opacity-90" data-testid="text-debt-reauth-subline">
+          {subline} — reconnect to refresh balance, APR, and minimum payment.
+        </div>
+      </div>
+      <PlaidReconnectButton
+        itemId={worst.itemId}
+        institutionName={worst.institutionName}
+        size="sm"
+      />
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={() => setDismissedKey(dismissKey)}
+        aria-label="Dismiss"
+        data-testid="button-debt-reauth-dismiss"
+      >
+        <X className="h-4 w-4" />
+      </Button>
+    </div>
   );
 }

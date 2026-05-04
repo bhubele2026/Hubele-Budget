@@ -4,6 +4,10 @@ import {
   useCreatePlaidUpdateLinkToken,
   getListPlaidItemsQueryKey,
   getListTransactionsQueryKey,
+  getListDebtsQueryKey,
+  getGetBillsSummaryQueryKey,
+  getGetForecastQueryKey,
+  getGetDashboardQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -95,6 +99,16 @@ export function PlaidReconnectButton({
     const totals = await runSync({ itemId, silent: true });
     if (cancelledRef.current) return;
     qc.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
+    // (#211) The page-top "reconnect your bank" banner reads
+    // plaidLastSyncErrorCode off /debts. Once sync succeeds the server has
+    // cleared that code, but the cached debts list still carries the old
+    // value — so we have to invalidate the debt-consuming queries here or
+    // the banner stays visible until the user navigates away. Same set as
+    // the inline DebtPlaidActions refresh path uses.
+    qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
     if (totals.added + totals.modified + totals.removed > 0) {
       qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
     }

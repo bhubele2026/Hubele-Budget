@@ -2,6 +2,7 @@ import { useListDebts } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DebtReauthBanner } from "@/components/debt-plaid-link";
 
 export default function DebtsPage() {
   const { data: debts, isLoading } = useListDebts();
@@ -15,6 +16,7 @@ export default function DebtsPage() {
 
   return (
     <div className="space-y-6">
+      <DebtReauthBanner debts={debts} />
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-serif font-bold text-foreground">Debt Avalanche</h1>
