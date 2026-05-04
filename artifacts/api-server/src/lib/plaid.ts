@@ -60,7 +60,32 @@ export function plaid(): PlaidApi {
 }
 
 export const PLAID_PRODUCTS = [Products.Transactions];
-export const PLAID_OPTIONAL_PRODUCTS = [Products.Liabilities];
+
+// Optional products are only requested when this Plaid client is approved
+// for them. Plaid hard-fails /link/token/create with INVALID_PRODUCT even
+// when a product is listed as *optional* if the calling client isn't
+// approved for it (e.g. liabilities requires manual approval in the Plaid
+// Dashboard). Default to none so bank-only Link flows succeed; opt in via
+// the PLAID_OPTIONAL_PRODUCTS_CSV env var (e.g. "liabilities") once the
+// product is approved on the Plaid client. Unknown product names are
+// silently dropped so a typo can't break Link.
+const VALID_OPTIONAL_PRODUCT_NAMES = new Set<string>(
+  Object.values(Products) as string[],
+);
+function parseOptionalProductsFromEnv(): Products[] {
+  const raw = process.env.PLAID_OPTIONAL_PRODUCTS_CSV?.trim();
+  if (!raw) return [];
+  const out: Products[] = [];
+  for (const part of raw.split(",")) {
+    const name = part.trim().toLowerCase();
+    if (!name) continue;
+    if (VALID_OPTIONAL_PRODUCT_NAMES.has(name)) {
+      out.push(name as Products);
+    }
+  }
+  return out;
+}
+export const PLAID_OPTIONAL_PRODUCTS: Products[] = parseOptionalProductsFromEnv();
 export const PLAID_COUNTRY_CODES = [CountryCode.Us];
 
 export type { PlaidTxn, RemovedTransaction };

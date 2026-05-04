@@ -32,6 +32,19 @@ export class PlaidLiabilitiesError extends Error {
   }
 }
 
+// Plaid returns INVALID_PRODUCT on /liabilities/get when the calling
+// client isn't approved for the liabilities product. That is an expected,
+// recoverable state for this app (we run with optional_products disabled
+// by default), so callers should treat it as "no liability data
+// available" rather than a hard error.
+function isLiabilitiesNotEnabled(e: unknown): boolean {
+  const ax = e as {
+    response?: { data?: { error_code?: string; error_type?: string } };
+  };
+  const code = ax?.response?.data?.error_code ?? "";
+  return code === "INVALID_PRODUCT" || code === "PRODUCTS_NOT_SUPPORTED";
+}
+
 export async function fetchLiabilitiesForItem(
   userId: string,
   itemRowId: string,
@@ -60,7 +73,13 @@ export async function fetchLiabilitiesForItem(
     resp = await plaid().liabilitiesGet({ access_token: item.accessToken });
   } catch (e) {
     resp = null;
-    liabErr = e;
+    // INVALID_PRODUCT means this Plaid client isn't approved for the
+    // liabilities product — that's an expected state for the bank-only
+    // configuration. Don't treat it as a fatal error; fall through with
+    // whatever /accounts/get returned so balance refresh still works.
+    if (!isLiabilitiesNotEnabled(e)) {
+      liabErr = e;
+    }
   }
   if (!acctResp && !resp) {
     throw new PlaidLiabilitiesError(

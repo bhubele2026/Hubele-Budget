@@ -39,7 +39,12 @@ router.post("/plaid/link-token", requireAuth, async (req, res): Promise<void> =>
       user: { client_user_id: req.userId! },
       client_name: "H2 Family Budget",
       products: PLAID_PRODUCTS,
-      optional_products: PLAID_OPTIONAL_PRODUCTS,
+      // Only include the field when there is at least one optional
+      // product configured — Plaid rejects an empty array on some
+      // versions of the API.
+      ...(PLAID_OPTIONAL_PRODUCTS.length > 0
+        ? { optional_products: PLAID_OPTIONAL_PRODUCTS }
+        : {}),
       country_codes: PLAID_COUNTRY_CODES,
       language: "en",
       ...(redirectUri ? { redirect_uri: redirectUri } : {}),
@@ -49,9 +54,19 @@ router.post("/plaid/link-token", requireAuth, async (req, res): Promise<void> =>
       expiration: resp.data.expiration,
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Plaid error";
+    // Surface Plaid's structured error to the client so the toast on the
+    // page shows the real reason (e.g. "Your account is not enabled for
+    // liabilities") instead of a generic axios "Request failed with
+    // status code 400" message.
+    const ax = e as { response?: { data?: { error_code?: string; error_message?: string } } };
+    const plaidCode = ax?.response?.data?.error_code;
+    const plaidMsg = ax?.response?.data?.error_message;
+    const msg = plaidMsg ?? (e instanceof Error ? e.message : "Plaid error");
     req.log.error({ err: e }, "Plaid link token failed");
-    res.status(500).json({ error: msg });
+    res.status(500).json({
+      error: msg,
+      ...(plaidCode ? { code: plaidCode } : {}),
+    });
   }
 });
 

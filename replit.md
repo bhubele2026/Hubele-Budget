@@ -41,6 +41,22 @@ Currently hosts the **H2 Family Budget** application — a personal/family budge
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
+## Plaid product configuration
+
+This app runs with **`transactions` only** by default. Optional products
+(notably `liabilities`) are gated behind the `PLAID_OPTIONAL_PRODUCTS_CSV`
+env var because Plaid hard-fails `/link/token/create` with
+`INVALID_PRODUCT` when an *optional* product is listed but the calling
+client isn't approved for it. To re-enable liabilities once the Plaid
+Dashboard approves the product, set
+`PLAID_OPTIONAL_PRODUCTS_CSV=liabilities` (comma-separated for multiple)
+in Secrets — no code change required. The lib/plaid.ts constant
+`PLAID_OPTIONAL_PRODUCTS` reads that var at startup and silently drops
+unknown product names. When liabilities isn't enabled, the
+`fetchLiabilitiesForItem` helper still returns balances via
+`/accounts/get` and skips the APR/min-payment enrichment, so debt sync
+degrades gracefully instead of crashing the link flow.
+
 ## One-shot cleanups
 
 - `artifacts/api-server/scripts/clear-non-checking-forecast-flag.ts` (task #120) — clears legacy `forecast_flag = true` on any transaction whose account isn't the user's configured Chase checking account. Safe to re-run; mirrors the read-time `isBankRow` filter in `routes/forecast.ts` and `lib/cashSignal.ts`. Going forward this state is impossible: `plaidSync.ts` only sets `forecastFlag` on the configured checking account, and the Forecast read paths re-filter at query time. Run with `./scripts/node_modules/.bin/tsx artifacts/api-server/scripts/clear-non-checking-forecast-flag.ts [--apply]`.
