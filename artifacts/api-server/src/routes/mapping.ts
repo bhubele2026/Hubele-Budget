@@ -9,9 +9,14 @@ import {
   DeleteMappingRuleParams,
   ReorderMappingRulesBody,
   TestMappingRulesBody,
+  PreviewMappingRuleRecategorizeBody,
+  PreviewMappingRuleRecategorizeParams,
 } from "@workspace/api-zod";
 import { findMatchingRules, type RuleRow } from "../lib/autoCategorize";
-import { countPatternCandidates } from "../lib/patternCandidates";
+import {
+  countPatternCandidates,
+  selectPatternCandidates,
+} from "../lib/patternCandidates";
 
 function normalizeMatchType(
   raw: string | null | undefined,
@@ -203,6 +208,93 @@ router.post(
         winner: winner !== null && rule.id === winner.id,
       })),
       winningCategoryId: winner?.categoryId ?? null,
+    });
+  },
+);
+
+/**
+ * Read-only preview of the bulk-recategorize that would happen if the
+ * Mapping Rules edit UI saved a new `categoryId` for this rule and then
+ * called POST /transactions/recategorize-by-pattern with the same
+ * `{ pattern, matchType, fromCategoryId, toCategoryId }`. Surfaces the
+ * candidate count + a thin sample list so the edit form can show
+ * "N past transactions will move into <new category>" with a
+ * "Show matches" affordance before the user confirms.
+ *
+ * Mounted before the more-generic PATCH /mapping-rules/:id route. Express
+ * matches by segment count so the routing isn't ambiguous, but we keep
+ * the preview definition adjacent to the rule mutators for grep-ability.
+ */
+router.post(
+  "/mapping-rules/:id/recategorize-preview",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const params = PreviewMappingRuleRecategorizeParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const body = PreviewMappingRuleRecategorizeBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const userId = req.userId!;
+    const [rule] = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(
+        and(
+          eq(mappingRulesTable.id, params.data.id),
+          eq(mappingRulesTable.userId, userId),
+        ),
+      );
+    if (!rule) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const fromCategoryId = rule.categoryId;
+    const toCategoryId = body.data.toCategoryId;
+    const matchType = normalizeMatchType(rule.matchType);
+    // Empty preview is the right answer when:
+    //   * the rule is currently uncategorized — the bulk endpoint requires
+    //     a concrete from-category to scope the update, so there's
+    //     nothing we could safely flip on save anyway, OR
+    //   * the user is "moving" to the same category — no-op, no preview.
+    if (!fromCategoryId || fromCategoryId === toCategoryId) {
+      res.json({
+        ruleId: rule.id,
+        pattern: rule.pattern,
+        matchType,
+        fromCategoryId,
+        toCategoryId,
+        candidateCount: 0,
+        sampleTransactions: [],
+      });
+      return;
+    }
+    const candidates = await selectPatternCandidates(
+      userId,
+      { pattern: rule.pattern, matchType: rule.matchType },
+      fromCategoryId,
+    );
+    // patternCandidates returns description as nullable; the
+    // RepointedRuleSample / preview-dialog schema expects a string,
+    // so coalesce here.
+    const sampleTransactions = candidates.slice(0, 10).map((c) => ({
+      id: c.id,
+      description: c.description ?? "",
+      occurredOn: c.occurredOn,
+      amount: c.amount,
+    }));
+    res.json({
+      ruleId: rule.id,
+      pattern: rule.pattern,
+      matchType,
+      fromCategoryId,
+      toCategoryId,
+      candidateCount: candidates.length,
+      sampleTransactions,
     });
   },
 );

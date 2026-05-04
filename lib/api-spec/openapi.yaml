@@ -672,6 +672,42 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/TestMappingRulesResult" }
 
+  /mapping-rules/{id}/recategorize-preview:
+    post:
+      operationId: previewMappingRuleRecategorize
+      tags: [mapping]
+      description: |
+        Preview how many existing transactions would be affected if the given
+        mapping rule's `categoryId` were changed to `toCategoryId`. Returns the
+        same `{ candidateCount, sampleTransactions }` shape that PATCH
+        /transactions/:id reports for repointed rules, so the Mapping Rules edit
+        UI can surface "N past transactions will move into <new category>" and
+        a "Show matches" preview before the user saves the edit.
+
+        Read-only — the rule is not modified and no transactions are touched.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/MappingRuleRecategorizePreviewInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/MappingRuleRecategorizePreview",
+                }
+        "404":
+          description: Rule not found
+
   /settings:
     get:
       operationId: getSettings
@@ -2045,6 +2081,64 @@ components:
           description: |
             True for the single rule the auto-categorize flow would pick
             (highest-priority match with a non-null categoryId).
+
+    MappingRuleRecategorizePreviewInput:
+      type: object
+      required: [toCategoryId]
+      properties:
+        toCategoryId:
+          type: string
+          description: |
+            The category the user is considering moving the rule to. The
+            preview is computed against the rule's *current* `categoryId` as
+            the `fromCategoryId`; if the rule is currently uncategorized
+            (`categoryId: null`) or `toCategoryId` already matches it, the
+            response reports `candidateCount: 0`.
+
+    MappingRuleRecategorizePreview:
+      type: object
+      required:
+        [
+          ruleId,
+          pattern,
+          matchType,
+          fromCategoryId,
+          toCategoryId,
+          candidateCount,
+          sampleTransactions,
+        ]
+      description: |
+        Read-only preview of the bulk-recategorize that would happen if the
+        Mapping Rules edit UI saved a new `categoryId` for this rule and then
+        called POST /transactions/recategorize-by-pattern with the same
+        `{ pattern, matchType, fromCategoryId, toCategoryId }`. Mirrors the
+        `RepointedRule` shape so the same preview Dialog can render either.
+      properties:
+        ruleId: { type: string }
+        pattern: { type: string }
+        matchType: { type: string, enum: [contains, exact, starts_with] }
+        fromCategoryId:
+          type: ["string", "null"]
+          description: |
+            The rule's current `categoryId` at preview time. `null` when the
+            rule is currently uncategorized — in that case `candidateCount` is
+            always `0` because the bulk-recategorize endpoint requires a
+            concrete from-category to scope the update.
+        toCategoryId: { type: string }
+        candidateCount:
+          type: integer
+          description: |
+            Number of transactions whose description matches the rule's
+            pattern AND that currently sit in `fromCategoryId`. `0` when the
+            target equals the from-category, when the rule is uncategorized,
+            or when no historical rows match.
+        sampleTransactions:
+          type: array
+          description: |
+            First ~10 affected transactions, ordered most-recent first. Same
+            thin slice (id, description, occurredOn, amount) used by
+            `RepointedRule.sampleTransactions`.
+          items: { $ref: "#/components/schemas/RepointedRuleSample" }
 
     TestMappingRulesResult:
       type: object

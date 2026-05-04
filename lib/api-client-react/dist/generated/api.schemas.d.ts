@@ -979,6 +979,55 @@ export interface TestMappingRulesMatch {
    */
     winner: boolean;
 }
+export interface MappingRuleRecategorizePreviewInput {
+    /** The category the user is considering moving the rule to. The
+  preview is computed against the rule's *current* `categoryId` as
+  the `fromCategoryId`; if the rule is currently uncategorized
+  (`categoryId: null`) or `toCategoryId` already matches it, the
+  response reports `candidateCount: 0`.
+   */
+    toCategoryId: string;
+}
+export type MappingRuleRecategorizePreviewMatchType = (typeof MappingRuleRecategorizePreviewMatchType)[keyof typeof MappingRuleRecategorizePreviewMatchType];
+export declare const MappingRuleRecategorizePreviewMatchType: {
+    readonly contains: "contains";
+    readonly exact: "exact";
+    readonly starts_with: "starts_with";
+};
+/**
+ * Read-only preview of the bulk-recategorize that would happen if the
+Mapping Rules edit UI saved a new `categoryId` for this rule and then
+called POST /transactions/recategorize-by-pattern with the same
+`{ pattern, matchType, fromCategoryId, toCategoryId }`. Mirrors the
+`RepointedRule` shape so the same preview Dialog can render either.
+
+ */
+export interface MappingRuleRecategorizePreview {
+    ruleId: string;
+    pattern: string;
+    matchType: MappingRuleRecategorizePreviewMatchType;
+    /**
+     * The rule's current `categoryId` at preview time. `null` when the
+  rule is currently uncategorized — in that case `candidateCount` is
+  always `0` because the bulk-recategorize endpoint requires a
+  concrete from-category to scope the update.
+  
+     * @nullable
+     */
+    fromCategoryId: string | null;
+    toCategoryId: string;
+    /** Number of transactions whose description matches the rule's
+  pattern AND that currently sit in `fromCategoryId`. `0` when the
+  target equals the from-category, when the rule is uncategorized,
+  or when no historical rows match.
+   */
+    candidateCount: number;
+    /** First ~10 affected transactions, ordered most-recent first. Same
+  thin slice (id, description, occurredOn, amount) used by
+  `RepointedRule.sampleTransactions`.
+   */
+    sampleTransactions: RepointedRuleSample[];
+}
 export interface TestMappingRulesResult {
     /** Every rule whose pattern matches the description, sorted by
   priority descending — same order the categorize() hot path uses.

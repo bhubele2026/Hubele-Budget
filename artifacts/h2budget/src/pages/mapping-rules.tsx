@@ -8,19 +8,29 @@ import {
   useReorderMappingRules,
   useTestMappingRules,
   useListCategories,
+  usePreviewMappingRuleRecategorize,
+  useRecategorizeTransactionsByPattern,
   getListMappingRulesQueryKey,
   createMappingRule,
   deleteMappingRule,
+  getListTransactionsQueryKey,
+  getGetBudgetMonthQueryKey,
 } from "@workspace/api-client-react";
 import type {
   MappingRule,
   MappingRuleInput,
   Category,
+  MappingRuleRecategorizePreview,
 } from "@workspace/api-client-react";
 import {
   useBulkRecategorizePrompt,
   bulkRuleFromRuleAction,
 } from "@/hooks/use-bulk-recategorize-prompt";
+import { ToastAction } from "@/components/ui/toast";
+import {
+  RuleMatchesPreviewDialog,
+  type RuleMatchesPreviewState,
+} from "@/components/rule-matches-preview-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,7 +58,6 @@ import {
   GripVertical,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { ToastAction } from "@/components/ui/toast";
 import {
   DndContext,
   DragOverlay,
@@ -489,6 +498,8 @@ export default function MappingRulesPage() {
   });
 
   const testRules = useTestMappingRules();
+  const previewRecategorize = usePreviewMappingRuleRecategorize();
+  const recategorizeBulk = useRecategorizeTransactionsByPattern();
 
   const [pattern, setPattern] = useState("");
   const [matchType, setMatchType] = useState("contains");
@@ -501,6 +512,26 @@ export default function MappingRulesPage() {
   const [editMatchType, setEditMatchType] = useState("contains");
   const [editCategoryId, setEditCategoryId] = useState("");
   const [editPriority, setEditPriority] = useState<string>("");
+  // Snapshot of the rule at edit-start. We need the original `categoryId`
+  // to compute `fromCategoryId` for the bulk recategorize on save (the
+  // server's preview endpoint also derives fromCategoryId from the rule's
+  // current categoryId, so they stay in lock-step). We keep the
+  // pattern/matchType in the snapshot only to scope the
+  // post-save recategorize to the *previewed* shape.
+  const [editingOriginal, setEditingOriginal] = useState<{
+    id: string;
+    categoryId: string | null;
+    pattern: string;
+    matchType: string;
+  } | null>(null);
+  // Latest preview returned by POST /mapping-rules/:id/recategorize-preview.
+  // Stored alongside the `toCategoryId` it was computed for so we can guard
+  // against showing a stale preview when the user flips the category select
+  // again before the previous preview round-trips.
+  const [editPreview, setEditPreview] =
+    useState<MappingRuleRecategorizePreview | null>(null);
+  const [matchesDialog, setMatchesDialog] =
+    useState<RuleMatchesPreviewState | null>(null);
 
   // Task #212 — wire the auto-learn flow's "apply to past charges?"
   // prompt into the Mapping Rules page's hand-create path. The server's
@@ -731,16 +762,80 @@ export default function MappingRulesPage() {
     setEditMatchType(rule.matchType);
     setEditCategoryId(rule.categoryId ?? "");
     setEditPriority(String(rule.priority));
+    setEditingOriginal({
+      id: rule.id,
+      categoryId: rule.categoryId ?? null,
+      pattern: rule.pattern,
+      matchType: rule.matchType,
+    });
+    setEditPreview(null);
   };
 
-  const cancelEdit = () => setEditingId(null);
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingOriginal(null);
+    setEditPreview(null);
+  };
+
+  // Triggered when the user picks a different category in the edit form.
+  // We fire a read-only preview against the same rule so the form can
+  // show "N past transactions will move into <new category>" with a
+  // "Show matches" affordance — same dialog the Chase/Transactions page
+  // surfaces after a quick-categorize repoints a rule. We skip the
+  // round-trip when the rule is currently uncategorized (the bulk
+  // endpoint can't safely scope without a fromCategoryId) or when the
+  // target category is unchanged.
+  const handleEditCategoryChange = (nextCategoryId: string) => {
+    setEditCategoryId(nextCategoryId);
+    if (!editingOriginal) return;
+    const fromCategoryId = editingOriginal.categoryId;
+    if (
+      !fromCategoryId ||
+      !nextCategoryId ||
+      nextCategoryId === fromCategoryId
+    ) {
+      setEditPreview(null);
+      return;
+    }
+    previewRecategorize.mutate(
+      { id: editingOriginal.id, data: { toCategoryId: nextCategoryId } },
+      {
+        onSuccess: (res) => {
+          // Drop late responses if the user has since flipped the select
+          // again or cancelled the edit.
+          if (res.toCategoryId !== nextCategoryId) return;
+          setEditPreview(res);
+        },
+        onError: () => {
+          // Silently fall back to the no-preview UX so a transient
+          // failure doesn't block the user from saving the rule edit.
+          setEditPreview(null);
+        },
+      },
+    );
+  };
 
   const saveEdit = (id: string) => {
     if (!editPattern || !editCategoryId) return;
     const priorityNum = Number.parseInt(editPriority, 10);
-    // Close the editor immediately — the optimistic update will repaint
-    // the read-only row with the new values before the server replies.
+    // Capture preview before clearing edit state so the chained bulk
+    // recategorize can fire even after we tear the edit row down.
+    const previewSnapshot =
+      editPreview &&
+      editPreview.candidateCount > 0 &&
+      editPreview.toCategoryId === editCategoryId &&
+      editPreview.fromCategoryId
+        ? editPreview
+        : null;
+    const toCategoryName =
+      catById.get(editCategoryId)?.name ?? "the new category";
+    // Close the editor immediately — the optimistic update from the
+    // updateRule mutation config will repaint the read-only row with
+    // the new values before the server replies. On error, that hook's
+    // onError rolls back the cache and surfaces the failure toast.
     setEditingId(null);
+    setEditingOriginal(null);
+    setEditPreview(null);
     updateRule.mutate(
       {
         id,
@@ -752,7 +847,92 @@ export default function MappingRulesPage() {
         },
       },
       {
-        onSuccess: () => toast({ title: "Rule updated" }),
+        onSuccess: () => {
+          if (!previewSnapshot) {
+            toast({ title: "Rule updated" });
+            return;
+          }
+          // Chain the bulk recategorize so the past transactions snap
+          // onto the new category in one user action, mirroring the
+          // Chase-page "Apply" toast UX.
+          recategorizeBulk.mutate(
+            {
+              data: {
+                pattern: previewSnapshot.pattern,
+                matchType: previewSnapshot.matchType,
+                fromCategoryId: previewSnapshot.fromCategoryId!,
+                toCategoryId: previewSnapshot.toCategoryId,
+              },
+            },
+            {
+              onSuccess: (res) => {
+                queryClient.invalidateQueries({
+                  queryKey: getListTransactionsQueryKey(),
+                });
+                for (const m of res.affectedMonths) {
+                  queryClient.invalidateQueries({
+                    queryKey: getGetBudgetMonthQueryKey(m),
+                  });
+                }
+                toast({
+                  title: `Rule updated · moved ${res.updated} past transaction${res.updated === 1 ? "" : "s"} into ${toCategoryName}`,
+                  action: (
+                    <ToastAction
+                      altText="Undo bulk recategorize"
+                      data-testid="action-undo-bulk-recategorize-edit"
+                      onClick={() => {
+                        if (res.affectedIds.length === 0) return;
+                        recategorizeBulk.mutate(
+                          {
+                            data: {
+                              pattern: previewSnapshot.pattern,
+                              matchType: previewSnapshot.matchType,
+                              fromCategoryId: previewSnapshot.toCategoryId,
+                              toCategoryId: previewSnapshot.fromCategoryId!,
+                              ids: res.affectedIds,
+                              // Re-point the rule back to its previous
+                              // category too — without this the rule
+                              // would still match new charges into the
+                              // category the user just undid.
+                              ruleId: previewSnapshot.ruleId,
+                            },
+                          },
+                          {
+                            onSuccess: (undoRes) => {
+                              queryClient.invalidateQueries({
+                                queryKey: getListTransactionsQueryKey(),
+                              });
+                              for (const m of undoRes.affectedMonths) {
+                                queryClient.invalidateQueries({
+                                  queryKey: getGetBudgetMonthQueryKey(m),
+                                });
+                              }
+                              toast({
+                                title:
+                                  undoRes.updated === 0
+                                    ? "Nothing to undo"
+                                    : `Reverted ${undoRes.updated} transaction${undoRes.updated === 1 ? "" : "s"}`,
+                              });
+                            },
+                          },
+                        );
+                      }}
+                    >
+                      Undo
+                    </ToastAction>
+                  ),
+                });
+              },
+              onError: (e) => {
+                toast({
+                  title: "Rule saved, but couldn't move past transactions",
+                  description: (e as Error).message,
+                  variant: "destructive",
+                });
+              },
+            },
+          );
+        },
       },
     );
   };
@@ -1294,9 +1474,12 @@ export default function MappingRulesPage() {
                               </Select>
                               <Select
                                 value={editCategoryId}
-                                onValueChange={setEditCategoryId}
+                                onValueChange={handleEditCategoryChange}
                               >
-                                <SelectTrigger className="h-8 text-xs flex-[2] min-w-[160px]">
+                                <SelectTrigger
+                                  className="h-8 text-xs flex-[2] min-w-[160px]"
+                                  data-testid={`rule-edit-category-${rule.id}`}
+                                >
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1344,6 +1527,53 @@ export default function MappingRulesPage() {
                                 <X className="w-4 h-4" />
                               </Button>
                             </div>
+                            {editPreview &&
+                              editPreview.toCategoryId === editCategoryId &&
+                              editPreview.candidateCount > 0 && (
+                                <div
+                                  className="flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
+                                  data-testid={`rule-edit-preview-${rule.id}`}
+                                >
+                                  <span>
+                                    <span
+                                      className="font-medium"
+                                      data-testid={`rule-edit-preview-count-${rule.id}`}
+                                    >
+                                      {editPreview.candidateCount}
+                                    </span>{" "}
+                                    past transaction
+                                    {editPreview.candidateCount === 1
+                                      ? ""
+                                      : "s"}{" "}
+                                    will move into{" "}
+                                    <span className="font-medium">
+                                      {catById.get(editPreview.toCategoryId)
+                                        ?.name ?? "the new category"}
+                                    </span>{" "}
+                                    when you save.
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="shrink-0 underline underline-offset-2 hover:text-foreground"
+                                    data-testid={`link-show-rule-matches-edit-${rule.id}`}
+                                    onClick={() =>
+                                      setMatchesDialog({
+                                        pattern: editPreview.pattern,
+                                        candidateCount:
+                                          editPreview.candidateCount,
+                                        sampleTransactions:
+                                          editPreview.sampleTransactions,
+                                        toCategoryName:
+                                          catById.get(
+                                            editPreview.toCategoryId,
+                                          )?.name ?? "the new category",
+                                      })
+                                    }
+                                  >
+                                    Show matches
+                                  </button>
+                                </div>
+                              )}
                           </div>
                         );
                       }
@@ -1400,6 +1630,22 @@ export default function MappingRulesPage() {
         </Card>
       )}
       {previewDialog}
+
+      <RuleMatchesPreviewDialog
+        state={matchesDialog}
+        onOpenChange={(open) => {
+          if (!open) setMatchesDialog(null);
+        }}
+        onApply={() => {
+          // From the Mapping Rules edit flow the bulk recategorize fires
+          // on Save (after the PATCH succeeds) so the dialog's Apply
+          // button is just a "got it, close this" — we still wire it to
+          // close the dialog so behavior matches the Chase-page entry
+          // point's keyboard/click affordances.
+          setMatchesDialog(null);
+        }}
+      />
+
     </div>
   );
 }

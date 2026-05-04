@@ -302,7 +302,7 @@ router.patch(
     type RepointedRule = {
       ruleId: string;
       pattern: string;
-      matchType: "contains" | "exact" | "starts_with";
+      matchType: ReturnType<typeof normalizeMatchType>;
       fromCategoryId: string;
       toCategoryId: string;
       candidateCount: number;

@@ -1250,6 +1250,69 @@ export const TestMappingRulesResponse = zod.object({
     ),
 });
 
+/**
+ * Preview how many existing transactions would be affected if the given
+mapping rule's `categoryId` were changed to `toCategoryId`. Returns the
+same `{ candidateCount, sampleTransactions }` shape that PATCH
+/transactions/:id reports for repointed rules, so the Mapping Rules edit
+UI can surface "N past transactions will move into <new category>" and
+a "Show matches" preview before the user saves the edit.
+
+Read-only — the rule is not modified and no transactions are touched.
+
+ */
+export const PreviewMappingRuleRecategorizeParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const PreviewMappingRuleRecategorizeBody = zod.object({
+  toCategoryId: zod
+    .string()
+    .describe(
+      "The category the user is considering moving the rule to. The\npreview is computed against the rule's \*current\* `categoryId` as\nthe `fromCategoryId`; if the rule is currently uncategorized\n(`categoryId: null`) or `toCategoryId` already matches it, the\nresponse reports `candidateCount: 0`.\n",
+    ),
+});
+
+export const PreviewMappingRuleRecategorizeResponse = zod
+  .object({
+    ruleId: zod.string(),
+    pattern: zod.string(),
+    matchType: zod.enum(["contains", "exact", "starts_with"]),
+    fromCategoryId: zod
+      .string()
+      .nullable()
+      .describe(
+        "The rule's current `categoryId` at preview time. `null` when the\nrule is currently uncategorized — in that case `candidateCount` is\nalways `0` because the bulk-recategorize endpoint requires a\nconcrete from-category to scope the update.\n",
+      ),
+    toCategoryId: zod.string(),
+    candidateCount: zod
+      .number()
+      .describe(
+        "Number of transactions whose description matches the rule's\npattern AND that currently sit in `fromCategoryId`. `0` when the\ntarget equals the from-category, when the rule is uncategorized,\nor when no historical rows match.\n",
+      ),
+    sampleTransactions: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          description: zod.string(),
+          occurredOn: zod.string(),
+          amount: zod.string(),
+          matchedRuleId: zod
+            .string()
+            .nullish()
+            .describe(
+              'Id of the mapping rule that auto-categorize would currently\nattribute for this sample row in its \*present\* category, or\nnull when no rule matches. Computed server-side identically\nto the GET \/transactions annotation so the \"Show matches\"\npreview dialog can render the same MatchedRuleChip\n(deep-link to \/mapping-rules?focus=<id> or \"manually\ncategorized\" hint) as every other transaction-list surface.\n',
+            ),
+        }),
+      )
+      .describe(
+        "First ~10 affected transactions, ordered most-recent first. Same\nthin slice (id, description, occurredOn, amount) used by\n`RepointedRule.sampleTransactions`.\n",
+      ),
+  })
+  .describe(
+    "Read-only preview of the bulk-recategorize that would happen if the\nMapping Rules edit UI saved a new `categoryId` for this rule and then\ncalled POST \/transactions\/recategorize-by-pattern with the same\n`{ pattern, matchType, fromCategoryId, toCategoryId }`. Mirrors the\n`RepointedRule` shape so the same preview Dialog can render either.\n",
+  );
+
 export const GetSettingsResponse = zod.object({
   weeklyAllowanceAmount: zod.string(),
   monthlyAllowanceAmount: zod.string(),

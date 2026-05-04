@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkSetForecastFlagInput, BulkSetForecastFlagResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UpdateTransactionResponse } from "./api.schemas";
+import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkSetForecastFlagInput, BulkSetForecastFlagResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UpdateTransactionResponse } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -906,6 +906,42 @@ export declare const useTestMappingRules: <TError = ErrorType<unknown>, TContext
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof testMappingRules>>, TError, {
     data: BodyType<TestMappingRulesInput>;
+}, TContext>;
+/**
+ * Preview how many existing transactions would be affected if the given
+mapping rule's `categoryId` were changed to `toCategoryId`. Returns the
+same `{ candidateCount, sampleTransactions }` shape that PATCH
+/transactions/:id reports for repointed rules, so the Mapping Rules edit
+UI can surface "N past transactions will move into <new category>" and
+a "Show matches" preview before the user saves the edit.
+
+Read-only — the rule is not modified and no transactions are touched.
+
+ */
+export declare const getPreviewMappingRuleRecategorizeUrl: (id: string) => string;
+export declare const previewMappingRuleRecategorize: (id: string, mappingRuleRecategorizePreviewInput: MappingRuleRecategorizePreviewInput, options?: RequestInit) => Promise<MappingRuleRecategorizePreview>;
+export declare const getPreviewMappingRuleRecategorizeMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof previewMappingRuleRecategorize>>, TError, {
+        id: string;
+        data: BodyType<MappingRuleRecategorizePreviewInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof previewMappingRuleRecategorize>>, TError, {
+    id: string;
+    data: BodyType<MappingRuleRecategorizePreviewInput>;
+}, TContext>;
+export type PreviewMappingRuleRecategorizeMutationResult = NonNullable<Awaited<ReturnType<typeof previewMappingRuleRecategorize>>>;
+export type PreviewMappingRuleRecategorizeMutationBody = BodyType<MappingRuleRecategorizePreviewInput>;
+export type PreviewMappingRuleRecategorizeMutationError = ErrorType<void>;
+export declare const usePreviewMappingRuleRecategorize: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof previewMappingRuleRecategorize>>, TError, {
+        id: string;
+        data: BodyType<MappingRuleRecategorizePreviewInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof previewMappingRuleRecategorize>>, TError, {
+    id: string;
+    data: BodyType<MappingRuleRecategorizePreviewInput>;
 }, TContext>;
 export declare const getGetSettingsUrl: () => string;
 export declare const getSettings: (options?: RequestInit) => Promise<Settings>;
