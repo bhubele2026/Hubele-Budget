@@ -47,6 +47,9 @@ vi.mock("@/hooks/use-toast", () => ({
 vi.mock("@/components/plaid-link-button", () => ({
   PlaidLinkButton: () => null,
 }));
+vi.mock("@/components/sync-button", () => ({
+  SyncButton: () => null,
+}));
 vi.mock("@/components/category-picker", () => ({
   CategoryPicker: () => null,
   defaultRememberPattern: (s: string) => s,

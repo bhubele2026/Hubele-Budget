@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import {
   useCreatePlaidLinkToken,
@@ -13,9 +13,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { usePlaidSync } from "@/hooks/use-plaid-sync";
 
 export const PLAID_LINK_TOKEN_STORAGE_KEY = "h2:plaid:link_token";
 export const PLAID_RETURN_TO_STORAGE_KEY = "h2:plaid:return_to";
+
+const POST_LINK_POLL_DELAY_MS = 5_000;
+const POST_LINK_POLL_MAX_ATTEMPTS = 6;
 
 export function PlaidLinkButton({
   onLinked,
@@ -30,6 +34,15 @@ export function PlaidLinkButton({
   const { data: plaidEnv } = useGetPlaidEnvironment();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { runSync } = usePlaidSync();
+  // Tracks unmount so a long-running post-link poll can't fire toasts
+  // (or keep scheduling timers) after the user navigates away.
+  const cancelledRef = useRef(false);
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, []);
 
   const fetchToken = useCallback(() => {
     createLinkToken.mutate(undefined, {
@@ -53,6 +66,49 @@ export function PlaidLinkButton({
     }
   }, []);
 
+  // Plaid /transactions/sync usually returns empty on the very first call
+  // for a freshly-linked item — the historical batch is staged on Plaid's
+  // backend and only becomes available a few seconds later (normally
+  // signaled by an INITIAL_UPDATE webhook). Poll silently a few times so
+  // the user sees their data without manually clicking Sync.
+  const pollAfterLink = useCallback(async () => {
+    let totalAdded = 0;
+    let totalModified = 0;
+    let lastErrors: string[] = [];
+    for (let attempt = 0; attempt < POST_LINK_POLL_MAX_ATTEMPTS; attempt++) {
+      await new Promise((r) => setTimeout(r, POST_LINK_POLL_DELAY_MS));
+      if (cancelledRef.current) return;
+      const totals = await runSync({ silent: true });
+      if (cancelledRef.current) return;
+      totalAdded += totals.added;
+      totalModified += totals.modified;
+      lastErrors = totals.errors;
+      if (totals.added > 0 || totals.modified > 0) break;
+    }
+    if (cancelledRef.current) return;
+    if (totalAdded + totalModified > 0) {
+      const parts: string[] = [];
+      if (totalAdded > 0) parts.push(`Added ${totalAdded}`);
+      if (totalModified > 0) parts.push(`updated ${totalModified}`);
+      toast({
+        title: "Transactions imported",
+        description: `${parts.join(", ")} from your newly linked account.`,
+      });
+    } else if (lastErrors.length > 0) {
+      toast({
+        title: "Sync had errors",
+        description: lastErrors.join("; "),
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Still preparing transactions",
+        description:
+          "Your bank hasn't finished its initial export yet. Click Sync again in a minute, or new charges will appear automatically on the next refresh.",
+      });
+    }
+  }, [runSync, toast]);
+
   const onSuccess = useCallback(
     (publicToken: string, metadata: { institution?: { institution_id?: string; name?: string } | null }) => {
       exchange.mutate(
@@ -75,10 +131,16 @@ export function PlaidLinkButton({
               // ignore — query invalidation below will retry without refresh
             }
             qc.invalidateQueries({ queryKey: getListPlaidLiabilityAccountsQueryKey() });
-            toast({ title: "Account linked", description: "Transactions are syncing." });
+            toast({
+              title: "Account linked",
+              description: "Pulling your transactions — this can take a few seconds.",
+            });
             setLinkToken(null);
             clearStoredLinkToken();
             onLinked?.();
+            // Fire-and-forget background poll so the freshly-linked item
+            // populates as soon as Plaid finishes the initial export.
+            void pollAfterLink();
           },
           onError: (err) => {
             toast({
@@ -91,7 +153,7 @@ export function PlaidLinkButton({
         },
       );
     },
-    [exchange, qc, toast, clearStoredLinkToken, onLinked],
+    [exchange, qc, toast, clearStoredLinkToken, onLinked, pollAfterLink],
   );
 
   const { open, ready } = usePlaidLink({

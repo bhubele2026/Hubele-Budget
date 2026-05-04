@@ -74,6 +74,7 @@ import {
 } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import { SyncButton } from "@/components/sync-button";
 import {
   AccountPageHeader,
   AccountFilterBar,
@@ -726,6 +727,7 @@ export default function TransactionsPage() {
             <Button onClick={handleOpenNew} variant="outline" size="sm" data-testid="button-add-transaction">
               <Plus className="w-4 h-4 mr-1.5" /> Add transaction
             </Button>
+            <SyncButton />
             <PlaidLinkButton label="Connect a bank" />
           </>
         }

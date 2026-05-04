@@ -7,14 +7,13 @@ import {
   getListDashboardBudgetsQueryKey,
   useListPlaidItems,
   useDeletePlaidItem,
-  useSyncPlaidTransactions,
   useGetPlaidEnvironment,
   useCleanupNonProdPlaidItems,
   getGetPlaidEnvironmentQueryKey,
   useListCategories,
   getListPlaidItemsQueryKey,
-  getListTransactionsQueryKey,
 } from "@workspace/api-client-react";
+import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,38 +58,14 @@ export default function SettingsPage() {
   const importWorkbook = useImportWorkbook();
   const { data: plaidItems } = useListPlaidItems();
   const deletePlaidItem = useDeletePlaidItem();
-  const syncPlaid = useSyncPlaidTransactions();
+  const { runSync, isPending: isSyncPending } = usePlaidSync();
   const { data: plaidEnv } = useGetPlaidEnvironment();
   const cleanupNonProd = useCleanupNonProdPlaidItems();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const handleSync = (itemId?: string) => {
-    syncPlaid.mutate(
-      { data: itemId ? { itemId } : {} },
-      {
-        onSuccess: (res) => {
-          queryClient.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-          const totals = (res.items ?? []).reduce(
-            (acc, r) => {
-              acc.added += r.added ?? 0;
-              acc.modified += r.modified ?? 0;
-              acc.removed += r.removed ?? 0;
-              return acc;
-            },
-            { added: 0, modified: 0, removed: 0 },
-          );
-          toast({
-            title: "Sync complete",
-            description: `Added ${totals.added}, updated ${totals.modified}, removed ${totals.removed}.`,
-          });
-        },
-        onError: (err) => {
-          toast({ title: "Sync failed", description: String(err), variant: "destructive" });
-        },
-      },
-    );
+    void runSync(itemId ? { itemId } : {});
   };
 
   const handleUnlink = (id: string, name: string | null | undefined) => {
@@ -420,7 +395,7 @@ export default function SettingsPage() {
             </p>
           )}
           {(plaidItems ?? []).map((item) => {
-            const isSyncing = syncPlaid.isPending;
+            const isSyncing = isSyncPending;
             return (
               <div
                 key={item.id}

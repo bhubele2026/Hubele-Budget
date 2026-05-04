@@ -45,6 +45,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import { SyncButton } from "@/components/sync-button";
 import { computeBalanceAtEndOf } from "@/lib/accountBalance";
 import {
   AccountPageHeader,
@@ -1020,7 +1021,12 @@ export default function AmexPage() {
           title="American Express"
           subtitle="Day-by-day card spending — categorized into your budget."
           icon={<CreditCard className="h-7 w-7 text-blue-600" />}
-          actions={<PlaidLinkButton label="Connect a card" />}
+          actions={
+            <>
+              <SyncButton />
+              <PlaidLinkButton label="Connect a card" />
+            </>
+          }
         />
 
       <div className="flex items-stretch gap-4 flex-wrap">
