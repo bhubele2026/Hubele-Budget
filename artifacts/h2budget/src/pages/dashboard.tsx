@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
@@ -23,6 +23,8 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -181,10 +183,12 @@ function WeeklyMonthlySection({
   transactions,
   viewMonth,
   today,
+  includeAllSources = false,
 }: {
   transactions: Transaction[];
   viewMonth: Date;
   today: Date;
+  includeAllSources?: boolean;
 }) {
   const SUB_LABEL = useWeeklyBucketLabels();
   const monthKey = useMemo(
@@ -204,7 +208,7 @@ function WeeklyMonthlySection({
     let sum = 0;
     const list: Transaction[] = [];
     for (const tx of transactions) {
-      if (tx.source !== "amex") continue;
+      if (!includeAllSources && tx.source !== "amex") continue;
       if (!tx.weeklyAllowance) continue;
       if (tx.occurredOn < monthStartISO || tx.occurredOn > monthEndISO) continue;
       const amt = expenseAmount(tx);
@@ -216,7 +220,7 @@ function WeeklyMonthlySection({
     }
     list.sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
     return { totals: t, total: sum, monthTxns: list };
-  }, [transactions, monthStartISO, monthEndISO]);
+  }, [transactions, monthStartISO, monthEndISO, includeAllSources]);
 
   const cap = editor.saved;
   const remaining = Math.max(0, cap - total);
@@ -307,12 +311,14 @@ function MonthlyLikeSection({
   transactions,
   viewMonth,
   today,
+  includeAllSources = false,
 }: {
   title: string;
   bucket: "monthly" | "unplanned";
   transactions: Transaction[];
   viewMonth: Date;
   today: Date;
+  includeAllSources?: boolean;
 }) {
   const monthKey = useMemo(
     () => `${viewMonth.getFullYear()}-${String(viewMonth.getMonth() + 1).padStart(2, "0")}`,
@@ -328,7 +334,7 @@ function MonthlyLikeSection({
 
   const { total, recent } = useMemo(() => {
     const filtered = transactions.filter((t) => {
-      if (t.source !== "amex") return false;
+      if (!includeAllSources && t.source !== "amex") return false;
       const matches = bucket === "monthly" ? t.monthlyAllowance : t.unplannedAllowance;
       if (!matches) return false;
       return t.occurredOn >= monthStartISO && t.occurredOn <= monthEndISO;
@@ -336,7 +342,7 @@ function MonthlyLikeSection({
     const sum = filtered.reduce((s, t) => s + expenseAmount(t), 0);
     const sorted = [...filtered].sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
     return { total: sum, recent: sorted };
-  }, [transactions, bucket, monthStartISO, monthEndISO]);
+  }, [transactions, bucket, monthStartISO, monthEndISO, includeAllSources]);
 
   const cap = editor.saved;
   const overspent = cap > 0 && total > cap;
@@ -476,6 +482,12 @@ function ReimbursementsBox({
   const { toast } = useToast();
   const updateTx = useUpdateTransaction();
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  // (#84) Multi-select mode: when on, the row checkbox toggles selection
+  // (instead of marking reimbursed) and a contextual bulk bar offers
+  // "Mark N reimbursed". When off, the per-row checkbox keeps its
+  // existing one-click behavior.
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const reimbursable = useMemo(
     () => transactions.filter((t) => t.reimbursable),
@@ -489,6 +501,28 @@ function ReimbursementsBox({
         .sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1)),
     [reimbursable],
   );
+
+  // (#84) Keep the selected set honest: prune ids that are no longer in
+  // `pending` (e.g., after a successful resolve, refetch, or month change),
+  // and exit selection mode entirely if nothing is left to act on. Without
+  // this, the bulk bar can show "N selected" while bulk actions silently
+  // no-op against a stale Set.
+  const pendingIdSet = useMemo(
+    () => new Set(pending.map((t) => t.id)),
+    [pending],
+  );
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (pendingIdSet.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+    if (selectionMode && pending.length === 0) setSelectionMode(false);
+  }, [pendingIdSet, pending.length, selectionMode]);
 
   const reimbursed = useMemo(
     () =>
@@ -673,24 +707,77 @@ function ReimbursementsBox({
     }
   };
 
+  // (#84) Bulk-mark by arbitrary subset chosen in selection mode.
+  const bulkMarkSelected = async () => {
+    const targets = pending.filter((t) => selectedIds.has(t.id));
+    if (targets.length === 0) return;
+    for (const t of targets) applyOptimistic(t.id, true);
+    try {
+      await Promise.all(
+        targets.map((t) =>
+          updateTx.mutateAsync({ id: t.id, data: { reimbursed: true } }),
+        ),
+      );
+      qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      toast({
+        title: `Marked ${targets.length} item${targets.length === 1 ? "" : "s"} reimbursed`,
+      });
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+    } catch (e) {
+      qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      toast({
+        title: "Some updates failed",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const exitSelectionMode = () => {
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const owedByListId = "dashboard-owed-by-suggestions";
 
   const renderRow = (t: Transaction, reimbursed: boolean) => {
     const amt = expenseAmount(t);
+    const inSelectMode = selectionMode && !reimbursed;
+    const isSelected = inSelectMode && selectedIds.has(t.id);
     return (
       <div
         key={t.id}
         className={cn(
           "flex items-center gap-3 text-sm py-1 transition-opacity",
           reimbursed && "opacity-60",
+          isSelected && "bg-primary/5 rounded-sm px-1 -mx-1",
         )}
       >
-        <Checkbox
-          checked={reimbursed}
-          disabled={pendingIds.has(t.id)}
-          onCheckedChange={(v) => setReimbursed(t, !!v)}
-          aria-label={reimbursed ? "Move back to pending" : "Mark reimbursed"}
-        />
+        {inSelectMode ? (
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={() => toggleSelected(t.id)}
+            aria-label={isSelected ? "Unselect" : "Select"}
+            data-testid={`select-reimburse-${t.id}`}
+          />
+        ) : (
+          <Checkbox
+            checked={reimbursed}
+            disabled={pendingIds.has(t.id)}
+            onCheckedChange={(v) => setReimbursed(t, !!v)}
+            aria-label={reimbursed ? "Move back to pending" : "Mark reimbursed"}
+          />
+        )}
         <div className="min-w-0 flex-1">
           <p
             className={cn(
@@ -768,13 +855,21 @@ function ReimbursementsBox({
                 {pendingByPayer.map(({ payer, total, count }) => (
                   <button
                     key={payer}
+                    type="button"
+                    disabled={selectionMode || updateTx.isPending}
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs hover:ring-2 hover:ring-primary/40 transition-all cursor-pointer",
                       payer === "Unassigned"
                         ? "border-dashed text-muted-foreground"
                         : "bg-muted/40",
+                      selectionMode &&
+                        "opacity-50 cursor-not-allowed hover:ring-0",
                     )}
-                    title={`Mark all ${count} item${count === 1 ? "" : "s"} from ${payer} as reimbursed`}
+                    title={
+                      selectionMode
+                        ? "Exit selection mode to use payer shortcuts"
+                        : `Mark all ${count} item${count === 1 ? "" : "s"} from ${payer} as reimbursed`
+                    }
                     onClick={() => bulkMarkPaid(payer)}
                     data-testid={`bulk-reimburse-${payer}`}
                   >
@@ -786,17 +881,56 @@ function ReimbursementsBox({
                 ))}
               </div>
             )}
-            {pending.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs"
-                onClick={() => bulkMarkPaid(null)}
-                disabled={updateTx.isPending}
-                data-testid="bulk-reimburse-all"
+            {pending.length > 0 && !selectionMode && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => bulkMarkPaid(null)}
+                  disabled={updateTx.isPending}
+                  data-testid="bulk-reimburse-all"
+                >
+                  Mark all {pending.length} as reimbursed
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => setSelectionMode(true)}
+                  data-testid="bulk-reimburse-select-mode"
+                >
+                  Select…
+                </Button>
+              </div>
+            )}
+            {pending.length > 0 && selectionMode && (
+              <div
+                className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5"
+                data-testid="bulk-reimburse-bar"
               >
-                Mark all {pending.length} as reimbursed
-              </Button>
+                <span className="text-xs font-medium">
+                  {selectedIds.size} of {pending.length} selected
+                </span>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={bulkMarkSelected}
+                  disabled={selectedIds.size === 0 || updateTx.isPending}
+                  data-testid="bulk-reimburse-mark-selected"
+                >
+                  Mark {selectedIds.size || ""} reimbursed
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs ml-auto"
+                  onClick={exitSelectionMode}
+                  data-testid="bulk-reimburse-cancel"
+                >
+                  Cancel
+                </Button>
+              </div>
             )}
           </div>
         )}
@@ -1203,6 +1337,8 @@ function MonthlySnapshot({
   );
 }
 
+const INCLUDE_ALL_SOURCES_KEY = "h2budget:dashboardIncludeAllSources";
+
 export function DashboardMonthlyBuckets({
   today,
   transactions,
@@ -1217,44 +1353,80 @@ export function DashboardMonthlyBuckets({
   );
   const isAtFloor = isViewMonthAtFloor(viewMonth);
   const monthLabel = monthLabelFor(viewMonth);
+  // (#28) Default OFF — preserves existing Amex-only bucket behavior.
+  // When ON, WK/MO/UN buckets include charges from any tagged source
+  // (Chase debit, manual entries, etc.). Persisted in localStorage.
+  const [includeAllSources, setIncludeAllSources] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(INCLUDE_ALL_SOURCES_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const onToggleAllSources = (next: boolean) => {
+    setIncludeAllSources(next);
+    try {
+      window.localStorage.setItem(INCLUDE_ALL_SOURCES_KEY, next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  };
 
   return (
     <>
       <div
-        className="flex items-center justify-end gap-2"
+        className="flex items-center justify-between gap-2 flex-wrap"
         data-testid="dashboard-month-cycler"
       >
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 rounded-full"
-          onClick={() => setMonthOffset((m) => m - 1)}
-          disabled={isAtFloor}
-          data-testid="button-month-prev"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span
-          className="text-xs uppercase tracking-widest text-muted-foreground min-w-[140px] text-center"
-          data-testid="text-month-label"
-        >
-          {monthLabel}
-        </span>
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 rounded-full"
-          onClick={() => setMonthOffset((m) => m + 1)}
-          data-testid="button-month-next"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="dashboard-include-all-sources"
+            checked={includeAllSources}
+            onCheckedChange={onToggleAllSources}
+            data-testid="toggle-include-all-sources"
+          />
+          <Label
+            htmlFor="dashboard-include-all-sources"
+            className="text-xs uppercase tracking-widest text-muted-foreground cursor-pointer"
+          >
+            Include other sources
+          </Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 rounded-full"
+            onClick={() => setMonthOffset((m) => m - 1)}
+            disabled={isAtFloor}
+            data-testid="button-month-prev"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span
+            className="text-xs uppercase tracking-widest text-muted-foreground min-w-[140px] text-center"
+            data-testid="text-month-label"
+          >
+            {monthLabel}
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 rounded-full"
+            onClick={() => setMonthOffset((m) => m + 1)}
+            data-testid="button-month-next"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <WeeklyMonthlySection
         transactions={transactions}
         viewMonth={viewMonth}
         today={today}
+        includeAllSources={includeAllSources}
       />
       <MonthlyLikeSection
         title="Monthly spending"
@@ -1262,6 +1434,7 @@ export function DashboardMonthlyBuckets({
         transactions={transactions}
         viewMonth={viewMonth}
         today={today}
+        includeAllSources={includeAllSources}
       />
       <MonthlyLikeSection
         title="Unplanned spending"
@@ -1269,6 +1442,7 @@ export function DashboardMonthlyBuckets({
         transactions={transactions}
         viewMonth={viewMonth}
         today={today}
+        includeAllSources={includeAllSources}
       />
     </>
   );

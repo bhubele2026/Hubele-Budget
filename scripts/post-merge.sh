@@ -6,9 +6,20 @@ pnpm install --frozen-lockfile
 # on a fresh checkout / CI environment.
 pnpm --filter @workspace/h2budget exec playwright install chromium
 pnpm --filter db push
-# Re-run OpenAPI codegen + tsc --build so api-zod, api-client-react,
-# and lib/db dist outputs match current source.
+# Task #56 — keep generated API types fresh after every merge.
+# Step 1: nuke any stale build outputs / tsbuildinfo so `tsc --build`
+# can't incorrectly skip the rebuild. (Stale dist + new openapi.yaml
+# is the exact pattern that has broken api-server typecheck multiple
+# times on fresh branches.)
+rm -rf \
+  lib/db/dist lib/db/tsconfig.tsbuildinfo \
+  lib/api-zod/dist lib/api-zod/tsconfig.tsbuildinfo \
+  lib/api-client-react/dist lib/api-client-react/tsconfig.tsbuildinfo
+# Step 2: regenerate from openapi.yaml.
 pnpm --filter @workspace/api-spec run codegen
+# Step 3: rebuild the lib outputs so every consumer (h2budget,
+# api-server, scripts) typechecks against current types.
+pnpm run typecheck:libs
 
 # Task #63 — seed the user's 18 recurring bills (idempotent; safe to re-run).
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \

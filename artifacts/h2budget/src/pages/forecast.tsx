@@ -50,6 +50,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -387,12 +388,19 @@ function PlanDropRow({
   onMove,
   activeDragId,
   payoff,
+  isBestSuggestion = false,
 }: {
   row: PlanLine;
   onSelect: (row: PlanLine) => void;
   onMove?: (row: PlanLine) => void;
   activeDragId: string | null;
   payoff?: PayoffInfo;
+  /**
+   * (#26) When a bank inbox card is being dragged, the row whose plan key
+   * matches the dragged card's top suggestion gets a tinted ring so the
+   * user can see exactly where to drop.
+   */
+  isBestSuggestion?: boolean;
 }) {
   const droppable = useDroppable({
     id: `plan:${row.itemId}|${row.date}`,
@@ -400,6 +408,8 @@ function PlanDropRow({
     disabled: row.status === "matched" || row.status === "missed",
   });
   const isOver = droppable.isOver && activeDragId !== null;
+  const showSuggestion =
+    !isOver && isBestSuggestion && activeDragId !== null;
   const canMove =
     !!onMove && (row.status === "pending_plan" || row.status === "future");
   return (
@@ -414,10 +424,13 @@ function PlanDropRow({
           onSelect(row);
         }
       }}
+      data-suggested-drop={showSuggestion ? "true" : undefined}
       className={`w-full text-left p-4 flex items-center justify-between transition-colors cursor-pointer ${
         isOver
           ? "bg-primary/10 ring-2 ring-primary ring-inset"
-          : "hover:bg-muted/50"
+          : showSuggestion
+            ? "bg-amber-50 ring-2 ring-amber-400/70 ring-inset dark:bg-amber-950/20"
+            : "hover:bg-muted/50"
       }`}
     >
       <div className="flex items-center gap-3 min-w-0">
@@ -577,6 +590,19 @@ export default function ForecastPage() {
   const [moveTarget, setMoveTarget] = useState<PlanLine | null>(null);
   const [moveDateDraft, setMoveDateDraft] = useState<string>("");
   const [moveError, setMoveError] = useState<string | null>(null);
+  // (#27) Per-row selection on the bank inbox so the user can bulk-resolve
+  // an arbitrary subset (not just "all").
+  const [selectedBankIds, setSelectedBankIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const toggleBankSelected = (txnId: string) =>
+    setSelectedBankIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(txnId)) next.delete(txnId);
+      else next.add(txnId);
+      return next;
+    });
+  const clearBankSelection = () => setSelectedBankIds(new Set());
 
   const today = useMemo(() => new Date(), []);
   const currentMonth = useMemo(
@@ -738,6 +764,26 @@ export default function ForecastPage() {
     [inbox, monthFilter],
   );
 
+  // (#27) Keep `selectedBankIds` honest: drop any txn ids that are no
+  // longer present in the visible inbox (post-resolve refetch, month
+  // change, fresh data). Otherwise the bulk bar can show "N selected"
+  // while the bulk action silently no-ops against a stale Set.
+  const bankInboxIdSet = useMemo(
+    () => new Set(bankInbox.map((c) => c.bank.txn.id)),
+    [bankInbox],
+  );
+  useEffect(() => {
+    setSelectedBankIds((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (bankInboxIdSet.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [bankInboxIdSet]);
+
   // Bank rows already resolved (matched or marked unplanned) in the current
   // month — used for an undo affordance directly on the bank card.
   const bankResolvedThisMonth = useMemo(() => {
@@ -889,6 +935,21 @@ export default function ForecastPage() {
     [bankSuggestions],
   );
 
+  // (#26) When an inbox card is being dragged, derive the plan key
+  // (`itemId|date`) of its best suggestion so the matching plan row
+  // can render with a tinted ring even before the cursor enters it.
+  const bestSuggestionPlanKey: string | null = useMemo(() => {
+    if (!activeDragId) return null;
+    const card = bankInbox.find((c) => c.id === activeDragId);
+    if (!card) return null;
+    const sugs = bankSuggestions.get(card.bank.txn.id) ?? [];
+    const top = sugs.find(
+      (s) => s.confidence === "high" || s.confidence === "medium",
+    );
+    if (!top) return null;
+    return `${top.plan.itemId}|${top.plan.date}`;
+  }, [activeDragId, bankInbox, bankSuggestions]);
+
   // Window key for confetti persistence: from→to
   const windowKey = data ? `${data.fromDate}_${data.toDate}` : null;
   const inboxCount = inbox.length;
@@ -1025,6 +1086,89 @@ export default function ForecastPage() {
     } else {
       toast({
         title: `${ok} updated, ${failures.length} failed`,
+        description: failures[0],
+        variant: "destructive",
+      });
+    }
+  };
+
+  // (#27) Bulk-mark just the selected inbox cards as unplanned.
+  const bulkMarkBankUnplannedSelected = async () => {
+    const ids = Array.from(selectedBankIds).filter((id) =>
+      bankInbox.some((c) => c.bank.txn.id === id),
+    );
+    if (!ids.length) return;
+    const CONCURRENCY = 6;
+    let cursor = 0;
+    let ok = 0;
+    const failures: string[] = [];
+    const worker = async () => {
+      while (cursor < ids.length) {
+        const i = cursor++;
+        const txnId = ids[i];
+        try {
+          await upsertResolution.mutateAsync({
+            data: { status: "ignored_unforecasted", matchedTxnId: txnId },
+          });
+          ok += 1;
+        } catch (e) {
+          failures.push((e as Error).message);
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
+    );
+    invalidate();
+    clearBankSelection();
+    if (!failures.length) {
+      toast({ title: `Marked ${ok} as unplanned` });
+    } else {
+      toast({
+        title: `${ok} updated, ${failures.length} failed`,
+        description: failures[0],
+        variant: "destructive",
+      });
+    }
+  };
+
+  // (#27) Bulk-match the confident-pickable subset of selected inbox cards.
+  const bulkMatchConfidentSelected = async () => {
+    const items = confidentMatches.filter((m) => selectedBankIds.has(m.txnId));
+    if (!items.length) return;
+    const CONCURRENCY = 6;
+    let cursor = 0;
+    let ok = 0;
+    const failures: string[] = [];
+    const worker = async () => {
+      while (cursor < items.length) {
+        const i = cursor++;
+        const it = items[i];
+        try {
+          await upsertResolution.mutateAsync({
+            data: {
+              status: "matched",
+              recurringItemId: it.plan.itemId,
+              occurrenceDate: it.plan.originalDate ?? it.plan.date,
+              matchedTxnId: it.txnId,
+            },
+          });
+          ok += 1;
+        } catch (e) {
+          failures.push((e as Error).message);
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker),
+    );
+    invalidate();
+    clearBankSelection();
+    if (!failures.length) {
+      toast({ title: `Matched ${ok} confident bank row${ok === 1 ? "" : "s"}` });
+    } else {
+      toast({
+        title: `${ok} matched, ${failures.length} failed`,
         description: failures[0],
         variant: "destructive",
       });
@@ -1771,6 +1915,53 @@ export default function ForecastPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
+                {/* (#27) Selection-scoped bulk bar */}
+                {selectedBankIds.size > 0 && (
+                  <div
+                    className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2"
+                    data-testid="bank-inbox-selection-bar"
+                  >
+                    <span className="text-xs font-medium">
+                      {selectedBankIds.size} selected
+                    </span>
+                    {(() => {
+                      const matchableCount = confidentMatches.filter((m) =>
+                        selectedBankIds.has(m.txnId),
+                      ).length;
+                      return matchableCount > 0 ? (
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={bulkMatchConfidentSelected}
+                          disabled={upsertResolution.isPending}
+                          data-testid="bulk-match-confident-selected"
+                        >
+                          <Sparkles className="w-3 h-3 mr-1" />
+                          Match {matchableCount} confident
+                        </Button>
+                      ) : null;
+                    })()}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={bulkMarkBankUnplannedSelected}
+                      disabled={upsertResolution.isPending}
+                      data-testid="bulk-mark-unplanned-selected"
+                    >
+                      Mark {selectedBankIds.size} unplanned
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs ml-auto"
+                      onClick={clearBankSelection}
+                      data-testid="bank-inbox-clear-selection"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                )}
                 {bankInbox.length === 0 ? (
                   <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
                     {isReconciledToBank ? (
@@ -1784,9 +1975,23 @@ export default function ForecastPage() {
                 ) : (
                   bankInbox.map((card) => {
                     const sugs = bankSuggestions.get(card.bank.txn.id) ?? [];
+                    const txnId = card.bank.txn.id;
+                    const isSelected = selectedBankIds.has(txnId);
                     return (
                       <div key={card.id} className="space-y-1">
                         <div className="flex items-stretch gap-2">
+                          <div className="flex items-start pt-3 pl-1">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleBankSelected(txnId)}
+                              aria-label={
+                                isSelected
+                                  ? `Unselect ${card.bank.txn.description}`
+                                  : `Select ${card.bank.txn.description}`
+                              }
+                              data-testid={`select-bank-${txnId}`}
+                            />
+                          </div>
                           <div className="flex-1">
                             <InboxCardView
                               card={card}
@@ -1909,6 +2114,10 @@ export default function ForecastPage() {
                           onMove={onMoveStart}
                           activeDragId={activeDragId}
                           payoff={payoffsByItem.get(row.itemId)}
+                          isBestSuggestion={
+                            bestSuggestionPlanKey ===
+                            `${row.itemId}|${row.date}`
+                          }
                         />,
                       );
                       const currentYM = row.date.slice(0, 7);
