@@ -23,6 +23,7 @@ import {
   DeleteTransactionParams,
   ListTransactionsQueryParams,
   RecategorizeTransactionsByPatternBody,
+  UncategorizeTransactionsByIdsBody,
   BulkSetForecastFlagBody,
 } from "@workspace/api-zod";
 
@@ -709,6 +710,67 @@ router.post(
         ),
       )
       .returning({ id: transactionsTable.id });
+    res.json({
+      updated: updated.length,
+      affectedMonths: Array.from(monthSet).sort(),
+      affectedIds: updated.map((r) => r.id),
+    });
+  },
+);
+
+/**
+ * Bulk clear the categoryId on a list of transactions, scoped by an
+ * optional `fromCategoryId` guard. Used by the Mapping Rules page's
+ * "Rule added · moved N past transactions" toast so the user can
+ * one-click Undo a freshly-added rule's bulk sweep — the existing
+ * /transactions/recategorize-by-pattern endpoint can't model the
+ * swap because it requires a non-null toCategoryId. Reusable for
+ * any future "from anywhere → null" bulk.
+ *
+ * The `fromCategoryId` guard preserves manual edits made between the
+ * original recategorize and the Undo click: only rows whose categoryId
+ * still equals the value the bulk moved them into are flipped back to
+ * null. Pass `null` to allow flipping rows already uncategorized
+ * (a no-op for those rows, but keeps the surface symmetric).
+ */
+router.post(
+  "/transactions/uncategorize-by-ids",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const parsed = UncategorizeTransactionsByIdsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const userId = req.userId!;
+    const { ids, fromCategoryId } = parsed.data;
+    // An explicitly empty list is a no-op so callers can pass through
+    // a degenerate Undo payload (e.g. a bulk that flipped 0 rows)
+    // without affecting unrelated data.
+    if (ids.length === 0) {
+      res.json({ updated: 0, affectedMonths: [], affectedIds: [] });
+      return;
+    }
+    const updated = await db
+      .update(transactionsTable)
+      .set({ categoryId: null })
+      .where(
+        and(
+          eq(transactionsTable.userId, userId),
+          inArray(transactionsTable.id, ids),
+          fromCategoryId === null
+            ? isNull(transactionsTable.categoryId)
+            : eq(transactionsTable.categoryId, fromCategoryId),
+        ),
+      )
+      .returning({
+        id: transactionsTable.id,
+        occurredOn: transactionsTable.occurredOn,
+      });
+    const monthSet = new Set<string>();
+    for (const r of updated) {
+      monthSet.add(`${r.occurredOn.slice(0, 7)}-01`);
+    }
     res.json({
       updated: updated.length,
       affectedMonths: Array.from(monthSet).sort(),

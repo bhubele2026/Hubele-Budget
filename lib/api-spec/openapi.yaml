@@ -160,6 +160,32 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RecategorizeByPatternResult" }
 
+  /transactions/uncategorize-by-ids:
+    post:
+      operationId: uncategorizeTransactionsByIds
+      tags: [transactions]
+      summary: |
+        Bulk clear the categoryId on a list of transactions, scoped by an
+        optional `fromCategoryId` guard so manual edits made between the
+        original recategorize and the Undo click are preserved. Used by the
+        "Rule added · moved N past transactions" toast on the Mapping Rules
+        page so the user can one-click Undo a freshly-added rule's bulk
+        sweep — the existing /transactions/recategorize-by-pattern endpoint
+        can't model the swap because it requires a non-null toCategoryId.
+        Reusable for any future "from anywhere" bulk that needs a null
+        target.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UncategorizeByIdsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UncategorizeByIdsResult" }
+
   /transactions/bulk-set-forecast-flag:
     post:
       operationId: bulkSetForecastFlag
@@ -1588,6 +1614,52 @@ components:
             client passes these back into the same endpoint with `from`
             and `to` swapped (and `ids` set) to implement one-click
             "Undo" of a bulk recategorization.
+          items: { type: string }
+
+    UncategorizeByIdsInput:
+      type: object
+      required: [ids, fromCategoryId]
+      properties:
+        ids:
+          type: array
+          description: |
+            Whitelist of transaction ids whose categoryId should be cleared.
+            Only rows owned by the requesting user are touched. An
+            explicitly-empty list is a no-op so callers can pass through a
+            degenerate Undo payload (e.g. a bulk that flipped 0 rows)
+            without affecting unrelated data.
+          items: { type: string }
+        fromCategoryId:
+          type: ["string", "null"]
+          description: |
+            Guard category — only rows whose categoryId still equals this
+            value are flipped to null. Pass the category id the rows were
+            moved into by the original bulk so any rows the user has since
+            re-edited (away from that category) are preserved. Pass `null`
+            to allow flipping rows that are already uncategorized — that's
+            still a no-op for those rows but keeps the same surface
+            reusable for future "from anywhere" callers.
+
+    UncategorizeByIdsResult:
+      type: object
+      required: [updated, affectedMonths, affectedIds]
+      properties:
+        updated:
+          type: integer
+          description: Number of transactions whose categoryId was cleared.
+        affectedMonths:
+          type: array
+          description: |
+            Distinct YYYY-MM-01 month-start strings spanning the cleared
+            transactions. Clients invalidate the corresponding budget month
+            queries so per-line actuals refresh.
+          items: { type: string }
+        affectedIds:
+          type: array
+          description: |
+            Ids of the transactions whose categoryId was actually cleared.
+            Mirrors RecategorizeByPatternResult.affectedIds so the toast
+            can report a precise count to the user.
           items: { type: string }
 
     BulkSetForecastFlagInput:

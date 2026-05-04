@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkSetForecastFlagInput, BulkSetForecastFlagResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UpdateTransactionResponse } from "./api.schemas";
+import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkSetForecastFlagInput, BulkSetForecastFlagResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdateTransactionResponse } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -172,6 +172,51 @@ export declare const useRecategorizeTransactionsByPattern: <TError = ErrorType<u
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>, TError, {
     data: BodyType<RecategorizeByPatternInput>;
+}, TContext>;
+/**
+ * @summary Bulk clear the categoryId on a list of transactions, scoped by an
+optional `fromCategoryId` guard so manual edits made between the
+original recategorize and the Undo click are preserved. Used by the
+"Rule added · moved N past transactions" toast on the Mapping Rules
+page so the user can one-click Undo a freshly-added rule's bulk
+sweep — the existing /transactions/recategorize-by-pattern endpoint
+can't model the swap because it requires a non-null toCategoryId.
+Reusable for any future "from anywhere" bulk that needs a null
+target.
+
+ */
+export declare const getUncategorizeTransactionsByIdsUrl: () => string;
+export declare const uncategorizeTransactionsByIds: (uncategorizeByIdsInput: UncategorizeByIdsInput, options?: RequestInit) => Promise<UncategorizeByIdsResult>;
+export declare const getUncategorizeTransactionsByIdsMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof uncategorizeTransactionsByIds>>, TError, {
+        data: BodyType<UncategorizeByIdsInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof uncategorizeTransactionsByIds>>, TError, {
+    data: BodyType<UncategorizeByIdsInput>;
+}, TContext>;
+export type UncategorizeTransactionsByIdsMutationResult = NonNullable<Awaited<ReturnType<typeof uncategorizeTransactionsByIds>>>;
+export type UncategorizeTransactionsByIdsMutationBody = BodyType<UncategorizeByIdsInput>;
+export type UncategorizeTransactionsByIdsMutationError = ErrorType<unknown>;
+/**
+ * @summary Bulk clear the categoryId on a list of transactions, scoped by an
+optional `fromCategoryId` guard so manual edits made between the
+original recategorize and the Undo click are preserved. Used by the
+"Rule added · moved N past transactions" toast on the Mapping Rules
+page so the user can one-click Undo a freshly-added rule's bulk
+sweep — the existing /transactions/recategorize-by-pattern endpoint
+can't model the swap because it requires a non-null toCategoryId.
+Reusable for any future "from anywhere" bulk that needs a null
+target.
+
+ */
+export declare const useUncategorizeTransactionsByIds: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof uncategorizeTransactionsByIds>>, TError, {
+        data: BodyType<UncategorizeByIdsInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof uncategorizeTransactionsByIds>>, TError, {
+    data: BodyType<UncategorizeByIdsInput>;
 }, TContext>;
 /**
  * @summary Bulk set the forecast_flag on a list of transactions to a target

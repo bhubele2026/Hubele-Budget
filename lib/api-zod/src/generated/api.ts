@@ -412,6 +412,48 @@ export const RecategorizeTransactionsByPatternResponse = zod.object({
 });
 
 /**
+ * @summary Bulk clear the categoryId on a list of transactions, scoped by an
+optional `fromCategoryId` guard so manual edits made between the
+original recategorize and the Undo click are preserved. Used by the
+"Rule added · moved N past transactions" toast on the Mapping Rules
+page so the user can one-click Undo a freshly-added rule's bulk
+sweep — the existing /transactions/recategorize-by-pattern endpoint
+can't model the swap because it requires a non-null toCategoryId.
+Reusable for any future "from anywhere" bulk that needs a null
+target.
+
+ */
+export const UncategorizeTransactionsByIdsBody = zod.object({
+  ids: zod
+    .array(zod.string())
+    .describe(
+      "Whitelist of transaction ids whose categoryId should be cleared.\nOnly rows owned by the requesting user are touched. An\nexplicitly-empty list is a no-op so callers can pass through a\ndegenerate Undo payload (e.g. a bulk that flipped 0 rows)\nwithout affecting unrelated data.\n",
+    ),
+  fromCategoryId: zod
+    .string()
+    .nullable()
+    .describe(
+      'Guard category — only rows whose categoryId still equals this\nvalue are flipped to null. Pass the category id the rows were\nmoved into by the original bulk so any rows the user has since\nre-edited (away from that category) are preserved. Pass `null`\nto allow flipping rows that are already uncategorized — that\'s\nstill a no-op for those rows but keeps the same surface\nreusable for future \"from anywhere\" callers.\n',
+    ),
+});
+
+export const UncategorizeTransactionsByIdsResponse = zod.object({
+  updated: zod
+    .number()
+    .describe("Number of transactions whose categoryId was cleared."),
+  affectedMonths: zod
+    .array(zod.string())
+    .describe(
+      "Distinct YYYY-MM-01 month-start strings spanning the cleared\ntransactions. Clients invalidate the corresponding budget month\nqueries so per-line actuals refresh.\n",
+    ),
+  affectedIds: zod
+    .array(zod.string())
+    .describe(
+      "Ids of the transactions whose categoryId was actually cleared.\nMirrors RecategorizeByPatternResult.affectedIds so the toast\ncan report a precise count to the user.\n",
+    ),
+});
+
+/**
  * @summary Bulk set the forecast_flag on a list of transactions to a target
 boolean value. Returns the ids that were actually flipped (rows
 whose flag already matched the target are skipped) so the client

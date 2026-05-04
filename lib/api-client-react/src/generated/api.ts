@@ -97,6 +97,8 @@ import type {
   TestMappingRulesResult,
   Transaction,
   TransactionInput,
+  UncategorizeByIdsInput,
+  UncategorizeByIdsResult,
   UpdateTransactionResponse,
 } from "./api.schemas";
 
@@ -690,6 +692,114 @@ export const useRecategorizeTransactionsByPattern = <
   return useMutation(
     getRecategorizeTransactionsByPatternMutationOptions(options),
   );
+};
+
+/**
+ * @summary Bulk clear the categoryId on a list of transactions, scoped by an
+optional `fromCategoryId` guard so manual edits made between the
+original recategorize and the Undo click are preserved. Used by the
+"Rule added · moved N past transactions" toast on the Mapping Rules
+page so the user can one-click Undo a freshly-added rule's bulk
+sweep — the existing /transactions/recategorize-by-pattern endpoint
+can't model the swap because it requires a non-null toCategoryId.
+Reusable for any future "from anywhere" bulk that needs a null
+target.
+
+ */
+export const getUncategorizeTransactionsByIdsUrl = () => {
+  return `/api/transactions/uncategorize-by-ids`;
+};
+
+export const uncategorizeTransactionsByIds = async (
+  uncategorizeByIdsInput: UncategorizeByIdsInput,
+  options?: RequestInit,
+): Promise<UncategorizeByIdsResult> => {
+  return customFetch<UncategorizeByIdsResult>(
+    getUncategorizeTransactionsByIdsUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(uncategorizeByIdsInput),
+    },
+  );
+};
+
+export const getUncategorizeTransactionsByIdsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uncategorizeTransactionsByIds>>,
+    TError,
+    { data: BodyType<UncategorizeByIdsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof uncategorizeTransactionsByIds>>,
+  TError,
+  { data: BodyType<UncategorizeByIdsInput> },
+  TContext
+> => {
+  const mutationKey = ["uncategorizeTransactionsByIds"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof uncategorizeTransactionsByIds>>,
+    { data: BodyType<UncategorizeByIdsInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return uncategorizeTransactionsByIds(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UncategorizeTransactionsByIdsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof uncategorizeTransactionsByIds>>
+>;
+export type UncategorizeTransactionsByIdsMutationBody =
+  BodyType<UncategorizeByIdsInput>;
+export type UncategorizeTransactionsByIdsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Bulk clear the categoryId on a list of transactions, scoped by an
+optional `fromCategoryId` guard so manual edits made between the
+original recategorize and the Undo click are preserved. Used by the
+"Rule added · moved N past transactions" toast on the Mapping Rules
+page so the user can one-click Undo a freshly-added rule's bulk
+sweep — the existing /transactions/recategorize-by-pattern endpoint
+can't model the swap because it requires a non-null toCategoryId.
+Reusable for any future "from anywhere" bulk that needs a null
+target.
+
+ */
+export const useUncategorizeTransactionsByIds = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uncategorizeTransactionsByIds>>,
+    TError,
+    { data: BodyType<UncategorizeByIdsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof uncategorizeTransactionsByIds>>,
+  TError,
+  { data: BodyType<UncategorizeByIdsInput> },
+  TContext
+> => {
+  return useMutation(getUncategorizeTransactionsByIdsMutationOptions(options));
 };
 
 /**

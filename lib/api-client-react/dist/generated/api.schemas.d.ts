@@ -426,6 +426,41 @@ export interface RecategorizeByPatternResult {
    */
     affectedIds: string[];
 }
+export interface UncategorizeByIdsInput {
+    /** Whitelist of transaction ids whose categoryId should be cleared.
+  Only rows owned by the requesting user are touched. An
+  explicitly-empty list is a no-op so callers can pass through a
+  degenerate Undo payload (e.g. a bulk that flipped 0 rows)
+  without affecting unrelated data.
+   */
+    ids: string[];
+    /**
+     * Guard category — only rows whose categoryId still equals this
+  value are flipped to null. Pass the category id the rows were
+  moved into by the original bulk so any rows the user has since
+  re-edited (away from that category) are preserved. Pass `null`
+  to allow flipping rows that are already uncategorized — that's
+  still a no-op for those rows but keeps the same surface
+  reusable for future "from anywhere" callers.
+  
+     * @nullable
+     */
+    fromCategoryId: string | null;
+}
+export interface UncategorizeByIdsResult {
+    /** Number of transactions whose categoryId was cleared. */
+    updated: number;
+    /** Distinct YYYY-MM-01 month-start strings spanning the cleared
+  transactions. Clients invalidate the corresponding budget month
+  queries so per-line actuals refresh.
+   */
+    affectedMonths: string[];
+    /** Ids of the transactions whose categoryId was actually cleared.
+  Mirrors RecategorizeByPatternResult.affectedIds so the toast
+  can report a precise count to the user.
+   */
+    affectedIds: string[];
+}
 export interface BulkSetForecastFlagInput {
     /** Transaction ids to flip. Only rows owned by the requesting
   user whose current `forecast_flag` differs from the target

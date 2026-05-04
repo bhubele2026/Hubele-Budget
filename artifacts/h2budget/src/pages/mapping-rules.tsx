@@ -11,6 +11,7 @@ import {
   usePreviewMappingRuleRecategorize,
   usePreviewMappingRuleRecategorizeByPattern,
   useRecategorizeTransactionsByPattern,
+  useUncategorizeTransactionsByIds,
   getListMappingRulesQueryKey,
   createMappingRule,
   deleteMappingRule,
@@ -504,6 +505,15 @@ export default function MappingRulesPage() {
   const previewRecategorizeByPattern =
     usePreviewMappingRuleRecategorizeByPattern();
   const recategorizeBulk = useRecategorizeTransactionsByPattern();
+  // Task #242 — undo path for the Add-flow's chained bulk recategorize.
+  // The existing /transactions/recategorize-by-pattern endpoint can't
+  // model the swap (the prior category is null and that endpoint requires
+  // a non-null toCategoryId), so we POST to the dedicated
+  // /transactions/uncategorize-by-ids endpoint with the affectedIds the
+  // bulk returned + the new category as the `fromCategoryId` guard. Rows
+  // the user has since manually re-edited away from that category are
+  // preserved by the guard.
+  const uncategorizeByIds = useUncategorizeTransactionsByIds();
 
   const [pattern, setPattern] = useState("");
   const [matchType, setMatchType] = useState("contains");
@@ -660,14 +670,70 @@ export default function MappingRulesPage() {
                     queryKey: getGetBudgetMonthQueryKey(m),
                   });
                 }
-                // No Undo affordance: the swap would require
-                // flipping these rows back to a `null` category,
-                // which the bulk endpoint rejects. The user can
-                // manually re-edit a row if needed; the rule
-                // itself can be deleted via the row-level Trash
-                // with its own Undo.
-                toast({
+                // Task #242 — one-click Undo. Posts the affected
+                // ids to /transactions/uncategorize-by-ids with
+                // the new category as the `fromCategoryId` guard
+                // so any rows the user has since manually re-edited
+                // away from `toCategoryId` are preserved. The
+                // freshly-added rule itself is left alone — the
+                // user can delete it via the row-level Trash with
+                // its own Undo if they don't want it pinned.
+                const undoTargetCategoryId = previewSnapshot.toCategoryId;
+                const affectedIds = res.affectedIds;
+                const undoable = res.updated > 0 && affectedIds.length > 0;
+                const { dismiss } = toast({
                   title: `Rule added · moved ${res.updated} past transaction${res.updated === 1 ? "" : "s"} into ${displayName}`,
+                  // ~6s — long enough to react to an accidental
+                  // bulk on a too-broad pattern without lingering.
+                  duration: 6000,
+                  ...(undoable
+                    ? {
+                        action: (
+                          <ToastAction
+                            altText="Undo rule-added bulk recategorize"
+                            data-testid="action-undo-add-rule-bulk"
+                            onClick={() => {
+                              dismiss();
+                              uncategorizeByIds.mutate(
+                                {
+                                  data: {
+                                    ids: affectedIds,
+                                    fromCategoryId: undoTargetCategoryId,
+                                  },
+                                },
+                                {
+                                  onSuccess: (undoRes) => {
+                                    queryClient.invalidateQueries({
+                                      queryKey: getListTransactionsQueryKey(),
+                                    });
+                                    for (const m of undoRes.affectedMonths) {
+                                      queryClient.invalidateQueries({
+                                        queryKey: getGetBudgetMonthQueryKey(m),
+                                      });
+                                    }
+                                    toast({
+                                      title:
+                                        undoRes.updated === 0
+                                          ? "Nothing to undo"
+                                          : `Restored ${undoRes.updated} transaction${undoRes.updated === 1 ? "" : "s"} to uncategorized`,
+                                    });
+                                  },
+                                  onError: (e) => {
+                                    toast({
+                                      title: "Couldn't undo",
+                                      description: (e as Error).message,
+                                      variant: "destructive",
+                                    });
+                                  },
+                                },
+                              );
+                            }}
+                          >
+                            Undo
+                          </ToastAction>
+                        ),
+                      }
+                    : {}),
                 });
               },
               onError: (e) => {

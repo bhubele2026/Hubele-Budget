@@ -825,6 +825,41 @@ export declare const RecategorizeTransactionsByPatternResponse: zod.ZodObject<{
     affectedIds: string[];
 }>;
 /**
+ * @summary Bulk clear the categoryId on a list of transactions, scoped by an
+optional `fromCategoryId` guard so manual edits made between the
+original recategorize and the Undo click are preserved. Used by the
+"Rule added · moved N past transactions" toast on the Mapping Rules
+page so the user can one-click Undo a freshly-added rule's bulk
+sweep — the existing /transactions/recategorize-by-pattern endpoint
+can't model the swap because it requires a non-null toCategoryId.
+Reusable for any future "from anywhere" bulk that needs a null
+target.
+
+ */
+export declare const UncategorizeTransactionsByIdsBody: zod.ZodObject<{
+    ids: zod.ZodArray<zod.ZodString, "many">;
+    fromCategoryId: zod.ZodNullable<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    fromCategoryId: string | null;
+    ids: string[];
+}, {
+    fromCategoryId: string | null;
+    ids: string[];
+}>;
+export declare const UncategorizeTransactionsByIdsResponse: zod.ZodObject<{
+    updated: zod.ZodNumber;
+    affectedMonths: zod.ZodArray<zod.ZodString, "many">;
+    affectedIds: zod.ZodArray<zod.ZodString, "many">;
+}, "strip", zod.ZodTypeAny, {
+    updated: number;
+    affectedMonths: string[];
+    affectedIds: string[];
+}, {
+    updated: number;
+    affectedMonths: string[];
+    affectedIds: string[];
+}>;
+/**
  * @summary Bulk set the forecast_flag on a list of transactions to a target
 boolean value. Returns the ids that were actually flipped (rows
 whose flag already matched the target are skipped) so the client
