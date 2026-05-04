@@ -480,7 +480,11 @@ describe("categorization pipeline (integration)", () => {
       })
       .returning();
 
-    const seedPattern = `BULKAMEX-${randomUUID().slice(0, 6).toUpperCase()}`;
+    // Real debt seed patterns ship as 2+ whitespace-separated tokens
+    // ("AMERICAN EXPRESS ACH", "AMEX EPAYMENT", ...). Task #182's smarter
+    // auto-relearn only silently repoints those *specific* shapes, so this
+    // bulk-re-categorize fixture mirrors a realistic seed shape.
+    const seedPattern = `BULKAMEX ACH-${randomUUID().slice(0, 6).toUpperCase()}`;
     const [seedRule] = await db
       .insert(mappingRulesTable)
       .values({
@@ -641,7 +645,12 @@ describe("categorization pipeline (integration)", () => {
       })
       .returning();
 
-    const seedPattern = `SEEDPMT-${randomUUID().slice(0, 6).toUpperCase()}`;
+    // Real debt seed patterns ("AMERICAN EXPRESS ACH", "AMEX EPAYMENT",
+    // "DISCOVER E-PAYMENT", ...) are all ≥ 2 whitespace-separated tokens,
+    // which is what `isPatternSpecific` keys on to decide whether silent
+    // auto-repoint is safe. Use a 2-token random seed pattern here so the
+    // test mirrors a realistic seed shape.
+    const seedPattern = `SEEDPMT ACH-${randomUUID().slice(0, 6).toUpperCase()}`;
     await db.insert(mappingRulesTable).values({
       userId: TEST_USER,
       pattern: seedPattern,
@@ -703,6 +712,177 @@ describe("categorization pipeline (integration)", () => {
       ruleRows,
     );
     expect(result.categoryId).toBe(debtCat!.id);
+  });
+
+  it("PATCH /transactions/:id keeps a generic 1-token rule independent when categorizing a more-specific charge (AMAZON vs AMAZON FRESH)", async () => {
+    // Setup: the user previously authored a broad "AMAZON" → Shopping rule.
+    // Today they manually pick Groceries for an "AMAZON FRESH 123" charge.
+    // The original AMAZON rule must NOT silently re-aim at Groceries — that
+    // would break general Amazon-as-shopping behavior across all of their
+    // existing and future Amazon charges. Both rules should remain
+    // independent, with the more-specific rule winning on future similar
+    // charges.
+    const [shoppingCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Shopping ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+    const [groceriesCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Groceries ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+
+    // Use a unique 1-token "merchant" tag so this test doesn't collide with
+    // any other rules created earlier in this file's shared TEST_USER.
+    const merchantTag = `AMZN${randomUUID().slice(0, 6).toUpperCase()}`;
+    await db.insert(mappingRulesTable).values({
+      userId: TEST_USER,
+      pattern: merchantTag,
+      matchType: "contains",
+      categoryId: shoppingCat!.id,
+      priority: 100,
+    });
+
+    const [txn] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: dateInCurrentMonth(26),
+        description: `${merchantTag} FRESH 123`,
+        amount: "-45.67",
+        source: "bank",
+      })
+      .returning();
+
+    const patch = await api("PATCH", `/transactions/${txn!.id}`, {
+      categoryId: groceriesCat!.id,
+    });
+    expect(patch.status).toBe(200);
+
+    // The broad rule still routes to Shopping, untouched.
+    const merchantRules = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(
+        and(
+          eq(mappingRulesTable.userId, TEST_USER),
+          eq(mappingRulesTable.pattern, merchantTag),
+        ),
+      );
+    expect(merchantRules.length).toBe(1);
+    expect(merchantRules[0]!.categoryId).toBe(shoppingCat!.id);
+
+    // A new, more-specific "MERCHANTTAG FRESH" rule was created for
+    // Groceries — derived from the description's first two tokens.
+    const groceryRules = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(
+        and(
+          eq(mappingRulesTable.userId, TEST_USER),
+          eq(mappingRulesTable.categoryId, groceriesCat!.id),
+        ),
+      );
+    expect(groceryRules.length).toBe(1);
+    expect(groceryRules[0]!.pattern).toBe(`${merchantTag} FRESH`);
+    expect(groceryRules[0]!.matchType).toBe("contains");
+    // Priority must outrank the existing matching generic rule so future
+    // "...FRESH..." charges land in Groceries instead of Shopping.
+    expect(groceryRules[0]!.priority).toBeGreaterThan(
+      merchantRules[0]!.priority,
+    );
+
+    // End-to-end: a future "MERCHANTTAG FRESH ..." charge auto-categorizes
+    // to Groceries (specific rule wins on priority), while a generic
+    // "MERCHANTTAG ..." charge still routes to Shopping.
+    const ruleRows = await loadUserRules(TEST_USER);
+    const freshResult = categorize(
+      { description: `${merchantTag} FRESH ANOTHER STORE` },
+      ruleRows,
+    );
+    expect(freshResult.categoryId).toBe(groceriesCat!.id);
+    const genericResult = categorize(
+      { description: `${merchantTag} BOOKS DEPARTMENT` },
+      ruleRows,
+    );
+    expect(genericResult.categoryId).toBe(shoppingCat!.id);
+  });
+
+  it("PATCH /transactions/:id does not silently overwrite a generic rule via the auto-derive upsert path", async () => {
+    // Sibling case to the AMAZON-FRESH test above: when the auto-derived
+    // pattern would *equal* an existing generic 1-token rule (e.g. txn
+    // description is just "AMAZON" with no extra tokens), the upsert path
+    // would otherwise clobber the generic rule's categoryId — the same
+    // bug, just via the back door. Verify the clobber guard catches it.
+    const [shoppingCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Shopping2 ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+    const [otherCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Other2 ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+
+    const merchantTag = `SOLO${randomUUID().slice(0, 6).toUpperCase()}`;
+    await db.insert(mappingRulesTable).values({
+      userId: TEST_USER,
+      pattern: merchantTag,
+      matchType: "contains",
+      categoryId: shoppingCat!.id,
+      priority: 100,
+    });
+
+    const [txn] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: dateInCurrentMonth(27),
+        description: merchantTag,
+        amount: "-7.89",
+        source: "bank",
+      })
+      .returning();
+
+    const patch = await api("PATCH", `/transactions/${txn!.id}`, {
+      categoryId: otherCat!.id,
+    });
+    expect(patch.status).toBe(200);
+
+    // The generic rule is unchanged.
+    const rules = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(
+        and(
+          eq(mappingRulesTable.userId, TEST_USER),
+          eq(mappingRulesTable.pattern, merchantTag),
+        ),
+      );
+    expect(rules.length).toBe(1);
+    expect(rules[0]!.categoryId).toBe(shoppingCat!.id);
   });
 
   it("PATCH /transactions/:id does not create a rule for an internal transfer", async () => {

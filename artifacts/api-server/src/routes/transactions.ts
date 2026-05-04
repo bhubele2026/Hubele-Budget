@@ -89,6 +89,22 @@ function derivePatternFromDescription(description: string | null | undefined): s
   return (head || cleaned).slice(0, 40);
 }
 
+/**
+ * A mapping-rule pattern is considered "specific" — i.e. safe to silently
+ * auto-repoint when the user manually picks a category for a transaction it
+ * matches — when it has at least two whitespace-separated tokens. This is the
+ * shape of every debt-payment seed rule we ship ("AMERICAN EXPRESS ACH",
+ * "AMEX EPAYMENT", "DISCOVER E-PAYMENT", etc.) so the auto-relearn behavior
+ * from Task #177 still fires for them. One-token catch-all patterns the user
+ * tends to author by hand ("AMAZON", "TARGET", "WALMART") are treated as
+ * generic and left alone — those are typically broadly-used routing rules
+ * and silently re-aiming them when the user picks Groceries for an
+ * "AMAZON FRESH 123" charge would break their general behavior.
+ */
+function isPatternSpecific(pattern: string): boolean {
+  return pattern.trim().split(/\s+/).filter(Boolean).length >= 2;
+}
+
 async function userOwnsDebt(userId: string, debtId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: debtsTable.id })
@@ -156,25 +172,40 @@ router.patch(
     // Whenever a category is assigned via the quick-categorize flow, learn a
     // mapping_rule from the txn's description so future matching transactions
     // auto-categorize the same way. The user no longer needs to opt in via
-    // `rememberPattern`. Internal transfers and very short descriptions are
-    // skipped because they wouldn't form a useful pattern.
+    // `rememberPattern`. Internal transfers are skipped because they
+    // wouldn't form a useful pattern.
     //
     // Two-step learning:
-    //   1. AUTO-RELEARN — repoint any existing rule whose pattern already
-    //      matches this description but currently aims at a different
-    //      category. The seed mapping rules for debt-payment patterns
-    //      (Amex / Cap One / Apple / PayPal / Discover / Citi / etc.) are
-    //      pre-pointed at "Misc / Buffer" because the per-debt budget
-    //      categories are created lazily by syncAutoDebtCategories only after
-    //      the user adds the debt to the tracker. The first time the user
-    //      manually picks the real debt category for a payment txn, every
-    //      matching seed rule snaps onto it.
-    //   2. INSERT — only when no existing rule matched do we derive a fresh
-    //      pattern from the description and upsert. Otherwise the repoint in
-    //      step 1 is sufficient and we avoid creating overlapping near-
-    //      duplicates (e.g. seed "AMERICAN EXPRESS ACH" alongside an auto
-    //      "AMERICAN EXPRESS"). Existing rules' priorities are preserved so
-    //      they continue to win on auto-categorize for new transactions.
+    //   1. AUTO-RELEARN — repoint any *specific* matching rule (≥ 2 tokens,
+    //      see `isPatternSpecific`) whose pattern matches this description
+    //      but currently aims at a different category. The seed mapping
+    //      rules for debt-payment patterns (Amex / Cap One / Apple / PayPal
+    //      / Discover / Citi / etc.) are all 2+ tokens and pre-pointed at
+    //      "Misc / Buffer" because the per-debt budget categories are
+    //      created lazily by syncAutoDebtCategories only after the user
+    //      adds the debt to the tracker. The first time the user manually
+    //      picks the real debt category for a payment txn, every matching
+    //      seed rule snaps onto it. Generic 1-token rules ("AMAZON",
+    //      "TARGET") are deliberately *not* repointed — they're typically
+    //      broadly-used routing the user authored, and silently re-aiming
+    //      them when the user picks Groceries for an "AMAZON FRESH 123"
+    //      charge would break their general behavior. Each repointed
+    //      specific rule is tracked in `repointedRules` along with a count
+    //      of older transactions still sitting in the rule's old category,
+    //      so the client can offer a "apply to past transactions too"
+    //      prompt instead of making the user touch every prior payment.
+    //   2. INSERT — derive a fresh pattern from the description and upsert
+    //      a more-specific rule, *unless* a specific matching rule already
+    //      points at the new category (the repoint in step 1 is sufficient
+    //      and we avoid duplicates like seed "AMERICAN EXPRESS ACH"
+    //      alongside an auto "AMERICAN EXPRESS"). When a generic matching
+    //      rule was deliberately left in step 1, the new specific rule
+    //      gets a priority bump so it wins on future similar charges. The
+    //      auto-derive path also refuses to upsert a pattern that would
+    //      collide with — and silently overwrite — one of those left-alone
+    //      generic rules; an explicit `rememberPattern` body field
+    //      (legacy UI affordance) still bypasses that guard since it
+    //      represents user-stated intent.
     type RepointedRule = {
       ruleId: string;
       pattern: string;
@@ -189,10 +220,15 @@ router.patch(
       const description = row.description ?? "";
       const allRules = await loadUserRules(userId);
       const matching = findMatchingRules(description, allRules);
-      const toRepoint = matching.filter(
-        (r) => r.categoryId && r.categoryId !== patch.categoryId,
+      const matchingSpecific = matching.filter((r) =>
+        isPatternSpecific(r.pattern),
       );
-      for (const r of toRepoint) {
+      const matchingGeneric = matching.filter(
+        (r) => !isPatternSpecific(r.pattern),
+      );
+
+      for (const r of matchingSpecific) {
+        if (r.categoryId === patch.categoryId) continue;
         await db
           .update(mappingRulesTable)
           .set({ categoryId: patch.categoryId })
@@ -226,19 +262,34 @@ router.patch(
           candidateCount,
         });
       }
-      if (matching.length === 0) {
-        const explicit =
-          typeof rememberPattern === "string" ? rememberPattern : null;
-        const source =
-          explicit ?? derivePatternFromDescription(row.description);
+
+      const isCovered = matchingSpecific.length > 0;
+      if (!isCovered) {
+        const isExplicit =
+          typeof rememberPattern === "string" && rememberPattern.length > 0;
+        const source = isExplicit
+          ? rememberPattern!
+          : derivePatternFromDescription(row.description);
         const pattern = (source ?? "").trim().slice(0, 60);
-        await upsertMappingRule(db, {
-          userId,
-          pattern,
-          matchType: "contains",
-          categoryId: patch.categoryId,
-          priority: 100,
-        });
+        const wouldClobberGeneric =
+          !isExplicit &&
+          matchingGeneric.some(
+            (r) => r.pattern.trim().toLowerCase() === pattern.toLowerCase(),
+          );
+        if (pattern && !wouldClobberGeneric) {
+          const maxGenericPriority = matchingGeneric.reduce(
+            (acc, r) => Math.max(acc, r.priority),
+            0,
+          );
+          const newPriority = Math.max(100, maxGenericPriority + 1);
+          await upsertMappingRule(db, {
+            userId,
+            pattern,
+            matchType: "contains",
+            categoryId: patch.categoryId,
+            priority: newPriority,
+          });
+        }
       }
     }
     // If forecast_flag was turned off, drop any forecast resolution that
