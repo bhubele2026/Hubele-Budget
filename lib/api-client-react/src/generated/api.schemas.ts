@@ -269,6 +269,26 @@ this description and was deliberately left alone.
    * @nullable
    */
   genericPattern?: string | null;
+  /**
+   * Id of the rule the auto-learn flow created or repointed.
+Set for `created`, `created_priority_bump`, and `repointed`
+so the client can offer an Undo affordance from the toast
+(DELETE the just-created rule, or PATCH the repointed rule
+back to its previous category). Null for `skipped_generic`
+and `none`.
+
+   * @nullable
+   */
+  ruleId?: string | null;
+  /**
+   * For `repointed` — the rule's previous categoryId before
+this PATCH moved it onto the user's chosen category. Used
+by the client's Undo affordance to restore the rule's
+original aim. Null for the other kinds.
+
+   * @nullable
+   */
+  previousCategoryId?: string | null;
 }
 
 export type UpdateTransactionResponse = Transaction & {

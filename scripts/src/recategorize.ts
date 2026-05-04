@@ -411,8 +411,8 @@ async function main() {
         categoryId: r.categoryId,
         priority: args.priority,
       });
-      if (result === "inserted") inserted++;
-      else if (result === "updated") updated++;
+      if (result.status === "inserted") inserted++;
+      else if (result.status === "updated") updated++;
       else noop++;
     }
   });

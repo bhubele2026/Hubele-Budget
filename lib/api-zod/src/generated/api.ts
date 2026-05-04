@@ -291,6 +291,18 @@ export const UpdateTransactionResponse = zod
             .describe(
               "For `created_priority_bump` and `skipped_generic` — the\nexisting generic (1-token) pattern that already matches\nthis description and was deliberately left alone.\n",
             ),
+          ruleId: zod
+            .string()
+            .nullish()
+            .describe(
+              "Id of the rule the auto-learn flow created or repointed.\nSet for `created`, `created_priority_bump`, and `repointed`\nso the client can offer an Undo affordance from the toast\n(DELETE the just-created rule, or PATCH the repointed rule\nback to its previous category). Null for `skipped_generic`\nand `none`.\n",
+            ),
+          previousCategoryId: zod
+            .string()
+            .nullish()
+            .describe(
+              "For `repointed` — the rule's previous categoryId before\nthis PATCH moved it onto the user's chosen category. Used\nby the client's Undo affordance to restore the rule's\noriginal aim. Null for the other kinds.\n",
+            ),
         })
         .describe(
           "Summary of what the auto-learn flow did to the user's mapping\nrules in response to this PATCH. Surfaced as a small toast\/note\nso the user understands why future similar charges will (or\nwon't) auto-categorize. The repoint case is also reported in\nmore detail via `repointedRules` (which drives the \"apply to\npast transactions too\" prompt).\n",

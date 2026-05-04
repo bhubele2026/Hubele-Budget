@@ -677,14 +677,20 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         kind: zod.ZodEnum<["created", "created_priority_bump", "skipped_generic", "repointed", "none"]>;
         pattern: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         genericPattern: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        ruleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        previousCategoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";
+        ruleId?: string | null | undefined;
         pattern?: string | null | undefined;
         genericPattern?: string | null | undefined;
+        previousCategoryId?: string | null | undefined;
     }, {
         kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";
+        ruleId?: string | null | undefined;
         pattern?: string | null | undefined;
         genericPattern?: string | null | undefined;
+        previousCategoryId?: string | null | undefined;
     }>;
 }, "strip", zod.ZodTypeAny, {
     repointedRules: {
@@ -703,8 +709,10 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     }[];
     ruleAction: {
         kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";
+        ruleId?: string | null | undefined;
         pattern?: string | null | undefined;
         genericPattern?: string | null | undefined;
+        previousCategoryId?: string | null | undefined;
     };
 }, {
     repointedRules: {
@@ -723,8 +731,10 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     }[];
     ruleAction: {
         kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";
+        ruleId?: string | null | undefined;
         pattern?: string | null | undefined;
         genericPattern?: string | null | undefined;
+        previousCategoryId?: string | null | undefined;
     };
 }>>;
 export declare const DeleteTransactionParams: zod.ZodObject<{

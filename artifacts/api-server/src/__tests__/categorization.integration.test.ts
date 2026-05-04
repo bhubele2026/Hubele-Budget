@@ -462,6 +462,99 @@ describe("categorization pipeline (integration)", () => {
     expect(rules[0]!.priority).toBe(100);
   });
 
+  it("PATCH /transactions/:id populates ruleAction.ruleId and previousCategoryId so the client can offer Undo", async () => {
+    // Task #196 — the toast Undo affordance needs to know which rule
+    // the auto-learn flow touched and (for repoints) what category to
+    // restore. Cover both branches:
+    //   1. fresh `created` rule → ruleId populated, previousCategoryId null
+    //   2. follow-up PATCH that repoints the same rule → ruleId populated
+    //      AND previousCategoryId echoes the original category.
+    const merchant = `UNDOMERCH${randomUUID().slice(0, 6).toUpperCase()}`;
+    const [catA] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Undo Test A ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+    const [catB] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Undo Test B ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+    const [txn] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: dateInCurrentMonth(24),
+        description: `${merchant} STORE 0001`,
+        amount: "-7.77",
+        source: "manual",
+      })
+      .returning();
+
+    // First PATCH — explicit-remember creates a fresh rule. Server
+    // should report ruleId of the inserted row + previousCategoryId
+    // null (nothing existed to restore).
+    const patch1 = await api("PATCH", `/transactions/${txn!.id}`, {
+      categoryId: catA!.id,
+      rememberPattern: merchant,
+    });
+    expect(patch1.status).toBe(200);
+    const body1 = patch1.json as {
+      ruleAction: {
+        kind: string;
+        ruleId: string | null;
+        previousCategoryId: string | null;
+      };
+    };
+    expect(body1.ruleAction.kind).toBe("created");
+    expect(body1.ruleAction.ruleId).toBeTruthy();
+    expect(body1.ruleAction.previousCategoryId).toBeNull();
+    const createdRuleId = body1.ruleAction.ruleId!;
+
+    // Second PATCH — same merchant, different category. The auto-learn
+    // flow repoints the existing rule and the response should hand the
+    // client the ruleId + the rule's *previous* categoryId (catA), so
+    // Undo can PATCH it back without touching the transaction itself.
+    const patch2 = await api("PATCH", `/transactions/${txn!.id}`, {
+      categoryId: catB!.id,
+      rememberPattern: merchant,
+    });
+    expect(patch2.status).toBe(200);
+    const body2 = patch2.json as {
+      ruleAction: {
+        kind: string;
+        ruleId: string | null;
+        previousCategoryId: string | null;
+      };
+    };
+    expect(body2.ruleAction.kind).toBe("repointed");
+    expect(body2.ruleAction.ruleId).toBe(createdRuleId);
+    expect(body2.ruleAction.previousCategoryId).toBe(catA!.id);
+
+    // Sanity-check the rule actually moved to catB on disk (the Undo
+    // affordance is what reverts it; without Undo the rule stays put).
+    const [persisted] = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(
+        and(
+          eq(mappingRulesTable.userId, TEST_USER),
+          eq(mappingRulesTable.id, createdRuleId),
+        ),
+      );
+    expect(persisted!.categoryId).toBe(catB!.id);
+  });
+
   it("PATCH /transactions/:id reports repointedRules with a candidateCount and POST /transactions/recategorize-by-pattern bulk-flips the historical rows", async () => {
     // Mirror the production "AMERICAN EXPRESS ACH → Misc/Buffer" seed
     // scenario: a mapping rule was pre-pointed at Misc/Buffer, several

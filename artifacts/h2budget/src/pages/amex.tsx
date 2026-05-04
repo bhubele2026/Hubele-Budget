@@ -42,6 +42,7 @@ import { CategoryPicker } from "@/components/category-picker";
 import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
+import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { formatCurrency } from "@/lib/utils";
 import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
@@ -152,6 +153,7 @@ export default function AmexPage() {
     staleTime: 60_000,
   });
   const updateTx = useUpdateTransaction();
+  const buildRuleUndoAction = useRuleActionUndo();
   const weeklyLabels = useWeeklyBucketLabels();
 
   // "Set actual balance" popover (only surfaced when ending balance source
@@ -600,12 +602,18 @@ export default function AmexPage() {
       // only when the user explicitly opted in via rememberPattern.
       if (categoryId) {
         const ruleDescription = ruleActionMessage(updated.ruleAction);
+        const undoAction = buildRuleUndoAction(updated.ruleAction);
         if (ruleDescription) {
-          toast({ title: "Categorized", description: ruleDescription });
+          toast({
+            title: "Categorized",
+            description: ruleDescription,
+            ...(undoAction ? { action: undoAction } : {}),
+          });
         } else if (rememberPattern) {
           toast({
             title: "Categorized & remembered",
             description: `Future "${rememberPattern}" will auto-categorize.`,
+            ...(undoAction ? { action: undoAction } : {}),
           });
         }
       }

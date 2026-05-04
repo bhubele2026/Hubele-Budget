@@ -10,16 +10,31 @@ export type UpsertMappingRuleInput = {
   priority: number;
 };
 
-export type UpsertMappingRuleResult = "inserted" | "updated" | "noop";
+export type UpsertMappingRuleStatus = "inserted" | "updated" | "noop";
+
+/**
+ * Result of an `upsertMappingRule` call. `ruleId` is the id of the row that
+ * the upsert touched (the just-inserted rule for `inserted`, the existing
+ * rule's id for `updated`/`noop`). It's `null` only when the upsert was
+ * skipped before touching the table — currently just the short-pattern
+ * guard at the top of the function.
+ */
+export type UpsertMappingRuleResult = {
+  status: UpsertMappingRuleStatus;
+  ruleId: string | null;
+};
 
 /**
  * Idempotent upsert of a mapping rule keyed by `(userId, pattern)`. Used by
  * both the live PATCH /transactions auto-learn flow and one-shot backfill
  * scripts so they share a single canonical persistence path.
  *
- * Returns `noop` when the existing rule already has at least the given
- * priority and matches the same target+matchType (so re-runs don't churn
- * createdAt or downgrade priority).
+ * Returns `status: "noop"` when the existing rule already has at least the
+ * given priority and matches the same target+matchType (so re-runs don't
+ * churn createdAt or downgrade priority). The returned `ruleId` lets
+ * callers reference the rule afterward — used by the auto-learn flow to
+ * report a "created" rule's id back to the client so it can offer an
+ * Undo affordance from the toast.
  */
 export async function upsertMappingRule(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,7 +42,7 @@ export async function upsertMappingRule(
   input: UpsertMappingRuleInput,
 ): Promise<UpsertMappingRuleResult> {
   const { userId, pattern, matchType, categoryId, priority } = input;
-  if (!pattern || pattern.length < 3) return "noop";
+  if (!pattern || pattern.length < 3) return { status: "noop", ruleId: null };
 
   const existing = await conn
     .select()
@@ -41,21 +56,25 @@ export async function upsertMappingRule(
     .limit(1);
 
   if (existing.length === 0) {
-    await conn.insert(mappingRulesTable).values({
-      userId,
-      pattern,
-      matchType,
-      categoryId,
-      priority,
-    });
-    return "inserted";
+    const [inserted] = await conn
+      .insert(mappingRulesTable)
+      .values({
+        userId,
+        pattern,
+        matchType,
+        categoryId,
+        priority,
+      })
+      .returning({ id: mappingRulesTable.id });
+    return { status: "inserted", ruleId: inserted!.id };
   }
 
   const row = existing[0];
   const sameTarget = row.categoryId === categoryId;
   const sameMatch = row.matchType === matchType;
   const samePriority = row.priority >= priority;
-  if (sameTarget && sameMatch && samePriority) return "noop";
+  if (sameTarget && sameMatch && samePriority)
+    return { status: "noop", ruleId: row.id };
 
   await conn
     .update(mappingRulesTable)
@@ -65,5 +84,5 @@ export async function upsertMappingRule(
       priority: Math.max(row.priority, priority),
     })
     .where(eq(mappingRulesTable.id, row.id));
-  return "updated";
+  return { status: "updated", ruleId: row.id };
 }

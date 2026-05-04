@@ -601,8 +601,8 @@ async function main(): Promise<void> {
           categoryId,
           priority: 100,
         });
-        if (result === "inserted") rulesCreated++;
-        else if (result === "updated") rulesUpdated++;
+        if (result.status === "inserted") rulesCreated++;
+        else if (result.status === "updated") rulesUpdated++;
         else rulesSkipped++;
       }
     });

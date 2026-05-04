@@ -69,6 +69,7 @@ import {
 } from "@/components/ui/popover";
 import { isBankTxn } from "@/lib/forecastMatch";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
+import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { BucketBubbles, type BucketFlags, type BucketKey } from "@/components/bucket-bubbles";
 import { computeBalanceAtEndOf } from "@/lib/accountBalance";
 import { computeRunningBalances } from "@/lib/runningBalance";
@@ -393,6 +394,8 @@ export default function TransactionsPage() {
   const createTx = useCreateTransaction();
   const updateTx = useUpdateTransaction();
   const deleteTx = useDeleteTransaction();
+  const recategorizeBulk = useRecategorizeTransactionsByPattern();
+  const buildRuleUndoAction = useRuleActionUndo();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
@@ -535,7 +538,6 @@ export default function TransactionsPage() {
     );
   };
 
-  const recategorizeBulk = useRecategorizeTransactionsByPattern();
 
   // Preview-dialog state for the "Show matches" affordance on the bulk
   // re-categorize toast. We carry the original rule (for the bulk POST)
@@ -721,9 +723,11 @@ export default function TransactionsPage() {
       // we don't show a misleading "will auto-categorize" promise when
       // the server actually did nothing (e.g. clobber-guard kicked in).
       const ruleDescription = ruleActionMessage(updated.ruleAction);
+      const undoAction = buildRuleUndoAction(updated.ruleAction);
       toast({
         title: "Categorized",
         ...(ruleDescription ? { description: ruleDescription } : {}),
+        ...(undoAction ? { action: undoAction } : {}),
       });
       // If the auto-learn flow repointed an existing seed rule (e.g. an
       // Amex / Cap One / Discover debt-payment rule pre-pointed at

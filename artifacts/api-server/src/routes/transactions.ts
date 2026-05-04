@@ -223,21 +223,57 @@ router.patch(
       candidateCount: number;
       sampleTransactions: RepointedRuleSample[];
     };
+    // `ruleId` and `previousCategoryId` are populated for the kinds that
+    // have an undoable side-effect on the user's mapping rules:
+    //   - `created` / `created_priority_bump` → `ruleId` of the new rule
+    //     so the client's Undo button can DELETE it.
+    //   - `repointed` → `ruleId` of the touched rule + `previousCategoryId`
+    //     (the rule's old aim) so Undo can PATCH the rule back to its
+    //     previous category. The transaction's own categoryId is left
+    //     alone — Undo only reverts the rule, not the user's manual pick.
     type RuleAction =
-      | { kind: "none"; pattern: null; genericPattern: null }
-      | { kind: "created"; pattern: string; genericPattern: null }
+      | {
+          kind: "none";
+          pattern: null;
+          genericPattern: null;
+          ruleId: null;
+          previousCategoryId: null;
+        }
+      | {
+          kind: "created";
+          pattern: string;
+          genericPattern: null;
+          ruleId: string | null;
+          previousCategoryId: null;
+        }
       | {
           kind: "created_priority_bump";
           pattern: string;
           genericPattern: string;
+          ruleId: string | null;
+          previousCategoryId: null;
         }
-      | { kind: "skipped_generic"; pattern: string; genericPattern: string }
-      | { kind: "repointed"; pattern: string; genericPattern: null };
+      | {
+          kind: "skipped_generic";
+          pattern: string;
+          genericPattern: string;
+          ruleId: null;
+          previousCategoryId: null;
+        }
+      | {
+          kind: "repointed";
+          pattern: string;
+          genericPattern: null;
+          ruleId: string;
+          previousCategoryId: string | null;
+        };
     const repointedRules: RepointedRule[] = [];
     let ruleAction: RuleAction = {
       kind: "none",
       pattern: null,
       genericPattern: null,
+      ruleId: null,
+      previousCategoryId: null,
     };
     if (patch.categoryId && !row.isTransfer) {
       const userId = req.userId!;
@@ -251,8 +287,12 @@ router.patch(
         (r) => !isPatternSpecific(r.pattern),
       );
 
+      // Track each repointed rule's pre-PATCH categoryId so we can hand
+      // it back to the client for the Undo affordance on the toast.
+      const repointedPrev = new Map<string, string | null>();
       for (const r of matchingSpecific) {
         if (r.categoryId === patch.categoryId) continue;
+        repointedPrev.set(r.id, r.categoryId);
         await db
           .update(mappingRulesTable)
           .set({ categoryId: patch.categoryId })
@@ -315,6 +355,13 @@ router.patch(
             0,
           );
           const newPriority = Math.max(100, maxGenericPriority + 1);
+          // Look up any pre-existing rule for this pattern *before* the
+          // upsert so we can capture its previous categoryId for the
+          // explicit-remember repoint branch below.
+          const existingForPattern = matching.find(
+            (r) => r.pattern === pattern,
+          );
+          const previousCategoryId = existingForPattern?.categoryId ?? null;
           const upsertResult = await upsertMappingRule(db, {
             userId,
             pattern,
@@ -329,8 +376,22 @@ router.patch(
           // semantically a repoint of the same rule, not a "new specific
           // alongside a different generic", so report it as such even
           // when the pre-existing rule was classified generic.
-          if (upsertResult !== "inserted") {
-            ruleAction = { kind: "repointed", pattern, genericPattern: null };
+          if (upsertResult.status !== "inserted") {
+            // Repoint via the upsert path — only emit a `repointed`
+            // RuleAction when the upsert actually moved the rule (i.e.
+            // we have a ruleId AND the previous category differs from
+            // the new pick). A pure noop has nothing to undo, so leave
+            // ruleAction at "none" and let the client suppress the
+            // toast description.
+            if (upsertResult.ruleId && previousCategoryId !== patch.categoryId) {
+              ruleAction = {
+                kind: "repointed",
+                pattern,
+                genericPattern: null,
+                ruleId: upsertResult.ruleId,
+                previousCategoryId,
+              };
+            }
           } else if (matchingGeneric.length > 0) {
             // A different (non-colliding) generic rule still matches —
             // we left it alone and gave the new specific rule a higher
@@ -341,27 +402,40 @@ router.patch(
               kind: "created_priority_bump",
               pattern,
               genericPattern: generic.pattern,
+              ruleId: upsertResult.ruleId,
+              previousCategoryId: null,
             };
           } else {
-            ruleAction = { kind: "created", pattern, genericPattern: null };
+            ruleAction = {
+              kind: "created",
+              pattern,
+              genericPattern: null,
+              ruleId: upsertResult.ruleId,
+              previousCategoryId: null,
+            };
           }
         } else if (pattern && collidingGeneric) {
           ruleAction = {
             kind: "skipped_generic",
             pattern,
             genericPattern: collidingGeneric.pattern,
+            ruleId: null,
+            previousCategoryId: null,
           };
         }
       } else if (repointedRules.length > 0) {
         // At least one specific matching rule was repointed onto the
         // chosen category. The "apply to past" prompt covers the
         // candidate-count side; this summary just lets the client tell
-        // the user which existing rule was reused.
+        // the user which existing rule was reused — and now also lets
+        // the client offer Undo to restore the rule's previous aim.
         const first = repointedRules[0]!;
         ruleAction = {
           kind: "repointed",
           pattern: first.pattern,
           genericPattern: null,
+          ruleId: first.ruleId,
+          previousCategoryId: repointedPrev.get(first.ruleId) ?? null,
         };
       }
     }
