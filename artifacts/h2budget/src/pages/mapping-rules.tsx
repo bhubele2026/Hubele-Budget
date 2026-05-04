@@ -9,6 +9,8 @@ import {
   useTestMappingRules,
   useListCategories,
   getListMappingRulesQueryKey,
+  createMappingRule,
+  deleteMappingRule,
 } from "@workspace/api-client-react";
 import type {
   MappingRule,
@@ -22,6 +24,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import {
@@ -84,6 +87,8 @@ type RuleRowProps = {
   isFocused: boolean;
   isHighlighted: boolean;
   setFocusRef: ((el: HTMLDivElement | null) => void) | null;
+  isSelected: boolean;
+  onToggleSelected: (id: string) => void;
   onMove: (id: string, direction: -1 | 1) => void;
   onStartEdit: (rule: MappingRule) => void;
   onDelete: (id: string) => void;
@@ -101,6 +106,8 @@ function SortableRuleRow({
   isFocused,
   isHighlighted,
   setFocusRef,
+  isSelected,
+  onToggleSelected,
   onMove,
   onStartEdit,
   onDelete,
@@ -143,7 +150,14 @@ function SortableRuleRow({
       }`}
       data-testid={`rule-row-${rule.id}`}
       data-focused={isFocused ? "true" : undefined}
+      data-selected={isSelected ? "true" : undefined}
     >
+      <Checkbox
+        checked={isSelected}
+        onCheckedChange={() => onToggleSelected(rule.id)}
+        aria-label={`Select rule ${rule.pattern}`}
+        data-testid={`rule-select-${rule.id}`}
+      />
       <button
         ref={setActivatorNodeRef}
         type="button"
@@ -441,6 +455,24 @@ export default function MappingRulesPage() {
   // it keeps the hook usable if we later add per-pattern previews.
   const { offerBulkRecategorize, previewDialog } = useBulkRecategorizePrompt();
 
+  // ---- Bulk selection (Task #223) ----
+  // Selected rule ids persist across search filter changes so users can
+  // search → tick a few → search again → tick more, then bulk-delete the
+  // whole set. The header checkbox only toggles the *currently visible*
+  // (filtered) rows. We do prune ids that no longer exist after the
+  // server data refreshes (e.g. after our own bulk delete) so stale ids
+  // can't linger in the set.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const clearSelection = () => setSelected(new Set());
+
   const handleAddRule = () => {
     if (!pattern || !categoryId) return;
     // New manually-added rules go above any auto-learned ones (which top out
@@ -479,6 +511,107 @@ export default function MappingRulesPage() {
         },
       },
     );
+  };
+
+  // Bulk delete the currently selected rules with a single Undo toast
+  // that recreates the whole batch in one go (Task #223). The API has no
+  // bulk endpoint yet, so we fan out DELETE / POST requests in parallel
+  // — fine for the realistic max of a few dozen rules.
+  //
+  // We bypass the per-id useDeleteMappingRule mutation here on purpose:
+  // its onMutate snapshots `previous` and writes `previous.filter(...)`,
+  // and N concurrent mutations would race on that snapshot and clobber
+  // each other's optimistic deletions. Instead we apply *one* combined
+  // optimistic update covering every selected id, then issue the network
+  // calls; onSettled-style invalidation runs once at the end.
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    const allRules = rules ?? [];
+    const idSet = new Set(ids);
+    const deleted = allRules.filter((r) => idSet.has(r.id));
+    if (deleted.length === 0) {
+      clearSelection();
+      return;
+    }
+
+    setBulkDeleting(true);
+    await queryClient.cancelQueries({ queryKey: rulesQueryKey });
+    const previous =
+      queryClient.getQueryData<MappingRule[]>(rulesQueryKey) ?? [];
+    queryClient.setQueryData<MappingRule[]>(
+      rulesQueryKey,
+      previous.filter((r) => !idSet.has(r.id)),
+    );
+    clearSelection();
+
+    try {
+      await Promise.all(deleted.map((r) => deleteMappingRule(r.id)));
+      const count = deleted.length;
+      const { dismiss } = toast({
+        title: `Deleted ${count} rule${count === 1 ? "" : "s"}`,
+        // Match the single-delete toast duration (~6s) — long enough to
+        // recover from an accidental click on a long auto-learned list.
+        duration: 6000,
+        action: (
+          <ToastAction
+            altText="Undo bulk delete rules"
+            data-testid="action-undo-bulk-delete-rules"
+            onClick={() => {
+              dismiss();
+              void handleBulkUndo(deleted);
+            }}
+          >
+            Undo
+          </ToastAction>
+        ),
+      });
+    } catch (e) {
+      // Roll back the optimistic remove if any DELETE failed — server
+      // state is now ambiguous (some may have succeeded), so we surface
+      // an error and let the invalidation reconcile.
+      rollback(previous);
+      toast({
+        title: "Couldn't delete rules",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setBulkDeleting(false);
+      invalidateRules();
+    }
+  };
+
+  // Restore a previously-deleted batch in one go. Each new rule is
+  // recreated with the same pattern / matchType / categoryId / priority
+  // so its position in the priority-sorted list lands back where it was.
+  // (The server may issue new ids — that's fine, the cache invalidation
+  // below picks them up.)
+  const handleBulkUndo = async (deleted: MappingRule[]) => {
+    if (deleted.length === 0) return;
+    try {
+      await Promise.all(
+        deleted.map((r) =>
+          createMappingRule({
+            pattern: r.pattern,
+            matchType: r.matchType,
+            categoryId: r.categoryId,
+            priority: r.priority,
+          }),
+        ),
+      );
+      toast({
+        title: `Restored ${deleted.length} rule${deleted.length === 1 ? "" : "s"}`,
+      });
+    } catch (e) {
+      toast({
+        title: "Couldn't restore rules",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      invalidateRules();
+    }
   };
 
   const handleDeleteRule = (id: string) => {
@@ -619,6 +752,48 @@ export default function MappingRulesPage() {
       );
     });
   }, [sorted, catById, searchQuery]);
+
+  // Drop selection ids that no longer exist in the server data so a
+  // stale id can never linger in the set after a delete (single or
+  // bulk). Selections deliberately survive search-query changes — the
+  // user can search → tick a few → search again → tick more, then
+  // bulk-delete the whole set.
+  useEffect(() => {
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const live = new Set((rules ?? []).map((r) => r.id));
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (live.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [rules]);
+
+  // Header checkbox is scoped to the *currently filtered* (visible)
+  // rows. It reads as fully checked only when every visible row is
+  // selected, indeterminate when some are.
+  const visibleSelectionState: boolean | "indeterminate" = useMemo(() => {
+    if (filtered.length === 0) return false;
+    let selectedCount = 0;
+    for (const r of filtered) if (selected.has(r.id)) selectedCount++;
+    if (selectedCount === 0) return false;
+    if (selectedCount === filtered.length) return true;
+    return "indeterminate";
+  }, [filtered, selected]);
+
+  const toggleAllVisible = (on: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const r of filtered) {
+        if (on) next.add(r.id);
+        else next.delete(r.id);
+      }
+      return next;
+    });
+  };
 
   const handleRunTest = () => {
     if (!testInput.trim()) return;
@@ -865,6 +1040,56 @@ export default function MappingRulesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
+            {/* Bulk action bar — header checkbox toggles only the
+              * currently filtered (visible) rows, but the "Delete
+              * selected (N)" button reflects the *total* selection
+              * (which can include rows hidden by the search filter).
+              * Clear selection lets the user back out without
+              * touching anything else. */}
+            <div
+              className="flex items-center gap-3 px-4 py-2 border-b bg-muted/30"
+              data-testid="rule-bulk-bar"
+            >
+              <Checkbox
+                checked={visibleSelectionState}
+                onCheckedChange={(v) => toggleAllVisible(!!v)}
+                aria-label="Select all visible rules"
+                disabled={filtered.length === 0}
+                data-testid="rule-select-all"
+              />
+              <span className="text-xs text-muted-foreground">
+                {selected.size > 0
+                  ? `${selected.size} selected`
+                  : searchQuery
+                    ? `Select all ${filtered.length} shown`
+                    : "Select all"}
+              </span>
+              {selected.size > 0 && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="ml-auto h-7"
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleting}
+                    data-testid="rule-bulk-delete"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                    Delete selected ({selected.size})
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7"
+                    onClick={clearSelection}
+                    disabled={bulkDeleting}
+                    data-testid="rule-bulk-clear"
+                  >
+                    Clear
+                  </Button>
+                </>
+              )}
+            </div>
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -1000,6 +1225,8 @@ export default function MappingRulesPage() {
                                 }
                               : null
                           }
+                          isSelected={selected.has(rule.id)}
+                          onToggleSelected={toggleSelected}
                           onMove={moveRule}
                           onStartEdit={startEdit}
                           onDelete={handleDeleteRule}
