@@ -17,6 +17,20 @@ export async function loadUserRules(userId: string): Promise<RuleRow[]> {
   return [...rows].sort((a, b) => b.priority - a.priority);
 }
 
+function ruleMatchesDescription(rule: RuleRow, hay: string): boolean {
+  const needle = rule.pattern.toLowerCase();
+  if (!needle) return false;
+  switch (rule.matchType) {
+    case "exact":
+      return hay === needle;
+    case "starts_with":
+      return hay.startsWith(needle);
+    case "contains":
+    default:
+      return hay.includes(needle);
+  }
+}
+
 export function matchRule(
   description: string,
   rules: RuleRow[],
@@ -25,24 +39,31 @@ export function matchRule(
   const hay = description.toLowerCase();
   for (const r of rules) {
     if (!r.categoryId) continue;
-    const needle = r.pattern.toLowerCase();
-    if (!needle) continue;
-    let hit = false;
-    switch (r.matchType) {
-      case "exact":
-        hit = hay === needle;
-        break;
-      case "starts_with":
-        hit = hay.startsWith(needle);
-        break;
-      case "contains":
-      default:
-        hit = hay.includes(needle);
-        break;
-    }
-    if (hit) return r.categoryId;
+    if (ruleMatchesDescription(r, hay)) return r.categoryId;
   }
   return null;
+}
+
+/**
+ * Returns every rule whose pattern matches the description, ignoring whether
+ * the rule currently has a `categoryId`. This is the auto-relearn entrypoint
+ * used by the PATCH /transactions handler to repoint stale rules (e.g. seed
+ * debt-payment rules pre-pointed at "Misc / Buffer" because the per-debt
+ * category didn't exist yet at seed time) onto the user's freshly chosen
+ * category. `matchRule` keeps its single-result, category-required semantics
+ * for the categorize() hot path.
+ */
+export function findMatchingRules(
+  description: string,
+  rules: RuleRow[],
+): RuleRow[] {
+  if (!description) return [];
+  const hay = description.toLowerCase();
+  const out: RuleRow[] = [];
+  for (const r of rules) {
+    if (ruleMatchesDescription(r, hay)) out.push(r);
+  }
+  return out;
 }
 
 /**

@@ -439,6 +439,97 @@ describe("categorization pipeline (integration)", () => {
     expect(rules[0]!.priority).toBe(100);
   });
 
+  it("PATCH /transactions/:id auto-relearns: repoints an existing matching rule onto the new category instead of creating a duplicate", async () => {
+    // Simulate the seed state: a debt-payment mapping rule pre-pointed at
+    // "Misc / Buffer" because the per-debt category didn't exist yet at
+    // seed time. The first time the user manually picks the real debt
+    // category for a payment txn, that rule should snap onto it (and we
+    // shouldn't duplicate the rule with an auto-derived shorter pattern).
+    const [miscCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Misc Buffer ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+    const [debtCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Amex Delta SkyMiles ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Debt",
+        sourceKind: "manual",
+      })
+      .returning();
+
+    const seedPattern = `SEEDPMT-${randomUUID().slice(0, 6).toUpperCase()}`;
+    await db.insert(mappingRulesTable).values({
+      userId: TEST_USER,
+      pattern: seedPattern,
+      matchType: "contains",
+      categoryId: miscCat!.id,
+      priority: 50,
+    });
+
+    const [txn] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: dateInCurrentMonth(25),
+        description: `${seedPattern} PMT XXXX5234`,
+        amount: "-200.00",
+        source: "bank",
+      })
+      .returning();
+
+    const patch = await api("PATCH", `/transactions/${txn!.id}`, {
+      categoryId: debtCat!.id,
+    });
+    expect(patch.status).toBe(200);
+
+    // The seed rule's pattern is unchanged; only its categoryId moved.
+    // Priority is preserved (still 50, not bumped to 100).
+    const seedRules = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(
+        and(
+          eq(mappingRulesTable.userId, TEST_USER),
+          eq(mappingRulesTable.pattern, seedPattern),
+        ),
+      );
+    expect(seedRules.length).toBe(1);
+    expect(seedRules[0]!.categoryId).toBe(debtCat!.id);
+    expect(seedRules[0]!.priority).toBe(50);
+
+    // No duplicate auto-derived rule was created (e.g. a "SEEDPMT-XXXX PMT"
+    // shortened pattern). The repoint is sufficient.
+    const debtRules = await db
+      .select()
+      .from(mappingRulesTable)
+      .where(
+        and(
+          eq(mappingRulesTable.userId, TEST_USER),
+          eq(mappingRulesTable.categoryId, debtCat!.id),
+        ),
+      );
+    expect(debtRules.length).toBe(1);
+    expect(debtRules[0]!.pattern).toBe(seedPattern);
+
+    // A future transaction with a similar description now auto-categorizes
+    // to the debt category, not Misc / Buffer.
+    const ruleRows = await loadUserRules(TEST_USER);
+    const result = categorize(
+      { description: `${seedPattern} PMT XXXX9999` },
+      ruleRows,
+    );
+    expect(result.categoryId).toBe(debtCat!.id);
+  });
+
   it("PATCH /transactions/:id does not create a rule for an internal transfer", async () => {
     const [cat] = await db
       .insert(budgetCategoriesTable)

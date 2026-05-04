@@ -4,10 +4,12 @@ import {
   db,
   transactionsTable,
   forecastResolutionsTable,
+  mappingRulesTable,
   upsertMappingRule,
   debtsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
+import { findMatchingRules, loadUserRules } from "../lib/autoCategorize";
 import {
   CreateTransactionBody,
   UpdateTransactionBody,
@@ -150,25 +152,61 @@ router.patch(
       res.status(404).json({ error: "Not found" });
       return;
     }
-    // Whenever a category is assigned via the quick-categorize flow, upsert
-    // a high-priority mapping_rule from the txn's description so future
-    // matching transactions auto-categorize the same way. The user no longer
-    // needs to opt in via `rememberPattern`. Internal transfers and very
-    // short descriptions are skipped because they wouldn't form a useful
-    // pattern. We trim to a reasonable length so noisy suffixes don't make
-    // the rule too narrow.
+    // Whenever a category is assigned via the quick-categorize flow, learn a
+    // mapping_rule from the txn's description so future matching transactions
+    // auto-categorize the same way. The user no longer needs to opt in via
+    // `rememberPattern`. Internal transfers and very short descriptions are
+    // skipped because they wouldn't form a useful pattern.
+    //
+    // Two-step learning:
+    //   1. AUTO-RELEARN — repoint any existing rule whose pattern already
+    //      matches this description but currently aims at a different
+    //      category. The seed mapping rules for debt-payment patterns
+    //      (Amex / Cap One / Apple / PayPal / Discover / Citi / etc.) are
+    //      pre-pointed at "Misc / Buffer" because the per-debt budget
+    //      categories are created lazily by syncAutoDebtCategories only after
+    //      the user adds the debt to the tracker. The first time the user
+    //      manually picks the real debt category for a payment txn, every
+    //      matching seed rule snaps onto it.
+    //   2. INSERT — only when no existing rule matched do we derive a fresh
+    //      pattern from the description and upsert. Otherwise the repoint in
+    //      step 1 is sufficient and we avoid creating overlapping near-
+    //      duplicates (e.g. seed "AMERICAN EXPRESS ACH" alongside an auto
+    //      "AMERICAN EXPRESS"). Existing rules' priorities are preserved so
+    //      they continue to win on auto-categorize for new transactions.
     if (patch.categoryId && !row.isTransfer) {
-      const explicit =
-        typeof rememberPattern === "string" ? rememberPattern : null;
-      const source = explicit ?? derivePatternFromDescription(row.description);
-      const pattern = (source ?? "").trim().slice(0, 60);
-      await upsertMappingRule(db, {
-        userId: req.userId!,
-        pattern,
-        matchType: "contains",
-        categoryId: patch.categoryId,
-        priority: 100,
-      });
+      const userId = req.userId!;
+      const description = row.description ?? "";
+      const allRules = await loadUserRules(userId);
+      const matching = findMatchingRules(description, allRules);
+      const toRepoint = matching.filter(
+        (r) => r.categoryId !== patch.categoryId,
+      );
+      for (const r of toRepoint) {
+        await db
+          .update(mappingRulesTable)
+          .set({ categoryId: patch.categoryId })
+          .where(
+            and(
+              eq(mappingRulesTable.id, r.id),
+              eq(mappingRulesTable.userId, userId),
+            ),
+          );
+      }
+      if (matching.length === 0) {
+        const explicit =
+          typeof rememberPattern === "string" ? rememberPattern : null;
+        const source =
+          explicit ?? derivePatternFromDescription(row.description);
+        const pattern = (source ?? "").trim().slice(0, 60);
+        await upsertMappingRule(db, {
+          userId,
+          pattern,
+          matchType: "contains",
+          categoryId: patch.categoryId,
+          priority: 100,
+        });
+      }
     }
     // If forecast_flag was turned off, drop any forecast resolution that
     // points to this txn so the Forecast inbox/bucket stays consistent.
