@@ -36,6 +36,8 @@ export * from "./budgetLineWithActualSourceKind";
 export * from "./budgetMonthDetail";
 export * from "./budgetSummary";
 export * from "./budgetSummaryPair";
+export * from "./bulkSetForecastFlagInput";
+export * from "./bulkSetForecastFlagResult";
 export * from "./cashSignal";
 export * from "./cashSignalDailyItem";
 export * from "./cashSignalStatus";

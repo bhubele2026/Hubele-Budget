@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UpdateTransactionResponse } from "./api.schemas";
+import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkSetForecastFlagInput, BulkSetForecastFlagResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateInvitationInput, CreateTransactionInput, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UpdateTransactionResponse } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -172,6 +172,43 @@ export declare const useRecategorizeTransactionsByPattern: <TError = ErrorType<u
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>, TError, {
     data: BodyType<RecategorizeByPatternInput>;
+}, TContext>;
+/**
+ * @summary Bulk set the forecast_flag on a list of transactions to a target
+boolean value. Returns the ids that were actually flipped (rows
+whose flag already matched the target are skipped) so the client
+can offer a one-click Undo on the success toast that's safe even
+when the user has since toggled some of the rows back manually.
+
+ */
+export declare const getBulkSetForecastFlagUrl: () => string;
+export declare const bulkSetForecastFlag: (bulkSetForecastFlagInput: BulkSetForecastFlagInput, options?: RequestInit) => Promise<BulkSetForecastFlagResult>;
+export declare const getBulkSetForecastFlagMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof bulkSetForecastFlag>>, TError, {
+        data: BodyType<BulkSetForecastFlagInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof bulkSetForecastFlag>>, TError, {
+    data: BodyType<BulkSetForecastFlagInput>;
+}, TContext>;
+export type BulkSetForecastFlagMutationResult = NonNullable<Awaited<ReturnType<typeof bulkSetForecastFlag>>>;
+export type BulkSetForecastFlagMutationBody = BodyType<BulkSetForecastFlagInput>;
+export type BulkSetForecastFlagMutationError = ErrorType<unknown>;
+/**
+ * @summary Bulk set the forecast_flag on a list of transactions to a target
+boolean value. Returns the ids that were actually flipped (rows
+whose flag already matched the target are skipped) so the client
+can offer a one-click Undo on the success toast that's safe even
+when the user has since toggled some of the rows back manually.
+
+ */
+export declare const useBulkSetForecastFlag: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof bulkSetForecastFlag>>, TError, {
+        data: BodyType<BulkSetForecastFlagInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof bulkSetForecastFlag>>, TError, {
+    data: BodyType<BulkSetForecastFlagInput>;
 }, TContext>;
 export declare const getListDebtsUrl: () => string;
 export declare const listDebts: (options?: RequestInit) => Promise<Debt[]>;

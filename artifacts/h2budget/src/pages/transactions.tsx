@@ -10,6 +10,7 @@ import {
   useRefreshForecastBank,
   useSeedAprilChase,
   useRecategorizeTransactionsByPattern,
+  useBulkSetForecastFlag,
   getListTransactionsQueryKey,
   getGetForecastQueryKey,
   getGetBudgetMonthQueryKey,
@@ -398,6 +399,7 @@ export default function TransactionsPage() {
   const updateTx = useUpdateTransaction();
   const deleteTx = useDeleteTransaction();
   const recategorizeBulk = useRecategorizeTransactionsByPattern();
+  const bulkSetForecastFlag = useBulkSetForecastFlag();
   const buildRuleUndoAction = useRuleActionUndo();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -819,6 +821,41 @@ export default function TransactionsPage() {
     });
   }, [filtered]);
 
+  // Reverses a bulk Send-to-Forecast / Remove-from-Forecast by re-issuing
+  // the same endpoint with `forecastFlag` inverted, scoped to the exact
+  // ids the original bulk flipped. Rows the user has since toggled back
+  // by hand are silently skipped server-side because their current value
+  // already matches the new target. Surfaces the count of rows that
+  // actually reverted so the user can tell when an Undo is a no-op
+  // because they'd already moved everything elsewhere.
+  const undoBulkForecast = (affectedIds: string[], originalNext: boolean) => {
+    if (affectedIds.length === 0) return;
+    bulkSetForecastFlag.mutate(
+      { data: { ids: affectedIds, forecastFlag: !originalNext } },
+      {
+        onSuccess: (res) => {
+          queryClient.invalidateQueries({
+            queryKey: getListTransactionsQueryKey(),
+          });
+          queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+          toast({
+            title:
+              res.updated === 0
+                ? "Nothing to undo"
+                : `Restored ${res.updated} transaction${res.updated === 1 ? "" : "s"}`,
+          });
+        },
+        onError: (e) => {
+          toast({
+            title: "Couldn't undo",
+            description: (e as Error).message,
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
   const bulkSetForecast = async (next: boolean) => {
     const ids = Array.from(selected);
     if (!ids.length) return;
@@ -848,42 +885,56 @@ export default function TransactionsPage() {
       toast({ title: reason });
       return;
     }
-    const CONCURRENCY = 6;
-    let cursor = 0;
-    let okCount = 0;
-    const failures: string[] = [];
-    const worker = async () => {
-      while (cursor < targets.length) {
-        const i = cursor++;
-        const id = targets[i].id;
-        try {
-          await updateTx.mutateAsync({ id, data: { forecastFlag: next } });
-          okCount += 1;
-        } catch (e) {
-          failures.push((e as Error).message);
-        }
-      }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker),
-    );
-    queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
-    clearSelection();
-    if (!failures.length) {
+    const targetIds = targets.map((t) => t.id);
+    try {
+      const res = await bulkSetForecastFlag.mutateAsync({
+        data: { ids: targetIds, forecastFlag: next },
+      });
+      queryClient.invalidateQueries({
+        queryKey: getListTransactionsQueryKey(),
+      });
+      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+      clearSelection();
       const parts: string[] = [];
       if (skippedUncat > 0) parts.push(`${skippedUncat} uncategorized`);
       if (skippedNonBank > 0) parts.push(`${skippedNonBank} non-checking`);
       const suffix = parts.length ? ` · skipped ${parts.join(", ")}` : "";
+      const okCount = res.updated;
+      const undoIds = res.affectedIds;
       toast({
         title: next
           ? `Sent ${okCount} to Forecast${suffix}`
           : `Removed ${okCount} from Forecast`,
+        ...(undoIds.length > 0
+          ? {
+              action: (
+                <ToastAction
+                  altText={
+                    next
+                      ? "Undo bulk send to Forecast"
+                      : "Undo bulk remove from Forecast"
+                  }
+                  data-testid={
+                    next
+                      ? "action-undo-bulk-send-forecast"
+                      : "action-undo-bulk-remove-forecast"
+                  }
+                  onClick={() => undoBulkForecast(undoIds, next)}
+                >
+                  Undo
+                </ToastAction>
+              ),
+            }
+          : {}),
       });
-    } else {
+    } catch (e) {
+      queryClient.invalidateQueries({
+        queryKey: getListTransactionsQueryKey(),
+      });
+      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
       toast({
-        title: `${okCount} updated, ${failures.length} failed`,
-        description: failures[0],
+        title: "Bulk update failed",
+        description: (e as Error).message,
         variant: "destructive",
       });
     }
@@ -1261,7 +1312,7 @@ export default function TransactionsPage() {
           <Button
             size="sm"
             onClick={() => bulkSetForecast(true)}
-            disabled={updateTx.isPending}
+            disabled={bulkSetForecastFlag.isPending}
             data-testid="bulk-send-forecast"
           >
             <Send className="w-3.5 h-3.5 mr-1.5" /> Send to Forecast
@@ -1270,7 +1321,7 @@ export default function TransactionsPage() {
             size="sm"
             variant="outline"
             onClick={() => bulkSetForecast(false)}
-            disabled={updateTx.isPending}
+            disabled={bulkSetForecastFlag.isPending}
             data-testid="bulk-remove-forecast"
           >
             Remove from Forecast

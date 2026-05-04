@@ -367,6 +367,37 @@ and `to` swapped (and `ids` set) to implement one-click
   affectedIds: string[];
 }
 
+export interface BulkSetForecastFlagInput {
+  /** Transaction ids to flip. Only rows owned by the requesting
+user whose current `forecast_flag` differs from the target
+value are touched — rows already at the target value are
+silently skipped so a re-issue (e.g. one-click "Undo") is
+safe even when the user has since toggled some rows back
+by hand.
+ */
+  ids: string[];
+  /** Target value for `forecast_flag`. When `false` the server
+also drops any forecast_resolutions pointing at the
+affected rows (mirroring the per-row PATCH cleanup) so the
+Forecast inbox/bucket stays consistent.
+ */
+  forecastFlag: boolean;
+}
+
+export interface BulkSetForecastFlagResult {
+  /** Number of transactions whose forecast_flag was flipped. */
+  updated: number;
+  /** Ids of the transactions whose forecast_flag was actually
+flipped. The client passes these back to the same endpoint
+with `forecastFlag` inverted to implement one-click "Undo"
+of a bulk Send-to-Forecast / Remove-from-Forecast — rows
+the user has since re-toggled by hand are naturally
+skipped because their current value already matches the
+new target.
+ */
+  affectedIds: string[];
+}
+
 export type DebtBalanceSource =
   (typeof DebtBalanceSource)[keyof typeof DebtBalanceSource];
 

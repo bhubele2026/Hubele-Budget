@@ -22,6 +22,7 @@ import {
   DeleteTransactionParams,
   ListTransactionsQueryParams,
   RecategorizeTransactionsByPatternBody,
+  BulkSetForecastFlagBody,
 } from "@workspace/api-zod";
 
 void UpdateTransactionBody;
@@ -667,6 +668,60 @@ router.post(
       affectedMonths: Array.from(monthSet).sort(),
       affectedIds: updated.map((r) => r.id),
     });
+  },
+);
+
+/**
+ * Bulk set the `forecast_flag` on a list of transactions to a target
+ * boolean value. Mirrors the per-row PATCH behavior:
+ *   - rows whose flag already matches the target are silently skipped
+ *     (so the client's one-click "Undo" can re-issue the inverse with
+ *     the affectedIds and naturally drop any rows the user has since
+ *     toggled back by hand);
+ *   - when the target is `false`, any forecast_resolutions pointing at
+ *     the affected rows are also dropped so the Forecast inbox/bucket
+ *     stays consistent.
+ * Returns the ids that were actually flipped so the client can scope an
+ * Undo whitelist to exactly those rows.
+ */
+router.post(
+  "/transactions/bulk-set-forecast-flag",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const parsed = BulkSetForecastFlagBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const userId = req.userId!;
+    const { ids, forecastFlag } = parsed.data;
+    if (ids.length === 0) {
+      res.json({ updated: 0, affectedIds: [] });
+      return;
+    }
+    const updated = await db
+      .update(transactionsTable)
+      .set({ forecastFlag })
+      .where(
+        and(
+          eq(transactionsTable.userId, userId),
+          inArray(transactionsTable.id, ids),
+          eq(transactionsTable.forecastFlag, !forecastFlag),
+        ),
+      )
+      .returning({ id: transactionsTable.id });
+    const affectedIds = updated.map((r) => r.id);
+    if (!forecastFlag && affectedIds.length > 0) {
+      await db
+        .delete(forecastResolutionsTable)
+        .where(
+          and(
+            eq(forecastResolutionsTable.userId, userId),
+            inArray(forecastResolutionsTable.matchedTxnId, affectedIds),
+          ),
+        );
+    }
+    res.json({ updated: affectedIds.length, affectedIds });
   },
 );
 

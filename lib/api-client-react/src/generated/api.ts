@@ -26,6 +26,8 @@ import type {
   BudgetLine,
   BudgetLineInput,
   BudgetMonthDetail,
+  BulkSetForecastFlagInput,
+  BulkSetForecastFlagResult,
   CashSignal,
   Category,
   CategoryInput,
@@ -682,6 +684,103 @@ export const useRecategorizeTransactionsByPattern = <
   return useMutation(
     getRecategorizeTransactionsByPatternMutationOptions(options),
   );
+};
+
+/**
+ * @summary Bulk set the forecast_flag on a list of transactions to a target
+boolean value. Returns the ids that were actually flipped (rows
+whose flag already matched the target are skipped) so the client
+can offer a one-click Undo on the success toast that's safe even
+when the user has since toggled some of the rows back manually.
+
+ */
+export const getBulkSetForecastFlagUrl = () => {
+  return `/api/transactions/bulk-set-forecast-flag`;
+};
+
+export const bulkSetForecastFlag = async (
+  bulkSetForecastFlagInput: BulkSetForecastFlagInput,
+  options?: RequestInit,
+): Promise<BulkSetForecastFlagResult> => {
+  return customFetch<BulkSetForecastFlagResult>(getBulkSetForecastFlagUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(bulkSetForecastFlagInput),
+  });
+};
+
+export const getBulkSetForecastFlagMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkSetForecastFlag>>,
+    TError,
+    { data: BodyType<BulkSetForecastFlagInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkSetForecastFlag>>,
+  TError,
+  { data: BodyType<BulkSetForecastFlagInput> },
+  TContext
+> => {
+  const mutationKey = ["bulkSetForecastFlag"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkSetForecastFlag>>,
+    { data: BodyType<BulkSetForecastFlagInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkSetForecastFlag(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BulkSetForecastFlagMutationResult = NonNullable<
+  Awaited<ReturnType<typeof bulkSetForecastFlag>>
+>;
+export type BulkSetForecastFlagMutationBody =
+  BodyType<BulkSetForecastFlagInput>;
+export type BulkSetForecastFlagMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Bulk set the forecast_flag on a list of transactions to a target
+boolean value. Returns the ids that were actually flipped (rows
+whose flag already matched the target are skipped) so the client
+can offer a one-click Undo on the success toast that's safe even
+when the user has since toggled some of the rows back manually.
+
+ */
+export const useBulkSetForecastFlag = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkSetForecastFlag>>,
+    TError,
+    { data: BodyType<BulkSetForecastFlagInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof bulkSetForecastFlag>>,
+  TError,
+  { data: BodyType<BulkSetForecastFlagInput> },
+  TContext
+> => {
+  return useMutation(getBulkSetForecastFlagMutationOptions(options));
 };
 
 export const getListDebtsUrl = () => {

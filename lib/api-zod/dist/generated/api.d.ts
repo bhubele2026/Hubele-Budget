@@ -802,6 +802,34 @@ export declare const RecategorizeTransactionsByPatternResponse: zod.ZodObject<{
     affectedMonths: string[];
     affectedIds: string[];
 }>;
+/**
+ * @summary Bulk set the forecast_flag on a list of transactions to a target
+boolean value. Returns the ids that were actually flipped (rows
+whose flag already matched the target are skipped) so the client
+can offer a one-click Undo on the success toast that's safe even
+when the user has since toggled some of the rows back manually.
+
+ */
+export declare const BulkSetForecastFlagBody: zod.ZodObject<{
+    ids: zod.ZodArray<zod.ZodString, "many">;
+    forecastFlag: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    forecastFlag: boolean;
+    ids: string[];
+}, {
+    forecastFlag: boolean;
+    ids: string[];
+}>;
+export declare const BulkSetForecastFlagResponse: zod.ZodObject<{
+    updated: zod.ZodNumber;
+    affectedIds: zod.ZodArray<zod.ZodString, "many">;
+}, "strip", zod.ZodTypeAny, {
+    updated: number;
+    affectedIds: string[];
+}, {
+    updated: number;
+    affectedIds: string[];
+}>;
 export declare const ListDebtsResponseItem: zod.ZodObject<{
     id: zod.ZodString;
     name: zod.ZodString;

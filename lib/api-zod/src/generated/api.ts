@@ -381,6 +381,38 @@ export const RecategorizeTransactionsByPatternResponse = zod.object({
     ),
 });
 
+/**
+ * @summary Bulk set the forecast_flag on a list of transactions to a target
+boolean value. Returns the ids that were actually flipped (rows
+whose flag already matched the target are skipped) so the client
+can offer a one-click Undo on the success toast that's safe even
+when the user has since toggled some of the rows back manually.
+
+ */
+export const BulkSetForecastFlagBody = zod.object({
+  ids: zod
+    .array(zod.string())
+    .describe(
+      'Transaction ids to flip. Only rows owned by the requesting\nuser whose current `forecast_flag` differs from the target\nvalue are touched — rows already at the target value are\nsilently skipped so a re-issue (e.g. one-click \"Undo\") is\nsafe even when the user has since toggled some rows back\nby hand.\n',
+    ),
+  forecastFlag: zod
+    .boolean()
+    .describe(
+      "Target value for `forecast_flag`. When `false` the server\nalso drops any forecast_resolutions pointing at the\naffected rows (mirroring the per-row PATCH cleanup) so the\nForecast inbox\/bucket stays consistent.\n",
+    ),
+});
+
+export const BulkSetForecastFlagResponse = zod.object({
+  updated: zod
+    .number()
+    .describe("Number of transactions whose forecast_flag was flipped."),
+  affectedIds: zod
+    .array(zod.string())
+    .describe(
+      'Ids of the transactions whose forecast_flag was actually\nflipped. The client passes these back to the same endpoint\nwith `forecastFlag` inverted to implement one-click \"Undo\"\nof a bulk Send-to-Forecast \/ Remove-from-Forecast — rows\nthe user has since re-toggled by hand are naturally\nskipped because their current value already matches the\nnew target.\n',
+    ),
+});
+
 export const ListDebtsResponseItem = zod.object({
   id: zod.string(),
   name: zod.string(),

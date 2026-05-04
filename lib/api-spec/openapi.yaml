@@ -160,6 +160,28 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RecategorizeByPatternResult" }
 
+  /transactions/bulk-set-forecast-flag:
+    post:
+      operationId: bulkSetForecastFlag
+      tags: [transactions]
+      summary: |
+        Bulk set the forecast_flag on a list of transactions to a target
+        boolean value. Returns the ids that were actually flipped (rows
+        whose flag already matched the target are skipped) so the client
+        can offer a one-click Undo on the success toast that's safe even
+        when the user has since toggled some of the rows back manually.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkSetForecastFlagInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkSetForecastFlagResult" }
+
   /debts:
     get:
       operationId: listDebts
@@ -1423,6 +1445,47 @@ components:
             client passes these back into the same endpoint with `from`
             and `to` swapped (and `ids` set) to implement one-click
             "Undo" of a bulk recategorization.
+          items: { type: string }
+
+    BulkSetForecastFlagInput:
+      type: object
+      required: [ids, forecastFlag]
+      properties:
+        ids:
+          type: array
+          description: |
+            Transaction ids to flip. Only rows owned by the requesting
+            user whose current `forecast_flag` differs from the target
+            value are touched — rows already at the target value are
+            silently skipped so a re-issue (e.g. one-click "Undo") is
+            safe even when the user has since toggled some rows back
+            by hand.
+          items: { type: string }
+        forecastFlag:
+          type: boolean
+          description: |
+            Target value for `forecast_flag`. When `false` the server
+            also drops any forecast_resolutions pointing at the
+            affected rows (mirroring the per-row PATCH cleanup) so the
+            Forecast inbox/bucket stays consistent.
+
+    BulkSetForecastFlagResult:
+      type: object
+      required: [updated, affectedIds]
+      properties:
+        updated:
+          type: integer
+          description: Number of transactions whose forecast_flag was flipped.
+        affectedIds:
+          type: array
+          description: |
+            Ids of the transactions whose forecast_flag was actually
+            flipped. The client passes these back to the same endpoint
+            with `forecastFlag` inverted to implement one-click "Undo"
+            of a bulk Send-to-Forecast / Remove-from-Forecast — rows
+            the user has since re-toggled by hand are naturally
+            skipped because their current value already matches the
+            new target.
           items: { type: string }
 
     Debt:
