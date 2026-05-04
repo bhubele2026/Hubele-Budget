@@ -41,6 +41,7 @@ import {
   GripVertical,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import {
   DndContext,
   PointerSensor,
@@ -452,10 +453,52 @@ export default function MappingRulesPage() {
   };
 
   const handleDeleteRule = (id: string) => {
+    // Capture the rule's full shape *before* the delete fires so the Undo
+    // action can recreate it with the same pattern / matchType /
+    // categoryId / priority. Each toast closes over its own `deleted`
+    // value, so two quick deletions in a row each undo the right rule
+    // even though only the most recent toast is visible at a time
+    // (the toast hook is configured with TOAST_LIMIT = 1).
+    const deleted = (rules ?? []).find((r) => r.id === id);
     deleteRule.mutate(
       { id },
       {
-        onSuccess: () => toast({ title: "Rule deleted" }),
+        onSuccess: () => {
+          if (!deleted) {
+            toast({ title: "Rule deleted" });
+            return;
+          }
+          const { dismiss } = toast({
+            title: "Rule deleted",
+            // ~6 seconds — long enough to recover from an accidental
+            // click on an auto-learned rule, short enough not to linger.
+            duration: 6000,
+            action: (
+              <ToastAction
+                altText="Undo delete rule"
+                data-testid={`action-undo-delete-rule-${deleted.id}`}
+                onClick={() => {
+                  dismiss();
+                  createRule.mutate(
+                    {
+                      data: {
+                        pattern: deleted.pattern,
+                        matchType: deleted.matchType,
+                        categoryId: deleted.categoryId,
+                        priority: deleted.priority,
+                      },
+                    },
+                    {
+                      onSuccess: () => toast({ title: "Rule restored" }),
+                    },
+                  );
+                }}
+              >
+                Undo
+              </ToastAction>
+            ),
+          });
+        },
       },
     );
   };
