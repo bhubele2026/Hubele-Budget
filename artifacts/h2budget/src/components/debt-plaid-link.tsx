@@ -28,6 +28,7 @@ import { PlaidLinkButton } from "@/components/plaid-link-button";
 import {
   PlaidReconnectButton,
   isPlaidReauthCode,
+  plaidReauthReason,
 } from "@/components/plaid-reconnect-button";
 
 function relTime(iso: string | null | undefined): string {
@@ -424,6 +425,14 @@ function PlaidAccountPicker({
 export type ReauthInstitution = {
   itemId: string;
   institutionName: string | null;
+  /**
+   * (#228) Plaid error code for this institution (e.g. ITEM_LOGIN_REQUIRED,
+   * PENDING_EXPIRATION, PENDING_DISCONNECT). Captured from the first
+   * affected debt — the same item can't simultaneously hold two different
+   * codes, so any debt under it is representative. Drives the per-code
+   * subline copy via plaidReauthReason().
+   */
+  lastSyncErrorCode: string | null;
   debts: Debt[];
 };
 
@@ -449,6 +458,10 @@ export function findDebtsNeedingReauth(
       groups.set(itemId, {
         itemId,
         institutionName: d.plaidAccount?.institutionName ?? null,
+        // (#228) The first debt's code stands in for the institution; the
+        // server writes the same lastSyncErrorCode on every account under
+        // an item, so any debt is representative.
+        lastSyncErrorCode: d.plaidLastSyncErrorCode ?? null,
         debts: [d],
       });
     }
@@ -500,7 +513,13 @@ export function DebtReauthBanner({ debts }: { debts: Debt[] | null | undefined }
       ? `${worstName} and ${otherCount} more bank${otherCount === 1 ? "" : "s"} need reconnecting`
       : `${worstName} needs reconnecting`;
   const debtCount = summary.totalDebts;
-  const subline = `${debtCount} debt${debtCount === 1 ? "" : "s"} may be out of date`;
+  // (#228) Lead with the per-code reason ("Your saved login expired…" /
+  // "This bank's connection is about to expire…") so the user knows what
+  // the Plaid Link popup is going to ask for. The debt-count fragment
+  // stays on its own line so the debt-specific impact ("balance, APR,
+  // and minimum payment may be out of date") is still visible.
+  const reason = plaidReauthReason(worst.lastSyncErrorCode);
+  const debtImpact = `${debtCount} debt${debtCount === 1 ? "" : "s"} may be out of date — reconnect to refresh balance, APR, and minimum payment.`;
 
   return (
     <div
@@ -514,7 +533,13 @@ export function DebtReauthBanner({ debts }: { debts: Debt[] | null | undefined }
           {headline}
         </div>
         <div className="text-sm opacity-90" data-testid="text-debt-reauth-subline">
-          {subline} — reconnect to refresh balance, APR, and minimum payment.
+          {reason}
+        </div>
+        <div
+          className="text-xs opacity-80 mt-0.5"
+          data-testid="text-debt-reauth-impact"
+        >
+          {debtImpact}
         </div>
       </div>
       <PlaidReconnectButton

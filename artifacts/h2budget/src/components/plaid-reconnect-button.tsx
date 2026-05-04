@@ -29,6 +29,44 @@ export function isPlaidReauthCode(code: string | null | undefined): boolean {
   return PLAID_REAUTH_ERROR_CODES.has(code);
 }
 
+// (#228) Friendly per-code copy that the page-top reconnect banner, the
+// DebtReauthBanner, and the Settings "Needs reconnect" badge all share so
+// the user knows *why* the Plaid Link popup is about to ask for credentials
+// again before they click Reconnect. Keep keys aligned with
+// PLAID_REAUTH_ERROR_CODES above.
+//
+// Codes (per Plaid):
+//   ITEM_LOGIN_REQUIRED — saved password / MFA is no longer valid (most
+//     common case; happens after a password change at the bank or an idle
+//     session timeout).
+//   PENDING_EXPIRATION — OAuth consent for this institution will expire
+//     soon and the user should re-authorize before that happens.
+//   PENDING_DISCONNECT — Plaid has flagged this connection for shutdown
+//     (data partner change, deprecated integration); user must reconnect
+//     before the cutoff or the link goes dead.
+export const PLAID_REAUTH_ERROR_REASONS: Record<string, string> = {
+  ITEM_LOGIN_REQUIRED:
+    "Your saved login expired — sign in again to keep transactions in sync.",
+  PENDING_EXPIRATION:
+    "This bank's connection is about to expire — re-authorize to keep it linked.",
+  PENDING_DISCONNECT:
+    "Plaid will disconnect this bank soon — reconnect now to keep it linked.",
+};
+
+const PLAID_REAUTH_FALLBACK_REASON =
+  "Plaid needs you to re-authorize this bank.";
+
+/**
+ * Returns a one-line, user-facing reason explaining why an item needs to be
+ * reconnected. Falls back to a generic "needs re-authorization" message for
+ * any code we don't have specific copy for (including null / unknown codes
+ * that still landed in a re-auth state via some other signal).
+ */
+export function plaidReauthReason(code: string | null | undefined): string {
+  if (!code) return PLAID_REAUTH_FALLBACK_REASON;
+  return PLAID_REAUTH_ERROR_REASONS[code] ?? PLAID_REAUTH_FALLBACK_REASON;
+}
+
 /**
  * Reconnect button shown next to the Sync chip when Plaid says an item
  * needs re-authentication (ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION, etc.).

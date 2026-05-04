@@ -168,7 +168,12 @@ describe("(#211) DebtReauthBanner", () => {
     ]);
     const banner = screen.getByTestId("banner-debt-reauth");
     expect(banner.textContent).toContain("Chase needs reconnecting");
-    expect(banner.textContent).toContain("2 debts may be out of date");
+    // (#228) The debt-impact line keeps the count + "out of date" copy and
+    // now lives in its own slot so the per-code reason can occupy the
+    // primary subline.
+    const impact = screen.getByTestId("text-debt-reauth-impact");
+    expect(impact.textContent).toContain("2 debts may be out of date");
+    expect(impact.textContent).toContain("balance, APR, and minimum payment");
     // Reconnect button is keyed off the parent item id.
     expect(screen.getByTestId("button-plaid-reconnect-item-chase")).toBeTruthy();
   });
@@ -179,7 +184,32 @@ describe("(#211) DebtReauthBanner", () => {
     ]);
     const banner = screen.getByTestId("banner-debt-reauth");
     expect(banner.textContent).toContain("Chase needs reconnecting");
-    expect(banner.textContent).toContain("1 debt may be out of date");
+    const impact = screen.getByTestId("text-debt-reauth-impact");
+    expect(impact.textContent).toContain("1 debt may be out of date");
+  });
+
+  it("(#228) shows the per-code reason in the subline so the user knows why a reconnect is needed", () => {
+    renderBanner([
+      makeDebt({ id: "d1", plaidLastSyncErrorCode: "ITEM_LOGIN_REQUIRED" }),
+    ]);
+    const subline = screen.getByTestId("text-debt-reauth-subline");
+    expect(subline.textContent).toContain("Your saved login expired");
+  });
+
+  it("(#228) shows a different reason for PENDING_DISCONNECT (vs. ITEM_LOGIN_REQUIRED)", () => {
+    renderBanner([
+      makeDebt({ id: "d1", plaidLastSyncErrorCode: "PENDING_DISCONNECT" }),
+    ]);
+    const subline = screen.getByTestId("text-debt-reauth-subline");
+    expect(subline.textContent).toContain("disconnect");
+    expect(subline.textContent).not.toContain("Your saved login expired");
+  });
+
+  it("(#228) findDebtsNeedingReauth captures the parent item's lastSyncErrorCode", () => {
+    const summary = findDebtsNeedingReauth([
+      makeDebt({ id: "d1", plaidLastSyncErrorCode: "PENDING_EXPIRATION" }),
+    ]);
+    expect(summary.worst?.lastSyncErrorCode).toBe("PENDING_EXPIRATION");
   });
 
   it("targets the worst-affected institution and mentions the rest", () => {

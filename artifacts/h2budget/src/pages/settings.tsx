@@ -35,6 +35,7 @@ import { formatPreparingElapsed, isPreparingStalled } from "@/lib/plaidPreparing
 import {
   PlaidReconnectButton,
   isPlaidReauthCode,
+  plaidReauthReason,
 } from "@/components/plaid-reconnect-button";
 import { OwnerInvitationsSection } from "@/components/owner-invitations";
 import {
@@ -488,7 +489,11 @@ export default function SettingsPage() {
                           <span
                             className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-destructive/50 text-destructive bg-destructive/10"
                             data-testid={`badge-needs-reconnect-${item.id}`}
-                            title="Plaid says this bank needs you to re-enter credentials. Click Reconnect to fix it."
+                            // (#228) Use the per-code reason so the tooltip
+                            // explains *why* (saved login expired vs.
+                            // consent expiring vs. pending disconnect)
+                            // before the user clicks Reconnect.
+                            title={`${plaidReauthReason(item.lastSyncErrorCode)} Click Reconnect to fix it.`}
                           >
                             Needs reconnect
                           </span>

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   PlaidReconnectButton,
   isPlaidReauthCode,
+  plaidReauthReason,
 } from "@/components/plaid-reconnect-button";
 
 /**
@@ -87,8 +88,11 @@ export function PlaidReauthBannerView({
     otherCount > 0
       ? `${worstName} and ${otherCount} more bank${otherCount === 1 ? "" : "s"} need reconnecting`
       : `${worstName} needs reconnecting`;
-  const subline =
-    "Transactions and balances may be out of date — reconnect to refresh.";
+  // (#228) Show the per-code reason (e.g. "Your saved login expired…") so
+  // the user knows what to expect from the Plaid Link popup. Falls back to
+  // the generic "needs to re-authorize" copy via plaidReauthReason() when
+  // the code is unknown.
+  const subline = plaidReauthReason(worst.lastSyncErrorCode);
 
   return (
     <div

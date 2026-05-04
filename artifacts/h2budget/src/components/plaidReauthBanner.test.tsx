@@ -26,6 +26,7 @@ import {
   PlaidReauthBannerView,
   findPlaidItemsNeedingReauth,
 } from "./plaid-reauth-banner";
+import { plaidReauthReason } from "./plaid-reconnect-button";
 import type { PlaidItemDetail } from "@workspace/api-client-react";
 
 function makeItem(overrides: Partial<PlaidItemDetail> & { id: string }): PlaidItemDetail {
@@ -55,6 +56,23 @@ function renderBanner(items: PlaidItemDetail[] | null | undefined) {
 
 beforeEach(() => {
   cleanup();
+});
+
+describe("(#228) plaidReauthReason", () => {
+  it("returns the expired-login copy for ITEM_LOGIN_REQUIRED", () => {
+    expect(plaidReauthReason("ITEM_LOGIN_REQUIRED")).toMatch(/saved login expired/i);
+  });
+  it("returns the about-to-expire copy for PENDING_EXPIRATION", () => {
+    expect(plaidReauthReason("PENDING_EXPIRATION")).toMatch(/about to expire/i);
+  });
+  it("returns the disconnect copy for PENDING_DISCONNECT", () => {
+    expect(plaidReauthReason("PENDING_DISCONNECT")).toMatch(/disconnect/i);
+  });
+  it("falls back to a generic re-authorize message for unknown / null codes", () => {
+    expect(plaidReauthReason(null)).toMatch(/re-authorize/i);
+    expect(plaidReauthReason(undefined)).toMatch(/re-authorize/i);
+    expect(plaidReauthReason("SOMETHING_NEW")).toMatch(/re-authorize/i);
+  });
 });
 
 describe("(#217) findPlaidItemsNeedingReauth", () => {
@@ -212,6 +230,51 @@ describe("(#217) PlaidReauthBannerView", () => {
       </QueryClientProvider>,
     );
     expect(screen.getByTestId("banner-plaid-reauth")).toBeTruthy();
+  });
+
+  it("(#228) shows the per-code reason in the subline so the user knows why a reconnect is needed", () => {
+    renderBanner([
+      makeItem({
+        id: "i-login",
+        institutionName: "Chase",
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+      }),
+    ]);
+    const subline = screen.getByTestId("text-plaid-reauth-subline");
+    expect(subline.textContent).toContain("Your saved login expired");
+    // Generic "may be out of date" copy from the pre-#228 banner is gone.
+    expect(subline.textContent).not.toContain("may be out of date");
+  });
+
+  it("(#228) uses the worst item's code (alphabetical pick) for the subline when several items are failing", () => {
+    renderBanner([
+      makeItem({
+        id: "i-chase",
+        institutionName: "Chase",
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+      }),
+      // Amex sorts first, so its PENDING_DISCONNECT reason wins the subline.
+      makeItem({
+        id: "i-amex",
+        institutionName: "Amex",
+        lastSyncErrorCode: "PENDING_DISCONNECT",
+      }),
+    ]);
+    const subline = screen.getByTestId("text-plaid-reauth-subline");
+    expect(subline.textContent).toContain(plaidReauthReason("PENDING_DISCONNECT"));
+    expect(subline.textContent).not.toContain(plaidReauthReason("ITEM_LOGIN_REQUIRED"));
+  });
+
+  it("(#228) shows the PENDING_EXPIRATION reason when consent is about to lapse", () => {
+    renderBanner([
+      makeItem({
+        id: "i-pending",
+        institutionName: "Chase",
+        lastSyncErrorCode: "PENDING_EXPIRATION",
+      }),
+    ]);
+    const subline = screen.getByTestId("text-plaid-reauth-subline");
+    expect(subline.textContent).toContain("about to expire");
   });
 
   it("disappears once the items list reports everything healthy again", () => {
