@@ -76,8 +76,35 @@ vi.mock("@workspace/api-client-react", () => {
       mutateAsync: async () => undefined,
       mutate: () => undefined,
     }),
+    // amex.tsx imports useListMappingRules directly, and
+    // useBulkRecategorizePrompt (called at amex.tsx:110) calls both
+    // useListMappingRules and useRecategorizeTransactionsByPattern at
+    // module-load time. Without these stubs the hook is invoked as
+    // `undefined`, mirroring the same incomplete-mock crash Task #235
+    // fixed in mappingRulesRestoreNoPrompt.test.tsx.
+    useListMappingRules: () => ({ data: [], isLoading: false }),
+    useRecategorizeTransactionsByPattern: () => ({
+      mutate: () => undefined,
+      isPending: false,
+    }),
+    // useRuleActionUndo (called from amex.tsx via useRuleActionUndo())
+    // pulls these two hooks at module-load time. Stub them so the
+    // render doesn't crash with "is not a function" when the hook
+    // body runs.
+    useDeleteMappingRule: () => ({
+      mutate: () => undefined,
+      isPending: false,
+    }),
+    useUpdateMappingRule: () => ({
+      mutate: () => undefined,
+      isPending: false,
+    }),
+    getListMappingRulesQueryKey: () => ["/api/mapping-rules"],
     getListTransactionsQueryKey: () => ["/api/transactions"],
     getGetBudgetMonthQueryKey: (m: string) => ["/api/budget-months", m],
+    // PlaidReauthBanner (rendered by amex.tsx) calls useListPlaidItems
+    // at module load. Empty list keeps the banner inert.
+    useListPlaidItems: () => ({ data: [] }),
     customFetch: async (
       url: string,
       init: { method?: string; body?: string } = {},
