@@ -737,7 +737,15 @@ export default function MappingRulesPage() {
                 // freshly-added rule itself is left alone — the
                 // user can delete it via the row-level Trash with
                 // its own Undo if they don't want it pinned.
-                const undoTargetCategoryId = previewSnapshot.toCategoryId;
+                //
+                // NOTE: must use `bulkToCategoryId` (the actual
+                // destination the bulk fired against), not
+                // `previewSnapshot.toCategoryId`. After Task #243
+                // dropped `toCategoryId` from the preview request,
+                // the snapshot value is `null`, which would make
+                // the server guard match every row and silently
+                // wipe categories the user never asked us to touch.
+                const undoTargetCategoryId = bulkToCategoryId;
                 const affectedIds = res.affectedIds;
                 const undoable = res.updated > 0 && affectedIds.length > 0;
                 const { dismiss } = toast({
