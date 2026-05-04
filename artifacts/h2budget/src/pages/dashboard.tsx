@@ -35,6 +35,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { DashboardKillOrder } from "@/components/dashboard-kill-order";
 import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
+import { PlaidExpiringSoonList } from "@/components/plaid-expiring-soon-list";
 
 import { SUB_BUCKETS, type SubBucket, useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import {
@@ -1553,6 +1554,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <DebtReauthBanner debts={debts} />
+      <PlaidExpiringSoonList />
       <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-8">
         <DashboardHero today={today} />
         <MonthlySnapshot
