@@ -295,6 +295,9 @@ router.patch(
           genericPattern: null;
           ruleId: null;
           previousCategoryId: null;
+          matchType: null;
+          toCategoryId: null;
+          candidateCount: null;
         }
       | {
           kind: "created";
@@ -302,6 +305,9 @@ router.patch(
           genericPattern: null;
           ruleId: string | null;
           previousCategoryId: null;
+          matchType: "contains";
+          toCategoryId: string;
+          candidateCount: number;
         }
       | {
           kind: "created_priority_bump";
@@ -309,6 +315,9 @@ router.patch(
           genericPattern: string;
           ruleId: string | null;
           previousCategoryId: null;
+          matchType: "contains";
+          toCategoryId: string;
+          candidateCount: number;
         }
       | {
           kind: "skipped_generic";
@@ -316,6 +325,9 @@ router.patch(
           genericPattern: string;
           ruleId: null;
           previousCategoryId: null;
+          matchType: null;
+          toCategoryId: null;
+          candidateCount: null;
         }
       | {
           kind: "repointed";
@@ -323,6 +335,9 @@ router.patch(
           genericPattern: null;
           ruleId: string;
           previousCategoryId: string | null;
+          matchType: null;
+          toCategoryId: null;
+          candidateCount: null;
         };
     const repointedRules: RepointedRule[] = [];
     let ruleAction: RuleAction = {
@@ -331,6 +346,9 @@ router.patch(
       genericPattern: null,
       ruleId: null,
       previousCategoryId: null,
+      matchType: null,
+      toCategoryId: null,
+      candidateCount: null,
     };
     if (patch.categoryId && !row.isTransfer) {
       const userId = req.userId!;
@@ -447,29 +465,61 @@ router.patch(
                 genericPattern: null,
                 ruleId: upsertResult.ruleId,
                 previousCategoryId,
+                matchType: null,
+                toCategoryId: null,
+                candidateCount: null,
               };
             }
-          } else if (matchingGeneric.length > 0) {
-            // A different (non-colliding) generic rule still matches —
-            // we left it alone and gave the new specific rule a higher
-            // priority. Tell the user so they understand both rules
-            // coexist and which one wins on future similar charges.
-            const generic = matchingGeneric[0]!;
-            ruleAction = {
-              kind: "created_priority_bump",
-              pattern,
-              genericPattern: generic.pattern,
-              ruleId: upsertResult.ruleId,
-              previousCategoryId: null,
-            };
           } else {
-            ruleAction = {
-              kind: "created",
-              pattern,
-              genericPattern: null,
-              ruleId: upsertResult.ruleId,
-              previousCategoryId: null,
-            };
+            // A brand-new specific rule was inserted. Count older
+            // *uncategorized* rows that match this pattern (excluding
+            // the row that triggered the auto-learn) so the client
+            // can offer the same "apply to past charges?" prompt
+            // already used for repointed rules. We deliberately scope
+            // to uncategorized rows: any row the user previously
+            // categorized by hand reflects explicit intent and should
+            // be left alone (the bulk endpoint enforces the same
+            // guard). The freshly-edited row itself is already on
+            // `patch.categoryId` after the UPDATE above, so it falls
+            // out of the uncategorized candidate pool naturally —
+            // we only need to defensively exclude its id in case a
+            // future change moves the categorize step.
+            const candidates = await selectPatternCandidates(
+              userId,
+              { pattern, matchType: "contains" },
+              null,
+            );
+            const candidateCount = candidates.filter(
+              (c) => c.id !== row.id,
+            ).length;
+            if (matchingGeneric.length > 0) {
+              // A different (non-colliding) generic rule still matches —
+              // we left it alone and gave the new specific rule a higher
+              // priority. Tell the user so they understand both rules
+              // coexist and which one wins on future similar charges.
+              const generic = matchingGeneric[0]!;
+              ruleAction = {
+                kind: "created_priority_bump",
+                pattern,
+                genericPattern: generic.pattern,
+                ruleId: upsertResult.ruleId,
+                previousCategoryId: null,
+                matchType: "contains",
+                toCategoryId: patch.categoryId,
+                candidateCount,
+              };
+            } else {
+              ruleAction = {
+                kind: "created",
+                pattern,
+                genericPattern: null,
+                ruleId: upsertResult.ruleId,
+                previousCategoryId: null,
+                matchType: "contains",
+                toCategoryId: patch.categoryId,
+                candidateCount,
+              };
+            }
           }
         } else if (pattern && collidingGeneric) {
           ruleAction = {
@@ -478,6 +528,9 @@ router.patch(
             genericPattern: collidingGeneric.pattern,
             ruleId: null,
             previousCategoryId: null,
+            matchType: null,
+            toCategoryId: null,
+            candidateCount: null,
           };
         }
       } else if (repointedRules.length > 0) {
@@ -493,6 +546,9 @@ router.patch(
           genericPattern: null,
           ruleId: first.ruleId,
           previousCategoryId: repointedPrev.get(first.ruleId) ?? null,
+          matchType: null,
+          toCategoryId: null,
+          candidateCount: null,
         };
       }
     }
@@ -541,7 +597,7 @@ function ilikePatternFor(rule: { matchType: string; pattern: string }): string {
 async function selectPatternCandidates(
   userId: string,
   rule: { pattern: string; matchType: string },
-  fromCategoryId: string,
+  fromCategoryId: string | null,
 ): Promise<
   {
     id: string;
@@ -554,6 +610,13 @@ async function selectPatternCandidates(
   // through to the client as the "Show matches" preview list. Bulk
   // re-categorize callers don't care about order (they just need the
   // full id set) so this is safe to apply unconditionally.
+  //
+  // `fromCategoryId === null` targets currently-uncategorized rows. Used by
+  // the "apply to past charges?" prompt that fires after the auto-learn flow
+  // creates a brand-new specific rule — older uncategorized rows matching
+  // the new pattern are exactly the ones the user would otherwise have to
+  // categorize by hand. Manually-categorized rows are deliberately excluded
+  // so explicit user intent is preserved.
   return db
     .select({
       id: transactionsTable.id,
@@ -565,7 +628,9 @@ async function selectPatternCandidates(
     .where(
       and(
         eq(transactionsTable.userId, userId),
-        eq(transactionsTable.categoryId, fromCategoryId),
+        fromCategoryId === null
+          ? isNull(transactionsTable.categoryId)
+          : eq(transactionsTable.categoryId, fromCategoryId),
         eq(transactionsTable.isTransfer, false),
         ilike(transactionsTable.description, ilikePatternFor(rule)),
       ),
@@ -593,7 +658,11 @@ router.post(
     const userId = req.userId!;
     const { pattern, matchType, fromCategoryId, toCategoryId, ids, ruleId } =
       parsed.data;
-    if (fromCategoryId === toCategoryId) {
+    // `fromCategoryId === null` means "rows currently uncategorized" — used
+    // by the "apply to past charges?" prompt that follows a freshly created
+    // mapping rule. The same-category short-circuit only applies when the
+    // categories actually match (null is distinct from any category id).
+    if (fromCategoryId !== null && fromCategoryId === toCategoryId) {
       res.json({ updated: 0, affectedMonths: [], affectedIds: [] });
       return;
     }
@@ -658,7 +727,9 @@ router.post(
       .where(
         and(
           eq(transactionsTable.userId, userId),
-          eq(transactionsTable.categoryId, fromCategoryId),
+          fromCategoryId === null
+            ? isNull(transactionsTable.categoryId)
+            : eq(transactionsTable.categoryId, fromCategoryId),
           inArray(transactionsTable.id, candidateIds),
         ),
       )

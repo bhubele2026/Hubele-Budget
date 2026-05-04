@@ -693,16 +693,25 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         genericPattern: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         ruleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         previousCategoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        matchType: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"contains">, zod.ZodLiteral<"exact">, zod.ZodLiteral<"starts_with">, zod.ZodLiteral<null>]>>>;
+        toCategoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        candidateCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
     }, "strip", zod.ZodTypeAny, {
         kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";
         ruleId?: string | null | undefined;
         pattern?: string | null | undefined;
+        matchType?: "exact" | "contains" | "starts_with" | null | undefined;
+        toCategoryId?: string | null | undefined;
+        candidateCount?: number | null | undefined;
         genericPattern?: string | null | undefined;
         previousCategoryId?: string | null | undefined;
     }, {
         kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";
         ruleId?: string | null | undefined;
         pattern?: string | null | undefined;
+        matchType?: "exact" | "contains" | "starts_with" | null | undefined;
+        toCategoryId?: string | null | undefined;
+        candidateCount?: number | null | undefined;
         genericPattern?: string | null | undefined;
         previousCategoryId?: string | null | undefined;
     }>;
@@ -725,6 +734,9 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";
         ruleId?: string | null | undefined;
         pattern?: string | null | undefined;
+        matchType?: "exact" | "contains" | "starts_with" | null | undefined;
+        toCategoryId?: string | null | undefined;
+        candidateCount?: number | null | undefined;
         genericPattern?: string | null | undefined;
         previousCategoryId?: string | null | undefined;
     };
@@ -747,6 +759,9 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
         kind: "created" | "created_priority_bump" | "skipped_generic" | "repointed" | "none";
         ruleId?: string | null | undefined;
         pattern?: string | null | undefined;
+        matchType?: "exact" | "contains" | "starts_with" | null | undefined;
+        toCategoryId?: string | null | undefined;
+        candidateCount?: number | null | undefined;
         genericPattern?: string | null | undefined;
         previousCategoryId?: string | null | undefined;
     };
@@ -770,21 +785,21 @@ rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
 export declare const RecategorizeTransactionsByPatternBody: zod.ZodObject<{
     pattern: zod.ZodString;
     matchType: zod.ZodEnum<["contains", "exact", "starts_with"]>;
-    fromCategoryId: zod.ZodString;
+    fromCategoryId: zod.ZodNullable<zod.ZodString>;
     toCategoryId: zod.ZodString;
     ids: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
     ruleId: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     pattern: string;
     matchType: "exact" | "contains" | "starts_with";
-    fromCategoryId: string;
+    fromCategoryId: string | null;
     toCategoryId: string;
     ruleId?: string | undefined;
     ids?: string[] | undefined;
 }, {
     pattern: string;
     matchType: "exact" | "contains" | "starts_with";
-    fromCategoryId: string;
+    fromCategoryId: string | null;
     toCategoryId: string;
     ruleId?: string | undefined;
     ids?: string[] | undefined;

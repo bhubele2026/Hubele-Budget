@@ -217,12 +217,30 @@ export declare const RuleActionKind: {
     readonly none: "none";
 };
 /**
+ * Match type of the freshly created rule. Set for `created`
+and `created_priority_bump`. The client passes this
+through to /transactions/recategorize-by-pattern when the
+user accepts the "apply to past charges?" prompt.
+
+ * @nullable
+ */
+export type RuleActionMatchType = (typeof RuleActionMatchType)[keyof typeof RuleActionMatchType] | null;
+export declare const RuleActionMatchType: {
+    readonly contains: "contains";
+    readonly exact: "exact";
+    readonly starts_with: "starts_with";
+};
+/**
  * Summary of what the auto-learn flow did to the user's mapping
 rules in response to this PATCH. Surfaced as a small toast/note
 so the user understands why future similar charges will (or
 won't) auto-categorize. The repoint case is also reported in
 more detail via `repointedRules` (which drives the "apply to
-past transactions too" prompt).
+past transactions too" prompt). For the `created` /
+`created_priority_bump` cases, the action also carries the
+match metadata + candidate count needed to drive the same
+"apply to past charges?" prompt against older *uncategorized*
+rows that match the freshly created rule.
 
  */
 export interface RuleAction {
@@ -277,6 +295,39 @@ export interface RuleAction {
      * @nullable
      */
     previousCategoryId?: string | null;
+    /**
+     * Match type of the freshly created rule. Set for `created`
+  and `created_priority_bump`. The client passes this
+  through to /transactions/recategorize-by-pattern when the
+  user accepts the "apply to past charges?" prompt.
+  
+     * @nullable
+     */
+    matchType?: RuleActionMatchType;
+    /**
+     * The category the freshly created rule points at. Set for
+  `created` and `created_priority_bump`. Used as the
+  `toCategoryId` for the bulk recategorize call when the
+  user accepts the "apply to past charges?" prompt.
+  
+     * @nullable
+     */
+    toCategoryId?: string | null;
+    /**
+     * For `created` and `created_priority_bump` — the count of
+  older *uncategorized* transactions that match the freshly
+  created rule's pattern (excluding the row that triggered
+  the auto-learn). This is what would be flipped onto
+  `toCategoryId` if the user accepts the "apply to past
+  charges?" prompt and POSTs to
+  /transactions/recategorize-by-pattern with
+  `fromCategoryId: null`. Manually-categorized older rows
+  are deliberately excluded so explicit user intent is
+  preserved.
+  
+     * @nullable
+     */
+    candidateCount?: number | null;
 }
 export type UpdateTransactionResponse = Transaction & {
     /** Empty unless this PATCH triggered the auto-learn flow to
@@ -297,11 +348,20 @@ export interface RecategorizeByPatternInput {
     /** @minLength 1 */
     pattern: string;
     matchType: RecategorizeByPatternInputMatchType;
-    /** Only transactions currently in this category are touched.
+    /**
+     * Only transactions currently in this category are touched.
   Transactions manually re-categorized to a different category
-  are skipped to preserve explicit user intent.
-   */
-    fromCategoryId: string;
+  are skipped to preserve explicit user intent. Pass `null`
+  to target rows that are currently *uncategorized* — used
+  by the "apply to past charges?" prompt that fires after
+  the auto-learn flow creates a brand-new specific rule
+  (the candidates are older uncategorized rows that match
+  the new pattern; manually categorized rows are
+  preserved).
+  
+     * @nullable
+     */
+    fromCategoryId: string | null;
     toCategoryId: string;
     /** Optional whitelist of transaction ids to scope the bulk
   update to. When provided, the server only flips rows whose

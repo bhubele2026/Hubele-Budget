@@ -120,6 +120,7 @@ export * from "./repointedRuleMatchType";
 export * from "./repointedRuleSample";
 export * from "./ruleAction";
 export * from "./ruleActionKind";
+export * from "./ruleActionMatchType";
 export * from "./seedDefaultBudgetResult";
 export * from "./setBankSnapshotInput";
 export * from "./settings";

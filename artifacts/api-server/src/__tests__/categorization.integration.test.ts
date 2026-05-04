@@ -555,6 +555,189 @@ describe("categorization pipeline (integration)", () => {
     expect(persisted!.categoryId).toBe(catB!.id);
   });
 
+  it("PATCH /transactions/:id reports a candidateCount on a freshly created rule and POST /transactions/recategorize-by-pattern with fromCategoryId=null bulk-flips uncategorized historical rows", async () => {
+    // Task #195 — when the auto-learn flow *creates* a brand-new
+    // specific rule (rather than repointing an existing one), the
+    // server should also report how many older *uncategorized* rows
+    // match the new pattern. POSTing those back to the bulk endpoint
+    // with `fromCategoryId: null` should flip exactly those rows
+    // onto the new category, while preserving any matching rows the
+    // user has already categorized by hand.
+    const [destCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Created Bulk Dest ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+    const [otherCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Created Bulk Other ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+
+    const merchant = `BULKNEW${randomUUID().slice(0, 6).toUpperCase()}`;
+    // 3 older uncategorized rows matching the merchant's first-2-token
+    // pattern "${merchant} STORE" — these should snap onto destCat.
+    const uncatIds: string[] = [];
+    for (let day = 5; day <= 7; day++) {
+      const [r] = await db
+        .insert(transactionsTable)
+        .values({
+          userId: TEST_USER,
+          occurredOn: dateInCurrentMonth(day),
+          description: `${merchant} STORE #${1000 + day}`,
+          amount: "-15.00",
+          source: "bank",
+        })
+        .returning();
+      uncatIds.push(r!.id);
+    }
+    // One matching row the user already categorized by hand — must be
+    // preserved (the bulk endpoint scopes to uncategorized rows when
+    // fromCategoryId is null).
+    const [manualOther] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: dateInCurrentMonth(8),
+        description: `${merchant} STORE MANUAL`,
+        amount: "-9.00",
+        source: "bank",
+        categoryId: otherCat!.id,
+      })
+      .returning();
+
+    // Trigger row — uncategorized; user picks destCat. Server should
+    // create a new rule for "${merchant} STORE" and report a
+    // candidateCount of 3 (the other 3 uncategorized matches; the
+    // trigger row itself is now on destCat after the PATCH).
+    const [trigger] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: dateInCurrentMonth(10),
+        description: `${merchant} STORE TRIGGER`,
+        amount: "-12.00",
+        source: "bank",
+      })
+      .returning();
+    const patch = await api("PATCH", `/transactions/${trigger!.id}`, {
+      categoryId: destCat!.id,
+    });
+    expect(patch.status).toBe(200);
+    const patchBody = patch.json as {
+      ruleAction: {
+        kind: string;
+        pattern: string | null;
+        matchType?: string | null;
+        toCategoryId?: string | null;
+        candidateCount?: number | null;
+      };
+    };
+    expect(patchBody.ruleAction.kind).toBe("created");
+    expect(patchBody.ruleAction.pattern).toBe(`${merchant} STORE`);
+    expect(patchBody.ruleAction.matchType).toBe("contains");
+    expect(patchBody.ruleAction.toCategoryId).toBe(destCat!.id);
+    expect(patchBody.ruleAction.candidateCount).toBe(3);
+
+    // POST the bulk re-categorize with fromCategoryId=null and verify
+    // exactly the 3 uncategorized rows flipped onto destCat. The
+    // manually-categorized row is left alone.
+    const bulk = await api("POST", `/transactions/recategorize-by-pattern`, {
+      pattern: patchBody.ruleAction.pattern,
+      matchType: patchBody.ruleAction.matchType,
+      fromCategoryId: null,
+      toCategoryId: patchBody.ruleAction.toCategoryId,
+    });
+    expect(bulk.status).toBe(200);
+    const bulkBody = bulk.json as {
+      updated: number;
+      affectedMonths: string[];
+      affectedIds: string[];
+    };
+    expect(bulkBody.updated).toBe(3);
+    expect(bulkBody.affectedMonths).toEqual([currentMonthStart()]);
+    expect(new Set(bulkBody.affectedIds)).toEqual(new Set(uncatIds));
+
+    const finalRows = await db
+      .select()
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.userId, TEST_USER),
+          inArray(transactionsTable.id, [
+            ...uncatIds,
+            manualOther!.id,
+            trigger!.id,
+          ]),
+        ),
+      );
+    const byId = new Map(finalRows.map((r) => [r.id, r]));
+    for (const id of uncatIds) {
+      expect(byId.get(id)!.categoryId).toBe(destCat!.id);
+    }
+    expect(byId.get(trigger!.id)!.categoryId).toBe(destCat!.id);
+    // Manually-categorized row preserved.
+    expect(byId.get(manualOther!.id)!.categoryId).toBe(otherCat!.id);
+
+    // Idempotent replay — nothing matching is uncategorized anymore.
+    const replay = await api("POST", `/transactions/recategorize-by-pattern`, {
+      pattern: patchBody.ruleAction.pattern,
+      matchType: patchBody.ruleAction.matchType,
+      fromCategoryId: null,
+      toCategoryId: patchBody.ruleAction.toCategoryId,
+    });
+    expect((replay.json as { updated: number }).updated).toBe(0);
+
+    // A second PATCH on a different trigger row matching the same
+    // pattern should now repoint the existing rule (no new rule is
+    // created since the rule we made above already covers it). This
+    // is the "created → repointed" handoff and the candidateCount on
+    // ruleAction must be omitted/null for repointed actions.
+    const [trigger2] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: dateInCurrentMonth(11),
+        description: `${merchant} STORE TRIGGER2`,
+        amount: "-7.50",
+        source: "bank",
+      })
+      .returning();
+    const [destCat2] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: `Created Bulk Dest2 ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+    const patch2 = await api("PATCH", `/transactions/${trigger2!.id}`, {
+      categoryId: destCat2!.id,
+    });
+    const patch2Body = patch2.json as {
+      ruleAction: {
+        kind: string;
+        candidateCount?: number | null;
+        toCategoryId?: string | null;
+      };
+    };
+    expect(patch2Body.ruleAction.kind).toBe("repointed");
+    expect(patch2Body.ruleAction.candidateCount ?? null).toBeNull();
+    expect(patch2Body.ruleAction.toCategoryId ?? null).toBeNull();
+  });
+
   it("PATCH /transactions/:id reports repointedRules with a candidateCount and POST /transactions/recategorize-by-pattern bulk-flips the historical rows", async () => {
     // Mirror the production "AMERICAN EXPRESS ACH → Misc/Buffer" seed
     // scenario: a mapping rule was pre-pointed at Misc/Buffer, several

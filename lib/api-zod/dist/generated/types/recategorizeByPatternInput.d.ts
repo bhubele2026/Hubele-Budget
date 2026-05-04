@@ -10,11 +10,20 @@ export interface RecategorizeByPatternInput {
     /** @minLength 1 */
     pattern: string;
     matchType: RecategorizeByPatternInputMatchType;
-    /** Only transactions currently in this category are touched.
+    /**
+     * Only transactions currently in this category are touched.
   Transactions manually re-categorized to a different category
-  are skipped to preserve explicit user intent.
-   */
-    fromCategoryId: string;
+  are skipped to preserve explicit user intent. Pass `null`
+  to target rows that are currently *uncategorized* — used
+  by the "apply to past charges?" prompt that fires after
+  the auto-learn flow creates a brand-new specific rule
+  (the candidates are older uncategorized rows that match
+  the new pattern; manually categorized rows are
+  preserved).
+  
+     * @nullable
+     */
+    fromCategoryId: string | null;
     toCategoryId: string;
     /** Optional whitelist of transaction ids to scope the bulk
   update to. When provided, the server only flips rows whose

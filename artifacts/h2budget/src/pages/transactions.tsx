@@ -9,18 +9,19 @@ import {
   useGetForecast,
   useRefreshForecastBank,
   useSeedAprilChase,
-  useRecategorizeTransactionsByPattern,
   useBulkSetForecastFlag,
   getListTransactionsQueryKey,
   getGetForecastQueryKey,
   getGetBudgetMonthQueryKey,
   type Transaction,
   type RepointedRule,
-  type RepointedRuleSample,
-  type RuleAction,
 } from "@workspace/api-client-react";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
-import { ToastAction } from "@/components/ui/toast";
+import {
+  useBulkRecategorizePrompt,
+  bulkRuleFromRepointed,
+  bulkRuleFromRuleAction,
+} from "@/hooks/use-bulk-recategorize-prompt";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -85,6 +86,7 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { SyncButton } from "@/components/sync-button";
 import {
@@ -398,7 +400,6 @@ export default function TransactionsPage() {
   const createTx = useCreateTransaction();
   const updateTx = useUpdateTransaction();
   const deleteTx = useDeleteTransaction();
-  const recategorizeBulk = useRecategorizeTransactionsByPattern();
   const bulkSetForecastFlag = useBulkSetForecastFlag();
   const buildRuleUndoAction = useRuleActionUndo();
 
@@ -543,184 +544,7 @@ export default function TransactionsPage() {
     );
   };
 
-
-  // Preview-dialog state for the "Show matches" affordance on the bulk
-  // re-categorize toast. We carry the original rule (for the bulk POST)
-  // and the resolved target category name so the dialog header reads
-  // naturally (e.g. "Move 12 past payments into Amex Delta?").
-  const [previewState, setPreviewState] = useState<
-    | {
-        rule: RepointedRule;
-        toCategoryName: string;
-      }
-    | null
-  >(null);
-
-  // Reverts a bulk recategorize by re-running the same endpoint with
-  // from/to swapped and scoped to the affected ids. Rows the user has
-  // since edited away from `toCategoryId` naturally drop out (the server
-  // only touches rows whose categoryId still equals the swapped
-  // `fromCategoryId`). Also re-points the originating mapping rule back
-  // to its previous category by passing `ruleId` along with the swapped
-  // from/to — without this, future matching charges would keep snapping
-  // onto the user's accidental category pick. Surfaces the count of
-  // rows that actually reverted so the user can tell when an Undo was a
-  // no-op because they'd already moved everything elsewhere.
-  const undoBulkRecategorize = (
-    rule: Pick<
-      RepointedRule,
-      "ruleId" | "pattern" | "matchType" | "fromCategoryId" | "toCategoryId"
-    >,
-    affectedIds: string[],
-  ) => {
-    if (affectedIds.length === 0) return;
-    recategorizeBulk.mutate(
-      {
-        data: {
-          pattern: rule.pattern,
-          matchType: rule.matchType,
-          // Swap from/to so we move the rows back to their original
-          // category. The `ids` whitelist plus the server-side
-          // categoryId == fromCategoryId filter makes this safely
-          // skip anything the user has since re-edited.
-          fromCategoryId: rule.toCategoryId,
-          toCategoryId: rule.fromCategoryId,
-          ids: affectedIds,
-          // Re-point the mapping rule back to its previous category
-          // so future matching transactions don't keep auto-flipping
-          // onto the user's mistaken pick.
-          ruleId: rule.ruleId,
-        },
-      },
-      {
-        onSuccess: (res) => {
-          queryClient.invalidateQueries({
-            queryKey: getListTransactionsQueryKey(),
-          });
-          for (const m of res.affectedMonths) {
-            queryClient.invalidateQueries({
-              queryKey: getGetBudgetMonthQueryKey(m),
-            });
-          }
-          toast({
-            title:
-              res.updated === 0
-                ? "Nothing to undo"
-                : `Restored ${res.updated} transaction${res.updated === 1 ? "" : "s"}`,
-          });
-        },
-        onError: (e) => {
-          toast({
-            title: "Couldn't undo",
-            description: (e as Error).message,
-            variant: "destructive",
-          });
-        },
-      },
-    );
-  };
-
-  // Forward bulk re-categorize used by both the "Apply" toast action
-  // and the preview dialog's confirm button. After success surfaces a
-  // follow-up toast with a one-click Undo scoped to the exact ids we
-  // just flipped, so any row the user re-edits in the meantime is left
-  // alone.
-  const applyBulkRecategorize = (rule: RepointedRule) => {
-    recategorizeBulk.mutate(
-      {
-        data: {
-          pattern: rule.pattern,
-          matchType: rule.matchType,
-          fromCategoryId: rule.fromCategoryId,
-          toCategoryId: rule.toCategoryId,
-        },
-      },
-      {
-        onSuccess: (res) => {
-          queryClient.invalidateQueries({
-            queryKey: getListTransactionsQueryKey(),
-          });
-          for (const m of res.affectedMonths) {
-            queryClient.invalidateQueries({
-              queryKey: getGetBudgetMonthQueryKey(m),
-            });
-          }
-          if (res.updated === 0) {
-            toast({ title: "Nothing to update" });
-            return;
-          }
-          toast({
-            title: `Re-categorized ${res.updated} past transaction${res.updated === 1 ? "" : "s"}`,
-            action: (
-              <ToastAction
-                altText="Undo bulk recategorize"
-                data-testid="action-undo-bulk-recategorize"
-                onClick={() => undoBulkRecategorize(rule, res.affectedIds)}
-              >
-                Undo
-              </ToastAction>
-            ),
-          });
-        },
-        onError: (e) => {
-          toast({
-            title: "Couldn't apply to past",
-            description: (e as Error).message,
-            variant: "destructive",
-          });
-        },
-      },
-    );
-  };
-
-  const offerBulkRecategorize = (rule: RepointedRule) => {
-    // Surfaces the "apply this rule to past transactions too" prompt after
-    // PATCH /transactions/:id repointed an existing seed mapping rule onto
-    // the user's freshly chosen category. The `candidateCount` is the
-    // number of older transactions still sitting in the rule's previous
-    // category (e.g. "Misc / Buffer") that would snap onto the new one,
-    // and `sampleTransactions` is a small preview list (most-recent
-    // first, capped at 10) we surface via a "Show matches" link so the
-    // user can sanity-check the bulk action before confirming.
-    if (rule.candidateCount <= 0) return;
-    const toCategoryName =
-      categoryById.get(rule.toCategoryId) ?? "this category";
-    const n = rule.candidateCount;
-    toast({
-      title: `Move ${n} past payment${n === 1 ? "" : "s"} into ${toCategoryName}?`,
-      description: (
-        <div className="flex flex-col gap-1">
-          <span>
-            Older "{rule.pattern}" transaction{n === 1 ? "" : "s"} still in
-            the rule's previous category will be moved.
-          </span>
-          {rule.sampleTransactions.length > 0 && (
-            <button
-              type="button"
-              className="self-start text-xs underline underline-offset-2 hover:text-foreground"
-              data-testid="link-show-rule-matches"
-              onClick={() => setPreviewState({ rule, toCategoryName })}
-            >
-              Show {rule.sampleTransactions.length === n
-                ? n === 1
-                  ? "the match"
-                  : `all ${n} matches`
-                : `the first ${rule.sampleTransactions.length} of ${n} matches`}
-            </button>
-          )}
-        </div>
-      ),
-      action: (
-        <ToastAction
-          altText="Apply to past transactions too"
-          data-testid="action-apply-rule-past"
-          onClick={() => applyBulkRecategorize(rule)}
-        >
-          Apply
-        </ToastAction>
-      ),
-    });
-  };
+  const { offerBulkRecategorize, previewDialog } = useBulkRecategorizePrompt();
 
   const handleQuickCategorize = async (tx: Transaction, categoryId: string) => {
     try {
@@ -764,8 +588,24 @@ export default function TransactionsPage() {
       // remaining candidates so the user can fix all of them in one go.
       const repointedRules: RepointedRule[] = updated.repointedRules ?? [];
       for (const rule of repointedRules) {
-        if (rule.candidateCount > 0) offerBulkRecategorize(rule);
+        const bulkRule = bulkRuleFromRepointed(
+          rule,
+          categoryById.get(rule.toCategoryId) ?? undefined,
+        );
+        if (bulkRule) offerBulkRecategorize(bulkRule);
       }
+      // Task #195 — when the auto-learn flow *creates* a brand-new
+      // specific rule, the server reports a candidate count of older
+      // *uncategorized* rows that match the new pattern. Surface the
+      // same "apply to past charges?" prompt so the user can flip
+      // them in one click instead of touching each row by hand.
+      const createdRule = bulkRuleFromRuleAction(
+        updated.ruleAction,
+        updated.ruleAction?.toCategoryId
+          ? categoryById.get(updated.ruleAction.toCategoryId) ?? undefined
+          : undefined,
+      );
+      if (createdRule) offerBulkRecategorize(createdRule);
     } catch (e) {
       toast({
         title: "Couldn't categorize",
@@ -1211,94 +1051,7 @@ export default function TransactionsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={previewState !== null}
-        onOpenChange={(open) => {
-          if (!open) setPreviewState(null);
-        }}
-      >
-        <DialogContent
-          className="sm:max-w-[480px]"
-          data-testid="dialog-rule-matches-preview"
-        >
-          <DialogHeader>
-            <DialogTitle>
-              {previewState
-                ? `Move ${previewState.rule.candidateCount} past payment${previewState.rule.candidateCount === 1 ? "" : "s"} into ${previewState.toCategoryName}?`
-                : ""}
-            </DialogTitle>
-            <DialogDescription>
-              {previewState
-                ? `These transactions still match "${previewState.rule.pattern}" and sit in the rule's previous category. Confirm to move them all into ${previewState.toCategoryName}.`
-                : ""}
-            </DialogDescription>
-          </DialogHeader>
-          {previewState && (
-            <div
-              className="max-h-[320px] overflow-y-auto rounded-md border divide-y divide-border"
-              data-testid="list-rule-matches"
-            >
-              {previewState.rule.sampleTransactions.map(
-                (s: RepointedRuleSample) => (
-                  <div
-                    key={s.id}
-                    className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
-                    data-testid={`row-rule-match-${s.id}`}
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate font-medium text-foreground">
-                        {s.description}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatDate(s.occurredOn)}
-                      </div>
-                    </div>
-                    <span
-                      className={cn(
-                        "tabular-nums whitespace-nowrap",
-                        parseSigned(s.amount) > 0 && "text-emerald-700",
-                        parseSigned(s.amount) < 0 && "text-foreground",
-                      )}
-                    >
-                      {formatCurrency(s.amount)}
-                    </span>
-                  </div>
-                ),
-              )}
-            </div>
-          )}
-          {previewState &&
-            previewState.rule.sampleTransactions.length <
-              previewState.rule.candidateCount && (
-              <p className="text-xs text-muted-foreground">
-                Showing the {previewState.rule.sampleTransactions.length}{" "}
-                most-recent of {previewState.rule.candidateCount} matches.
-                Apply will move all {previewState.rule.candidateCount}.
-              </p>
-            )}
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setPreviewState(null)}
-              data-testid="button-rule-matches-cancel"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (!previewState) return;
-                applyBulkRecategorize(previewState.rule);
-                setPreviewState(null);
-              }}
-              disabled={recategorizeBulk.isPending}
-              data-testid="button-rule-matches-apply"
-            >
-              Move {previewState?.rule.candidateCount ?? 0} transaction
-              {previewState?.rule.candidateCount === 1 ? "" : "s"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {previewDialog}
 
       {selected.size > 0 && (
         <div

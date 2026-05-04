@@ -321,9 +321,32 @@ export const UpdateTransactionResponse = zod
             .describe(
               "For `repointed` — the rule's previous categoryId before\nthis PATCH moved it onto the user's chosen category. Used\nby the client's Undo affordance to restore the rule's\noriginal aim. Null for the other kinds.\n",
             ),
+          matchType: zod
+            .union([
+              zod.literal("contains"),
+              zod.literal("exact"),
+              zod.literal("starts_with"),
+              zod.literal(null),
+            ])
+            .nullish()
+            .describe(
+              'Match type of the freshly created rule. Set for `created`\nand `created_priority_bump`. The client passes this\nthrough to \/transactions\/recategorize-by-pattern when the\nuser accepts the \"apply to past charges?\" prompt.\n',
+            ),
+          toCategoryId: zod
+            .string()
+            .nullish()
+            .describe(
+              'The category the freshly created rule points at. Set for\n`created` and `created_priority_bump`. Used as the\n`toCategoryId` for the bulk recategorize call when the\nuser accepts the \"apply to past charges?\" prompt.\n',
+            ),
+          candidateCount: zod
+            .number()
+            .nullish()
+            .describe(
+              'For `created` and `created_priority_bump` — the count of\nolder \*uncategorized\* transactions that match the freshly\ncreated rule\'s pattern (excluding the row that triggered\nthe auto-learn). This is what would be flipped onto\n`toCategoryId` if the user accepts the \"apply to past\ncharges?\" prompt and POSTs to\n\/transactions\/recategorize-by-pattern with\n`fromCategoryId: null`. Manually-categorized older rows\nare deliberately excluded so explicit user intent is\npreserved.\n',
+            ),
         })
         .describe(
-          "Summary of what the auto-learn flow did to the user's mapping\nrules in response to this PATCH. Surfaced as a small toast\/note\nso the user understands why future similar charges will (or\nwon't) auto-categorize. The repoint case is also reported in\nmore detail via `repointedRules` (which drives the \"apply to\npast transactions too\" prompt).\n",
+          'Summary of what the auto-learn flow did to the user\'s mapping\nrules in response to this PATCH. Surfaced as a small toast\/note\nso the user understands why future similar charges will (or\nwon\'t) auto-categorize. The repoint case is also reported in\nmore detail via `repointedRules` (which drives the \"apply to\npast transactions too\" prompt). For the `created` \/\n`created_priority_bump` cases, the action also carries the\nmatch metadata + candidate count needed to drive the same\n\"apply to past charges?\" prompt against older \*uncategorized\*\nrows that match the freshly created rule.\n',
         ),
     }),
   );
@@ -347,8 +370,9 @@ export const RecategorizeTransactionsByPatternBody = zod.object({
   matchType: zod.enum(["contains", "exact", "starts_with"]),
   fromCategoryId: zod
     .string()
+    .nullable()
     .describe(
-      "Only transactions currently in this category are touched.\nTransactions manually re-categorized to a different category\nare skipped to preserve explicit user intent.\n",
+      'Only transactions currently in this category are touched.\nTransactions manually re-categorized to a different category\nare skipped to preserve explicit user intent. Pass `null`\nto target rows that are currently \*uncategorized\* — used\nby the \"apply to past charges?\" prompt that fires after\nthe auto-learn flow creates a brand-new specific rule\n(the candidates are older uncategorized rows that match\nthe new pattern; manually categorized rows are\npreserved).\n',
     ),
   toCategoryId: zod.string(),
   ids: zod

@@ -9,8 +9,14 @@ import {
   getListTransactionsQueryKey,
   getGetBudgetMonthQueryKey,
   type Transaction,
+  type RepointedRule,
 } from "@workspace/api-client-react";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
+import {
+  useBulkRecategorizePrompt,
+  bulkRuleFromRepointed,
+  bulkRuleFromRuleAction,
+} from "@/hooks/use-bulk-recategorize-prompt";
 import { customFetch } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -100,6 +106,7 @@ function currentBucket(t: Pick<Transaction, "weeklyAllowance" | "monthlyAllowanc
 export default function AmexPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { offerBulkRecategorize, previewDialog } = useBulkRecategorizePrompt();
 
   // Filters
   const [sourceFilter, setSourceFilter] = useState<string>("all");
@@ -633,6 +640,27 @@ export default function AmexPage() {
             });
           }
         }
+        // Tasks #182/#195 — when the auto-learn flow either repoints an
+        // existing seed rule or creates a brand-new specific rule,
+        // surface a follow-up "apply to past charges?" prompt so the
+        // user can flip the matching historical rows in one click
+        // instead of touching each row by hand. Mirrors the
+        // Transactions page UX so both entry points behave the same.
+        const repointedRules: RepointedRule[] = updated.repointedRules ?? [];
+        for (const rule of repointedRules) {
+          const bulkRule = bulkRuleFromRepointed(
+            rule,
+            categoryById.get(rule.toCategoryId) ?? undefined,
+          );
+          if (bulkRule) offerBulkRecategorize(bulkRule);
+        }
+        const createdRule = bulkRuleFromRuleAction(
+          updated.ruleAction,
+          updated.ruleAction?.toCategoryId
+            ? categoryById.get(updated.ruleAction.toCategoryId) ?? undefined
+            : undefined,
+        );
+        if (createdRule) offerBulkRecategorize(createdRule);
       }
     } catch (e) {
       toast({
@@ -1690,6 +1718,7 @@ export default function AmexPage() {
           <option key={p} value={p} />
         ))}
       </datalist>
+      {previewDialog}
     </div>
   );
 }
