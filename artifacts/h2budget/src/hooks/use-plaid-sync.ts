@@ -12,9 +12,32 @@ export type SyncTotals = {
   modified: number;
   removed: number;
   errors: string[];
+  // True when at least one item came back with the transient
+  // PRODUCT_NOT_READY signal — Plaid is still staging the historical batch
+  // for a freshly linked item. The UI treats this as a neutral, encouraging
+  // state rather than a destructive error.
+  stillPreparing: boolean;
 };
 
-const ZERO: SyncTotals = { added: 0, modified: 0, removed: 0, errors: [] };
+const ZERO: SyncTotals = {
+  added: 0,
+  modified: 0,
+  removed: 0,
+  errors: [],
+  stillPreparing: false,
+};
+
+const STILL_PREPARING_MESSAGE =
+  "Your bank is still preparing the initial batch — try Sync again in a minute.";
+
+// Plaid errors stored on the server are the raw `error_message` returned
+// by Plaid. Prefix with "Plaid: " in the UI so the user can see at a glance
+// where the message came from. (Avoid double-prefixing if the server has
+// already done it for some reason.)
+export function formatPlaidErrorForDisplay(msg: string): string {
+  if (!msg) return msg;
+  return msg.startsWith("Plaid:") ? msg : `Plaid: ${msg}`;
+}
 
 export type RunSyncOptions = {
   itemId?: string;
@@ -41,9 +64,16 @@ export function usePlaidSync() {
                   acc.modified += r.modified ?? 0;
                   acc.removed += r.removed ?? 0;
                   if (r.error) acc.errors.push(r.error);
+                  if (r.stillPreparing) acc.stillPreparing = true;
                   return acc;
                 },
-                { added: 0, modified: 0, removed: 0, errors: [] },
+                {
+                  added: 0,
+                  modified: 0,
+                  removed: 0,
+                  errors: [],
+                  stillPreparing: false,
+                },
               );
               qc.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
               if (totals.added + totals.modified + totals.removed > 0) {
@@ -53,15 +83,24 @@ export function usePlaidSync() {
                 if (totals.errors.length > 0) {
                   toast({
                     title: "Sync had errors",
-                    description: totals.errors.join("; "),
+                    description: totals.errors
+                      .map(formatPlaidErrorForDisplay)
+                      .join("; "),
                     variant: "destructive",
                   });
+                } else if (totals.stillPreparing) {
+                  // Plaid told us PRODUCT_NOT_READY — the bank hasn't
+                  // finished staging the historical batch yet. Show a
+                  // neutral, encouraging toast (NOT destructive) so the
+                  // user knows what's happening.
+                  toast({
+                    title: "Still preparing",
+                    description: STILL_PREPARING_MESSAGE,
+                  });
                 } else if (totals.added + totals.modified === 0) {
-                  // Plaid frequently returns only "removed" entries (or
-                  // nothing at all) for a freshly linked item while the
-                  // historical batch is still being staged on its end.
-                  // Treat zero-new as the still-preparing case so the
-                  // toast stays honest about what the user will see.
+                  // No PRODUCT_NOT_READY signal but also nothing new —
+                  // Plaid is silently in the still-preparing window or the
+                  // user is genuinely caught up. Same neutral message.
                   toast({
                     title: "No new transactions yet",
                     description:

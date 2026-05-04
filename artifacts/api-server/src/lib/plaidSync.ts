@@ -22,7 +22,36 @@ export type SyncResult = {
   removed: number;
   autoCategorized: number;
   error: string | null;
+  // True when Plaid responded with PRODUCT_NOT_READY (a freshly linked item
+  // whose historical batch is still being staged). Treated as a transient,
+  // non-destructive state by the frontend.
+  stillPreparing?: boolean;
 };
+
+type PlaidErrorBody = {
+  error_code?: string;
+  error_message?: string;
+  error_type?: string;
+};
+
+/**
+ * Pull Plaid's structured error_code / error_message out of an axios-shaped
+ * error. The Plaid SDK throws axios errors whose `response.data` carries the
+ * structured details we want to surface to users — falling back to the raw
+ * `e.message` (e.g. "Request failed with status code 400") strips that info.
+ */
+export function extractPlaidError(e: unknown): {
+  code: string | null;
+  message: string;
+} {
+  const ax = e as { response?: { data?: PlaidErrorBody } };
+  const body = ax?.response?.data;
+  const code = body?.error_code ?? null;
+  const plaidMsg = body?.error_message;
+  if (plaidMsg) return { code, message: plaidMsg };
+  if (e instanceof Error) return { code, message: e.message };
+  return { code, message: String(e) };
+}
 
 function plaidAmountToSigned(t: PlaidTxn): string {
   // Plaid: positive = money out (debit). We use negative = spend.
@@ -336,6 +365,7 @@ export async function syncPlaidItem(
 
     // Auto-refresh bank snapshot balance if a Plaid checking account is
     // configured (#45). Keeps the forecast anchor fresh on every sync.
+    let balanceRefreshError: string | null = null;
     if (checkingPlaidAccountId && forecastSettings?.bankSnapshotAccountId) {
       try {
         const resp = await plaid().accountsBalanceGet({
@@ -356,9 +386,25 @@ export async function syncPlaidItem(
             })
             .where(eq(forecastSettingsTable.userId, userId));
         }
-      } catch {
-        // Best-effort; don't break the sync.
+      } catch (e) {
+        // Don't break the sync — but capture Plaid's real reason so the
+        // user sees "balance refresh failed: <real plaid message>" rather
+        // than a silent failure.
+        const { code, message } = extractPlaidError(e);
+        // PRODUCT_NOT_READY on balance is just as transient as on
+        // /transactions/sync — surface as still-preparing, never as a
+        // hard error chip.
+        if (code !== "PRODUCT_NOT_READY") {
+          balanceRefreshError = `Balance refresh failed: ${message}`;
+        }
       }
+    }
+
+    if (balanceRefreshError) {
+      await db
+        .update(plaidItemsTable)
+        .set({ lastSyncError: balanceRefreshError })
+        .where(eq(plaidItemsTable.id, itemRowId));
     }
 
     return {
@@ -368,13 +414,30 @@ export async function syncPlaidItem(
       modified: modified.length,
       removed: removed.length,
       autoCategorized,
-      error: null,
+      error: balanceRefreshError,
     };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const { code, message } = extractPlaidError(e);
+    // PRODUCT_NOT_READY is Plaid still staging the historical batch for a
+    // freshly linked item. It is transient and recovers on its own (or on
+    // the very next Sync click). Don't write it into last_sync_error and
+    // don't surface a destructive `error` to the client; instead flag it as
+    // "still preparing" so the UI can render an encouraging neutral toast.
+    if (code === "PRODUCT_NOT_READY") {
+      return {
+        itemId: item.itemId,
+        institutionName: item.institutionName,
+        added: 0,
+        modified: 0,
+        removed: 0,
+        autoCategorized: 0,
+        error: null,
+        stillPreparing: true,
+      };
+    }
     await db
       .update(plaidItemsTable)
-      .set({ lastSyncError: msg })
+      .set({ lastSyncError: message })
       .where(eq(plaidItemsTable.id, itemRowId));
     return {
       itemId: item.itemId,
@@ -383,7 +446,7 @@ export async function syncPlaidItem(
       modified: 0,
       removed: 0,
       autoCategorized: 0,
-      error: msg,
+      error: message,
     };
   }
 }

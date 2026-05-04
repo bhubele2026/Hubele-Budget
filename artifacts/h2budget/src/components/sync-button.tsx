@@ -3,7 +3,7 @@ import { useListPlaidItems } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, AlertTriangle } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
-import { usePlaidSync } from "@/hooks/use-plaid-sync";
+import { usePlaidSync, formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
 
 export function SyncButton({
   size = "sm",
@@ -46,6 +46,11 @@ export function SyncButton({
     ? `Last synced ${formatDistanceToNowStrict(mostRecent, { addSuffix: true })}`
     : "Not yet synced";
 
+  // Plaid errors are persisted on the server as the raw `error_message`
+  // returned by Plaid. Prefix with "Plaid: " here so the chip / tooltip make
+  // it obvious where the message came from.
+  const displayError = latestError ? formatPlaidErrorForDisplay(latestError) : null;
+
   return (
     <div className="flex flex-col items-end leading-tight">
       <Button
@@ -56,21 +61,21 @@ export function SyncButton({
           void runSync();
         }}
         disabled={isPending}
-        title={latestError ?? relative}
+        title={displayError ?? relative}
         data-testid="button-sync-plaid"
       >
         <RefreshCw className={`w-4 h-4 mr-1.5 ${isPending ? "animate-spin" : ""}`} />
         {isPending ? "Syncing…" : "Sync"}
       </Button>
       <span className="text-[10px] text-muted-foreground mt-1">{relative}</span>
-      {latestError ? (
+      {displayError ? (
         <span
           className="text-[10px] text-destructive mt-0.5 flex items-center gap-1 max-w-[220px] truncate"
-          title={latestError}
+          title={displayError}
           data-testid="text-sync-error"
         >
           <AlertTriangle className="w-3 h-3 shrink-0" />
-          <span className="truncate">{latestError}</span>
+          <span className="truncate">{displayError}</span>
         </span>
       ) : null}
     </div>

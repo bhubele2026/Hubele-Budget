@@ -16,4 +16,5 @@ export type PlaidSyncResultItemsItem = {
   autoCategorized: number;
   /** @nullable */
   error?: string | null;
+  stillPreparing?: boolean;
 };

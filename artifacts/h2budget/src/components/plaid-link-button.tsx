@@ -97,7 +97,9 @@ export function PlaidLinkButton({
     } else if (lastErrors.length > 0) {
       toast({
         title: "Sync had errors",
-        description: lastErrors.join("; "),
+        description: lastErrors
+          .map((m) => (m.startsWith("Plaid:") ? m : `Plaid: ${m}`))
+          .join("; "),
         variant: "destructive",
       });
     } else {

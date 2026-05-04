@@ -12,7 +12,13 @@ type Item = {
 
 let plaidItems: Item[] | undefined = [];
 let syncResponse: {
-  items: Array<{ added: number; modified: number; removed: number; error: string | null }>;
+  items: Array<{
+    added: number;
+    modified: number;
+    removed: number;
+    error: string | null;
+    stillPreparing?: boolean;
+  }>;
 } = {
   items: [],
 };
@@ -139,26 +145,50 @@ describe("SyncButton", () => {
     });
   });
 
-  it("surfaces per-item lastSyncError under the button", () => {
+  it("surfaces per-item lastSyncError under the button with a 'Plaid:' prefix", () => {
     plaidItems = [
       {
         id: "i-1",
         institutionName: "Chase",
         lastSyncedAt: new Date().toISOString(),
-        lastSyncError: "ITEM_LOGIN_REQUIRED",
+        lastSyncError: "the login details of this item have changed",
       },
     ];
     renderButton();
-    expect(screen.getByTestId("text-sync-error")).toBeTruthy();
-    expect(screen.getByText(/ITEM_LOGIN_REQUIRED/i)).toBeTruthy();
+    const chip = screen.getByTestId("text-sync-error");
+    expect(chip).toBeTruthy();
+    // The chip text should be prefixed with "Plaid: " so the user can tell
+    // where the message originated.
+    expect(chip.textContent).toMatch(/^Plaid: the login details/);
   });
 
-  it("emits a 'Sync had errors' toast when an item reports an error", async () => {
+  it("does not double-prefix a lastSyncError that already starts with 'Plaid:'", () => {
+    plaidItems = [
+      {
+        id: "i-1",
+        institutionName: "Chase",
+        lastSyncedAt: new Date().toISOString(),
+        lastSyncError: "Plaid: already prefixed",
+      },
+    ];
+    renderButton();
+    const chip = screen.getByTestId("text-sync-error");
+    expect(chip.textContent).toBe("Plaid: already prefixed");
+  });
+
+  it("emits a 'Sync had errors' toast prefixed with 'Plaid:' when an item reports an error", async () => {
     plaidItems = [
       { id: "i-1", institutionName: "Chase", lastSyncedAt: null, lastSyncError: null },
     ];
     syncResponse = {
-      items: [{ added: 0, modified: 0, removed: 0, error: "ITEM_LOGIN_REQUIRED" }],
+      items: [
+        {
+          added: 0,
+          modified: 0,
+          removed: 0,
+          error: "the login details of this item have changed",
+        },
+      ],
     };
     renderButton();
     fireEvent.click(screen.getByTestId("button-sync-plaid"));
@@ -166,10 +196,37 @@ describe("SyncButton", () => {
       expect(toastFn).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Sync had errors",
-          description: "ITEM_LOGIN_REQUIRED",
+          description: "Plaid: the login details of this item have changed",
           variant: "destructive",
         }),
       );
     });
+  });
+
+  it("shows a neutral 'Still preparing' toast (NOT destructive) when the per-item stillPreparing flag is set", async () => {
+    plaidItems = [
+      { id: "i-1", institutionName: "Chase", lastSyncedAt: null, lastSyncError: null },
+    ];
+    syncResponse = {
+      items: [
+        { added: 0, modified: 0, removed: 0, error: null, stillPreparing: true },
+      ],
+    };
+    renderButton();
+    fireEvent.click(screen.getByTestId("button-sync-plaid"));
+    await waitFor(() => {
+      expect(toastFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Still preparing",
+          description: expect.stringContaining("still preparing the initial batch"),
+        }),
+      );
+    });
+    // Critically: the toast for PRODUCT_NOT_READY must NOT be destructive,
+    // and we must NOT also fire the "Sync had errors" destructive toast.
+    const destructiveCalls = toastFn.mock.calls.filter(
+      ([arg]) => (arg as { variant?: string }).variant === "destructive",
+    );
+    expect(destructiveCalls).toHaveLength(0);
   });
 });

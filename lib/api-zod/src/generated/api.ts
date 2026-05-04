@@ -1431,6 +1431,7 @@ export const SyncPlaidTransactionsResponse = zod.object({
       removed: zod.number(),
       autoCategorized: zod.number(),
       error: zod.string().nullish(),
+      stillPreparing: zod.boolean().optional(),
     }),
   ),
 });

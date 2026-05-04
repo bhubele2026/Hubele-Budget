@@ -4138,6 +4138,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         removed: zod.ZodNumber;
         autoCategorized: zod.ZodNumber;
         error: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        stillPreparing: zod.ZodOptional<zod.ZodBoolean>;
     }, "strip", zod.ZodTypeAny, {
         itemId: string;
         added: number;
@@ -4146,6 +4147,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         autoCategorized: number;
         institutionName?: string | null | undefined;
         error?: string | null | undefined;
+        stillPreparing?: boolean | undefined;
     }, {
         itemId: string;
         added: number;
@@ -4154,6 +4156,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         autoCategorized: number;
         institutionName?: string | null | undefined;
         error?: string | null | undefined;
+        stillPreparing?: boolean | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     items: {
@@ -4164,6 +4167,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         autoCategorized: number;
         institutionName?: string | null | undefined;
         error?: string | null | undefined;
+        stillPreparing?: boolean | undefined;
     }[];
 }, {
     items: {
@@ -4174,6 +4178,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         autoCategorized: number;
         institutionName?: string | null | undefined;
         error?: string | null | undefined;
+        stillPreparing?: boolean | undefined;
     }[];
 }>;
 export declare const GetPlaidEnvironmentResponse: zod.ZodObject<{

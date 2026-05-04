@@ -2026,6 +2026,12 @@ components:
               removed: { type: integer }
               autoCategorized: { type: integer }
               error: { type: ["string", "null"] }
+              # True when Plaid responded with PRODUCT_NOT_READY (i.e. it is
+              # still staging the historical batch for a freshly linked
+              # item). The frontend treats this as a transient, non-error
+              # state and does NOT show a destructive toast or persist a
+              # red error chip.
+              stillPreparing: { type: boolean }
     PlaidEnvironmentInfo:
       type: object
       required: [env, configured, nonProdItemCount, nonProdItems]
