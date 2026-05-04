@@ -59,6 +59,12 @@ export const GetDashboardResponse = zod.object({
       plaidTransactionId: zod.string().nullish(),
       plaidAccountId: zod.string().nullish(),
       debtId: zod.string().nullish(),
+      matchedRuleId: zod
+        .string()
+        .nullish()
+        .describe(
+          'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+        ),
     }),
   ),
   topCategories: zod.array(
@@ -128,6 +134,12 @@ export const ListTransactionsResponseItem = zod.object({
   plaidTransactionId: zod.string().nullish(),
   plaidAccountId: zod.string().nullish(),
   debtId: zod.string().nullish(),
+  matchedRuleId: zod
+    .string()
+    .nullish()
+    .describe(
+      'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+    ),
 });
 export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem);
 
@@ -233,6 +245,12 @@ export const UpdateTransactionResponse = zod
     plaidTransactionId: zod.string().nullish(),
     plaidAccountId: zod.string().nullish(),
     debtId: zod.string().nullish(),
+    matchedRuleId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+      ),
   })
   .and(
     zod.object({
@@ -1308,6 +1326,12 @@ export const GetForecastResponse = zod.object({
       plaidTransactionId: zod.string().nullish(),
       plaidAccountId: zod.string().nullish(),
       debtId: zod.string().nullish(),
+      matchedRuleId: zod
+        .string()
+        .nullish()
+        .describe(
+          'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+        ),
     }),
   ),
   resolutions: zod.array(

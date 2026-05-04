@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   categorize,
+  findMatchedRuleId,
   findMatchingRules,
   matchRule,
   type RuleRow,
@@ -62,6 +63,77 @@ describe("findMatchingRules", () => {
 
   it("returns empty for empty descriptions", () => {
     expect(findMatchingRules("", rules)).toEqual([]);
+  });
+});
+
+describe("findMatchedRuleId", () => {
+  // Rules input is expected to already be sorted by priority desc — just
+  // like loadUserRules() returns. Fixtures here mirror that contract.
+  const sortedRules: RuleRow[] = [
+    { id: "r-pay", pattern: "EXACT", matchType: "starts_with", categoryId: "cat-paycheck", priority: 60 },
+    { id: "r-coffee", pattern: "STARBUCKS", matchType: "contains", categoryId: "cat-coffee", priority: 50 },
+    { id: "r-amex", pattern: "AMERICAN EXPRESS ACH", matchType: "contains", categoryId: "cat-amex-pmt", priority: 50 },
+  ];
+
+  it("returns the matching rule's id when its categoryId matches the txn's current category", () => {
+    expect(
+      findMatchedRuleId("Starbucks #1234 Madison", "cat-coffee", sortedRules),
+    ).toBe("r-coffee");
+  });
+
+  it("returns null when the highest-priority matching rule disagrees with the current category (manual override)", () => {
+    // Rule says cat-coffee, but the user moved this row to cat-other —
+    // attribution to r-coffee would be misleading.
+    expect(
+      findMatchedRuleId("Starbucks #1234 Madison", "cat-other", sortedRules),
+    ).toBeNull();
+  });
+
+  it("returns null when no rule matches the description at all", () => {
+    expect(
+      findMatchedRuleId("Some random merchant", "cat-coffee", sortedRules),
+    ).toBeNull();
+  });
+
+  it("returns null when the transaction has no current category", () => {
+    expect(
+      findMatchedRuleId("Starbucks #1234 Madison", null, sortedRules),
+    ).toBeNull();
+    expect(
+      findMatchedRuleId("Starbucks #1234 Madison", undefined, sortedRules),
+    ).toBeNull();
+  });
+
+  it("returns null for empty / null descriptions", () => {
+    expect(findMatchedRuleId("", "cat-coffee", sortedRules)).toBeNull();
+    expect(findMatchedRuleId(null, "cat-coffee", sortedRules)).toBeNull();
+    expect(findMatchedRuleId(undefined, "cat-coffee", sortedRules)).toBeNull();
+  });
+
+  it("only considers the FIRST matching rule, mirroring categorize()'s priority-desc walk", () => {
+    // r-amex (priority 50) wins for this description; even though a
+    // lower-priority orphan "AMEX" rule pointing at cat-other also
+    // matches, we never reach it.
+    const ruleSet: RuleRow[] = [
+      { id: "r-amex", pattern: "AMERICAN EXPRESS ACH", matchType: "contains", categoryId: "cat-amex-pmt", priority: 50 },
+      { id: "r-amex-broad", pattern: "AMEX", matchType: "contains", categoryId: "cat-other", priority: 10 },
+    ];
+    expect(
+      findMatchedRuleId("AMERICAN EXPRESS ACH PMT XXXX5234", "cat-other", ruleSet),
+    ).toBeNull();
+    expect(
+      findMatchedRuleId("AMERICAN EXPRESS ACH PMT XXXX5234", "cat-amex-pmt", ruleSet),
+    ).toBe("r-amex");
+  });
+
+  it("skips orphan rules (categoryId === null) when looking for an attribution", () => {
+    const ruleSet: RuleRow[] = [
+      { id: "r-orphan", pattern: "STARBUCKS", matchType: "contains", categoryId: null, priority: 100 },
+      { id: "r-coffee", pattern: "STARBUCKS", matchType: "contains", categoryId: "cat-coffee", priority: 50 },
+    ];
+    expect(
+      findMatchedRuleId("Starbucks #1234", "cat-coffee", ruleSet),
+    ).toBe("r-coffee");
   });
 });
 

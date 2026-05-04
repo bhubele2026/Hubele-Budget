@@ -9,7 +9,11 @@ import {
   debtsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
-import { findMatchingRules, loadUserRules } from "../lib/autoCategorize";
+import {
+  findMatchedRuleId,
+  findMatchingRules,
+  loadUserRules,
+} from "../lib/autoCategorize";
 import {
   CreateTransactionBody,
   UpdateTransactionBody,
@@ -71,7 +75,18 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
     .where(and(...conds))
     .orderBy(desc(transactionsTable.occurredOn))
     .limit(q.data.limit ?? 500);
-  res.json(rows);
+  // Annotate each row with the mapping rule that auto-categorize would
+  // currently attribute, so the Transactions / Amex pages can show a
+  // "matched by rule X" affordance and let the user jump to the rule on
+  // the Mapping Rules page. Computed lazily per-list rather than stored
+  // on the txn so editing a rule's pattern instantly reflects on every
+  // existing row without a backfill. Rules are loaded once for the list.
+  const userRules = await loadUserRules(req.userId!);
+  const annotated = rows.map((r) => ({
+    ...r,
+    matchedRuleId: findMatchedRuleId(r.description, r.categoryId, userRules),
+  }));
+  res.json(annotated);
 });
 
 /**

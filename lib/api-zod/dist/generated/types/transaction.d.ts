@@ -39,5 +39,17 @@ export interface Transaction {
     plaidAccountId?: string | null;
     /** @nullable */
     debtId?: string | null;
+    /**
+     * Id of the mapping rule that auto-categorize would currently
+  attribute for this row, or null when no rule matches (e.g. the
+  category was set manually). Computed server-side per list
+  response — not persisted on the row — so editing a rule's
+  pattern reflects on every existing transaction without a
+  backfill. Powers the "matched by rule X · jump to it" affordance
+  on the Transactions and Amex pages.
+  
+     * @nullable
+     */
+    matchedRuleId?: string | null;
 }
 //# sourceMappingURL=transaction.d.ts.map

@@ -5,6 +5,7 @@ import {
   useUpdateTransaction,
   useDeleteTransaction,
   useListCategories,
+  useListMappingRules,
   useGetForecast,
   useRefreshForecastBank,
   useSeedAprilChase,
@@ -17,6 +18,7 @@ import {
   type RepointedRuleSample,
   type RuleAction,
 } from "@workspace/api-client-react";
+import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { ToastAction } from "@/components/ui/toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -131,6 +133,7 @@ function ymd(d: Date) {
 export default function TransactionsPage() {
   const { data: transactions, isLoading } = useListTransactions({ limit: 5000 });
   const { data: categories } = useListCategories();
+  const { data: mappingRules } = useListMappingRules();
   const { data: forecastData } = useGetForecast();
   const refreshBank = useRefreshForecastBank();
   const seedAprilChase = useSeedAprilChase();
@@ -1326,12 +1329,18 @@ export default function TransactionsPage() {
                           {tx.source}
                         </span>
                       </div>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1 items-center">
                         {tx.categoryId && categoryById.get(tx.categoryId) && (
                           <Badge variant="outline" className="text-xs border-violet-200 text-violet-700 bg-violet-50">
                             {categoryById.get(tx.categoryId)}
                           </Badge>
                         )}
+                        <MatchedRuleChip
+                          categoryId={tx.categoryId}
+                          matchedRuleId={tx.matchedRuleId}
+                          rules={mappingRules}
+                          testIdSuffix={tx.id}
+                        />
                         {!tx.categoryId && !tx.isTransfer && (
                           <CategorizeChip
                             tx={tx}

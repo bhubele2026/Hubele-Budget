@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearch } from "wouter";
 import {
   useListMappingRules,
   useCreateMappingRule,
@@ -64,6 +65,16 @@ type RuleRowProps = {
   isWinner: boolean;
   reorderDisabled: boolean;
   dragDisabled: boolean;
+  // Task #192 deep-link support: when set, the row is the target of a
+  // ?focus=<ruleId> navigation from a transaction's "rule: <pattern>" chip.
+  // `isFocused` is deterministic (purely from the URL param) — this is what
+  // tests assert on via data-focused. `isHighlighted` is the transient
+  // visual ring that fades after a few seconds. `setFocusRef` is the
+  // callback ref the parent uses to scroll the row into view; it's
+  // composed with the dnd-kit setNodeRef so both can coexist.
+  isFocused: boolean;
+  isHighlighted: boolean;
+  setFocusRef: ((el: HTMLDivElement | null) => void) | null;
   onMove: (id: string, direction: -1 | 1) => void;
   onStartEdit: (rule: MappingRule) => void;
   onDelete: (id: string) => void;
@@ -78,6 +89,9 @@ function SortableRuleRow({
   isWinner,
   reorderDisabled,
   dragDisabled,
+  isFocused,
+  isHighlighted,
+  setFocusRef,
   onMove,
   onStartEdit,
   onDelete,
@@ -100,20 +114,26 @@ function SortableRuleRow({
     opacity: isDragging ? 0.6 : 1,
   };
 
-  const winnerBg = isWinner
-    ? "bg-emerald-50 dark:bg-emerald-950/30"
-    : isMatched
-      ? "bg-amber-50 dark:bg-amber-950/20"
-      : "";
+  const stateBg = isHighlighted
+    ? "ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-950/30"
+    : isWinner
+      ? "bg-emerald-50 dark:bg-emerald-950/30"
+      : isMatched
+        ? "bg-amber-50 dark:bg-amber-950/20"
+        : "";
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(el) => {
+        setNodeRef(el);
+        if (setFocusRef) setFocusRef(el);
+      }}
       style={style}
-      className={`flex items-center gap-2 px-4 py-2 hover:bg-muted/30 ${winnerBg} ${
+      className={`flex items-center gap-2 px-4 py-2 hover:bg-muted/30 transition-colors ${stateBg} ${
         isDragging ? "shadow-lg ring-2 ring-primary/40 bg-card" : ""
       }`}
       data-testid={`rule-row-${rule.id}`}
+      data-focused={isFocused ? "true" : undefined}
     >
       <button
         ref={setActivatorNodeRef}
@@ -404,6 +424,40 @@ export default function MappingRulesPage() {
     if (!data) return new Set<string>();
     return new Set(data.matches.map((m) => m.rule.id));
   }, [testRules.data]);
+
+  // ?focus=<ruleId> deep-link support — clicked from the "rule: 'PATTERN'"
+  // chip on the Transactions / Amex pages to land directly on the rule
+  // responsible for a row's category. We scroll the row into view and
+  // briefly flash a ring around it so the user actually spots it in a long
+  // list, then drop the highlight after a few seconds. The focus also
+  // forces the search to be cleared so the row can never be filtered out
+  // before we can scroll to it.
+  const search = useSearch();
+  const focusId = useMemo(() => {
+    const params = new URLSearchParams(search);
+    return params.get("focus");
+  }, [search]);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const focusRowRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!focusId) return;
+    if (!rules || rules.length === 0) return;
+    if (!rules.some((r) => r.id === focusId)) return;
+    if (searchQuery) setSearchQuery("");
+    setHighlightedId(focusId);
+    const t = window.setTimeout(() => {
+      focusRowRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 50);
+    const clear = window.setTimeout(() => setHighlightedId(null), 4000);
+    return () => {
+      window.clearTimeout(t);
+      window.clearTimeout(clear);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, rules]);
 
   const winningId = useMemo(() => {
     const data = testRules.data;
@@ -719,6 +773,7 @@ export default function MappingRulesPage() {
                           </div>
                         );
                       }
+                      const isFocused = rule.id === focusId;
                       return (
                         <SortableRuleRow
                           key={rule.id}
@@ -730,6 +785,15 @@ export default function MappingRulesPage() {
                           isWinner={isWinner}
                           reorderDisabled={reorderDisabled}
                           dragDisabled={dragDisabled}
+                          isFocused={isFocused}
+                          isHighlighted={highlightedId === rule.id}
+                          setFocusRef={
+                            isFocused
+                              ? (el) => {
+                                  focusRowRef.current = el;
+                                }
+                              : null
+                          }
                           onMove={moveRule}
                           onStartEdit={startEdit}
                           onDelete={handleDeleteRule}

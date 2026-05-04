@@ -5,10 +5,12 @@ import {
   useUpdateTransaction,
   useListCategories,
   useListDebts,
+  useListMappingRules,
   getListTransactionsQueryKey,
   getGetBudgetMonthQueryKey,
   type Transaction,
 } from "@workspace/api-client-react";
+import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { customFetch } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -141,6 +143,7 @@ export default function AmexPage() {
   const { data: txns, isLoading } = useListTransactions(queryParams);
   const { data: categories } = useListCategories();
   const { data: debts } = useListDebts();
+  const { data: mappingRules } = useListMappingRules();
   // Server-provided Amex anchor: fallback used when the Amex debt row is
   // missing or renamed.
   const { data: amexAnchorResp, isLoading: amexAnchorLoading } = useQuery<{
@@ -1508,6 +1511,13 @@ export default function AmexPage() {
                           Transfer
                         </Badge>
                       )}
+                      <MatchedRuleChip
+                        categoryId={t.categoryId}
+                        matchedRuleId={t.matchedRuleId}
+                        rules={mappingRules}
+                        testIdSuffix={`amex-mobile-${t.id}`}
+                        variant="compact"
+                      />
                     </div>
                   </div>
                 ))}
@@ -1598,6 +1608,15 @@ export default function AmexPage() {
                               Transfer
                             </Badge>
                           )}
+                          <div className="mt-1">
+                            <MatchedRuleChip
+                              categoryId={t.categoryId}
+                              matchedRuleId={t.matchedRuleId}
+                              rules={mappingRules}
+                              testIdSuffix={`amex-${t.id}`}
+                              variant="compact"
+                            />
+                          </div>
                         </td>
                         <td className="px-3 py-2">
                           <Select

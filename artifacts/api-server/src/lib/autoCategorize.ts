@@ -45,6 +45,39 @@ export function matchRule(
 }
 
 /**
+ * Returns the id of the rule that auto-categorize would currently attribute
+ * for the given transaction. The intent is "which rule is responsible for
+ * this row sitting in this category" — surfaced on Transactions / Amex rows
+ * so the user can jump straight to that rule on the Mapping Rules page.
+ *
+ * Semantics, mirroring the auto-categorize pipeline:
+ *   - Walk the user's rules in priority-descending order (the input is
+ *     expected to already be sorted by `loadUserRules`).
+ *   - The first rule whose pattern matches the description is the
+ *     candidate. If its `categoryId` matches the transaction's current
+ *     `categoryId`, that's the attribution. Otherwise the user (or some
+ *     other path) clearly overrode the auto-pick, so we report no rule
+ *     attribution rather than a misleading one.
+ *   - Returns null for transactions with no `categoryId`, no description,
+ *     or no matching rule at all.
+ */
+export function findMatchedRuleId(
+  description: string | null | undefined,
+  currentCategoryId: string | null | undefined,
+  rules: RuleRow[],
+): string | null {
+  if (!currentCategoryId) return null;
+  if (!description) return null;
+  const hay = description.toLowerCase();
+  for (const r of rules) {
+    if (!r.categoryId) continue;
+    if (!ruleMatchesDescription(r, hay)) continue;
+    return r.categoryId === currentCategoryId ? r.id : null;
+  }
+  return null;
+}
+
+/**
  * Returns every rule whose pattern matches the description, ignoring whether
  * the rule currently has a `categoryId`. This is the auto-relearn entrypoint
  * used by the PATCH /transactions handler to repoint stale rules (e.g. seed

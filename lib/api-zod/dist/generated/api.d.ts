@@ -52,6 +52,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         occurredOn: string;
@@ -75,6 +76,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        matchedRuleId?: string | null | undefined;
     }, {
         id: string;
         occurredOn: string;
@@ -98,6 +100,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        matchedRuleId?: string | null | undefined;
     }>, "many">;
     topCategories: zod.ZodArray<zod.ZodObject<{
         categoryName: zod.ZodString;
@@ -176,6 +179,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        matchedRuleId?: string | null | undefined;
     }[];
     topCategories: {
         categoryName: string;
@@ -226,6 +230,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        matchedRuleId?: string | null | undefined;
     }[];
     topCategories: {
         categoryName: string;
@@ -304,6 +309,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     occurredOn: string;
@@ -327,6 +333,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    matchedRuleId?: string | null | undefined;
 }, {
     id: string;
     occurredOn: string;
@@ -350,6 +357,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    matchedRuleId?: string | null | undefined;
 }>;
 export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -374,6 +382,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     occurredOn: string;
@@ -397,6 +406,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    matchedRuleId?: string | null | undefined;
 }, {
     id: string;
     occurredOn: string;
@@ -420,6 +430,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    matchedRuleId?: string | null | undefined;
 }>, "many">;
 export declare const CreateTransactionBody: zod.ZodObject<{
     occurredOn: zod.ZodString;
@@ -576,6 +587,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     occurredOn: string;
@@ -599,6 +611,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    matchedRuleId?: string | null | undefined;
 }, {
     id: string;
     occurredOn: string;
@@ -622,6 +635,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     plaidTransactionId?: string | null | undefined;
     plaidAccountId?: string | null | undefined;
     debtId?: string | null | undefined;
+    matchedRuleId?: string | null | undefined;
 }>, zod.ZodObject<{
     repointedRules: zod.ZodArray<zod.ZodObject<{
         ruleId: zod.ZodString;
@@ -3341,6 +3355,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         occurredOn: string;
@@ -3364,6 +3379,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        matchedRuleId?: string | null | undefined;
     }, {
         id: string;
         occurredOn: string;
@@ -3387,6 +3403,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        matchedRuleId?: string | null | undefined;
     }>, "many">;
     resolutions: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
@@ -3614,6 +3631,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        matchedRuleId?: string | null | undefined;
     }[];
     resolutions: {
         status: string;
@@ -3715,6 +3733,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         plaidTransactionId?: string | null | undefined;
         plaidAccountId?: string | null | undefined;
         debtId?: string | null | undefined;
+        matchedRuleId?: string | null | undefined;
     }[];
     resolutions: {
         status: string;
