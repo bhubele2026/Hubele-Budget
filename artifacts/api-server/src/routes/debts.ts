@@ -144,6 +144,12 @@ function shapeDebt(
     plaidLastSyncedAt: d.plaidLastSyncedAt
       ? d.plaidLastSyncedAt.toISOString()
       : null,
+    // (#43) Surface the parent Plaid item's last sync error on the debt so
+    // the debts/avalanche UI can warn that balance/APR/min-payment values
+    // may be stale (e.g. ITEM_LOGIN_REQUIRED). null when healthy or
+    // when the debt isn't Plaid-linked.
+    plaidLastSyncError:
+      d.plaidAccountId && item?.lastSyncError ? item.lastSyncError : null,
     plaidAccount: acct
       ? {
           id: acct.id,

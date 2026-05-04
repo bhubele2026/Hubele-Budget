@@ -255,6 +255,12 @@ export const ListDebtsResponseItem = zod.object({
   lastBalanceUpdate: zod.string().nullish(),
   plaidAccountId: zod.string().nullish(),
   plaidLastSyncedAt: zod.string().nullish(),
+  plaidLastSyncError: zod
+    .string()
+    .nullish()
+    .describe(
+      "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -316,6 +322,12 @@ export const LinkDebtToPlaidResponse = zod.object({
   lastBalanceUpdate: zod.string().nullish(),
   plaidAccountId: zod.string().nullish(),
   plaidLastSyncedAt: zod.string().nullish(),
+  plaidLastSyncError: zod
+    .string()
+    .nullish()
+    .describe(
+      "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -357,6 +369,12 @@ export const UnlinkDebtFromPlaidResponse = zod.object({
   lastBalanceUpdate: zod.string().nullish(),
   plaidAccountId: zod.string().nullish(),
   plaidLastSyncedAt: zod.string().nullish(),
+  plaidLastSyncError: zod
+    .string()
+    .nullish()
+    .describe(
+      "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -398,6 +416,12 @@ export const RefreshDebtFromPlaidResponse = zod.object({
   lastBalanceUpdate: zod.string().nullish(),
   plaidAccountId: zod.string().nullish(),
   plaidLastSyncedAt: zod.string().nullish(),
+  plaidLastSyncError: zod
+    .string()
+    .nullish()
+    .describe(
+      "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -572,6 +596,12 @@ export const UpdateDebtResponse = zod.object({
   lastBalanceUpdate: zod.string().nullish(),
   plaidAccountId: zod.string().nullish(),
   plaidLastSyncedAt: zod.string().nullish(),
+  plaidLastSyncError: zod
+    .string()
+    .nullish()
+    .describe(
+      "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),

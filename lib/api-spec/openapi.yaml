@@ -1156,6 +1156,13 @@ components:
         lastBalanceUpdate: { type: ["string", "null"] }
         plaidAccountId: { type: ["string", "null"] }
         plaidLastSyncedAt: { type: ["string", "null"] }
+        plaidLastSyncError:
+          type: ["string", "null"]
+          description: |
+            Latest sync error from the parent Plaid item, surfaced on debts
+            so users see when balance/APR/min-payment values may be stale
+            because Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).
+            null when sync is healthy or the debt isn't Plaid-linked.
         balanceSource: { type: string, enum: [plaid, manual] }
         aprSource: { type: string, enum: [plaid, manual] }
         minPaymentSource: { type: string, enum: [plaid, manual] }

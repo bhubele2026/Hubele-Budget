@@ -199,6 +199,15 @@ export interface Debt {
     plaidAccountId?: string | null;
     /** @nullable */
     plaidLastSyncedAt?: string | null;
+    /**
+     * Latest sync error from the parent Plaid item, surfaced on debts
+  so users see when balance/APR/min-payment values may be stale
+  because Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).
+  null when sync is healthy or the debt isn't Plaid-linked.
+  
+     * @nullable
+     */
+    plaidLastSyncError?: string | null;
     balanceSource: DebtBalanceSource;
     aprSource: DebtAprSource;
     minPaymentSource: DebtMinPaymentSource;

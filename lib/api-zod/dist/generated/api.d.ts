@@ -647,6 +647,7 @@ export declare const ListDebtsResponseItem: zod.ZodObject<{
     lastBalanceUpdate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidLastSyncedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidLastSyncError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     balanceSource: zod.ZodEnum<["plaid", "manual"]>;
     aprSource: zod.ZodEnum<["plaid", "manual"]>;
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
@@ -698,6 +699,7 @@ export declare const ListDebtsResponseItem: zod.ZodObject<{
     statementDay?: number | null | undefined;
     lastBalanceUpdate?: string | null | undefined;
     plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -728,6 +730,7 @@ export declare const ListDebtsResponseItem: zod.ZodObject<{
     statementDay?: number | null | undefined;
     lastBalanceUpdate?: string | null | undefined;
     plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -756,6 +759,7 @@ export declare const ListDebtsResponse: zod.ZodArray<zod.ZodObject<{
     lastBalanceUpdate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidLastSyncedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidLastSyncError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     balanceSource: zod.ZodEnum<["plaid", "manual"]>;
     aprSource: zod.ZodEnum<["plaid", "manual"]>;
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
@@ -807,6 +811,7 @@ export declare const ListDebtsResponse: zod.ZodArray<zod.ZodObject<{
     statementDay?: number | null | undefined;
     lastBalanceUpdate?: string | null | undefined;
     plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -837,6 +842,7 @@ export declare const ListDebtsResponse: zod.ZodArray<zod.ZodObject<{
     statementDay?: number | null | undefined;
     lastBalanceUpdate?: string | null | undefined;
     plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -919,6 +925,7 @@ export declare const LinkDebtToPlaidResponse: zod.ZodObject<{
     lastBalanceUpdate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidLastSyncedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidLastSyncError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     balanceSource: zod.ZodEnum<["plaid", "manual"]>;
     aprSource: zod.ZodEnum<["plaid", "manual"]>;
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
@@ -970,6 +977,7 @@ export declare const LinkDebtToPlaidResponse: zod.ZodObject<{
     statementDay?: number | null | undefined;
     lastBalanceUpdate?: string | null | undefined;
     plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -1000,6 +1008,7 @@ export declare const LinkDebtToPlaidResponse: zod.ZodObject<{
     statementDay?: number | null | undefined;
     lastBalanceUpdate?: string | null | undefined;
     plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -1035,6 +1044,7 @@ export declare const UnlinkDebtFromPlaidResponse: zod.ZodObject<{
     lastBalanceUpdate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidLastSyncedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidLastSyncError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     balanceSource: zod.ZodEnum<["plaid", "manual"]>;
     aprSource: zod.ZodEnum<["plaid", "manual"]>;
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
@@ -1086,6 +1096,7 @@ export declare const UnlinkDebtFromPlaidResponse: zod.ZodObject<{
     statementDay?: number | null | undefined;
     lastBalanceUpdate?: string | null | undefined;
     plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -1116,6 +1127,7 @@ export declare const UnlinkDebtFromPlaidResponse: zod.ZodObject<{
     statementDay?: number | null | undefined;
     lastBalanceUpdate?: string | null | undefined;
     plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -1151,6 +1163,7 @@ export declare const RefreshDebtFromPlaidResponse: zod.ZodObject<{
     lastBalanceUpdate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidLastSyncedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidLastSyncError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     balanceSource: zod.ZodEnum<["plaid", "manual"]>;
     aprSource: zod.ZodEnum<["plaid", "manual"]>;
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
@@ -1202,6 +1215,7 @@ export declare const RefreshDebtFromPlaidResponse: zod.ZodObject<{
     statementDay?: number | null | undefined;
     lastBalanceUpdate?: string | null | undefined;
     plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -1232,6 +1246,7 @@ export declare const RefreshDebtFromPlaidResponse: zod.ZodObject<{
     statementDay?: number | null | undefined;
     lastBalanceUpdate?: string | null | undefined;
     plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -1668,6 +1683,7 @@ export declare const UpdateDebtResponse: zod.ZodObject<{
     lastBalanceUpdate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidLastSyncedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidLastSyncError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     balanceSource: zod.ZodEnum<["plaid", "manual"]>;
     aprSource: zod.ZodEnum<["plaid", "manual"]>;
     minPaymentSource: zod.ZodEnum<["plaid", "manual"]>;
@@ -1719,6 +1735,7 @@ export declare const UpdateDebtResponse: zod.ZodObject<{
     statementDay?: number | null | undefined;
     lastBalanceUpdate?: string | null | undefined;
     plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;
@@ -1749,6 +1766,7 @@ export declare const UpdateDebtResponse: zod.ZodObject<{
     statementDay?: number | null | undefined;
     lastBalanceUpdate?: string | null | undefined;
     plaidLastSyncedAt?: string | null | undefined;
+    plaidLastSyncError?: string | null | undefined;
     plaidAccount?: {
         id: string;
         type?: string | null | undefined;

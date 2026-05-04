@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Link2, Unlink, RefreshCw, Loader2 } from "lucide-react";
+import { Link2, Unlink, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 
@@ -82,6 +82,31 @@ export function DebtPlaidIndicator({
 
 export function DebtLastSynced({ debt }: { debt: Debt }) {
   if (!debt.plaidAccountId) return null;
+  // (#43) When the parent Plaid item's last sync failed, surface the error
+  // inline so the user knows the visible balance/APR/min may be stale and
+  // can act (re-link in Settings). Falls back to the normal "synced Xm ago"
+  // pill when sync is healthy.
+  if (debt.plaidLastSyncError) {
+    return (
+      <div
+        className="text-[10px] text-destructive flex items-center gap-1"
+        data-testid={`text-debt-sync-error-${debt.id}`}
+        title={`Sync failing: ${debt.plaidLastSyncError}\nLast healthy sync: ${
+          debt.plaidLastSyncedAt
+            ? new Date(debt.plaidLastSyncedAt).toLocaleString()
+            : "never"
+        }\nFix: Settings → Linked banks → Re-link`}
+      >
+        <AlertTriangle className="h-3 w-3" />
+        <span>
+          sync failing
+          {debt.plaidLastSyncedAt
+            ? ` · last ok ${relTime(debt.plaidLastSyncedAt)}`
+            : ""}
+        </span>
+      </div>
+    );
+  }
   return (
     <div
       className="text-[10px] text-muted-foreground"
