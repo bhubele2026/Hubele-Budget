@@ -7,6 +7,7 @@ import {
   useGetForecast,
   useListTransactions,
   useListDashboardBudgets,
+  useListDebts,
   useUpsertDashboardBudget,
   useDeleteDashboardBudget,
   useUpdateTransaction,
@@ -30,7 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { DashboardKillOrder } from "@/components/dashboard-kill-order";
 import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
-import { DashboardReconnectBanner } from "@/components/dashboard-reconnect-banner";
+import { DebtReauthBanner } from "@/components/debt-plaid-link";
 
 import { SUB_BUCKETS, type SubBucket, useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import {
@@ -1457,6 +1458,7 @@ export default function DashboardPage() {
     return fmtISO(start);
   }, [today]);
   const { data, isLoading } = useGetDashboard();
+  const { data: debts } = useListDebts();
   const { data: forecastData } = useGetForecast();
   const { data: monthTxns } = useListTransactions({ from: monthlyFromISO, limit: 5000 });
   // Pull all Chase activity so end-of-month balances roll correctly between
@@ -1532,7 +1534,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <DashboardReconnectBanner />
+      <DebtReauthBanner debts={debts} />
       <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-8">
         <DashboardHero today={today} />
         <MonthlySnapshot
