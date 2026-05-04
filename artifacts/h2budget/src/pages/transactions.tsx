@@ -484,10 +484,12 @@ export default function TransactionsPage() {
 
   const handleOpenEdit = (tx: Transaction) => {
     setEditingTx(tx);
-    // Edit dialog doesn't expose the Category field (the category is set
-    // by the row's own quick-categorize chip / Mapping Rules), so the
-    // auto-pick effect short-circuits on `editingTx`. Pre-fill the form
-    // value anyway so the field stays consistent if it's later surfaced.
+    // Edit dialog surfaces the Category combobox pre-filled with the
+    // row's current category (Task #234). The live "as you type"
+    // auto-pick effect intentionally short-circuits on `editingTx` so
+    // typing in the description field doesn't silently overwrite the
+    // user's existing category — flipping `categoryManuallyPickedRef`
+    // mirrors that intent and keeps the picker stable.
     categoryManuallyPickedRef.current = true;
     const numeric = parseFloat(tx.amount);
     form.reset({
@@ -517,6 +519,16 @@ export default function TransactionsPage() {
     () => (isDialogOpen && !editingTx ? matchRuleClient(watchedDescription ?? "", mappingRules) : null),
     [isDialogOpen, editingTx, watchedDescription, mappingRules],
   );
+  // Task #234 — when the Edit dialog is open, surface the rule that the
+  // server originally attributed the row to (`tx.matchedRuleId`) so the
+  // combobox's MatchedRuleChip can keep showing "matched by rule X" while
+  // the user hasn't changed the category. The picker only displays the
+  // chip when the rule's categoryId equals the picker's current value, so
+  // the chip naturally disappears if the user picks a different category.
+  const editingMatchedRule = useMemo(() => {
+    if (!isDialogOpen || !editingTx?.matchedRuleId) return null;
+    return (mappingRules ?? []).find((r) => r.id === editingTx.matchedRuleId) ?? null;
+  }, [isDialogOpen, editingTx, mappingRules]);
   useEffect(() => {
     if (!isDialogOpen || editingTx) return;
     if (categoryManuallyPickedRef.current) return;
@@ -531,22 +543,65 @@ export default function TransactionsPage() {
     const { kind, categoryId, ...rest } = values;
     const basePayload = { ...rest, amount: normalizeAmount(values.amount, kind) };
     if (editingTx) {
-      // Edit dialog doesn't expose the Category field today (the row's
-      // own quick-categorize chip handles that). Only forward the
-      // pre-filled categoryId when it actually changed, to avoid
-      // tripping PATCH /transactions's mapping-rule-repoint side effect
-      // on no-op edits.
-      const editPayload =
-        (categoryId ?? null) !== (editingTx.categoryId ?? null)
-          ? { ...basePayload, categoryId: categoryId ?? null }
-          : basePayload;
+      // Task #234 — Edit dialog now exposes the same Category combobox
+      // the Add dialog uses. Only forward `categoryId` when the user
+      // actually picked something different so a no-op save doesn't
+      // trip PATCH /transactions's mapping-rule auto-learn / repoint
+      // side effects. When the category *did* change, mirror the row
+      // chip's `handleQuickCategorize` flow: surface the same
+      // ruleAction-aware "Categorized" toast (with `useRuleActionUndo`
+      // affordance) plus any bulk recategorize prompts the response
+      // suggests.
+      const categoryChanged =
+        (categoryId ?? null) !== (editingTx.categoryId ?? null);
+      const editPayload = categoryChanged
+        ? { ...basePayload, categoryId: categoryId ?? null }
+        : basePayload;
       updateTx.mutate(
         { id: editingTx.id, data: editPayload },
         {
-          onSuccess: () => {
+          onSuccess: (updated) => {
             queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
             setIsDialogOpen(false);
-            toast({ title: "Transaction updated" });
+            if (!categoryChanged) {
+              toast({ title: "Transaction updated" });
+              return;
+            }
+            queryClient.invalidateQueries({
+              queryKey: getGetBudgetMonthQueryKey(
+                `${updated.occurredOn.slice(0, 7)}-01`,
+              ),
+            });
+            const ruleDescription = ruleActionMessage(updated.ruleAction);
+            const categorizedToast = toast({
+              title: "Categorized",
+              ...(ruleDescription ? { description: ruleDescription } : {}),
+            });
+            const undoAction = buildRuleUndoAction(
+              updated.ruleAction,
+              categorizedToast.id,
+            );
+            if (undoAction) {
+              categorizedToast.update({
+                id: categorizedToast.id,
+                action: undoAction,
+              });
+            }
+            const repointedRules: RepointedRule[] = updated.repointedRules ?? [];
+            for (const rule of repointedRules) {
+              const bulkRule = bulkRuleFromRepointed(
+                rule,
+                categoryById.get(rule.toCategoryId) ?? undefined,
+              );
+              if (bulkRule) offerBulkRecategorize(bulkRule);
+            }
+            const createdRule = bulkRuleFromRuleAction(
+              updated.ruleAction,
+              updated.ruleAction?.toCategoryId
+                ? categoryById.get(updated.ruleAction.toCategoryId) ?? undefined
+                : undefined,
+            );
+            if (createdRule) offerBulkRecategorize(createdRule);
           },
         },
       );
@@ -1181,30 +1236,30 @@ export default function TransactionsPage() {
               <FormField control={form.control} name="description" render={({ field }) => (
                 <FormItem><FormLabel>Description</FormLabel><FormControl><Input placeholder="Trader Joe's" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
-              {!editingTx && (
-                <FormField
-                  control={form.control}
-                  name="categoryId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Category</FormLabel>
-                      <FormControl>
-                        <NewTransactionCategoryPicker
-                          value={field.value ?? null}
-                          onChange={(next) => {
-                            categoryManuallyPickedRef.current = true;
-                            field.onChange(next);
-                          }}
-                          categories={categories ?? []}
-                          autoMatchedRule={dialogAutoMatchedRule}
-                          mappingRules={mappingRules}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+              <FormField
+                control={form.control}
+                name="categoryId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category</FormLabel>
+                    <FormControl>
+                      <NewTransactionCategoryPicker
+                        value={field.value ?? null}
+                        onChange={(next) => {
+                          categoryManuallyPickedRef.current = true;
+                          field.onChange(next);
+                        }}
+                        categories={categories ?? []}
+                        autoMatchedRule={
+                          editingTx ? editingMatchedRule : dialogAutoMatchedRule
+                        }
+                        mappingRules={mappingRules}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <div className="grid grid-cols-3 gap-3">
                 <FormField control={form.control} name="kind" render={({ field }) => (
                   <FormItem className="col-span-1"><FormLabel>Kind</FormLabel>
