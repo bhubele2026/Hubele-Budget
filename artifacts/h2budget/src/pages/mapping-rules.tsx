@@ -33,8 +33,188 @@ import {
   ArrowUp,
   ArrowDown,
   Beaker,
+  GripVertical,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+type RuleRowProps = {
+  rule: MappingRule;
+  category: Category | null;
+  isFirst: boolean;
+  isLast: boolean;
+  isMatched: boolean;
+  isWinner: boolean;
+  reorderDisabled: boolean;
+  dragDisabled: boolean;
+  onMove: (id: string, direction: -1 | 1) => void;
+  onStartEdit: (rule: MappingRule) => void;
+  onDelete: (id: string) => void;
+};
+
+function SortableRuleRow({
+  rule,
+  category,
+  isFirst,
+  isLast,
+  isMatched,
+  isWinner,
+  reorderDisabled,
+  dragDisabled,
+  onMove,
+  onStartEdit,
+  onDelete,
+}: RuleRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: rule.id, disabled: dragDisabled });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+    position: "relative",
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  const winnerBg = isWinner
+    ? "bg-emerald-50 dark:bg-emerald-950/30"
+    : isMatched
+      ? "bg-amber-50 dark:bg-amber-950/20"
+      : "";
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-2 px-4 py-2 hover:bg-muted/30 ${winnerBg} ${
+        isDragging ? "shadow-lg ring-2 ring-primary/40 bg-card" : ""
+      }`}
+      data-testid={`rule-row-${rule.id}`}
+    >
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
+        {...listeners}
+        {...attributes}
+        disabled={dragDisabled}
+        className={`touch-none flex items-center justify-center h-8 w-6 text-muted-foreground hover:text-foreground ${
+          dragDisabled
+            ? "opacity-40 cursor-not-allowed"
+            : "cursor-grab active:cursor-grabbing"
+        }`}
+        title={
+          dragDisabled
+            ? "Clear the search to drag"
+            : "Drag to reorder (use arrow keys when focused)"
+        }
+        aria-label={`Drag to reorder ${rule.pattern}`}
+        data-testid={`rule-drag-${rule.id}`}
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      <div className="flex flex-col">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-5 w-6"
+          disabled={isFirst || reorderDisabled}
+          onClick={() => onMove(rule.id, -1)}
+          data-testid={`rule-up-${rule.id}`}
+          title={
+            dragDisabled
+              ? "Clear the search to reorder"
+              : "Move up"
+          }
+        >
+          <ArrowUp className="w-3 h-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-5 w-6"
+          disabled={isLast || reorderDisabled}
+          onClick={() => onMove(rule.id, 1)}
+          data-testid={`rule-down-${rule.id}`}
+          title={
+            dragDisabled
+              ? "Clear the search to reorder"
+              : "Move down"
+          }
+        >
+          <ArrowDown className="w-3 h-3" />
+        </Button>
+      </div>
+      <Badge
+        variant="outline"
+        className="font-mono text-[10px] tabular-nums w-12 justify-center"
+        data-testid={`rule-priority-${rule.id}`}
+      >
+        {rule.priority}
+      </Badge>
+      <span className="font-mono text-xs bg-muted/60 px-2 py-0.5 rounded truncate flex-[2] min-w-0">
+        {rule.pattern}
+      </span>
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+        {rule.matchType.replace("_", " ")}
+      </span>
+      <span
+        className={`text-xs flex-1 min-w-0 truncate ${
+          category ? "" : "italic text-muted-foreground"
+        }`}
+        data-testid={`rule-category-${rule.id}`}
+      >
+        {category?.name ?? "Uncategorized"}
+      </span>
+      {isWinner && (
+        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-[10px]">
+          Winner
+        </Badge>
+      )}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={() => onStartEdit(rule)}
+        data-testid={`rule-edit-btn-${rule.id}`}
+      >
+        <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={() => onDelete(rule.id)}
+        data-testid={`rule-delete-${rule.id}`}
+      >
+        <Trash2 className="w-3.5 h-3.5 text-destructive" />
+      </Button>
+    </div>
+  );
+}
 
 export default function MappingRulesPage() {
   const { data: rules, isLoading: rulesLoading } = useListMappingRules();
@@ -148,19 +328,14 @@ export default function MappingRulesPage() {
     return [...(rules ?? [])].sort((a, b) => b.priority - a.priority);
   }, [rules]);
 
-  const moveRule = (id: string, direction: -1 | 1) => {
-    const idx = sorted.findIndex((r) => r.id === id);
-    if (idx < 0) return;
-    const nextIdx = idx + direction;
-    if (nextIdx < 0 || nextIdx >= sorted.length) return;
-    const nextOrder = [...sorted];
-    const [item] = nextOrder.splice(idx, 1);
-    nextOrder.splice(nextIdx, 0, item!);
+  const persistOrder = (orderedIds: string[]) => {
     reorderRules.mutate(
-      { data: { orderedIds: nextOrder.map((r) => r.id) } },
+      { data: { orderedIds } },
       {
         onSuccess: () => invalidateRules(),
         onError: (e) => {
+          // Refetch so we revert any optimistic UI change.
+          invalidateRules();
           toast({
             title: "Couldn't reorder",
             description: (e as Error).message,
@@ -169,6 +344,35 @@ export default function MappingRulesPage() {
         },
       },
     );
+  };
+
+  const moveRule = (id: string, direction: -1 | 1) => {
+    const idx = sorted.findIndex((r) => r.id === id);
+    if (idx < 0) return;
+    const nextIdx = idx + direction;
+    if (nextIdx < 0 || nextIdx >= sorted.length) return;
+    const nextOrder = arrayMove(sorted, idx, nextIdx);
+    persistOrder(nextOrder.map((r) => r.id));
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const oldIdx = sorted.findIndex((r) => r.id === active.id);
+    const newIdx = sorted.findIndex((r) => r.id === over.id);
+    if (oldIdx < 0 || newIdx < 0) return;
+    const nextOrder = arrayMove(sorted, oldIdx, newIdx);
+    persistOrder(nextOrder.map((r) => r.id));
   };
 
   const catById = useMemo(() => {
@@ -215,6 +419,12 @@ export default function MappingRulesPage() {
       </div>
     );
   }
+
+  // Drag-and-drop reorders the full sorted list, so we must disable it
+  // whenever a search filter is hiding rules — otherwise dropping would
+  // misplace items relative to the hidden ones.
+  const dragDisabled = !!searchQuery || reorderRules.isPending;
+  const sortableIds = sorted.map((r) => r.id);
 
   return (
     <div className="space-y-6">
@@ -395,195 +605,141 @@ export default function MappingRulesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="divide-y divide-border">
-              {filtered.length === 0 ? (
-                <div className="p-6 text-center text-muted-foreground text-sm">
-                  No rules match your search.
-                </div>
-              ) : (
-                filtered.map((rule) => {
-                  const idxInFull = sorted.findIndex((r) => r.id === rule.id);
-                  const isFirst = idxInFull === 0;
-                  const isLast = idxInFull === sorted.length - 1;
-                  const cat = rule.categoryId
-                    ? catById.get(rule.categoryId)
-                    : null;
-                  const isMatched = matchedIds.has(rule.id);
-                  const isWinner = winningId === rule.id;
-                  const reorderDisabled =
-                    reorderRules.isPending || !!searchQuery;
-                  return editingId === rule.id ? (
-                    <div
-                      key={rule.id}
-                      className="flex flex-col gap-2 px-4 py-3 bg-muted/20"
-                      data-testid={`rule-edit-${rule.id}`}
-                    >
-                      <Input
-                        value={editPattern}
-                        onChange={(e) => setEditPattern(e.target.value)}
-                        className="h-8 text-sm font-mono"
-                        autoFocus
-                      />
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Select
-                          value={editMatchType}
-                          onValueChange={setEditMatchType}
-                        >
-                          <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="contains">Contains</SelectItem>
-                            <SelectItem value="exact">Exact</SelectItem>
-                            <SelectItem value="starts_with">
-                              Starts With
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Select
-                          value={editCategoryId}
-                          onValueChange={setEditCategoryId}
-                        >
-                          <SelectTrigger className="h-8 text-xs flex-[2] min-w-[160px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {categories?.map((cat) => (
-                              <SelectItem key={cat.id} value={cat.id}>
-                                {cat.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <div className="flex items-center gap-1">
-                          <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                            Priority
-                          </label>
-                          <Input
-                            type="number"
-                            value={editPriority}
-                            onChange={(e) => setEditPriority(e.target.value)}
-                            className="h-8 w-20 text-xs"
-                            data-testid={`rule-edit-priority-${rule.id}`}
-                          />
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => saveEdit(rule.id)}
-                          disabled={
-                            !editPattern ||
-                            !editCategoryId ||
-                            updateRule.isPending
-                          }
-                          data-testid={`rule-save-${rule.id}`}
-                        >
-                          <Check className="w-4 h-4 text-emerald-600" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={cancelEdit}
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={sortableIds}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="divide-y divide-border">
+                  {filtered.length === 0 ? (
+                    <div className="p-6 text-center text-muted-foreground text-sm">
+                      No rules match your search.
                     </div>
                   ) : (
-                    <div
-                      key={rule.id}
-                      className={`flex items-center gap-2 px-4 py-2 hover:bg-muted/30 ${
-                        isWinner
-                          ? "bg-emerald-50 dark:bg-emerald-950/30"
-                          : isMatched
-                            ? "bg-amber-50 dark:bg-amber-950/20"
-                            : ""
-                      }`}
-                      data-testid={`rule-row-${rule.id}`}
-                    >
-                      <div className="flex flex-col">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-6"
-                          disabled={isFirst || reorderDisabled}
-                          onClick={() => moveRule(rule.id, -1)}
-                          data-testid={`rule-up-${rule.id}`}
-                          title={
-                            searchQuery
-                              ? "Clear the search to reorder"
-                              : "Move up"
-                          }
-                        >
-                          <ArrowUp className="w-3 h-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-6"
-                          disabled={isLast || reorderDisabled}
-                          onClick={() => moveRule(rule.id, 1)}
-                          data-testid={`rule-down-${rule.id}`}
-                          title={
-                            searchQuery
-                              ? "Clear the search to reorder"
-                              : "Move down"
-                          }
-                        >
-                          <ArrowDown className="w-3 h-3" />
-                        </Button>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className="font-mono text-[10px] tabular-nums w-12 justify-center"
-                        data-testid={`rule-priority-${rule.id}`}
-                      >
-                        {rule.priority}
-                      </Badge>
-                      <span className="font-mono text-xs bg-muted/60 px-2 py-0.5 rounded truncate flex-[2] min-w-0">
-                        {rule.pattern}
-                      </span>
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        {rule.matchType.replace("_", " ")}
-                      </span>
-                      <span
-                        className={`text-xs flex-1 min-w-0 truncate ${
-                          cat ? "" : "italic text-muted-foreground"
-                        }`}
-                        data-testid={`rule-category-${rule.id}`}
-                      >
-                        {cat?.name ?? "Uncategorized"}
-                      </span>
-                      {isWinner && (
-                        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-[10px]">
-                          Winner
-                        </Badge>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => startEdit(rule)}
-                        data-testid={`rule-edit-btn-${rule.id}`}
-                      >
-                        <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => handleDeleteRule(rule.id)}
-                        data-testid={`rule-delete-${rule.id}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                    filtered.map((rule) => {
+                      const idxInFull = sorted.findIndex(
+                        (r) => r.id === rule.id,
+                      );
+                      const isFirst = idxInFull === 0;
+                      const isLast = idxInFull === sorted.length - 1;
+                      const cat = rule.categoryId
+                        ? catById.get(rule.categoryId) ?? null
+                        : null;
+                      const isMatched = matchedIds.has(rule.id);
+                      const isWinner = winningId === rule.id;
+                      const reorderDisabled =
+                        reorderRules.isPending || !!searchQuery;
+                      if (editingId === rule.id) {
+                        return (
+                          <div
+                            key={rule.id}
+                            className="flex flex-col gap-2 px-4 py-3 bg-muted/20"
+                            data-testid={`rule-edit-${rule.id}`}
+                          >
+                            <Input
+                              value={editPattern}
+                              onChange={(e) => setEditPattern(e.target.value)}
+                              className="h-8 text-sm font-mono"
+                              autoFocus
+                            />
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Select
+                                value={editMatchType}
+                                onValueChange={setEditMatchType}
+                              >
+                                <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="contains">
+                                    Contains
+                                  </SelectItem>
+                                  <SelectItem value="exact">Exact</SelectItem>
+                                  <SelectItem value="starts_with">
+                                    Starts With
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Select
+                                value={editCategoryId}
+                                onValueChange={setEditCategoryId}
+                              >
+                                <SelectTrigger className="h-8 text-xs flex-[2] min-w-[160px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {categories?.map((cat) => (
+                                    <SelectItem key={cat.id} value={cat.id}>
+                                      {cat.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <div className="flex items-center gap-1">
+                                <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                  Priority
+                                </label>
+                                <Input
+                                  type="number"
+                                  value={editPriority}
+                                  onChange={(e) =>
+                                    setEditPriority(e.target.value)
+                                  }
+                                  className="h-8 w-20 text-xs"
+                                  data-testid={`rule-edit-priority-${rule.id}`}
+                                />
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => saveEdit(rule.id)}
+                                disabled={
+                                  !editPattern ||
+                                  !editCategoryId ||
+                                  updateRule.isPending
+                                }
+                                data-testid={`rule-save-${rule.id}`}
+                              >
+                                <Check className="w-4 h-4 text-emerald-600" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={cancelEdit}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <SortableRuleRow
+                          key={rule.id}
+                          rule={rule}
+                          category={cat}
+                          isFirst={isFirst}
+                          isLast={isLast}
+                          isMatched={isMatched}
+                          isWinner={isWinner}
+                          reorderDisabled={reorderDisabled}
+                          dragDisabled={dragDisabled}
+                          onMove={moveRule}
+                          onStartEdit={startEdit}
+                          onDelete={handleDeleteRule}
+                        />
+                      );
+                    })
+                  )}
+                </div>
+              </SortableContext>
+            </DndContext>
           </CardContent>
         </Card>
       )}
