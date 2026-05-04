@@ -1,8 +1,13 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "4myQjEfFlao7Vm9VmQsS2"
 uri = "file://artifacts/h2budget/public/logo.png"
 type = "image"
 title = "minimal ledger logo mark"
+
+[[outputs]]
+id = "l68mkUO7fYytUp6cUU-JL"
+uri = "file://artifacts/h2budget/test-results/mapping-rules-drag-to-cate-cdcd8-s-its-categoryId-and-toasts/test-failed-1.png"
+type = "image"
+title = "Failed drag screenshot"

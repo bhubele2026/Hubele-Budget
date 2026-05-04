@@ -51,13 +51,18 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   TouchSensor,
   KeyboardSensor,
+  useDroppable,
   useSensor,
   useSensors,
   closestCenter,
+  pointerWithin,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -67,6 +72,59 @@ import {
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+
+const CATEGORY_DROP_PREFIX = "category:";
+
+// The DragOverlay shows a compact card while the user drags a rule, but
+// dnd-kit's `closestCenter` compares the OVERLAY's center against each
+// droppable's center. Since the cursor is anchored near the overlay's
+// left edge (the grip handle), the overlay's center sits well to the
+// right of the cursor and `closestCenter` ends up choosing a category
+// chip that's NOT directly under the pointer. `pointerWithin` first
+// matches whatever droppable is precisely under the cursor (which is
+// what users expect when dropping on a small chip), and we fall back to
+// `closestCenter` so the existing rule-on-rule reorder behavior keeps
+// working when the cursor briefly slips outside any droppable.
+const ruleCollisionDetection: CollisionDetection = (args) => {
+  const pointerHits = pointerWithin(args);
+  if (pointerHits.length > 0) return pointerHits;
+  return closestCenter(args);
+};
+
+function CategoryDropTarget({
+  category,
+  isCurrent,
+  isDragActive,
+}: {
+  category: Category;
+  isCurrent: boolean;
+  isDragActive: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `${CATEGORY_DROP_PREFIX}${category.id}`,
+    data: { kind: "category", categoryId: category.id },
+  });
+  const showHover = isOver && isDragActive;
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      tabIndex={-1}
+      aria-label={`Drop rule onto ${category.name}`}
+      data-testid={`category-drop-${category.id}`}
+      data-drop-over={showHover ? "true" : undefined}
+      className={`px-2.5 py-1 rounded-full border text-xs whitespace-nowrap transition-colors select-none ${
+        showHover
+          ? "bg-primary text-primary-foreground border-primary ring-2 ring-primary/40"
+          : isCurrent
+            ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200"
+            : "bg-muted/40 border-border text-foreground hover:bg-muted"
+      }`}
+    >
+      {category.name}
+    </button>
+  );
+}
 
 type RuleRowProps = {
   rule: MappingRule;
@@ -473,6 +531,8 @@ export default function MappingRulesPage() {
     });
   const clearSelection = () => setSelected(new Set());
 
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
   const handleAddRule = () => {
     if (!pattern || !categoryId) return;
     // New manually-added rules go above any auto-learned ones (which top out
@@ -724,9 +784,62 @@ export default function MappingRulesPage() {
     }),
   );
 
+  const catById = useMemo(() => {
+    const m = new Map<string, Category>();
+    for (const c of categories ?? []) m.set(c.id, c);
+    return m;
+  }, [categories]);
+
+  const handleDragStart = (e: DragStartEvent) => {
+    setActiveDragId(String(e.active.id));
+  };
+
+  const reassignRuleCategory = (ruleId: string, newCategoryId: string) => {
+    const rule = (rules ?? []).find((r) => r.id === ruleId);
+    if (!rule) return;
+    if (rule.categoryId === newCategoryId) return;
+    const targetCat = catById.get(newCategoryId);
+    updateRule.mutate(
+      {
+        id: ruleId,
+        data: {
+          pattern: rule.pattern,
+          matchType: rule.matchType,
+          categoryId: newCategoryId,
+          priority: rule.priority,
+        },
+      },
+      {
+        onSuccess: () => {
+          invalidateRules();
+          toast({
+            title: "Rule reassigned",
+            description: targetCat
+              ? `“${rule.pattern}” → ${targetCat.name}`
+              : `“${rule.pattern}” moved to a new category.`,
+          });
+        },
+        onError: (err) => {
+          toast({
+            title: "Couldn't reassign rule",
+            description: (err as Error).message,
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
   const handleDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
+    setActiveDragId(null);
     if (!over || active.id === over.id) return;
+    const overId = String(over.id);
+    if (overId.startsWith(CATEGORY_DROP_PREFIX)) {
+      const newCategoryId = overId.slice(CATEGORY_DROP_PREFIX.length);
+      reassignRuleCategory(String(active.id), newCategoryId);
+      return;
+    }
     const oldIdx = sorted.findIndex((r) => r.id === active.id);
     const newIdx = sorted.findIndex((r) => r.id === over.id);
     if (oldIdx < 0 || newIdx < 0) return;
@@ -734,11 +847,13 @@ export default function MappingRulesPage() {
     persistOrder(nextOrder.map((r) => r.id));
   };
 
-  const catById = useMemo(() => {
-    const m = new Map<string, Category>();
-    for (const c of categories ?? []) m.set(c.id, c);
-    return m;
-  }, [categories]);
+  const handleDragCancel = () => setActiveDragId(null);
+
+  const activeDragRule = useMemo(
+    () =>
+      activeDragId ? (rules ?? []).find((r) => r.id === activeDragId) ?? null : null,
+    [activeDragId, rules],
+  );
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -1092,9 +1207,37 @@ export default function MappingRulesPage() {
             </div>
             <DndContext
               sensors={sensors}
-              collisionDetection={closestCenter}
+              collisionDetection={ruleCollisionDetection}
+              onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
             >
+              {(categories?.length ?? 0) > 0 && (
+                <div
+                  className={`px-4 py-3 border-b bg-muted/20 transition-colors ${
+                    activeDragId ? "bg-primary/5" : ""
+                  }`}
+                  data-testid="category-drop-strip"
+                >
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2">
+                    {activeDragId
+                      ? "Drop on a category to reassign"
+                      : "Drag a rule onto a category to reassign it"}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {categories?.map((cat) => (
+                      <CategoryDropTarget
+                        key={cat.id}
+                        category={cat}
+                        isCurrent={
+                          activeDragRule?.categoryId === cat.id
+                        }
+                        isDragActive={activeDragId !== null}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
               <SortableContext
                 items={sortableIds}
                 strategy={verticalListSortingStrategy}
@@ -1236,6 +1379,22 @@ export default function MappingRulesPage() {
                   )}
                 </div>
               </SortableContext>
+              <DragOverlay>
+                {activeDragRule ? (
+                  <div
+                    className="flex items-center gap-2 px-3 py-2 rounded-md border bg-card shadow-lg ring-2 ring-primary/40"
+                    data-testid="rule-drag-overlay"
+                  >
+                    <GripVertical className="w-4 h-4 text-muted-foreground" />
+                    <span className="font-mono text-xs bg-muted/60 px-2 py-0.5 rounded">
+                      {activeDragRule.pattern}
+                    </span>
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {activeDragRule.matchType.replace("_", " ")}
+                    </span>
+                  </div>
+                ) : null}
+              </DragOverlay>
             </DndContext>
           </CardContent>
         </Card>
