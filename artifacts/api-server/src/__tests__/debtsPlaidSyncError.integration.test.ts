@@ -58,7 +58,10 @@ afterAll(async () => {
 
 beforeEach(cleanup);
 
-async function seedItem(opts: { lastSyncError: string | null }): Promise<{ accountRowId: string }> {
+async function seedItem(opts: {
+  lastSyncError: string | null;
+  lastSyncErrorCode?: string | null;
+}): Promise<{ accountRowId: string; itemRowId: string }> {
   const [item] = await db
     .insert(plaidItemsTable)
     .values({
@@ -69,6 +72,7 @@ async function seedItem(opts: { lastSyncError: string | null }): Promise<{ accou
       institutionSlug: "testbank",
       lastSyncedAt: new Date("2026-05-01T10:00:00Z"),
       lastSyncError: opts.lastSyncError,
+      lastSyncErrorCode: opts.lastSyncErrorCode ?? null,
     })
     .returning();
   const [acct] = await db
@@ -83,7 +87,7 @@ async function seedItem(opts: { lastSyncError: string | null }): Promise<{ accou
       subtype: "credit card",
     })
     .returning();
-  return { accountRowId: acct!.id };
+  return { accountRowId: acct!.id, itemRowId: item!.id };
 }
 
 type DebtResponse = {
@@ -91,6 +95,8 @@ type DebtResponse = {
   plaidAccountId: string | null;
   plaidLastSyncedAt: string | null;
   plaidLastSyncError: string | null;
+  plaidLastSyncErrorCode: string | null;
+  plaidAccount: { id: string; itemId: string | null } | null;
 };
 
 describe("(#43) GET /debts surfaces parent Plaid item lastSyncError", () => {
@@ -155,5 +161,55 @@ describe("(#43) GET /debts surfaces parent Plaid item lastSyncError", () => {
     expect(body).toHaveLength(1);
     expect(body[0].plaidAccountId).toBeNull();
     expect(body[0].plaidLastSyncError).toBeNull();
+    expect(body[0].plaidLastSyncErrorCode).toBeNull();
+  });
+});
+
+describe("(#198) GET /debts mirrors plaidLastSyncErrorCode + plaidAccount.itemId", () => {
+  it("surfaces ITEM_LOGIN_REQUIRED code AND the parent item row id so the row can render Reconnect", async () => {
+    const { accountRowId, itemRowId } = await seedItem({
+      lastSyncError: "the login details of this item have changed",
+      lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+    });
+    await db.insert(debtsTable).values({
+      userId: TEST_USER,
+      name: "Reauth Card",
+      balance: "1500",
+      apr: "0.25",
+      minPayment: "30",
+      plaidAccountId: accountRowId,
+      plaidLastSyncedAt: new Date("2026-04-15T10:00:00Z"),
+    });
+
+    const res = await fetch(`${baseUrl}/debts`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as DebtResponse[];
+    expect(body).toHaveLength(1);
+    expect(body[0].plaidLastSyncErrorCode).toBe("ITEM_LOGIN_REQUIRED");
+    // The plaidAccount sub-object must carry the parent item row id so
+    // <PlaidReconnectButton> can mint an update-mode link token without an
+    // extra round trip.
+    expect(body[0].plaidAccount?.itemId).toBe(itemRowId);
+  });
+
+  it("returns plaidLastSyncErrorCode null when item has no structured code (legacy/healthy)", async () => {
+    const { accountRowId } = await seedItem({
+      lastSyncError: "some legacy free-text error without a code",
+      lastSyncErrorCode: null,
+    });
+    await db.insert(debtsTable).values({
+      userId: TEST_USER,
+      name: "Legacy Err Card",
+      balance: "800",
+      apr: "0.2",
+      minPayment: "20",
+      plaidAccountId: accountRowId,
+    });
+
+    const res = await fetch(`${baseUrl}/debts`);
+    const body = (await res.json()) as DebtResponse[];
+    expect(body[0].plaidLastSyncError).not.toBeNull();
+    // No code → no Reconnect affordance — it would just dead-end.
+    expect(body[0].plaidLastSyncErrorCode).toBeNull();
   });
 });

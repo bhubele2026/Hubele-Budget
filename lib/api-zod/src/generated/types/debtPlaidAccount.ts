@@ -8,6 +8,14 @@
 
 export interface DebtPlaidAccount {
   id: string;
+  /**
+   * Internal Plaid item row id (UUID) of the parent item. Used by
+the Debts / Avalanche UI to mint an update-mode link token via
+<PlaidReconnectButton> when the item is in a re-auth state.
+
+   * @nullable
+   */
+  itemId?: string | null;
   /** @nullable */
   name?: string | null;
   /** @nullable */

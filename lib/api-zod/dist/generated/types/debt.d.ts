@@ -43,6 +43,16 @@ export interface Debt {
      * @nullable
      */
     plaidLastSyncError?: string | null;
+    /**
+     * Structured `error_code` from the parent Plaid item's last failed
+  sync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the
+  value on the parent PlaidItem so the Debts / Avalanche UI can
+  decide when to render an inline "Reconnect" affordance on the
+  row. null when sync is healthy or the debt isn't Plaid-linked.
+  
+     * @nullable
+     */
+    plaidLastSyncErrorCode?: string | null;
     balanceSource: DebtBalanceSource;
     aprSource: DebtAprSource;
     minPaymentSource: DebtMinPaymentSource;

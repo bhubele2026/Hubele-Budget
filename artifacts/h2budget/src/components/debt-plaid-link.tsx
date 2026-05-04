@@ -25,6 +25,10 @@ import { Badge } from "@/components/ui/badge";
 import { Link2, Unlink, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import {
+  PlaidReconnectButton,
+  isPlaidReauthCode,
+} from "@/components/plaid-reconnect-button";
 
 function relTime(iso: string | null | undefined): string {
   if (!iso) return "never";
@@ -173,8 +177,24 @@ export function DebtPlaidActions({ debt }: { debt: Debt }) {
   });
 
   if (debt.plaidAccountId) {
+    // (#198) When Plaid reports the parent item is in a re-auth state
+    // (ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION, PENDING_DISCONNECT) the
+    // refresh icon is useless until the user reconnects — clicking it just
+    // hits the same wall. Surface a Reconnect button inline on the debt
+    // row instead, so the user can fix it from where they noticed the
+    // stale balance. Reuses <PlaidReconnectButton> from the Sync chip.
+    const needsReauth =
+      isPlaidReauthCode(debt.plaidLastSyncErrorCode) &&
+      !!debt.plaidAccount?.itemId;
     return (
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 justify-end">
+        {needsReauth ? (
+          <PlaidReconnectButton
+            itemId={debt.plaidAccount!.itemId!}
+            institutionName={debt.plaidAccount?.institutionName ?? null}
+            size="sm"
+          />
+        ) : null}
         <Button
           variant="ghost"
           size="icon"

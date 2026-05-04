@@ -1416,6 +1416,14 @@ components:
             so users see when balance/APR/min-payment values may be stale
             because Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).
             null when sync is healthy or the debt isn't Plaid-linked.
+        plaidLastSyncErrorCode:
+          type: ["string", "null"]
+          description: |
+            Structured `error_code` from the parent Plaid item's last failed
+            sync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the
+            value on the parent PlaidItem so the Debts / Avalanche UI can
+            decide when to render an inline "Reconnect" affordance on the
+            row. null when sync is healthy or the debt isn't Plaid-linked.
         balanceSource: { type: string, enum: [plaid, manual] }
         aprSource: { type: string, enum: [plaid, manual] }
         minPaymentSource: { type: string, enum: [plaid, manual] }
@@ -1428,6 +1436,12 @@ components:
       required: [id]
       properties:
         id: { type: string }
+        itemId:
+          type: ["string", "null"]
+          description: |
+            Internal Plaid item row id (UUID) of the parent item. Used by
+            the Debts / Avalanche UI to mint an update-mode link token via
+            <PlaidReconnectButton> when the item is in a re-auth state.
         name: { type: ["string", "null"] }
         mask: { type: ["string", "null"] }
         type: { type: ["string", "null"] }

@@ -368,6 +368,12 @@ export const ListDebtsResponseItem = zod.object({
     .describe(
       "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
     ),
+  plaidLastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -375,6 +381,12 @@ export const ListDebtsResponseItem = zod.object({
     .union([
       zod.object({
         id: zod.string(),
+        itemId: zod
+          .string()
+          .nullish()
+          .describe(
+            "Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n",
+          ),
         name: zod.string().nullish(),
         mask: zod.string().nullish(),
         type: zod.string().nullish(),
@@ -435,6 +447,12 @@ export const LinkDebtToPlaidResponse = zod.object({
     .describe(
       "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
     ),
+  plaidLastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -442,6 +460,12 @@ export const LinkDebtToPlaidResponse = zod.object({
     .union([
       zod.object({
         id: zod.string(),
+        itemId: zod
+          .string()
+          .nullish()
+          .describe(
+            "Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n",
+          ),
         name: zod.string().nullish(),
         mask: zod.string().nullish(),
         type: zod.string().nullish(),
@@ -482,6 +506,12 @@ export const UnlinkDebtFromPlaidResponse = zod.object({
     .describe(
       "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
     ),
+  plaidLastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -489,6 +519,12 @@ export const UnlinkDebtFromPlaidResponse = zod.object({
     .union([
       zod.object({
         id: zod.string(),
+        itemId: zod
+          .string()
+          .nullish()
+          .describe(
+            "Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n",
+          ),
         name: zod.string().nullish(),
         mask: zod.string().nullish(),
         type: zod.string().nullish(),
@@ -529,6 +565,12 @@ export const RefreshDebtFromPlaidResponse = zod.object({
     .describe(
       "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
     ),
+  plaidLastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -536,6 +578,12 @@ export const RefreshDebtFromPlaidResponse = zod.object({
     .union([
       zod.object({
         id: zod.string(),
+        itemId: zod
+          .string()
+          .nullish()
+          .describe(
+            "Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n",
+          ),
         name: zod.string().nullish(),
         mask: zod.string().nullish(),
         type: zod.string().nullish(),
@@ -709,6 +757,12 @@ export const UpdateDebtResponse = zod.object({
     .describe(
       "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
     ),
+  plaidLastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -716,6 +770,12 @@ export const UpdateDebtResponse = zod.object({
     .union([
       zod.object({
         id: zod.string(),
+        itemId: zod
+          .string()
+          .nullish()
+          .describe(
+            "Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n",
+          ),
         name: zod.string().nullish(),
         mask: zod.string().nullish(),
         type: zod.string().nullish(),

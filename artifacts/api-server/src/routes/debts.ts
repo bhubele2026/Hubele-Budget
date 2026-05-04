@@ -150,9 +150,21 @@ function shapeDebt(
     // when the debt isn't Plaid-linked.
     plaidLastSyncError:
       d.plaidAccountId && item?.lastSyncError ? item.lastSyncError : null,
+    // (#198) Mirror the parent item's structured `error_code` so the Debts /
+    // Avalanche rows can decide whether to render an inline Reconnect
+    // affordance. The string `lastSyncError` above is for the human-readable
+    // chip; this code is what drives the re-auth UI gate (matches the set
+    // in PLAID_REAUTH_ERROR_CODES on both client and server).
+    plaidLastSyncErrorCode:
+      d.plaidAccountId && item?.lastSyncErrorCode
+        ? item.lastSyncErrorCode
+        : null,
     plaidAccount: acct
       ? {
           id: acct.id,
+          // (#198) Surface parent Plaid item row id so <PlaidReconnectButton>
+          // can mint an update-mode link token without an extra round trip.
+          itemId: acct.itemId,
           name: acct.name,
           mask: acct.mask,
           type: acct.type,
