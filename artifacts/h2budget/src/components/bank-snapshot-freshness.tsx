@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { formatRelativeTime } from "@/lib/utils";
 
 // Tiny "Last auto-updated 12 minutes ago" / "Set manually 3 hours ago"
@@ -15,6 +16,16 @@ export function BankSnapshotFreshness({
   at: string;
   now?: Date;
 }) {
+  // Re-render once a minute so "12 minutes ago" actually ticks up to
+  // "13 minutes ago" while the user has the page open (Task #332). When
+  // the caller pins `now` (unit tests), we skip the interval so the
+  // clock stays deterministic.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (now) return;
+    const id = setInterval(() => setTick((n) => n + 1), 60 * 1000);
+    return () => clearInterval(id);
+  }, [now]);
   const prefix = source === "plaid" ? "Last auto-updated " : "Set manually ";
   return (
     <div data-testid="text-bank-snapshot-freshness">

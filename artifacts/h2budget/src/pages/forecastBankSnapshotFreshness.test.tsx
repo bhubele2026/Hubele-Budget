@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { act, render, screen, cleanup } from "@testing-library/react";
 import React from "react";
 import { BankSnapshotFreshness } from "./forecast";
 import { formatRelativeTime } from "@/lib/utils";
@@ -69,6 +69,38 @@ describe("BankSnapshotFreshness — bank balance freshness label (#285)", () => 
     expect(
       screen.getByTestId("text-bank-snapshot-freshness").textContent,
     ).toBe("Set manually 3 hours ago");
+  });
+
+  it("ticks the label up roughly once a minute while mounted (#332)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-05T12:00:30.000Z"));
+    try {
+      const { unmount } = render(
+        <BankSnapshotFreshness
+          source="plaid"
+          at="2026-05-05T11:48:00.000Z"
+        />,
+      );
+      expect(
+        screen.getByTestId("text-bank-snapshot-freshness").textContent,
+      ).toBe("Last auto-updated 12 minutes ago");
+
+      // advanceTimersByTime also moves the mocked system clock forward,
+      // so 12:00:30 + 60s = 12:01:30 → 13 minutes since 11:48:00.
+      act(() => {
+        vi.advanceTimersByTime(60 * 1000);
+      });
+      expect(
+        screen.getByTestId("text-bank-snapshot-freshness").textContent,
+      ).toBe("Last auto-updated 13 minutes ago");
+
+      // Unmount must clear the interval so we don't keep ticking forever.
+      const before = vi.getTimerCount();
+      unmount();
+      expect(vi.getTimerCount()).toBe(before - 1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("re-renders a fresher 'just now' label after a Plaid refresh updates `at`", () => {
