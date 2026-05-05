@@ -27,8 +27,6 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -61,6 +59,17 @@ export function nonAmexSourceLabel(source: string | null | undefined): string | 
   if (!source) return null;
   const s = source.toLowerCase();
   if (s === "amex" || s === "plaid:amex") return null;
+  if (s.startsWith("plaid:")) return s.slice("plaid:".length);
+  return s;
+}
+
+// (#278) Canonical chip label for any tagged source — including Amex.
+// Used to derive the source-filter chip row above the WK/MO/UN buckets and
+// to test row membership against the user's selected-source set.
+export function dashboardSourceLabel(source: string | null | undefined): string {
+  if (!source) return "unknown";
+  const s = source.toLowerCase();
+  if (s === "amex" || s === "plaid:amex") return "amex";
   if (s.startsWith("plaid:")) return s.slice("plaid:".length);
   return s;
 }
@@ -212,12 +221,12 @@ function WeeklyMonthlySection({
   transactions,
   viewMonth,
   today,
-  includeAllSources = false,
+  selectedSources,
 }: {
   transactions: Transaction[];
   viewMonth: Date;
   today: Date;
-  includeAllSources?: boolean;
+  selectedSources: ReadonlySet<string>;
 }) {
   const SUB_LABEL = useWeeklyBucketLabels();
   const monthKey = useMemo(
@@ -237,7 +246,7 @@ function WeeklyMonthlySection({
     let sum = 0;
     const list: Transaction[] = [];
     for (const tx of transactions) {
-      if (!includeAllSources && tx.source !== "amex") continue;
+      if (!selectedSources.has(dashboardSourceLabel(tx.source))) continue;
       if (!tx.weeklyAllowance) continue;
       if (tx.occurredOn < monthStartISO || tx.occurredOn > monthEndISO) continue;
       const amt = expenseAmount(tx);
@@ -249,7 +258,7 @@ function WeeklyMonthlySection({
     }
     list.sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
     return { totals: t, total: sum, monthTxns: list };
-  }, [transactions, monthStartISO, monthEndISO, includeAllSources]);
+  }, [transactions, monthStartISO, monthEndISO, selectedSources]);
 
   const cap = editor.saved;
   const remaining = Math.max(0, cap - total);
@@ -346,14 +355,14 @@ function MonthlyLikeSection({
   transactions,
   viewMonth,
   today,
-  includeAllSources = false,
+  selectedSources,
 }: {
   title: string;
   bucket: "monthly" | "unplanned";
   transactions: Transaction[];
   viewMonth: Date;
   today: Date;
-  includeAllSources?: boolean;
+  selectedSources: ReadonlySet<string>;
 }) {
   const monthKey = useMemo(
     () => `${viewMonth.getFullYear()}-${String(viewMonth.getMonth() + 1).padStart(2, "0")}`,
@@ -369,7 +378,7 @@ function MonthlyLikeSection({
 
   const { total, recent } = useMemo(() => {
     const filtered = transactions.filter((t) => {
-      if (!includeAllSources && t.source !== "amex") return false;
+      if (!selectedSources.has(dashboardSourceLabel(t.source))) return false;
       const matches = bucket === "monthly" ? t.monthlyAllowance : t.unplannedAllowance;
       if (!matches) return false;
       return t.occurredOn >= monthStartISO && t.occurredOn <= monthEndISO;
@@ -377,7 +386,7 @@ function MonthlyLikeSection({
     const sum = filtered.reduce((s, t) => s + expenseAmount(t), 0);
     const sorted = [...filtered].sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
     return { total: sum, recent: sorted };
-  }, [transactions, bucket, monthStartISO, monthEndISO, includeAllSources]);
+  }, [transactions, bucket, monthStartISO, monthEndISO, selectedSources]);
 
   const cap = editor.saved;
   const overspent = cap > 0 && total > cap;
@@ -1421,6 +1430,86 @@ function MonthlySnapshot({
 }
 
 const INCLUDE_ALL_SOURCES_KEY = "h2budget:dashboardIncludeAllSources";
+const SELECTED_SOURCES_KEY = "h2budget:dashboardSelectedSources";
+
+// (#278) Detected source chips for a given month — derived from transactions
+// that are tagged into any WK/MO/UN bucket and fall in [monthStartISO,
+// monthEndISO]. Returned sorted with "amex" first (the historical default),
+// then alphabetical, so the chip row order is stable across renders.
+export function detectChipSources(
+  transactions: Transaction[],
+  monthStartISO: string,
+  monthEndISO: string,
+): string[] {
+  const set = new Set<string>();
+  for (const t of transactions) {
+    const tagged = t.weeklyAllowance || t.monthlyAllowance || t.unplannedAllowance;
+    if (!tagged) continue;
+    if (t.occurredOn < monthStartISO || t.occurredOn > monthEndISO) continue;
+    set.add(dashboardSourceLabel(t.source));
+  }
+  return Array.from(set).sort((a, b) => {
+    if (a === b) return 0;
+    if (a === "amex") return -1;
+    if (b === "amex") return 1;
+    return a.localeCompare(b);
+  });
+}
+
+type InitialSelection =
+  | { kind: "explicit"; selected: string[] }
+  | { kind: "migrate-all" } // legacy "include all sources" was ON — seed from
+                            // the first non-empty detected list, then persist.
+  | { kind: "default" };    // no prior pref — preserves Amex-only default (#28).
+
+function readInitialSelection(): InitialSelection {
+  if (typeof window === "undefined") return { kind: "default" };
+  try {
+    const raw = window.localStorage.getItem(SELECTED_SOURCES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return {
+          kind: "explicit",
+          selected: parsed.filter((s): s is string => typeof s === "string"),
+        };
+      }
+    }
+    if (window.localStorage.getItem(INCLUDE_ALL_SOURCES_KEY) === "1") {
+      return { kind: "migrate-all" };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { kind: "default" };
+}
+
+function SourceChip({
+  label,
+  active,
+  onToggle,
+}: {
+  label: string;
+  active: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={active}
+      data-testid={`chip-source-${label}`}
+      className={
+        "text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border transition-colors " +
+        (active
+          ? "bg-amber-700 text-white border-amber-700"
+          : "bg-transparent text-muted-foreground border-muted-foreground/40 hover:border-muted-foreground")
+      }
+    >
+      {label}
+    </button>
+  );
+}
 
 export function DashboardMonthlyBuckets({
   today,
@@ -1436,24 +1525,62 @@ export function DashboardMonthlyBuckets({
   );
   const isAtFloor = isViewMonthAtFloor(viewMonth);
   const monthLabel = monthLabelFor(viewMonth);
-  // (#28) Default OFF — preserves existing Amex-only bucket behavior.
-  // When ON, WK/MO/UN buckets include charges from any tagged source
-  // (Chase debit, manual entries, etc.). Persisted in localStorage.
-  const [includeAllSources, setIncludeAllSources] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return window.localStorage.getItem(INCLUDE_ALL_SOURCES_KEY) === "1";
-    } catch {
-      return false;
-    }
+  const monthStartISO = useMemo(() => fmtISO(viewMonth), [viewMonth]);
+  const monthEndISO = useMemo(
+    () => fmtISO(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0)),
+    [viewMonth],
+  );
+
+  // (#278) Per-source filter chips replace the single Amex-only toggle (#28).
+  // `selectedSources` is the explicit set of source labels included in the
+  // WK/MO/UN totals — toggling the last chip off yields a true empty set
+  // (zero totals) rather than silently re-selecting everything.
+  const initialRef = useRef<InitialSelection | null>(null);
+  if (initialRef.current === null) initialRef.current = readInitialSelection();
+  const [selectedSources, setSelectedSources] = useState<ReadonlySet<string>>(() => {
+    const init = initialRef.current!;
+    if (init.kind === "explicit") return new Set(init.selected);
+    if (init.kind === "default") return new Set(["amex"]);
+    // "migrate-all" — seeded once detected sources are known (effect below).
+    return new Set();
   });
-  const onToggleAllSources = (next: boolean) => {
-    setIncludeAllSources(next);
+  // Persist any user-driven change. Skipped while we still owe the legacy
+  // "include all" migration its first seed so we don't write an empty array
+  // before detected sources arrive.
+  const pendingMigrationRef = useRef(initialRef.current.kind === "migrate-all");
+  useEffect(() => {
+    if (pendingMigrationRef.current) return;
     try {
-      window.localStorage.setItem(INCLUDE_ALL_SOURCES_KEY, next ? "1" : "0");
+      window.localStorage.setItem(
+        SELECTED_SOURCES_KEY,
+        JSON.stringify(Array.from(selectedSources)),
+      );
     } catch {
       /* ignore */
     }
+  }, [selectedSources]);
+
+  const detectedSources = useMemo(
+    () => detectChipSources(transactions, monthStartISO, monthEndISO),
+    [transactions, monthStartISO, monthEndISO],
+  );
+
+  // One-shot migration from the legacy single-toggle key (#28): once we've
+  // observed a non-empty detected set, snapshot it as the user's selection.
+  useEffect(() => {
+    if (!pendingMigrationRef.current) return;
+    if (detectedSources.length === 0) return;
+    pendingMigrationRef.current = false;
+    setSelectedSources(new Set(detectedSources));
+  }, [detectedSources]);
+
+  const toggleSource = (label: string) => {
+    setSelectedSources((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
   };
 
   return (
@@ -1462,19 +1589,29 @@ export function DashboardMonthlyBuckets({
         className="flex items-center justify-between gap-2 flex-wrap"
         data-testid="dashboard-month-cycler"
       >
-        <div className="flex items-center gap-2">
-          <Switch
-            id="dashboard-include-all-sources"
-            checked={includeAllSources}
-            onCheckedChange={onToggleAllSources}
-            data-testid="toggle-include-all-sources"
-          />
-          <Label
-            htmlFor="dashboard-include-all-sources"
-            className="text-xs uppercase tracking-widest text-muted-foreground cursor-pointer"
-          >
-            Include other sources
-          </Label>
+        <div
+          className="flex items-center gap-2 flex-wrap"
+          data-testid="dashboard-source-chips"
+        >
+          {detectedSources.length === 0 ? (
+            <span className="text-xs uppercase tracking-widest text-muted-foreground">
+              No tagged sources yet
+            </span>
+          ) : (
+            <>
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground mr-1">
+                Sources
+              </span>
+              {detectedSources.map((label) => (
+                <SourceChip
+                  key={label}
+                  label={label}
+                  active={selectedSources.has(label)}
+                  onToggle={() => toggleSource(label)}
+                />
+              ))}
+            </>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -1509,7 +1646,7 @@ export function DashboardMonthlyBuckets({
         transactions={transactions}
         viewMonth={viewMonth}
         today={today}
-        includeAllSources={includeAllSources}
+        selectedSources={selectedSources}
       />
       <MonthlyLikeSection
         title="Monthly spending"
@@ -1517,7 +1654,7 @@ export function DashboardMonthlyBuckets({
         transactions={transactions}
         viewMonth={viewMonth}
         today={today}
-        includeAllSources={includeAllSources}
+        selectedSources={selectedSources}
       />
       <MonthlyLikeSection
         title="Unplanned spending"
@@ -1525,7 +1662,7 @@ export function DashboardMonthlyBuckets({
         transactions={transactions}
         viewMonth={viewMonth}
         today={today}
-        includeAllSources={includeAllSources}
+        selectedSources={selectedSources}
       />
     </>
   );
