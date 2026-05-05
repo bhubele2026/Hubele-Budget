@@ -80,6 +80,8 @@ import {
   Tag,
   CreditCard,
   Landmark,
+  MoreHorizontal,
+  Check,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -87,6 +89,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
+import { ToastAction } from "@/components/ui/toast";
 
 type SourceKind = "manual" | "auto_bills" | "auto_debts";
 
@@ -414,6 +425,62 @@ export default function BudgetPage() {
     }
   };
 
+  // Task #295 — re-tag a contributing transaction directly from the actuals
+  // breakdown popover. Mirrors the simple "Categorized" + Undo flow used on
+  // the Transactions page: the toast's Undo button PATCHes the row back to
+  // its previous categoryId so a misclick is one tap to revert. Both the
+  // popover total and the row's actual refresh because we invalidate both
+  // the transactions list and the current budget month.
+  const handleReassignTxn = async (
+    txId: string,
+    nextCategoryId: string,
+    prevCategoryId: string | null,
+  ) => {
+    if (nextCategoryId === prevCategoryId) return;
+    try {
+      await updateTx.mutateAsync({ id: txId, data: { categoryId: nextCategoryId } });
+      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      invalidate();
+      const t = toast({
+        title: "Categorized",
+        action: (
+          <ToastAction
+            altText="Undo categorize"
+            data-testid={`action-undo-reassign-${txId}`}
+            onClick={async () => {
+              t.dismiss();
+              try {
+                await updateTx.mutateAsync({
+                  id: txId,
+                  data: { categoryId: prevCategoryId },
+                });
+                queryClient.invalidateQueries({
+                  queryKey: getListTransactionsQueryKey(),
+                });
+                invalidate();
+                toast({ title: "Reverted category" });
+              } catch (err) {
+                toast({
+                  title: "Couldn't undo",
+                  description: (err as Error).message,
+                  variant: "destructive",
+                });
+              }
+            }}
+          >
+            Undo
+          </ToastAction>
+        ),
+      });
+    } catch (e) {
+      toast({
+        title: "Couldn't categorize",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDeleteCategory = (id: string) => {
     if (!confirm("Delete this category?")) return;
     deleteCat.mutate(
@@ -635,6 +702,8 @@ export default function BudgetPage() {
                           categoryRules={rulesByCategory.get(line.categoryId) ?? []}
                           contributingTxns={txnsByCategoryThisMonth.get(line.categoryId) ?? []}
                           onAssignTxn={handleAssignTxn}
+                          onReassignTxn={handleReassignTxn}
+                          allCategories={categories ?? []}
                           assigning={updateTx.isPending}
                         />
                       ))}
@@ -763,6 +832,85 @@ function friendlySourceLabel(source: string | null | undefined): string | null {
   return source;
 }
 
+// Task #295 — small "..." affordance that opens a searchable category
+// picker for a single transaction inside the actuals breakdown popover.
+// Stays mounted inside the parent popover so opening this nested picker
+// does not close the actuals popover. The currently-selected category is
+// passed in so we can short-circuit no-op picks (avoiding a redundant
+// PATCH and an empty Undo toast).
+function ActualsRowReassignPicker({
+  tx,
+  currentCategoryId,
+  allCategories,
+  onReassign,
+  assigning,
+}: {
+  tx: Transaction;
+  currentCategoryId: string;
+  allCategories: { id: string; name: string }[];
+  onReassign: (
+    txId: string,
+    nextCategoryId: string,
+    prevCategoryId: string | null,
+  ) => void;
+  assigning: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground -mr-1"
+          disabled={assigning}
+          onClick={(e) => e.stopPropagation()}
+          title="Re-categorize this transaction"
+          data-testid={`button-reassign-${tx.id}`}
+          aria-label="Re-categorize this transaction"
+        >
+          <MoreHorizontal className="w-3 h-3" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-64 p-0"
+        align="end"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Command>
+          <CommandInput placeholder="Move to category…" />
+          <CommandList>
+            <CommandEmpty>No category</CommandEmpty>
+            <CommandGroup>
+              {allCategories.map((c) => (
+                <CommandItem
+                  key={c.id}
+                  value={c.name}
+                  onSelect={() => {
+                    setOpen(false);
+                    if (c.id !== currentCategoryId) {
+                      onReassign(tx.id, c.id, currentCategoryId);
+                    }
+                  }}
+                  data-testid={`item-reassign-${tx.id}-to-${c.id}`}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-3 w-3",
+                      c.id === currentCategoryId ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  {c.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // Returns true when `description` matches `rule` per its matchType.
 function ruleMatches(description: string, rule: MappingRule): boolean {
   const pattern = rule.pattern.toLowerCase();
@@ -791,6 +939,8 @@ function BudgetLineRow({
   categoryRules,
   contributingTxns,
   onAssignTxn,
+  onReassignTxn,
+  allCategories,
   assigning,
 }: {
   line: BudgetLineWithActual;
@@ -804,6 +954,12 @@ function BudgetLineRow({
   categoryRules: MappingRule[];
   contributingTxns: Transaction[];
   onAssignTxn: (txId: string, categoryId: string) => void;
+  onReassignTxn: (
+    txId: string,
+    nextCategoryId: string,
+    prevCategoryId: string | null,
+  ) => void;
+  allCategories: { id: string; name: string }[];
   assigning: boolean;
 }) {
   const [, navigate] = useLocation();
@@ -1146,6 +1302,20 @@ function BudgetLineRow({
                         >
                           {formatCurrency(amt)}
                         </div>
+                        {/* Task #295 — inline re-categorize affordance.
+                            Opens a category picker so a misfiled charge
+                            (e.g. Costco gas → Auto instead of Groceries)
+                            can be re-pointed without leaving the Budget
+                            page. The handler invalidates both the txn list
+                            and the current month so the popover total and
+                            the row's actual refresh in place. */}
+                        <ActualsRowReassignPicker
+                          tx={t}
+                          currentCategoryId={line.categoryId}
+                          allCategories={allCategories}
+                          onReassign={onReassignTxn}
+                          assigning={assigning}
+                        />
                       </div>
                     );
                   })}
