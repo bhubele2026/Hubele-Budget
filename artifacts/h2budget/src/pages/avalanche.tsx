@@ -1439,9 +1439,29 @@ export default function AvalanchePage() {
                     <tr key={m.monthIndex} className="border-t">
                       <td className="px-3 py-2">{fmtMonth(m.date)}</td>
                       <td className="px-3 py-2 text-muted-foreground">
-                        {m.targets.length > 1
-                          ? m.targets.map((t) => t.name).join(" → ")
-                          : m.activeTargetName ?? "—"}
+                        {m.targets.length === 0 ? (
+                          m.activeTargetName ?? "—"
+                        ) : (
+                          <div className="flex flex-col gap-0.5">
+                            {m.targets.map((t) => (
+                              <span
+                                key={t.id}
+                                className={
+                                  t.killedThisMonth
+                                    ? "text-emerald-600 dark:text-emerald-400 line-through decoration-emerald-600/60 dark:decoration-emerald-400/60"
+                                    : ""
+                                }
+                                title={
+                                  t.killedThisMonth
+                                    ? `Paid off this month (+${fmtMoney(t.extraPaid)} extra)`
+                                    : `+${fmtMoney(t.extraPaid)} extra`
+                                }
+                              >
+                                {t.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {fmtMoney(m.totalInterest)}
