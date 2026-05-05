@@ -463,6 +463,41 @@ export function pickConfidentBankMatches(
   return out;
 }
 
+/** Per-card "obvious match" picker for the one-click Match button.
+ *  A card qualifies iff (a) it has exactly ONE high-confidence suggestion
+ *  (no on-card tie) AND (b) that plan key is not also a high-confidence
+ *  suggestion of any OTHER pending bank card (no contest). Cards with no
+ *  high-confidence suggestion, multiple high-confidence ties, or a plan
+ *  contested by another card are intentionally excluded so the user still
+ *  has to disambiguate via the dropdown / drag flow.
+ *
+ *  Returns a Map keyed by bank txn id → the single chosen suggestion. */
+export function pickOneClickBankMatches(
+  bankSuggestions: Map<string, PlanSuggestion[]>,
+): Map<string, PlanSuggestion> {
+  const planClaimCount = new Map<string, number>();
+  for (const sugs of bankSuggestions.values()) {
+    const seenOnThisCard = new Set<string>();
+    for (const s of sugs) {
+      if (s.confidence !== "high") continue;
+      const key = `${s.plan.itemId}|${s.plan.date}`;
+      if (seenOnThisCard.has(key)) continue;
+      seenOnThisCard.add(key);
+      planClaimCount.set(key, (planClaimCount.get(key) ?? 0) + 1);
+    }
+  }
+  const out = new Map<string, PlanSuggestion>();
+  for (const [txnId, sugs] of bankSuggestions) {
+    const highs = sugs.filter((s) => s.confidence === "high");
+    if (highs.length !== 1) continue;
+    const only = highs[0];
+    const key = `${only.plan.itemId}|${only.plan.date}`;
+    if ((planClaimCount.get(key) ?? 0) > 1) continue;
+    out.set(txnId, only);
+  }
+  return out;
+}
+
 export type BucketEntry = {
   id: string;
   status:

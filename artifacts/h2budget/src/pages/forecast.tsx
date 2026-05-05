@@ -86,6 +86,7 @@ import {
   suggestPlanMatchesForBank,
   rankPlansForBank,
   pickConfidentBankMatches,
+  pickOneClickBankMatches,
   shouldCelebrateClear,
   type LineRow,
   type PlanLine,
@@ -193,6 +194,7 @@ function InboxCardView({
   onMatchPick,
   onHoverChange,
   planRows,
+  oneClickSuggestion,
   isOverlay,
 }: {
   card: InboxCard;
@@ -201,6 +203,10 @@ function InboxCardView({
   onMatchPick: (planRow: PlanLine) => void;
   onHoverChange?: (hovered: boolean) => void;
   planRows: PlanLine[];
+  /** When set, the card has a single high-confidence top suggestion that
+   *  isn't contested by any other inbox card. We render a primary "Match"
+   *  button that confirms it in one click via `onMatchPick`. */
+  oneClickSuggestion?: PlanLine | null;
   isOverlay?: boolean;
 }) {
   const draggable = useDraggable({
@@ -264,6 +270,18 @@ function InboxCardView({
       </span>
       {!isOverlay && (
         <div className="flex items-center gap-1">
+          {oneClickSuggestion && (
+            <Button
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => onMatchPick(oneClickSuggestion)}
+              data-testid={`one-click-match-${card.bank.txn.id}`}
+              title={`Match to ${oneClickSuggestion.label} on ${oneClickSuggestion.date}`}
+              aria-label={`Match to ${oneClickSuggestion.label} on ${oneClickSuggestion.date}`}
+            >
+              Match
+            </Button>
+          )}
           <Select
             onValueChange={(v) => {
               const p = planRows.find(
@@ -952,6 +970,15 @@ export default function ForecastPage() {
   // the "Match all confident" bulk action label & enabled state.
   const confidentMatches = useMemo(
     () => pickConfidentBankMatches(bankSuggestions),
+    [bankSuggestions],
+  );
+
+  // (#28) Per-card "one-click match" picks: a card qualifies only when it
+  // has exactly one high-confidence suggestion AND that plan isn't also
+  // high-confidence for some other card. Lets the obvious cards confirm
+  // with a single button while keeping ties/contests on the dropdown.
+  const oneClickByTxnId = useMemo(
+    () => pickOneClickBankMatches(bankSuggestions),
     [bankSuggestions],
   );
 
@@ -2119,6 +2146,10 @@ export default function ForecastPage() {
                                     r.status === "pending_plan" ||
                                     r.status === "future",
                                 )
+                              }
+                              oneClickSuggestion={
+                                oneClickByTxnId.get(card.bank.txn.id)?.plan ??
+                                null
                               }
                             />
                             <SuggestionStrip
