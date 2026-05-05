@@ -1754,9 +1754,21 @@ export default function ForecastPage() {
             {cashProjectionLoading && dailySeries.length === 0 ? (
               <Skeleton className="h-full w-full" />
             ) : dailySeries.length === 0 || proj?.status === "no_data" ? (
-              <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground text-center px-4">
-                All clear — set a bank snapshot or add planned items to
-                draw your projected balance.
+              <div
+                className="h-full w-full flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground text-center px-4"
+                data-testid="empty-projected-balance"
+              >
+                <p>
+                  All clear — set a bank snapshot or add planned items to
+                  draw your projected balance.
+                </p>
+                <Button
+                  size="sm"
+                  onClick={openSnapshot}
+                  data-testid="button-empty-set-bank-snapshot"
+                >
+                  Set bank snapshot
+                </Button>
               </div>
             ) : (
             <ResponsiveContainer width="100%" height="100%">
