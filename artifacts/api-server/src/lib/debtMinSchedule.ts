@@ -15,10 +15,27 @@ export type DebtMinRow = {
   locked: true;
   linkedRecurringId: string | null;
   dueDay: number | null;
+  endsThisCycle: boolean;
 };
 
 function activeDebt(d: DebtRow): boolean {
-  return (d.status ?? "active") === "active" && Number(d.minPayment) > 0;
+  return (
+    (d.status ?? "active") === "active" &&
+    Number(d.minPayment) > 0 &&
+    Number(d.balance) > 0.005
+  );
+}
+
+// Paid off this calendar month: balance ~0, positive minPayment, updatedAt
+// within current month. Status-agnostic so both auto-archived and manually
+// zeroed debts surface the one-cycle "stops at payoff" row.
+function justPaidOffDebt(d: DebtRow, today: Date): boolean {
+  if (Number(d.balance) > 0.005) return false;
+  if (Number(d.minPayment) <= 0) return false;
+  const updated = d.updatedAt ? new Date(d.updatedAt) : null;
+  if (!updated || Number.isNaN(updated.getTime())) return false;
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  return updated >= monthStart;
 }
 
 function activeRecurring(r: RecurringRow): boolean {
@@ -75,27 +92,37 @@ export function buildDebtMinSchedule(
   const rows: DebtMinRow[] = [];
   const suppressed = new Set<string>();
   for (const d of debts) {
-    if (!activeDebt(d)) continue;
+    const isActive = activeDebt(d);
+    const justPaidOff = !isActive && justPaidOffDebt(d, today);
+    if (!isActive && !justPaidOff) continue;
     const linked = recurringByDebt.get(d.id) ?? null;
     let nextOccurrence: string | null = null;
-    if (linked) {
-      const dt = nextDueFromRecurring(linked, today);
-      if (dt) nextOccurrence = fmtISO(dt);
-    }
-    if (!nextOccurrence && d.dueDay && d.dueDay >= 1 && d.dueDay <= 31) {
-      nextOccurrence = fmtISO(nextDueFromDay(d.dueDay, today));
+    if (isActive) {
+      if (linked) {
+        const dt = nextDueFromRecurring(linked, today);
+        if (dt) nextOccurrence = fmtISO(dt);
+      }
+      if (!nextOccurrence && d.dueDay && d.dueDay >= 1 && d.dueDay <= 31) {
+        nextOccurrence = fmtISO(nextDueFromDay(d.dueDay, today));
+      }
     }
     const minStr = Number(d.minPayment).toFixed(2);
+    // amount=0 for paid-off rows so they don't inflate totals; minPayment
+    // preserved so the UI can show the historical amount struck through.
+    const amount = justPaidOff
+      ? "0.00"
+      : (-Math.abs(Number(d.minPayment))).toFixed(2);
     rows.push({
       debtId: d.id,
       debtName: d.name,
-      amount: (-Math.abs(Number(d.minPayment))).toFixed(2),
+      amount,
       minPayment: minStr,
       nextOccurrence,
       source: d.minPaymentSource === "plaid" ? "plaid" : "manual",
       locked: true,
       linkedRecurringId: linked?.id ?? null,
       dueDay: d.dueDay ?? null,
+      endsThisCycle: justPaidOff,
     });
     if (linked) suppressed.add(linked.id);
   }

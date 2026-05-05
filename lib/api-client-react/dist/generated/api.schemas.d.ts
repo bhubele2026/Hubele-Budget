@@ -891,6 +891,7 @@ export interface BillsDebtMinRow {
     linkedRecurringId?: string | null;
     /** @nullable */
     dueDay?: number | null;
+    endsThisCycle?: boolean;
 }
 export interface BillsSummary {
     income: BillsSummaryRow[];

@@ -2121,6 +2121,7 @@ components:
         locked: { type: boolean }
         linkedRecurringId: { type: ["string", "null"] }
         dueDay: { type: ["integer", "null"] }
+        endsThisCycle: { type: boolean }
     BillsSummary:
       type: object
       required: [income, bills, debtMins, monthly]

@@ -5252,6 +5252,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         locked: zod.ZodBoolean;
         linkedRecurringId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         dueDay: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        endsThisCycle: zod.ZodOptional<zod.ZodBoolean>;
     }, "strip", zod.ZodTypeAny, {
         amount: string;
         source: "plaid" | "manual";
@@ -5262,6 +5263,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         dueDay?: number | null | undefined;
         nextOccurrence?: string | null | undefined;
         linkedRecurringId?: string | null | undefined;
+        endsThisCycle?: boolean | undefined;
     }, {
         amount: string;
         source: "plaid" | "manual";
@@ -5272,6 +5274,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         dueDay?: number | null | undefined;
         nextOccurrence?: string | null | undefined;
         linkedRecurringId?: string | null | undefined;
+        endsThisCycle?: boolean | undefined;
     }>, "many">;
     monthly: zod.ZodObject<{
         income: zod.ZodString;
@@ -5344,6 +5347,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         dueDay?: number | null | undefined;
         nextOccurrence?: string | null | undefined;
         linkedRecurringId?: string | null | undefined;
+        endsThisCycle?: boolean | undefined;
     }[];
     monthly: {
         active: number;
@@ -5398,6 +5402,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         dueDay?: number | null | undefined;
         nextOccurrence?: string | null | undefined;
         linkedRecurringId?: string | null | undefined;
+        endsThisCycle?: boolean | undefined;
     }[];
     monthly: {
         active: number;

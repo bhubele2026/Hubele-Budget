@@ -21,7 +21,7 @@ import {
 } from "@workspace/api-client-react";
 import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
 import { computePayoffsByDebt, filterDebtMinRowsByPayoff } from "@/lib/forecastDebts";
-import { Lock } from "lucide-react";
+import { Lock, PartyPopper } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -890,6 +890,39 @@ function DebtMinimumsCard({
             const pill = formatDatePill(r.nextOccurrence ?? null);
             const min = Number(r.minPayment) || 0;
             const amt = Math.abs(Number(r.amount) || 0);
+            const endsThisCycle = r.endsThisCycle === true;
+            if (endsThisCycle) {
+              return (
+                <li
+                  key={r.debtId}
+                  className="px-5 py-3 flex items-center gap-4 opacity-70 hover:opacity-100 hover:bg-muted/40 cursor-pointer transition-all"
+                  onClick={() => onOpen(r.debtId)}
+                  data-testid={`row-debt-min-paid-${r.debtId}`}
+                >
+                  <div className="w-12 shrink-0 text-center">
+                    <PartyPopper
+                      className="w-5 h-5 mx-auto text-emerald-500"
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate text-muted-foreground line-through">
+                      {r.debtName} minimum
+                    </div>
+                    <div className="text-xs text-emerald-600 dark:text-emerald-400 truncate font-medium">
+                      Stops at payoff · was {formatCurrency(min)}/mo
+                    </div>
+                  </div>
+                  <div className="text-sm font-semibold tabular-nums text-muted-foreground line-through">
+                    −{formatCurrency(min)}
+                  </div>
+                  <Lock
+                    className="w-4 h-4 text-muted-foreground"
+                    aria-label="Locked — managed by Debts"
+                  />
+                </li>
+              );
+            }
             return (
               <li
                 key={r.debtId}

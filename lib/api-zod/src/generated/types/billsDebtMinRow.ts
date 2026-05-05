@@ -20,4 +20,5 @@ export interface BillsDebtMinRow {
   linkedRecurringId?: string | null;
   /** @nullable */
   dueDay?: number | null;
+  endsThisCycle?: boolean;
 }

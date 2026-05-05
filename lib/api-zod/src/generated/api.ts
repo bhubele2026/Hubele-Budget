@@ -2139,6 +2139,7 @@ export const GetBillsSummaryResponse = zod.object({
       locked: zod.boolean(),
       linkedRecurringId: zod.string().nullish(),
       dueDay: zod.number().nullish(),
+      endsThisCycle: zod.boolean().optional(),
     }),
   ),
   monthly: zod.object({

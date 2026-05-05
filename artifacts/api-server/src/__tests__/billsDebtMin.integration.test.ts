@@ -70,6 +70,7 @@ async function getBills(): Promise<{
     locked: boolean;
     linkedRecurringId: string | null;
     nextOccurrence: string | null;
+    endsThisCycle?: boolean;
   }>;
   monthly: { bills: string; debtMin: string; totalOutflow: string; net: string };
 }> {
@@ -195,6 +196,104 @@ describe("bills/summary debt minimums", () => {
     );
     expect(sum.toFixed(2)).toBe(summary.monthly.debtMin);
     expect(summary.monthly.debtMin).toBe("76.49");
+  });
+
+  it("surfaces a one-cycle 'stops at payoff' row for debts archived this calendar month", async () => {
+    const d = await insertDebt({
+      name: "Just Paid Off",
+      minPayment: "150",
+      dueDay: 7,
+      status: "archived",
+      balance: "0",
+    });
+    // updatedAt defaults to now via the schema, so the archived debt qualifies
+    const summary = await getBills();
+    expect(summary.debtMins).toHaveLength(1);
+    const row = summary.debtMins[0];
+    expect(row.debtId).toBe(d.id);
+    expect(row.endsThisCycle).toBe(true);
+    expect(row.amount).toBe("0.00"); // doesn't inflate the total
+    expect(row.minPayment).toBe("150.00"); // historical amount preserved for UI
+    expect(row.nextOccurrence).toBeNull();
+    expect(row.locked).toBe(true);
+    // Total stays at $0 — the bill is gone, no double counting
+    expect(summary.monthly.debtMin).toBe("0.00");
+  });
+
+  it("does NOT surface a 'stops at payoff' row for debts archived in a previous calendar month", async () => {
+    const lastMonth = new Date();
+    lastMonth.setMonth(lastMonth.getMonth() - 2);
+    const d = await insertDebt({
+      name: "Old Payoff",
+      minPayment: "100",
+      status: "archived",
+      balance: "0",
+    });
+    // Force updatedAt to two months ago — should be filtered out
+    await db
+      .update(debtsTable)
+      .set({ updatedAt: lastMonth })
+      .where(eq(debtsTable.id, d.id));
+    const summary = await getBills();
+    expect(summary.debtMins).toHaveLength(0);
+  });
+
+  it("does NOT surface 'stops at payoff' for archived debt with non-zero balance", async () => {
+    await insertDebt({
+      name: "Archived With Balance",
+      minPayment: "60",
+      status: "archived",
+      balance: "500",
+    });
+    const summary = await getBills();
+    expect(summary.debtMins).toHaveLength(0);
+  });
+
+  it("flips an ACTIVE debt to 'stops at payoff' the moment its balance hits zero", async () => {
+    // Plaid sync (or a manual balance edit) zeroes out the balance but the
+    // debt is still status='active'. The Bills page must immediately stop
+    // showing this as a normal locked row and instead show the celebratory
+    // "stops at payoff" treatment so the bill doesn't silently disappear
+    // from the totals.
+    const d = await insertDebt({
+      name: "Plaid-zeroed CC",
+      minPayment: "85",
+      dueDay: 12,
+      status: "active",
+      balance: "0",
+    });
+    const summary = await getBills();
+    expect(summary.debtMins).toHaveLength(1);
+    const row = summary.debtMins[0];
+    expect(row.debtId).toBe(d.id);
+    expect(row.endsThisCycle).toBe(true);
+    expect(row.amount).toBe("0.00");
+    expect(row.minPayment).toBe("85.00");
+    expect(summary.monthly.debtMin).toBe("0.00");
+  });
+
+  it("'stops at payoff' rows still suppress their linked recurring item (dedup)", async () => {
+    const d = await insertDebt({
+      name: "Final Discover",
+      minPayment: "60",
+      status: "archived",
+      balance: "0",
+    });
+    await insertRecurring({
+      name: "Final Discover",
+      amount: "60",
+      debtId: d.id,
+      dayOfMonth: 22,
+    });
+    const summary = await getBills();
+    // The linked recurring item must NOT appear in regular bills
+    expect(summary.bills).toHaveLength(0);
+    expect(summary.debtMins).toHaveLength(1);
+    expect(summary.debtMins[0].endsThisCycle).toBe(true);
+    expect(summary.debtMins[0].linkedRecurringId).not.toBeNull();
+    // Both totals are zero — the bill is gone everywhere
+    expect(summary.monthly.bills).toBe("0.00");
+    expect(summary.monthly.debtMin).toBe("0.00");
   });
 
   it("forecast events include synthetic debt-min events for unlinked debts and skip them when linked", async () => {
