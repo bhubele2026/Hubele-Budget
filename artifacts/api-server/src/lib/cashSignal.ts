@@ -185,6 +185,14 @@ export type CashSignal = {
   projectedExpenses?: string;
   acceptedImpact?: string;
   daily?: Array<{ date: string; balance: string }>;
+  /**
+   * Per-day expense events (planned recurring + synthesized debt-min) that
+   * land inside the projection window, with their bill name and signed
+   * amount. The forecast chart uses this to mark big-bill days. Income
+   * events and matched-out items are excluded — only entries that actually
+   * dip the balance show up.
+   */
+  events?: Array<{ date: string; label: string; amount: string }>;
 };
 
 function r2(n: number): string {
@@ -372,6 +380,11 @@ export async function computeCashSignal(
 
   type Item = { date: string; amount: number; matched: boolean };
   const items: Item[] = [];
+  // Parallel list of labeled expense events surfaced to the chart. We only
+  // include entries that ACTUALLY drag the balance down (negative amount,
+  // post-anchor, not already matched out by a real txn) so the markers line
+  // up with dips on the projected line.
+  const expenseEvents: Array<{ date: string; label: string; amount: number }> = [];
   for (const ev of events) {
     const origKey = `${ev.itemId}|${ev.date}`;
     const effectiveDate = rescheduledByKey.get(origKey) ?? ev.date;
@@ -379,6 +392,13 @@ export async function computeCashSignal(
     const matched = matchedPlanKeys.has(origKey);
     if (matched) continue;
     items.push({ date: effectiveDate, amount: ev.amount, matched: false });
+    if (ev.amount < 0) {
+      expenseEvents.push({
+        date: effectiveDate,
+        label: ev.label,
+        amount: ev.amount,
+      });
+    }
   }
   for (const t of txns) {
     if (t.occurredOn <= anchorISO) continue;
@@ -459,5 +479,9 @@ export async function computeCashSignal(
     projectedExpenses: r2(projectedExpenses),
     acceptedImpact: r2(acceptedImpact),
     daily,
+    events: expenseEvents
+      .filter((e) => e.date >= fromISO && e.date <= toISO)
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+      .map((e) => ({ date: e.date, label: e.label, amount: r2(e.amount) })),
   };
 }

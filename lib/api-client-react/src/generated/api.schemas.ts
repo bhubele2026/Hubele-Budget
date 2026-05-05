@@ -1632,6 +1632,12 @@ export type CashSignalDailyItem = {
   balance: string;
 };
 
+export type CashSignalEventsItem = {
+  date: string;
+  label: string;
+  amount: string;
+};
+
 export interface CashSignal {
   bankToday: string;
   lowestProjected: string;
@@ -1655,6 +1661,7 @@ export interface CashSignal {
   projectedExpenses?: string;
   acceptedImpact?: string;
   daily?: CashSignalDailyItem[];
+  events?: CashSignalEventsItem[];
 }
 
 export interface MonthSnapshot {

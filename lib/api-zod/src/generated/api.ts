@@ -1717,6 +1717,15 @@ export const GetForecastResponse = zod.object({
             }),
           )
           .optional(),
+        events: zod
+          .array(
+            zod.object({
+              date: zod.string(),
+              label: zod.string(),
+              amount: zod.string(),
+            }),
+          )
+          .optional(),
       }),
       zod.null(),
     ])
@@ -1842,6 +1851,15 @@ export const GetForecastCashSignalResponse = zod.object({
       zod.object({
         date: zod.string(),
         balance: zod.string(),
+      }),
+    )
+    .optional(),
+  events: zod
+    .array(
+      zod.object({
+        date: zod.string(),
+        label: zod.string(),
+        amount: zod.string(),
       }),
     )
     .optional(),

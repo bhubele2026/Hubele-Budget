@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CashSignalDailyItem } from "./cashSignalDailyItem";
+import type { CashSignalEventsItem } from "./cashSignalEventsItem";
 import type { CashSignalStatus } from "./cashSignalStatus";
 export interface CashSignal {
     bankToday: string;
@@ -30,5 +31,6 @@ export interface CashSignal {
     projectedExpenses?: string;
     acceptedImpact?: string;
     daily?: CashSignalDailyItem[];
+    events?: CashSignalEventsItem[];
 }
 //# sourceMappingURL=cashSignal.d.ts.map

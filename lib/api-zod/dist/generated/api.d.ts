@@ -3894,6 +3894,19 @@ export declare const GetForecastResponse: zod.ZodObject<{
             date: string;
             balance: string;
         }>, "many">>;
+        events: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+            date: zod.ZodString;
+            label: zod.ZodString;
+            amount: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            amount: string;
+            label: string;
+        }, {
+            date: string;
+            amount: string;
+            label: string;
+        }>, "many">>;
     }, "strip", zod.ZodTypeAny, {
         status: "ready" | "tight" | "not_yet" | "no_data";
         cashBuffer: string;
@@ -3903,6 +3916,11 @@ export declare const GetForecastResponse: zod.ZodObject<{
         maxSafeExtra: string;
         fromDate?: string | undefined;
         toDate?: string | undefined;
+        events?: {
+            date: string;
+            amount: string;
+            label: string;
+        }[] | undefined;
         startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
@@ -3925,6 +3943,11 @@ export declare const GetForecastResponse: zod.ZodObject<{
         maxSafeExtra: string;
         fromDate?: string | undefined;
         toDate?: string | undefined;
+        events?: {
+            date: string;
+            amount: string;
+            label: string;
+        }[] | undefined;
         startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
@@ -4067,6 +4090,11 @@ export declare const GetForecastResponse: zod.ZodObject<{
         maxSafeExtra: string;
         fromDate?: string | undefined;
         toDate?: string | undefined;
+        events?: {
+            date: string;
+            amount: string;
+            label: string;
+        }[] | undefined;
         startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
@@ -4169,6 +4197,11 @@ export declare const GetForecastResponse: zod.ZodObject<{
         maxSafeExtra: string;
         fromDate?: string | undefined;
         toDate?: string | undefined;
+        events?: {
+            date: string;
+            amount: string;
+            label: string;
+        }[] | undefined;
         startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
         snapshotSource?: string | null | undefined;
@@ -4385,6 +4418,19 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         date: string;
         balance: string;
     }>, "many">>;
+    events: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        date: zod.ZodString;
+        label: zod.ZodString;
+        amount: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        amount: string;
+        label: string;
+    }, {
+        date: string;
+        amount: string;
+        label: string;
+    }>, "many">>;
 }, "strip", zod.ZodTypeAny, {
     status: "ready" | "tight" | "not_yet" | "no_data";
     cashBuffer: string;
@@ -4394,6 +4440,11 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     maxSafeExtra: string;
     fromDate?: string | undefined;
     toDate?: string | undefined;
+    events?: {
+        date: string;
+        amount: string;
+        label: string;
+    }[] | undefined;
     startingBalance?: string | undefined;
     snapshotAt?: string | null | undefined;
     snapshotSource?: string | null | undefined;
@@ -4416,6 +4467,11 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
     maxSafeExtra: string;
     fromDate?: string | undefined;
     toDate?: string | undefined;
+    events?: {
+        date: string;
+        amount: string;
+        label: string;
+    }[] | undefined;
     startingBalance?: string | undefined;
     snapshotAt?: string | null | undefined;
     snapshotSource?: string | null | undefined;

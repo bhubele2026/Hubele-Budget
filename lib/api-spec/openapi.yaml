@@ -2756,6 +2756,15 @@ components:
             properties:
               date: { type: string }
               balance: { type: string }
+        events:
+          type: array
+          items:
+            type: object
+            required: [date, label, amount]
+            properties:
+              date: { type: string }
+              label: { type: string }
+              amount: { type: string }
     ForecastBundle:
       type: object
       required: [events, transactions, resolutions, closedMonths, settings, fromDate, toDate, plaidCheckingAccounts]

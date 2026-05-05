@@ -1557,6 +1557,45 @@ export default function ForecastPage() {
     return { x: match.rawDate, y: lowestNum, rawDate: match.rawDate };
   })();
 
+  // Big-bill markers: group expense events by day, then call out the days
+  // whose total outflow is large enough to actually move the chart — at
+  // least half the cash buffer (or $100 when no buffer is set), capped to
+  // the top 5 by amount so a long horizon doesn't get peppered with dots.
+  const bigBillMarkers = (() => {
+    const evs = proj?.events ?? [];
+    if (evs.length === 0 || dailySeries.length === 0) return [];
+    const dailyByDate = new Map(dailySeries.map((d) => [d.rawDate, d.balance]));
+    const byDate = new Map<
+      string,
+      { total: number; bills: Array<{ label: string; amount: number }> }
+    >();
+    for (const e of evs) {
+      const amt = Number(e.amount);
+      if (!Number.isFinite(amt) || amt >= 0) continue;
+      if (!dailyByDate.has(e.date)) continue;
+      const slot = byDate.get(e.date) ?? { total: 0, bills: [] };
+      slot.total += amt;
+      slot.bills.push({ label: e.label, amount: amt });
+      byDate.set(e.date, slot);
+    }
+    const bufferThreshold =
+      Number.isFinite(cashBufferNum) && cashBufferNum > 0
+        ? cashBufferNum * 0.5
+        : 100;
+    const candidates = Array.from(byDate.entries())
+      .map(([date, slot]) => ({
+        date,
+        total: slot.total,
+        bills: slot.bills.sort((a, b) => a.amount - b.amount),
+        balance: dailyByDate.get(date) ?? 0,
+      }))
+      .filter((c) => Math.abs(c.total) >= bufferThreshold)
+      .sort((a, b) => a.total - b.total)
+      .slice(0, 5);
+    return candidates;
+  })();
+  const bigBillByDate = new Map(bigBillMarkers.map((m) => [m.date, m]));
+
   return (
     <div className="space-y-6">
       <PlaidReauthBanner />
@@ -1844,7 +1883,28 @@ export default function ForecastPage() {
                       | undefined;
                     return p?.rawDate ? formatDate(p.rawDate) : String(_label);
                   }}
-                  formatter={(v: number) => [formatCurrency(v), "Balance"]}
+                  formatter={(v: number, _name, entry) => {
+                    const p = entry?.payload as
+                      | { rawDate?: string }
+                      | undefined;
+                    const marker = p?.rawDate
+                      ? bigBillByDate.get(p.rawDate)
+                      : undefined;
+                    if (marker) {
+                      const lines = marker.bills
+                        .map(
+                          (b) =>
+                            `${b.label}: ${formatCurrency(b.amount)}`,
+                        )
+                        .join("\n");
+                      return [
+                        `${formatCurrency(v)}\nBig bills today:\n${lines}`,
+                        "Balance",
+                      ];
+                    }
+                    return [formatCurrency(v), "Balance"];
+                  }}
+                  itemStyle={{ whiteSpace: "pre-line" }}
                 />
                 <Area
                   type="monotone"
@@ -1872,6 +1932,20 @@ export default function ForecastPage() {
                     />
                   </ReferenceLine>
                 )}
+                {bigBillMarkers.map((m) => (
+                  <ReferenceDot
+                    key={`big-bill-${m.date}`}
+                    x={m.date}
+                    y={m.balance}
+                    r={4}
+                    fill="hsl(var(--chart-1))"
+                    stroke="hsl(var(--background))"
+                    strokeWidth={1.5}
+                    ifOverflow="extendDomain"
+                    isFront
+                    data-testid={`big-bill-marker-${m.date}`}
+                  />
+                ))}
                 {lowestPoint && (
                   <ReferenceDot
                     x={lowestPoint.x}

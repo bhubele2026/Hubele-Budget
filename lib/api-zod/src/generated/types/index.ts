@@ -48,6 +48,7 @@ export * from "./bulkSetForecastFlagInput";
 export * from "./bulkSetForecastFlagResult";
 export * from "./cashSignal";
 export * from "./cashSignalDailyItem";
+export * from "./cashSignalEventsItem";
 export * from "./cashSignalStatus";
 export * from "./category";
 export * from "./categoryInput";
