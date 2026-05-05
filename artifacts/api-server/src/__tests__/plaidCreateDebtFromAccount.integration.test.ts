@@ -124,9 +124,9 @@ async function insertCreditAccount(opts: {
       subtype: opts.subtype === undefined ? "credit card" : opts.subtype,
       liabilityKind:
         opts.liabilityKind === undefined ? "credit" : opts.liabilityKind,
-      liabilityBalance: opts.balance ?? "1234.56",
-      liabilityApr: opts.apr ?? "0.2199",
-      liabilityMinPayment: opts.minPayment ?? "35.00",
+      liabilityBalance: "balance" in opts ? opts.balance : "1234.56",
+      liabilityApr: "apr" in opts ? opts.apr : "0.2199",
+      liabilityMinPayment: "minPayment" in opts ? opts.minPayment : "35.00",
       liabilityDueDay: opts.dueDay ?? null,
       liabilityStatementDay: opts.statementDay ?? null,
       liabilityLastFetchedAt: new Date(),
@@ -250,6 +250,87 @@ describe("POST /plaid/liability-accounts/:plaidAccountId/create-debt", () => {
       .from(debtsTable)
       .where(eq(debtsTable.userId, TEST_USER));
     expect(all).toHaveLength(1);
+  });
+
+  it("marks all *_source columns as plaid even when suggested apr/minPayment are null (so future refresh adopts values)", async () => {
+    // Plaid sometimes returns the account with no liabilities payload on
+    // the first sync — APR / min payment land null in our cache. The
+    // resulting debt must still be marked source=plaid so the next
+    // refresh that *does* carry values can update the row instead of
+    // being ignored as "user-entered manual".
+    const { plaidAccountId } = await insertCreditAccount({
+      apr: null,
+      minPayment: null,
+    });
+    const res = await fetch(
+      `${baseUrl}/plaid/liability-accounts/${plaidAccountId}/create-debt`,
+      { method: "POST" },
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      action: string;
+      debt: {
+        id: string;
+        apr: string | null;
+        minPayment: string | null;
+        balanceSource: string;
+        aprSource: string;
+        minPaymentSource: string;
+      };
+    };
+    expect(body.action).toBe("created");
+    // Schema NOT NULL defaults kick in (apr default "0", minPayment "0")
+    // — what matters is the source columns are still flipped to "plaid".
+    expect(body.debt.apr).toBe("0.0000");
+    expect(body.debt.minPayment).toBe("0.00");
+    expect(body.debt.balanceSource).toBe("plaid");
+    expect(body.debt.aprSource).toBe("plaid");
+    expect(body.debt.minPaymentSource).toBe("plaid");
+  });
+
+  it("flips a linked-existing debt's *_source columns to plaid even when suggested values are null", async () => {
+    const { plaidAccountId } = await insertCreditAccount({
+      institutionName: "Discover",
+      mask: "9999",
+      apr: null,
+      minPayment: null,
+    });
+    await db.insert(debtsTable).values({
+      userId: TEST_USER,
+      name: "Discover ••9999",
+      balance: "500",
+      apr: "0.15",
+      minPayment: "25",
+      payment: "25",
+      type: "credit_card",
+      balanceSource: "manual",
+      aprSource: "manual",
+      minPaymentSource: "manual",
+    });
+
+    const res = await fetch(
+      `${baseUrl}/plaid/liability-accounts/${plaidAccountId}/create-debt`,
+      { method: "POST" },
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      action: string;
+      debt: {
+        apr: string | null;
+        minPayment: string | null;
+        balanceSource: string;
+        aprSource: string;
+        minPaymentSource: string;
+      };
+    };
+    expect(body.action).toBe("linked-existing");
+    // Pre-existing manual values are preserved (we don't overwrite with null)
+    expect(body.debt.apr).toBe("0.1500");
+    expect(body.debt.minPayment).toBe("25.00");
+    // ...but sources are flipped so the next Plaid refresh wins.
+    expect(body.debt.balanceSource).toBe("plaid");
+    expect(body.debt.aprSource).toBe("plaid");
+    expect(body.debt.minPaymentSource).toBe("plaid");
   });
 
   it("returns 409 when the plaid account is already linked to a debt", async () => {

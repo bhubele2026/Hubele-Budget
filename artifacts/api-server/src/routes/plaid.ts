@@ -201,14 +201,23 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
     );
   if (existing.length > 0) {
     const target = existing[0];
+    // (#44) Adopting an existing debt by linking it to this Plaid account
+    // means future Plaid syncs should drive balance/APR/min payment going
+    // forward. Always flip the *_source columns to "plaid" — even when
+    // the cached suggestion is currently null — so the next refresh that
+    // does carry a value gets adopted automatically. Without this, an
+    // initial-empty Plaid response would freeze the row at source=manual
+    // and the eventual refresh would be ignored.
     const patch: Partial<typeof debtsTable.$inferInsert> = {
       plaidAccountId: account.id,
       plaidLastSyncedAt: now,
       updatedAt: now,
+      balanceSource: "plaid",
+      aprSource: "plaid",
+      minPaymentSource: "plaid",
     };
     if (suggested.balance != null) {
       patch.balance = suggested.balance;
-      patch.balanceSource = "plaid";
       patch.lastBalanceUpdate = now;
       if (target.originalBalance == null) {
         patch.originalBalance = suggested.balance;
@@ -216,11 +225,9 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
     }
     if (suggested.apr != null) {
       patch.apr = suggested.apr;
-      patch.aprSource = "plaid";
     }
     if (suggested.minPayment != null) {
       patch.minPayment = suggested.minPayment;
-      patch.minPaymentSource = "plaid";
     }
     // (#44) Only fill due/statement day when the existing debt row didn't
     // already have a value — typed-over fields win over the Plaid hint.
@@ -246,6 +253,12 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
     }
   }
 
+  // (#44) Brand-new Plaid-sourced debt — always mark all three *_source
+  // columns as "plaid" so subsequent refreshes (which gate updates by
+  // source) keep the row in sync. We do this even when a value is
+  // currently null in the cached suggestion, so the first refresh that
+  // *does* carry a value adopts it automatically instead of being
+  // ignored as "user-entered manual".
   const values: typeof debtsTable.$inferInsert = {
     userId,
     name: finalName,
@@ -253,20 +266,20 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
     status: "active",
     plaidAccountId: account.id,
     plaidLastSyncedAt: now,
+    balanceSource: "plaid",
+    aprSource: "plaid",
+    minPaymentSource: "plaid",
   };
   if (suggested.balance != null) {
     values.balance = suggested.balance;
-    values.balanceSource = "plaid";
     values.originalBalance = suggested.balance;
     values.lastBalanceUpdate = now;
   }
   if (suggested.apr != null) {
     values.apr = suggested.apr;
-    values.aprSource = "plaid";
   }
   if (suggested.minPayment != null) {
     values.minPayment = suggested.minPayment;
-    values.minPaymentSource = "plaid";
   }
   if (suggested.dueDay != null) values.dueDay = suggested.dueDay;
   if (suggested.statementDay != null) values.statementDay = suggested.statementDay;
