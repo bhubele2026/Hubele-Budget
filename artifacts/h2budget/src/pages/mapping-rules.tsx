@@ -1409,13 +1409,56 @@ export default function MappingRulesPage() {
     reorderRules.mutate({ data: { orderedIds } });
   };
 
+  // Task #282 — reorder within a category card without disturbing the
+  // global ordering of any other card's rules. We capture the global
+  // slot indices currently occupied by same-card rules, arrayMove the
+  // same-card *id list* (not the global list), then write the new
+  // arrangement back into those captured slots. Rules from other cards
+  // keep both their global position AND their relative priority — only
+  // the two same-card rules swap (or, for drag, shift) priority slots.
+  const reorderWithinCard = (
+    activeId: string,
+    overId: string,
+  ): string[] | null => {
+    const activeRule = sorted.find((r) => r.id === activeId);
+    const overRule = sorted.find((r) => r.id === overId);
+    if (!activeRule || !overRule) return null;
+    const activeCat = activeRule.categoryId ?? null;
+    const overCat = overRule.categoryId ?? null;
+    if (activeCat !== overCat) return null;
+    const sameCardIds: string[] = [];
+    const slots: number[] = [];
+    sorted.forEach((r, i) => {
+      if ((r.categoryId ?? null) === activeCat) {
+        sameCardIds.push(r.id);
+        slots.push(i);
+      }
+    });
+    const fromIdx = sameCardIds.indexOf(activeId);
+    const toIdx = sameCardIds.indexOf(overId);
+    if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return null;
+    const reorderedIds = arrayMove(sameCardIds, fromIdx, toIdx);
+    const next = sorted.map((r) => r.id);
+    slots.forEach((slotIdx, k) => {
+      next[slotIdx] = reorderedIds[k];
+    });
+    return next;
+  };
+
   const moveRule = (id: string, direction: -1 | 1) => {
-    const idx = sorted.findIndex((r) => r.id === id);
-    if (idx < 0) return;
-    const nextIdx = idx + direction;
-    if (nextIdx < 0 || nextIdx >= sorted.length) return;
-    const nextOrder = arrayMove(sorted, idx, nextIdx);
-    persistOrder(nextOrder.map((r) => r.id));
+    const rule = sorted.find((r) => r.id === id);
+    if (!rule) return;
+    const ruleCatKey = rule.categoryId ?? null;
+    const sameCard = sorted.filter(
+      (r) => (r.categoryId ?? null) === ruleCatKey,
+    );
+    const cardIdx = sameCard.findIndex((r) => r.id === id);
+    const targetCardIdx = cardIdx + direction;
+    if (targetCardIdx < 0 || targetCardIdx >= sameCard.length) return;
+    const targetId = sameCard[targetCardIdx].id;
+    const nextOrder = reorderWithinCard(id, targetId);
+    if (!nextOrder) return;
+    persistOrder(nextOrder);
   };
 
   const sensors = useSensors(
@@ -1534,11 +1577,17 @@ export default function MappingRulesPage() {
       reassignRuleCategory(String(active.id), newCategoryId);
       return;
     }
-    const oldIdx = sorted.findIndex((r) => r.id === active.id);
-    const newIdx = sorted.findIndex((r) => r.id === over.id);
-    if (oldIdx < 0 || newIdx < 0) return;
-    const nextOrder = arrayMove(sorted, oldIdx, newIdx);
-    persistOrder(nextOrder.map((r) => r.id));
+    // Task #282 — drag-to-reorder is now scoped to within a single
+    // category card. Cross-card drops are ignored (cross-category
+    // moves go through the dedicated category drop strip). Same-card
+    // drops go through reorderWithinCard, which only re-arranges
+    // same-card rules in their existing global slots — every other
+    // card's rules keep both their global position and their relative
+    // priority, so the auto-categorization engine's "higher priority
+    // wins" outcome for unrelated rules is unchanged.
+    const nextOrder = reorderWithinCard(String(active.id), String(over.id));
+    if (!nextOrder) return;
+    persistOrder(nextOrder);
   };
 
   const handleDragCancel = () => setActiveDragId(null);
@@ -1661,6 +1710,39 @@ export default function MappingRulesPage() {
     }
     return base;
   }, [sorted, catById, searchQuery, focusFilterActive, matchedFocusIds]);
+
+  // Task #282 — group filtered rules into per-category cards. Cards
+  // with zero matching rules are hidden (so search/focus filters
+  // collapse the list naturally). Categories are sorted alphabetically
+  // by name; an "Uncategorized" card (rules with categoryId === null)
+  // is always rendered last so it doesn't push real categories down.
+  // Within each card, rules keep the global priority-descending order
+  // so the existing "higher wins" semantics are still visually obvious.
+  const cardGroups = useMemo(() => {
+    const map = new Map<string, MappingRule[]>();
+    for (const r of filtered) {
+      const key = r.categoryId ?? "__uncategorized__";
+      const arr = map.get(key);
+      if (arr) arr.push(r);
+      else map.set(key, [r]);
+    }
+    const entries = Array.from(map.entries()).map(([catKey, groupRules]) => {
+      const cat =
+        catKey === "__uncategorized__" ? null : catById.get(catKey) ?? null;
+      return {
+        key: catKey,
+        category: cat,
+        name: cat?.name ?? "Uncategorized",
+        rules: groupRules,
+      };
+    });
+    entries.sort((a, b) => {
+      if (a.key === "__uncategorized__") return 1;
+      if (b.key === "__uncategorized__") return -1;
+      return a.name.localeCompare(b.name);
+    });
+    return entries;
+  }, [filtered, catById]);
 
   // Drop selection ids that no longer exist in the server data so a
   // stale id can never linger in the set after a delete (single or
@@ -2043,114 +2125,108 @@ export default function MappingRulesPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between text-base">
-              <span>Rules in priority order</span>
-              <span className="text-xs font-normal text-muted-foreground">
-                {sorted.length} total{" "}
-                {searchQuery || focusFilterActive
-                  ? `· ${filtered.length} shown`
-                  : ""}
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {/* Bulk action bar — header checkbox toggles only the
-              * currently filtered (visible) rows, but the "Delete
-              * selected (N)" button reflects the *total* selection
-              * (which can include rows hidden by the search filter).
-              * Clear selection lets the user back out without
-              * touching anything else. */}
-            <div
-              className="flex items-center gap-3 px-4 py-2 border-b bg-muted/30"
-              data-testid="rule-bulk-bar"
-            >
-              <Checkbox
-                checked={visibleSelectionState}
-                onCheckedChange={(v) => toggleAllVisible(!!v)}
-                aria-label="Select all visible rules"
-                disabled={filtered.length === 0}
-                data-testid="rule-select-all"
-              />
-              <span className="text-xs text-muted-foreground">
-                {selected.size > 0
-                  ? `${selected.size} selected`
-                  : searchQuery
-                    ? `Select all ${filtered.length} shown`
-                    : "Select all"}
-              </span>
-              {selected.size > 0 && (
-                <>
-                  {/* Task #231 — bulk re-assign category for the
-                    * selected rules. The Select renders with no value
-                    * so picking any category triggers the action; we
-                    * key the trigger on selected.size so its label
-                    * resets back to the placeholder after the
-                    * operation completes (selection is cleared inside
-                    * the handler). */}
-                  <div className="ml-auto">
-                    <Select
-                      key={`bulk-category-${selected.size}`}
-                      value=""
-                      onValueChange={(v) =>
-                        void handleBulkChangeCategory(v)
-                      }
-                      disabled={bulkDeleting || bulkUpdating}
-                    >
-                      <SelectTrigger
-                        className="h-7 w-[180px] text-xs"
-                        data-testid="rule-bulk-change-category"
+        // Task #282 — the previously single "Rules in priority order"
+        // card is now split into a controls card (summary + bulk bar +
+        // category drop strip) followed by one Card per category that
+        // has at least one rule. A single DndContext + SortableContext
+        // wraps everything so drag-to-reorder (within a card) and
+        // drag-to-reassign (onto the strip's category chip) keep
+        // working unchanged.
+        <DndContext
+          sensors={sensors}
+          collisionDetection={ruleCollisionDetection}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center justify-between text-base">
+                <span>Rules grouped by category</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  {sorted.length} total{" "}
+                  {searchQuery || focusFilterActive
+                    ? `· ${filtered.length} shown`
+                    : ""}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div
+                className="flex items-center gap-3 px-4 py-2 border-b bg-muted/30"
+                data-testid="rule-bulk-bar"
+              >
+                <Checkbox
+                  checked={visibleSelectionState}
+                  onCheckedChange={(v) => toggleAllVisible(!!v)}
+                  aria-label="Select all visible rules"
+                  disabled={filtered.length === 0}
+                  data-testid="rule-select-all"
+                />
+                <span className="text-xs text-muted-foreground">
+                  {selected.size > 0
+                    ? `${selected.size} selected`
+                    : searchQuery
+                      ? `Select all ${filtered.length} shown`
+                      : "Select all"}
+                </span>
+                {selected.size > 0 && (
+                  <>
+                    <div className="ml-auto">
+                      <Select
+                        key={`bulk-category-${selected.size}`}
+                        value=""
+                        onValueChange={(v) =>
+                          void handleBulkChangeCategory(v)
+                        }
+                        disabled={bulkDeleting || bulkUpdating}
                       >
-                        <SelectValue placeholder="Change category…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories?.map((cat) => (
-                          <SelectItem
-                            key={cat.id}
-                            value={cat.id}
-                            data-testid={`rule-bulk-change-category-option-${cat.id}`}
-                          >
-                            {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="h-7"
-                    onClick={handleBulkDelete}
-                    disabled={bulkDeleting || bulkUpdating}
-                    data-testid="rule-bulk-delete"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                    Delete selected ({selected.size})
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7"
-                    onClick={clearSelection}
-                    disabled={bulkDeleting || bulkUpdating}
-                    data-testid="rule-bulk-clear"
-                  >
-                    Clear
-                  </Button>
-                </>
-              )}
-            </div>
-            <DndContext
-              sensors={sensors}
-              collisionDetection={ruleCollisionDetection}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragCancel={handleDragCancel}
-            >
+                        <SelectTrigger
+                          className="h-7 w-[180px] text-xs"
+                          data-testid="rule-bulk-change-category"
+                        >
+                          <SelectValue placeholder="Change category…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories?.map((cat) => (
+                            <SelectItem
+                              key={cat.id}
+                              value={cat.id}
+                              data-testid={`rule-bulk-change-category-option-${cat.id}`}
+                            >
+                              {cat.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-7"
+                      onClick={handleBulkDelete}
+                      disabled={bulkDeleting || bulkUpdating}
+                      data-testid="rule-bulk-delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                      Delete selected ({selected.size})
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7"
+                      onClick={clearSelection}
+                      disabled={bulkDeleting || bulkUpdating}
+                      data-testid="rule-bulk-clear"
+                    >
+                      Clear
+                    </Button>
+                  </>
+                )}
+              </div>
               {(categories?.length ?? 0) > 0 && (
                 <div
-                  className={`px-4 py-3 border-b bg-muted/20 transition-colors ${
+                  className={`px-4 py-3 transition-colors ${
                     activeDragId ? "bg-primary/5" : ""
                   }`}
                   data-testid="category-drop-strip"
@@ -2174,221 +2250,260 @@ export default function MappingRulesPage() {
                   </div>
                 </div>
               )}
-              <SortableContext
-                items={sortableIds}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="divide-y divide-border">
-                  {filtered.length === 0 ? (
-                    <div className="p-6 text-center text-muted-foreground text-sm">
-                      No rules match your search.
-                    </div>
-                  ) : (
-                    filtered.map((rule) => {
-                      const idxInFull = sorted.findIndex(
-                        (r) => r.id === rule.id,
-                      );
-                      const isFirst = idxInFull === 0;
-                      const isLast = idxInFull === sorted.length - 1;
-                      const cat = rule.categoryId
-                        ? catById.get(rule.categoryId) ?? null
-                        : null;
-                      const isMatched = matchedIds.has(rule.id);
-                      const isWinner = winningId === rule.id;
-                      const reorderDisabled =
-                        reorderRules.isPending || !!searchQuery;
-                      if (editingId === rule.id) {
-                        return (
-                          <div
-                            key={rule.id}
-                            className="flex flex-col gap-2 px-4 py-3 bg-muted/20"
-                            data-testid={`rule-edit-${rule.id}`}
-                          >
-                            <Input
-                              value={editPattern}
-                              onChange={(e) => setEditPattern(e.target.value)}
-                              className="h-8 text-sm font-mono"
-                              autoFocus
-                            />
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Select
-                                value={editMatchType}
-                                onValueChange={setEditMatchType}
-                              >
-                                <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px]">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="contains">
-                                    Contains
-                                  </SelectItem>
-                                  <SelectItem value="exact">Exact</SelectItem>
-                                  <SelectItem value="starts_with">
-                                    Starts With
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <Select
-                                value={editCategoryId}
-                                onValueChange={handleEditCategoryChange}
-                              >
-                                <SelectTrigger
-                                  className="h-8 text-xs flex-[2] min-w-[160px]"
-                                  data-testid={`rule-edit-category-${rule.id}`}
-                                >
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {categories?.map((cat) => (
-                                    <SelectItem key={cat.id} value={cat.id}>
-                                      {cat.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <div className="flex items-center gap-1">
-                                <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                  Priority
-                                </label>
-                                <Input
-                                  type="number"
-                                  value={editPriority}
-                                  onChange={(e) =>
-                                    setEditPriority(e.target.value)
-                                  }
-                                  className="h-8 w-20 text-xs"
-                                  data-testid={`rule-edit-priority-${rule.id}`}
-                                />
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => saveEdit(rule.id)}
-                                disabled={
-                                  !editPattern ||
-                                  !editCategoryId ||
-                                  updateRule.isPending
-                                }
-                                data-testid={`rule-save-${rule.id}`}
-                              >
-                                <Check className="w-4 h-4 text-emerald-600" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={cancelEdit}
-                              >
-                                <X className="w-4 h-4" />
-                              </Button>
-                            </div>
-                            {editPreview &&
-                              editPreview.toCategoryId === editCategoryId &&
-                              editPreview.candidateCount > 0 && (
-                                <div
-                                  className="flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
-                                  data-testid={`rule-edit-preview-${rule.id}`}
-                                >
-                                  <span>
-                                    <span
-                                      className="font-medium"
-                                      data-testid={`rule-edit-preview-count-${rule.id}`}
-                                    >
-                                      {editPreview.candidateCount}
-                                    </span>{" "}
-                                    past transaction
-                                    {editPreview.candidateCount === 1
-                                      ? ""
-                                      : "s"}{" "}
-                                    will move into{" "}
-                                    <span className="font-medium">
-                                      {catById.get(editPreview.toCategoryId)
-                                        ?.name ?? "the new category"}
-                                    </span>{" "}
-                                    when you save.
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="shrink-0 underline underline-offset-2 hover:text-foreground"
-                                    data-testid={`link-show-rule-matches-edit-${rule.id}`}
-                                    onClick={() =>
-                                      setMatchesDialog({
-                                        pattern: editPreview.pattern,
-                                        candidateCount:
-                                          editPreview.candidateCount,
-                                        sampleTransactions:
-                                          editPreview.sampleTransactions,
-                                        toCategoryName:
-                                          catById.get(
-                                            editPreview.toCategoryId,
-                                          )?.name ?? "the new category",
-                                      })
-                                    }
-                                  >
-                                    Show matches
-                                  </button>
-                                </div>
-                              )}
-                          </div>
-                        );
-                      }
-                      const isFocused = focusIdSet.has(rule.id);
-                      // Only the first matched focus id receives the
-                      // scroll-target ref so we don't bounce around
-                      // jumping to multiple rows when the toast deep-link
-                      // included several rule ids.
-                      const isScrollTarget = rule.id === focusId;
-                      return (
-                        <SortableRuleRow
-                          key={rule.id}
-                          rule={rule}
-                          category={cat}
-                          isFirst={isFirst}
-                          isLast={isLast}
-                          isMatched={isMatched}
-                          isWinner={isWinner}
-                          reorderDisabled={reorderDisabled}
-                          dragDisabled={dragDisabled}
-                          isFocused={isFocused}
-                          isHighlighted={highlightedIds.has(rule.id)}
-                          setFocusRef={
-                            isScrollTarget
-                              ? (el) => {
-                                  focusRowRef.current = el;
-                                }
-                              : null
-                          }
-                          isSelected={selected.has(rule.id)}
-                          onToggleSelected={toggleSelected}
-                          onMove={moveRule}
-                          onStartEdit={startEdit}
-                          onDelete={handleDeleteRule}
-                        />
-                      );
-                    })
-                  )}
-                </div>
-              </SortableContext>
-              <DragOverlay>
-                {activeDragRule ? (
-                  <div
-                    className="flex items-center gap-2 px-3 py-2 rounded-md border bg-card shadow-lg ring-2 ring-primary/40"
-                    data-testid="rule-drag-overlay"
+            </CardContent>
+          </Card>
+
+          <SortableContext
+            items={sortableIds}
+            strategy={verticalListSortingStrategy}
+          >
+            {filtered.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center text-muted-foreground text-sm">
+                  No rules match your search.
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4" data-testid="rule-category-cards">
+                {cardGroups.map((group) => (
+                  <Card
+                    key={group.key}
+                    data-testid={`rule-category-card-${group.key}`}
                   >
-                    <GripVertical className="w-4 h-4 text-muted-foreground" />
-                    <span className="font-mono text-xs bg-muted/60 px-2 py-0.5 rounded">
-                      {activeDragRule.pattern}
-                    </span>
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      {activeDragRule.matchType.replace("_", " ")}
-                    </span>
-                  </div>
-                ) : null}
-              </DragOverlay>
-            </DndContext>
-          </CardContent>
-        </Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center justify-between text-base">
+                        <span
+                          data-testid={`rule-category-card-name-${group.key}`}
+                        >
+                          {group.name}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] tabular-nums"
+                          data-testid={`rule-category-card-count-${group.key}`}
+                        >
+                          {group.rules.length} rule
+                          {group.rules.length === 1 ? "" : "s"}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      {/* Fixed-height scroll box per spec — keeps very
+                        * large categories from dominating the page while
+                        * still allowing the user to scan + edit any rule. */}
+                      <div
+                        className="max-h-80 overflow-y-auto divide-y divide-border"
+                        data-testid={`rule-category-card-list-${group.key}`}
+                      >
+                        {group.rules.map((rule, idxInGroup) => {
+                          const isFirst = idxInGroup === 0;
+                          const isLast = idxInGroup === group.rules.length - 1;
+                          const cat = rule.categoryId
+                            ? catById.get(rule.categoryId) ?? null
+                            : null;
+                          const isMatched = matchedIds.has(rule.id);
+                          const isWinner = winningId === rule.id;
+                          const reorderDisabled =
+                            reorderRules.isPending || !!searchQuery;
+                          if (editingId === rule.id) {
+                            return (
+                              <div
+                                key={rule.id}
+                                className="flex flex-col gap-2 px-4 py-3 bg-muted/20"
+                                data-testid={`rule-edit-${rule.id}`}
+                              >
+                                <Input
+                                  value={editPattern}
+                                  onChange={(e) =>
+                                    setEditPattern(e.target.value)
+                                  }
+                                  className="h-8 text-sm font-mono"
+                                  autoFocus
+                                />
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Select
+                                    value={editMatchType}
+                                    onValueChange={setEditMatchType}
+                                  >
+                                    <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px]">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="contains">
+                                        Contains
+                                      </SelectItem>
+                                      <SelectItem value="exact">
+                                        Exact
+                                      </SelectItem>
+                                      <SelectItem value="starts_with">
+                                        Starts With
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <Select
+                                    value={editCategoryId}
+                                    onValueChange={handleEditCategoryChange}
+                                  >
+                                    <SelectTrigger
+                                      className="h-8 text-xs flex-[2] min-w-[160px]"
+                                      data-testid={`rule-edit-category-${rule.id}`}
+                                    >
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {categories?.map((cat) => (
+                                        <SelectItem
+                                          key={cat.id}
+                                          value={cat.id}
+                                        >
+                                          {cat.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <div className="flex items-center gap-1">
+                                    <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                      Priority
+                                    </label>
+                                    <Input
+                                      type="number"
+                                      value={editPriority}
+                                      onChange={(e) =>
+                                        setEditPriority(e.target.value)
+                                      }
+                                      className="h-8 w-20 text-xs"
+                                      data-testid={`rule-edit-priority-${rule.id}`}
+                                    />
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => saveEdit(rule.id)}
+                                    disabled={
+                                      !editPattern ||
+                                      !editCategoryId ||
+                                      updateRule.isPending
+                                    }
+                                    data-testid={`rule-save-${rule.id}`}
+                                  >
+                                    <Check className="w-4 h-4 text-emerald-600" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={cancelEdit}
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                                {editPreview &&
+                                  editPreview.toCategoryId ===
+                                    editCategoryId &&
+                                  editPreview.candidateCount > 0 && (
+                                    <div
+                                      className="flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
+                                      data-testid={`rule-edit-preview-${rule.id}`}
+                                    >
+                                      <span>
+                                        <span
+                                          className="font-medium"
+                                          data-testid={`rule-edit-preview-count-${rule.id}`}
+                                        >
+                                          {editPreview.candidateCount}
+                                        </span>{" "}
+                                        past transaction
+                                        {editPreview.candidateCount === 1
+                                          ? ""
+                                          : "s"}{" "}
+                                        will move into{" "}
+                                        <span className="font-medium">
+                                          {catById.get(
+                                            editPreview.toCategoryId,
+                                          )?.name ?? "the new category"}
+                                        </span>{" "}
+                                        when you save.
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="shrink-0 underline underline-offset-2 hover:text-foreground"
+                                        data-testid={`link-show-rule-matches-edit-${rule.id}`}
+                                        onClick={() =>
+                                          setMatchesDialog({
+                                            pattern: editPreview.pattern,
+                                            candidateCount:
+                                              editPreview.candidateCount,
+                                            sampleTransactions:
+                                              editPreview.sampleTransactions,
+                                            toCategoryName:
+                                              catById.get(
+                                                editPreview.toCategoryId,
+                                              )?.name ?? "the new category",
+                                          })
+                                        }
+                                      >
+                                        Show matches
+                                      </button>
+                                    </div>
+                                  )}
+                              </div>
+                            );
+                          }
+                          const isFocused = focusIdSet.has(rule.id);
+                          const isScrollTarget = rule.id === focusId;
+                          return (
+                            <SortableRuleRow
+                              key={rule.id}
+                              rule={rule}
+                              category={cat}
+                              isFirst={isFirst}
+                              isLast={isLast}
+                              isMatched={isMatched}
+                              isWinner={isWinner}
+                              reorderDisabled={reorderDisabled}
+                              dragDisabled={dragDisabled}
+                              isFocused={isFocused}
+                              isHighlighted={highlightedIds.has(rule.id)}
+                              setFocusRef={
+                                isScrollTarget
+                                  ? (el) => {
+                                      focusRowRef.current = el;
+                                    }
+                                  : null
+                              }
+                              isSelected={selected.has(rule.id)}
+                              onToggleSelected={toggleSelected}
+                              onMove={moveRule}
+                              onStartEdit={startEdit}
+                              onDelete={handleDeleteRule}
+                            />
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </SortableContext>
+          <DragOverlay>
+            {activeDragRule ? (
+              <div
+                className="flex items-center gap-2 px-3 py-2 rounded-md border bg-card shadow-lg ring-2 ring-primary/40"
+                data-testid="rule-drag-overlay"
+              >
+                <GripVertical className="w-4 h-4 text-muted-foreground" />
+                <span className="font-mono text-xs bg-muted/60 px-2 py-0.5 rounded">
+                  {activeDragRule.pattern}
+                </span>
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {activeDragRule.matchType.replace("_", " ")}
+                </span>
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
       {previewDialog}
 
