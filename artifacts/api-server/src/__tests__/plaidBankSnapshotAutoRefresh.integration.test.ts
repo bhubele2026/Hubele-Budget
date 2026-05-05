@@ -330,6 +330,51 @@ describe("(#45) bank snapshot auto-refresh on hourly Plaid sync", () => {
     }
   });
 
+  // (#286) Regression: a stale "Balance refresh failed: …" chip from a
+  // previous failing hourly sync must be cleared by the next *healthy*
+  // sync. Otherwise a red badge lingers in the Sync header long after the
+  // underlying issue resolved (e.g. the user reconnected the bank). The
+  // success path in syncPlaidItem already nulls lastSyncError /
+  // lastSyncErrorCode before the balance refresh attempt, and a
+  // succeeding refresh leaves those cleared values in place — this test
+  // pins that behavior so a future refactor can't regress it.
+  it("(#286) clears a stale 'Balance refresh failed' chip after a healthy sync", async () => {
+    const { itemRowId, plaidAccountRowId, externalAccountId } =
+      await seedItemAndCheckingAccount({ institutionName: "Chase" });
+    await configureSnapshot(plaidAccountRowId, "Chase Checking");
+
+    // Seed a stale failure chip from a hypothetical earlier hourly sync.
+    await db
+      .update(plaidItemsTable)
+      .set({
+        lastSyncError:
+          "Balance refresh failed: the login details have changed",
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+      })
+      .where(eq(plaidItemsTable.id, itemRowId));
+
+    accountsBalanceGetMock = async () => ({
+      data: {
+        accounts: [
+          {
+            account_id: externalAccountId,
+            balances: { available: 5555.55, current: 5600.0 },
+          },
+        ],
+      },
+    });
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId);
+    expect(result.error ?? null).toBeNull();
+
+    const [item] = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    expect(item!.lastSyncError).toBeNull();
+    expect(item!.lastSyncErrorCode).toBeNull();
+  });
+
   it("end-to-end via syncAllForAllUsers (the cron entry point) refreshes the snapshot once per user", async () => {
     const { plaidAccountRowId, externalAccountId } =
       await seedItemAndCheckingAccount({ institutionName: "Chase" });
