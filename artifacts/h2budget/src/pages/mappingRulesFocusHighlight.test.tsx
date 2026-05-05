@@ -38,6 +38,7 @@ vi.mock("@/hooks/use-bulk-recategorize-prompt", () => ({
 let searchString = "";
 vi.mock("wouter", () => ({
   useSearch: () => searchString,
+  useLocation: () => ["/", vi.fn()],
 }));
 
 // Heavy dnd-kit pieces aren't relevant here — stub them out so the
@@ -113,6 +114,10 @@ vi.mock("@workspace/api-client-react", () => ({
     isPending: false,
   }),
   useRecategorizeTransactionsByPattern: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+  useUncategorizeTransactionsByIds: () => ({
     mutate: vi.fn(),
     isPending: false,
   }),

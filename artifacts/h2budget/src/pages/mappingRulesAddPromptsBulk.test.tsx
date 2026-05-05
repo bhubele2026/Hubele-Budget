@@ -83,6 +83,7 @@ vi.mock("@/hooks/use-bulk-recategorize-prompt", () => ({
 
 vi.mock("wouter", () => ({
   useSearch: () => "",
+  useLocation: () => ["/", vi.fn()],
 }));
 
 vi.mock("@dnd-kit/core", () => ({
@@ -218,7 +219,16 @@ vi.mock("@workspace/api-client-react", () => ({
     reset: vi.fn(),
     isPending: false,
   }),
+  usePreviewMappingRuleRecategorizeByPattern: () => ({
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    isPending: false,
+  }),
   useRecategorizeTransactionsByPattern: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+  useUncategorizeTransactionsByIds: () => ({
     mutate: vi.fn(),
     isPending: false,
   }),
