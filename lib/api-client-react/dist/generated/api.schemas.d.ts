@@ -862,6 +862,7 @@ export interface BillsSummaryRow {
     /** @nullable */
     nextOccurrence: string | null;
     monthlyAmount: string;
+    actualAmount: string;
 }
 export interface BillsSummaryMonthly {
     income: string;

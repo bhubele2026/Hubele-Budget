@@ -45,6 +45,7 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   ArrowRight,
+  Check,
   Pause,
   Pencil,
   Play,
@@ -775,10 +776,23 @@ function BillGroupCard({
           </div>
         ) : (
           <ul className="divide-y divide-border">
-            {rows.map(({ item, nextOccurrence, monthlyAmount }) => {
+            {rows.map(({ item, nextOccurrence, monthlyAmount, actualAmount }) => {
               const pill = formatDatePill(nextOccurrence);
               const active = isActive(item);
               const amt = Number(monthlyAmount) || 0;
+              const actual = Number(actualAmount) || 0;
+              // (#70) Status of the actual vs. planned amount this month.
+              // - "paid": actual covers ≥99% of planned (a small float fudge)
+              // - "partial": some money has moved but not the full plan
+              // - "none": nothing matched yet — keep the row neutral
+              const planned = amt;
+              const ratio = planned > 0 ? actual / planned : actual > 0 ? 1 : 0;
+              const status: "paid" | "partial" | "none" =
+                actual <= 0
+                  ? "none"
+                  : ratio >= 0.99
+                    ? "paid"
+                    : "partial";
               return (
                 <li
                   key={item.id}
@@ -811,9 +825,33 @@ function BillGroupCard({
                       {!active ? " · paused" : ""}
                     </div>
                   </div>
-                  <div className={`text-sm font-semibold tabular-nums ${tint}`}>
-                    {sign}
-                    {formatCurrency(amt)}
+                  <div className="flex flex-col items-end gap-0.5">
+                    <div className={`text-sm font-semibold tabular-nums ${tint}`}>
+                      {sign}
+                      {formatCurrency(amt)}
+                    </div>
+                    {active && status !== "none" ? (
+                      <div
+                        className={`text-[11px] tabular-nums flex items-center gap-1 ${
+                          status === "paid"
+                            ? "text-emerald-700"
+                            : "text-amber-600"
+                        }`}
+                        data-testid={`text-actual-${item.id}`}
+                        title={
+                          status === "paid"
+                            ? `Paid ${formatCurrency(actual)} of ${formatCurrency(planned)} planned`
+                            : `Partial — ${formatCurrency(actual)} of ${formatCurrency(planned)} planned`
+                        }
+                      >
+                        {status === "paid" ? (
+                          <Check className="w-3 h-3" aria-hidden />
+                        ) : null}
+                        {status === "paid"
+                          ? `${formatCurrency(actual)} paid`
+                          : `${formatCurrency(actual)} so far`}
+                      </div>
+                    ) : null}
                   </div>
                   <button
                     type="button"

@@ -18,6 +18,8 @@ import {
   debtsTable,
   recurringItemsTable,
   forecastSettingsTable,
+  forecastResolutionsTable,
+  transactionsTable,
 } from "@workspace/db";
 import billsRouter from "../routes/bills";
 import forecastRouter from "../routes/forecast";
@@ -31,6 +33,12 @@ let server: Server;
 let baseUrl: string;
 
 async function cleanup(): Promise<void> {
+  await db
+    .delete(forecastResolutionsTable)
+    .where(eq(forecastResolutionsTable.userId, TEST_USER));
+  await db
+    .delete(transactionsTable)
+    .where(eq(transactionsTable.userId, TEST_USER));
   await db
     .delete(recurringItemsTable)
     .where(eq(recurringItemsTable.userId, TEST_USER));
@@ -58,9 +66,15 @@ beforeEach(async () => {
   await cleanup();
 });
 
+type SummaryRow = {
+  item: { id: string; name: string };
+  nextOccurrence: string | null;
+  monthlyAmount: string;
+  actualAmount: string;
+};
 async function getBills(): Promise<{
-  income: unknown[];
-  bills: unknown[];
+  income: SummaryRow[];
+  bills: SummaryRow[];
   debtMins: Array<{
     debtId: string;
     debtName: string;
@@ -294,6 +308,128 @@ describe("bills/summary debt minimums", () => {
     // Both totals are zero — the bill is gone everywhere
     expect(summary.monthly.bills).toBe("0.00");
     expect(summary.monthly.debtMin).toBe("0.00");
+  });
+
+  it("(#70) reports actualAmount per bill from matched txns this month and zero when none", async () => {
+    // Two unrelated recurring bills. Rent has a matched txn this month;
+    // Internet has none, so its actualAmount should remain 0.00.
+    const rent = await insertRecurring({
+      name: "Rent",
+      amount: "1200",
+      dayOfMonth: 1,
+    });
+    const internet = await insertRecurring({
+      name: "Internet",
+      amount: "75",
+      dayOfMonth: 5,
+    });
+
+    const today = new Date();
+    const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+    const lastMonthEnd = (() => {
+      const d = new Date(today.getFullYear(), today.getMonth(), 0);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    })();
+
+    const [rentTxn] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: monthStart,
+        description: "Rent payment",
+        amount: "-1200",
+        source: "plaid:bank",
+      })
+      .returning();
+    // A second matched resolution from last month, to confirm we
+    // window by occurrence_date (this txn must NOT count this month).
+    const [oldRentTxn] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: lastMonthEnd,
+        description: "Rent payment (old)",
+        amount: "-1200",
+        source: "plaid:bank",
+      })
+      .returning();
+
+    await db.insert(forecastResolutionsTable).values({
+      userId: TEST_USER,
+      recurringItemId: rent.id,
+      occurrenceDate: monthStart,
+      status: "matched",
+      matchedTxnId: rentTxn.id,
+    });
+    await db.insert(forecastResolutionsTable).values({
+      userId: TEST_USER,
+      recurringItemId: rent.id,
+      occurrenceDate: lastMonthEnd,
+      status: "matched",
+      matchedTxnId: oldRentTxn.id,
+    });
+
+    const summary = await getBills();
+    const rentRow = summary.bills.find((r) => r.item.id === rent.id);
+    const internetRow = summary.bills.find((r) => r.item.id === internet.id);
+    expect(rentRow?.actualAmount).toBe("1200.00");
+    expect(internetRow?.actualAmount).toBe("0.00");
+  });
+
+  it("(#70) sums multiple matched txns against the same bill within the month", async () => {
+    const utility = await insertRecurring({
+      name: "Electric",
+      amount: "200",
+      dayOfMonth: 10,
+    });
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    const day1 = `${y}-${m}-05`;
+    const day2 = `${y}-${m}-12`;
+
+    const [t1] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: day1,
+        description: "Electric partial 1",
+        amount: "-50",
+        source: "plaid:bank",
+      })
+      .returning();
+    const [t2] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: day2,
+        description: "Electric partial 2",
+        amount: "-90",
+        source: "plaid:bank",
+      })
+      .returning();
+    await db.insert(forecastResolutionsTable).values([
+      {
+        userId: TEST_USER,
+        recurringItemId: utility.id,
+        occurrenceDate: day1,
+        status: "matched",
+        matchedTxnId: t1.id,
+      },
+      {
+        userId: TEST_USER,
+        recurringItemId: utility.id,
+        occurrenceDate: day2,
+        status: "matched",
+        matchedTxnId: t2.id,
+      },
+    ]);
+
+    const summary = await getBills();
+    const row = summary.bills.find((r) => r.item.id === utility.id);
+    // Two partial payments, sum is 140; under planned 200 → "partial".
+    expect(row?.actualAmount).toBe("140.00");
+    expect(row?.monthlyAmount).toBe("200.00");
   });
 
   it("forecast events include synthetic debt-min events for unlinked debts and skip them when linked", async () => {

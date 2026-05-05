@@ -11,5 +11,6 @@ export interface BillsSummaryRow {
     /** @nullable */
     nextOccurrence: string | null;
     monthlyAmount: string;
+    actualAmount: string;
 }
 //# sourceMappingURL=billsSummaryRow.d.ts.map

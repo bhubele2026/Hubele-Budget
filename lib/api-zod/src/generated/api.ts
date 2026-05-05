@@ -2108,6 +2108,7 @@ export const GetBillsSummaryResponse = zod.object({
       }),
       nextOccurrence: zod.string().nullable(),
       monthlyAmount: zod.string(),
+      actualAmount: zod.string(),
     }),
   ),
   bills: zod.array(
@@ -2126,6 +2127,7 @@ export const GetBillsSummaryResponse = zod.object({
       }),
       nextOccurrence: zod.string().nullable(),
       monthlyAmount: zod.string(),
+      actualAmount: zod.string(),
     }),
   ),
   debtMins: zod.array(

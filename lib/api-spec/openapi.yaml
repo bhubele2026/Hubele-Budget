@@ -2091,11 +2091,12 @@ components:
 
     BillsSummaryRow:
       type: object
-      required: [item, nextOccurrence, monthlyAmount]
+      required: [item, nextOccurrence, monthlyAmount, actualAmount]
       properties:
         item: { $ref: "#/components/schemas/RecurringItem" }
         nextOccurrence: { type: ["string", "null"] }
         monthlyAmount: { type: string }
+        actualAmount: { type: string }
     BillsSummaryMonthly:
       type: object
       required: [income, bills, debtMin, totalOutflow, net, active, monthStart, monthEnd]

@@ -1,6 +1,12 @@
 import { Router, type IRouter } from "express";
-import { and, eq, lt } from "drizzle-orm";
-import { db, recurringItemsTable, debtsTable } from "@workspace/db";
+import { and, eq, gte, inArray, lt, lte } from "drizzle-orm";
+import {
+  db,
+  recurringItemsTable,
+  debtsTable,
+  forecastResolutionsTable,
+  transactionsTable,
+} from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { expandItem, fmtISO } from "../lib/cashSignal";
 import { buildDebtMinSchedule } from "../lib/debtMinSchedule";
@@ -73,6 +79,63 @@ router.get("/bills/summary", requireAuth, async (req, res): Promise<void> => {
   const today = todayDate();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const monthStartISO = fmtISO(monthStart);
+  const monthEndISO = fmtISO(monthEnd);
+
+  // (#70) Cross-reference matched forecast resolutions against transactions
+  // to compute the actual amount paid against each recurring item this
+  // month. We pull resolutions whose occurrence_date falls in the current
+  // month, then sum the absolute amount of each matched bank/card txn,
+  // grouped by recurringItemId.
+  const matchedRows = await db
+    .select({
+      recurringItemId: forecastResolutionsTable.recurringItemId,
+      matchedTxnId: forecastResolutionsTable.matchedTxnId,
+    })
+    .from(forecastResolutionsTable)
+    .where(
+      and(
+        eq(forecastResolutionsTable.userId, userId),
+        eq(forecastResolutionsTable.status, "matched"),
+        gte(forecastResolutionsTable.occurrenceDate, monthStartISO),
+        lte(forecastResolutionsTable.occurrenceDate, monthEndISO),
+      ),
+    );
+  const txnIds = Array.from(
+    new Set(
+      matchedRows
+        .map((r) => r.matchedTxnId)
+        .filter((x): x is string => !!x),
+    ),
+  );
+  const txnAmountById = new Map<string, number>();
+  if (txnIds.length > 0) {
+    const txns = await db
+      .select({
+        id: transactionsTable.id,
+        amount: transactionsTable.amount,
+      })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.userId, userId),
+          inArray(transactionsTable.id, txnIds),
+        ),
+      );
+    for (const t of txns) {
+      txnAmountById.set(t.id, Math.abs(Number(t.amount) || 0));
+    }
+  }
+  const actualByItem = new Map<string, number>();
+  for (const r of matchedRows) {
+    if (!r.recurringItemId || !r.matchedTxnId) continue;
+    const amt = txnAmountById.get(r.matchedTxnId);
+    if (amt === undefined) continue;
+    actualByItem.set(
+      r.recurringItemId,
+      (actualByItem.get(r.recurringItemId) ?? 0) + amt,
+    );
+  }
 
   // Build debt-min rows + figure out which recurring items are linked to a
   // debt (so we suppress them from the regular bills list to avoid double
@@ -93,10 +156,12 @@ router.get("/bills/summary", requireAuth, async (req, res): Promise<void> => {
   for (const item of sortedItems) {
     if (suppressedRecurringIds.has(item.id)) continue;
     const monthlyAmount = monthlyAmountAbs(item, monthStart, monthEnd);
+    const actualAmount = actualByItem.get(item.id) ?? 0;
     const row = {
       item,
       nextOccurrence: nextOccurrenceISO(item),
       monthlyAmount: fixed2(monthlyAmount),
+      actualAmount: fixed2(actualAmount),
     };
     if (item.kind === "income") incomeRows.push(row);
     else billRows.push(row);

@@ -5143,7 +5143,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         }>;
         nextOccurrence: zod.ZodNullable<zod.ZodString>;
         monthlyAmount: zod.ZodString;
+        actualAmount: zod.ZodString;
     }, "strip", zod.ZodTypeAny, {
+        actualAmount: string;
         item: {
             id: string;
             amount: string;
@@ -5159,6 +5161,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         nextOccurrence: string | null;
         monthlyAmount: string;
     }, {
+        actualAmount: string;
         item: {
             id: string;
             amount: string;
@@ -5211,7 +5214,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         }>;
         nextOccurrence: zod.ZodNullable<zod.ZodString>;
         monthlyAmount: zod.ZodString;
+        actualAmount: zod.ZodString;
     }, "strip", zod.ZodTypeAny, {
+        actualAmount: string;
         item: {
             id: string;
             amount: string;
@@ -5227,6 +5232,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         nextOccurrence: string | null;
         monthlyAmount: string;
     }, {
+        actualAmount: string;
         item: {
             id: string;
             amount: string;
@@ -5306,6 +5312,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
     }>;
 }, "strip", zod.ZodTypeAny, {
     income: {
+        actualAmount: string;
         item: {
             id: string;
             amount: string;
@@ -5322,6 +5329,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         monthlyAmount: string;
     }[];
     bills: {
+        actualAmount: string;
         item: {
             id: string;
             amount: string;
@@ -5361,6 +5369,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
     };
 }, {
     income: {
+        actualAmount: string;
         item: {
             id: string;
             amount: string;
@@ -5377,6 +5386,7 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         monthlyAmount: string;
     }[];
     bills: {
+        actualAmount: string;
         item: {
             id: string;
             amount: string;
