@@ -25,10 +25,15 @@ vi.mock("@/hooks/use-bulk-recategorize-prompt", () => ({
 // Dynamic search/navigate so individual tests can vary the focus param.
 let mockSearch = "";
 const navigateMock = vi.fn();
-vi.mock("wouter", () => ({
-  useSearch: () => mockSearch,
-  useLocation: () => ["/mapping-rules", navigateMock] as const,
-}));
+vi.mock("wouter", async () => {
+  const { defaultMappingRulesWouterMock } = await import(
+    "./__test-helpers__/mapping-rules-mocks"
+  );
+  return defaultMappingRulesWouterMock({
+    useSearch: () => mockSearch,
+    useLocation: () => ["/mapping-rules", navigateMock] as const,
+  });
+});
 
 vi.mock("@dnd-kit/core", () => ({
   DndContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -97,48 +102,18 @@ const rulesState: MappingRule[] = [
   },
 ];
 
-vi.mock("@workspace/api-client-react", () => ({
-  useListMappingRules: () => ({ data: rulesState, isLoading: false }),
-  useListCategories: () => ({
-    data: [{ id: "cat-1", name: "Coffee" }],
-    isLoading: false,
-  }),
-  useCreateMappingRule: () => ({ mutate: vi.fn(), isPending: false }),
-  useUpdateMappingRule: () => ({ mutate: vi.fn(), isPending: false }),
-  useDeleteMappingRule: () => ({ mutate: vi.fn(), isPending: false }),
-  useReorderMappingRules: () => ({ mutate: vi.fn(), isPending: false }),
-  useTestMappingRules: () => ({
-    mutate: vi.fn(),
-    data: undefined,
-    reset: vi.fn(),
-    isPending: false,
-  }),
-  usePreviewMappingRuleRecategorize: () => ({
-    mutate: vi.fn(),
-    data: undefined,
-    reset: vi.fn(),
-    isPending: false,
-  }),
-  usePreviewMappingRuleRecategorizeByPattern: () => ({
-    mutate: vi.fn(),
-    data: undefined,
-    reset: vi.fn(),
-    isPending: false,
-  }),
-  useRecategorizeTransactionsByPattern: () => ({
-    mutate: vi.fn(),
-    isPending: false,
-  }),
-  useUncategorizeTransactionsByIds: () => ({
-    mutate: vi.fn(),
-    isPending: false,
-  }),
-  getListMappingRulesQueryKey: () => ["/api/mapping-rules"],
-  getListTransactionsQueryKey: () => ["/api/transactions"],
-  getGetBudgetMonthQueryKey: (m: string) => ["/api/budget-month", m],
-  createMappingRule: vi.fn(),
-  deleteMappingRule: vi.fn(),
-}));
+vi.mock("@workspace/api-client-react", async () => {
+  const { defaultMappingRulesApiClientMock } = await import(
+    "./__test-helpers__/mapping-rules-mocks"
+  );
+  return defaultMappingRulesApiClientMock({
+    useListMappingRules: () => ({ data: rulesState, isLoading: false }),
+    useListCategories: () => ({
+      data: [{ id: "cat-1", name: "Coffee" }],
+      isLoading: false,
+    }),
+  });
+});
 
 import MappingRulesPage from "./mapping-rules";
 
