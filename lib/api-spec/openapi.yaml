@@ -2955,6 +2955,22 @@ components:
         # successful refresh (e.g. for items linked before this column
         # existed).
         consentExpirationLastRefreshedAt: { type: ["string", "null"] }
+        # (#265) Latest /item/get failure message captured during the
+        # consent-refresh path (manual "Refresh disconnect dates"
+        # button, on-sync PENDING_EXPIRATION refresh, or daily cron).
+        # Cleared on the next successful refresh. Settings renders
+        # this inline under the per-item "Disconnect date checked …"
+        # line, styled like the existing lastSyncError block, so a
+        # user who walks away after running the refresh can still
+        # see *why* this bank's check failed without having to
+        # re-trigger it. Distinct from `lastSyncError` so a healthy
+        # /transactions/sync does not erase the consent-refresh
+        # failure (and vice versa). Null on healthy items.
+        consentExpirationLastRefreshError: { type: ["string", "null"] }
+        # Plaid `error_code` (e.g. ITEM_LOGIN_REQUIRED) for the
+        # consent-refresh failure above, when available. Lets the
+        # frontend correlate the inline message with reauth flows.
+        consentExpirationLastRefreshErrorCode: { type: ["string", "null"] }
         accounts:
           type: array
           items: { $ref: "#/components/schemas/PlaidAccount" }

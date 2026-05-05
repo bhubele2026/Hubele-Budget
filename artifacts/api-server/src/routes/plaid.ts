@@ -549,6 +549,11 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       consentExpirationLastRefreshedAt: item!.consentExpirationLastRefreshedAt
         ? item!.consentExpirationLastRefreshedAt.toISOString()
         : null,
+      // (#265) On a fresh exchange the consent-refresh path has just
+      // succeeded (or no /item/get failure was captured), so this is
+      // always null here.
+      consentExpirationLastRefreshError: null,
+      consentExpirationLastRefreshErrorCode: null,
       accounts: accounts.map((a) => ({
         id: a.id,
         accountId: a.accountId,
@@ -613,6 +618,17 @@ router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
       consentExpirationLastRefreshedAt: it.consentExpirationLastRefreshedAt
         ? it.consentExpirationLastRefreshedAt.toISOString()
         : null,
+      // (#265) Latest /item/get failure captured during the consent-
+      // refresh path (manual button, on-sync PENDING_EXPIRATION
+      // refresh, or daily cron). Cleared on the next successful
+      // refresh. The Settings page renders this inline under the
+      // "Disconnect date checked …" line so users can see *why* the
+      // most recent disconnect-date check failed without having to
+      // re-trigger the refresh.
+      consentExpirationLastRefreshError:
+        it.consentExpirationLastRefreshError ?? null,
+      consentExpirationLastRefreshErrorCode:
+        it.consentExpirationLastRefreshErrorCode ?? null,
       accounts: (byItem.get(it.id) ?? []).map((a) => ({
         id: a.id,
         accountId: a.accountId,

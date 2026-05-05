@@ -679,6 +679,24 @@ export default function SettingsPage() {
                           {formatPlaidErrorForDisplay(item.lastSyncError)}
                         </div>
                       )}
+                      {/* (#265) Latest /item/get failure captured during the
+                          consent-refresh path (manual button, on-sync
+                          PENDING_EXPIRATION refresh, or daily cron). Rendered
+                          inline under the "Disconnect date checked …" line so
+                          a user who walks away after running the refresh can
+                          still see *why* this bank's check failed without
+                          having to re-trigger it. Styled like lastSyncError. */}
+                      {item.consentExpirationLastRefreshError && (
+                        <div
+                          className="text-xs text-destructive mt-1"
+                          data-testid={`text-consent-refresh-error-${item.id}`}
+                        >
+                          Couldn't verify disconnect date:{" "}
+                          {formatPlaidErrorForDisplay(
+                            item.consentExpirationLastRefreshError,
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

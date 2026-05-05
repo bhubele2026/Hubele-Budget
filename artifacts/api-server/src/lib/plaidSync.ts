@@ -549,6 +549,13 @@ export async function syncPlaidItem(
     // Best-effort: any failure here must not mask the original sync
     // error we still need to write below.
     let refreshedConsentExpirationAt: Date | null | undefined = undefined;
+    // (#265) Track the consent-refresh /item/get outcome separately
+    // from the wrapping sync error so we can persist a clear, inline
+    // failure reason next to "Disconnect date checked …" on Settings
+    // without clobbering it on the next healthy sync.
+    let consentRefreshError: string | null = null;
+    let consentRefreshErrorCode: string | null = null;
+    let consentRefreshSucceeded = false;
     if (code === "PENDING_EXPIRATION" || code === "PENDING_DISCONNECT") {
       try {
         const itemResp = await plaid().itemGet({
@@ -567,8 +574,14 @@ export async function syncPlaidItem(
         } else {
           refreshedConsentExpirationAt = null;
         }
-      } catch {
-        // Leave the previously stored value alone if /item/get fails.
+        consentRefreshSucceeded = true;
+      } catch (refreshErr) {
+        // Leave the previously stored cutoff value alone if /item/get
+        // fails, but capture the reason so the Settings row can show
+        // a "Couldn't verify disconnect date: …" line.
+        const refreshed = extractPlaidError(refreshErr);
+        consentRefreshError = refreshed.message;
+        consentRefreshErrorCode = refreshed.code;
       }
     }
     await db
@@ -580,10 +593,22 @@ export async function syncPlaidItem(
         // succeeded, regardless of whether the cutoff value actually
         // moved. Lets support tell "the cutoff is current" apart from
         // "we have not been able to reach Plaid for this item lately".
-        ...(refreshedConsentExpirationAt !== undefined
+        ...(consentRefreshSucceeded
           ? {
               consentExpirationAt: refreshedConsentExpirationAt,
               consentExpirationLastRefreshedAt: new Date(),
+              // (#265) Clear any previously persisted consent-refresh
+              // error now that /item/get has succeeded again.
+              consentExpirationLastRefreshError: null,
+              consentExpirationLastRefreshErrorCode: null,
+            }
+          : {}),
+        // (#265) Persist the /item/get failure reason so Settings can
+        // render it inline under "Disconnect date checked …".
+        ...(consentRefreshError !== null
+          ? {
+              consentExpirationLastRefreshError: consentRefreshError,
+              consentExpirationLastRefreshErrorCode: consentRefreshErrorCode,
             }
           : {}),
       })
@@ -703,6 +728,10 @@ export async function refreshConsentExpirationForItem(
       .set({
         consentExpirationLastRefreshedAt: refreshedAt,
         ...(changed ? { consentExpirationAt: next } : {}),
+        // (#265) Clear any previously persisted consent-refresh
+        // error now that /item/get has succeeded again.
+        consentExpirationLastRefreshError: null,
+        consentExpirationLastRefreshErrorCode: null,
       })
       .where(eq(plaidItemsTable.id, itemRowId));
     return {
@@ -715,7 +744,19 @@ export async function refreshConsentExpirationForItem(
       error: null,
     };
   } catch (e) {
-    const { message } = extractPlaidError(e);
+    const { code, message } = extractPlaidError(e);
+    // (#265) Persist the failure so a user who walks away after the
+    // manual or cron-driven refresh can still see *why* this item's
+    // disconnect-date check failed without having to re-trigger the
+    // refresh. Distinct from `last_sync_error` so a healthy
+    // /transactions/sync does not erase the consent-refresh failure.
+    await db
+      .update(plaidItemsTable)
+      .set({
+        consentExpirationLastRefreshError: message,
+        consentExpirationLastRefreshErrorCode: code,
+      })
+      .where(eq(plaidItemsTable.id, itemRowId));
     return {
       itemRowId: item.id,
       itemId: item.itemId,

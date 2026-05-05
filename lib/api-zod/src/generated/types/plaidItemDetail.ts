@@ -37,5 +37,9 @@ sync chip.
   consentExpirationAt?: string | null;
   /** @nullable */
   consentExpirationLastRefreshedAt?: string | null;
+  /** @nullable */
+  consentExpirationLastRefreshError?: string | null;
+  /** @nullable */
+  consentExpirationLastRefreshErrorCode?: string | null;
   accounts: PlaidAccount[];
 }

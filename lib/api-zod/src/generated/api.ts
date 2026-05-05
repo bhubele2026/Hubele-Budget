@@ -1969,6 +1969,8 @@ export const ExchangePlaidPublicTokenResponse = zod.object({
   stillPreparingSince: zod.string().nullish(),
   consentExpirationAt: zod.string().nullish(),
   consentExpirationLastRefreshedAt: zod.string().nullish(),
+  consentExpirationLastRefreshError: zod.string().nullish(),
+  consentExpirationLastRefreshErrorCode: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),
@@ -2000,6 +2002,8 @@ export const ListPlaidItemsResponseItem = zod.object({
   stillPreparingSince: zod.string().nullish(),
   consentExpirationAt: zod.string().nullish(),
   consentExpirationLastRefreshedAt: zod.string().nullish(),
+  consentExpirationLastRefreshError: zod.string().nullish(),
+  consentExpirationLastRefreshErrorCode: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),

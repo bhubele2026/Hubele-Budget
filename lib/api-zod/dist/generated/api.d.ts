@@ -4661,6 +4661,8 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     stillPreparingSince: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentExpirationAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentExpirationLastRefreshedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    consentExpirationLastRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    consentExpirationLastRefreshErrorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -4708,6 +4710,8 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     stillPreparingSince?: string | null | undefined;
     consentExpirationAt?: string | null | undefined;
     consentExpirationLastRefreshedAt?: string | null | undefined;
+    consentExpirationLastRefreshError?: string | null | undefined;
+    consentExpirationLastRefreshErrorCode?: string | null | undefined;
 }, {
     id: string;
     itemId: string;
@@ -4730,6 +4734,8 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     stillPreparingSince?: string | null | undefined;
     consentExpirationAt?: string | null | undefined;
     consentExpirationLastRefreshedAt?: string | null | undefined;
+    consentExpirationLastRefreshError?: string | null | undefined;
+    consentExpirationLastRefreshErrorCode?: string | null | undefined;
 }>;
 export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     id: zod.ZodString;
@@ -4744,6 +4750,8 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     stillPreparingSince: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentExpirationAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentExpirationLastRefreshedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    consentExpirationLastRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    consentExpirationLastRefreshErrorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -4791,6 +4799,8 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     stillPreparingSince?: string | null | undefined;
     consentExpirationAt?: string | null | undefined;
     consentExpirationLastRefreshedAt?: string | null | undefined;
+    consentExpirationLastRefreshError?: string | null | undefined;
+    consentExpirationLastRefreshErrorCode?: string | null | undefined;
 }, {
     id: string;
     itemId: string;
@@ -4813,6 +4823,8 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     stillPreparingSince?: string | null | undefined;
     consentExpirationAt?: string | null | undefined;
     consentExpirationLastRefreshedAt?: string | null | undefined;
+    consentExpirationLastRefreshError?: string | null | undefined;
+    consentExpirationLastRefreshErrorCode?: string | null | undefined;
 }>;
 export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -4827,6 +4839,8 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     stillPreparingSince: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentExpirationAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentExpirationLastRefreshedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    consentExpirationLastRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    consentExpirationLastRefreshErrorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -4874,6 +4888,8 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     stillPreparingSince?: string | null | undefined;
     consentExpirationAt?: string | null | undefined;
     consentExpirationLastRefreshedAt?: string | null | undefined;
+    consentExpirationLastRefreshError?: string | null | undefined;
+    consentExpirationLastRefreshErrorCode?: string | null | undefined;
 }, {
     id: string;
     itemId: string;
@@ -4896,6 +4912,8 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     stillPreparingSince?: string | null | undefined;
     consentExpirationAt?: string | null | undefined;
     consentExpirationLastRefreshedAt?: string | null | undefined;
+    consentExpirationLastRefreshError?: string | null | undefined;
+    consentExpirationLastRefreshErrorCode?: string | null | undefined;
 }>, "many">;
 export declare const DeletePlaidItemParams: zod.ZodObject<{
     id: zod.ZodString;

@@ -233,6 +233,66 @@ describe("(#253) refreshConsentExpirationForItem", () => {
     ).toBeGreaterThan(staleRefresh.getTime());
   });
 
+  it("(#265) persists the /item/get failure on the row and clears it on the next successful refresh", async () => {
+    const { itemRowId } = await seedItem({
+      consentExpirationAt: new Date("2026-05-21T15:30:00.000Z"),
+    });
+
+    // First: a failure must be persisted so a user who walks away
+    // after the manual or cron-driven refresh can still see WHY this
+    // bank's check failed without having to re-trigger the refresh.
+    itemGetMock = async () => {
+      throw {
+        message: "Request failed with status code 400",
+        response: {
+          status: 400,
+          data: {
+            error_code: "ITEM_LOGIN_REQUIRED",
+            error_message: "the user needs to reauth",
+            error_type: "ITEM_ERROR",
+          },
+        },
+      };
+    };
+    const failed = await refreshConsentExpirationForItem(itemRowId);
+    expect(failed.error).toMatch(/reauth/);
+
+    const [afterFail] = await db
+      .select({
+        consentExpirationLastRefreshError:
+          plaidItemsTable.consentExpirationLastRefreshError,
+        consentExpirationLastRefreshErrorCode:
+          plaidItemsTable.consentExpirationLastRefreshErrorCode,
+      })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    expect(afterFail?.consentExpirationLastRefreshError).toMatch(/reauth/);
+    expect(afterFail?.consentExpirationLastRefreshErrorCode).toBe(
+      "ITEM_LOGIN_REQUIRED",
+    );
+
+    // Then a successful refresh must clear the persisted error so a
+    // healed item stops showing the stale "Couldn't verify…" line.
+    itemGetMock = async () => ({
+      data: {
+        item: { item_id: "x", consent_expiration_time: "2026-09-15T12:00:00.000Z" },
+      },
+    });
+    const ok = await refreshConsentExpirationForItem(itemRowId);
+    expect(ok.error).toBeNull();
+    const [afterOk] = await db
+      .select({
+        consentExpirationLastRefreshError:
+          plaidItemsTable.consentExpirationLastRefreshError,
+        consentExpirationLastRefreshErrorCode:
+          plaidItemsTable.consentExpirationLastRefreshErrorCode,
+      })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    expect(afterOk?.consentExpirationLastRefreshError).toBeNull();
+    expect(afterOk?.consentExpirationLastRefreshErrorCode).toBeNull();
+  });
+
   it("captures /item/get failures on the result without throwing and leaves the stored value alone", async () => {
     const stored = new Date("2026-05-21T15:30:00.000Z");
     const priorRefresh = new Date("2026-04-01T00:00:00.000Z");

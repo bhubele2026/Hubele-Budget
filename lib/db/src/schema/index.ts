@@ -252,6 +252,22 @@ export const plaidItemsTable = pgTable(
       "consent_expiration_last_refreshed_at",
       { withTimezone: true },
     ),
+    // (#265) Latest /item/get failure message captured during the
+    // consent_expiration refresh path (manual trigger, on-sync
+    // PENDING_EXPIRATION refresh, or daily cron). Cleared on the
+    // next successful refresh. Lets the Settings page render an
+    // inline "why" under the per-item "Disconnect date checked …"
+    // line so a user who walks away after running the manual
+    // refresh can still see which bank errored without having to
+    // re-click the button. Distinct from `last_sync_error` (which
+    // tracks /transactions/sync failures) so a healthy sync does
+    // not erase the consent-refresh failure and vice versa.
+    consentExpirationLastRefreshError: text(
+      "consent_expiration_last_refresh_error",
+    ),
+    consentExpirationLastRefreshErrorCode: text(
+      "consent_expiration_last_refresh_error_code",
+    ),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
