@@ -14,6 +14,7 @@ import {
   useUncategorizeTransactionsByIds,
   getListMappingRulesQueryKey,
   createMappingRule,
+  updateMappingRule,
   deleteMappingRule,
   getListTransactionsQueryKey,
   getGetBudgetMonthQueryKey,
@@ -632,6 +633,10 @@ export default function MappingRulesPage() {
   // can't linger in the set.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Task #231 — bulk-change category. Tracked separately from
+  // bulkDeleting so the bar can disable both controls during either
+  // operation without confusing onSettled bookkeeping.
+  const [bulkUpdating, setBulkUpdating] = useState(false);
   const toggleSelected = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -1020,6 +1025,117 @@ export default function MappingRulesPage() {
       );
       toast({
         title: `Restored ${deleted.length} rule${deleted.length === 1 ? "" : "s"}`,
+      });
+    } catch (e) {
+      toast({
+        title: "Couldn't restore rules",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      invalidateRules();
+    }
+  };
+
+  // Task #231 — bulk re-assign category for the selected rules. Mirrors
+  // the bulk-delete pattern: one combined optimistic update, fan out
+  // PATCH calls in parallel, single toast with a single Undo that
+  // restores each rule's prior categoryId in one go. Rules already
+  // pointed at the chosen category are skipped (no-op) so the toast
+  // count and the Undo set stay accurate.
+  const handleBulkChangeCategory = async (newCategoryId: string) => {
+    if (!newCategoryId) return;
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    const allRules = rules ?? [];
+    const idSet = new Set(ids);
+    const targets = allRules.filter(
+      (r) => idSet.has(r.id) && r.categoryId !== newCategoryId,
+    );
+    if (targets.length === 0) {
+      clearSelection();
+      return;
+    }
+    const targetCatName =
+      catById.get(newCategoryId)?.name ?? "the new category";
+
+    setBulkUpdating(true);
+    await queryClient.cancelQueries({ queryKey: rulesQueryKey });
+    const previous =
+      queryClient.getQueryData<MappingRule[]>(rulesQueryKey) ?? [];
+    queryClient.setQueryData<MappingRule[]>(
+      rulesQueryKey,
+      previous.map((r) =>
+        idSet.has(r.id) ? { ...r, categoryId: newCategoryId } : r,
+      ),
+    );
+    clearSelection();
+
+    try {
+      await Promise.all(
+        targets.map((r) =>
+          updateMappingRule(r.id, {
+            pattern: r.pattern,
+            matchType: r.matchType,
+            categoryId: newCategoryId,
+            priority: r.priority,
+          }),
+        ),
+      );
+      const count = targets.length;
+      const { dismiss } = toast({
+        title: `Updated ${count} rule${count === 1 ? "" : "s"} → ${targetCatName}`,
+        // Match the bulk-delete toast duration (~6s) so the Undo affordance
+        // stays visible long enough to recover from an accidental change.
+        duration: 6000,
+        action: (
+          <ToastAction
+            altText="Undo bulk change category"
+            data-testid="action-undo-bulk-change-category"
+            onClick={() => {
+              dismiss();
+              void handleBulkUndoCategoryChange(targets);
+            }}
+          >
+            Undo
+          </ToastAction>
+        ),
+      });
+    } catch (e) {
+      // Roll back the optimistic update if any PATCH failed — server
+      // state is now ambiguous (some may have succeeded), so we surface
+      // an error and let the invalidation reconcile.
+      rollback(previous);
+      toast({
+        title: "Couldn't update rules",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setBulkUpdating(false);
+      invalidateRules();
+    }
+  };
+
+  // Restore each changed rule's prior categoryId in one go. Each PATCH
+  // resends the rule's pattern / matchType / priority unchanged so only
+  // categoryId flips back. The cache invalidation below picks up the
+  // server's authoritative response.
+  const handleBulkUndoCategoryChange = async (changed: MappingRule[]) => {
+    if (changed.length === 0) return;
+    try {
+      await Promise.all(
+        changed.map((r) =>
+          updateMappingRule(r.id, {
+            pattern: r.pattern,
+            matchType: r.matchType,
+            categoryId: r.categoryId,
+            priority: r.priority,
+          }),
+        ),
+      );
+      toast({
+        title: `Restored ${changed.length} rule${changed.length === 1 ? "" : "s"}`,
       });
     } catch (e) {
       toast({
@@ -1916,12 +2032,47 @@ export default function MappingRulesPage() {
               </span>
               {selected.size > 0 && (
                 <>
+                  {/* Task #231 — bulk re-assign category for the
+                    * selected rules. The Select renders with no value
+                    * so picking any category triggers the action; we
+                    * key the trigger on selected.size so its label
+                    * resets back to the placeholder after the
+                    * operation completes (selection is cleared inside
+                    * the handler). */}
+                  <div className="ml-auto">
+                    <Select
+                      key={`bulk-category-${selected.size}`}
+                      value=""
+                      onValueChange={(v) =>
+                        void handleBulkChangeCategory(v)
+                      }
+                      disabled={bulkDeleting || bulkUpdating}
+                    >
+                      <SelectTrigger
+                        className="h-7 w-[180px] text-xs"
+                        data-testid="rule-bulk-change-category"
+                      >
+                        <SelectValue placeholder="Change category…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories?.map((cat) => (
+                          <SelectItem
+                            key={cat.id}
+                            value={cat.id}
+                            data-testid={`rule-bulk-change-category-option-${cat.id}`}
+                          >
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <Button
                     size="sm"
                     variant="destructive"
-                    className="ml-auto h-7"
+                    className="h-7"
                     onClick={handleBulkDelete}
-                    disabled={bulkDeleting}
+                    disabled={bulkDeleting || bulkUpdating}
                     data-testid="rule-bulk-delete"
                   >
                     <Trash2 className="w-3.5 h-3.5 mr-1.5" />
@@ -1932,7 +2083,7 @@ export default function MappingRulesPage() {
                     variant="ghost"
                     className="h-7"
                     onClick={clearSelection}
-                    disabled={bulkDeleting}
+                    disabled={bulkDeleting || bulkUpdating}
                     data-testid="rule-bulk-clear"
                   >
                     Clear
