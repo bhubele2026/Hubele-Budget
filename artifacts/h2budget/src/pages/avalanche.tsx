@@ -1458,6 +1458,7 @@ export default function AvalanchePage() {
                                 }
                               >
                                 {t.name}
+                                {t.extraPaid > 0 ? ` +${fmtMoney(t.extraPaid)}` : ""}
                               </span>
                             ))}
                           </div>
