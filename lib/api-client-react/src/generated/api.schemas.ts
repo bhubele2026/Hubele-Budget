@@ -427,13 +427,20 @@ preserved).
    */
   fromCategoryId: string | null;
   toCategoryId: string;
-  /** Optional whitelist of transaction ids to scope the bulk
+  /**
+   * Optional whitelist of transaction ids to scope the bulk
 update to. When provided, the server only flips rows whose
 id is in this list AND whose categoryId still equals
 `fromCategoryId`. Used by the client's "Undo" affordance to
 revert exactly the rows that the original bulk touched,
-skipping any the user has since re-edited.
- */
+skipping any the user has since re-edited. Capped at 1000
+ids per request — a longer list is rejected with a 400 to
+prevent a hand-crafted payload from stalling the API; in
+practice the array is bounded by what currently matches
+the pattern, well below this cap.
+
+   * @maxItems 1000
+   */
   ids?: string[];
   /** Optional id of the mapping rule whose previous re-point
 should be reversed alongside the transaction flip. When

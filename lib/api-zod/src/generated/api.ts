@@ -371,6 +371,8 @@ rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
 
  */
 
+export const recategorizeTransactionsByPatternBodyIdsMax = 1000;
+
 export const RecategorizeTransactionsByPatternBody = zod.object({
   pattern: zod.string().min(1),
   matchType: zod.enum(["contains", "exact", "starts_with"]),
@@ -383,9 +385,10 @@ export const RecategorizeTransactionsByPatternBody = zod.object({
   toCategoryId: zod.string(),
   ids: zod
     .array(zod.string())
+    .max(recategorizeTransactionsByPatternBodyIdsMax)
     .optional()
     .describe(
-      'Optional whitelist of transaction ids to scope the bulk\nupdate to. When provided, the server only flips rows whose\nid is in this list AND whose categoryId still equals\n`fromCategoryId`. Used by the client\'s \"Undo\" affordance to\nrevert exactly the rows that the original bulk touched,\nskipping any the user has since re-edited.\n',
+      'Optional whitelist of transaction ids to scope the bulk\nupdate to. When provided, the server only flips rows whose\nid is in this list AND whose categoryId still equals\n`fromCategoryId`. Used by the client\'s \"Undo\" affordance to\nrevert exactly the rows that the original bulk touched,\nskipping any the user has since re-edited. Capped at 1000\nids per request — a longer list is rejected with a 400 to\nprevent a hand-crafted payload from stalling the API; in\npractice the array is bounded by what currently matches\nthe pattern, well below this cap.\n',
     ),
   ruleId: zod
     .string()

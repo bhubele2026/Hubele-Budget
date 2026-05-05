@@ -789,6 +789,7 @@ rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
 "Misc / Buffer" onto the user's real per-debt category).
 
  */
+export declare const recategorizeTransactionsByPatternBodyIdsMax = 1000;
 export declare const RecategorizeTransactionsByPatternBody: zod.ZodObject<{
     pattern: zod.ZodString;
     matchType: zod.ZodEnum<["contains", "exact", "starts_with"]>;

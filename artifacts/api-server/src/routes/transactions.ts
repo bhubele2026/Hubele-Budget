@@ -23,6 +23,7 @@ import {
   DeleteTransactionParams,
   ListTransactionsQueryParams,
   RecategorizeTransactionsByPatternBody,
+  recategorizeTransactionsByPatternBodyIdsMax,
   UncategorizeTransactionsByIdsBody,
   uncategorizeTransactionsByIdsBodyIdsMax,
   BulkSetForecastFlagBody,
@@ -627,6 +628,25 @@ router.post(
   "/transactions/recategorize-by-pattern",
   requireAuth,
   async (req, res): Promise<void> => {
+    // Pre-validate the optional ids whitelist length so callers get a
+    // clear, field-specific 400 ("Too many ids: …") instead of the
+    // generic zod "Array must contain at most N element(s)" message.
+    // In practice the array is bounded by what currently matches the
+    // pattern, but a hand-crafted request could submit an arbitrarily-
+    // long list and stall this request — the cap shields the API from
+    // that runaway. Mirrors the `maxItems: 1000` documented on
+    // RecategorizeByPatternInput.ids in the OpenAPI spec; the
+    // regenerated zod schema also enforces it as defense-in-depth.
+    const rawIds = (req.body as { ids?: unknown } | null | undefined)?.ids;
+    if (
+      Array.isArray(rawIds) &&
+      rawIds.length > recategorizeTransactionsByPatternBodyIdsMax
+    ) {
+      res.status(400).json({
+        error: `Too many ids: ${rawIds.length} exceeds the cap of ${recategorizeTransactionsByPatternBodyIdsMax} per request.`,
+      });
+      return;
+    }
     const parsed = RecategorizeTransactionsByPatternBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
