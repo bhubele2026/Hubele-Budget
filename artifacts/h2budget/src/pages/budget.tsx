@@ -78,6 +78,8 @@ import {
   Pin,
   PinOff,
   Tag,
+  CreditCard,
+  Landmark,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -862,14 +864,35 @@ function BudgetLineRow({
     >
       <div className="col-span-12 md:col-span-5 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            className="font-medium truncate hover:underline decoration-dotted underline-offset-2 text-left"
-            title={`View ${line.categoryName} transactions`}
-            onClick={() => navigate(drillDownHref)}
-          >
-            {line.categoryName}
-          </button>
+          {(() => {
+            const opensInAmex = drillDownHref.startsWith("/amex");
+            const destLabel = opensInAmex ? "Amex" : "Transactions";
+            return (
+              <button
+                type="button"
+                className="font-medium truncate hover:underline decoration-dotted underline-offset-2 text-left inline-flex items-center gap-1"
+                title={`View ${line.categoryName} transactions — Opens in ${destLabel}`}
+                onClick={() => navigate(drillDownHref)}
+                data-testid={`button-category-name-${line.categoryId}`}
+                data-drilldown-target={opensInAmex ? "amex" : "transactions"}
+              >
+                <span className="truncate">{line.categoryName}</span>
+                {opensInAmex ? (
+                  <CreditCard
+                    className="w-3 h-3 shrink-0 text-blue-600 dark:text-blue-300"
+                    aria-hidden="true"
+                    data-testid={`icon-drilldown-amex-${line.categoryId}`}
+                  />
+                ) : (
+                  <Landmark
+                    className="w-3 h-3 shrink-0 text-emerald-600 dark:text-emerald-300"
+                    aria-hidden="true"
+                    data-testid={`icon-drilldown-transactions-${line.categoryId}`}
+                  />
+                )}
+              </button>
+            );
+          })()}
           {sourceKind !== "manual" && <SourceBadge kind={sourceKind} />}
           {(line.sourceBreakdown ?? []).map((b) => (
             <Badge
