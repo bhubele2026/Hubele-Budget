@@ -30,6 +30,9 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip as RechartsTooltip,
+  ReferenceLine,
+  ReferenceDot,
+  Label as RechartsLabel,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1510,6 +1513,13 @@ export default function ForecastPage() {
       balance: Number(d.balance),
     }))
     .filter((d) => Number.isFinite(d.balance));
+  const cashBufferNum = proj?.cashBuffer ? Number(proj.cashBuffer) : NaN;
+  const lowestPoint = (() => {
+    if (!proj?.lowestDate || !Number.isFinite(lowestNum)) return null;
+    const match = dailySeries.find((d) => d.rawDate === proj.lowestDate);
+    if (!match) return null;
+    return { x: match.rawDate, y: lowestNum, rawDate: match.rawDate };
+  })();
 
   return (
     <div className="space-y-6">
@@ -1762,8 +1772,9 @@ export default function ForecastPage() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                 <XAxis
-                  dataKey="date"
+                  dataKey="rawDate"
                   tick={{ fontSize: 10 }}
+                  tickFormatter={(v: string) => shortDate(v)}
                   interval="preserveStartEnd"
                   minTickGap={32}
                 />
@@ -1796,6 +1807,44 @@ export default function ForecastPage() {
                   name="Projected balance"
                   isAnimationActive={false}
                 />
+                {Number.isFinite(cashBufferNum) && (
+                  <ReferenceLine
+                    y={cashBufferNum}
+                    stroke="hsl(var(--destructive))"
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    ifOverflow="extendDomain"
+                    data-testid="ref-cash-buffer"
+                  >
+                    <RechartsLabel
+                      value={`Cash buffer ${formatCurrency(cashBufferNum)}`}
+                      position="insideTopRight"
+                      fill="hsl(var(--destructive))"
+                      fontSize={10}
+                    />
+                  </ReferenceLine>
+                )}
+                {lowestPoint && (
+                  <ReferenceDot
+                    x={lowestPoint.x}
+                    y={lowestPoint.y}
+                    r={5}
+                    fill="hsl(var(--destructive))"
+                    stroke="hsl(var(--background))"
+                    strokeWidth={2}
+                    ifOverflow="extendDomain"
+                    isFront
+                    data-testid="ref-lowest-point"
+                  >
+                    <RechartsLabel
+                      value={`Lowest ${formatCurrency(lowestPoint.y)} · ${formatDate(lowestPoint.rawDate)}`}
+                      position="top"
+                      fill="hsl(var(--destructive))"
+                      fontSize={11}
+                      fontWeight={600}
+                    />
+                  </ReferenceDot>
+                )}
               </AreaChart>
             </ResponsiveContainer>
             )}
