@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
@@ -767,6 +767,7 @@ export function ReimbursementsBox({
       });
       setSelectedIds(new Set());
       setSelectionMode(false);
+      lastClickedIdRef.current = null;
     } catch (e) {
       qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
       toast({
@@ -777,9 +778,12 @@ export function ReimbursementsBox({
     }
   };
 
+  const lastClickedIdRef = useRef<string | null>(null);
+
   const exitSelectionMode = () => {
     setSelectedIds(new Set());
     setSelectionMode(false);
+    lastClickedIdRef.current = null;
   };
 
   const toggleSelected = (id: string) => {
@@ -789,6 +793,27 @@ export function ReimbursementsBox({
       else next.add(id);
       return next;
     });
+    lastClickedIdRef.current = id;
+  };
+
+  const selectRangeTo = (id: string) => {
+    const anchor = lastClickedIdRef.current;
+    const ids = pending.map((t) => t.id);
+    const endIdx = ids.indexOf(id);
+    if (endIdx === -1) return;
+    const startIdx = anchor ? ids.indexOf(anchor) : -1;
+    if (startIdx === -1) {
+      toggleSelected(id);
+      return;
+    }
+    const [lo, hi] =
+      startIdx <= endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (let i = lo; i <= hi; i += 1) next.add(ids[i]);
+      return next;
+    });
+    lastClickedIdRef.current = id;
   };
 
   const owedByListId = "dashboard-owed-by-suggestions";
@@ -809,6 +834,12 @@ export function ReimbursementsBox({
         {inSelectMode ? (
           <Checkbox
             checked={isSelected}
+            onClick={(e) => {
+              if (e.shiftKey) {
+                e.preventDefault();
+                selectRangeTo(t.id);
+              }
+            }}
             onCheckedChange={() => toggleSelected(t.id)}
             aria-label={isSelected ? "Unselect" : "Select"}
             data-testid={`select-reimburse-${t.id}`}

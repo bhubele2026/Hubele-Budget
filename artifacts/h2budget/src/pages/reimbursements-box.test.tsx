@@ -148,6 +148,82 @@ describe("ReimbursementsBox bulk-select", () => {
     );
   });
 
+  it("shift-click selects every pending row between the previous click and this one", async () => {
+    const rows: Transaction[] = [
+      tx({ id: "a", description: "Dinner",  owedBy: "Alice" }),
+      tx({ id: "b", description: "Uber",    owedBy: "Alice" }),
+      tx({ id: "c", description: "Movie",   owedBy: "Bob"   }),
+      tx({ id: "d", description: "Lunch",   owedBy: "Carol" }),
+    ];
+    renderBox(rows);
+    fireEvent.click(screen.getByTestId("bulk-reimburse-select-mode"));
+
+    // Anchor click on row "a", then shift-click on row "c": a, b, c selected.
+    fireEvent.click(screen.getByTestId("select-reimburse-a"));
+    fireEvent.click(screen.getByTestId("select-reimburse-c"), { shiftKey: true });
+
+    const bar = screen.getByTestId("bulk-reimburse-bar");
+    expect(within(bar).getByText(/3 of 4 selected/)).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("bulk-reimburse-mark-selected"));
+    await waitFor(() => {
+      expect(updateMutateAsync).toHaveBeenCalledTimes(3);
+    });
+    const ids = updateMutateAsync.mock.calls
+      .map(([arg]) => (arg as { id: string }).id)
+      .sort();
+    expect(ids).toEqual(["a", "b", "c"]);
+  });
+
+  it("shift-click works in reverse order from a later anchor row", async () => {
+    const rows: Transaction[] = [
+      tx({ id: "a", owedBy: "Alice" }),
+      tx({ id: "b", owedBy: "Alice" }),
+      tx({ id: "c", owedBy: "Bob"   }),
+      tx({ id: "d", owedBy: "Carol" }),
+    ];
+    renderBox(rows);
+    fireEvent.click(screen.getByTestId("bulk-reimburse-select-mode"));
+
+    fireEvent.click(screen.getByTestId("select-reimburse-d"));
+    fireEvent.click(screen.getByTestId("select-reimburse-b"), { shiftKey: true });
+
+    const bar = screen.getByTestId("bulk-reimburse-bar");
+    expect(within(bar).getByText(/3 of 4 selected/)).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("bulk-reimburse-mark-selected"));
+    await waitFor(() => {
+      expect(updateMutateAsync).toHaveBeenCalledTimes(3);
+    });
+    const ids = updateMutateAsync.mock.calls
+      .map(([arg]) => (arg as { id: string }).id)
+      .sort();
+    expect(ids).toEqual(["b", "c", "d"]);
+  });
+
+  it("re-entering selection mode forgets the prior anchor (no stale shift-click range)", () => {
+    const rows: Transaction[] = [
+      tx({ id: "a", owedBy: "Alice" }),
+      tx({ id: "b", owedBy: "Alice" }),
+      tx({ id: "c", owedBy: "Bob"   }),
+      tx({ id: "d", owedBy: "Carol" }),
+    ];
+    renderBox(rows);
+
+    // First session: anchor on "a", then cancel.
+    fireEvent.click(screen.getByTestId("bulk-reimburse-select-mode"));
+    fireEvent.click(screen.getByTestId("select-reimburse-a"));
+    fireEvent.click(screen.getByTestId("bulk-reimburse-cancel"));
+
+    // Second session: a fresh shift-click on "c" must NOT range-select from
+    // the stale "a" anchor — it should just toggle "c" alone.
+    fireEvent.click(screen.getByTestId("bulk-reimburse-select-mode"));
+    fireEvent.click(screen.getByTestId("select-reimburse-c"), { shiftKey: true });
+
+    const bar = screen.getByTestId("bulk-reimburse-bar");
+    expect(within(bar).getByText(/1 of 4 selected/)).toBeTruthy();
+  });
+
   it("Cancel clears the selection and exits selection mode without firing PATCH", () => {
     renderBox(baseRows);
     fireEvent.click(screen.getByTestId("bulk-reimburse-select-mode"));
