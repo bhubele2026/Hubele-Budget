@@ -34,6 +34,10 @@ import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } 
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { formatPreparingElapsed, isPreparingStalled } from "@/lib/plaidPreparing";
 import {
+  formatConsentRefreshAge,
+  isConsentRefreshStale,
+} from "@/lib/plaidConsentFreshness";
+import {
   PlaidReconnectButton,
   isPlaidReauthCode,
   plaidReauthReason,
@@ -615,24 +619,49 @@ export default function SettingsPage() {
                           /transactions/sync call. Hidden until the row
                           has been refreshed at least once (e.g. items
                           linked before this column existed). */}
-                      {item.consentExpirationLastRefreshedAt && (
-                        <div
-                          className="text-xs text-muted-foreground"
-                          data-testid={`text-consent-refreshed-${item.id}`}
-                          title={
-                            item.consentExpirationAt
-                              ? `Disconnect date on file: ${new Date(
-                                  item.consentExpirationAt,
-                                ).toLocaleString()}`
-                              : "Plaid does not report a disconnect date for this item."
-                          }
-                        >
-                          Disconnect date checked{" "}
-                          {new Date(
-                            item.consentExpirationLastRefreshedAt,
-                          ).toLocaleString()}
-                        </div>
-                      )}
+                      {item.consentExpirationLastRefreshedAt && (() => {
+                        // (#260) Once the daily refresh hasn't advanced this
+                        // timestamp in ~3 days, surface an amber chip so the
+                        // user can hit Sync and confirm whether the
+                        // disconnect cutoff above is still trustworthy.
+                        const isStale = isConsentRefreshStale(
+                          item.consentExpirationLastRefreshedAt,
+                          nowTick,
+                        );
+                        const age = formatConsentRefreshAge(
+                          item.consentExpirationLastRefreshedAt,
+                          nowTick,
+                        );
+                        return (
+                          <div
+                            className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap"
+                            data-testid={`text-consent-refreshed-${item.id}`}
+                            title={
+                              item.consentExpirationAt
+                                ? `Disconnect date on file: ${new Date(
+                                    item.consentExpirationAt,
+                                  ).toLocaleString()}`
+                                : "Plaid does not report a disconnect date for this item."
+                            }
+                          >
+                            <span>
+                              Disconnect date checked{" "}
+                              {new Date(
+                                item.consentExpirationLastRefreshedAt,
+                              ).toLocaleString()}
+                            </span>
+                            {isStale && (
+                              <span
+                                className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-700 dark:text-amber-400"
+                                data-testid={`badge-consent-refresh-stale-${item.id}`}
+                                title={`The daily check hasn't advanced this timestamp in ${age ?? "several days"}. The disconnect date above may be out of date — click Sync to re-verify with Plaid.`}
+                              >
+                                Disconnect date stale
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {item.stillPreparing && isPreparingStalled(item.stillPreparingSince, nowTick) && (
                         <div
                           className="text-xs text-amber-700 dark:text-amber-400 mt-1"
