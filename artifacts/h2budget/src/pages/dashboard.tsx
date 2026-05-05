@@ -53,6 +53,29 @@ function expenseAmount(t: Transaction): number {
   return a < 0 ? -a : 0;
 }
 
+// (#28) Compact label for non-Amex sources surfaced in the WK/MO/UN row
+// lists when "Include other sources" is on. Returns null for Amex (the
+// implicit default) so the badge stays out of the way for the common case.
+// "plaid:chase" -> "chase", "plaid:bank" -> "bank", "manual" -> "manual".
+export function nonAmexSourceLabel(source: string | null | undefined): string | null {
+  if (!source) return null;
+  const s = source.toLowerCase();
+  if (s === "amex" || s === "plaid:amex") return null;
+  if (s.startsWith("plaid:")) return s.slice("plaid:".length);
+  return s;
+}
+
+function SourceTag({ label }: { label: string }) {
+  return (
+    <span
+      className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded border border-muted-foreground/30 text-muted-foreground shrink-0"
+      title={`Source: ${label}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 function useBudgetEditor(bucket: "weekly" | "monthly" | "unplanned", periodKey: string) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -288,13 +311,19 @@ function WeeklyMonthlySection({
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                 {monthTxns.map((t) => {
                   const amt = Number(t.amount) || 0;
+                  const srcLabel = nonAmexSourceLabel(t.source);
                   return (
-                    <div key={t.id} className="flex items-center justify-between gap-3 text-sm">
+                    <div
+                      key={t.id}
+                      className="flex items-center justify-between gap-3 text-sm"
+                      data-testid={`row-weekly-${t.id}`}
+                    >
                       <div className="flex items-baseline gap-3 min-w-0">
                         <span className="text-[10px] uppercase tracking-widest text-muted-foreground w-12 shrink-0">
                           {new Date(t.occurredOn + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                         </span>
                         <span className="truncate">{t.description}</span>
+                        {srcLabel && <SourceTag label={srcLabel} />}
                       </div>
                       <span className={`tabular-nums font-mono ${amt < 0 ? "text-destructive" : "text-foreground"}`}>
                         {amt < 0 ? "-" : ""}{formatCurrency(Math.abs(amt))}
@@ -397,13 +426,19 @@ function MonthlyLikeSection({
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                 {recent.map((t) => {
                   const amt = Number(t.amount) || 0;
+                  const srcLabel = nonAmexSourceLabel(t.source);
                   return (
-                    <div key={t.id} className="flex items-center justify-between gap-3 text-sm">
+                    <div
+                      key={t.id}
+                      className="flex items-center justify-between gap-3 text-sm"
+                      data-testid={`row-${bucket}-${t.id}`}
+                    >
                       <div className="flex items-baseline gap-3 min-w-0">
                         <span className="text-[10px] uppercase tracking-widest text-muted-foreground w-12 shrink-0">
                           {new Date(t.occurredOn + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                         </span>
                         <span className="truncate">{t.description}</span>
+                        {srcLabel && <SourceTag label={srcLabel} />}
                       </div>
                       <span className={`tabular-nums font-mono ${amt < 0 ? "text-destructive" : "text-foreground"}`}>
                         {amt < 0 ? "-" : ""}{formatCurrency(Math.abs(amt))}
