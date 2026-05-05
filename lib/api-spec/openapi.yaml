@@ -1136,6 +1136,29 @@ paths:
           schema: { type: string }
       responses:
         "204": { description: Deleted }
+  /plaid/items/{id}/sync-attempts:
+    get:
+      operationId: listPlaidSyncAttempts
+      tags: [plaid]
+      summary: |
+        (#279) Most recent Plaid sync attempts for a single linked item.
+        Powers the Settings → Linked banks "Recent activity" expander
+        so users can spot a flaky bank link (e.g. "failed 4 of the
+        last 10 syncs") instead of only seeing the latest
+        `lastSyncError` snapshot. Newest first; capped server-side at
+        ~20 rows.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlaidSyncAttemptsResult" }
+        "404": { description: Plaid item not found }
   /plaid/sync:
     post:
       operationId: syncPlaidTransactions
@@ -3061,6 +3084,34 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/PlaidConsentRefreshItem" }
+    PlaidSyncAttempt:
+      type: object
+      required: [id, attemptedAt, kind, success]
+      properties:
+        id: { type: string }
+        # ISO timestamp of when the attempt completed (success or fail).
+        attemptedAt: { type: string }
+        # Which Plaid product call this row records:
+        #   * "transactions" — /transactions/sync
+        #   * "balance"      — /accounts/balance/get (bank snapshot refresh)
+        #   * "liabilities"  — /liabilities/get / /accounts/get fallback
+        kind:
+          type: string
+          enum: [transactions, balance, liabilities]
+        success: { type: boolean }
+        # Plaid's structured `error_code` when success=false; null on
+        # success or when Plaid did not return one.
+        errorCode: { type: ["string", "null"] }
+        # Human-readable message — Plaid's `error_message` when present,
+        # otherwise the underlying error string. Null on success.
+        errorMessage: { type: ["string", "null"] }
+    PlaidSyncAttemptsResult:
+      type: object
+      required: [attempts]
+      properties:
+        attempts:
+          type: array
+          items: { $ref: "#/components/schemas/PlaidSyncAttempt" }
     PlaidEnvironmentInfo:
       type: object
       required: [env, configured, nonProdItemCount, nonProdItems]

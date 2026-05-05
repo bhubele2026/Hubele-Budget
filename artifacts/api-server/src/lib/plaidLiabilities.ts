@@ -7,6 +7,7 @@ import {
 import { plaid } from "./plaid";
 import { logger } from "./logger";
 import { extractPlaidError } from "./plaidSync";
+import { recordPlaidSyncAttempt } from "./plaidSyncAttempts";
 
 export type LiabilityRow = {
   accountId: string;
@@ -135,6 +136,16 @@ export async function fetchLiabilitiesForItem(
             eq(plaidItemsTable.userId, userId),
           ),
         );
+      // (#279) Audit the failed liability fetch so the Recent activity
+      // panel surfaces it alongside transaction sync failures.
+      await recordPlaidSyncAttempt({
+        userId,
+        plaidItemId: itemRowId,
+        kind: "liabilities",
+        success: false,
+        errorCode: code,
+        errorMessage: message,
+      });
     }
     throw new PlaidLiabilitiesError(
       `Plaid fetch failed: ${String(acctErr ?? liabErr)}`,
@@ -154,6 +165,14 @@ export async function fetchLiabilitiesForItem(
           eq(plaidItemsTable.userId, userId),
         ),
       );
+    await recordPlaidSyncAttempt({
+      userId,
+      plaidItemId: itemRowId,
+      kind: "liabilities",
+      success: false,
+      errorCode: code,
+      errorMessage: message,
+    });
   } else if (acctResp) {
     await db
       .update(plaidItemsTable)
@@ -167,6 +186,18 @@ export async function fetchLiabilitiesForItem(
           eq(plaidItemsTable.userId, userId),
         ),
       );
+    // (#279) Successful liability fetch — record so users see "fetched
+    // ok" rows in Settings. Note INVALID_PRODUCT (handled silently
+    // above) lands here too, which is the right call: from the user's
+    // perspective the bank is healthy on the calls we *do* make.
+    await recordPlaidSyncAttempt({
+      userId,
+      plaidItemId: itemRowId,
+      kind: "liabilities",
+      success: true,
+      errorCode: null,
+      errorMessage: null,
+    });
   }
   const liab = resp?.data.liabilities;
   const accountsById = new Map(

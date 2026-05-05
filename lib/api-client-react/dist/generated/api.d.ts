@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteAmexAnchor200, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdateTransactionResponse } from "./api.schemas";
+import type { AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteAmexAnchor200, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdateTransactionResponse } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -1503,6 +1503,41 @@ export declare const useDeletePlaidItem: <TError = ErrorType<unknown>, TContext 
 }) => UseMutationResult<Awaited<ReturnType<typeof deletePlaidItem>>, TError, {
     id: string;
 }, TContext>;
+/**
+ * @summary (#279) Most recent Plaid sync attempts for a single linked item.
+Powers the Settings → Linked banks "Recent activity" expander
+so users can spot a flaky bank link (e.g. "failed 4 of the
+last 10 syncs") instead of only seeing the latest
+`lastSyncError` snapshot. Newest first; capped server-side at
+~20 rows.
+
+ */
+export declare const getListPlaidSyncAttemptsUrl: (id: string) => string;
+export declare const listPlaidSyncAttempts: (id: string, options?: RequestInit) => Promise<PlaidSyncAttemptsResult>;
+export declare const getListPlaidSyncAttemptsQueryKey: (id: string) => readonly [`/api/plaid/items/${string}/sync-attempts`];
+export declare const getListPlaidSyncAttemptsQueryOptions: <TData = Awaited<ReturnType<typeof listPlaidSyncAttempts>>, TError = ErrorType<void>>(id: string, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listPlaidSyncAttempts>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listPlaidSyncAttempts>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListPlaidSyncAttemptsQueryResult = NonNullable<Awaited<ReturnType<typeof listPlaidSyncAttempts>>>;
+export type ListPlaidSyncAttemptsQueryError = ErrorType<void>;
+/**
+ * @summary (#279) Most recent Plaid sync attempts for a single linked item.
+Powers the Settings → Linked banks "Recent activity" expander
+so users can spot a flaky bank link (e.g. "failed 4 of the
+last 10 syncs") instead of only seeing the latest
+`lastSyncError` snapshot. Newest first; capped server-side at
+~20 rows.
+
+ */
+export declare function useListPlaidSyncAttempts<TData = Awaited<ReturnType<typeof listPlaidSyncAttempts>>, TError = ErrorType<void>>(id: string, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listPlaidSyncAttempts>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
 export declare const getSyncPlaidTransactionsUrl: () => string;
 export declare const syncPlaidTransactions: (plaidSyncInput?: PlaidSyncInput, options?: RequestInit) => Promise<PlaidSyncResult>;
 export declare const getSyncPlaidTransactionsMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {

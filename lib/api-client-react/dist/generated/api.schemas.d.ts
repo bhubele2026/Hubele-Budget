@@ -1661,6 +1661,25 @@ export interface PlaidConsentRefreshResult {
     failed: number;
     items: PlaidConsentRefreshItem[];
 }
+export type PlaidSyncAttemptKind = (typeof PlaidSyncAttemptKind)[keyof typeof PlaidSyncAttemptKind];
+export declare const PlaidSyncAttemptKind: {
+    readonly transactions: "transactions";
+    readonly balance: "balance";
+    readonly liabilities: "liabilities";
+};
+export interface PlaidSyncAttempt {
+    id: string;
+    attemptedAt: string;
+    kind: PlaidSyncAttemptKind;
+    success: boolean;
+    /** @nullable */
+    errorCode?: string | null;
+    /** @nullable */
+    errorMessage?: string | null;
+}
+export interface PlaidSyncAttemptsResult {
+    attempts: PlaidSyncAttempt[];
+}
 /**
  * @nullable
  */

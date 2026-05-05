@@ -14,6 +14,7 @@ import { loadUserRules, categorize } from "./autoCategorize";
 import { expandItem, parseISO, addDays, fmtISO } from "./cashSignal";
 import { refreshAmexAnchor } from "./amexAnchor";
 import { logger } from "./logger";
+import { recordPlaidSyncAttempt } from "./plaidSyncAttempts";
 
 export type RuleAttribution = {
   ruleId: string;
@@ -498,6 +499,34 @@ export async function syncPlaidItem(
         .where(eq(plaidItemsTable.id, itemRowId));
     }
 
+    // (#279) Record one row per attempted product call so the
+    // Settings → Linked banks "Recent activity" panel can show the
+    // full history (success/failure per kind), not just the latest
+    // chip. Only emit a `balance` row when we actually attempted the
+    // refresh (item owns the bank-snapshot account).
+    await recordPlaidSyncAttempt({
+      userId,
+      plaidItemId: itemRowId,
+      kind: "transactions",
+      success: true,
+      errorCode: null,
+      errorMessage: null,
+    });
+    if (
+      checkingPlaidAccountId &&
+      forecastSettings?.bankSnapshotAccountId &&
+      bankSnapshotBelongsToThisItem
+    ) {
+      await recordPlaidSyncAttempt({
+        userId,
+        plaidItemId: itemRowId,
+        kind: "balance",
+        success: !balanceRefreshError,
+        errorCode: balanceRefreshErrorCode,
+        errorMessage: balanceRefreshError,
+      });
+    }
+
     // Sort attributions by count desc; insertion order (rule-first-hit
     // order) is the natural tiebreaker because Map preserves it.
     const ruleAttributions: RuleAttribution[] = Array.from(
@@ -530,6 +559,18 @@ export async function syncPlaidItem(
         .update(plaidItemsTable)
         .set({ stillPreparingSince: new Date() })
         .where(eq(plaidItemsTable.id, itemRowId));
+      // (#279) Record the still-preparing outcome so the Recent
+      // activity panel shows the warm-up phase, not just the eventual
+      // first success. Treated as a failure with the PRODUCT_NOT_READY
+      // code so support can see how long the warm-up took.
+      await recordPlaidSyncAttempt({
+        userId,
+        plaidItemId: itemRowId,
+        kind: "transactions",
+        success: false,
+        errorCode: code,
+        errorMessage: message,
+      });
       return {
         itemId: item.itemId,
         institutionName: item.institutionName,
@@ -613,6 +654,16 @@ export async function syncPlaidItem(
           : {}),
       })
       .where(eq(plaidItemsTable.id, itemRowId));
+    // (#279) Audit the failed transactions sync so the Recent activity
+    // panel can show "failed 4 of the last 10".
+    await recordPlaidSyncAttempt({
+      userId,
+      plaidItemId: itemRowId,
+      kind: "transactions",
+      success: false,
+      errorCode: code,
+      errorMessage: message,
+    });
     return {
       itemId: item.itemId,
       institutionName: item.institutionName,

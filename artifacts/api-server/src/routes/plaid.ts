@@ -40,6 +40,10 @@ import {
   fetchLiabilitiesForItem,
   fetchLiabilitiesForUser,
 } from "../lib/plaidLiabilities";
+import {
+  listRecentSyncAttempts,
+  PLAID_SYNC_ATTEMPT_LIST_LIMIT,
+} from "../lib/plaidSyncAttempts";
 import { debtsTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -1410,6 +1414,38 @@ router.post(
       req.log.error({ err: e }, "Plaid disconnect reminder sweep failed");
       res.status(500).json({ error: msg });
     }
+  },
+);
+
+// (#279) Per-item recent sync history. The Settings → Linked banks
+// "Recent activity" expander hits this once when the user opens it.
+// Returns the most recent ~20 attempts (any product) ordered newest
+// first; the client handles re-sorting in memory so columns can be
+// re-clicked without an extra round-trip.
+router.get(
+  "/plaid/items/:id/sync-attempts",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const itemRowId = String(req.params.id);
+    const [item] = await db
+      .select({ id: plaidItemsTable.id })
+      .from(plaidItemsTable)
+      .where(
+        and(
+          eq(plaidItemsTable.id, itemRowId),
+          eq(plaidItemsTable.userId, req.userId!),
+        ),
+      );
+    if (!item) {
+      res.status(404).json({ error: "Plaid item not found" });
+      return;
+    }
+    const attempts = await listRecentSyncAttempts(
+      req.userId!,
+      itemRowId,
+      PLAID_SYNC_ATTEMPT_LIST_LIMIT,
+    );
+    res.json({ attempts });
   },
 );
 

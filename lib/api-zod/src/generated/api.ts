@@ -2040,6 +2040,32 @@ export const DeletePlaidItemParams = zod.object({
   id: zod.coerce.string(),
 });
 
+/**
+ * @summary (#279) Most recent Plaid sync attempts for a single linked item.
+Powers the Settings → Linked banks "Recent activity" expander
+so users can spot a flaky bank link (e.g. "failed 4 of the
+last 10 syncs") instead of only seeing the latest
+`lastSyncError` snapshot. Newest first; capped server-side at
+~20 rows.
+
+ */
+export const ListPlaidSyncAttemptsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ListPlaidSyncAttemptsResponse = zod.object({
+  attempts: zod.array(
+    zod.object({
+      id: zod.string(),
+      attemptedAt: zod.string(),
+      kind: zod.enum(["transactions", "balance", "liabilities"]),
+      success: zod.boolean(),
+      errorCode: zod.string().nullish(),
+      errorMessage: zod.string().nullish(),
+    }),
+  ),
+});
+
 export const SyncPlaidTransactionsBody = zod.object({
   itemId: zod.string().nullish(),
 });

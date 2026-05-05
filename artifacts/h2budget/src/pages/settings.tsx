@@ -43,6 +43,7 @@ import {
   plaidReauthReason,
 } from "@/components/plaid-reconnect-button";
 import { OwnerInvitationsSection } from "@/components/owner-invitations";
+import { PlaidSyncHistory } from "@/components/plaid-sync-history";
 import {
   DEFAULT_DAYS_SINCE_TRACKERS,
   compileMatcher,
@@ -727,6 +728,9 @@ export default function SettingsPage() {
                       <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
                   </div>
+                </div>
+                <div className="mt-2 ml-8">
+                  <PlaidSyncHistory itemId={item.id} />
                 </div>
                 {item.accounts.length > 0 && (
                   <ul className="mt-3 ml-8 text-sm text-muted-foreground space-y-1">

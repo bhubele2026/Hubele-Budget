@@ -319,6 +319,44 @@ export const plaidConsentRemindersSentTable = pgTable(
   }),
 );
 
+// (#279) Append-only audit log of every Plaid sync attempt — one row
+// per (item, kind) outcome. Surfaces the full recent-history (e.g.
+// "this bank failed 4 of the last 10 syncs") in Settings → Linked
+// banks so users can spot a flaky bank link before they only see the
+// latest `lastSyncError` snapshot. Pruned by a daily cron so the
+// table stays bounded.
+//
+// `kind` is one of:
+//   * "transactions" — /transactions/sync (called from syncPlaidItem)
+//   * "balance"      — /accounts/balance/get (bank-snapshot refresh)
+//   * "liabilities"  — /liabilities/get + /accounts/get fallback
+export const plaidSyncAttemptsTable = pgTable(
+  "plaid_sync_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    plaidItemId: uuid("plaid_item_id")
+      .notNull()
+      .references((): AnyPgColumn => plaidItemsTable.id, {
+        onDelete: "cascade",
+      }),
+    attemptedAt: timestamp("attempted_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    kind: text("kind").notNull(),
+    success: boolean("success").notNull(),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+  },
+  (t) => ({
+    itemTimeIdx: index("plaid_sync_attempts_item_time_idx").on(
+      t.plaidItemId,
+      t.attemptedAt,
+    ),
+    userIdx: index("plaid_sync_attempts_user_idx").on(t.userId),
+  }),
+);
+
 export const plaidAccountsTable = pgTable(
   "plaid_accounts",
   {

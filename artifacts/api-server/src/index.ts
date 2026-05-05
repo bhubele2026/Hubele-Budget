@@ -6,6 +6,7 @@ import {
   syncAllForAllUsers,
 } from "./lib/plaidSync";
 import { sendExpirationRemindersForAllUsers } from "./lib/plaidExpirationReminder";
+import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
 
 // Plaid configuration validation:
@@ -146,6 +147,31 @@ app.listen(port, (err) => {
       { timezone: "UTC" },
     );
     logger.info("Plaid daily disconnect reminder scheduled");
+
+    // (#279) Daily prune of the plaid_sync_attempts audit log so the
+    // table stays bounded as users accumulate hourly syncs over months.
+    // Runs at 03:47 UTC, well clear of the other daily Plaid jobs so a
+    // slow prune doesn't stack on top of them.
+    cron.schedule(
+      "47 3 * * *",
+      () => {
+        prunePlaidSyncAttempts()
+          .then((deleted) => {
+            logger.info(
+              { deleted },
+              "Daily plaid_sync_attempts prune complete",
+            );
+          })
+          .catch((err) => {
+            logger.error(
+              { err },
+              "Daily plaid_sync_attempts prune failed",
+            );
+          });
+      },
+      { timezone: "UTC" },
+    );
+    logger.info("Plaid daily sync-attempts prune scheduled");
   } else {
     logger.warn("Plaid credentials missing — scheduled sync disabled");
   }

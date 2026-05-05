@@ -88,6 +88,7 @@ import type {
   PlaidItemDetail,
   PlaidLiabilityAccount,
   PlaidLinkToken,
+  PlaidSyncAttemptsResult,
   PlaidSyncInput,
   PlaidSyncResult,
   PlaidUpdateLinkTokenInput,
@@ -5646,6 +5647,106 @@ export const useDeletePlaidItem = <
 > => {
   return useMutation(getDeletePlaidItemMutationOptions(options));
 };
+
+/**
+ * @summary (#279) Most recent Plaid sync attempts for a single linked item.
+Powers the Settings → Linked banks "Recent activity" expander
+so users can spot a flaky bank link (e.g. "failed 4 of the
+last 10 syncs") instead of only seeing the latest
+`lastSyncError` snapshot. Newest first; capped server-side at
+~20 rows.
+
+ */
+export const getListPlaidSyncAttemptsUrl = (id: string) => {
+  return `/api/plaid/items/${id}/sync-attempts`;
+};
+
+export const listPlaidSyncAttempts = async (
+  id: string,
+  options?: RequestInit,
+): Promise<PlaidSyncAttemptsResult> => {
+  return customFetch<PlaidSyncAttemptsResult>(getListPlaidSyncAttemptsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListPlaidSyncAttemptsQueryKey = (id: string) => {
+  return [`/api/plaid/items/${id}/sync-attempts`] as const;
+};
+
+export const getListPlaidSyncAttemptsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPlaidSyncAttempts>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPlaidSyncAttempts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListPlaidSyncAttemptsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPlaidSyncAttempts>>
+  > = ({ signal }) => listPlaidSyncAttempts(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPlaidSyncAttempts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPlaidSyncAttemptsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPlaidSyncAttempts>>
+>;
+export type ListPlaidSyncAttemptsQueryError = ErrorType<void>;
+
+/**
+ * @summary (#279) Most recent Plaid sync attempts for a single linked item.
+Powers the Settings → Linked banks "Recent activity" expander
+so users can spot a flaky bank link (e.g. "failed 4 of the
+last 10 syncs") instead of only seeing the latest
+`lastSyncError` snapshot. Newest first; capped server-side at
+~20 rows.
+
+ */
+
+export function useListPlaidSyncAttempts<
+  TData = Awaited<ReturnType<typeof listPlaidSyncAttempts>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPlaidSyncAttempts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPlaidSyncAttemptsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 export const getSyncPlaidTransactionsUrl = () => {
   return `/api/plaid/sync`;

@@ -4978,6 +4978,64 @@ export declare const DeletePlaidItemParams: zod.ZodObject<{
 }, {
     id: string;
 }>;
+/**
+ * @summary (#279) Most recent Plaid sync attempts for a single linked item.
+Powers the Settings → Linked banks "Recent activity" expander
+so users can spot a flaky bank link (e.g. "failed 4 of the
+last 10 syncs") instead of only seeing the latest
+`lastSyncError` snapshot. Newest first; capped server-side at
+~20 rows.
+
+ */
+export declare const ListPlaidSyncAttemptsParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
+    attempts: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        attemptedAt: zod.ZodString;
+        kind: zod.ZodEnum<["transactions", "balance", "liabilities"]>;
+        success: zod.ZodBoolean;
+        errorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        errorMessage: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        kind: "balance" | "transactions" | "liabilities";
+        attemptedAt: string;
+        success: boolean;
+        errorCode?: string | null | undefined;
+        errorMessage?: string | null | undefined;
+    }, {
+        id: string;
+        kind: "balance" | "transactions" | "liabilities";
+        attemptedAt: string;
+        success: boolean;
+        errorCode?: string | null | undefined;
+        errorMessage?: string | null | undefined;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    attempts: {
+        id: string;
+        kind: "balance" | "transactions" | "liabilities";
+        attemptedAt: string;
+        success: boolean;
+        errorCode?: string | null | undefined;
+        errorMessage?: string | null | undefined;
+    }[];
+}, {
+    attempts: {
+        id: string;
+        kind: "balance" | "transactions" | "liabilities";
+        attemptedAt: string;
+        success: boolean;
+        errorCode?: string | null | undefined;
+        errorMessage?: string | null | undefined;
+    }[];
+}>;
 export declare const SyncPlaidTransactionsBody: zod.ZodObject<{
     itemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
