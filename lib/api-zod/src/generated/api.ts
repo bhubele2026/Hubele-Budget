@@ -1862,6 +1862,27 @@ export const ReopenForecastMonthParams = zod.object({
   monthKey: zod.coerce.string(),
 });
 
+export const GetAmexAnchorResponse = zod.object({
+  amexEndingBalance: zod.number().nullable(),
+  asOf: zod.string(),
+  source: zod.enum(["debt", "anchor", "computed", "missing"]),
+});
+
+export const SetAmexAnchorBody = zod.object({
+  balance: zod.number(),
+  asOf: zod.string().nullish(),
+});
+
+export const SetAmexAnchorResponse = zod.object({
+  amexEndingBalance: zod.number().nullable(),
+  asOf: zod.string(),
+  source: zod.enum(["debt", "anchor", "computed", "missing"]),
+});
+
+export const DeleteAmexAnchorResponse = zod.object({
+  ok: zod.boolean(),
+});
+
 export const ListDashboardBudgetsQueryParams = zod.object({
   bucket: zod.coerce.string().optional(),
   periodKey: zod.coerce.string().optional(),

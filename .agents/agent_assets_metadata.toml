@@ -6,6 +6,12 @@ uri = "file://artifacts/h2budget/public/logo.png"
 type = "image"
 title = "minimal ledger logo mark"
 
+[[generated]]
+id = "lSgf6X8SnMl3RuKZJg-5H"
+uri = "file://artifacts/mobile/assets/images/icon.png"
+type = "image"
+title = "h2 budget app icon"
+
 [[outputs]]
 id = "l68mkUO7fYytUp6cUU-JL"
 uri = "file://artifacts/h2budget/test-results/mapping-rules-drag-to-cate-cdcd8-s-its-categoryId-and-toasts/test-failed-1.png"

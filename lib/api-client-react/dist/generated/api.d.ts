@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdateTransactionResponse } from "./api.schemas";
+import type { AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DeleteAmexAnchor200, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdateTransactionResponse } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -1292,6 +1292,56 @@ export declare const useReopenForecastMonth: <TError = ErrorType<unknown>, TCont
 }) => UseMutationResult<Awaited<ReturnType<typeof reopenForecastMonth>>, TError, {
     monthKey: string;
 }, TContext>;
+export declare const getGetAmexAnchorUrl: () => string;
+export declare const getAmexAnchor: (options?: RequestInit) => Promise<AmexAnchor>;
+export declare const getGetAmexAnchorQueryKey: () => readonly ["/api/amex/anchor"];
+export declare const getGetAmexAnchorQueryOptions: <TData = Awaited<ReturnType<typeof getAmexAnchor>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getAmexAnchor>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getAmexAnchor>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetAmexAnchorQueryResult = NonNullable<Awaited<ReturnType<typeof getAmexAnchor>>>;
+export type GetAmexAnchorQueryError = ErrorType<unknown>;
+export declare function useGetAmexAnchor<TData = Awaited<ReturnType<typeof getAmexAnchor>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getAmexAnchor>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+export declare const getSetAmexAnchorUrl: () => string;
+export declare const setAmexAnchor: (amexAnchorInput: AmexAnchorInput, options?: RequestInit) => Promise<AmexAnchor>;
+export declare const getSetAmexAnchorMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof setAmexAnchor>>, TError, {
+        data: BodyType<AmexAnchorInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof setAmexAnchor>>, TError, {
+    data: BodyType<AmexAnchorInput>;
+}, TContext>;
+export type SetAmexAnchorMutationResult = NonNullable<Awaited<ReturnType<typeof setAmexAnchor>>>;
+export type SetAmexAnchorMutationBody = BodyType<AmexAnchorInput>;
+export type SetAmexAnchorMutationError = ErrorType<unknown>;
+export declare const useSetAmexAnchor: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof setAmexAnchor>>, TError, {
+        data: BodyType<AmexAnchorInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof setAmexAnchor>>, TError, {
+    data: BodyType<AmexAnchorInput>;
+}, TContext>;
+export declare const getDeleteAmexAnchorUrl: () => string;
+export declare const deleteAmexAnchor: (options?: RequestInit) => Promise<DeleteAmexAnchor200>;
+export declare const getDeleteAmexAnchorMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteAmexAnchor>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof deleteAmexAnchor>>, TError, void, TContext>;
+export type DeleteAmexAnchorMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAmexAnchor>>>;
+export type DeleteAmexAnchorMutationError = ErrorType<unknown>;
+export declare const useDeleteAmexAnchor: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteAmexAnchor>>, TError, void, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof deleteAmexAnchor>>, TError, void, TContext>;
 export declare const getListDashboardBudgetsUrl: (params?: ListDashboardBudgetsParams) => string;
 export declare const listDashboardBudgets: (params?: ListDashboardBudgetsParams, options?: RequestInit) => Promise<DashboardBudget[]>;
 export declare const getListDashboardBudgetsQueryKey: (params?: ListDashboardBudgetsParams) => readonly ["/api/dashboard-budgets", ...ListDashboardBudgetsParams[]];

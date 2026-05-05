@@ -1496,6 +1496,24 @@ export interface SetBankSnapshotInput {
     /** @nullable */
     plaidAccountId?: string | null;
 }
+export type AmexAnchorSource = (typeof AmexAnchorSource)[keyof typeof AmexAnchorSource];
+export declare const AmexAnchorSource: {
+    readonly debt: "debt";
+    readonly anchor: "anchor";
+    readonly computed: "computed";
+    readonly missing: "missing";
+};
+export interface AmexAnchor {
+    /** @nullable */
+    amexEndingBalance: number | null;
+    asOf: string;
+    source: AmexAnchorSource;
+}
+export interface AmexAnchorInput {
+    balance: number;
+    /** @nullable */
+    asOf?: string | null;
+}
 export interface DashboardBudget {
     id: string;
     bucket: string;
@@ -1689,6 +1707,9 @@ export type CloseForecastMonthBody = {
     pending?: number | null;
     /** @nullable */
     reconciled?: boolean | null;
+};
+export type DeleteAmexAnchor200 = {
+    ok: boolean;
 };
 export type ListDashboardBudgetsParams = {
     bucket?: string;

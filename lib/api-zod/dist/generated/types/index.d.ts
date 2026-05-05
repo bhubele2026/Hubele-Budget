@@ -5,6 +5,9 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+export * from "./amexAnchor";
+export * from "./amexAnchorInput";
+export * from "./amexAnchorSource";
 export * from "./aprilChaseSeedResult";
 export * from "./avalancheExtra";
 export * from "./avalancheExtraBreakdown";
@@ -77,6 +80,7 @@ export * from "./debtMinPaymentSource";
 export * from "./debtPaymentInput";
 export * from "./debtPaymentResult";
 export * from "./debtPlaidAccount";
+export * from "./deleteAmexAnchor200";
 export * from "./deleteDashboardBudgetParams";
 export * from "./forecastBundle";
 export * from "./forecastBundleMonthSnapshots";

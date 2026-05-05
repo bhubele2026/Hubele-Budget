@@ -4468,6 +4468,49 @@ export declare const ReopenForecastMonthParams: zod.ZodObject<{
 }, {
     monthKey: string;
 }>;
+export declare const GetAmexAnchorResponse: zod.ZodObject<{
+    amexEndingBalance: zod.ZodNullable<zod.ZodNumber>;
+    asOf: zod.ZodString;
+    source: zod.ZodEnum<["debt", "anchor", "computed", "missing"]>;
+}, "strip", zod.ZodTypeAny, {
+    source: "debt" | "anchor" | "computed" | "missing";
+    amexEndingBalance: number | null;
+    asOf: string;
+}, {
+    source: "debt" | "anchor" | "computed" | "missing";
+    amexEndingBalance: number | null;
+    asOf: string;
+}>;
+export declare const SetAmexAnchorBody: zod.ZodObject<{
+    balance: zod.ZodNumber;
+    asOf: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+}, "strip", zod.ZodTypeAny, {
+    balance: number;
+    asOf?: string | null | undefined;
+}, {
+    balance: number;
+    asOf?: string | null | undefined;
+}>;
+export declare const SetAmexAnchorResponse: zod.ZodObject<{
+    amexEndingBalance: zod.ZodNullable<zod.ZodNumber>;
+    asOf: zod.ZodString;
+    source: zod.ZodEnum<["debt", "anchor", "computed", "missing"]>;
+}, "strip", zod.ZodTypeAny, {
+    source: "debt" | "anchor" | "computed" | "missing";
+    amexEndingBalance: number | null;
+    asOf: string;
+}, {
+    source: "debt" | "anchor" | "computed" | "missing";
+    amexEndingBalance: number | null;
+    asOf: string;
+}>;
+export declare const DeleteAmexAnchorResponse: zod.ZodObject<{
+    ok: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    ok: boolean;
+}, {
+    ok: boolean;
+}>;
 export declare const ListDashboardBudgetsQueryParams: zod.ZodObject<{
     bucket: zod.ZodOptional<zod.ZodString>;
     periodKey: zod.ZodOptional<zod.ZodString>;

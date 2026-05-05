@@ -17,6 +17,8 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AmexAnchor,
+  AmexAnchorInput,
   AprilChaseSeedResult,
   AvalancheExtra,
   AvalancheSettings,
@@ -52,6 +54,7 @@ import type {
   DebtLinkInput,
   DebtPaymentInput,
   DebtPaymentResult,
+  DeleteAmexAnchor200,
   DeleteDashboardBudgetParams,
   ForecastBundle,
   ForecastClosedMonth,
@@ -4760,6 +4763,229 @@ export const useReopenForecastMonth = <
   TContext
 > => {
   return useMutation(getReopenForecastMonthMutationOptions(options));
+};
+
+export const getGetAmexAnchorUrl = () => {
+  return `/api/amex/anchor`;
+};
+
+export const getAmexAnchor = async (
+  options?: RequestInit,
+): Promise<AmexAnchor> => {
+  return customFetch<AmexAnchor>(getGetAmexAnchorUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAmexAnchorQueryKey = () => {
+  return [`/api/amex/anchor`] as const;
+};
+
+export const getGetAmexAnchorQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAmexAnchor>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAmexAnchor>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAmexAnchorQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAmexAnchor>>> = ({
+    signal,
+  }) => getAmexAnchor({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAmexAnchor>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAmexAnchorQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAmexAnchor>>
+>;
+export type GetAmexAnchorQueryError = ErrorType<unknown>;
+
+export function useGetAmexAnchor<
+  TData = Awaited<ReturnType<typeof getAmexAnchor>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAmexAnchor>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAmexAnchorQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getSetAmexAnchorUrl = () => {
+  return `/api/amex/anchor`;
+};
+
+export const setAmexAnchor = async (
+  amexAnchorInput: AmexAnchorInput,
+  options?: RequestInit,
+): Promise<AmexAnchor> => {
+  return customFetch<AmexAnchor>(getSetAmexAnchorUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(amexAnchorInput),
+  });
+};
+
+export const getSetAmexAnchorMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setAmexAnchor>>,
+    TError,
+    { data: BodyType<AmexAnchorInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setAmexAnchor>>,
+  TError,
+  { data: BodyType<AmexAnchorInput> },
+  TContext
+> => {
+  const mutationKey = ["setAmexAnchor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setAmexAnchor>>,
+    { data: BodyType<AmexAnchorInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setAmexAnchor(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetAmexAnchorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setAmexAnchor>>
+>;
+export type SetAmexAnchorMutationBody = BodyType<AmexAnchorInput>;
+export type SetAmexAnchorMutationError = ErrorType<unknown>;
+
+export const useSetAmexAnchor = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setAmexAnchor>>,
+    TError,
+    { data: BodyType<AmexAnchorInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setAmexAnchor>>,
+  TError,
+  { data: BodyType<AmexAnchorInput> },
+  TContext
+> => {
+  return useMutation(getSetAmexAnchorMutationOptions(options));
+};
+
+export const getDeleteAmexAnchorUrl = () => {
+  return `/api/amex/anchor`;
+};
+
+export const deleteAmexAnchor = async (
+  options?: RequestInit,
+): Promise<DeleteAmexAnchor200> => {
+  return customFetch<DeleteAmexAnchor200>(getDeleteAmexAnchorUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteAmexAnchorMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAmexAnchor>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteAmexAnchor>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["deleteAmexAnchor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteAmexAnchor>>,
+    void
+  > = () => {
+    return deleteAmexAnchor(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteAmexAnchorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteAmexAnchor>>
+>;
+
+export type DeleteAmexAnchorMutationError = ErrorType<unknown>;
+
+export const useDeleteAmexAnchor = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAmexAnchor>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteAmexAnchor>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getDeleteAmexAnchorMutationOptions(options));
 };
 
 export const getListDashboardBudgetsUrl = (

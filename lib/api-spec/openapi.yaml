@@ -983,6 +983,44 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /amex/anchor:
+    get:
+      operationId: getAmexAnchor
+      tags: [amex]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AmexAnchor" }
+    post:
+      operationId: setAmexAnchor
+      tags: [amex]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AmexAnchorInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AmexAnchor" }
+    delete:
+      operationId: deleteAmexAnchor
+      tags: [amex]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+
   /dashboard-budgets:
     get:
       operationId: listDashboardBudgets
@@ -2762,6 +2800,20 @@ components:
       properties:
         balance: { type: ["string", "null"] }
         plaidAccountId: { type: ["string", "null"] }
+
+    AmexAnchor:
+      type: object
+      required: [amexEndingBalance, asOf, source]
+      properties:
+        amexEndingBalance: { type: ["number", "null"] }
+        asOf: { type: string }
+        source: { type: string, enum: [debt, anchor, computed, missing] }
+    AmexAnchorInput:
+      type: object
+      required: [balance]
+      properties:
+        balance: { type: number }
+        asOf: { type: ["string", "null"] }
 
     DashboardBudget:
       type: object
