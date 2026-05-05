@@ -83,7 +83,7 @@ vi.mock("@/hooks/use-bulk-recategorize-prompt", () => ({
 
 vi.mock("wouter", () => ({
   useSearch: () => "",
-  useLocation: () => ["/", vi.fn()],
+  useLocation: () => ["/mapping-rules", vi.fn()],
 }));
 
 vi.mock("@dnd-kit/core", () => ({
@@ -221,6 +221,7 @@ vi.mock("@workspace/api-client-react", () => ({
   }),
   usePreviewMappingRuleRecategorizeByPattern: () => ({
     mutate: vi.fn(),
+    data: undefined,
     reset: vi.fn(),
     isPending: false,
   }),

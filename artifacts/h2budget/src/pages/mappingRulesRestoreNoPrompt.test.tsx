@@ -49,7 +49,7 @@ vi.mock("@/hooks/use-bulk-recategorize-prompt", () => ({
 // wouter is only used for ?focus= deep linking on this page; safe to stub.
 vi.mock("wouter", () => ({
   useSearch: () => "",
-  useLocation: () => ["/", vi.fn()],
+  useLocation: () => ["/mapping-rules", vi.fn()],
 }));
 
 // Heavy dnd-kit pieces aren't relevant to the restore/Undo flow. Stub
@@ -134,6 +134,7 @@ vi.mock("@workspace/api-client-react", () => ({
   }),
   usePreviewMappingRuleRecategorizeByPattern: () => ({
     mutate: vi.fn(),
+    data: undefined,
     reset: vi.fn(),
     isPending: false,
   }),

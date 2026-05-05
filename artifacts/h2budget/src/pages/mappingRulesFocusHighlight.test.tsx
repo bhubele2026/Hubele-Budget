@@ -38,7 +38,7 @@ vi.mock("@/hooks/use-bulk-recategorize-prompt", () => ({
 let searchString = "";
 vi.mock("wouter", () => ({
   useSearch: () => searchString,
-  useLocation: () => ["/", vi.fn()],
+  useLocation: () => ["/mapping-rules", vi.fn()],
 }));
 
 // Heavy dnd-kit pieces aren't relevant here — stub them out so the
