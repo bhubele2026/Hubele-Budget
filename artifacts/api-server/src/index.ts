@@ -5,6 +5,7 @@ import {
   refreshConsentExpirationForAllItems,
   syncAllForAllUsers,
 } from "./lib/plaidSync";
+import { sendExpirationRemindersForAllUsers } from "./lib/plaidExpirationReminder";
 import { getPlaidEnv } from "./lib/plaid";
 
 // Plaid configuration validation:
@@ -106,6 +107,45 @@ app.listen(port, (err) => {
       { timezone: "UTC" },
     );
     logger.info("Plaid daily consent refresh scheduled");
+
+    // (#262) Daily disconnect reminder sweep. Walks every active Plaid
+    // item across every user, finds those whose consent_expiration_time
+    // falls inside the alert window (3 days by default), and emails the
+    // owner a "reconnect before <date>" nudge. The in-app expiring-soon
+    // alert (#257) only catches users who happen to open the dashboard,
+    // so this email closes the gap for users who don't visit for two
+    // weeks. De-dup is keyed on (item_id, cutoff) so the same user is
+    // never spammed twice for the same cutoff, and a successful
+    // re-consent (which rolls the cutoff months out of the window)
+    // automatically silences future reminders.
+    //
+    // Runs at 03:32 UTC — 15 minutes after the consent refresh at 03:17
+    // — so the reminder always sees the freshest cutoff Plaid reports.
+    cron.schedule(
+      "32 3 * * *",
+      () => {
+        sendExpirationRemindersForAllUsers()
+          .then((summary) => {
+            logger.info(
+              {
+                scanned: summary.scanned,
+                sent: summary.sent,
+                skipped: summary.skipped,
+                failed: summary.failed,
+              },
+              "Daily Plaid disconnect reminder sweep complete",
+            );
+          })
+          .catch((err) => {
+            logger.error(
+              { err },
+              "Daily Plaid disconnect reminder sweep failed",
+            );
+          });
+      },
+      { timezone: "UTC" },
+    );
+    logger.info("Plaid daily disconnect reminder scheduled");
   } else {
     logger.warn("Plaid credentials missing — scheduled sync disabled");
   }

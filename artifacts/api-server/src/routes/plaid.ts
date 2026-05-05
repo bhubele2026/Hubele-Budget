@@ -31,6 +31,8 @@ import {
   syncPlaidItem,
   syncAllForUser,
 } from "../lib/plaidSync";
+import { sendExpirationRemindersForUser } from "../lib/plaidExpirationReminder";
+import { PLAID_REAUTH_ERROR_CODES as PLAID_REAUTH_ERROR_CODES_LIB } from "../lib/plaidReauthCodes";
 import { fetchLiabilitiesForUser } from "../lib/plaidLiabilities";
 import { debtsTable } from "@workspace/db";
 
@@ -77,11 +79,10 @@ router.post("/plaid/link-token", requireAuth, async (req, res): Promise<void> =>
 // Plaid error codes that indicate the only fix is for the user to
 // re-authenticate the bank via Plaid Link in update mode. The frontend
 // keys off this set to decide when to render the "Reconnect" button.
-export const PLAID_REAUTH_ERROR_CODES = new Set<string>([
-  "ITEM_LOGIN_REQUIRED",
-  "PENDING_EXPIRATION",
-  "PENDING_DISCONNECT",
-]);
+// Re-exported here for backwards compatibility — the canonical home is
+// `lib/plaidReauthCodes.ts` so other lib modules can import the set
+// without creating a circular dependency through this routes file.
+export const PLAID_REAUTH_ERROR_CODES = PLAID_REAUTH_ERROR_CODES_LIB;
 
 router.post(
   "/plaid/link-token/update",
@@ -699,6 +700,33 @@ router.post(
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Refresh failed";
       req.log.error({ err: e }, "Plaid consent refresh failed");
+      res.status(500).json({ error: msg });
+    }
+  },
+);
+
+// (#262) Manual trigger for the daily disconnect-reminder sweep. Same
+// code path runs unattended at 03:32 UTC (see index.ts); this endpoint
+// exists so an operator (or an integration test) can kick it for the
+// caller's items on demand and inspect the per-item outcome. Best-
+// effort by design: per-item failures surface in the response body but
+// never fail the request.
+router.post(
+  "/plaid/send-expiration-reminders",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    try {
+      const results = await sendExpirationRemindersForUser(req.userId!);
+      res.json({
+        scanned: results.length,
+        sent: results.filter((r) => !r.error && r.channel !== "skipped").length,
+        skipped: results.filter((r) => r.channel === "skipped").length,
+        failed: results.filter((r) => !!r.error).length,
+        items: results,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Reminder sweep failed";
+      req.log.error({ err: e }, "Plaid disconnect reminder sweep failed");
       res.status(500).json({ error: msg });
     }
   },

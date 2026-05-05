@@ -253,6 +253,49 @@ export const plaidItemsTable = pgTable(
   }),
 );
 
+// (#262) Tracks which (plaid_item, consent cutoff) pairs we have
+// already emailed/pushed an "about to disconnect" reminder for so the
+// daily sweep does not spam the same user every morning while an item
+// sits inside the alert window. Keyed by (plaidItemId, cutoffSentFor):
+//
+//   * Same cutoff → already notified, skip.
+//   * Different cutoff → fresh reminder is allowed. In practice a
+//     successful re-consent rolls Plaid's cutoff months out (well past
+//     the alert window), so the next sweep will not even consider the
+//     item — silence falls out for free without us having to look up
+//     reconnect events explicitly.
+//
+// `recipient` and `channel` are recorded for support/debugging so we
+// can answer "what did we tell this user, and where did we send it?"
+// without re-running the sweep. Cascade delete on the parent item so
+// removing a Plaid link cleans up its history.
+export const plaidConsentRemindersSentTable = pgTable(
+  "plaid_consent_reminders_sent",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    plaidItemId: uuid("plaid_item_id")
+      .notNull()
+      .references((): AnyPgColumn => plaidItemsTable.id, {
+        onDelete: "cascade",
+      }),
+    cutoffSentFor: timestamp("cutoff_sent_for", {
+      withTimezone: true,
+    }).notNull(),
+    channel: text("channel").notNull(),
+    recipient: text("recipient"),
+    sentAt: timestamp("sent_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    itemCutoffUq: uniqueIndex(
+      "plaid_consent_reminders_sent_item_cutoff_uq",
+    ).on(t.plaidItemId, t.cutoffSentFor),
+    userIdx: index("plaid_consent_reminders_sent_user_idx").on(t.userId),
+  }),
+);
+
 export const plaidAccountsTable = pgTable(
   "plaid_accounts",
   {
