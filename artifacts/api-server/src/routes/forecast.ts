@@ -233,6 +233,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     cashSignal,
     plaidCheckingAccounts,
     monthSnapshots: settings.monthSnapshots ?? {},
+    accountSnapshots: settings.accountSnapshots ?? {},
   });
 });
 
@@ -335,6 +336,28 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
       accountId = acct.id;
       accountName = acct.name;
       accountMask = acct.mask;
+      // Mirror into per-account snapshot map (#296) so the Chase
+      // page can anchor balance math for this account too.
+      const prevMap = (
+        await db
+          .select({ accountSnapshots: forecastSettingsTable.accountSnapshots })
+          .from(forecastSettingsTable)
+          .where(eq(forecastSettingsTable.userId, userId))
+      )[0]?.accountSnapshots ?? {};
+      const nextMap = {
+        ...prevMap,
+        [acct.id]: {
+          balance: snapshotBalance,
+          at: new Date().toISOString(),
+          source: "plaid" as const,
+          name: acct.name,
+          mask: acct.mask,
+        },
+      };
+      await db
+        .update(forecastSettingsTable)
+        .set({ accountSnapshots: nextMap })
+        .where(eq(forecastSettingsTable.userId, userId));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Plaid balance fetch failed";
       req.log.error({ err: e }, "accountsBalanceGet failed");
@@ -374,19 +397,24 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
 router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   const settings = await ensureSettings(userId);
-  if (!settings.bankSnapshotAccountId) {
+  // #296 — accept an optional `plaidAccountId` so the Chase page can
+  // refresh whichever account the user is currently viewing, not just
+  // the primary snapshot account. Falls back to the primary account
+  // when the body is absent (legacy Forecast-page behavior).
+  const requestedId =
+    typeof req.body?.plaidAccountId === "string" && req.body.plaidAccountId
+      ? String(req.body.plaidAccountId)
+      : settings.bankSnapshotAccountId;
+  if (!requestedId) {
     res.status(400).json({ error: "No checking account linked. Set one first." });
     return;
   }
-  // Reuse the same flow as bank-snapshot
-  req.body = { plaidAccountId: settings.bankSnapshotAccountId };
-  // Forward
   const [acct] = await db
     .select()
     .from(plaidAccountsTable)
     .where(
       and(
-        eq(plaidAccountsTable.id, settings.bankSnapshotAccountId),
+        eq(plaidAccountsTable.id, requestedId),
         eq(plaidAccountsTable.userId, userId),
       ),
     );
@@ -414,20 +442,58 @@ router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<voi
       return;
     }
     const at = new Date();
+    const balanceStr = Number(live).toFixed(2);
+    // Always upsert the per-account snapshot (#296) so the Chase page
+    // anchor for this account picks up the fresh value.
+    const accountSnapshots = {
+      ...(settings.accountSnapshots ?? {}),
+      [acct.id]: {
+        balance: balanceStr,
+        at: at.toISOString(),
+        source: "plaid" as const,
+        name: acct.name,
+        mask: acct.mask,
+      },
+    };
+    // If this is the primary snapshot account (or no primary is set
+    // yet), also update the legacy bankSnapshot* columns so the
+    // Forecast page / cash-signal anchor advances too.
+    const isPrimary =
+      !settings.bankSnapshotAccountId ||
+      settings.bankSnapshotAccountId === acct.id;
+    const update: Record<string, unknown> = {
+      accountSnapshots,
+      updatedAt: new Date(),
+    };
+    if (isPrimary) {
+      update.bankSnapshotBalance = balanceStr;
+      update.bankSnapshotAt = at;
+      update.bankSnapshotSource = "plaid";
+      update.bankSnapshotAccountId = acct.id;
+      update.bankSnapshotName = acct.name;
+      update.bankSnapshotMask = acct.mask;
+    }
     const [row] = await db
       .update(forecastSettingsTable)
-      .set({
-        bankSnapshotBalance: Number(live).toFixed(2),
-        bankSnapshotAt: at,
-        bankSnapshotSource: "plaid",
-        bankSnapshotAccountId: acct.id,
-        bankSnapshotName: acct.name,
-        bankSnapshotMask: acct.mask,
-        updatedAt: new Date(),
-      })
+      .set(update)
       .where(eq(forecastSettingsTable.userId, userId))
       .returning();
-    res.json(presentSnapshot(row));
+    // Keep the response shape backward-compatible (BankSnapshot). When
+    // refreshing a non-primary account, synthesize the snapshot
+    // payload from the per-account map entry rather than the legacy
+    // primary columns so the client sees the freshly-refreshed value.
+    if (isPrimary) {
+      res.json(presentSnapshot(row));
+    } else {
+      res.json({
+        balance: balanceStr,
+        at: at.toISOString(),
+        source: "plaid",
+        accountId: acct.id,
+        name: acct.name,
+        mask: acct.mask,
+      });
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Plaid balance fetch failed";
     req.log.error({ err: e }, "refresh-bank failed");

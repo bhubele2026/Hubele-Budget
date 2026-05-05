@@ -1683,6 +1683,26 @@ export interface MonthSnapshot {
 
 export type ForecastBundleMonthSnapshots = { [key: string]: MonthSnapshot };
 
+export type AccountSnapshotSource =
+  (typeof AccountSnapshotSource)[keyof typeof AccountSnapshotSource];
+
+export const AccountSnapshotSource = {
+  manual: "manual",
+  plaid: "plaid",
+} as const;
+
+export interface AccountSnapshot {
+  balance: string;
+  at: string;
+  source: AccountSnapshotSource;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  mask?: string | null;
+}
+
+export type ForecastBundleAccountSnapshots = { [key: string]: AccountSnapshot };
+
 export interface ForecastBundle {
   fromDate: string;
   toDate: string;
@@ -1695,11 +1715,17 @@ export interface ForecastBundle {
   cashSignal?: CashSignal | null;
   plaidCheckingAccounts: PlaidCheckingAccount[];
   monthSnapshots?: ForecastBundleMonthSnapshots;
+  accountSnapshots?: ForecastBundleAccountSnapshots;
 }
 
 export interface SetBankSnapshotInput {
   /** @nullable */
   balance?: string | null;
+  /** @nullable */
+  plaidAccountId?: string | null;
+}
+
+export interface RefreshBankInput {
   /** @nullable */
   plaidAccountId?: string | null;
 }

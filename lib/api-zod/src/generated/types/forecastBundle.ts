@@ -7,6 +7,7 @@
  */
 import type { BankSnapshot } from "./bankSnapshot";
 import type { CashSignal } from "./cashSignal";
+import type { ForecastBundleAccountSnapshots } from "./forecastBundleAccountSnapshots";
 import type { ForecastBundleMonthSnapshots } from "./forecastBundleMonthSnapshots";
 import type { ForecastEvent } from "./forecastEvent";
 import type { ForecastResolution } from "./forecastResolution";
@@ -26,4 +27,5 @@ export interface ForecastBundle {
   cashSignal?: CashSignal | null;
   plaidCheckingAccounts: PlaidCheckingAccount[];
   monthSnapshots?: ForecastBundleMonthSnapshots;
+  accountSnapshots?: ForecastBundleAccountSnapshots;
 }

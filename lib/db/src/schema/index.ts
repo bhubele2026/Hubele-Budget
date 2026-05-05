@@ -504,6 +504,23 @@ export const forecastSettingsTable = pgTable("forecast_settings", {
       }
     >
   >(),
+  // Per-account current-balance snapshots, keyed by `plaid_accounts.id`.
+  // The legacy `bankSnapshot*` columns above remain the "primary" snapshot
+  // (drives Forecast page balance math + cash-signal). This map lets the
+  // Chase page anchor Starting/Ending balance for non-primary checking
+  // accounts the user picks via the multi-account picker (#296).
+  accountSnapshots: jsonb("account_snapshots").$type<
+    Record<
+      string,
+      {
+        balance: string;
+        at: string;
+        source: "manual" | "plaid";
+        name: string | null;
+        mask: string | null;
+      }
+    >
+  >(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

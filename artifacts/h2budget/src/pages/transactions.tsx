@@ -238,6 +238,7 @@ export default function TransactionsPage() {
   }, [isLoading]);
 
   const bankSnapshot = forecastData?.bankSnapshot ?? null;
+  const accountSnapshots = forecastData?.accountSnapshots ?? {};
   // #103 — multi-checking households: let the user pick which linked
   // checking account powers this page. The selected key is either
   // `"manual"` (transactions without a plaidAccountId) or the internal
@@ -255,12 +256,42 @@ export default function TransactionsPage() {
   const isManualAccount = effectiveAccountKey === "manual";
   const effectiveAccountInternalId = isManualAccount ? null : effectiveAccountKey;
   // True when the user is viewing the same account that the bank
-  // snapshot anchors. Balance math only works for the snapshot account
-  // (we have no anchored balance for the others), so we use this flag
-  // to gate the Starting/Ending balance chips.
+  // snapshot anchors. Used by header meta + as a "this is the primary
+  // account" hint in the picker dropdown.
   const usingSnapshotAccount =
     !!bankSnapshot &&
     effectiveAccountKey === (bankSnapshot.accountId ?? "manual");
+  // #296 — pick whichever snapshot anchors the *currently-viewed*
+  // account: the primary `bankSnapshot` if we're on its account,
+  // otherwise the per-account entry from `accountSnapshots`. Manual
+  // (non-Plaid) accounts have no anchor and stay null.
+  const effectiveSnapshot = useMemo<{
+    balance: string;
+    at: string;
+    source: "manual" | "plaid";
+    name: string | null;
+    mask: string | null;
+  } | null>(() => {
+    if (usingSnapshotAccount && bankSnapshot) {
+      return {
+        balance: bankSnapshot.balance,
+        at: bankSnapshot.at,
+        source: bankSnapshot.source,
+        name: bankSnapshot.name ?? null,
+        mask: bankSnapshot.mask ?? null,
+      };
+    }
+    if (effectiveAccountInternalId) {
+      const snap = accountSnapshots[effectiveAccountInternalId];
+      if (snap) return snap;
+    }
+    return null;
+  }, [
+    usingSnapshotAccount,
+    bankSnapshot,
+    effectiveAccountInternalId,
+    accountSnapshots,
+  ]);
   const chasePlaidAccountId = useMemo(() => {
     if (!effectiveAccountInternalId) return null;
     const acct = (forecastData?.plaidCheckingAccounts ?? []).find(
@@ -441,22 +472,21 @@ export default function TransactionsPage() {
     return m;
   }, [chaseTransactions]);
 
-  // #103 — only anchor balance math when the user is viewing the same
-  // account the snapshot was taken on. Other accounts have no anchored
-  // balance, so we render Starting/Ending balance as "unavailable"
-  // instead of silently showing the wrong account's balance.
-  const anchorBalance =
-    bankSnapshot && usingSnapshotAccount
-      ? Number(bankSnapshot.balance) || 0
-      : null;
-  // Anchor the rolling balance at the bank snapshot's month. The snapshot
-  // value is the known balance as of `bankSnapshot.at` (typically a
-  // mid-month Plaid sync). End-of-anchor-month is reconstructed by the
-  // helper as snapshot + sum(post-snapshot txns in anchor month).
+  // #103/#296 — anchor balance math to whichever snapshot covers the
+  // currently-viewed account (primary or per-account). Manual accounts
+  // and Plaid accounts that have never been refreshed still render
+  // Starting/Ending balance as "unavailable".
+  const anchorBalance = effectiveSnapshot
+    ? Number(effectiveSnapshot.balance) || 0
+    : null;
+  // Anchor the rolling balance at the snapshot's month. The snapshot
+  // value is the known balance as of `effectiveSnapshot.at` (typically
+  // a mid-month Plaid sync). End-of-anchor-month is reconstructed by
+  // the helper as snapshot + sum(post-snapshot txns in anchor month).
   const anchorMonth = useMemo<MonthKey>(() => {
-    if (bankSnapshot?.at) return monthKeyFromISO(bankSnapshot.at);
+    if (effectiveSnapshot?.at) return monthKeyFromISO(effectiveSnapshot.at);
     return currentMonth;
-  }, [bankSnapshot?.at, currentMonth]);
+  }, [effectiveSnapshot?.at, currentMonth]);
 
   // Transactions that occurred in the anchor month (the snapshot's month).
   // Used to reconstruct end-of-anchor-month from the mid-month snapshot:
@@ -475,11 +505,11 @@ export default function TransactionsPage() {
         anchorMonth,
         netChangeByMonth,
         target: mk,
-        anchorAt: bankSnapshot?.at ?? null,
+        anchorAt: effectiveSnapshot?.at ?? null,
         anchorMonthTxns,
       });
     };
-  }, [anchorBalance, anchorMonth, netChangeByMonth, bankSnapshot?.at, anchorMonthTxns]);
+  }, [anchorBalance, anchorMonth, netChangeByMonth, effectiveSnapshot?.at, anchorMonthTxns]);
 
   const endingBalance = useMemo(
     () => balanceAtEndOf(selectedMonth),
@@ -943,7 +973,7 @@ export default function TransactionsPage() {
   };
 
   const handleRefreshBank = () => {
-    refreshBank.mutate(undefined, {
+    refreshBank.mutate({ data: { plaidAccountId: effectiveAccountInternalId ?? null } }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
         queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
@@ -1143,12 +1173,14 @@ export default function TransactionsPage() {
   }
 
   const todayKey = ymd(new Date());
-  // #103 — Starting/Ending balance only render when we have a snapshot
-  // AND we're viewing the snapshot's account. Refresh-from-Plaid still
-  // applies to the snapshot account (the only one we sync), regardless
-  // of which view is on screen.
-  const hasLinkedChecking = !!bankSnapshot && usingSnapshotAccount;
-  const isPlaidLinked = bankSnapshot?.source === "plaid";
+  // #103/#296 — Starting/Ending balance render whenever the
+  // currently-viewed account has a snapshot we can anchor to (primary
+  // or per-account). Refresh-from-Plaid is offered for any selected
+  // Plaid checking account so the user can populate / advance that
+  // account's snapshot directly from this page.
+  const hasLinkedChecking = !!effectiveSnapshot;
+  const isPlaidLinked =
+    !isManualAccount && !!effectiveAccountInternalId;
 
   return (
     <div
@@ -1251,19 +1283,23 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {bankSnapshot && usingSnapshotAccount && (
+      {effectiveSnapshot && (
         <div
           className="text-xs text-muted-foreground"
           data-testid="text-snapshot-meta"
         >
-          {bankSnapshot.source === "plaid" ? "Plaid" : "Manual"} ·{" "}
-          {bankSnapshot.name ?? "Checking"}
-          {bankSnapshot.mask ? ` ••${bankSnapshot.mask}` : ""} · Updated{" "}
-          {formatDate(bankSnapshot.at.slice(0, 10))} · Current balance{" "}
-          {formatCurrency(bankSnapshot.balance)}
+          {effectiveSnapshot.source === "plaid" ? "Plaid" : "Manual"} ·{" "}
+          {selectedPlaidAccount?.institutionName ??
+            effectiveSnapshot.name ??
+            selectedPlaidAccount?.name ??
+            "Checking"}
+          {effectiveSnapshot.mask ? ` ••${effectiveSnapshot.mask}` : ""} ·
+          Updated {formatDate(effectiveSnapshot.at.slice(0, 10))} · Current
+          balance {formatCurrency(effectiveSnapshot.balance)}
+          {usingSnapshotAccount ? " · snapshot" : ""}
         </div>
       )}
-      {!usingSnapshotAccount && selectedPlaidAccount && (
+      {!effectiveSnapshot && selectedPlaidAccount && (
         <div
           className="text-xs text-muted-foreground"
           data-testid="text-snapshot-meta"
@@ -1273,8 +1309,7 @@ export default function TransactionsPage() {
             selectedPlaidAccount.name ??
             "Checking"}
           {selectedPlaidAccount.mask ? ` ••${selectedPlaidAccount.mask}` : ""} ·
-          Set this as your snapshot account on Forecast to see Starting and
-          Ending balances.
+          Press Refresh from Plaid to see Starting and Ending balances.
         </div>
       )}
       {!usingSnapshotAccount && isManualAccount && (

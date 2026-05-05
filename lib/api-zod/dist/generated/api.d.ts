@@ -4012,6 +4012,25 @@ export declare const GetForecastResponse: zod.ZodObject<{
         reconciled?: boolean | null | undefined;
         closedAt?: string | null | undefined;
     }>>>;
+    accountSnapshots: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodObject<{
+        balance: zod.ZodString;
+        at: zod.ZodString;
+        source: zod.ZodEnum<["manual", "plaid"]>;
+        name: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        mask: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        at: string;
+        source: "plaid" | "manual";
+        balance: string;
+        name?: string | null | undefined;
+        mask?: string | null | undefined;
+    }, {
+        at: string;
+        source: "plaid" | "manual";
+        balance: string;
+        name?: string | null | undefined;
+        mask?: string | null | undefined;
+    }>>>;
 }, "strip", zod.ZodTypeAny, {
     fromDate: string;
     toDate: string;
@@ -4119,6 +4138,13 @@ export declare const GetForecastResponse: zod.ZodObject<{
         reconciled?: boolean | null | undefined;
         closedAt?: string | null | undefined;
     }> | undefined;
+    accountSnapshots?: Record<string, {
+        at: string;
+        source: "plaid" | "manual";
+        balance: string;
+        name?: string | null | undefined;
+        mask?: string | null | undefined;
+    }> | undefined;
 }, {
     fromDate: string;
     toDate: string;
@@ -4225,6 +4251,13 @@ export declare const GetForecastResponse: zod.ZodObject<{
         pending?: number | null | undefined;
         reconciled?: boolean | null | undefined;
         closedAt?: string | null | undefined;
+    }> | undefined;
+    accountSnapshots?: Record<string, {
+        at: string;
+        source: "plaid" | "manual";
+        balance: string;
+        name?: string | null | undefined;
+        mask?: string | null | undefined;
     }> | undefined;
 }>;
 export declare const GetForecastSettingsResponse: zod.ZodObject<{
@@ -4357,6 +4390,13 @@ export declare const SetForecastBankSnapshotResponse: zod.ZodObject<{
     name?: string | null | undefined;
     mask?: string | null | undefined;
     accountId?: string | null | undefined;
+}>;
+export declare const RefreshForecastBankBody: zod.ZodObject<{
+    plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+}, "strip", zod.ZodTypeAny, {
+    plaidAccountId?: string | null | undefined;
+}, {
+    plaidAccountId?: string | null | undefined;
 }>;
 export declare const RefreshForecastBankResponse: zod.ZodObject<{
     balance: zod.ZodString;

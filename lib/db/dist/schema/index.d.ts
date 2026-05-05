@@ -3487,6 +3487,37 @@ export declare const forecastSettingsTable: import("drizzle-orm/pg-core").PgTabl
                 closedAt?: string;
             }>;
         }>;
+        accountSnapshots: import("drizzle-orm/pg-core").PgColumn<{
+            name: "account_snapshots";
+            tableName: "forecast_settings";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: Record<string, {
+                balance: string;
+                at: string;
+                source: "manual" | "plaid";
+                name: string | null;
+                mask: string | null;
+            }>;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: Record<string, {
+                balance: string;
+                at: string;
+                source: "manual" | "plaid";
+                name: string | null;
+                mask: string | null;
+            }>;
+        }>;
         updatedAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "updated_at";
             tableName: "forecast_settings";

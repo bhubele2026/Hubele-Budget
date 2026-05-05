@@ -923,6 +923,11 @@ paths:
     post:
       operationId: refreshForecastBank
       tags: [forecast]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshBankInput" }
       responses:
         "200":
           description: OK
@@ -2844,6 +2849,10 @@ components:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/MonthSnapshot"
+        accountSnapshots:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/AccountSnapshot"
     MonthSnapshot:
       type: object
       required: [balance, at]
@@ -2861,6 +2870,19 @@ components:
       properties:
         balance: { type: ["string", "null"] }
         plaidAccountId: { type: ["string", "null"] }
+    RefreshBankInput:
+      type: object
+      properties:
+        plaidAccountId: { type: ["string", "null"] }
+    AccountSnapshot:
+      type: object
+      required: [balance, at, source]
+      properties:
+        balance: { type: string }
+        at: { type: string }
+        source: { type: string, enum: [manual, plaid] }
+        name: { type: ["string", "null"] }
+        mask: { type: ["string", "null"] }
 
     AmexAnchor:
       type: object

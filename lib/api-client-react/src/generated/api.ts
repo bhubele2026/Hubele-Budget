@@ -96,6 +96,7 @@ import type {
   RecategorizeByPatternResult,
   RecurringItem,
   RecurringItemInput,
+  RefreshBankInput,
   ReorderMappingRulesInput,
   SeedDefaultBudgetResult,
   SetBankSnapshotInput,
@@ -4445,11 +4446,14 @@ export const getRefreshForecastBankUrl = () => {
 };
 
 export const refreshForecastBank = async (
+  refreshBankInput?: RefreshBankInput,
   options?: RequestInit,
 ): Promise<BankSnapshot> => {
   return customFetch<BankSnapshot>(getRefreshForecastBankUrl(), {
     ...options,
     method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(refreshBankInput),
   });
 };
 
@@ -4460,14 +4464,14 @@ export const getRefreshForecastBankMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof refreshForecastBank>>,
     TError,
-    void,
+    { data: BodyType<RefreshBankInput> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof refreshForecastBank>>,
   TError,
-  void,
+  { data: BodyType<RefreshBankInput> },
   TContext
 > => {
   const mutationKey = ["refreshForecastBank"];
@@ -4481,9 +4485,11 @@ export const getRefreshForecastBankMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof refreshForecastBank>>,
-    void
-  > = () => {
-    return refreshForecastBank(requestOptions);
+    { data: BodyType<RefreshBankInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return refreshForecastBank(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -4492,7 +4498,7 @@ export const getRefreshForecastBankMutationOptions = <
 export type RefreshForecastBankMutationResult = NonNullable<
   Awaited<ReturnType<typeof refreshForecastBank>>
 >;
-
+export type RefreshForecastBankMutationBody = BodyType<RefreshBankInput>;
 export type RefreshForecastBankMutationError = ErrorType<unknown>;
 
 export const useRefreshForecastBank = <
@@ -4502,14 +4508,14 @@ export const useRefreshForecastBank = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof refreshForecastBank>>,
     TError,
-    void,
+    { data: BodyType<RefreshBankInput> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof refreshForecastBank>>,
   TError,
-  void,
+  { data: BodyType<RefreshBankInput> },
   TContext
 > => {
   return useMutation(getRefreshForecastBankMutationOptions(options));

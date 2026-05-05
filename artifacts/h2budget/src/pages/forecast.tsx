@@ -1501,7 +1501,7 @@ export default function ForecastPage() {
     );
   };
   const onRefreshBank = () => {
-    refreshBank.mutate(undefined, {
+    refreshBank.mutate({ data: {} }, {
       onSuccess: () => {
         invalidate();
         toast({ title: "Bank balance refreshed" });

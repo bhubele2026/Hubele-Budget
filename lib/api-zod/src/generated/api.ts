@@ -1755,6 +1755,18 @@ export const GetForecastResponse = zod.object({
       }),
     )
     .optional(),
+  accountSnapshots: zod
+    .record(
+      zod.string(),
+      zod.object({
+        balance: zod.string(),
+        at: zod.string(),
+        source: zod.enum(["manual", "plaid"]),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+      }),
+    )
+    .optional(),
 });
 
 export const GetForecastSettingsResponse = zod.object({
@@ -1812,6 +1824,10 @@ export const SetForecastBankSnapshotResponse = zod.object({
   accountId: zod.string().nullish(),
   name: zod.string().nullish(),
   mask: zod.string().nullish(),
+});
+
+export const RefreshForecastBankBody = zod.object({
+  plaidAccountId: zod.string().nullish(),
 });
 
 export const RefreshForecastBankResponse = zod.object({
