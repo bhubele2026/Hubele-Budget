@@ -59,6 +59,11 @@ import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { SyncButton } from "@/components/sync-button";
 import { computeBalanceAtEndOf } from "@/lib/accountBalance";
 import {
+  compareNewestFirst,
+  computeRunningBalances,
+  sortNewestFirst,
+} from "@/lib/runningBalance";
+import {
   AccountPageHeader,
   AccountFilterBar,
   BalanceTrendChart,
@@ -316,8 +321,10 @@ export default function AmexPage() {
     });
   }, [monthScoped, search, memberFilter, categoryFilter, categoryById, from, to]);
 
-  // Group by day (descending). Within each day, sort by a stable key
-  // (occurredOn desc, then id asc) so refetches can't swap row order.
+  // Group by day (descending). Within each day, sort newest-first via
+  // the canonical comparator so the per-row "bal $X" running statement
+  // balance shown beside each row matches the order in which
+  // `computeRunningBalances` walked the list.
   const groups = useMemo(() => {
     const map = new Map<string, Transaction[]>();
     for (const t of filtered) {
@@ -326,13 +333,7 @@ export default function AmexPage() {
       if (arr) arr.push(t);
       else map.set(k, [t]);
     }
-    for (const arr of map.values()) {
-      arr.sort((a, b) => {
-        if (a.occurredOn !== b.occurredOn)
-          return a.occurredOn < b.occurredOn ? 1 : -1;
-        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-      });
-    }
+    for (const arr of map.values()) arr.sort(compareNewestFirst);
     return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
   }, [filtered]);
 
@@ -459,6 +460,20 @@ export default function AmexPage() {
     anchorMonth,
     anchorMonthTxns,
   ]);
+
+  // Anchor every same-day balance assignment to the canonical
+  // newest-first comparator so the "bal $X" register-style statement
+  // balance shown beside each row matches the row's actual position
+  // in the day list. Computed off the full month (pre-filter) so that
+  // typing in Search / picking a category doesn't reshuffle the
+  // displayed balances.
+  const runningBalanceMap = useMemo(() => {
+    if (endingBalance.value === null) return new Map<string, number>();
+    return computeRunningBalances(
+      sortNewestFirst(monthScoped),
+      endingBalance.value,
+    );
+  }, [monthScoped, endingBalance.value]);
 
   const endingBalanceMeta = useMemo(() => {
     if (
@@ -1564,8 +1579,18 @@ export default function AmexPage() {
                           {t.member ?? "—"}
                         </div>
                       </div>
-                      <div className="text-sm font-mono tabular-nums whitespace-nowrap font-semibold">
-                        {formatCurrency(parseAbs(t.amount))}
+                      <div className="flex flex-col items-end">
+                        <div className="text-sm font-mono tabular-nums whitespace-nowrap font-semibold">
+                          {formatCurrency(parseAbs(t.amount))}
+                        </div>
+                        {runningBalanceMap.has(t.id) && (
+                          <span
+                            className="text-[11px] tabular-nums text-muted-foreground"
+                            data-testid={`text-running-balance-mobile-${t.id}`}
+                          >
+                            bal {formatCurrency(runningBalanceMap.get(t.id)!)}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pl-7">
@@ -1810,7 +1835,17 @@ export default function AmexPage() {
                           </div>
                         </td>
                         <td className="px-3 py-2 text-right font-mono tabular-nums whitespace-nowrap">
-                          {formatCurrency(parseAbs(t.amount))}
+                          <div className="flex flex-col items-end">
+                            <span>{formatCurrency(parseAbs(t.amount))}</span>
+                            {runningBalanceMap.has(t.id) && (
+                              <span
+                                className="text-[11px] text-muted-foreground"
+                                data-testid={`text-running-balance-${t.id}`}
+                              >
+                                bal {formatCurrency(runningBalanceMap.get(t.id)!)}
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
