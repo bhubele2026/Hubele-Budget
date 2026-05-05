@@ -1040,6 +1040,44 @@ export default function AmexPage() {
     }
   };
 
+  const bulkSetOwedBy = async (raw: string) => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const trimmed = raw.trim();
+    const next: string | null = trimmed.length === 0 ? null : trimmed;
+    const CONCURRENCY = 6;
+    const results: { id: string; ok: boolean; err?: string }[] = [];
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < ids.length) {
+        const i = cursor++;
+        const id = ids[i];
+        try {
+          await updateTx.mutateAsync({ id, data: { owedBy: next } });
+          results.push({ id, ok: true });
+        } catch (e) {
+          results.push({ id, ok: false, err: (e as Error).message });
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
+    );
+    invalidateTxns();
+    const okCount = results.filter((r) => r.ok).length;
+    const failed = results.filter((r) => !r.ok);
+    const label = next === null ? "Cleared owed by on" : `Set owed by to ${next} on`;
+    if (failed.length === 0) {
+      toast({ title: `${label} ${okCount} transaction${okCount === 1 ? "" : "s"}` });
+    } else {
+      toast({
+        title: `${okCount} updated, ${failed.length} failed`,
+        description: failed[0].err,
+        variant: "destructive",
+      });
+    }
+  };
+
   const bulkSetReimbursable = async (next: boolean) => {
     const ids = Array.from(selected);
     if (!ids.length) return;
@@ -1435,6 +1473,36 @@ export default function AmexPage() {
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetReimbursable(false)}>
               Unmark
+            </Button>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-blue-900 mr-1">Owed by:</span>
+            <Input
+              placeholder="Owed by…"
+              list={owedByListId}
+              aria-label="Bulk set owed by for selected transactions"
+              data-testid="input-bulk-owed-by"
+              className="h-7 w-32 text-xs"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const value = e.currentTarget.value;
+                  void bulkSetOwedBy(value);
+                  e.currentTarget.value = "";
+                  (e.currentTarget as HTMLInputElement).blur();
+                } else if (e.key === "Escape") {
+                  e.currentTarget.value = "";
+                  (e.currentTarget as HTMLInputElement).blur();
+                }
+              }}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              data-testid="button-bulk-clear-owed-by"
+              onClick={() => bulkSetOwedBy("")}
+            >
+              Clear
             </Button>
           </div>
           <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
