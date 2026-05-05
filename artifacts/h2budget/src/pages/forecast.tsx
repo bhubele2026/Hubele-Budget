@@ -76,7 +76,8 @@ import { CSS } from "@dnd-kit/utilities";
 import confetti from "canvas-confetti";
 import { useToast } from "@/hooks/use-toast";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
-import { formatCurrency, formatDate, formatRelativeTime } from "@/lib/utils";
+import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   buildLineRegister,
   filterForecastTxns,
@@ -133,28 +134,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-// Tiny "Last auto-updated 12 minutes ago" / "Set manually 3 hours ago"
-// label rendered under the bank balance on the Forecast page. Extracted
-// so the page-level test (Task #285) can render it without spinning up
-// the entire ForecastPage and its many query hooks.
-export function BankSnapshotFreshness({
-  source,
-  at,
-  now,
-}: {
-  source: "manual" | "plaid";
-  at: string;
-  now?: Date;
-}) {
-  const prefix =
-    source === "plaid" ? "Last auto-updated " : "Set manually ";
-  return (
-    <div data-testid="text-bank-snapshot-freshness">
-      {prefix}
-      {formatRelativeTime(at, now)}
-    </div>
-  );
-}
+// Re-exported here so existing imports (and the Task #285 test) keep
+// working after the component moved to a shared location for use on the
+// Dashboard and Transactions pages too (Task #333).
+export { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 
 function statusBadge(s: string) {
   const map: Record<string, { label: string; cls: string }> = {

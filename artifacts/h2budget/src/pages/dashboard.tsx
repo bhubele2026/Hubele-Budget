@@ -31,6 +31,7 @@ import { ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { DashboardKillOrder } from "@/components/dashboard-kill-order";
+import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
 import { PlaidExpiringSoonList } from "@/components/plaid-expiring-soon-list";
@@ -1135,11 +1136,13 @@ function MonthlySnapshot({
   totalDebt,
   activeDebtCount,
   chaseEndingBalance,
+  bankSnapshot,
 }: {
   today: Date;
   totalDebt: string;
   activeDebtCount: number;
   chaseEndingBalance: (monthStart: string) => number | null;
+  bankSnapshot: { source: "manual" | "plaid"; at: string } | null;
 }) {
   const currentMonthStart = useMemo(
     () => fmtMonthStart(new Date(today.getFullYear(), today.getMonth(), 1)),
@@ -1318,6 +1321,14 @@ function MonthlySnapshot({
                   <div className="text-xs text-muted-foreground mt-1">
                     end of {shortMonth}
                   </div>
+                  {bankSnapshot && (
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      <BankSnapshotFreshness
+                        source={bankSnapshot.source}
+                        at={bankSnapshot.at}
+                      />
+                    </div>
+                  )}
                 </>
               );
             })()}
@@ -1765,6 +1776,11 @@ export default function DashboardPage() {
           totalDebt={data.totalDebt}
           activeDebtCount={data.activeDebtCount}
           chaseEndingBalance={chaseEndingBalance}
+          bankSnapshot={
+            bankSnapshot
+              ? { source: bankSnapshot.source, at: bankSnapshot.at }
+              : null
+          }
         />
       </div>
 

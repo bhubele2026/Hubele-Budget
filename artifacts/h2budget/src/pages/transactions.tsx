@@ -93,6 +93,7 @@ import {
 } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { SyncButton } from "@/components/sync-button";
@@ -1294,9 +1295,12 @@ export default function TransactionsPage() {
             selectedPlaidAccount?.name ??
             "Checking"}
           {effectiveSnapshot.mask ? ` ••${effectiveSnapshot.mask}` : ""} ·
-          Updated {formatDate(effectiveSnapshot.at.slice(0, 10))} · Current
-          balance {formatCurrency(effectiveSnapshot.balance)}
+          Current balance {formatCurrency(effectiveSnapshot.balance)}
           {usingSnapshotAccount ? " · snapshot" : ""}
+          <BankSnapshotFreshness
+            source={effectiveSnapshot.source}
+            at={effectiveSnapshot.at}
+          />
         </div>
       )}
       {!effectiveSnapshot && selectedPlaidAccount && (
