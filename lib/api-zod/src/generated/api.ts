@@ -771,6 +771,12 @@ export const ListPlaidLiabilityAccountsQueryParams = zod.object({
 export const ListPlaidLiabilityAccountsResponseItem = zod.object({
   id: zod.string(),
   accountId: zod.string(),
+  itemId: zod
+    .string()
+    .optional()
+    .describe(
+      'Internal Plaid item row id (UUID) of the parent item. Used by\nthe post-Link \"Add as debts\" dialog to scope the candidate\nlist to just the institution that was just linked.\n',
+    ),
   name: zod.string().nullish(),
   officialName: zod.string().nullish(),
   mask: zod.string().nullish(),

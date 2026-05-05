@@ -1869,6 +1869,12 @@ components:
       properties:
         id: { type: string }
         accountId: { type: string }
+        itemId:
+          type: string
+          description: |
+            Internal Plaid item row id (UUID) of the parent item. Used by
+            the post-Link "Add as debts" dialog to scope the candidate
+            list to just the institution that was just linked.
         name: { type: ["string", "null"] }
         officialName: { type: ["string", "null"] }
         mask: { type: ["string", "null"] }

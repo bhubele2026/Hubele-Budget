@@ -128,7 +128,7 @@ export function PlaidLinkButton({
           },
         },
         {
-          onSuccess: async () => {
+          onSuccess: async (exchangeRes) => {
             qc.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
             qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
             // Trigger a server-side liabilities fetch so debt-like accounts
@@ -153,12 +153,15 @@ export function PlaidLinkButton({
             clearStoredLinkToken();
             onLinked?.();
 
-            // (#44) Show the post-Link dialog when there are unmatched
-            // debt-like accounts. We rely on suggestedDebt (set by the API
-            // for credit/loan/student/mortgage accounts) and skip anything
-            // already linked to a debt row.
+            // (#44) Scope post-Link candidates to the just-linked item so
+            // we don't surface unrelated historical accounts from other
+            // institutions — and skip anything already linked to a debt.
+            const justLinkedItemId = (exchangeRes as { id?: string }).id;
             const candidates = liabilityAccounts.filter(
-              (a) => !a.linkedDebt && a.suggestedDebt,
+              (a) =>
+                !a.linkedDebt &&
+                a.suggestedDebt &&
+                (justLinkedItemId ? a.itemId === justLinkedItemId : true),
             );
             if (candidates.length > 0) {
               setPostLinkAccounts(candidates);

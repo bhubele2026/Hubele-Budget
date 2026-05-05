@@ -704,6 +704,11 @@ export interface PlaidSuggestedDebt {
 export interface PlaidLiabilityAccount {
   id: string;
   accountId: string;
+  /** Internal Plaid item row id (UUID) of the parent item. Used by
+the post-Link "Add as debts" dialog to scope the candidate
+list to just the institution that was just linked.
+ */
+  itemId?: string;
   /** @nullable */
   name?: string | null;
   /** @nullable */

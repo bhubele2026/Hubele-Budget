@@ -497,57 +497,17 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     // Initial sync (last 90 days come via /transactions/sync naturally)
     await syncPlaidItem(req.userId!, item!.id);
 
-    // (#44) Auto-create debts for newly linked credit/loan accounts.
-    // Pull liabilities first (best-effort) so balance/APR/minimum payment
-    // get cached on the plaid_accounts row before we read them — otherwise
-    // the auto-created debt would land with $0 across the board and the
-    // user would think the integration is broken.
+    // (#44) Pull liabilities best-effort so the post-Link "Add as debts"
+    // dialog the client opens after exchange has cached balance/APR/min
+    // payment to show — without auto-creating any debts. The user
+    // explicitly confirms which accounts to add via the dialog.
     try {
       await fetchLiabilitiesForItem(req.userId!, item!.id);
     } catch (e) {
       req.log.warn(
         { err: e, itemRowId: item!.id },
-        "fetchLiabilitiesForItem failed during auto-create — debts may be created with $0 fields",
+        "fetchLiabilitiesForItem failed during exchange — post-Link dialog may show empty fields",
       );
-    }
-    try {
-      const newAccts = await db
-        .select()
-        .from(plaidAccountsTable)
-        .where(eq(plaidAccountsTable.itemId, item!.id));
-      const existingLinks = await db
-        .select({ plaidAccountId: debtsTable.plaidAccountId })
-        .from(debtsTable)
-        .where(eq(debtsTable.userId, req.userId!));
-      const linkedAcctIds = new Set(
-        existingLinks.map((d) => d.plaidAccountId).filter(Boolean) as string[],
-      );
-      for (const acct of newAccts) {
-        if (linkedAcctIds.has(acct.id)) continue;
-        if (!plaidAccountIsDebtLike(acct)) continue;
-        try {
-          const result = await createOrLinkDebtFromPlaidAccount({
-            userId: req.userId!,
-            account: acct,
-            institutionName: resolvedName,
-          });
-          req.log.info(
-            {
-              accountId: acct.accountId,
-              debtId: result.debt.id,
-              action: result.action,
-            },
-            "Auto-created/linked debt from Plaid account",
-          );
-        } catch (e) {
-          req.log.warn(
-            { err: e, accountId: acct.accountId },
-            "createOrLinkDebtFromPlaidAccount failed (non-fatal)",
-          );
-        }
-      }
-    } catch (e) {
-      req.log.warn({ err: e }, "Auto-create debts failed (non-fatal)");
     }
 
     const accounts = await db
@@ -779,6 +739,7 @@ router.get(
         return {
           id: a.id,
           accountId: a.accountId,
+          itemId: a.itemId,
           name: a.name,
           officialName: a.officialName,
           mask: a.mask,

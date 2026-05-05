@@ -1581,6 +1581,7 @@ export declare const ListPlaidLiabilityAccountsQueryParams: zod.ZodObject<{
 export declare const ListPlaidLiabilityAccountsResponseItem: zod.ZodObject<{
     id: zod.ZodString;
     accountId: zod.ZodString;
+    itemId: zod.ZodOptional<zod.ZodString>;
     name: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     officialName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     mask: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -1637,6 +1638,7 @@ export declare const ListPlaidLiabilityAccountsResponseItem: zod.ZodObject<{
     balance?: string | null | undefined;
     apr?: string | null | undefined;
     minPayment?: string | null | undefined;
+    itemId?: string | undefined;
     mask?: string | null | undefined;
     subtype?: string | null | undefined;
     liabilityKind?: string | null | undefined;
@@ -1666,6 +1668,7 @@ export declare const ListPlaidLiabilityAccountsResponseItem: zod.ZodObject<{
     balance?: string | null | undefined;
     apr?: string | null | undefined;
     minPayment?: string | null | undefined;
+    itemId?: string | undefined;
     mask?: string | null | undefined;
     subtype?: string | null | undefined;
     liabilityKind?: string | null | undefined;
@@ -1691,6 +1694,7 @@ export declare const ListPlaidLiabilityAccountsResponseItem: zod.ZodObject<{
 export declare const ListPlaidLiabilityAccountsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
     accountId: zod.ZodString;
+    itemId: zod.ZodOptional<zod.ZodString>;
     name: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     officialName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     mask: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -1747,6 +1751,7 @@ export declare const ListPlaidLiabilityAccountsResponse: zod.ZodArray<zod.ZodObj
     balance?: string | null | undefined;
     apr?: string | null | undefined;
     minPayment?: string | null | undefined;
+    itemId?: string | undefined;
     mask?: string | null | undefined;
     subtype?: string | null | undefined;
     liabilityKind?: string | null | undefined;
@@ -1776,6 +1781,7 @@ export declare const ListPlaidLiabilityAccountsResponse: zod.ZodArray<zod.ZodObj
     balance?: string | null | undefined;
     apr?: string | null | undefined;
     minPayment?: string | null | undefined;
+    itemId?: string | undefined;
     mask?: string | null | undefined;
     subtype?: string | null | undefined;
     liabilityKind?: string | null | undefined;
