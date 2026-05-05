@@ -725,6 +725,19 @@ function UncategorizedRow({
   );
 }
 
+// Mirrors the server-side source label collapse in /budget/months
+// (artifacts/api-server/src/routes/budget.ts) so the actuals-breakdown
+// popover surfaces the same friendly "Bank" / "Amex" labels the row's
+// source-breakdown badges already use, instead of raw strings like
+// "plaid:amex_xxx" or "manual" that leak from the underlying source field.
+function friendlySourceLabel(source: string | null | undefined): string | null {
+  if (!source) return null;
+  if (source === "amex" || source.startsWith("plaid:amex")) return "Amex";
+  if (source.startsWith("plaid:")) return "Bank";
+  if (source === "manual") return "Manual";
+  return source;
+}
+
 // Returns true when `description` matches `rule` per its matchType.
 function ruleMatches(description: string, rule: MappingRule): boolean {
   const pattern = rule.pattern.toLowerCase();
@@ -1060,7 +1073,10 @@ function BudgetLineRow({
                           <div className="text-xs font-medium truncate">{t.description}</div>
                           <div className="text-[10px] text-muted-foreground">
                             {t.occurredOn}
-                            {t.source ? ` · ${t.source}` : ""}
+                            {(() => {
+                              const lbl = friendlySourceLabel(t.source);
+                              return lbl ? ` · ${lbl}` : "";
+                            })()}
                           </div>
                         </div>
                         <div
