@@ -36,6 +36,14 @@ app.use(
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
 app.use(cors({ credentials: true, origin: true }));
+// Plaid webhooks are JWT-signed and the JWT carries a SHA-256 of the raw
+// request body, so we MUST capture the unparsed bytes for that one route
+// before express.json() turns the body into a JS object. `type: () => true`
+// makes the raw parser fire regardless of what Content-Type Plaid sends.
+app.use(
+  "/api/plaid/webhook",
+  express.raw({ type: () => true, limit: "1mb" }),
+);
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 

@@ -27,12 +27,14 @@ export function tokenEnv(token: string | null | undefined): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 import {
+  refreshConsentExpirationForItem,
   refreshConsentExpirationForUser,
   syncPlaidItem,
   syncAllForUser,
 } from "../lib/plaidSync";
 import { sendExpirationRemindersForUser } from "../lib/plaidExpirationReminder";
 import { PLAID_REAUTH_ERROR_CODES as PLAID_REAUTH_ERROR_CODES_LIB } from "../lib/plaidReauthCodes";
+import { verifyPlaidWebhook } from "../lib/plaidWebhookVerify";
 import {
   fetchLiabilitiesForItem,
   fetchLiabilitiesForUser,
@@ -1155,9 +1157,81 @@ router.post(
   },
 );
 
+// Friendly copy that mirrors the per-code reasons the frontend's
+// `plaidReauthReason` shows. We persist these into `last_sync_error` when an
+// ITEM webhook arrives so the Settings "Linked Accounts" row immediately
+// renders the existing "Needs reconnect" badge + Reconnect button — without
+// waiting for the next /transactions/sync to re-discover the same condition
+// (which, for PENDING_EXPIRATION, may not happen for days).
+const ITEM_ERROR_FALLBACK_MESSAGES: Record<string, string> = {
+  ITEM_LOGIN_REQUIRED:
+    "Your saved login expired. Reconnect this bank to resume syncing.",
+  PENDING_EXPIRATION:
+    "Bank connection is about to expire. Reconnect to keep it linked.",
+  PENDING_DISCONNECT:
+    "Plaid will disconnect this bank soon. Reconnect to keep it linked.",
+  USER_PERMISSION_REVOKED:
+    "Bank access was revoked. Re-link this bank to resume syncing.",
+  USER_ACCOUNT_REVOKED:
+    "An account on this bank was revoked. Re-link to resume syncing.",
+};
+
 router.post("/plaid/webhook", async (req, res): Promise<void> => {
-  const { webhook_type, webhook_code, item_id } = req.body ?? {};
-  req.log.info({ webhook_type, webhook_code, item_id }, "Plaid webhook received");
+  // The Plaid-Verification JWT pins a SHA-256 of the *raw* request body, so
+  // the webhook route is mounted on `express.raw` (see app.ts) — req.body
+  // arrives as a Buffer. Tests may use `express.json` instead and pass a
+  // pre-parsed object; tolerate both shapes.
+  let rawBody: Buffer;
+  let parsed: {
+    webhook_type?: string;
+    webhook_code?: string;
+    item_id?: string;
+    error?: { error_code?: string; error_message?: string } | null;
+    consent_expiration_time?: string | null;
+  };
+  if (Buffer.isBuffer(req.body)) {
+    rawBody = req.body;
+    if (rawBody.length === 0) {
+      res.sendStatus(400);
+      return;
+    }
+    try {
+      parsed = JSON.parse(rawBody.toString("utf8"));
+    } catch {
+      res.sendStatus(400);
+      return;
+    }
+  } else {
+    parsed = (req.body ?? {}) as typeof parsed;
+    rawBody = Buffer.from(JSON.stringify(parsed));
+  }
+
+  // Verification is mandatory in production. For local dev / tests where
+  // Plaid isn't reachable, set PLAID_WEBHOOK_VERIFICATION_DISABLED=true to
+  // skip — never set this in production.
+  const skipVerify =
+    process.env.PLAID_WEBHOOK_VERIFICATION_DISABLED === "true";
+  if (!skipVerify) {
+    const header =
+      (req.header("Plaid-Verification") ??
+        req.header("plaid-verification")) ||
+      undefined;
+    const result = await verifyPlaidWebhook(rawBody, header);
+    if (!result.ok) {
+      req.log.warn(
+        { reason: result.reason },
+        "Plaid webhook verification failed",
+      );
+      res.sendStatus(401);
+      return;
+    }
+  }
+
+  const { webhook_type, webhook_code, item_id, error } = parsed;
+  req.log.info(
+    { webhook_type, webhook_code, item_id },
+    "Plaid webhook received",
+  );
   if (!item_id) {
     res.sendStatus(400);
     return;
@@ -1167,22 +1241,102 @@ router.post("/plaid/webhook", async (req, res): Promise<void> => {
     .from(plaidItemsTable)
     .where(eq(plaidItemsTable.itemId, String(item_id)));
   if (items.length === 0) {
-    res.sendStatus(404);
+    // We may receive webhooks for items that were unlinked locally but not
+    // yet itemRemove'd at Plaid. 200 (instead of 404) so Plaid stops
+    // retrying — there's nothing actionable on our side.
+    res.sendStatus(200);
     return;
   }
   const item = items[0];
-  if (
-    webhook_type === "TRANSACTIONS" &&
-    (webhook_code === "SYNC_UPDATES_AVAILABLE" ||
+
+  if (webhook_type === "TRANSACTIONS") {
+    // SYNC_UPDATES_AVAILABLE is the modern code; DEFAULT_UPDATE /
+    // INITIAL_UPDATE / HISTORICAL_UPDATE are the legacy /transactions/get
+    // codes some institutions still emit. All four mean "new data is
+    // ready" → just re-run the cursor-based sync.
+    if (
+      webhook_code === "SYNC_UPDATES_AVAILABLE" ||
       webhook_code === "DEFAULT_UPDATE" ||
       webhook_code === "INITIAL_UPDATE" ||
-      webhook_code === "HISTORICAL_UPDATE")
-  ) {
-    try {
-      await syncPlaidItem(item.userId, item.id);
-    } catch (e) {
-      req.log.error({ err: e }, "Webhook-triggered sync failed");
+      webhook_code === "HISTORICAL_UPDATE"
+    ) {
+      try {
+        await syncPlaidItem(item.userId, item.id);
+      } catch (e) {
+        req.log.error({ err: e }, "Webhook-triggered sync failed");
+      }
     }
+  } else if (webhook_type === "ITEM") {
+    if (webhook_code === "ERROR") {
+      // Plaid wraps the actionable code in an `error` object on ITEM/ERROR
+      // webhooks. ITEM_LOGIN_REQUIRED is the most common case; whatever
+      // code arrives gets persisted so the existing reauth detection (set
+      // of codes in PLAID_REAUTH_ERROR_CODES) can fire the Reconnect
+      // button on Settings → Linked Accounts and the page-top banner.
+      const code = error?.error_code ?? null;
+      if (code) {
+        const message =
+          error?.error_message ??
+          ITEM_ERROR_FALLBACK_MESSAGES[code] ??
+          `Plaid reported "${code}" for this bank.`;
+        await db
+          .update(plaidItemsTable)
+          .set({ lastSyncError: message, lastSyncErrorCode: code })
+          .where(eq(plaidItemsTable.id, item.id));
+      }
+    } else if (
+      webhook_code === "PENDING_EXPIRATION" ||
+      webhook_code === "PENDING_DISCONNECT"
+    ) {
+      // Both are "you must reconnect before <date>" warnings — they're in
+      // PLAID_REAUTH_ERROR_CODES so writing them to lastSyncErrorCode lights
+      // up the Reconnect button. Also opportunistically refresh the cached
+      // consent_expiration_at so the dated banner copy ("Chase will
+      // disconnect on May 21") reflects whatever Plaid reports now.
+      const message =
+        ITEM_ERROR_FALLBACK_MESSAGES[webhook_code] ??
+        `Plaid reported "${webhook_code}" for this bank.`;
+      await db
+        .update(plaidItemsTable)
+        .set({ lastSyncError: message, lastSyncErrorCode: webhook_code })
+        .where(eq(plaidItemsTable.id, item.id));
+      try {
+        await refreshConsentExpirationForItem(item.id);
+      } catch (e) {
+        req.log.warn(
+          { err: e },
+          "Consent refresh after PENDING_* webhook failed",
+        );
+      }
+    } else if (
+      webhook_code === "USER_PERMISSION_REVOKED" ||
+      webhook_code === "USER_ACCOUNT_REVOKED"
+    ) {
+      const message = ITEM_ERROR_FALLBACK_MESSAGES[webhook_code]!;
+      await db
+        .update(plaidItemsTable)
+        .set({ lastSyncError: message, lastSyncErrorCode: webhook_code })
+        .where(eq(plaidItemsTable.id, item.id));
+    } else if (webhook_code === "LOGIN_REPAIRED") {
+      // The user re-authed (in another flow) and Plaid says everything is
+      // healthy again — clear the chip and resync to pull anything that
+      // accumulated while the item was locked out.
+      await db
+        .update(plaidItemsTable)
+        .set({ lastSyncError: null, lastSyncErrorCode: null })
+        .where(eq(plaidItemsTable.id, item.id));
+      try {
+        await syncPlaidItem(item.userId, item.id);
+      } catch (e) {
+        req.log.warn(
+          { err: e },
+          "Post-LOGIN_REPAIRED sync failed (non-fatal)",
+        );
+      }
+    }
+    // NEW_ACCOUNTS_AVAILABLE / WEBHOOK_UPDATE_ACKNOWLEDGED are intentionally
+    // ignored — we don't auto-add accounts (could surprise the user) and
+    // the acknowledgement is informational.
   }
   res.sendStatus(200);
 });
