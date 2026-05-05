@@ -113,12 +113,22 @@ export async function syncPlaidItem(
     .from(forecastSettingsTable)
     .where(eq(forecastSettingsTable.userId, userId));
   let checkingPlaidAccountId: string | null = null;
+  // (#45) Track whether the bank-snapshot account actually belongs to the
+  // item we're syncing right now. Without this, a user with multiple
+  // linked institutions would have *every* item's hourly sync try to
+  // refresh the (Chase-owned) bank balance using each item's access
+  // token — Plaid would throw INVALID_ACCOUNT_ID on every non-owning
+  // item and we'd write a bogus "Balance refresh failed" chip on those
+  // items. Only the item that actually owns the checking account should
+  // attempt the refresh.
+  let bankSnapshotBelongsToThisItem = false;
   if (forecastSettings?.bankSnapshotAccountId) {
     const [acct] = await db
       .select()
       .from(plaidAccountsTable)
       .where(eq(plaidAccountsTable.id, forecastSettings.bankSnapshotAccountId));
     checkingPlaidAccountId = acct?.accountId ?? null;
+    bankSnapshotBelongsToThisItem = acct?.itemId === itemRowId;
   }
 
   // Build a map from Plaid's external account_id to the user's debt.id, so any
@@ -423,7 +433,11 @@ export async function syncPlaidItem(
     // configured (#45). Keeps the forecast anchor fresh on every sync.
     let balanceRefreshError: string | null = null;
     let balanceRefreshErrorCode: string | null = null;
-    if (checkingPlaidAccountId && forecastSettings?.bankSnapshotAccountId) {
+    if (
+      checkingPlaidAccountId &&
+      forecastSettings?.bankSnapshotAccountId &&
+      bankSnapshotBelongsToThisItem
+    ) {
       try {
         const resp = await plaid().accountsBalanceGet({
           access_token: item.accessToken,
@@ -455,6 +469,22 @@ export async function syncPlaidItem(
           balanceRefreshError = `Balance refresh failed: ${message}`;
           balanceRefreshErrorCode = code;
         }
+        // (#45) Log per-item context so support can trace which user /
+        // institution / Plaid error surfaced the lastSyncError chip on
+        // a hourly sync. Persistence-only would leave us blind whenever
+        // the chip turns over before anyone notices.
+        logger.warn(
+          {
+            userId,
+            itemRowId,
+            itemId: item.itemId,
+            institutionName: item.institutionName,
+            checkingPlaidAccountId,
+            code,
+            err: message,
+          },
+          "Plaid bank-snapshot balance refresh failed",
+        );
       }
     }
 
