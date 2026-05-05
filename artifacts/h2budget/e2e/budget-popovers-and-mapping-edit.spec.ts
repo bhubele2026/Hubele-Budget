@@ -169,11 +169,17 @@ test.describe("Budget popovers + Mapping Rules inline edit (#178)", () => {
     const today = todayIso();
     const monthStart = thisMonthStart();
 
+    // Pass categoryId: null explicitly so the POST /transactions
+    // auto-categorize pipeline (which would otherwise apply the STARBUCKS
+    // rule we just created and assign Dining) leaves this row truly
+    // uncategorized — the badge / popover the assertions below exercise
+    // only renders for uncategorized rows.
     await apiCall(page, "POST", "/api/transactions", {
       occurredOn: today,
       description: "STARBUCKS COFFEE #4421",
       amount: "-7.85",
       account: "Test Bank",
+      categoryId: null,
     });
 
     await apiCall(page, "POST", "/api/transactions", {
