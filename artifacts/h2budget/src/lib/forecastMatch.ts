@@ -133,13 +133,24 @@ export function buildLineRegister(opts: {
    *  treated as already baked into startBalance and skipped from the running
    *  balance calculation. */
   snapshotISO?: string | null;
+  /** Optional visible-window start (YYYY-MM-DD). When set, only plan/bank
+   *  rows on/after this date are surfaced in the active register `rows`,
+   *  while `allPlan`/`allBank` (and the running-balance accumulator that
+   *  feeds them) keep using the wider [fromISO, toISO] window. Used by the
+   *  Forecast page to hide stale prior-month bills from the register
+   *  without losing access to last month's data for the month-close /
+   *  rescheduled-bucket flows. Clamped to fromISO if earlier. */
+  visibleFromISO?: string | null;
 }): { rows: LineRow[]; allPlan: PlanLine[]; allBank: BankLine[] } {
-  const { events, txns, resolutions, closedMonths, startBalance, fromISO, toISO, snapshotISO } = opts;
+  const { events, txns, resolutions, closedMonths, startBalance, fromISO, toISO, snapshotISO, visibleFromISO } = opts;
   const today = opts.today ?? new Date();
   const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const fromMs = parseISO(fromISO);
   const toMs = parseISO(toISO);
   const anchorMs = snapshotISO ? parseISO(snapshotISO) : null;
+  const visibleFromMs = visibleFromISO
+    ? Math.max(parseISO(visibleFromISO), fromMs)
+    : fromMs;
 
   const byEventKey = new Map<string, Resolution>();
   const byTxn = new Map<string, Resolution>();
@@ -230,8 +241,12 @@ export function buildLineRegister(opts: {
     balanceByTxnId.set(b.txn.id, bal);
   }
 
-  const visibleBank = activeBank.filter((b) => inWindow(b.date));
-  const visiblePlan = activePlan.filter((p) => inWindow(p.date));
+  const inVisibleWindow = (iso: string) => {
+    const ms = parseISO(iso);
+    return ms >= visibleFromMs && ms <= toMs;
+  };
+  const visibleBank = activeBank.filter((b) => inVisibleWindow(b.date));
+  const visiblePlan = activePlan.filter((p) => inVisibleWindow(p.date));
 
   const rows: LineRow[] = [];
   for (const b of visibleBank) {

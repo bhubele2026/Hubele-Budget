@@ -726,8 +726,14 @@ export default function ForecastPage() {
       toISO: data.toDate,
       today,
       snapshotISO,
+      // Hide stale prior-month plan/bank rows from the active register.
+      // The API still returns events back to the first of last month so
+      // the month-close + rescheduled-bucket flows (which read from
+      // `register.allPlan`/`allBank`) keep working; we only narrow what
+      // the user sees in the default view.
+      visibleFromISO: forecastFromDate,
     });
-  }, [data, closedMonths, today, debtLinks, payoffsByDebt]);
+  }, [data, closedMonths, today, debtLinks, payoffsByDebt, forecastFromDate]);
 
   const bucket = useMemo(() => {
     if (!register || !data) return [];
