@@ -84,14 +84,12 @@ function isoDay(offsetDays: number): string {
 
 test.describe("Mapping Rules edit recategorize-preview (#200)", () => {
   test("inline preview reports N affected, Show-matches dialog lists them, and Save fires the bulk recategorize with the captured fromCategoryId", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "map-rules-edit-recat-200",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     // Land on the Mapping Rules page so the user is provisioned and the
     // edit form is the system under test.
@@ -285,7 +283,5 @@ test.describe("Mapping Rules edit recategorize-preview (#200)", () => {
     const byId = new Map(allTxns.map((t) => [t.id, t.categoryId] as const));
     expect(byId.get(hist1.id)).toBe(debtCat.id);
     expect(byId.get(hist2.id)).toBe(debtCat.id);
-
-    await context.close();
   });
 });

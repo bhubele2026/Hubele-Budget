@@ -106,14 +106,12 @@ function todayIso(): string {
 
 test.describe("Budget popovers + Mapping Rules inline edit (#178)", () => {
   test("violet match hint, actuals popover deep-link, and PATCH mapping-rule edit", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "budget-popovers-178",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     // Sign in and land on /budget — first visit auto-fires
     // POST /budget/seed-defaults so we have categories to assert against.
@@ -325,7 +323,5 @@ test.describe("Budget popovers + Mapping Rules inline edit (#178)", () => {
     const matching = rules.filter((r) => r.id === rule.id);
     expect(matching).toHaveLength(1);
     expect(matching[0]!.pattern).toBe("STARBUCKS RESERVE");
-
-    await context.close();
   });
 });

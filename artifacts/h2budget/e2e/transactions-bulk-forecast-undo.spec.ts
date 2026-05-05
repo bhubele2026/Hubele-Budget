@@ -82,14 +82,12 @@ function isoDay(offsetDays: number): string {
 
 test.describe("Transactions bulk Send-to-Forecast Undo (#215)", () => {
   test("bulk Send-to-Forecast and Remove-from-Forecast each offer Undo on the success toast, scoped to the affectedIds", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "txn-bulk-fc-undo-215",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     const monthStart = thisMonthStart();
     await signInAndOpen(

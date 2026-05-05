@@ -91,14 +91,12 @@ async function apiCall<T>(
 
 test.describe("Mapping Rules bulk select & delete (#223)", () => {
   test("bulk delete with single undo toast restores the whole batch", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "mapping-bulk-delete-223",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     // Land on /budget first so the default-budget seed runs and we
     // get categories to point our test rules at.
@@ -274,7 +272,5 @@ test.describe("Mapping Rules bulk select & delete (#223)", () => {
     await page.getByTestId("rule-select-all").click();
     const bulkDeleteBtn2 = page.getByTestId("rule-bulk-delete");
     await expect(bulkDeleteBtn2).toContainText("Delete selected (1)");
-
-    await context.close();
   });
 });

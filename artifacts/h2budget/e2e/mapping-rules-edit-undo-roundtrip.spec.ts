@@ -83,14 +83,12 @@ function isoDay(offsetDays: number): string {
 
 test.describe("Mapping Rules edit save → undo round-trip (#219)", () => {
   test("Undo on the post-save toast reverts BOTH the bulk recategorize AND the rule's category change", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "map-rules-edit-undo-219",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     // Land on the Mapping Rules page so the user is provisioned and the
     // edit form is the system under test.
@@ -316,7 +314,5 @@ test.describe("Mapping Rules edit save → undo round-trip (#219)", () => {
     await expect(
       page.getByTestId(`rule-category-${rule.id}`),
     ).toHaveText(miscName, { timeout: 5_000 });
-
-    await context.close();
   });
 });

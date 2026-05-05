@@ -115,14 +115,12 @@ async function dragTo(
 
 test.describe("Mapping Rules · drag rule onto category (#202)", () => {
   test("dragging a rule onto a category chip PATCHes its categoryId and toasts", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "rule-drag-cat-202",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     // Land on /budget so first-visit seeding fires and we have categories.
     await signInAndOpen(page, email, password, "/budget");
@@ -255,7 +253,5 @@ test.describe("Mapping Rules · drag rule onto category (#202)", () => {
     await page.waitForTimeout(500);
     page.off("request", extraPatchListener);
     expect(extraPatchSeen).toBe(false);
-
-    await context.close();
   });
 });

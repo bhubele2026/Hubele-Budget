@@ -93,14 +93,12 @@ function isoDay(offsetDays: number): string {
 
 test.describe("Mapping Rules add recategorize-preview (#220 + #243)", () => {
   test("Add form previews uncategorized matches, Show-matches lists them, and Add chains the bulk recategorize with fromCategoryId=null", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "map-rules-add-recat-220",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     // Land on the Mapping Rules page so the user is provisioned.
     await signInAndOpen(page, email, password, "/mapping-rules");
@@ -337,7 +335,5 @@ test.describe("Mapping Rules add recategorize-preview (#220 + #243)", () => {
     const byId = new Map(allTxns.map((t) => [t.id, t.categoryId] as const));
     expect(byId.get(hist1.id)).toBe(debtCat.id);
     expect(byId.get(hist2.id)).toBe(debtCat.id);
-
-    await context.close();
   });
 });

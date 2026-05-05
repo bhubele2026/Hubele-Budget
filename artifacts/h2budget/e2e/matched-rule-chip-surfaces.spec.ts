@@ -95,14 +95,12 @@ function isoDay(offsetDays: number): string {
 
 test.describe("MatchedRuleChip on extra transaction-list surfaces (#208)", () => {
   test("dashboard recent activity, reimbursements box, and recategorize preview dialog all surface the chip with the same rule-vs-manual semantics", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "matched-rule-chip-208",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     // Land on the dashboard so the user is provisioned in the DB.
     // The dashboard route is `/dashboard` (root `/` redirects there);
@@ -322,7 +320,5 @@ test.describe("MatchedRuleChip on extra transaction-list surfaces (#208)", () =>
     await expect(
       page.getByTestId(`text-no-rule-rule-match-${histB2.id}`),
     ).toBeVisible();
-
-    await context.close();
   });
 });

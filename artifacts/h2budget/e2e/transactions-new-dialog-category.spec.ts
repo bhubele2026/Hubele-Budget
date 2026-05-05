@@ -82,14 +82,12 @@ function thisMonthStart(): string {
 
 test.describe("Add-Transaction dialog Category combobox (#230)", () => {
   test("auto-picks the matching rule's category as the user types, surfaces the chip, and POSTs an explicit override when the user picks a different category", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "txn-new-cat-230",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     const monthStart = thisMonthStart();
     await signInAndOpen(

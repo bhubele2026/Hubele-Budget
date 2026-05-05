@@ -93,14 +93,12 @@ function isoDay(offsetDays: number): string {
 
 test.describe("Transactions bulk re-categorize preview (#187)", () => {
   test("toast says 'Move N past payments into <cat>?' and the Show-matches dialog lists the affected transactions, then Apply re-categorizes them", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "txn-bulk-recat-187",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     // Land on the Transactions page so the user is provisioned in the DB
     // and the deep-link `?month=` param scopes the view to the current
@@ -364,7 +362,5 @@ test.describe("Transactions bulk re-categorize preview (#187)", () => {
     const seedRule = rulesAfterUndo.find((r) => r.pattern === pattern);
     expect(seedRule).toBeDefined();
     expect(seedRule!.categoryId).toBe(miscCat.id);
-
-    await context.close();
   });
 });

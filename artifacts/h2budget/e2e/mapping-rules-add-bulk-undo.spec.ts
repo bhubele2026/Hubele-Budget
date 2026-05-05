@@ -79,14 +79,12 @@ function isoDay(offsetDays: number): string {
 
 test.describe("Mapping Rules add-flow bulk Undo (#242)", () => {
   test("Undo restores the rule-added bulk's affected rows back to uncategorized while preserving rows the user has since re-edited", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "map-rules-add-undo-242",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     await signInAndOpen(page, email, password, "/mapping-rules");
     await expect(
@@ -265,7 +263,5 @@ test.describe("Mapping Rules add-flow bulk Undo (#242)", () => {
     const addedRule = rules.find((r) => r.pattern === pattern);
     expect(addedRule).toBeDefined();
     expect(addedRule?.categoryId).toBe(debtCat.id);
-
-    await context.close();
   });
 });
