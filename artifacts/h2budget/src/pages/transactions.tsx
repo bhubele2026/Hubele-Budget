@@ -78,7 +78,11 @@ import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { BucketBubbles, type BucketFlags, type BucketKey } from "@/components/bucket-bubbles";
 import { computeBalanceAtEndOf } from "@/lib/accountBalance";
-import { computeRunningBalances } from "@/lib/runningBalance";
+import {
+  compareNewestFirst,
+  computeRunningBalances,
+  sortNewestFirst,
+} from "@/lib/runningBalance";
 import {
   Command,
   CommandInput,
@@ -409,17 +413,21 @@ export default function TransactionsPage() {
     return points;
   }, [anchorBalance, balanceAtEndOf, selectedMonth]);
 
+  // Anchor every same-day balance assignment to the canonical
+  // newest-first comparator (occurredOn DESC, occurredAt DESC nulls
+  // last, id DESC). The day-group display below uses the SAME
+  // comparator so the "bal $X" shown beside each row matches the
+  // row's actual position in the register-style list.
   const runningBalanceMap = useMemo(() => {
     if (endingBalance === null) return new Map<string, number>();
-    const sorted = [...monthScoped].sort((a, b) => {
-      if (a.occurredOn !== b.occurredOn)
-        return a.occurredOn < b.occurredOn ? 1 : -1;
-      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-    });
-    return computeRunningBalances(sorted, endingBalance);
+    return computeRunningBalances(sortNewestFirst(monthScoped), endingBalance);
   }, [monthScoped, endingBalance]);
 
   // ---- Day grouping ----
+  // Within each day, sort items newest-first via the same canonical
+  // comparator used to compute the running balance. Without this,
+  // Postgres returns same-day rows in an unspecified order and the
+  // running balance values shown beside them appear non-monotonic.
   const groups = useMemo(() => {
     const map = new Map<string, Transaction[]>();
     for (const t of filtered) {
@@ -428,6 +436,7 @@ export default function TransactionsPage() {
       if (arr) arr.push(t);
       else map.set(k, [t]);
     }
+    for (const arr of map.values()) arr.sort(compareNewestFirst);
     return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
   }, [filtered]);
 
