@@ -1604,6 +1604,25 @@ export declare const ListPlaidLiabilityAccountsResponseItem: zod.ZodObject<{
         id: string;
         name: string;
     }>, zod.ZodNull]>>;
+    suggestedDebt: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        name: zod.ZodString;
+        type: zod.ZodString;
+        balance: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        apr: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        minPayment: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        type: string;
+        name: string;
+        balance?: string | null | undefined;
+        apr?: string | null | undefined;
+        minPayment?: string | null | undefined;
+    }, {
+        type: string;
+        name: string;
+        balance?: string | null | undefined;
+        apr?: string | null | undefined;
+        minPayment?: string | null | undefined;
+    }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     accountId: string;
@@ -1624,6 +1643,13 @@ export declare const ListPlaidLiabilityAccountsResponseItem: zod.ZodObject<{
         id: string;
         name: string;
     } | null | undefined;
+    suggestedDebt?: {
+        type: string;
+        name: string;
+        balance?: string | null | undefined;
+        apr?: string | null | undefined;
+        minPayment?: string | null | undefined;
+    } | null | undefined;
 }, {
     id: string;
     accountId: string;
@@ -1643,6 +1669,13 @@ export declare const ListPlaidLiabilityAccountsResponseItem: zod.ZodObject<{
     linkedDebt?: {
         id: string;
         name: string;
+    } | null | undefined;
+    suggestedDebt?: {
+        type: string;
+        name: string;
+        balance?: string | null | undefined;
+        apr?: string | null | undefined;
+        minPayment?: string | null | undefined;
     } | null | undefined;
 }>;
 export declare const ListPlaidLiabilityAccountsResponse: zod.ZodArray<zod.ZodObject<{
@@ -1671,6 +1704,25 @@ export declare const ListPlaidLiabilityAccountsResponse: zod.ZodArray<zod.ZodObj
         id: string;
         name: string;
     }>, zod.ZodNull]>>;
+    suggestedDebt: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+        name: zod.ZodString;
+        type: zod.ZodString;
+        balance: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        apr: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        minPayment: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        type: string;
+        name: string;
+        balance?: string | null | undefined;
+        apr?: string | null | undefined;
+        minPayment?: string | null | undefined;
+    }, {
+        type: string;
+        name: string;
+        balance?: string | null | undefined;
+        apr?: string | null | undefined;
+        minPayment?: string | null | undefined;
+    }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     accountId: string;
@@ -1690,6 +1742,13 @@ export declare const ListPlaidLiabilityAccountsResponse: zod.ZodArray<zod.ZodObj
     linkedDebt?: {
         id: string;
         name: string;
+    } | null | undefined;
+    suggestedDebt?: {
+        type: string;
+        name: string;
+        balance?: string | null | undefined;
+        apr?: string | null | undefined;
+        minPayment?: string | null | undefined;
     } | null | undefined;
 }, {
     id: string;
@@ -1711,7 +1770,21 @@ export declare const ListPlaidLiabilityAccountsResponse: zod.ZodArray<zod.ZodObj
         id: string;
         name: string;
     } | null | undefined;
+    suggestedDebt?: {
+        type: string;
+        name: string;
+        balance?: string | null | undefined;
+        apr?: string | null | undefined;
+        minPayment?: string | null | undefined;
+    } | null | undefined;
 }>, "many">;
+export declare const CreateDebtFromPlaidAccountParams: zod.ZodObject<{
+    plaidAccountId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    plaidAccountId: string;
+}, {
+    plaidAccountId: string;
+}>;
 /**
  * @summary All recorded balance snapshots for the current user's debts
  */

@@ -5,6 +5,7 @@ import {
   useLinkDebtToPlaid,
   useUnlinkDebtFromPlaid,
   useRefreshDebtFromPlaid,
+  useCreateDebtFromPlaidAccount,
   getListDebtsQueryKey,
   getListPlaidLiabilityAccountsQueryKey,
   getGetBillsSummaryQueryKey,
@@ -272,20 +273,57 @@ function PlaidAccountPicker({
   const accounts = useListPlaidLiabilityAccounts(undefined, {
     query: { enabled: open, queryKey: getListPlaidLiabilityAccountsQueryKey() },
   });
+  // (#44) Shared invalidator — every consumer (Avalanche debts list,
+  // Bills summary, Forecast, Dashboard, Amex anchor tile, the picker
+  // itself) needs to refetch when a debt appears or its Plaid link
+  // changes, so both Link and "Add as new debt" funnel through here.
+  const invalidateAfterDebtChange = () => {
+    qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
+    qc.invalidateQueries({ queryKey: getListPlaidLiabilityAccountsQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+    // The Amex Ending balance tile derives from the linked Amex debt
+    // when present, so refresh its anchor query too.
+    qc.invalidateQueries({ queryKey: ["/api/amex/anchor"] });
+  };
   const link = useLinkDebtToPlaid({
     mutation: {
       onSuccess: () => {
-        qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
-        qc.invalidateQueries({ queryKey: getListPlaidLiabilityAccountsQueryKey() });
-        qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
-        qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
-        qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+        invalidateAfterDebtChange();
         toast({ title: "Linked to Plaid" });
         onOpenChange(false);
       },
       onError: (err) =>
         toast({
           title: "Could not link",
+          description: String(err),
+          variant: "destructive",
+        }),
+    },
+  });
+  // (#44) "Add as new debt" — creates a brand-new debt row from the
+  // Plaid account's cached liability data and links it. Used for
+  // unmatched accounts in the picker so the user doesn't have to
+  // manually create a debt and then come back to link it.
+  const createDebt = useCreateDebtFromPlaidAccount({
+    mutation: {
+      onSuccess: (res) => {
+        invalidateAfterDebtChange();
+        const action = (res as { action?: string } | undefined)?.action;
+        const debtName =
+          (res as { debt?: { name?: string } } | undefined)?.debt?.name ?? "debt";
+        toast({
+          title:
+            action === "linked-existing"
+              ? `Linked existing "${debtName}"`
+              : `Added "${debtName}" as a new debt`,
+        });
+        onOpenChange(false);
+      },
+      onError: (err) =>
+        toast({
+          title: "Could not add as debt",
           description: String(err),
           variant: "destructive",
         }),
@@ -346,6 +384,10 @@ function PlaidAccountPicker({
             <div className="max-h-80 overflow-y-auto border rounded-md divide-y">
               {items.map((a) => {
                 const taken = a.linkedDebt && a.linkedDebt.id !== debt.id;
+                // (#44) Only offer "Add as new debt" when the account is
+                // unmatched. Already-linked accounts only get the
+                // "linked to" badge.
+                const canAddAsNew = !taken && !a.linkedDebt;
                 return (
                   <div
                     key={a.id}
@@ -372,23 +414,47 @@ function PlaidAccountPicker({
                         </Badge>
                       ) : null}
                     </div>
-                    <Button
-                      size="sm"
-                      disabled={link.isPending || !!taken}
-                      onClick={() =>
-                        link.mutate({
-                          id: debt.id,
-                          data: { plaidAccountId: a.id },
-                        })
-                      }
-                      data-testid={`button-pick-plaid-${a.id}`}
-                    >
-                      {link.isPending ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        "Use this"
-                      )}
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        disabled={link.isPending || createDebt.isPending || !!taken}
+                        onClick={() =>
+                          link.mutate({
+                            id: debt.id,
+                            data: { plaidAccountId: a.id },
+                          })
+                        }
+                        data-testid={`button-pick-plaid-${a.id}`}
+                      >
+                        {link.isPending ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          "Use this"
+                        )}
+                      </Button>
+                      {canAddAsNew ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={link.isPending || createDebt.isPending}
+                          onClick={() =>
+                            createDebt.mutate({ plaidAccountId: a.id })
+                          }
+                          title={
+                            a.suggestedDebt
+                              ? `Create "${a.suggestedDebt.name}" as a new debt`
+                              : "Create a new debt from this account"
+                          }
+                          data-testid={`button-add-as-debt-${a.id}`}
+                        >
+                          {createDebt.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            "Add as new debt"
+                          )}
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}

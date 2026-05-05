@@ -35,6 +35,8 @@ import type {
   CheckInvitationResult,
   CleanupNonProdPlaidItems200,
   CloseForecastMonthBody,
+  CreateDebtFromPlaidAccount409,
+  CreateDebtFromPlaidResult,
   CreateInvitationInput,
   CreateMappingRuleResponse,
   CreateTransactionInput,
@@ -1376,6 +1378,88 @@ export function useListPlaidLiabilityAccounts<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+export const getCreateDebtFromPlaidAccountUrl = (plaidAccountId: string) => {
+  return `/api/plaid/liability-accounts/${plaidAccountId}/create-debt`;
+};
+
+export const createDebtFromPlaidAccount = async (
+  plaidAccountId: string,
+  options?: RequestInit,
+): Promise<CreateDebtFromPlaidResult> => {
+  return customFetch<CreateDebtFromPlaidResult>(
+    getCreateDebtFromPlaidAccountUrl(plaidAccountId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getCreateDebtFromPlaidAccountMutationOptions = <
+  TError = ErrorType<CreateDebtFromPlaidAccount409>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDebtFromPlaidAccount>>,
+    TError,
+    { plaidAccountId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDebtFromPlaidAccount>>,
+  TError,
+  { plaidAccountId: string },
+  TContext
+> => {
+  const mutationKey = ["createDebtFromPlaidAccount"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createDebtFromPlaidAccount>>,
+    { plaidAccountId: string }
+  > = (props) => {
+    const { plaidAccountId } = props ?? {};
+
+    return createDebtFromPlaidAccount(plaidAccountId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateDebtFromPlaidAccountMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDebtFromPlaidAccount>>
+>;
+
+export type CreateDebtFromPlaidAccountMutationError =
+  ErrorType<CreateDebtFromPlaidAccount409>;
+
+export const useCreateDebtFromPlaidAccount = <
+  TError = ErrorType<CreateDebtFromPlaidAccount409>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDebtFromPlaidAccount>>,
+    TError,
+    { plaidAccountId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createDebtFromPlaidAccount>>,
+  TError,
+  { plaidAccountId: string },
+  TContext
+> => {
+  return useMutation(getCreateDebtFromPlaidAccountMutationOptions(options));
+};
 
 /**
  * @summary All recorded balance snapshots for the current user's debts

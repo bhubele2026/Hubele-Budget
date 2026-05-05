@@ -300,6 +300,32 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/PlaidLiabilityAccount" }
+  /plaid/liability-accounts/{plaidAccountId}/create-debt:
+    post:
+      operationId: createDebtFromPlaidAccount
+      tags: [plaid]
+      parameters:
+        - in: path
+          name: plaidAccountId
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateDebtFromPlaidResult" }
+        "409":
+          description: Already linked to a debt
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error: { type: string }
+                  debtId: { type: string }
+                  debtName: { type: string }
   /debts/balance-history:
     get:
       operationId: listDebtBalanceHistory
@@ -1849,6 +1875,25 @@ components:
                 id: { type: string }
                 name: { type: string }
             - type: "null"
+        suggestedDebt:
+          oneOf:
+            - $ref: "#/components/schemas/PlaidSuggestedDebt"
+            - type: "null"
+    PlaidSuggestedDebt:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string }
+        balance: { type: ["string", "null"] }
+        apr: { type: ["string", "null"] }
+        minPayment: { type: ["string", "null"] }
+    CreateDebtFromPlaidResult:
+      type: object
+      required: [debt, action]
+      properties:
+        debt: { $ref: "#/components/schemas/Debt" }
+        action: { type: string, enum: [created, linked-existing] }
     AvalancheSettings:
       type: object
       required: [strategy, extraSource, manualExtra, budgetMode]

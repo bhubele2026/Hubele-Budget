@@ -13,6 +13,7 @@ import {
   index,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 
 export const profilesTable = pgTable("profiles", {
@@ -54,6 +55,12 @@ export const debtsTable = pgTable(
   (t) => ({
     userIdx: index("debts_user_idx").on(t.userId),
     plaidAcctIdx: index("debts_plaid_account_idx").on(t.plaidAccountId),
+    // (#44) One Plaid account → at most one debt. Partial uniqueness so
+    // the many manual debts (plaid_account_id IS NULL) are unaffected.
+    // The api-server catches the resulting 23505 and returns 409.
+    plaidAcctUnique: uniqueIndex("debts_plaid_account_unique")
+      .on(t.plaidAccountId)
+      .where(sql`${t.plaidAccountId} IS NOT NULL`),
   }),
 );
 

@@ -33,10 +33,231 @@ import {
 } from "../lib/plaidSync";
 import { sendExpirationRemindersForUser } from "../lib/plaidExpirationReminder";
 import { PLAID_REAUTH_ERROR_CODES as PLAID_REAUTH_ERROR_CODES_LIB } from "../lib/plaidReauthCodes";
-import { fetchLiabilitiesForUser } from "../lib/plaidLiabilities";
+import {
+  fetchLiabilitiesForItem,
+  fetchLiabilitiesForUser,
+} from "../lib/plaidLiabilities";
 import { debtsTable } from "@workspace/db";
 
 const router: IRouter = Router();
+
+// (#44) Subtypes that map to a real debt obligation (vs. e.g. an HSA or
+// generic asset). Mirrored on both the auto-create-on-exchange path and
+// the GET /plaid/liability-accounts filter.
+const DEBT_SUBTYPES = new Set([
+  "credit card",
+  "paypal",
+  "line of credit",
+  "student",
+  "mortgage",
+  "home equity",
+  "auto",
+  "loan",
+  "commercial",
+  "construction",
+  "consumer",
+  "overdraft",
+]);
+
+type PlaidAccountRow = typeof plaidAccountsTable.$inferSelect;
+
+export function plaidAccountIsDebtLike(a: PlaidAccountRow): boolean {
+  if (a.liabilityKind) return true;
+  if (a.type === "credit" || a.type === "loan") return true;
+  const sub = (a.subtype ?? "").toLowerCase();
+  return DEBT_SUBTYPES.has(sub);
+}
+
+// (#44) Build the suggested debt name we use both for auto-create and
+// for the picker's preview. "{Institution} ••{mask}" is consistent with
+// how the rest of the app shows linked Plaid accounts (see
+// DebtPlaidSource), so a debt created this way reads naturally.
+export function suggestedDebtName(
+  acct: PlaidAccountRow,
+  institutionName: string | null | undefined,
+): string {
+  const inst = (institutionName ?? "").trim();
+  const mask = (acct.mask ?? "").trim();
+  const base = acct.officialName?.trim() || acct.name?.trim() || "Account";
+  if (inst && mask) return `${inst} ••${mask}`;
+  if (inst) return `${inst} — ${base}`;
+  if (mask) return `${base} ••${mask}`;
+  return base;
+}
+
+// (#44) Map a Plaid account subtype/liabilityKind to one of the simple
+// debt `type` values the avalanche page already uses. Falls back to
+// "credit_card" because that is by far the most common debt-like
+// account users link.
+export function suggestedDebtType(acct: PlaidAccountRow): string {
+  if (acct.liabilityKind === "mortgage") return "mortgage";
+  if (acct.liabilityKind === "student") return "student_loan";
+  const sub = (acct.subtype ?? "").toLowerCase();
+  if (sub === "mortgage" || sub === "home equity") return "mortgage";
+  if (sub === "student") return "student_loan";
+  if (sub === "auto") return "auto_loan";
+  if (
+    sub === "loan" ||
+    sub === "consumer" ||
+    sub === "commercial" ||
+    sub === "construction"
+  )
+    return "loan";
+  if (acct.type === "loan") return "loan";
+  return "credit_card";
+}
+
+// (#44) Postgres unique-violation code. The partial unique index on
+// debts.plaid_account_id raises this when a concurrent request beats us
+// to linking the same account; the helpers + create endpoint translate
+// it into a 409 instead of a 500.
+export const PG_UNIQUE_VIOLATION = "23505";
+export function isUniqueViolation(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  // Drizzle/pg can put SQLSTATE either directly on .code (most direct
+  // pg errors) or on .cause.code (when the driver wraps the original
+  // error). Check both so the helper / endpoint translate it into 409
+  // regardless of which driver path produced the error.
+  const direct = (err as { code?: string }).code;
+  const wrapped = (err as { cause?: { code?: string } }).cause?.code;
+  return direct === PG_UNIQUE_VIOLATION || wrapped === PG_UNIQUE_VIOLATION;
+}
+export class PlaidAccountAlreadyLinkedError extends Error {
+  constructor() {
+    super("This Plaid account is already linked to a debt");
+    this.name = "PlaidAccountAlreadyLinkedError";
+  }
+}
+
+export type SuggestedDebt = {
+  name: string;
+  type: string;
+  balance: string | null;
+  apr: string | null;
+  minPayment: string | null;
+};
+
+export function buildSuggestedDebt(
+  acct: PlaidAccountRow,
+  institutionName: string | null | undefined,
+): SuggestedDebt {
+  return {
+    name: suggestedDebtName(acct, institutionName),
+    type: suggestedDebtType(acct),
+    balance: acct.liabilityBalance ?? null,
+    apr: acct.liabilityApr ?? null,
+    minPayment: acct.liabilityMinPayment ?? null,
+  };
+}
+
+/**
+ * (#44) Insert a debt from a Plaid account, marking every Plaid-provided
+ * field's *_source as "plaid" and stamping the sync timestamp so the
+ * Avalanche/Amex pages immediately treat the row as live. If a debt with
+ * the suggested name already exists for this user *without* a Plaid link
+ * (typical case: user already created an "Amex" row manually), link the
+ * existing row instead of creating a duplicate.
+ *
+ * Returns the resulting debt row plus an `action` describing what
+ * happened so the caller (auto-create on exchange, the explicit
+ * create-debt endpoint) can report it back to the user.
+ */
+export async function createOrLinkDebtFromPlaidAccount(opts: {
+  userId: string;
+  account: PlaidAccountRow;
+  institutionName: string | null | undefined;
+}): Promise<{
+  debt: typeof debtsTable.$inferSelect;
+  action: "created" | "linked-existing";
+}> {
+  const { userId, account, institutionName } = opts;
+  const suggested = buildSuggestedDebt(account, institutionName);
+  const now = new Date();
+
+  // De-dupe by name: if a same-name debt already exists with no Plaid
+  // link, adopt it rather than creating a second row.
+  const existing = await db
+    .select()
+    .from(debtsTable)
+    .where(
+      and(
+        eq(debtsTable.userId, userId),
+        eq(debtsTable.name, suggested.name),
+        sql`${debtsTable.plaidAccountId} is null`,
+      ),
+    );
+  if (existing.length > 0) {
+    const target = existing[0];
+    const patch: Partial<typeof debtsTable.$inferInsert> = {
+      plaidAccountId: account.id,
+      plaidLastSyncedAt: now,
+      updatedAt: now,
+    };
+    if (suggested.balance != null) {
+      patch.balance = suggested.balance;
+      patch.balanceSource = "plaid";
+      patch.lastBalanceUpdate = now;
+      if (target.originalBalance == null) {
+        patch.originalBalance = suggested.balance;
+      }
+    }
+    if (suggested.apr != null) {
+      patch.apr = suggested.apr;
+      patch.aprSource = "plaid";
+    }
+    if (suggested.minPayment != null) {
+      patch.minPayment = suggested.minPayment;
+      patch.minPaymentSource = "plaid";
+    }
+    try {
+      const [updated] = await db
+        .update(debtsTable)
+        .set(patch)
+        .where(and(eq(debtsTable.id, target.id), eq(debtsTable.userId, userId)))
+        .returning();
+      return { debt: updated ?? target, action: "linked-existing" };
+    } catch (e) {
+      // (#44) Concurrent linker beat us to this Plaid account — partial
+      // unique index `debts_plaid_account_unique` raised 23505. Surface
+      // as a typed error so the route can return 409 instead of 500.
+      if (isUniqueViolation(e)) throw new PlaidAccountAlreadyLinkedError();
+      throw e;
+    }
+  }
+
+  const values: typeof debtsTable.$inferInsert = {
+    userId,
+    name: suggested.name,
+    type: suggested.type,
+    status: "active",
+    plaidAccountId: account.id,
+    plaidLastSyncedAt: now,
+  };
+  if (suggested.balance != null) {
+    values.balance = suggested.balance;
+    values.balanceSource = "plaid";
+    values.originalBalance = suggested.balance;
+    values.lastBalanceUpdate = now;
+  }
+  if (suggested.apr != null) {
+    values.apr = suggested.apr;
+    values.aprSource = "plaid";
+  }
+  if (suggested.minPayment != null) {
+    values.minPayment = suggested.minPayment;
+    values.minPaymentSource = "plaid";
+  }
+  try {
+    const [created] = await db.insert(debtsTable).values(values).returning();
+    return { debt: created!, action: "created" };
+  } catch (e) {
+    // (#44) Same race-protection as the link branch above — the partial
+    // unique index turns the "two simultaneous create-debt calls" case
+    // into a clean 409 instead of an inconsistent state.
+    if (isUniqueViolation(e)) throw new PlaidAccountAlreadyLinkedError();
+    throw e;
+  }
+}
 
 router.post("/plaid/link-token", requireAuth, async (req, res): Promise<void> => {
   try {
@@ -253,34 +474,54 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     // Initial sync (last 90 days come via /transactions/sync naturally)
     await syncPlaidItem(req.userId!, item!.id);
 
-    // Auto-create debts for newly linked credit/loan accounts (#44)
+    // (#44) Auto-create debts for newly linked credit/loan accounts.
+    // Pull liabilities first (best-effort) so balance/APR/minimum payment
+    // get cached on the plaid_accounts row before we read them — otherwise
+    // the auto-created debt would land with $0 across the board and the
+    // user would think the integration is broken.
+    try {
+      await fetchLiabilitiesForItem(req.userId!, item!.id);
+    } catch (e) {
+      req.log.warn(
+        { err: e, itemRowId: item!.id },
+        "fetchLiabilitiesForItem failed during auto-create — debts may be created with $0 fields",
+      );
+    }
     try {
       const newAccts = await db
         .select()
         .from(plaidAccountsTable)
         .where(eq(plaidAccountsTable.itemId, item!.id));
-      const existingDebts = await db
+      const existingLinks = await db
         .select({ plaidAccountId: debtsTable.plaidAccountId })
         .from(debtsTable)
         .where(eq(debtsTable.userId, req.userId!));
       const linkedAcctIds = new Set(
-        existingDebts.map((d) => d.plaidAccountId).filter(Boolean),
+        existingLinks.map((d) => d.plaidAccountId).filter(Boolean) as string[],
       );
       for (const acct of newAccts) {
         if (linkedAcctIds.has(acct.id)) continue;
-        const t = (acct.type ?? "").toLowerCase();
-        const st = (acct.subtype ?? "").toLowerCase();
-        if (t !== "credit" && t !== "loan" && st !== "credit card") continue;
-        await db.insert(debtsTable).values({
-          userId: req.userId!,
-          name: acct.officialName || acct.name || `${resolvedName ?? "Plaid"} ${acct.mask ?? ""}`.trim(),
-          balance: "0",
-          apr: "0",
-          minPayment: "0",
-          status: "active",
-          plaidAccountId: acct.id,
-        });
-        req.log.info({ accountId: acct.accountId, name: acct.name }, "Auto-created debt from Plaid account");
+        if (!plaidAccountIsDebtLike(acct)) continue;
+        try {
+          const result = await createOrLinkDebtFromPlaidAccount({
+            userId: req.userId!,
+            account: acct,
+            institutionName: resolvedName,
+          });
+          req.log.info(
+            {
+              accountId: acct.accountId,
+              debtId: result.debt.id,
+              action: result.action,
+            },
+            "Auto-created/linked debt from Plaid account",
+          );
+        } catch (e) {
+          req.log.warn(
+            { err: e, accountId: acct.accountId },
+            "createOrLinkDebtFromPlaidAccount failed (non-fatal)",
+          );
+        }
       }
     } catch (e) {
       req.log.warn({ err: e }, "Auto-create debts failed (non-fatal)");
@@ -501,31 +742,17 @@ router.get(
         .map((d) => [d.plaidAccountId!, { id: d.id, name: d.name }]),
     );
 
-    const debtSubtypes = new Set([
-      "credit card",
-      "paypal",
-      "line of credit",
-      "student",
-      "mortgage",
-      "home equity",
-      "auto",
-      "loan",
-      "commercial",
-      "construction",
-      "consumer",
-      "overdraft",
-    ]);
-    const looksLikeDebt = (a: typeof accts[number]) => {
-      if (a.liabilityKind) return true;
-      if (a.type === "credit" || a.type === "loan") return true;
-      const sub = (a.subtype ?? "").toLowerCase();
-      return debtSubtypes.has(sub);
-    };
-
     res.json(
-      accts.filter(looksLikeDebt).map((a) => {
+      accts.filter(plaidAccountIsDebtLike).map((a) => {
         const item = itemById.get(a.itemId);
         const linked = linkedByAcct.get(a.id);
+        // (#44) Surface the would-be debt payload for unmatched accounts
+        // so the picker can offer "Add as new debt" without a second
+        // round trip. Null when the account is already linked — the
+        // client uses linkedDebt for that case.
+        const suggestedDebt = linked
+          ? null
+          : buildSuggestedDebt(a, item?.institutionName);
         return {
           id: a.id,
           accountId: a.accountId,
@@ -545,9 +772,134 @@ router.get(
           institutionName: item?.institutionName ?? null,
           institutionSlug: item?.institutionSlug ?? null,
           linkedDebt: linked ?? null,
+          suggestedDebt,
         };
       }),
     );
+  },
+);
+
+// (#44) One-click "Add as new debt" — creates a debt row from the
+// Plaid account's cached liability data and links it. Refuses with
+// 409 if the account is already linked to another debt; instead of
+// duplicating an existing same-name debt it adopts that row.
+router.post(
+  "/plaid/liability-accounts/:plaidAccountId/create-debt",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const userId = req.userId!;
+    const plaidAccountId = String(req.params.plaidAccountId);
+    const [acct] = await db
+      .select()
+      .from(plaidAccountsTable)
+      .where(
+        and(
+          eq(plaidAccountsTable.id, plaidAccountId),
+          eq(plaidAccountsTable.userId, userId),
+        ),
+      );
+    if (!acct) {
+      res.status(404).json({ error: "Plaid account not found" });
+      return;
+    }
+    if (!plaidAccountIsDebtLike(acct)) {
+      res.status(400).json({
+        error: "This Plaid account does not look like a debt account",
+      });
+      return;
+    }
+    const [taken] = await db
+      .select({ id: debtsTable.id, name: debtsTable.name })
+      .from(debtsTable)
+      .where(
+        and(
+          eq(debtsTable.userId, userId),
+          eq(debtsTable.plaidAccountId, plaidAccountId),
+        ),
+      );
+    if (taken) {
+      res.status(409).json({
+        error: "This Plaid account is already linked to a debt",
+        debtId: taken.id,
+        debtName: taken.name,
+      });
+      return;
+    }
+    // Refresh liabilities so the suggestion mirrors current Plaid data.
+    // Best-effort — if the call fails we fall back to whatever values we
+    // already have cached on the account row.
+    try {
+      await fetchLiabilitiesForItem(userId, acct.itemId);
+    } catch (e) {
+      req.log.warn(
+        { err: e, itemRowId: acct.itemId },
+        "fetchLiabilitiesForItem failed during create-debt — using cached values",
+      );
+    }
+    const [refreshed] = await db
+      .select()
+      .from(plaidAccountsTable)
+      .where(
+        and(
+          eq(plaidAccountsTable.id, plaidAccountId),
+          eq(plaidAccountsTable.userId, userId),
+        ),
+      );
+    // (#44) Always scope by userId — even though we already verified the
+    // account belongs to the user, the item lookup must not silently
+    // grab another user's institution name if a row id ever overlaps.
+    const [item] = await db
+      .select({ institutionName: plaidItemsTable.institutionName })
+      .from(plaidItemsTable)
+      .where(
+        and(
+          eq(plaidItemsTable.id, (refreshed ?? acct).itemId),
+          eq(plaidItemsTable.userId, userId),
+        ),
+      );
+    try {
+      const result = await createOrLinkDebtFromPlaidAccount({
+        userId,
+        account: refreshed ?? acct,
+        institutionName: item?.institutionName ?? null,
+      });
+      res.status(201).json({
+        debt: {
+          ...result.debt,
+          lastBalanceUpdate: result.debt.lastBalanceUpdate
+            ? result.debt.lastBalanceUpdate.toISOString()
+            : null,
+          plaidLastSyncedAt: result.debt.plaidLastSyncedAt
+            ? result.debt.plaidLastSyncedAt.toISOString()
+            : null,
+        },
+        action: result.action,
+      });
+    } catch (e) {
+      // (#44) The helper raises this typed error when the partial unique
+      // index catches a race; surface it as 409 with the existing debt
+      // info if we can find it.
+      if (e instanceof PlaidAccountAlreadyLinkedError) {
+        const [winner] = await db
+          .select({ id: debtsTable.id, name: debtsTable.name })
+          .from(debtsTable)
+          .where(
+            and(
+              eq(debtsTable.userId, userId),
+              eq(debtsTable.plaidAccountId, plaidAccountId),
+            ),
+          );
+        res.status(409).json({
+          error: e.message,
+          debtId: winner?.id,
+          debtName: winner?.name,
+        });
+        return;
+      }
+      const msg = e instanceof Error ? e.message : "Could not create debt";
+      req.log.error({ err: e }, "createOrLinkDebtFromPlaidAccount failed");
+      res.status(500).json({ error: msg });
+    }
   },
 );
 

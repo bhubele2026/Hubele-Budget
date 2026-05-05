@@ -632,6 +632,16 @@ export type PlaidLiabilityAccountLinkedDebt = {
     id: string;
     name: string;
 } | null;
+export interface PlaidSuggestedDebt {
+    name: string;
+    type: string;
+    /** @nullable */
+    balance?: string | null;
+    /** @nullable */
+    apr?: string | null;
+    /** @nullable */
+    minPayment?: string | null;
+}
 export interface PlaidLiabilityAccount {
     id: string;
     accountId: string;
@@ -662,6 +672,16 @@ export interface PlaidLiabilityAccount {
     /** @nullable */
     institutionSlug?: string | null;
     linkedDebt?: PlaidLiabilityAccountLinkedDebt;
+    suggestedDebt?: PlaidSuggestedDebt | null;
+}
+export type CreateDebtFromPlaidResultAction = (typeof CreateDebtFromPlaidResultAction)[keyof typeof CreateDebtFromPlaidResultAction];
+export declare const CreateDebtFromPlaidResultAction: {
+    readonly created: "created";
+    readonly "linked-existing": "linked-existing";
+};
+export interface CreateDebtFromPlaidResult {
+    debt: Debt;
+    action: CreateDebtFromPlaidResultAction;
 }
 export type AvalancheSettingsStrategy = (typeof AvalancheSettingsStrategy)[keyof typeof AvalancheSettingsStrategy];
 export declare const AvalancheSettingsStrategy: {
@@ -1605,6 +1625,11 @@ export type ListTransactionsParams = {
 };
 export type ListPlaidLiabilityAccountsParams = {
     refresh?: boolean;
+};
+export type CreateDebtFromPlaidAccount409 = {
+    error: string;
+    debtId?: string;
+    debtName?: string;
 };
 export type GetForecastParams = {
     days?: number;

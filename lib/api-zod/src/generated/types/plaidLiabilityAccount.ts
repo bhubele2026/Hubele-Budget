@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PlaidLiabilityAccountLinkedDebt } from "./plaidLiabilityAccountLinkedDebt";
+import type { PlaidSuggestedDebt } from "./plaidSuggestedDebt";
 
 export interface PlaidLiabilityAccount {
   id: string;
@@ -37,4 +38,5 @@ export interface PlaidLiabilityAccount {
   /** @nullable */
   institutionSlug?: string | null;
   linkedDebt?: PlaidLiabilityAccountLinkedDebt;
+  suggestedDebt?: PlaidSuggestedDebt | null;
 }

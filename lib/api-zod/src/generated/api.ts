@@ -793,10 +793,26 @@ export const ListPlaidLiabilityAccountsResponseItem = zod.object({
       zod.null(),
     ])
     .optional(),
+  suggestedDebt: zod
+    .union([
+      zod.object({
+        name: zod.string(),
+        type: zod.string(),
+        balance: zod.string().nullish(),
+        apr: zod.string().nullish(),
+        minPayment: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
 });
 export const ListPlaidLiabilityAccountsResponse = zod.array(
   ListPlaidLiabilityAccountsResponseItem,
 );
+
+export const CreateDebtFromPlaidAccountParams = zod.object({
+  plaidAccountId: zod.coerce.string(),
+});
 
 /**
  * @summary All recorded balance snapshots for the current user's debts
