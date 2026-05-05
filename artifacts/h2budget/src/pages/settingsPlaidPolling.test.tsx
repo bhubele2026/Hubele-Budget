@@ -87,6 +87,7 @@ vi.mock("@workspace/api-client-react", () => {
     useDeletePlaidItem: () => mutation,
     useGetPlaidEnvironment: () => PLAID_ENV_RESULT,
     useCleanupNonProdPlaidItems: () => mutation,
+    useRefreshPlaidConsentExpirations: () => mutation,
     useListCategories: () => CATEGORIES_RESULT,
     getGetSettingsQueryKey: () => ["settings"],
     getListDashboardBudgetsQueryKey: () => ["dashboard-budgets"],

@@ -1546,6 +1546,25 @@ export type PlaidSyncResultItemsItem = {
 export interface PlaidSyncResult {
     items: PlaidSyncResultItemsItem[];
 }
+export interface PlaidConsentRefreshItem {
+    itemRowId: string;
+    itemId: string;
+    /** @nullable */
+    institutionName?: string | null;
+    /** @nullable */
+    consentExpirationAt?: string | null;
+    /** @nullable */
+    consentExpirationLastRefreshedAt?: string | null;
+    changed: boolean;
+    /** @nullable */
+    error?: string | null;
+}
+export interface PlaidConsentRefreshResult {
+    scanned: number;
+    updated: number;
+    failed: number;
+    items: PlaidConsentRefreshItem[];
+}
 /**
  * @nullable
  */

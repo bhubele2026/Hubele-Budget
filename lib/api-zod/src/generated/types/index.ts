@@ -107,6 +107,8 @@ export * from "./pinBudgetMonthInput";
 export * from "./pinResult";
 export * from "./plaidAccount";
 export * from "./plaidCheckingAccount";
+export * from "./plaidConsentRefreshItem";
+export * from "./plaidConsentRefreshResult";
 export * from "./plaidEnvironmentInfo";
 export * from "./plaidEnvironmentInfoEnv";
 export * from "./plaidEnvironmentInfoNonProdItemsItem";

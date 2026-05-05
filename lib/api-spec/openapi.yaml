@@ -1082,6 +1082,22 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PlaidEnvironmentInfo" }
+  /plaid/refresh-consent-expirations:
+    post:
+      operationId: refreshPlaidConsentExpirations
+      tags: [plaid]
+      summary: |
+        (#253) Manually refresh `consent_expiration_time` for every Plaid
+        item belonging to the caller. Same code path as the daily 03:17
+        UTC cron job — exposed so users can self-serve from Settings when
+        they suspect the disconnect-date countdown is stale, without
+        waiting up to 24h for the next scheduled run.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlaidConsentRefreshResult" }
   /plaid/cleanup-non-prod:
     post:
       operationId: cleanupNonProdPlaidItems
@@ -2817,6 +2833,46 @@ components:
               # state and does NOT show a destructive toast or persist a
               # red error chip.
               stillPreparing: { type: boolean }
+    PlaidConsentRefreshItem:
+      type: object
+      required:
+        - itemRowId
+        - itemId
+        - changed
+      properties:
+        # Server-side row id for the Plaid item (matches PlaidItemDetail.id).
+        # Lets the client correlate per-item entries back to the Settings row.
+        itemRowId: { type: string }
+        # Plaid's `item_id` — included for parity with the manual-trigger
+        # response so callers can log/debug without re-fetching.
+        itemId: { type: string }
+        institutionName: { type: ["string", "null"] }
+        # Latest cutoff Plaid reports for this item, ISO timestamp. Null
+        # when Plaid does not surface a cutoff (most non-OAuth banks).
+        consentExpirationAt: { type: ["string", "null"] }
+        # Wall-clock timestamp of when this manual refresh completed
+        # successfully (i.e. the value just written into
+        # `consent_expiration_last_refreshed_at`). Null when the refresh
+        # failed before /item/get returned, so the UI can tell "Plaid
+        # said nothing changed" apart from "we never reached Plaid".
+        consentExpirationLastRefreshedAt: { type: ["string", "null"] }
+        # True when the cutoff value actually moved on this run. The
+        # toast counts these as "cutoff updated".
+        changed: { type: boolean }
+        # Per-item failure message (populated from Plaid's error body).
+        # Null on success. The toast surfaces failed items with their
+        # institution name so the user knows which bank to reconnect.
+        error: { type: ["string", "null"] }
+    PlaidConsentRefreshResult:
+      type: object
+      required: [scanned, updated, failed, items]
+      properties:
+        scanned: { type: integer }
+        updated: { type: integer }
+        failed: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlaidConsentRefreshItem" }
     PlaidEnvironmentInfo:
       type: object
       required: [env, configured, nonProdItemCount, nonProdItems]

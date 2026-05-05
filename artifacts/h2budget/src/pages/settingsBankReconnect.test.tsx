@@ -91,6 +91,7 @@ vi.mock("@workspace/api-client-react", () => {
     useSyncPlaidTransactions: () => mutation,
     useGetPlaidEnvironment: () => PLAID_ENV_RESULT,
     useCleanupNonProdPlaidItems: () => mutation,
+    useRefreshPlaidConsentExpirations: () => mutation,
     useListCategories: () => CATEGORIES_RESULT,
     useCreatePlaidUpdateLinkToken: () => mutation,
     getGetSettingsQueryKey: () => ["settings"],

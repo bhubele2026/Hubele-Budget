@@ -73,6 +73,7 @@ vi.mock("@workspace/api-client-react", () => {
       },
     }),
     useCleanupNonProdPlaidItems: () => mutation,
+    useRefreshPlaidConsentExpirations: () => mutation,
     useListCategories: () => ({ data: [] }),
     useCreatePlaidUpdateLinkToken: () => mutation,
     getGetSettingsQueryKey: () => ["settings"],

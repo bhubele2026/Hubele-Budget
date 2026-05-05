@@ -4870,6 +4870,70 @@ export declare const GetPlaidEnvironmentResponse: zod.ZodObject<{
     }[];
     configError?: string | null | undefined;
 }>;
+/**
+ * @summary (#253) Manually refresh `consent_expiration_time` for every Plaid
+item belonging to the caller. Same code path as the daily 03:17
+UTC cron job — exposed so users can self-serve from Settings when
+they suspect the disconnect-date countdown is stale, without
+waiting up to 24h for the next scheduled run.
+
+ */
+export declare const RefreshPlaidConsentExpirationsResponse: zod.ZodObject<{
+    scanned: zod.ZodNumber;
+    updated: zod.ZodNumber;
+    failed: zod.ZodNumber;
+    items: zod.ZodArray<zod.ZodObject<{
+        itemRowId: zod.ZodString;
+        itemId: zod.ZodString;
+        institutionName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        consentExpirationAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        consentExpirationLastRefreshedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        changed: zod.ZodBoolean;
+        error: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        itemId: string;
+        itemRowId: string;
+        changed: boolean;
+        institutionName?: string | null | undefined;
+        consentExpirationAt?: string | null | undefined;
+        consentExpirationLastRefreshedAt?: string | null | undefined;
+        error?: string | null | undefined;
+    }, {
+        itemId: string;
+        itemRowId: string;
+        changed: boolean;
+        institutionName?: string | null | undefined;
+        consentExpirationAt?: string | null | undefined;
+        consentExpirationLastRefreshedAt?: string | null | undefined;
+        error?: string | null | undefined;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    updated: number;
+    items: {
+        itemId: string;
+        itemRowId: string;
+        changed: boolean;
+        institutionName?: string | null | undefined;
+        consentExpirationAt?: string | null | undefined;
+        consentExpirationLastRefreshedAt?: string | null | undefined;
+        error?: string | null | undefined;
+    }[];
+    scanned: number;
+    failed: number;
+}, {
+    updated: number;
+    items: {
+        itemId: string;
+        itemRowId: string;
+        changed: boolean;
+        institutionName?: string | null | undefined;
+        consentExpirationAt?: string | null | undefined;
+        consentExpirationLastRefreshedAt?: string | null | undefined;
+        error?: string | null | undefined;
+    }[];
+    scanned: number;
+    failed: number;
+}>;
 export declare const CleanupNonProdPlaidItemsResponse: zod.ZodObject<{
     removed: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {

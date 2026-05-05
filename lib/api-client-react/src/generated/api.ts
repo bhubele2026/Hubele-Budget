@@ -75,6 +75,7 @@ import type {
   PinBudgetLineInput,
   PinBudgetMonthInput,
   PinResult,
+  PlaidConsentRefreshResult,
   PlaidEnvironmentInfo,
   PlaidExchangeInput,
   PlaidItemDetail,
@@ -5395,6 +5396,100 @@ export function useGetPlaidEnvironment<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary (#253) Manually refresh `consent_expiration_time` for every Plaid
+item belonging to the caller. Same code path as the daily 03:17
+UTC cron job — exposed so users can self-serve from Settings when
+they suspect the disconnect-date countdown is stale, without
+waiting up to 24h for the next scheduled run.
+
+ */
+export const getRefreshPlaidConsentExpirationsUrl = () => {
+  return `/api/plaid/refresh-consent-expirations`;
+};
+
+export const refreshPlaidConsentExpirations = async (
+  options?: RequestInit,
+): Promise<PlaidConsentRefreshResult> => {
+  return customFetch<PlaidConsentRefreshResult>(
+    getRefreshPlaidConsentExpirationsUrl(),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getRefreshPlaidConsentExpirationsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof refreshPlaidConsentExpirations>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof refreshPlaidConsentExpirations>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["refreshPlaidConsentExpirations"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof refreshPlaidConsentExpirations>>,
+    void
+  > = () => {
+    return refreshPlaidConsentExpirations(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RefreshPlaidConsentExpirationsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof refreshPlaidConsentExpirations>>
+>;
+
+export type RefreshPlaidConsentExpirationsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (#253) Manually refresh `consent_expiration_time` for every Plaid
+item belonging to the caller. Same code path as the daily 03:17
+UTC cron job — exposed so users can self-serve from Settings when
+they suspect the disconnect-date countdown is stale, without
+waiting up to 24h for the next scheduled run.
+
+ */
+export const useRefreshPlaidConsentExpirations = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof refreshPlaidConsentExpirations>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof refreshPlaidConsentExpirations>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getRefreshPlaidConsentExpirationsMutationOptions(options));
+};
 
 export const getCleanupNonProdPlaidItemsUrl = () => {
   return `/api/plaid/cleanup-non-prod`;

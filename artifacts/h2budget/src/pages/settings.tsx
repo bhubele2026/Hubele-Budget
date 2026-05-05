@@ -12,6 +12,7 @@ import {
   getGetPlaidEnvironmentQueryKey,
   useListCategories,
   getListPlaidItemsQueryKey,
+  useRefreshPlaidConsentExpirations,
 } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { usePlaidSync, formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
@@ -91,6 +92,7 @@ export default function SettingsPage() {
     return () => window.clearInterval(id);
   }, [hasPreparingItem]);
   const deletePlaidItem = useDeletePlaidItem();
+  const refreshConsentExpirations = useRefreshPlaidConsentExpirations();
   const { runSync, isPending: isSyncPending } = usePlaidSync();
   // Track which row's per-item Sync button was just clicked so only THAT
   // row's spinner spins (the underlying mutation is global, so without this
@@ -106,6 +108,53 @@ export default function SettingsPage() {
     if (itemId) setSyncingItemId(itemId);
     void runSync(itemId ? { itemId } : {}).finally(() => {
       if (itemId) setSyncingItemId((curr) => (curr === itemId ? null : curr));
+    });
+  };
+
+  // (#261) Manual trigger for the daily consent_expiration_time refresh.
+  // The same code path runs unattended at 03:17 UTC, so this button is for
+  // users who suspect their disconnect-date countdown is stale and don't
+  // want to wait up to 24h. Surfaces the per-item summary in the toast and
+  // invalidates the items query so each row's "Disconnect date checked"
+  // line updates immediately.
+  const handleRefreshConsentExpirations = () => {
+    refreshConsentExpirations.mutate(undefined, {
+      onSuccess: (res) => {
+        queryClient.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
+        const failedItems = (res.items ?? []).filter((it) => !!it.error);
+        // Build a "Checked 4 banks · 1 cutoff updated" headline. Pluralize
+        // "bank" only when scanned !== 1 so single-item users don't see
+        // "Checked 1 banks".
+        const parts = [
+          `Checked ${res.scanned} ${res.scanned === 1 ? "bank" : "banks"}`,
+          `${res.updated} cutoff${res.updated === 1 ? "" : "s"} updated`,
+        ];
+        let description = parts.join(" · ");
+        // Surface failed items by institution name (falls back to a generic
+        // label) so the user knows which bank to reconnect when /item/get
+        // fails for it (e.g. ITEM_LOGIN_REQUIRED).
+        if (failedItems.length > 0) {
+          const names = failedItems
+            .map((it) => it.institutionName ?? "Unnamed institution")
+            .join(", ");
+          description += `. Failed: ${names}.`;
+        }
+        toast({
+          title:
+            failedItems.length > 0
+              ? "Disconnect dates refreshed (with errors)"
+              : "Disconnect dates refreshed",
+          description,
+          variant: failedItems.length > 0 ? "destructive" : undefined,
+        });
+      },
+      onError: (err) => {
+        toast({
+          title: "Refresh failed",
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        });
+      },
     });
   };
 
@@ -468,6 +517,36 @@ export default function SettingsPage() {
             <p className="text-sm text-muted-foreground">
               No accounts linked yet. Click "Link a Bank or Card" to get started.
             </p>
+          )}
+          {(plaidItems ?? []).length > 0 && (
+            // (#261) Manual entry point for the cron-driven consent
+            // refresh job. Rendered above the rows so the action is in
+            // sight when users hover the "Disconnect date checked"
+            // sublines they're trying to verify, but only once at least
+            // one bank is linked (no items = nothing to refresh).
+            <div
+              className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-muted/10 p-3"
+              data-testid="row-refresh-consent-expirations"
+            >
+              <div className="text-xs text-muted-foreground">
+                Disconnect dates auto-refresh once a day. Use this to
+                check now if a countdown looks stale.
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshConsentExpirations}
+                disabled={refreshConsentExpirations.isPending}
+                data-testid="button-refresh-consent-expirations"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 mr-1.5 ${
+                    refreshConsentExpirations.isPending ? "animate-spin" : ""
+                  }`}
+                />
+                Refresh disconnect dates
+              </Button>
+            </div>
           )}
           {(plaidItems ?? []).map((item) => {
             const isSyncing = isSyncPending && syncingItemId === item.id;

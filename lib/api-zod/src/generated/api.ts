@@ -2008,6 +2008,31 @@ export const GetPlaidEnvironmentResponse = zod.object({
   ),
 });
 
+/**
+ * @summary (#253) Manually refresh `consent_expiration_time` for every Plaid
+item belonging to the caller. Same code path as the daily 03:17
+UTC cron job — exposed so users can self-serve from Settings when
+they suspect the disconnect-date countdown is stale, without
+waiting up to 24h for the next scheduled run.
+
+ */
+export const RefreshPlaidConsentExpirationsResponse = zod.object({
+  scanned: zod.number(),
+  updated: zod.number(),
+  failed: zod.number(),
+  items: zod.array(
+    zod.object({
+      itemRowId: zod.string(),
+      itemId: zod.string(),
+      institutionName: zod.string().nullish(),
+      consentExpirationAt: zod.string().nullish(),
+      consentExpirationLastRefreshedAt: zod.string().nullish(),
+      changed: zod.boolean(),
+      error: zod.string().nullish(),
+    }),
+  ),
+});
+
 export const CleanupNonProdPlaidItemsResponse = zod.object({
   removed: zod.number(),
 });
