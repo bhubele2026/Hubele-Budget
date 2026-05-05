@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useListPlaidItems,
+  useDismissPlaidExpirationWarning,
+  getListPlaidItemsQueryKey,
   type PlaidItemDetail,
 } from "@workspace/api-client-react";
 import { CalendarClock, X } from "lucide-react";
@@ -23,11 +26,11 @@ import {
  * the user a window to re-consent on their schedule.
  *
  * Items are filtered to those whose `consentExpirationAt` falls within
- * the next ~14 days. Items that are *already* in a re-auth state are
+ * the next ~7 days. Items that are *already* in a re-auth state are
  * intentionally excluded — those are covered by <PlaidReauthBanner>
  * and we don't want to double-notify the user about the same bank.
  */
-export const EXPIRING_SOON_WINDOW_DAYS = 14;
+export const EXPIRING_SOON_WINDOW_DAYS = 7;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export type PlaidExpiringSoonEntry = {
@@ -70,6 +73,17 @@ export function findPlaidItemsExpiringSoon(
     if (Number.isNaN(t)) continue;
     if (t > cutoffMs) continue;
     if (t < graceMs) continue;
+    // (#274) Persistent dismissal — the server stamps the cutoff the
+    // user dismissed for. Suppress the row only while it still matches
+    // the live cutoff; if Plaid moves the cutoff (e.g. a successful
+    // re-consent rolls it months out, which usually drops the item
+    // out of the window anyway) the alert returns automatically.
+    if (
+      item.consentWarningDismissedForCutoff &&
+      new Date(item.consentWarningDismissedForCutoff).getTime() === t
+    ) {
+      continue;
+    }
     const daysUntil = Math.floor((t - now.getTime()) / MS_PER_DAY);
     out.push({ item, expiresAt, daysUntil });
   }
@@ -105,34 +119,28 @@ export function formatExpiringSoonRelative(daysUntil: number): string {
 export function PlaidExpiringSoonListView({
   items,
   now,
+  onDismiss,
+  isDismissing,
 }: {
   items: PlaidItemDetail[] | null | undefined;
   now?: Date;
+  /**
+   * (#274) Called with the set of currently-shown item ids when the
+   * user clicks dismiss. The container wires this to the persistent
+   * `dismissPlaidExpirationWarning` mutation so the alert stays hidden
+   * across reloads. Optional so the pure presentation component can
+   * still be exercised in tests without an API client.
+   */
+  onDismiss?: (itemIds: string[]) => void;
+  /** When true, the dismiss button shows a disabled / busy state. */
+  isDismissing?: boolean;
 }) {
   const entries = useMemo(
     () => findPlaidItemsExpiringSoon(items, now),
     [items, now],
   );
-  // Stable dismiss key keyed off the set of affected items — if a NEW
-  // item enters the window after dismissal, the alert reappears.
-  const dismissKey = useMemo(
-    () =>
-      entries
-        .map((e) => e.item.id)
-        .sort()
-        .join("|"),
-    [entries],
-  );
-  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (dismissedKey && dismissedKey !== dismissKey) {
-      setDismissedKey(null);
-    }
-  }, [dismissKey, dismissedKey]);
 
   if (entries.length === 0) return null;
-  if (dismissedKey === dismissKey) return null;
 
   return (
     <div
@@ -193,7 +201,8 @@ export function PlaidExpiringSoonListView({
           variant="ghost"
           size="icon"
           className="h-7 w-7 -mr-1"
-          onClick={() => setDismissedKey(dismissKey)}
+          onClick={() => onDismiss?.(entries.map((e) => e.item.id))}
+          disabled={isDismissing}
           aria-label="Dismiss"
           data-testid="button-plaid-expiring-soon-dismiss"
         >
@@ -211,5 +220,43 @@ export function PlaidExpiringSoonListView({
  */
 export function PlaidExpiringSoonList() {
   const { data: items } = useListPlaidItems();
-  return <PlaidExpiringSoonListView items={items} />;
+  const qc = useQueryClient();
+  const dismiss = useDismissPlaidExpirationWarning();
+
+  const onDismiss = (itemIds: string[]) => {
+    if (itemIds.length === 0) return;
+    // (#274) Optimistically stamp `consentWarningDismissedForCutoff`
+    // for each affected item in the cached list so the alert
+    // disappears immediately, then fire-and-forget the per-item
+    // mutations and reconcile with a refetch when they all settle.
+    const queryKey = getListPlaidItemsQueryKey();
+    const previous = qc.getQueryData<PlaidItemDetail[]>(queryKey);
+    if (previous) {
+      const affected = new Set(itemIds);
+      qc.setQueryData<PlaidItemDetail[]>(
+        queryKey,
+        previous.map((it) =>
+          affected.has(it.id) && it.consentExpirationAt
+            ? {
+                ...it,
+                consentWarningDismissedForCutoff: it.consentExpirationAt,
+              }
+            : it,
+        ),
+      );
+    }
+    Promise.allSettled(
+      itemIds.map((id) => dismiss.mutateAsync({ id })),
+    ).finally(() => {
+      qc.invalidateQueries({ queryKey });
+    });
+  };
+
+  return (
+    <PlaidExpiringSoonListView
+      items={items}
+      onDismiss={onDismiss}
+      isDismissing={dismiss.isPending}
+    />
+  );
 }

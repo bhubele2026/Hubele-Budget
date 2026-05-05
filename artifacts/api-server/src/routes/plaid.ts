@@ -553,11 +553,6 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       consentExpirationLastRefreshedAt: item!.consentExpirationLastRefreshedAt
         ? item!.consentExpirationLastRefreshedAt.toISOString()
         : null,
-      // (#265) On a fresh exchange the consent-refresh path has just
-      // succeeded (or no /item/get failure was captured), so this is
-      // always null here.
-      consentExpirationLastRefreshError: null,
-      consentExpirationLastRefreshErrorCode: null,
       accounts: accounts.map((a) => ({
         id: a.id,
         accountId: a.accountId,
@@ -575,6 +570,75 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
   }
 });
 
+type PlaidItemRow = typeof plaidItemsTable.$inferSelect;
+
+function serializePlaidItemDetail(
+  it: PlaidItemRow,
+  accounts: PlaidAccountRow[],
+) {
+  return {
+    id: it.id,
+    itemId: it.itemId,
+    institutionId: it.institutionId,
+    institutionName: it.institutionName,
+    institutionSlug: it.institutionSlug,
+    lastSyncedAt: it.lastSyncedAt ? it.lastSyncedAt.toISOString() : null,
+    lastSyncError: it.lastSyncError,
+    lastSyncErrorCode: it.lastSyncErrorCode,
+    stillPreparing: it.stillPreparingSince != null,
+    stillPreparingSince: it.stillPreparingSince
+      ? it.stillPreparingSince.toISOString()
+      : null,
+    // (#238) Plaid's `consent_expiration_time` cutoff for this item.
+    // Powers the dated PENDING_EXPIRATION / PENDING_DISCONNECT subline
+    // copy ("Chase will disconnect on May 21 — reconnect now to keep
+    // it linked.") on the page-top reauth banner, the DebtReauthBanner,
+    // and the Settings tooltip. Null when Plaid does not provide one.
+    consentExpirationAt: it.consentExpirationAt
+      ? it.consentExpirationAt.toISOString()
+      : null,
+    // (#258) Wall-clock timestamp of when we last successfully
+    // verified `consentExpirationAt` against Plaid (any path: link
+    // exchange, sync's PENDING_EXPIRATION refresh, or the daily
+    // cron). The Settings page surfaces this so users and support
+    // can confirm the disconnect countdown is fresh ("checked just
+    // now" vs. "we have not been able to reach Plaid for this item
+    // in a week"). Null until the first successful refresh.
+    consentExpirationLastRefreshedAt: it.consentExpirationLastRefreshedAt
+      ? it.consentExpirationLastRefreshedAt.toISOString()
+      : null,
+    // (#265) Latest /item/get failure captured during the consent-
+    // refresh path (manual button, on-sync PENDING_EXPIRATION
+    // refresh, or daily cron). Cleared on the next successful
+    // refresh. The Settings page renders this inline under the
+    // "Disconnect date checked …" line so users can see *why* the
+    // most recent disconnect-date check failed without having to
+    // re-trigger the refresh.
+    consentExpirationLastRefreshError:
+      it.consentExpirationLastRefreshError ?? null,
+    consentExpirationLastRefreshErrorCode:
+      it.consentExpirationLastRefreshErrorCode ?? null,
+    // (#274) The cutoff value the user dismissed the dashboard
+    // "consent expiring soon" banner for. The dashboard banner
+    // suppresses an item only while its current cutoff still equals
+    // this stored value, so dismissals persist across reloads but a
+    // re-consent or a brand-new item entering the window naturally
+    // re-surfaces the alert.
+    consentWarningDismissedForCutoff: it.consentWarningDismissedForCutoff
+      ? it.consentWarningDismissedForCutoff.toISOString()
+      : null,
+    accounts: accounts.map((a) => ({
+      id: a.id,
+      accountId: a.accountId,
+      name: a.name,
+      officialName: a.officialName,
+      mask: a.mask,
+      type: a.type,
+      subtype: a.subtype,
+    })),
+  };
+}
+
 router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
   const items = await db
     .select()
@@ -584,67 +648,80 @@ router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
     .select()
     .from(plaidAccountsTable)
     .where(eq(plaidAccountsTable.userId, req.userId!));
-  const byItem = new Map<string, typeof accts>();
+  const byItem = new Map<string, PlaidAccountRow[]>();
   for (const a of accts) {
     const arr = byItem.get(a.itemId) ?? [];
     arr.push(a);
     byItem.set(a.itemId, arr);
   }
-  res.json(
-    items.map((it) => ({
-      id: it.id,
-      itemId: it.itemId,
-      institutionId: it.institutionId,
-      institutionName: it.institutionName,
-      institutionSlug: it.institutionSlug,
-      lastSyncedAt: it.lastSyncedAt ? it.lastSyncedAt.toISOString() : null,
-      lastSyncError: it.lastSyncError,
-      lastSyncErrorCode: it.lastSyncErrorCode,
-      stillPreparing: it.stillPreparingSince != null,
-      stillPreparingSince: it.stillPreparingSince
-        ? it.stillPreparingSince.toISOString()
-        : null,
-      // (#238) Plaid's `consent_expiration_time` cutoff for this item.
-      // Powers the dated PENDING_EXPIRATION / PENDING_DISCONNECT subline
-      // copy ("Chase will disconnect on May 21 — reconnect now to keep
-      // it linked.") on the page-top reauth banner, the DebtReauthBanner,
-      // and the Settings tooltip. Null when Plaid does not provide one.
-      consentExpirationAt: it.consentExpirationAt
-        ? it.consentExpirationAt.toISOString()
-        : null,
-      // (#258) Wall-clock timestamp of when we last successfully
-      // verified `consentExpirationAt` against Plaid (any path: link
-      // exchange, sync's PENDING_EXPIRATION refresh, or the daily
-      // cron). The Settings page surfaces this so users and support
-      // can confirm the disconnect countdown is fresh ("checked just
-      // now" vs. "we have not been able to reach Plaid for this item
-      // in a week"). Null until the first successful refresh.
-      consentExpirationLastRefreshedAt: it.consentExpirationLastRefreshedAt
-        ? it.consentExpirationLastRefreshedAt.toISOString()
-        : null,
-      // (#265) Latest /item/get failure captured during the consent-
-      // refresh path (manual button, on-sync PENDING_EXPIRATION
-      // refresh, or daily cron). Cleared on the next successful
-      // refresh. The Settings page renders this inline under the
-      // "Disconnect date checked …" line so users can see *why* the
-      // most recent disconnect-date check failed without having to
-      // re-trigger the refresh.
-      consentExpirationLastRefreshError:
-        it.consentExpirationLastRefreshError ?? null,
-      consentExpirationLastRefreshErrorCode:
-        it.consentExpirationLastRefreshErrorCode ?? null,
-      accounts: (byItem.get(it.id) ?? []).map((a) => ({
-        id: a.id,
-        accountId: a.accountId,
-        name: a.name,
-        officialName: a.officialName,
-        mask: a.mask,
-        type: a.type,
-        subtype: a.subtype,
-      })),
-    })),
-  );
+  res.json(items.map((it) => serializePlaidItemDetail(it, byItem.get(it.id) ?? [])));
 });
+
+// (#274) Persist the user's dismissal of the dashboard "bank consent
+// expiring soon" banner for a single item. We stamp
+// `consent_warning_dismissed_for_cutoff` with the current
+// `consent_expiration_at` so reloads stay quiet, while a re-consent
+// (which rolls the cutoff forward) or a brand-new item entering the
+// window naturally re-shows the alert without a separate "clear
+// dismissal" call. Returns the updated item so the client can refresh
+// its cache without an extra round trip.
+router.post(
+  "/plaid/items/:id/dismiss-expiration-warning",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const id = String(req.params.id);
+    const [item] = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(
+        and(
+          eq(plaidItemsTable.id, id),
+          eq(plaidItemsTable.userId, req.userId!),
+        ),
+      );
+    if (!item) {
+      res.sendStatus(404);
+      return;
+    }
+    // No cutoff to dismiss against — nothing to persist. Return the
+    // item unchanged so the client can keep moving. (The dashboard
+    // never offers dismiss for items without a cutoff, but we treat
+    // this as a no-op rather than an error to stay forgiving.)
+    if (!item.consentExpirationAt) {
+      const accts = await db
+        .select()
+        .from(plaidAccountsTable)
+        .where(
+          and(
+            eq(plaidAccountsTable.itemId, item.id),
+            eq(plaidAccountsTable.userId, req.userId!),
+          ),
+        );
+      res.json(serializePlaidItemDetail(item, accts));
+      return;
+    }
+    const [updated] = await db
+      .update(plaidItemsTable)
+      .set({ consentWarningDismissedForCutoff: item.consentExpirationAt })
+      .where(
+        and(
+          eq(plaidItemsTable.id, item.id),
+          eq(plaidItemsTable.userId, req.userId!),
+        ),
+      )
+      .returning();
+    const accts = await db
+      .select()
+      .from(plaidAccountsTable)
+      .where(
+        and(
+          eq(plaidAccountsTable.itemId, item.id),
+          eq(plaidAccountsTable.userId, req.userId!),
+        ),
+      );
+    res.json(serializePlaidItemDetail(updated ?? item, accts));
+  },
+);
 
 router.delete("/plaid/items/:id", requireAuth, async (req, res): Promise<void> => {
   const id = String(req.params.id);

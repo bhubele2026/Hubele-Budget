@@ -1989,6 +1989,7 @@ export const ExchangePlaidPublicTokenResponse = zod.object({
   consentExpirationLastRefreshedAt: zod.string().nullish(),
   consentExpirationLastRefreshError: zod.string().nullish(),
   consentExpirationLastRefreshErrorCode: zod.string().nullish(),
+  consentWarningDismissedForCutoff: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),
@@ -2022,6 +2023,7 @@ export const ListPlaidItemsResponseItem = zod.object({
   consentExpirationLastRefreshedAt: zod.string().nullish(),
   consentExpirationLastRefreshError: zod.string().nullish(),
   consentExpirationLastRefreshErrorCode: zod.string().nullish(),
+  consentWarningDismissedForCutoff: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),
@@ -2062,6 +2064,53 @@ export const ListPlaidSyncAttemptsResponse = zod.object({
       success: zod.boolean(),
       errorCode: zod.string().nullish(),
       errorMessage: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary (#274) Persist the user's dismissal of the dashboard "bank
+consent expiring soon" banner for this item. The server stamps
+`consentWarningDismissedForCutoff` with the current
+`consentExpirationAt`, so the alert stays hidden across page
+reloads but re-surfaces automatically if Plaid moves the
+cutoff (e.g. after a successful re-consent).
+
+ */
+export const DismissPlaidExpirationWarningParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const DismissPlaidExpirationWarningResponse = zod.object({
+  id: zod.string(),
+  itemId: zod.string(),
+  institutionId: zod.string().nullish(),
+  institutionName: zod.string().nullish(),
+  institutionSlug: zod.string(),
+  lastSyncedAt: zod.string().nullish(),
+  lastSyncError: zod.string().nullish(),
+  lastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      'Plaid\'s structured `error_code` from the most recent failed\nsync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,\nPENDING_EXPIRATION). Null when sync is healthy or when the\nprevious failure had no structured code. Used by the UI to\ndecide when to surface the \"Reconnect\" button next to the\nsync chip.\n',
+    ),
+  stillPreparing: zod.boolean().optional(),
+  stillPreparingSince: zod.string().nullish(),
+  consentExpirationAt: zod.string().nullish(),
+  consentExpirationLastRefreshedAt: zod.string().nullish(),
+  consentExpirationLastRefreshError: zod.string().nullish(),
+  consentExpirationLastRefreshErrorCode: zod.string().nullish(),
+  consentWarningDismissedForCutoff: zod.string().nullish(),
+  accounts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      name: zod.string().nullish(),
+      officialName: zod.string().nullish(),
+      mask: zod.string().nullish(),
+      type: zod.string().nullish(),
+      subtype: zod.string().nullish(),
     }),
   ),
 });

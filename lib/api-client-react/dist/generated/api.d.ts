@@ -1538,6 +1538,44 @@ export declare function useListPlaidSyncAttempts<TData = Awaited<ReturnType<type
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * @summary (#274) Persist the user's dismissal of the dashboard "bank
+consent expiring soon" banner for this item. The server stamps
+`consentWarningDismissedForCutoff` with the current
+`consentExpirationAt`, so the alert stays hidden across page
+reloads but re-surfaces automatically if Plaid moves the
+cutoff (e.g. after a successful re-consent).
+
+ */
+export declare const getDismissPlaidExpirationWarningUrl: (id: string) => string;
+export declare const dismissPlaidExpirationWarning: (id: string, options?: RequestInit) => Promise<PlaidItemDetail>;
+export declare const getDismissPlaidExpirationWarningMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof dismissPlaidExpirationWarning>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof dismissPlaidExpirationWarning>>, TError, {
+    id: string;
+}, TContext>;
+export type DismissPlaidExpirationWarningMutationResult = NonNullable<Awaited<ReturnType<typeof dismissPlaidExpirationWarning>>>;
+export type DismissPlaidExpirationWarningMutationError = ErrorType<unknown>;
+/**
+ * @summary (#274) Persist the user's dismissal of the dashboard "bank
+consent expiring soon" banner for this item. The server stamps
+`consentWarningDismissedForCutoff` with the current
+`consentExpirationAt`, so the alert stays hidden across page
+reloads but re-surfaces automatically if Plaid moves the
+cutoff (e.g. after a successful re-consent).
+
+ */
+export declare const useDismissPlaidExpirationWarning: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof dismissPlaidExpirationWarning>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof dismissPlaidExpirationWarning>>, TError, {
+    id: string;
+}, TContext>;
 export declare const getSyncPlaidTransactionsUrl: () => string;
 export declare const syncPlaidTransactions: (plaidSyncInput?: PlaidSyncInput, options?: RequestInit) => Promise<PlaidSyncResult>;
 export declare const getSyncPlaidTransactionsMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {

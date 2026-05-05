@@ -1159,6 +1159,28 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/PlaidSyncAttemptsResult" }
         "404": { description: Plaid item not found }
+  /plaid/items/{id}/dismiss-expiration-warning:
+    post:
+      operationId: dismissPlaidExpirationWarning
+      tags: [plaid]
+      summary: |
+        (#274) Persist the user's dismissal of the dashboard "bank
+        consent expiring soon" banner for this item. The server stamps
+        `consentWarningDismissedForCutoff` with the current
+        `consentExpirationAt`, so the alert stays hidden across page
+        reloads but re-surfaces automatically if Plaid moves the
+        cutoff (e.g. after a successful re-consent).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlaidItemDetail" }
   /plaid/sync:
     post:
       operationId: syncPlaidTransactions
@@ -3003,6 +3025,13 @@ components:
         # consent-refresh failure above, when available. Lets the
         # frontend correlate the inline message with reauth flows.
         consentExpirationLastRefreshErrorCode: { type: ["string", "null"] }
+        # (#274) The value of `consentExpirationAt` at the moment the
+        # user dismissed the dashboard "consent expiring soon" banner.
+        # The dashboard hides this item while the live cutoff still
+        # matches; re-consenting (cutoff rolls forward) or a brand-new
+        # item entering the window re-shows the alert. Null until the
+        # user dismisses the banner for the first time.
+        consentWarningDismissedForCutoff: { type: ["string", "null"] }
         accounts:
           type: array
           items: { $ref: "#/components/schemas/PlaidAccount" }

@@ -6,6 +6,11 @@ import React from "react";
 vi.mock("@workspace/api-client-react", () => ({
   useListPlaidItems: () => ({ data: [], isLoading: false }),
   useCreatePlaidUpdateLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  useDismissPlaidExpirationWarning: () => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn().mockResolvedValue(undefined),
+    isPending: false,
+  }),
   getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
   getListTransactionsQueryKey: () => ["/api/transactions"],
   getListDebtsQueryKey: () => ["/api/debts"],
@@ -44,6 +49,7 @@ function makeItem(
     stillPreparing: false,
     stillPreparingSince: null,
     consentExpirationAt: null,
+    consentWarningDismissedForCutoff: null,
     accounts: [],
     ...overrides,
   } as PlaidItemDetail;
@@ -81,29 +87,29 @@ describe("(#257) findPlaidItemsExpiringSoon", () => {
     expect(findPlaidItemsExpiringSoon(undefined, NOW)).toEqual([]);
   });
 
-  it("includes items whose cutoff is within the next 14 days", () => {
-    // 7 days into the future — squarely inside the window.
+  it("includes items whose cutoff is within the next 7 days", () => {
+    // 5 days into the future — squarely inside the window.
     const out = findPlaidItemsExpiringSoon(
       [
         makeItem({
           id: "i1",
-          consentExpirationAt: "2026-05-11T12:00:00.000Z",
+          consentExpirationAt: "2026-05-09T12:00:00.000Z",
         }),
       ],
       NOW,
     );
     expect(out).toHaveLength(1);
     expect(out[0].item.id).toBe("i1");
-    expect(out[0].daysUntil).toBe(7);
+    expect(out[0].daysUntil).toBe(5);
   });
 
-  it("excludes items whose cutoff is more than 14 days out", () => {
-    // 30 days out — well past the window; alerting now would be noise.
+  it("excludes items whose cutoff is more than 7 days out", () => {
+    // 11 days out — past the 7-day alert window; alerting now would be noise.
     const out = findPlaidItemsExpiringSoon(
       [
         makeItem({
           id: "i1",
-          consentExpirationAt: "2026-06-03T12:00:00.000Z",
+          consentExpirationAt: "2026-05-15T12:00:00.000Z",
         }),
       ],
       NOW,
@@ -148,17 +154,17 @@ describe("(#257) findPlaidItemsExpiringSoon", () => {
       [
         makeItem({
           id: "i1",
-          consentExpirationAt: "2026-05-11T12:00:00.000Z",
+          consentExpirationAt: "2026-05-09T12:00:00.000Z",
           lastSyncErrorCode: "PENDING_DISCONNECT",
         }),
         makeItem({
           id: "i2",
-          consentExpirationAt: "2026-05-11T12:00:00.000Z",
+          consentExpirationAt: "2026-05-09T12:00:00.000Z",
           lastSyncErrorCode: "PENDING_EXPIRATION",
         }),
         makeItem({
           id: "i3",
-          consentExpirationAt: "2026-05-11T12:00:00.000Z",
+          consentExpirationAt: "2026-05-09T12:00:00.000Z",
           lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
         }),
       ],
@@ -181,7 +187,7 @@ describe("(#257) findPlaidItemsExpiringSoon", () => {
         makeItem({
           id: "later",
           institutionName: "Bank of America",
-          consentExpirationAt: "2026-05-15T12:00:00.000Z",
+          consentExpirationAt: "2026-05-10T12:00:00.000Z",
         }),
         makeItem({
           id: "soonest",
@@ -191,7 +197,7 @@ describe("(#257) findPlaidItemsExpiringSoon", () => {
         makeItem({
           id: "middle",
           institutionName: "Amex",
-          consentExpirationAt: "2026-05-10T12:00:00.000Z",
+          consentExpirationAt: "2026-05-08T12:00:00.000Z",
         }),
       ],
       NOW,
@@ -205,12 +211,12 @@ describe("(#257) findPlaidItemsExpiringSoon", () => {
         makeItem({
           id: "chase",
           institutionName: "Chase",
-          consentExpirationAt: "2026-05-11T12:00:00.000Z",
+          consentExpirationAt: "2026-05-09T12:00:00.000Z",
         }),
         makeItem({
           id: "amex",
           institutionName: "Amex",
-          consentExpirationAt: "2026-05-11T12:00:00.000Z",
+          consentExpirationAt: "2026-05-09T12:00:00.000Z",
         }),
       ],
       NOW,
@@ -219,12 +225,12 @@ describe("(#257) findPlaidItemsExpiringSoon", () => {
   });
 
   it("respects a custom withinDays window", () => {
-    // Tighten to 3 days — the 7-day-out item should now drop off.
+    // Tighten to 3 days — the 5-day-out item should now drop off.
     const out = findPlaidItemsExpiringSoon(
       [
         makeItem({
           id: "i1",
-          consentExpirationAt: "2026-05-11T12:00:00.000Z",
+          consentExpirationAt: "2026-05-09T12:00:00.000Z",
         }),
         makeItem({
           id: "i2",
@@ -237,8 +243,8 @@ describe("(#257) findPlaidItemsExpiringSoon", () => {
     expect(out.map((e) => e.item.id)).toEqual(["i2"]);
   });
 
-  it("defaults the window to 14 days", () => {
-    expect(EXPIRING_SOON_WINDOW_DAYS).toBe(14);
+  it("defaults the window to 7 days", () => {
+    expect(EXPIRING_SOON_WINDOW_DAYS).toBe(7);
   });
 });
 
@@ -332,37 +338,10 @@ describe("(#257) PlaidExpiringSoonListView", () => {
     expect(row.textContent).toContain("Your bank");
   });
 
-  it("hides itself when the user clicks the dismiss button", () => {
-    renderList([
-      makeItem({
-        id: "i1",
-        consentExpirationAt: "2026-05-11T12:00:00.000Z",
-      }),
-    ]);
-    expect(screen.getByTestId("alerts-plaid-expiring-soon")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("button-plaid-expiring-soon-dismiss"));
-    expect(screen.queryByTestId("alerts-plaid-expiring-soon")).toBeNull();
-  });
-
-  it("re-shows the alerts when a NEW bank enters the window after dismissal", () => {
+  it("calls onDismiss with every currently-shown item id when the dismiss button is clicked", () => {
+    const onDismiss = vi.fn();
     const qc = new QueryClient();
-    const { rerender } = render(
-      <QueryClientProvider client={qc}>
-        <PlaidExpiringSoonListView
-          items={[
-            makeItem({
-              id: "i1",
-              consentExpirationAt: "2026-05-11T12:00:00.000Z",
-            }),
-          ]}
-          now={NOW}
-        />
-      </QueryClientProvider>,
-    );
-    fireEvent.click(screen.getByTestId("button-plaid-expiring-soon-dismiss"));
-    expect(screen.queryByTestId("alerts-plaid-expiring-soon")).toBeNull();
-
-    rerender(
+    render(
       <QueryClientProvider client={qc}>
         <PlaidExpiringSoonListView
           items={[
@@ -373,19 +352,99 @@ describe("(#257) PlaidExpiringSoonListView", () => {
             makeItem({
               id: "i2",
               institutionName: "Bank of America",
-              consentExpirationAt: "2026-05-13T12:00:00.000Z",
+              consentExpirationAt: "2026-05-10T12:00:00.000Z",
             }),
           ]}
           now={NOW}
+          onDismiss={onDismiss}
         />
       </QueryClientProvider>,
     );
+    fireEvent.click(screen.getByTestId("button-plaid-expiring-soon-dismiss"));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onDismiss.mock.calls[0][0].sort()).toEqual(["i1", "i2"]);
+  });
+
+  it("disables the dismiss button while a dismissal is in flight", () => {
+    renderList([
+      makeItem({
+        id: "i1",
+        consentExpirationAt: "2026-05-11T12:00:00.000Z",
+      }),
+    ]);
+    // Re-render with isDismissing=true.
+    cleanup();
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <PlaidExpiringSoonListView
+          items={[
+            makeItem({
+              id: "i1",
+              consentExpirationAt: "2026-05-11T12:00:00.000Z",
+            }),
+          ]}
+          now={NOW}
+          isDismissing
+        />
+      </QueryClientProvider>,
+    );
+    const btn = screen.getByTestId(
+      "button-plaid-expiring-soon-dismiss",
+    ) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it("excludes items whose persisted dismissal still matches the live cutoff", () => {
+    // (#274) Server-side persistence: once the user dismisses, the item
+    // carries `consentWarningDismissedForCutoff` equal to its current
+    // `consentExpirationAt`. The banner stays hidden across reloads.
+    renderList([
+      makeItem({
+        id: "i1",
+        consentExpirationAt: "2026-05-11T12:00:00.000Z",
+        consentWarningDismissedForCutoff: "2026-05-11T12:00:00.000Z",
+      }),
+    ]);
+    expect(screen.queryByTestId("alerts-plaid-expiring-soon")).toBeNull();
+  });
+
+  it("re-shows after dismissal once Plaid moves the cutoff", () => {
+    // (#274) If the cutoff stored in `consentWarningDismissedForCutoff`
+    // no longer matches the live `consentExpirationAt` (e.g. the daily
+    // refresh wrote a fresh, nearer cutoff), the alert returns.
+    renderList([
+      makeItem({
+        id: "i1",
+        consentExpirationAt: "2026-05-09T12:00:00.000Z",
+        consentWarningDismissedForCutoff: "2026-05-11T12:00:00.000Z",
+      }),
+    ]);
     expect(screen.getByTestId("alerts-plaid-expiring-soon")).toBeTruthy();
+  });
+
+  it("re-shows when a NEW bank enters the window even though another item was dismissed", () => {
+    renderList([
+      makeItem({
+        id: "i1",
+        consentExpirationAt: "2026-05-11T12:00:00.000Z",
+        consentWarningDismissedForCutoff: "2026-05-11T12:00:00.000Z",
+      }),
+      makeItem({
+        id: "i2",
+        institutionName: "Bank of America",
+        consentExpirationAt: "2026-05-10T12:00:00.000Z",
+      }),
+    ]);
+    expect(screen.getByTestId("alerts-plaid-expiring-soon")).toBeTruthy();
+    // Only the non-dismissed item is listed.
+    expect(screen.queryByTestId("row-plaid-expiring-i1")).toBeNull();
+    expect(screen.getByTestId("row-plaid-expiring-i2")).toBeTruthy();
   });
 
   it("auto-dismisses when the user re-consents and the cutoff rolls past the threshold", () => {
     // The point of the 'done' criterion: once consentExpirationAt
-    // moves past the 14-day window (because the user re-authorized
+    // moves past the 7-day window (because the user re-authorized
     // and the daily refresh wrote a fresh, far-future cutoff), the
     // alerts disappear without any user dismissal.
     const qc = new QueryClient();

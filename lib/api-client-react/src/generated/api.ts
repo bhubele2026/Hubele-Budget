@@ -5748,6 +5748,102 @@ export function useListPlaidSyncAttempts<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
+/**
+ * @summary (#274) Persist the user's dismissal of the dashboard "bank
+consent expiring soon" banner for this item. The server stamps
+`consentWarningDismissedForCutoff` with the current
+`consentExpirationAt`, so the alert stays hidden across page
+reloads but re-surfaces automatically if Plaid moves the
+cutoff (e.g. after a successful re-consent).
+
+ */
+export const getDismissPlaidExpirationWarningUrl = (id: string) => {
+  return `/api/plaid/items/${id}/dismiss-expiration-warning`;
+};
+
+export const dismissPlaidExpirationWarning = async (
+  id: string,
+  options?: RequestInit,
+): Promise<PlaidItemDetail> => {
+  return customFetch<PlaidItemDetail>(getDismissPlaidExpirationWarningUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getDismissPlaidExpirationWarningMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dismissPlaidExpirationWarning>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof dismissPlaidExpirationWarning>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["dismissPlaidExpirationWarning"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof dismissPlaidExpirationWarning>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return dismissPlaidExpirationWarning(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DismissPlaidExpirationWarningMutationResult = NonNullable<
+  Awaited<ReturnType<typeof dismissPlaidExpirationWarning>>
+>;
+
+export type DismissPlaidExpirationWarningMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (#274) Persist the user's dismissal of the dashboard "bank
+consent expiring soon" banner for this item. The server stamps
+`consentWarningDismissedForCutoff` with the current
+`consentExpirationAt`, so the alert stays hidden across page
+reloads but re-surfaces automatically if Plaid moves the
+cutoff (e.g. after a successful re-consent).
+
+ */
+export const useDismissPlaidExpirationWarning = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dismissPlaidExpirationWarning>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof dismissPlaidExpirationWarning>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDismissPlaidExpirationWarningMutationOptions(options));
+};
+
 export const getSyncPlaidTransactionsUrl = () => {
   return `/api/plaid/sync`;
 };

@@ -268,6 +268,18 @@ export const plaidItemsTable = pgTable(
     consentExpirationLastRefreshErrorCode: text(
       "consent_expiration_last_refresh_error_code",
     ),
+    // (#274) The value of `consent_expiration_at` at the moment the
+    // user clicked dismiss on the dashboard "bank consent expiring
+    // soon" banner. The frontend suppresses the alert for an item
+    // only while its current cutoff matches this stored value, so a
+    // re-consent (which rolls the cutoff forward) or a brand-new item
+    // entering the window naturally re-surfaces the banner without
+    // needing a separate "clear dismissal" mutation. Null until the
+    // user dismisses for the first time.
+    consentWarningDismissedForCutoff: timestamp(
+      "consent_warning_dismissed_for_cutoff",
+      { withTimezone: true },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({

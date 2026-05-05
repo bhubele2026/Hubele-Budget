@@ -1620,6 +1620,8 @@ export interface PlaidItemDetail {
     consentExpirationLastRefreshError?: string | null;
     /** @nullable */
     consentExpirationLastRefreshErrorCode?: string | null;
+    /** @nullable */
+    consentWarningDismissedForCutoff?: string | null;
     accounts: PlaidAccount[];
 }
 export interface PlaidSyncInput {
