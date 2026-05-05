@@ -172,6 +172,23 @@ function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+// #103 — persisted chase-page account picker. Stored under a stable key
+// so it survives reloads / browser restarts even when the user clears
+// the URL. URL takes precedence so shareable links still win.
+const CHASE_ACCOUNT_STORAGE_KEY = "h2budget:chase-account";
+
+function readInitialChaseAccount(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("account");
+    if (fromUrl) return fromUrl;
+    return window.localStorage.getItem(CHASE_ACCOUNT_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export default function TransactionsPage() {
   const { data: transactions, isLoading } = useListTransactions({ limit: 5000 });
   const { data: categories } = useListCategories();
@@ -221,12 +238,29 @@ export default function TransactionsPage() {
   }, [isLoading]);
 
   const bankSnapshot = forecastData?.bankSnapshot ?? null;
-  // #103 — multi-checking households: let the user override the snapshot
-  // account and view a different linked checking on the Chase page. The
-  // override is local UI state; Forecast / balance math still anchors to
-  // the configured snapshot account.
-  const [chaseAccountOverride, setChaseAccountOverride] = useState<string | null>(null);
-  const effectiveAccountInternalId = chaseAccountOverride ?? bankSnapshot?.accountId ?? null;
+  // #103 — multi-checking households: let the user pick which linked
+  // checking account powers this page. The selected key is either
+  // `"manual"` (transactions without a plaidAccountId) or the internal
+  // id of a row in `plaidCheckingAccounts`. The selection is persisted
+  // across reloads via a `?account=` URL param plus a localStorage
+  // fallback so deep-links share the same view.
+  const [selectedAccountKey, setSelectedAccountKey] = useState<string | null>(
+    () => readInitialChaseAccount(),
+  );
+  // The effective key falls back to the snapshot's account (or "manual"
+  // when there is no snapshot) so a fresh user with no preference still
+  // lands on the same account they would have seen before #103.
+  const defaultAccountKey = bankSnapshot?.accountId ?? "manual";
+  const effectiveAccountKey = selectedAccountKey ?? defaultAccountKey;
+  const isManualAccount = effectiveAccountKey === "manual";
+  const effectiveAccountInternalId = isManualAccount ? null : effectiveAccountKey;
+  // True when the user is viewing the same account that the bank
+  // snapshot anchors. Balance math only works for the snapshot account
+  // (we have no anchored balance for the others), so we use this flag
+  // to gate the Starting/Ending balance chips.
+  const usingSnapshotAccount =
+    !!bankSnapshot &&
+    effectiveAccountKey === (bankSnapshot.accountId ?? "manual");
   const chasePlaidAccountId = useMemo(() => {
     if (!effectiveAccountInternalId) return null;
     const acct = (forecastData?.plaidCheckingAccounts ?? []).find(
@@ -234,6 +268,59 @@ export default function TransactionsPage() {
     );
     return acct?.accountId ?? null;
   }, [effectiveAccountInternalId, forecastData?.plaidCheckingAccounts]);
+  // The currently selected account row (if it's a Plaid account) — used
+  // by the meta line under the header so the user always sees the
+  // institution / mask of the account they're viewing, not just the
+  // snapshot account.
+  const selectedPlaidAccount = useMemo(() => {
+    if (!effectiveAccountInternalId) return null;
+    return (
+      (forecastData?.plaidCheckingAccounts ?? []).find(
+        (a) => a.id === effectiveAccountInternalId,
+      ) ?? null
+    );
+  }, [effectiveAccountInternalId, forecastData?.plaidCheckingAccounts]);
+
+  // Persist the picker selection so reloads / deep-links land on the
+  // same account. We update both `?account=` (visible, shareable) and
+  // localStorage (so it sticks even when the user clears the URL).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (selectedAccountKey) {
+      params.set("account", selectedAccountKey);
+      try {
+        window.localStorage.setItem(
+          CHASE_ACCOUNT_STORAGE_KEY,
+          selectedAccountKey,
+        );
+      } catch {
+        // localStorage may be blocked (private mode); URL still works.
+      }
+    } else {
+      params.delete("account");
+      try {
+        window.localStorage.removeItem(CHASE_ACCOUNT_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+    }
+    const qs = params.toString();
+    const next = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
+    window.history.replaceState(null, "", next);
+  }, [selectedAccountKey]);
+
+  // If the persisted selection points at an account that no longer
+  // exists (linked bank removed, account closed), drop it back to the
+  // default so the picker doesn't render an empty value.
+  useEffect(() => {
+    if (!selectedAccountKey || selectedAccountKey === "manual") return;
+    const accounts = forecastData?.plaidCheckingAccounts;
+    if (!accounts) return;
+    if (!accounts.some((a) => a.id === selectedAccountKey)) {
+      setSelectedAccountKey(null);
+    }
+  }, [selectedAccountKey, forecastData?.plaidCheckingAccounts]);
 
   // Scope to the linked checking account (or manual rows when nothing linked).
   const chaseTransactions = useMemo(() => {
@@ -354,7 +441,14 @@ export default function TransactionsPage() {
     return m;
   }, [chaseTransactions]);
 
-  const anchorBalance = bankSnapshot ? Number(bankSnapshot.balance) || 0 : null;
+  // #103 — only anchor balance math when the user is viewing the same
+  // account the snapshot was taken on. Other accounts have no anchored
+  // balance, so we render Starting/Ending balance as "unavailable"
+  // instead of silently showing the wrong account's balance.
+  const anchorBalance =
+    bankSnapshot && usingSnapshotAccount
+      ? Number(bankSnapshot.balance) || 0
+      : null;
   // Anchor the rolling balance at the bank snapshot's month. The snapshot
   // value is the known balance as of `bankSnapshot.at` (typically a
   // mid-month Plaid sync). End-of-anchor-month is reconstructed by the
@@ -1049,7 +1143,11 @@ export default function TransactionsPage() {
   }
 
   const todayKey = ymd(new Date());
-  const hasLinkedChecking = !!bankSnapshot;
+  // #103 — Starting/Ending balance only render when we have a snapshot
+  // AND we're viewing the snapshot's account. Refresh-from-Plaid still
+  // applies to the snapshot account (the only one we sync), regardless
+  // of which view is on screen.
+  const hasLinkedChecking = !!bankSnapshot && usingSnapshotAccount;
   const isPlaidLinked = bankSnapshot?.source === "plaid";
 
   return (
@@ -1153,7 +1251,7 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {bankSnapshot && (
+      {bankSnapshot && usingSnapshotAccount && (
         <div
           className="text-xs text-muted-foreground"
           data-testid="text-snapshot-meta"
@@ -1165,39 +1263,54 @@ export default function TransactionsPage() {
           {formatCurrency(bankSnapshot.balance)}
         </div>
       )}
-      {(forecastData?.plaidCheckingAccounts?.length ?? 0) > 1 && (
+      {!usingSnapshotAccount && selectedPlaidAccount && (
+        <div
+          className="text-xs text-muted-foreground"
+          data-testid="text-snapshot-meta"
+        >
+          Plaid ·{" "}
+          {selectedPlaidAccount.institutionName ??
+            selectedPlaidAccount.name ??
+            "Checking"}
+          {selectedPlaidAccount.mask ? ` ••${selectedPlaidAccount.mask}` : ""} ·
+          Set this as your snapshot account on Forecast to see Starting and
+          Ending balances.
+        </div>
+      )}
+      {!usingSnapshotAccount && isManualAccount && (
+        <div
+          className="text-xs text-muted-foreground"
+          data-testid="text-snapshot-meta"
+        >
+          Manual entries · No bank balance is tracked for hand-entered rows.
+        </div>
+      )}
+      {(forecastData?.plaidCheckingAccounts?.length ?? 0) > 0 && (
         <div className="flex items-center gap-2" data-testid="chase-account-picker">
           <span className="text-xs text-muted-foreground">View account:</span>
           <Select
-            value={chaseAccountOverride ?? "_default"}
-            onValueChange={(v) =>
-              setChaseAccountOverride(v === "_default" ? null : v)
-            }
+            value={effectiveAccountKey}
+            onValueChange={(v) => setSelectedAccountKey(v)}
           >
             <SelectTrigger className="h-7 text-xs w-64" data-testid="select-chase-account">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="_default">
-                Default (snapshot account)
-              </SelectItem>
               {(forecastData?.plaidCheckingAccounts ?? []).map((a) => {
-                const name = (a as { name?: string }).name ?? "Checking";
-                const mask = (a as { mask?: string }).mask ?? null;
+                const name = a.institutionName ?? a.name ?? "Checking";
+                const mask = a.mask ?? null;
+                const isSnapshot = bankSnapshot?.accountId === a.id;
                 return (
                   <SelectItem key={a.id} value={a.id}>
                     {name}
                     {mask ? ` ••${mask}` : ""}
+                    {isSnapshot ? " · snapshot" : ""}
                   </SelectItem>
                 );
               })}
+              <SelectItem value="manual">Manual entries</SelectItem>
             </SelectContent>
           </Select>
-          {chaseAccountOverride && (
-            <span className="text-[10px] uppercase tracking-wider text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-              View only · balance math still uses snapshot account
-            </span>
-          )}
         </div>
       )}
 
