@@ -6,6 +6,7 @@ import {
 } from "@workspace/db";
 import { plaid } from "./plaid";
 import { logger } from "./logger";
+import { extractPlaidError } from "./plaidSync";
 
 export type LiabilityRow = {
   accountId: string;
@@ -105,10 +106,67 @@ export async function fetchLiabilitiesForItem(
       liabErr = e;
     }
   }
+  // (#43) Persist liability/balance fetch failures on the parent Plaid
+  // item so the Avalanche debt rows can render the same "sync failing"
+  // chip + Reconnect affordance that /transactions/sync already powers.
+  // Otherwise debt-only users (who never call /plaid/sync) would never
+  // see a badge when their bank link breaks.
+  //
+  // - Both fetches failed → record the most actionable error and throw.
+  // - /accounts/get failed (balance refresh dead) → record the error.
+  // - /accounts/get succeeded but /liabilities/get failed with a real,
+  //   non-recoverable Plaid error code (e.g. ITEM_LOGIN_REQUIRED) →
+  //   record so the user can act before APR/min-payment go fully stale.
+  // - Both succeeded (or only INVALID_PRODUCT) → clear any stale error
+  //   so the badge drops once the bank is healthy again.
+  const fetchErr = acctErr ?? liabErr;
   if (!acctResp && !resp) {
+    if (fetchErr) {
+      const { code, message } = extractPlaidError(fetchErr);
+      await db
+        .update(plaidItemsTable)
+        .set({
+          lastSyncError: `Liability refresh failed: ${message}`,
+          lastSyncErrorCode: code,
+        })
+        .where(
+          and(
+            eq(plaidItemsTable.id, itemRowId),
+            eq(plaidItemsTable.userId, userId),
+          ),
+        );
+    }
     throw new PlaidLiabilitiesError(
       `Plaid fetch failed: ${String(acctErr ?? liabErr)}`,
     );
+  }
+  if (fetchErr) {
+    const { code, message } = extractPlaidError(fetchErr);
+    await db
+      .update(plaidItemsTable)
+      .set({
+        lastSyncError: `Liability refresh failed: ${message}`,
+        lastSyncErrorCode: code,
+      })
+      .where(
+        and(
+          eq(plaidItemsTable.id, itemRowId),
+          eq(plaidItemsTable.userId, userId),
+        ),
+      );
+  } else if (acctResp) {
+    await db
+      .update(plaidItemsTable)
+      .set({
+        lastSyncError: null,
+        lastSyncErrorCode: null,
+      })
+      .where(
+        and(
+          eq(plaidItemsTable.id, itemRowId),
+          eq(plaidItemsTable.userId, userId),
+        ),
+      );
   }
   const liab = resp?.data.liabilities;
   const accountsById = new Map(

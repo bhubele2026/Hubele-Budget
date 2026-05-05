@@ -99,6 +99,11 @@ type DebtResponse = {
   plaidAccount: { id: string; itemId: string | null } | null;
 };
 
+// Fresh-enough plaidLastSyncedAt so the opportunistic refresh in GET /debts
+// (any debt older than 1h triggers a real Plaid call) skips. We are testing
+// the *shape* of the response, not the refresh path itself.
+const FRESH_SYNC_AT = new Date(Date.now() - 60_000);
+
 describe("(#43) GET /debts surfaces parent Plaid item lastSyncError", () => {
   it("returns plaidLastSyncError null when sync is healthy", async () => {
     const { accountRowId } = await seedItem({ lastSyncError: null });
@@ -109,7 +114,7 @@ describe("(#43) GET /debts surfaces parent Plaid item lastSyncError", () => {
       apr: "0.2",
       minPayment: "25",
       plaidAccountId: accountRowId,
-      plaidLastSyncedAt: new Date("2026-05-01T10:00:00Z"),
+      plaidLastSyncedAt: FRESH_SYNC_AT,
     });
 
     const res = await fetch(`${baseUrl}/debts`);
@@ -117,7 +122,7 @@ describe("(#43) GET /debts surfaces parent Plaid item lastSyncError", () => {
     const body = (await res.json()) as DebtResponse[];
     expect(body).toHaveLength(1);
     expect(body[0].plaidLastSyncError).toBeNull();
-    expect(body[0].plaidLastSyncedAt).toBe("2026-05-01T10:00:00.000Z");
+    expect(body[0].plaidLastSyncedAt).toBe(FRESH_SYNC_AT.toISOString());
   });
 
   it("surfaces ITEM_LOGIN_REQUIRED to plaidLastSyncError when item sync failed", async () => {
@@ -131,7 +136,7 @@ describe("(#43) GET /debts surfaces parent Plaid item lastSyncError", () => {
       apr: "0.25",
       minPayment: "30",
       plaidAccountId: accountRowId,
-      plaidLastSyncedAt: new Date("2026-04-15T10:00:00Z"),
+      plaidLastSyncedAt: FRESH_SYNC_AT,
     });
 
     const res = await fetch(`${baseUrl}/debts`);
@@ -143,7 +148,7 @@ describe("(#43) GET /debts surfaces parent Plaid item lastSyncError", () => {
     );
     // The "last healthy" timestamp must still be present so the UI can show
     // when sync was last working.
-    expect(body[0].plaidLastSyncedAt).toBe("2026-04-15T10:00:00.000Z");
+    expect(body[0].plaidLastSyncedAt).toBe(FRESH_SYNC_AT.toISOString());
   });
 
   it("returns plaidLastSyncError null for manual (non-Plaid) debts", async () => {
@@ -178,7 +183,7 @@ describe("(#198) GET /debts mirrors plaidLastSyncErrorCode + plaidAccount.itemId
       apr: "0.25",
       minPayment: "30",
       plaidAccountId: accountRowId,
-      plaidLastSyncedAt: new Date("2026-04-15T10:00:00Z"),
+      plaidLastSyncedAt: FRESH_SYNC_AT,
     });
 
     const res = await fetch(`${baseUrl}/debts`);
@@ -204,6 +209,7 @@ describe("(#198) GET /debts mirrors plaidLastSyncErrorCode + plaidAccount.itemId
       apr: "0.2",
       minPayment: "20",
       plaidAccountId: accountRowId,
+      plaidLastSyncedAt: FRESH_SYNC_AT,
     });
 
     const res = await fetch(`${baseUrl}/debts`);

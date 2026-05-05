@@ -224,3 +224,193 @@ describe("fetchLiabilitiesForItem when liabilities product is not enabled", () =
     );
   });
 });
+
+describe("(#43) fetchLiabilitiesForItem records sync errors on the parent item", () => {
+  it("persists the Plaid error_code + message to lastSyncError when /accounts/get returns ITEM_LOGIN_REQUIRED", async () => {
+    const { itemRowId } = await insertItemAndAccount();
+
+    accountsGetMock = async () => {
+      throw {
+        message: "Request failed with status code 400",
+        response: {
+          status: 400,
+          data: {
+            error_code: "ITEM_LOGIN_REQUIRED",
+            error_type: "ITEM_ERROR",
+            error_message:
+              "the login details of this item have changed and a user login is required",
+          },
+        },
+      };
+    };
+    liabilitiesGetMock = async () => {
+      throw {
+        response: {
+          data: {
+            error_code: "ITEM_LOGIN_REQUIRED",
+            error_message:
+              "the login details of this item have changed and a user login is required",
+          },
+        },
+      };
+    };
+
+    await expect(
+      fetchLiabilitiesForItem(TEST_USER, itemRowId),
+    ).rejects.toThrow(/Plaid fetch failed/);
+
+    const [row] = await db
+      .select({
+        lastSyncError: plaidItemsTable.lastSyncError,
+        lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+      })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    // Code is the Reconnect-button gate — must be the structured Plaid value.
+    expect(row?.lastSyncErrorCode).toBe("ITEM_LOGIN_REQUIRED");
+    // Message is the human-readable chip text — must include the friendly
+    // Plaid error_message, NOT the bare axios "Request failed…" string.
+    expect(row?.lastSyncError).toMatch(/Liability refresh failed/);
+    expect(row?.lastSyncError).toMatch(
+      /login details of this item have changed/,
+    );
+    expect(row?.lastSyncError).not.toMatch(/Request failed with status code/);
+  });
+
+  it("records the error when /accounts/get fails even if /liabilities/get returned recoverable INVALID_PRODUCT", async () => {
+    const { itemRowId } = await insertItemAndAccount();
+
+    accountsGetMock = async () => {
+      throw {
+        response: {
+          status: 400,
+          data: {
+            error_code: "ITEM_LOGIN_REQUIRED",
+            error_message: "auth expired",
+          },
+        },
+      };
+    };
+    liabilitiesGetMock = async () => {
+      throw {
+        response: {
+          data: {
+            error_code: "INVALID_PRODUCT",
+            error_message: "no liabilities access",
+          },
+        },
+      };
+    };
+
+    await expect(
+      fetchLiabilitiesForItem(TEST_USER, itemRowId),
+    ).rejects.toThrow(/Plaid fetch failed/);
+
+    const [row] = await db
+      .select({
+        lastSyncError: plaidItemsTable.lastSyncError,
+        lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+      })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    // The acctErr (ITEM_LOGIN_REQUIRED) must win over the recoverable
+    // INVALID_PRODUCT — that's the actionable code that drives Reconnect.
+    expect(row?.lastSyncErrorCode).toBe("ITEM_LOGIN_REQUIRED");
+    expect(row?.lastSyncError).toMatch(/auth expired/);
+  });
+
+  it("clears a stale lastSyncError after a successful balance refresh", async () => {
+    const { acctRowId, plaidAccountId, itemRowId } =
+      await insertItemAndAccount();
+    // Pre-stamp a stale re-auth error from a previous run.
+    await db
+      .update(plaidItemsTable)
+      .set({
+        lastSyncError: "Liability refresh failed: stale credentials",
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+      })
+      .where(eq(plaidItemsTable.id, itemRowId));
+
+    accountsGetMock = async () => ({
+      data: {
+        accounts: [
+          {
+            account_id: plaidAccountId,
+            name: "Test Card",
+            type: "credit",
+            subtype: "credit card",
+            balances: { current: 999.99 },
+          },
+        ],
+      },
+    });
+    // /liabilities/get also succeeds (returns no liabilities is fine).
+    liabilitiesGetMock = async () => ({
+      data: { accounts: [], liabilities: null },
+    });
+
+    const rows = await fetchLiabilitiesForItem(TEST_USER, itemRowId);
+    expect(rows).toEqual([]);
+
+    const [item] = await db
+      .select({
+        lastSyncError: plaidItemsTable.lastSyncError,
+        lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+      })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    // A healthy balance refresh proves the connection works — the chip
+    // must drop on the next /debts read.
+    expect(item?.lastSyncError).toBeNull();
+    expect(item?.lastSyncErrorCode).toBeNull();
+
+    const [row] = await db
+      .select()
+      .from(plaidAccountsTable)
+      .where(eq(plaidAccountsTable.id, acctRowId));
+    expect(row!.liabilityBalance).toBe("999.99");
+  });
+
+  it("preserves stale lastSyncError when a successful liab call only had INVALID_PRODUCT-grade gaps (still success path)", async () => {
+    const { plaidAccountId, itemRowId } = await insertItemAndAccount();
+
+    accountsGetMock = async () => ({
+      data: {
+        accounts: [
+          {
+            account_id: plaidAccountId,
+            name: "Test Card",
+            type: "credit",
+            subtype: "credit card",
+            balances: { current: 12.34 },
+          },
+        ],
+      },
+    });
+    liabilitiesGetMock = async () => {
+      throw {
+        response: {
+          data: {
+            error_code: "INVALID_PRODUCT",
+            error_message: "no liabilities access",
+          },
+        },
+      };
+    };
+
+    await fetchLiabilitiesForItem(TEST_USER, itemRowId);
+
+    // INVALID_PRODUCT is an expected, recoverable state for the bank-only
+    // configuration — accounts/get succeeded, so we treat the item as
+    // healthy and clear any stale chip from a previous run.
+    const [item] = await db
+      .select({
+        lastSyncError: plaidItemsTable.lastSyncError,
+        lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+      })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    expect(item?.lastSyncError).toBeNull();
+    expect(item?.lastSyncErrorCode).toBeNull();
+  });
+});
