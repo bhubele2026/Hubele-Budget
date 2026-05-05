@@ -1,1 +1,0 @@
-{"version":3,"file":"createTransactionResponse.d.ts","sourceRoot":"","sources":["../../../src/generated/types/createTransactionResponse.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,eAAe,CAAC;AAEjD,MAAM,MAAM,yBAAyB,GAAG,WAAW,GAAG;IACpD;;;;;;;;;;;;;;OAcG;IACH,qBAAqB,EAAE,MAAM,GAAG,IAAI,CAAC;CACtC,CAAC"}
