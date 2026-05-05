@@ -379,6 +379,19 @@ export default function BillsPage() {
   const totalOutflow = billsMonthly + debtMin;
   const net = incomeMonthly - totalOutflow;
 
+  // #303 — actual-so-far totals per group, mirroring the per-row
+  // "$X paid / $X so far" labels. Sum BillsSummaryRow.actualAmount across
+  // active items only, matching how monthly planned totals exclude paused
+  // items (see api-server bills route).
+  const sumActiveActual = (rows: BillsSummaryRow[]) =>
+    rows.reduce(
+      (s, r) =>
+        isActive(r.item) ? s + (Number(r.actualAmount) || 0) : s,
+      0,
+    );
+  const incomeActual = sumActiveActual(incomeRows);
+  const billsActual = sumActiveActual(billRows);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-start gap-4 flex-wrap">
@@ -470,8 +483,20 @@ export default function BillsPage() {
               <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
                 Per month
               </div>
-              <SummaryRow label="Income" amount={incomeMonthly} tone="income" />
-              <SummaryRow label="Bills" amount={-billsMonthly} tone="bill" />
+              <SummaryRow
+                label="Income"
+                amount={incomeMonthly}
+                tone="income"
+                actual={incomeActual}
+                actualTestId="text-income-actual"
+              />
+              <SummaryRow
+                label="Bills"
+                amount={-billsMonthly}
+                tone="bill"
+                actual={billsActual}
+                actualTestId="text-bills-actual"
+              />
               <SummaryRow label="Debt minimums" amount={-debtMin} tone="bill" />
               <div className="border-t pt-3 space-y-3">
                 <SummaryRow label="Total outflow" amount={-totalOutflow} tone="bill" />
@@ -707,20 +732,36 @@ function SummaryRow({
   label,
   amount,
   tone,
+  actual,
+  actualTestId,
 }: {
   label: string;
   amount: number;
   tone: "income" | "bill";
+  actual?: number;
+  actualTestId?: string;
 }) {
   const positive = amount >= 0;
   const colorClass = tone === "income" ? "text-emerald-700" : "text-destructive";
+  const sign = positive && tone === "income" ? "+" : "";
   return (
-    <div className="flex items-center justify-between text-sm">
+    <div className="flex items-center justify-between text-sm gap-3">
       <span className="text-muted-foreground">{label}</span>
-      <span className={`tabular-nums font-medium ${colorClass}`}>
-        {positive && tone === "income" ? "+" : ""}
-        {formatCurrency(amount)}
-      </span>
+      <div className="flex items-baseline gap-2 min-w-0">
+        <span className={`tabular-nums font-medium ${colorClass}`}>
+          {sign}
+          {formatCurrency(amount)}
+        </span>
+        {actual !== undefined ? (
+          <span
+            className="text-[11px] tabular-nums text-muted-foreground"
+            data-testid={actualTestId}
+            title={`${formatCurrency(actual)} actual so far this month`}
+          >
+            / {formatCurrency(actual)} so far
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
