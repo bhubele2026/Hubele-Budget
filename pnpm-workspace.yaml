@@ -158,3 +158,10 @@ overrides:
   # drizzle-kit uses esbuild internally on an older version that's vulnerable, this overrides it
   "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0"
   esbuild: "0.27.3"
+  # Pin a single copy of @types/react and @types/react-dom across the workspace.
+  # Without this, transitive deps (e.g. expo / react-native / clerk peers) pull
+  # in @types/react@19.1.x while our catalog resolves @types/react@19.2.x,
+  # producing TS2322 "two different types with this name exist" errors when
+  # passing refs through React 19 components.
+  "@types/react": "^19.2.0"
+  "@types/react-dom": "^19.2.0"
