@@ -26,6 +26,8 @@ import type {
   BudgetLine,
   BudgetLineInput,
   BudgetMonthDetail,
+  BulkCreateDebtsFromPlaidRequest,
+  BulkCreateDebtsFromPlaidResponse,
   BulkSetForecastFlagInput,
   BulkSetForecastFlagResult,
   CashSignal,
@@ -1459,6 +1461,92 @@ export const useCreateDebtFromPlaidAccount = <
   TContext
 > => {
   return useMutation(getCreateDebtFromPlaidAccountMutationOptions(options));
+};
+
+export const getBulkCreateDebtsFromPlaidAccountsUrl = () => {
+  return `/api/plaid/liability-accounts/create-debts`;
+};
+
+export const bulkCreateDebtsFromPlaidAccounts = async (
+  bulkCreateDebtsFromPlaidRequest: BulkCreateDebtsFromPlaidRequest,
+  options?: RequestInit,
+): Promise<BulkCreateDebtsFromPlaidResponse> => {
+  return customFetch<BulkCreateDebtsFromPlaidResponse>(
+    getBulkCreateDebtsFromPlaidAccountsUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(bulkCreateDebtsFromPlaidRequest),
+    },
+  );
+};
+
+export const getBulkCreateDebtsFromPlaidAccountsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkCreateDebtsFromPlaidAccounts>>,
+    TError,
+    { data: BodyType<BulkCreateDebtsFromPlaidRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkCreateDebtsFromPlaidAccounts>>,
+  TError,
+  { data: BodyType<BulkCreateDebtsFromPlaidRequest> },
+  TContext
+> => {
+  const mutationKey = ["bulkCreateDebtsFromPlaidAccounts"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkCreateDebtsFromPlaidAccounts>>,
+    { data: BodyType<BulkCreateDebtsFromPlaidRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkCreateDebtsFromPlaidAccounts(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BulkCreateDebtsFromPlaidAccountsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof bulkCreateDebtsFromPlaidAccounts>>
+>;
+export type BulkCreateDebtsFromPlaidAccountsMutationBody =
+  BodyType<BulkCreateDebtsFromPlaidRequest>;
+export type BulkCreateDebtsFromPlaidAccountsMutationError = ErrorType<unknown>;
+
+export const useBulkCreateDebtsFromPlaidAccounts = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkCreateDebtsFromPlaidAccounts>>,
+    TError,
+    { data: BodyType<BulkCreateDebtsFromPlaidRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof bulkCreateDebtsFromPlaidAccounts>>,
+  TError,
+  { data: BodyType<BulkCreateDebtsFromPlaidRequest> },
+  TContext
+> => {
+  return useMutation(
+    getBulkCreateDebtsFromPlaidAccountsMutationOptions(options),
+  );
 };
 
 /**

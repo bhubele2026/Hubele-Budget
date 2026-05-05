@@ -13,7 +13,25 @@ export type LiabilityRow = {
   balance: number | null;
   apr: number | null; // decimal, e.g. 0.1999
   minPayment: number | null;
+  // (#44) Day-of-month derived from Plaid's
+  // next_payment_due_date / last_statement_issue_date so we can
+  // pre-fill the suggested debt's dueDay/statementDay.
+  dueDay: number | null;
+  statementDay: number | null;
 };
+
+// (#44) Plaid liabilities expose dates as ISO strings in the bank's
+// local timezone (e.g. "2026-05-21"). We only need the day-of-month for
+// the debts schema, and pulling it via UTC string parsing avoids any
+// host-timezone drift that would otherwise nudge the date by ±1 day.
+export function dayOfMonthFromIso(s: string | null | undefined): number | null {
+  if (!s || typeof s !== "string") return null;
+  const m = /^\d{4}-\d{2}-(\d{2})/.exec(s);
+  if (!m) return null;
+  const day = Number(m[1]);
+  if (!Number.isFinite(day) || day < 1 || day > 31) return null;
+  return day;
+}
 
 function pickBestApr(aprs: Array<{ apr_percentage: number; apr_type?: string }> | undefined): number | null {
   if (!aprs || aprs.length === 0) return null;
@@ -149,6 +167,8 @@ export async function fetchLiabilitiesForItem(
       balance: acc?.balances?.current ?? null,
       apr: pickBestApr(c.aprs),
       minPayment: c.minimum_payment_amount ?? null,
+      dueDay: dayOfMonthFromIso(c.next_payment_due_date),
+      statementDay: dayOfMonthFromIso(c.last_statement_issue_date),
     });
   }
   for (const s of liab.student ?? []) {
@@ -161,6 +181,15 @@ export async function fetchLiabilitiesForItem(
       balance: acc?.balances?.current ?? null,
       apr: aprPct != null ? aprPct / 100 : null,
       minPayment: s.minimum_payment_amount ?? null,
+      // Plaid student liabilities expose `expected_payoff_date` and
+      // `last_statement_issue_date`; use the next-payment due-date when
+      // available so the suggested due-day matches the credit case.
+      dueDay: dayOfMonthFromIso(
+        (s as { next_payment_due_date?: string | null }).next_payment_due_date,
+      ),
+      statementDay: dayOfMonthFromIso(
+        (s as { last_statement_issue_date?: string | null }).last_statement_issue_date,
+      ),
     });
   }
   for (const m of liab.mortgage ?? []) {
@@ -173,6 +202,9 @@ export async function fetchLiabilitiesForItem(
       balance: acc?.balances?.current ?? null,
       apr: irPct != null ? irPct / 100 : null,
       minPayment: m.next_monthly_payment ?? null,
+      dueDay: dayOfMonthFromIso(m.next_payment_due_date),
+      // Mortgage payloads don't include a statement date, so this stays null.
+      statementDay: null,
     });
   }
 
@@ -186,6 +218,8 @@ export async function fetchLiabilitiesForItem(
     if (r.apr != null) patch.liabilityApr = r.apr.toFixed(4);
     if (r.minPayment != null)
       patch.liabilityMinPayment = r.minPayment.toFixed(2);
+    if (r.dueDay != null) patch.liabilityDueDay = r.dueDay;
+    if (r.statementDay != null) patch.liabilityStatementDay = r.statementDay;
     await db
       .update(plaidAccountsTable)
       .set(patch)

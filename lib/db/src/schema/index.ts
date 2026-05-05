@@ -319,6 +319,12 @@ export const plaidAccountsTable = pgTable(
     liabilityBalance: numeric("liability_balance", { precision: 12, scale: 2 }),
     liabilityApr: numeric("liability_apr", { precision: 6, scale: 4 }),
     liabilityMinPayment: numeric("liability_min_payment", { precision: 12, scale: 2 }),
+    // (#44) Day-of-month derived from /liabilities/get's
+    // next_payment_due_date / last_statement_issue_date so that
+    // GET /plaid/liability-accounts can pre-fill the suggestedDebt
+    // payload without an extra Plaid round-trip on each render.
+    liabilityDueDay: integer("liability_due_day"),
+    liabilityStatementDay: integer("liability_statement_day"),
     liabilityLastFetchedAt: timestamp("liability_last_fetched_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },

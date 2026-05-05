@@ -28,8 +28,11 @@ import {
   debtsTable,
   plaidAccountsTable,
   plaidItemsTable,
+  transactionsTable,
+  settingsTable,
 } from "@workspace/db";
 import plaidRouter from "../routes/plaid";
+import amexRouter from "../routes/amex";
 
 const app = express();
 app.use(express.json());
@@ -43,17 +46,20 @@ app.use((req: { log?: unknown }, _res, next) => {
   next();
 });
 app.use(plaidRouter);
+app.use(amexRouter);
 
 let server: Server;
 let baseUrl: string;
 
 async function cleanup(): Promise<void> {
   for (const userId of [TEST_USER, OTHER_USER]) {
+    await db.delete(transactionsTable).where(eq(transactionsTable.userId, userId));
     await db.delete(debtsTable).where(eq(debtsTable.userId, userId));
     await db
       .delete(plaidAccountsTable)
       .where(eq(plaidAccountsTable.userId, userId));
     await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, userId));
+    await db.delete(settingsTable).where(eq(settingsTable.userId, userId));
   }
 }
 
@@ -87,7 +93,13 @@ async function insertCreditAccount(opts: {
   balance?: string | null;
   apr?: string | null;
   minPayment?: string | null;
-} = {}): Promise<{ itemId: string; plaidAccountId: string }> {
+  dueDay?: number | null;
+  statementDay?: number | null;
+} = {}): Promise<{
+  itemId: string;
+  plaidAccountId: string;
+  accountId: string;
+}> {
   const userId = opts.userId ?? TEST_USER;
   const label = opts.institutionName ?? "Chase";
   const [item] = await db
@@ -115,10 +127,16 @@ async function insertCreditAccount(opts: {
       liabilityBalance: opts.balance ?? "1234.56",
       liabilityApr: opts.apr ?? "0.2199",
       liabilityMinPayment: opts.minPayment ?? "35.00",
+      liabilityDueDay: opts.dueDay ?? null,
+      liabilityStatementDay: opts.statementDay ?? null,
       liabilityLastFetchedAt: new Date(),
     })
     .returning();
-  return { itemId: item!.id, plaidAccountId: acct!.id };
+  return {
+    itemId: item!.id,
+    plaidAccountId: acct!.id,
+    accountId: acct!.accountId,
+  };
 }
 
 describe("isUniqueViolation", () => {
@@ -362,5 +380,212 @@ describe("POST /plaid/liability-accounts/:plaidAccountId/create-debt", () => {
       { method: "POST" },
     );
     expect(res.status).toBe(400);
+  });
+
+  it("propagates dueDay/statementDay from cached liability data into the new debt", async () => {
+    const { plaidAccountId } = await insertCreditAccount({
+      institutionName: "Citi",
+      mask: "4242",
+      dueDay: 21,
+      statementDay: 27,
+    });
+    const res = await fetch(
+      `${baseUrl}/plaid/liability-accounts/${plaidAccountId}/create-debt`,
+      { method: "POST" },
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      debt: { id: string; dueDay: number | null; statementDay: number | null };
+    };
+    expect(body.debt.dueDay).toBe(21);
+    expect(body.debt.statementDay).toBe(27);
+
+    const [persisted] = await db
+      .select()
+      .from(debtsTable)
+      .where(eq(debtsTable.id, body.debt.id));
+    expect(persisted!.dueDay).toBe(21);
+    expect(persisted!.statementDay).toBe(27);
+  });
+});
+
+describe("GET /plaid/liability-accounts (suggestedDebt payload)", () => {
+  it("includes dueDay and statementDay when Plaid cached them on the account", async () => {
+    await insertCreditAccount({
+      institutionName: "Discover",
+      mask: "9000",
+      dueDay: 14,
+      statementDay: 20,
+    });
+    const res = await fetch(`${baseUrl}/plaid/liability-accounts`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      mask: string | null;
+      suggestedDebt: {
+        name: string;
+        type: string;
+        balance: string | null;
+        apr: string | null;
+        minPayment: string | null;
+        dueDay: number | null;
+        statementDay: number | null;
+      } | null;
+    }>;
+    const row = body.find((a) => a.mask === "9000");
+    expect(row?.suggestedDebt).toBeTruthy();
+    expect(row!.suggestedDebt!.dueDay).toBe(14);
+    expect(row!.suggestedDebt!.statementDay).toBe(20);
+    expect(row!.suggestedDebt!.name).toBe("Discover ••9000");
+    expect(row!.suggestedDebt!.type).toBe("credit_card");
+  });
+});
+
+describe("POST /plaid/liability-accounts/create-debts (bulk)", () => {
+  it("creates, links-existing, skips already-linked, and skips not-debt-like in one call", async () => {
+    // Fresh debt-like account → should be created
+    const a = await insertCreditAccount({
+      institutionName: "Chase",
+      mask: "1111",
+    });
+    // Same-name debt exists → should be linked-existing (dedupe by name)
+    const b = await insertCreditAccount({
+      institutionName: "Amex",
+      mask: "2222",
+    });
+    await db.insert(debtsTable).values({
+      userId: TEST_USER,
+      name: "Amex ••2222",
+      balance: "0",
+      apr: "0",
+      minPayment: "0",
+      payment: "0",
+      type: "credit_card",
+    });
+    // Already linked to a different debt → already-linked
+    const c = await insertCreditAccount({
+      institutionName: "Citi",
+      mask: "3333",
+    });
+    const [taken] = await db
+      .insert(debtsTable)
+      .values({
+        userId: TEST_USER,
+        name: "Pre-existing",
+        balance: "0",
+        apr: "0",
+        minPayment: "0",
+        payment: "0",
+        type: "credit_card",
+        plaidAccountId: c.plaidAccountId,
+        balanceSource: "plaid",
+      })
+      .returning();
+    // Not a debt account at all
+    const d = await insertCreditAccount({
+      institutionName: "Wells",
+      mask: "4444",
+      type: "depository",
+      subtype: "checking",
+      liabilityKind: null,
+    });
+    // Unknown plaid account id
+    const unknownId = randomUUID();
+
+    const res = await fetch(
+      `${baseUrl}/plaid/liability-accounts/create-debts`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          accounts: [
+            { plaidAccountId: a.plaidAccountId, name: "Chase Sapphire" },
+            { plaidAccountId: b.plaidAccountId },
+            { plaidAccountId: c.plaidAccountId },
+            { plaidAccountId: d.plaidAccountId },
+            { plaidAccountId: unknownId },
+          ],
+        }),
+      },
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      results: Array<{
+        plaidAccountId: string;
+        status: string;
+        debtId?: string;
+        debtName?: string;
+      }>;
+    };
+    const byId = Object.fromEntries(body.results.map((r) => [r.plaidAccountId, r]));
+    expect(byId[a.plaidAccountId]!.status).toBe("created");
+    expect(byId[a.plaidAccountId]!.debtName).toBe("Chase Sapphire"); // name override applied
+    expect(byId[b.plaidAccountId]!.status).toBe("linked-existing");
+    expect(byId[c.plaidAccountId]!.status).toBe("already-linked");
+    expect(byId[c.plaidAccountId]!.debtId).toBe(taken!.id);
+    expect(byId[d.plaidAccountId]!.status).toBe("not-debt-like");
+    expect(byId[unknownId]!.status).toBe("not-found");
+
+    // Verify final state: no duplicate Amex row, no debt for non-debt acct.
+    const all = await db
+      .select()
+      .from(debtsTable)
+      .where(eq(debtsTable.userId, TEST_USER));
+    const linkedToA = all.filter((x) => x.plaidAccountId === a.plaidAccountId);
+    const linkedToB = all.filter((x) => x.plaidAccountId === b.plaidAccountId);
+    const linkedToD = all.filter((x) => x.plaidAccountId === d.plaidAccountId);
+    expect(linkedToA).toHaveLength(1);
+    expect(linkedToB).toHaveLength(1);
+    expect(linkedToD).toHaveLength(0);
+  });
+
+  it("rejects an empty accounts array with 400", async () => {
+    const res = await fetch(
+      `${baseUrl}/plaid/liability-accounts/create-debts`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ accounts: [] }),
+      },
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("Amex anchor regression after auto-create-debt", () => {
+  it("flips GET /amex/anchor source from missing to debt after auto-creating a debt for an Amex Plaid account", async () => {
+    const { plaidAccountId } = await insertCreditAccount({
+      institutionName: "American Express",
+      mask: "1009",
+      balance: "750.25",
+      apr: "0.2799",
+      minPayment: "40.00",
+    });
+    // Pre-condition: no debt, no anchor, no txns → /amex/anchor "missing".
+    const before = await fetch(`${baseUrl}/amex/anchor`);
+    expect(before.status).toBe(200);
+    const beforeBody = (await before.json()) as { source: string };
+    expect(beforeBody.source).toBe("missing");
+
+    const create = await fetch(
+      `${baseUrl}/plaid/liability-accounts/${plaidAccountId}/create-debt`,
+      { method: "POST" },
+    );
+    expect(create.status).toBe(201);
+    const created = (await create.json()) as {
+      debt: { name: string };
+    };
+    // Auto-name must match the byName regex in /amex/anchor so the resolver
+    // can find the debt without manual user editing.
+    expect(created.debt.name).toMatch(/amex|american\s*express/i);
+
+    const after = await fetch(`${baseUrl}/amex/anchor`);
+    expect(after.status).toBe(200);
+    const afterBody = (await after.json()) as {
+      source: string;
+      amexEndingBalance: number | null;
+    };
+    expect(afterBody.source).toBe("debt");
+    expect(afterBody.source).not.toBe("missing");
+    expect(afterBody.amexEndingBalance).toBeCloseTo(750.25);
   });
 });

@@ -641,6 +641,10 @@ export interface PlaidSuggestedDebt {
     apr?: string | null;
     /** @nullable */
     minPayment?: string | null;
+    /** @nullable */
+    dueDay?: number | null;
+    /** @nullable */
+    statementDay?: number | null;
 }
 export interface PlaidLiabilityAccount {
     id: string;
@@ -682,6 +686,36 @@ export declare const CreateDebtFromPlaidResultAction: {
 export interface CreateDebtFromPlaidResult {
     debt: Debt;
     action: CreateDebtFromPlaidResultAction;
+}
+export type BulkCreateDebtsFromPlaidRequestAccountsItem = {
+    plaidAccountId: string;
+    /** @nullable */
+    name?: string | null;
+};
+export interface BulkCreateDebtsFromPlaidRequest {
+    accounts: BulkCreateDebtsFromPlaidRequestAccountsItem[];
+}
+export type BulkCreateDebtFromPlaidResultStatus = (typeof BulkCreateDebtFromPlaidResultStatus)[keyof typeof BulkCreateDebtFromPlaidResultStatus];
+export declare const BulkCreateDebtFromPlaidResultStatus: {
+    readonly created: "created";
+    readonly "linked-existing": "linked-existing";
+    readonly "already-linked": "already-linked";
+    readonly "not-debt-like": "not-debt-like";
+    readonly "not-found": "not-found";
+    readonly error: "error";
+};
+export interface BulkCreateDebtFromPlaidResult {
+    plaidAccountId: string;
+    status: BulkCreateDebtFromPlaidResultStatus;
+    /** @nullable */
+    debtId?: string | null;
+    /** @nullable */
+    debtName?: string | null;
+    /** @nullable */
+    error?: string | null;
+}
+export interface BulkCreateDebtsFromPlaidResponse {
+    results: BulkCreateDebtFromPlaidResult[];
 }
 export type AvalancheSettingsStrategy = (typeof AvalancheSettingsStrategy)[keyof typeof AvalancheSettingsStrategy];
 export declare const AvalancheSettingsStrategy: {

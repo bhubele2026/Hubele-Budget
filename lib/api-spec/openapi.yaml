@@ -326,6 +326,21 @@ paths:
                   error: { type: string }
                   debtId: { type: string }
                   debtName: { type: string }
+  /plaid/liability-accounts/create-debts:
+    post:
+      operationId: bulkCreateDebtsFromPlaidAccounts
+      tags: [plaid]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkCreateDebtsFromPlaidRequest" }
+      responses:
+        "201":
+          description: Per-account create/skip results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkCreateDebtsFromPlaidResponse" }
   /debts/balance-history:
     get:
       operationId: listDebtBalanceHistory
@@ -1888,12 +1903,50 @@ components:
         balance: { type: ["string", "null"] }
         apr: { type: ["string", "null"] }
         minPayment: { type: ["string", "null"] }
+        dueDay: { type: ["integer", "null"] }
+        statementDay: { type: ["integer", "null"] }
     CreateDebtFromPlaidResult:
       type: object
       required: [debt, action]
       properties:
         debt: { $ref: "#/components/schemas/Debt" }
         action: { type: string, enum: [created, linked-existing] }
+    BulkCreateDebtsFromPlaidRequest:
+      type: object
+      required: [accounts]
+      properties:
+        accounts:
+          type: array
+          items:
+            type: object
+            required: [plaidAccountId]
+            properties:
+              plaidAccountId: { type: string }
+              name: { type: ["string", "null"] }
+    BulkCreateDebtFromPlaidResult:
+      type: object
+      required: [plaidAccountId, status]
+      properties:
+        plaidAccountId: { type: string }
+        status:
+          type: string
+          enum:
+            - created
+            - linked-existing
+            - already-linked
+            - not-debt-like
+            - not-found
+            - error
+        debtId: { type: ["string", "null"] }
+        debtName: { type: ["string", "null"] }
+        error: { type: ["string", "null"] }
+    BulkCreateDebtsFromPlaidResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/BulkCreateDebtFromPlaidResult" }
     AvalancheSettings:
       type: object
       required: [strategy, extraSource, manualExtra, budgetMode]

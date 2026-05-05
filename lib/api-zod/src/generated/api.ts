@@ -801,6 +801,8 @@ export const ListPlaidLiabilityAccountsResponseItem = zod.object({
         balance: zod.string().nullish(),
         apr: zod.string().nullish(),
         minPayment: zod.string().nullish(),
+        dueDay: zod.number().nullish(),
+        statementDay: zod.number().nullish(),
       }),
       zod.null(),
     ])
@@ -812,6 +814,15 @@ export const ListPlaidLiabilityAccountsResponse = zod.array(
 
 export const CreateDebtFromPlaidAccountParams = zod.object({
   plaidAccountId: zod.coerce.string(),
+});
+
+export const BulkCreateDebtsFromPlaidAccountsBody = zod.object({
+  accounts: zod.array(
+    zod.object({
+      plaidAccountId: zod.string(),
+      name: zod.string().nullish(),
+    }),
+  ),
 });
 
 /**

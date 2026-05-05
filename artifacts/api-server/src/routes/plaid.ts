@@ -135,6 +135,11 @@ export type SuggestedDebt = {
   balance: string | null;
   apr: string | null;
   minPayment: string | null;
+  // (#44) Day-of-month derived from /liabilities/get (when Plaid
+  // provides them) so the auto-created debt's dueDay/statementDay
+  // are populated up-front instead of forcing a follow-up edit.
+  dueDay: number | null;
+  statementDay: number | null;
 };
 
 export function buildSuggestedDebt(
@@ -147,6 +152,8 @@ export function buildSuggestedDebt(
     balance: acct.liabilityBalance ?? null,
     apr: acct.liabilityApr ?? null,
     minPayment: acct.liabilityMinPayment ?? null,
+    dueDay: acct.liabilityDueDay ?? null,
+    statementDay: acct.liabilityStatementDay ?? null,
   };
 }
 
@@ -166,12 +173,18 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
   userId: string;
   account: PlaidAccountRow;
   institutionName: string | null | undefined;
+  // (#44) Optional caller override (used by the post-Link bulk dialog
+  // when the user edited the suggested name before clicking "Add as
+  // debts"). Falls back to the institution+mask suggestion.
+  nameOverride?: string | null;
 }): Promise<{
   debt: typeof debtsTable.$inferSelect;
   action: "created" | "linked-existing";
 }> {
-  const { userId, account, institutionName } = opts;
+  const { userId, account, institutionName, nameOverride } = opts;
   const suggested = buildSuggestedDebt(account, institutionName);
+  const overridden = nameOverride?.trim();
+  const finalName = overridden && overridden.length > 0 ? overridden : suggested.name;
   const now = new Date();
 
   // De-dupe by name: if a same-name debt already exists with no Plaid
@@ -182,7 +195,7 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
     .where(
       and(
         eq(debtsTable.userId, userId),
-        eq(debtsTable.name, suggested.name),
+        eq(debtsTable.name, finalName),
         sql`${debtsTable.plaidAccountId} is null`,
       ),
     );
@@ -209,6 +222,14 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
       patch.minPayment = suggested.minPayment;
       patch.minPaymentSource = "plaid";
     }
+    // (#44) Only fill due/statement day when the existing debt row didn't
+    // already have a value — typed-over fields win over the Plaid hint.
+    if (suggested.dueDay != null && target.dueDay == null) {
+      patch.dueDay = suggested.dueDay;
+    }
+    if (suggested.statementDay != null && target.statementDay == null) {
+      patch.statementDay = suggested.statementDay;
+    }
     try {
       const [updated] = await db
         .update(debtsTable)
@@ -227,7 +248,7 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
 
   const values: typeof debtsTable.$inferInsert = {
     userId,
-    name: suggested.name,
+    name: finalName,
     type: suggested.type,
     status: "active",
     plaidAccountId: account.id,
@@ -247,6 +268,8 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
     values.minPayment = suggested.minPayment;
     values.minPaymentSource = "plaid";
   }
+  if (suggested.dueDay != null) values.dueDay = suggested.dueDay;
+  if (suggested.statementDay != null) values.statementDay = suggested.statementDay;
   try {
     const [created] = await db.insert(debtsTable).values(values).returning();
     return { debt: created!, action: "created" };
@@ -900,6 +923,165 @@ router.post(
       req.log.error({ err: e }, "createOrLinkDebtFromPlaidAccount failed");
       res.status(500).json({ error: msg });
     }
+  },
+);
+
+// (#44) Bulk variant of /create-debt — used by the post-Link follow-up
+// dialog so the user can add several newly-discovered debt-like
+// accounts in one round-trip. Each entry succeeds, fails, or skips
+// independently and the per-account result is reported back so the UI
+// can render a precise success toast (count + names + Avalanche link).
+router.post(
+  "/plaid/liability-accounts/create-debts",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const userId = req.userId!;
+    const body = (req.body ?? {}) as {
+      accounts?: Array<{ plaidAccountId?: unknown; name?: unknown }>;
+    };
+    const inputs = Array.isArray(body.accounts) ? body.accounts : [];
+    if (inputs.length === 0) {
+      res.status(400).json({ error: "accounts must be a non-empty array" });
+      return;
+    }
+    type ResultStatus =
+      | "created"
+      | "linked-existing"
+      | "already-linked"
+      | "not-debt-like"
+      | "not-found"
+      | "error";
+    type Result = {
+      plaidAccountId: string;
+      status: ResultStatus;
+      debtId?: string;
+      debtName?: string;
+      error?: string;
+    };
+    const results: Result[] = [];
+    const refreshedItemIds = new Set<string>();
+
+    for (const entry of inputs) {
+      const plaidAccountId =
+        typeof entry?.plaidAccountId === "string" ? entry.plaidAccountId : "";
+      const nameOverride =
+        typeof entry?.name === "string" ? entry.name : null;
+      if (!plaidAccountId) {
+        results.push({
+          plaidAccountId: "",
+          status: "not-found",
+          error: "missing plaidAccountId",
+        });
+        continue;
+      }
+      const [acct] = await db
+        .select()
+        .from(plaidAccountsTable)
+        .where(
+          and(
+            eq(plaidAccountsTable.id, plaidAccountId),
+            eq(plaidAccountsTable.userId, userId),
+          ),
+        );
+      if (!acct) {
+        results.push({ plaidAccountId, status: "not-found" });
+        continue;
+      }
+      if (!plaidAccountIsDebtLike(acct)) {
+        results.push({ plaidAccountId, status: "not-debt-like" });
+        continue;
+      }
+      const [taken] = await db
+        .select({ id: debtsTable.id, name: debtsTable.name })
+        .from(debtsTable)
+        .where(
+          and(
+            eq(debtsTable.userId, userId),
+            eq(debtsTable.plaidAccountId, plaidAccountId),
+          ),
+        );
+      if (taken) {
+        results.push({
+          plaidAccountId,
+          status: "already-linked",
+          debtId: taken.id,
+          debtName: taken.name,
+        });
+        continue;
+      }
+      // Refresh liabilities once per item so cached balance/APR/min/day
+      // values are current before we materialize multiple debts under it.
+      if (!refreshedItemIds.has(acct.itemId)) {
+        try {
+          await fetchLiabilitiesForItem(userId, acct.itemId);
+        } catch (e) {
+          req.log.warn(
+            { err: e, itemRowId: acct.itemId },
+            "fetchLiabilitiesForItem failed during bulk create-debts — using cached values",
+          );
+        }
+        refreshedItemIds.add(acct.itemId);
+      }
+      const [refreshed] = await db
+        .select()
+        .from(plaidAccountsTable)
+        .where(
+          and(
+            eq(plaidAccountsTable.id, plaidAccountId),
+            eq(plaidAccountsTable.userId, userId),
+          ),
+        );
+      const [item] = await db
+        .select({ institutionName: plaidItemsTable.institutionName })
+        .from(plaidItemsTable)
+        .where(
+          and(
+            eq(plaidItemsTable.id, (refreshed ?? acct).itemId),
+            eq(plaidItemsTable.userId, userId),
+          ),
+        );
+      try {
+        const r = await createOrLinkDebtFromPlaidAccount({
+          userId,
+          account: refreshed ?? acct,
+          institutionName: item?.institutionName ?? null,
+          nameOverride,
+        });
+        results.push({
+          plaidAccountId,
+          status: r.action,
+          debtId: r.debt.id,
+          debtName: r.debt.name,
+        });
+      } catch (e) {
+        if (e instanceof PlaidAccountAlreadyLinkedError) {
+          const [winner] = await db
+            .select({ id: debtsTable.id, name: debtsTable.name })
+            .from(debtsTable)
+            .where(
+              and(
+                eq(debtsTable.userId, userId),
+                eq(debtsTable.plaidAccountId, plaidAccountId),
+              ),
+            );
+          results.push({
+            plaidAccountId,
+            status: "already-linked",
+            debtId: winner?.id,
+            debtName: winner?.name,
+          });
+          continue;
+        }
+        const msg = e instanceof Error ? e.message : "Could not create debt";
+        req.log.error(
+          { err: e, plaidAccountId },
+          "bulk create-debts: per-row failure",
+        );
+        results.push({ plaidAccountId, status: "error", error: msg });
+      }
+    }
+
+    res.status(201).json({ results });
   },
 );
 

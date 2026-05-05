@@ -2357,6 +2357,40 @@ export declare const plaidAccountsTable: import("drizzle-orm/pg-core").PgTableWi
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        liabilityDueDay: import("drizzle-orm/pg-core").PgColumn<{
+            name: "liability_due_day";
+            tableName: "plaid_accounts";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        liabilityStatementDay: import("drizzle-orm/pg-core").PgColumn<{
+            name: "liability_statement_day";
+            tableName: "plaid_accounts";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         liabilityLastFetchedAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "liability_last_fetched_at";
             tableName: "plaid_accounts";

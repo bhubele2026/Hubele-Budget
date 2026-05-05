@@ -14,5 +14,9 @@ export interface PlaidSuggestedDebt {
     apr?: string | null;
     /** @nullable */
     minPayment?: string | null;
+    /** @nullable */
+    dueDay?: number | null;
+    /** @nullable */
+    statementDay?: number | null;
 }
 //# sourceMappingURL=plaidSuggestedDebt.d.ts.map

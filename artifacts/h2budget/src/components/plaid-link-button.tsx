@@ -8,12 +8,14 @@ import {
   getListTransactionsQueryKey,
   getListPlaidLiabilityAccountsQueryKey,
   listPlaidLiabilityAccounts,
+  type PlaidLiabilityAccount,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
+import { PostLinkDebtDialog } from "@/components/post-link-debt-dialog";
 
 export const PLAID_LINK_TOKEN_STORAGE_KEY = "h2:plaid:link_token";
 export const PLAID_RETURN_TO_STORAGE_KEY = "h2:plaid:return_to";
@@ -29,6 +31,10 @@ export function PlaidLinkButton({
   label?: string;
 } = {}) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
+  const [postLinkAccounts, setPostLinkAccounts] = useState<
+    PlaidLiabilityAccount[]
+  >([]);
+  const [postLinkOpen, setPostLinkOpen] = useState(false);
   const createLinkToken = useCreatePlaidLinkToken();
   const exchange = useExchangePlaidPublicToken();
   const { data: plaidEnv } = useGetPlaidEnvironment();
@@ -127,8 +133,14 @@ export function PlaidLinkButton({
             qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
             // Trigger a server-side liabilities fetch so debt-like accounts
             // appear immediately in pickers, then refresh the cached query.
+            // (#44) Also use the result to surface a one-click "create
+            // debts" dialog for any newly-linked credit/loan accounts that
+            // aren't already wired to a debt row.
+            let liabilityAccounts: PlaidLiabilityAccount[] = [];
             try {
-              await listPlaidLiabilityAccounts({ refresh: true });
+              liabilityAccounts = await listPlaidLiabilityAccounts({
+                refresh: true,
+              });
             } catch {
               // ignore — query invalidation below will retry without refresh
             }
@@ -140,6 +152,19 @@ export function PlaidLinkButton({
             setLinkToken(null);
             clearStoredLinkToken();
             onLinked?.();
+
+            // (#44) Show the post-Link dialog when there are unmatched
+            // debt-like accounts. We rely on suggestedDebt (set by the API
+            // for credit/loan/student/mortgage accounts) and skip anything
+            // already linked to a debt row.
+            const candidates = liabilityAccounts.filter(
+              (a) => !a.linkedDebt && a.suggestedDebt,
+            );
+            if (candidates.length > 0) {
+              setPostLinkAccounts(candidates);
+              setPostLinkOpen(true);
+            }
+
             // Fire-and-forget background poll so the freshly-linked item
             // populates as soon as Plaid finishes the initial export.
             void pollAfterLink();
@@ -198,18 +223,30 @@ export function PlaidLinkButton({
       : null;
 
   return (
-    <Button
-      onClick={fetchToken}
-      disabled={busy || notConfigured || hasConfigError}
-      title={disabledReason ?? undefined}
-      data-testid="button-link-bank"
-    >
-      {busy ? (
-        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-      ) : (
-        <Plus className="w-4 h-4 mr-2" />
+    <>
+      <Button
+        onClick={fetchToken}
+        disabled={busy || notConfigured || hasConfigError}
+        title={disabledReason ?? undefined}
+        data-testid="button-link-bank"
+      >
+        {busy ? (
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+        ) : (
+          <Plus className="w-4 h-4 mr-2" />
+        )}
+        {label ?? "Link a Bank or Card"}
+      </Button>
+      {postLinkOpen && postLinkAccounts.length > 0 && (
+        <PostLinkDebtDialog
+          open={postLinkOpen}
+          onOpenChange={(v) => {
+            setPostLinkOpen(v);
+            if (!v) setPostLinkAccounts([]);
+          }}
+          accounts={postLinkAccounts}
+        />
       )}
-      {label ?? "Link a Bank or Card"}
-    </Button>
+    </>
   );
 }

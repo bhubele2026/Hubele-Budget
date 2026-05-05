@@ -1610,18 +1610,24 @@ export declare const ListPlaidLiabilityAccountsResponseItem: zod.ZodObject<{
         balance: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         apr: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         minPayment: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        dueDay: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        statementDay: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
     }, "strip", zod.ZodTypeAny, {
         type: string;
         name: string;
         balance?: string | null | undefined;
         apr?: string | null | undefined;
         minPayment?: string | null | undefined;
+        dueDay?: number | null | undefined;
+        statementDay?: number | null | undefined;
     }, {
         type: string;
         name: string;
         balance?: string | null | undefined;
         apr?: string | null | undefined;
         minPayment?: string | null | undefined;
+        dueDay?: number | null | undefined;
+        statementDay?: number | null | undefined;
     }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
@@ -1649,6 +1655,8 @@ export declare const ListPlaidLiabilityAccountsResponseItem: zod.ZodObject<{
         balance?: string | null | undefined;
         apr?: string | null | undefined;
         minPayment?: string | null | undefined;
+        dueDay?: number | null | undefined;
+        statementDay?: number | null | undefined;
     } | null | undefined;
 }, {
     id: string;
@@ -1676,6 +1684,8 @@ export declare const ListPlaidLiabilityAccountsResponseItem: zod.ZodObject<{
         balance?: string | null | undefined;
         apr?: string | null | undefined;
         minPayment?: string | null | undefined;
+        dueDay?: number | null | undefined;
+        statementDay?: number | null | undefined;
     } | null | undefined;
 }>;
 export declare const ListPlaidLiabilityAccountsResponse: zod.ZodArray<zod.ZodObject<{
@@ -1710,18 +1720,24 @@ export declare const ListPlaidLiabilityAccountsResponse: zod.ZodArray<zod.ZodObj
         balance: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         apr: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         minPayment: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        dueDay: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        statementDay: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
     }, "strip", zod.ZodTypeAny, {
         type: string;
         name: string;
         balance?: string | null | undefined;
         apr?: string | null | undefined;
         minPayment?: string | null | undefined;
+        dueDay?: number | null | undefined;
+        statementDay?: number | null | undefined;
     }, {
         type: string;
         name: string;
         balance?: string | null | undefined;
         apr?: string | null | undefined;
         minPayment?: string | null | undefined;
+        dueDay?: number | null | undefined;
+        statementDay?: number | null | undefined;
     }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
@@ -1749,6 +1765,8 @@ export declare const ListPlaidLiabilityAccountsResponse: zod.ZodArray<zod.ZodObj
         balance?: string | null | undefined;
         apr?: string | null | undefined;
         minPayment?: string | null | undefined;
+        dueDay?: number | null | undefined;
+        statementDay?: number | null | undefined;
     } | null | undefined;
 }, {
     id: string;
@@ -1776,6 +1794,8 @@ export declare const ListPlaidLiabilityAccountsResponse: zod.ZodArray<zod.ZodObj
         balance?: string | null | undefined;
         apr?: string | null | undefined;
         minPayment?: string | null | undefined;
+        dueDay?: number | null | undefined;
+        statementDay?: number | null | undefined;
     } | null | undefined;
 }>, "many">;
 export declare const CreateDebtFromPlaidAccountParams: zod.ZodObject<{
@@ -1784,6 +1804,28 @@ export declare const CreateDebtFromPlaidAccountParams: zod.ZodObject<{
     plaidAccountId: string;
 }, {
     plaidAccountId: string;
+}>;
+export declare const BulkCreateDebtsFromPlaidAccountsBody: zod.ZodObject<{
+    accounts: zod.ZodArray<zod.ZodObject<{
+        plaidAccountId: zod.ZodString;
+        name: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        plaidAccountId: string;
+        name?: string | null | undefined;
+    }, {
+        plaidAccountId: string;
+        name?: string | null | undefined;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    accounts: {
+        plaidAccountId: string;
+        name?: string | null | undefined;
+    }[];
+}, {
+    accounts: {
+        plaidAccountId: string;
+        name?: string | null | undefined;
+    }[];
 }>;
 /**
  * @summary All recorded balance snapshots for the current user's debts
