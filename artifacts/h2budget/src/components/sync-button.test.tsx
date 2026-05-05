@@ -305,6 +305,46 @@ describe("SyncButton", () => {
     expect(screen.queryByTestId("button-plaid-reconnect-i-ok")).toBeNull();
   });
 
+  it("(#310) opens the Reconnect popover on hover on hover-capable devices", async () => {
+    // Force the hover-capable code path: jsdom's matchMedia is undefined by
+    // default, so stub it to report `(hover: hover)` matches.
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes("hover: hover"),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      plaidItems = [
+        {
+          id: "i-hover",
+          institutionName: "Chase",
+          lastSyncedAt: new Date().toISOString(),
+          lastSyncError: "the login details of this item have changed",
+          lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+        },
+      ];
+      renderButton();
+      const trigger = screen.getByTestId("button-plaid-reconnect-trigger");
+      // Popover starts closed — no per-item Reconnect button rendered yet.
+      expect(screen.queryByTestId("button-plaid-reconnect-i-hover")).toBeNull();
+      // Hovering (no click) should open the popover after the open delay.
+      fireEvent.mouseEnter(trigger);
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("button-plaid-reconnect-i-hover"),
+        ).toBeTruthy();
+      });
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
   it("does NOT show the Reconnect popover for non-reauth errors (e.g. RATE_LIMIT_EXCEEDED)", () => {
     plaidItems = [
       {

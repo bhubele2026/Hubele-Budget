@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useListPlaidItems,
   type PlaidItemDetail,
@@ -139,8 +139,67 @@ function ReauthPopover({
     count === 1
       ? `Reconnect ${items[0].institutionName ?? "your bank"} via Plaid`
       : `${count} banks need reconnecting`;
+  // (#310) The popover is click/keyboard-driven by default (Radix Popover),
+  // but on devices that actually support hover (i.e. desktop with a real
+  // pointer) we *also* open it when the user hovers the trigger so power
+  // users can glance at which banks are broken without an extra click. We
+  // gate this on the `(hover: hover)` media query so touch devices keep the
+  // existing tap-to-open behavior — opening on touch-hover would feel
+  // flickery and trap-focus the popover unexpectedly.
+  const [open, setOpen] = useState(false);
+  const [hoverCapable, setHoverCapable] = useState(false);
+  const openTimer = useRef<number | null>(null);
+  const closeTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mql = window.matchMedia("(hover: hover)");
+    setHoverCapable(mql.matches);
+    const onChange = (e: MediaQueryListEvent) => setHoverCapable(e.matches);
+    mql.addEventListener?.("change", onChange);
+    return () => mql.removeEventListener?.("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (openTimer.current) window.clearTimeout(openTimer.current);
+      if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    };
+  }, []);
+
+  const clearTimers = () => {
+    if (openTimer.current) {
+      window.clearTimeout(openTimer.current);
+      openTimer.current = null;
+    }
+    if (closeTimer.current) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+
+  const handleHoverOpen = () => {
+    if (!hoverCapable) return;
+    clearTimers();
+    // Small open delay so the popover doesn't flicker when the cursor just
+    // grazes the trigger on the way somewhere else.
+    openTimer.current = window.setTimeout(() => {
+      setOpen(true);
+    }, 120);
+  };
+
+  const handleHoverClose = () => {
+    if (!hoverCapable) return;
+    clearTimers();
+    // A slightly longer close delay gives the user time to move their cursor
+    // from the trigger into the popover content without it snapping shut.
+    closeTimer.current = window.setTimeout(() => {
+      setOpen(false);
+    }, 150);
+  };
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -148,6 +207,9 @@ function ReauthPopover({
           size={size}
           title={triggerTitle}
           data-testid="button-plaid-reconnect-trigger"
+          onMouseEnter={handleHoverOpen}
+          onMouseLeave={handleHoverClose}
+          onFocus={clearTimers}
         >
           <Link2 className="w-3.5 h-3.5 mr-1" />
           Reconnect
@@ -165,6 +227,8 @@ function ReauthPopover({
         align="end"
         className="w-72 p-2"
         data-testid="popover-plaid-reconnect"
+        onMouseEnter={handleHoverOpen}
+        onMouseLeave={handleHoverClose}
       >
         <div className="px-2 pb-2 text-xs text-muted-foreground">
           {count === 1
