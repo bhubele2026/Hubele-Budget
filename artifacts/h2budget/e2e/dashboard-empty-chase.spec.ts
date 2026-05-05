@@ -22,14 +22,12 @@ test.afterAll(async () => {
 
 test.describe("Dashboard — empty Chase ending-balance tile", () => {
   test("renders the dash placeholder and the 'Link Chase checking to see this' hint for a fresh user", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "dashboard-empty-chase",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     await signInAndOpen(page, email, password, "/");
 
@@ -52,7 +50,5 @@ test.describe("Dashboard — empty Chase ending-balance tile", () => {
     // "/dashboard" — accept either so the spec doesn't lock the routing
     // detail.
     expect(["/", "/dashboard"]).toContain(new URL(page.url()).pathname);
-
-    await context.close();
   });
 });

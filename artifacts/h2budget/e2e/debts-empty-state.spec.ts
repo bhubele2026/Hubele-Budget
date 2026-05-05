@@ -23,14 +23,12 @@ test.afterAll(async () => {
 
 test.describe("Debts page — empty-state contract", () => {
   test("renders the page heading and the 'No debts recorded. You're debt free!' empty state for a fresh user", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "debts-empty",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     await signInAndOpen(page, email, password, "/debts");
 
@@ -43,7 +41,5 @@ test.describe("Debts page — empty-state contract", () => {
     await expect(empty).toHaveText("No debts recorded. You're debt free!");
 
     expect(new URL(page.url()).pathname).toBe("/debts");
-
-    await context.close();
   });
 });

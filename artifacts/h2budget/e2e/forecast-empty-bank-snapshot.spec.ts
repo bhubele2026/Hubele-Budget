@@ -28,14 +28,12 @@ test.afterAll(async () => {
 
 test.describe("Forecast page — empty bank snapshot self-heal flow", () => {
   test("shows missing-state Bank balance tile, saves a snapshot, and re-renders in place with 'Manual · …'", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "forecast-bank-self-heal",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     await signInAndOpen(page, email, password, "/forecast");
 
@@ -86,7 +84,5 @@ test.describe("Forecast page — empty bank snapshot self-heal flow", () => {
     // the saved value later — that's the same affordance, but the chip
     // is now populated rather than missing-state.
     await expect(page.getByTestId("button-set-bank-snapshot")).toBeVisible();
-
-    await context.close();
   });
 });

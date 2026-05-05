@@ -27,14 +27,12 @@ test.afterAll(async () => {
 
 test.describe("Transactions page — empty checking missing-state tiles", () => {
   test("renders Unavailable Starting/Ending balance chips with the connect-checking hint and a secondary 'Connect a bank' action", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "txn-empty-checking",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     await signInAndOpen(page, email, password, "/transactions");
 
@@ -61,7 +59,5 @@ test.describe("Transactions page — empty checking missing-state tiles", () => 
     ).toBeVisible();
 
     expect(new URL(page.url()).pathname).toBe("/transactions");
-
-    await context.close();
   });
 });

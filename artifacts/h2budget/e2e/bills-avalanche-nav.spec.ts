@@ -13,14 +13,12 @@ test.afterAll(async () => {
 
 test.describe("Bills → Avalanche navigation (#76)", () => {
   test("Bills page loads and debt-min rows link to /avalanche?focus=", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "bills-ava-nav",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     await signInAndOpen(page, email, password, "/bills");
 
@@ -50,7 +48,5 @@ test.describe("Bills → Avalanche navigation (#76)", () => {
         page.getByRole("heading", { name: /debt avalanche/i }),
       ).toBeVisible({ timeout: 15_000 });
     }
-
-    await context.close();
   });
 });

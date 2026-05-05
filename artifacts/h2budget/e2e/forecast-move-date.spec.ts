@@ -13,14 +13,12 @@ test.afterAll(async () => {
 
 test.describe("Forecast move-to date picker (#107)", () => {
   test("forecast page renders and shows the rescheduled overrides panel when applicable", async ({
-    browser,
+    page,
   }) => {
     const { email, password } = await createTestUser(
       "forecast-move",
       provisionedUserIds,
     );
-    const context = await browser.newContext();
-    const page = await context.newPage();
 
     await signInAndOpen(page, email, password, "/forecast");
 
@@ -53,7 +51,5 @@ test.describe("Forecast move-to date picker (#107)", () => {
       const undoCount = await undoButtons.count();
       expect(undoCount).toBeGreaterThanOrEqual(1);
     }
-
-    await context.close();
   });
 });
