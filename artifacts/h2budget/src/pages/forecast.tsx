@@ -1321,7 +1321,10 @@ export default function ForecastPage() {
           setMoveError(null);
         },
         onError: (e: unknown) => {
-          setMoveError((e as Error).message ?? "Failed to move occurrence");
+          const message =
+            (e as Error).message ?? "Failed to move occurrence";
+          setMoveError(message);
+          toast({ title: message, variant: "destructive" });
         },
       },
     );
