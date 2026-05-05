@@ -320,3 +320,192 @@ describe("computeCashSignal — status thresholds", () => {
     expect(sig.maxSafeExtra).toBe("200.00");
   });
 });
+
+describe("computeCashSignal — rescheduled resolutions", () => {
+  it("moves a plan item from its original date to rescheduledTo", async () => {
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-04-01T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    // Monthly $200 on the 15th. Within the test window the expansion
+    // produces 2026-04-15 and 2026-05-15.
+    const item = await addRecurring({ dayOfMonth: 15, amount: "200" });
+
+    // Reschedule the 04-15 occurrence to 04-25. The projection should
+    // skip 04-15 and instead drop the balance on 04-25; 05-15 keeps
+    // its place. A regression here would either double-count (apply
+    // both 04-15 and 04-25) or silently skip the rescheduled hit.
+    await db.insert(forecastResolutionsTable).values({
+      userId: TEST_USER,
+      recurringItemId: item.id,
+      occurrenceDate: "2026-04-15",
+      status: "rescheduled",
+      rescheduledTo: "2026-04-25",
+    });
+
+    const sig = await computeCashSignal(TEST_USER, {
+      fromDate: "2026-04-01",
+      horizonDays: 60, // covers 04-25 and 05-15
+    });
+
+    // Both events still hit (just one of them on a moved date):
+    // 1000 - 200 (04-25) - 200 (05-15) = 600.
+    expect(sig.endingBalance).toBe("600.00");
+    expect(sig.projectedExpenses).toBe("400.00");
+    // Lowest is reached at the second hit, 05-15.
+    expect(sig.lowestProjected).toBe("600.00");
+    expect(sig.lowestDate).toBe("2026-05-15");
+    // The rescheduled date is surfaced in the chart's per-day events,
+    // and the original 04-15 is NOT.
+    const eventDates = (sig.events ?? []).map((e) => e.date);
+    expect(eventDates).toContain("2026-04-25");
+    expect(eventDates).toContain("2026-05-15");
+    expect(eventDates).not.toContain("2026-04-15");
+  });
+});
+
+describe("computeCashSignal — matched-txn bank filtering", () => {
+  async function addPlaidAccount(opts: {
+    externalId: string;
+    name: string;
+    institutionSlug?: string;
+  }): Promise<{ id: string; externalId: string }> {
+    const [item] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId: TEST_USER,
+        itemId: `item-${randomUUID()}`,
+        accessToken: "test-token",
+        institutionSlug: opts.institutionSlug ?? "chase",
+      })
+      .returning();
+    const [acct] = await db
+      .insert(plaidAccountsTable)
+      .values({
+        userId: TEST_USER,
+        itemId: item.id,
+        accountId: opts.externalId,
+        name: opts.name,
+      })
+      .returning();
+    return { id: acct.id, externalId: acct.accountId };
+  }
+
+  async function addTxn(opts: {
+    occurredOn: string;
+    amount: string;
+    plaidAccountId?: string | null;
+    source?: string;
+  }): Promise<string> {
+    const [t] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: opts.occurredOn,
+        description: "matched",
+        amount: opts.amount,
+        plaidAccountId: opts.plaidAccountId ?? null,
+        source: opts.source ?? "manual",
+      })
+      .returning({ id: transactionsTable.id });
+    return t.id;
+  }
+
+  it("suppresses the plan item when matched_txn_id belongs to the configured Chase account", async () => {
+    const chase = await addPlaidAccount({
+      externalId: "chase-ext-1",
+      name: "Chase Checking",
+      institutionSlug: "chase",
+    });
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-04-01T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    // Wire the snapshot to the Chase account so isBankRow recognizes
+    // its external id.
+    await db
+      .update(forecastSettingsTable)
+      .set({ bankSnapshotAccountId: chase.id })
+      .where(eq(forecastSettingsTable.userId, TEST_USER));
+
+    const item = await addRecurring({ dayOfMonth: 15, amount: "200" });
+    // Real bank withdrawal already in the snapshot (dated before
+    // anchor so it doesn't itself add to projected items).
+    const chaseTxnId = await addTxn({
+      occurredOn: "2026-03-30",
+      amount: "-200",
+      plaidAccountId: chase.externalId,
+      source: "plaid:chase",
+    });
+    await db.insert(forecastResolutionsTable).values({
+      userId: TEST_USER,
+      recurringItemId: item.id,
+      occurrenceDate: "2026-04-15",
+      status: "matched",
+      matchedTxnId: chaseTxnId,
+    });
+
+    const sig = await computeCashSignal(TEST_USER, {
+      fromDate: "2026-04-01",
+      horizonDays: 60, // covers 04-15 and 05-15
+    });
+
+    // Chase match → 04-15 plan item is suppressed; only 05-15 hits.
+    expect(sig.endingBalance).toBe("800.00");
+    expect(sig.projectedExpenses).toBe("200.00");
+    expect(sig.lowestDate).toBe("2026-05-15");
+  });
+
+  it("ignores a 'matched' resolution whose matched txn is on a non-Chase (Amex) account", async () => {
+    const chase = await addPlaidAccount({
+      externalId: "chase-ext-2",
+      name: "Chase Checking",
+      institutionSlug: "chase",
+    });
+    const amex = await addPlaidAccount({
+      externalId: "amex-ext-1",
+      name: "Amex Card",
+      institutionSlug: "amex",
+    });
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-04-01T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await db
+      .update(forecastSettingsTable)
+      .set({ bankSnapshotAccountId: chase.id })
+      .where(eq(forecastSettingsTable.userId, TEST_USER));
+
+    const item = await addRecurring({ dayOfMonth: 15, amount: "200" });
+    // Legacy resolution: someone matched the planned bill against an
+    // Amex charge. The bank projection MUST ignore this match — the
+    // bill still has to come out of Chase.
+    const amexTxnId = await addTxn({
+      occurredOn: "2026-03-30",
+      amount: "-200",
+      plaidAccountId: amex.externalId,
+      source: "plaid:amex",
+    });
+    await db.insert(forecastResolutionsTable).values({
+      userId: TEST_USER,
+      recurringItemId: item.id,
+      occurrenceDate: "2026-04-15",
+      status: "matched",
+      matchedTxnId: amexTxnId,
+    });
+
+    const sig = await computeCashSignal(TEST_USER, {
+      fromDate: "2026-04-01",
+      horizonDays: 60,
+    });
+
+    // Amex match is filtered out → both 04-15 and 05-15 apply:
+    // 1000 - 200 - 200 = 600.
+    expect(sig.endingBalance).toBe("600.00");
+    expect(sig.projectedExpenses).toBe("400.00");
+    expect(sig.lowestDate).toBe("2026-05-15");
+  });
+});
