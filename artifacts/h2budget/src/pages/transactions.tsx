@@ -1645,7 +1645,12 @@ export default function TransactionsPage() {
                           Categorize first
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(tx)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleOpenEdit(tx)}
+                        data-testid={`button-edit-tx-${tx.id}`}
+                      >
                         <Edit2 className="w-4 h-4 text-muted-foreground" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleDelete(tx.id)}>
