@@ -230,6 +230,16 @@ async function applyLiabilityToDebt(
     if (debt.originalBalance == null) {
       patch.originalBalance = acct.liabilityBalance;
     }
+    // (#292) Auto-archive when Plaid reports the balance hit zero so the
+    // Bills "Stops at payoff" celebratory row fires automatically. Without
+    // this the user has to manually flip status='archived' for the row to
+    // appear, and most paid-off debts would silently slip past it.
+    if (
+      debt.status === "active" &&
+      Number(acct.liabilityBalance) <= 0.005
+    ) {
+      patch.status = "archived";
+    }
   }
   if (allowApr && acct.liabilityApr != null) {
     validateAprDecimal(acct.liabilityApr);
@@ -522,6 +532,19 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
     a !== undefined && String(a) !== String(b);
   if (changed(parsed.data.balance, current.balance))
     overrides.balanceSource = "manual";
+  // (#292) Auto-archive when a manual balance edit zeroes out an active
+  // debt so the Bills "Stops at payoff" celebratory row fires without
+  // requiring the user to also flip the status by hand. We only do this
+  // when the user didn't already specify a status in the same patch, so
+  // an explicit status='active' (e.g. un-archive) still wins.
+  if (
+    parsed.data.balance !== undefined &&
+    Number(parsed.data.balance) <= 0.005 &&
+    current.status === "active" &&
+    parsed.data.status === undefined
+  ) {
+    overrides.status = "archived";
+  }
   if (changed(parsed.data.apr, current.apr))
     overrides.aprSource = "manual";
   if (changed(parsed.data.minPayment, current.minPayment))
