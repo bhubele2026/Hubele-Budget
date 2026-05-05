@@ -1272,53 +1272,77 @@ function BudgetLineRow({
               </div>
             ) : (
               <>
+                {/* Running total — accumulates chronologically (oldest →
+                    newest) so the newest row at the top shows the full
+                    category total, and each older row shows what was spent
+                    up to that point. Helps answer "which week added up the
+                    most?" at a glance for high-traffic categories. */}
                 <div
                   className="space-y-0.5 max-h-64 overflow-y-auto pr-1"
                   data-testid={`actuals-list-${line.categoryId}`}
                 >
-                  {contributingTxns.slice(0, 25).map((t) => {
-                    const amt = Number(t.amount);
-                    return (
-                      <div
-                        key={t.id}
-                        className="flex items-start justify-between gap-2 px-2 py-1.5 rounded hover:bg-muted/40"
-                        data-testid={`actuals-row-${t.id}`}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="text-xs font-medium truncate">{t.description}</div>
-                          <div className="text-[10px] text-muted-foreground">
-                            {t.occurredOn}
-                            {(() => {
-                              const lbl = friendlySourceLabel(t.source);
-                              return lbl ? ` · ${lbl}` : "";
-                            })()}
-                          </div>
-                        </div>
+                  {(() => {
+                    const runningById = new Map<string, number>();
+                    let acc = 0;
+                    for (let i = contributingTxns.length - 1; i >= 0; i--) {
+                      const t = contributingTxns[i];
+                      acc += Number(t.amount);
+                      runningById.set(t.id, acc);
+                    }
+                    return contributingTxns.slice(0, 25).map((t) => {
+                      const amt = Number(t.amount);
+                      const running = runningById.get(t.id) ?? amt;
+                      return (
                         <div
-                          className={cn(
-                            "text-xs font-mono tabular-nums whitespace-nowrap",
-                            amt < 0 ? "text-rose-700" : "text-emerald-700",
-                          )}
+                          key={t.id}
+                          className="flex items-start justify-between gap-2 px-2 py-1.5 rounded hover:bg-muted/40"
+                          data-testid={`actuals-row-${t.id}`}
                         >
-                          {formatCurrency(amt)}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium truncate">{t.description}</div>
+                            <div className="text-[10px] text-muted-foreground">
+                              {t.occurredOn}
+                              {(() => {
+                                const lbl = friendlySourceLabel(t.source);
+                                return lbl ? ` · ${lbl}` : "";
+                              })()}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end whitespace-nowrap">
+                            <div
+                              className={cn(
+                                "text-xs font-mono tabular-nums",
+                                amt < 0 ? "text-rose-700" : "text-emerald-700",
+                              )}
+                            >
+                              {formatCurrency(amt)}
+                            </div>
+                            <div
+                              className="text-[10px] font-mono tabular-nums text-muted-foreground"
+                              title="Running total of this category (oldest through this row)"
+                              data-testid={`actuals-running-${t.id}`}
+                            >
+                              {formatCurrency(running)}
+                            </div>
+                          </div>
+                          {/* Task #295 — inline re-categorize affordance.
+                              Opens a category picker so a misfiled charge
+                              (e.g. Costco gas → Auto instead of Groceries)
+                              can be re-pointed without leaving the Budget
+                              page. The handler invalidates both the txn
+                              list and the current month so the popover
+                              total and the row's actual refresh in place. */}
+                          <ActualsRowReassignPicker
+                            tx={t}
+                            currentCategoryId={line.categoryId}
+                            allCategories={allCategories}
+                            onReassign={onReassignTxn}
+                            assigning={assigning}
+                          />
                         </div>
-                        {/* Task #295 — inline re-categorize affordance.
-                            Opens a category picker so a misfiled charge
-                            (e.g. Costco gas → Auto instead of Groceries)
-                            can be re-pointed without leaving the Budget
-                            page. The handler invalidates both the txn list
-                            and the current month so the popover total and
-                            the row's actual refresh in place. */}
-                        <ActualsRowReassignPicker
-                          tx={t}
-                          currentCategoryId={line.categoryId}
-                          allCategories={allCategories}
-                          onReassign={onReassignTxn}
-                          assigning={assigning}
-                        />
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                   {contributingTxns.length > 25 && (
                     <div className="text-[10px] text-muted-foreground text-center pt-1">
                       Showing 25 of {contributingTxns.length}
