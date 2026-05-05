@@ -354,6 +354,46 @@ export function suggestPlanMatchesForBank(
   return out.slice(0, limit);
 }
 
+/** Rank ALL pending/future plan rows by how well they match a single
+ *  bank row, returning a copy of the input sorted best-first. Used to
+ *  pre-sort the "Match to…" dropdown so users don't have to scan a
+ *  date-ordered list for the obvious match.
+ *
+ *  Scoring mirrors `suggestPlanMatchesForBank` (amount delta dominates,
+ *  date proximity tiebreaks, label-token overlap nudges) but with no
+ *  date-window filter so every candidate is reachable. Plans whose sign
+ *  doesn't match the bank row are ranked last (in their original order)
+ *  so callers can still expose them without losing the obvious filter.
+ */
+export function rankPlansForBank(
+  bank: Pick<BankLine, "amount" | "date" | "txn">,
+  plans: PlanLine[],
+): PlanLine[] {
+  const wantSign = Math.sign(bank.amount);
+  const targetMs = parseISO(bank.date);
+  const want = Math.abs(bank.amount);
+  const desc = (bank.txn.description ?? "").toLowerCase();
+
+  const scored = plans.map((p, idx) => {
+    const sameSign = wantSign !== 0 && Math.sign(p.amount) === wantSign;
+    const amountDelta = Math.abs(Math.abs(p.amount) - want);
+    const daysAway = Math.abs(parseISO(p.date) - targetMs) / DAY;
+    const tokens = (p.label ?? "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length >= 4);
+    const labelMatch = tokens.some((t) => desc.includes(t));
+    const score = amountDelta * 100 + daysAway - (labelMatch ? 2 : 0);
+    return { p, idx, sameSign, score };
+  });
+  scored.sort((a, b) => {
+    if (a.sameSign !== b.sameSign) return a.sameSign ? -1 : 1;
+    if (a.score !== b.score) return a.score - b.score;
+    return a.idx - b.idx;
+  });
+  return scored.map((s) => s.p);
+}
+
 /** Greedy bulk picker: from a map of bank txn id → ranked suggestions,
  *  return the set of (txnId, plan) pairs whose chosen suggestion is `high`
  *  confidence, ensuring no plan occurrence is assigned to two bank rows.

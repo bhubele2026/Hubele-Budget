@@ -81,6 +81,7 @@ import {
   monthKey,
   isBankTxn,
   suggestPlanMatchesForBank,
+  rankPlansForBank,
   pickConfidentBankMatches,
   shouldCelebrateClear,
   type LineRow,
@@ -187,6 +188,7 @@ function InboxCardView({
   categoryName,
   onUnplanned,
   onMatchPick,
+  onHoverChange,
   planRows,
   isOverlay,
 }: {
@@ -194,6 +196,7 @@ function InboxCardView({
   categoryName?: string | null;
   onUnplanned: () => void;
   onMatchPick: (planRow: PlanLine) => void;
+  onHoverChange?: (hovered: boolean) => void;
   planRows: PlanLine[];
   isOverlay?: boolean;
 }) {
@@ -211,6 +214,10 @@ function InboxCardView({
     <div
       ref={setNodeRef}
       style={style}
+      onMouseEnter={onHoverChange ? () => onHoverChange(true) : undefined}
+      onMouseLeave={onHoverChange ? () => onHoverChange(false) : undefined}
+      onFocus={onHoverChange ? () => onHoverChange(true) : undefined}
+      onBlur={onHoverChange ? () => onHoverChange(false) : undefined}
       className={`rounded-md border bg-card p-3 flex items-center gap-3 shadow-sm transition-opacity ${
         isDragging ? "opacity-30" : ""
       } ${isOverlay ? "shadow-lg ring-2 ring-primary/40 cursor-grabbing" : ""}`}
@@ -397,9 +404,10 @@ function PlanDropRow({
   activeDragId: string | null;
   payoff?: PayoffInfo;
   /**
-   * (#26) When a bank inbox card is being dragged, the row whose plan key
-   * matches the dragged card's top suggestion gets a tinted ring so the
-   * user can see exactly where to drop.
+   * (#26) When a bank inbox card is being dragged or hovered, the row whose
+   * plan key matches that card's top suggestion gets a tinted ring so the
+   * user can see exactly where to drop. Parent owns the "is this the best
+   * suggestion right now" decision so we don't recompute scoring per row.
    */
   isBestSuggestion?: boolean;
 }) {
@@ -409,8 +417,7 @@ function PlanDropRow({
     disabled: row.status === "matched" || row.status === "missed",
   });
   const isOver = droppable.isOver && activeDragId !== null;
-  const showSuggestion =
-    !isOver && isBestSuggestion && activeDragId !== null;
+  const showSuggestion = !isOver && isBestSuggestion;
   const canMove =
     !!onMove && (row.status === "pending_plan" || row.status === "future");
   return (
@@ -587,6 +594,9 @@ export default function ForecastPage() {
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [draftSnapshot, setDraftSnapshot] = useState("");
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  // (#26) Tracks which inbox card is currently hovered/focused so the
+  // matching plan row can light up before the user picks the card up.
+  const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
   const [reconciledNow, setReconciledNow] = useState(false);
   const [moveTarget, setMoveTarget] = useState<PlanLine | null>(null);
   const [moveDateDraft, setMoveDateDraft] = useState<string>("");
@@ -936,12 +946,14 @@ export default function ForecastPage() {
     [bankSuggestions],
   );
 
-  // (#26) When an inbox card is being dragged, derive the plan key
-  // (`itemId|date`) of its best suggestion so the matching plan row
-  // can render with a tinted ring even before the cursor enters it.
+  // (#26) When an inbox card is being dragged OR hovered/focused, derive the
+  // plan key (`itemId|date`) of its best suggestion so the matching plan row
+  // can render with a tinted ring even before the cursor enters it. Drag wins
+  // over hover so the highlight stays anchored to whatever's actively moving.
   const bestSuggestionPlanKey: string | null = useMemo(() => {
-    if (!activeDragId) return null;
-    const card = bankInbox.find((c) => c.id === activeDragId);
+    const cardId = activeDragId ?? hoveredCardId;
+    if (!cardId) return null;
+    const card = bankInbox.find((c) => c.id === cardId);
     if (!card) return null;
     const sugs = bankSuggestions.get(card.bank.txn.id) ?? [];
     const top = sugs.find(
@@ -949,7 +961,23 @@ export default function ForecastPage() {
     );
     if (!top) return null;
     return `${top.plan.itemId}|${top.plan.date}`;
-  }, [activeDragId, bankInbox, bankSuggestions]);
+  }, [activeDragId, hoveredCardId, bankInbox, bankSuggestions]);
+
+  // (#26) Per-bank-card pre-sorted plan options for the "Match to…" dropdown.
+  // We rank ALL pending plans by best match (amount → date → label nudge) so
+  // the obvious choice is always at the top of the list. Falls back to the
+  // empty list shape `Map.get` returns when a card isn't keyed.
+  const sortedPlansByCard = useMemo(() => {
+    const m = new Map<string, PlanLine[]>();
+    if (!register) return m;
+    const pendingPlans = register.allPlan.filter(
+      (r) => r.status === "pending_plan" || r.status === "future",
+    );
+    for (const c of bankInbox) {
+      m.set(c.bank.txn.id, rankPlansForBank(c.bank, pendingPlans));
+    }
+    return m;
+  }, [bankInbox, register]);
 
   // Window key for confetti persistence: from→to
   const windowKey = data ? `${data.fromDate}_${data.toDate}` : null;
@@ -2009,11 +2037,19 @@ export default function ForecastPage() {
                               onMatchPick={(p) =>
                                 matchInboxToPlan(card.bank.txn.id, p)
                               }
-                              planRows={planRows.filter(
-                                (r) =>
-                                  r.status === "pending_plan" ||
-                                  r.status === "future",
-                              )}
+                              onHoverChange={(hovered) =>
+                                setHoveredCardId((cur) =>
+                                  hovered ? card.id : cur === card.id ? null : cur,
+                                )
+                              }
+                              planRows={
+                                sortedPlansByCard.get(card.bank.txn.id) ??
+                                planRows.filter(
+                                  (r) =>
+                                    r.status === "pending_plan" ||
+                                    r.status === "future",
+                                )
+                              }
                             />
                             <SuggestionStrip
                               suggestions={sugs}
