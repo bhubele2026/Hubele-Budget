@@ -3,6 +3,7 @@ import { Redirect } from "wouter";
 import { SignIn, SignUp } from "@clerk/react";
 import { useCheckInvitation } from "@workspace/api-client-react";
 import { Mail } from "lucide-react";
+import { H2Logo } from "@/components/h2-logo";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -101,9 +102,29 @@ function PendingInvitationCheck() {
   );
 }
 
+function AuthBrandHeader() {
+  return (
+    <div
+      className="flex flex-col items-center gap-3 mb-2 text-center"
+      data-testid="auth-brand-header"
+    >
+      <H2Logo className="w-12 h-12 rounded-lg" />
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          H2 Budget
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Family finance, focused.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function SignInPage() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-5">
+      <AuthBrandHeader />
       <SignIn
         path={`${basePath}/sign-in`}
         routing="path"
@@ -123,7 +144,8 @@ export function SignUpPage() {
     return <Redirect to="/sign-in" />;
   }
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-5">
+      <AuthBrandHeader />
       <SignUp
         path={`${basePath}/sign-up`}
         routing="path"

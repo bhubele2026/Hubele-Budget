@@ -93,6 +93,8 @@ vi.mock("@workspace/api-client-react", () => {
     getListDashboardBudgetsQueryKey: () => ["dashboard-budgets"],
     getGetPlaidEnvironmentQueryKey: () => ["plaid-env"],
     getListPlaidItemsQueryKey: () => ["plaid-items"],
+    useListPlaidSyncAttempts: () => ({ data: undefined, isLoading: false, isError: false }),
+    getListPlaidSyncAttemptsQueryKey: (id: string) => ["plaid-sync-attempts", id],
   };
 });
 

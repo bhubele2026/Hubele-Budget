@@ -42,11 +42,16 @@ function SidebarContents({
 }) {
   return (
     <>
-      <div className="p-4 border-b border-sidebar-border flex items-center gap-3">
-        <H2Logo className="w-8 h-8 rounded" />
-        <span className="font-serif font-bold text-lg tracking-tight text-sidebar-foreground">
-          H2 Budget
-        </span>
+      <div className="px-5 py-4 border-b border-sidebar-border flex items-center gap-2.5">
+        <H2Logo className="w-8 h-8 rounded-md" />
+        <div className="flex flex-col leading-tight">
+          <span className="font-semibold text-[15px] tracking-tight text-sidebar-foreground">
+            H2 Budget
+          </span>
+          <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+            Family finance
+          </span>
+        </div>
       </div>
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
@@ -56,13 +61,13 @@ function SidebarContents({
               <span
                 onClick={onNavigate}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md transition-colors cursor-pointer text-sm font-medium",
+                  "flex items-center gap-3 px-3 py-2 rounded-md transition-colors cursor-pointer text-sm",
                   isActive
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent",
+                    ? "bg-sidebar-primary/10 text-sidebar-primary font-semibold"
+                    : "text-sidebar-foreground/80 font-medium hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
-                <item.icon className="w-4 h-4" />
+                <item.icon className={cn("w-4 h-4", isActive && "text-sidebar-primary")} />
                 <span className="flex-1">{item.name}</span>
               </span>
             </Link>
@@ -116,7 +121,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </SheetContent>
         </Sheet>
         <div
-          className="flex-1 min-w-0 text-center font-serif font-bold text-base tracking-tight text-sidebar-foreground truncate"
+          className="flex-1 min-w-0 text-center font-semibold text-base tracking-tight text-sidebar-foreground truncate"
           data-testid="text-mobile-page-title"
         >
           {currentPageTitle}

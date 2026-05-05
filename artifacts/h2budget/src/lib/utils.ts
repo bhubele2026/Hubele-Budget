@@ -15,6 +15,26 @@ export function formatCurrency(amount: string | number | undefined | null) {
   }).format(num);
 }
 
+// Returns the Tailwind class for positive / negative / zero money values,
+// resolving against the --positive and --negative tokens in index.css.
+export function moneyColorClass(
+  amount: string | number | undefined | null,
+  opts: { neutralAtZero?: boolean } = {},
+): string {
+  const num =
+    typeof amount === "string"
+      ? parseFloat(amount)
+      : typeof amount === "number"
+        ? amount
+        : 0;
+  if (!Number.isFinite(num) || (num === 0 && opts.neutralAtZero !== false)) {
+    return "text-muted-foreground";
+  }
+  return num > 0
+    ? "text-[hsl(var(--positive))]"
+    : "text-[hsl(var(--negative))]";
+}
+
 // Render a short, human-friendly "X ago" string for a past timestamp.
 // Used by the Forecast bank-snapshot card to show users that the hourly
 // Plaid auto-refresh actually ran (Task #285). `now` is injectable so
