@@ -7,12 +7,20 @@
  */
 
 export interface UncategorizeByIdsInput {
-  /** Whitelist of transaction ids whose categoryId should be cleared.
+  /**
+   * Whitelist of transaction ids whose categoryId should be cleared.
 Only rows owned by the requesting user are touched. An
 explicitly-empty list is a no-op so callers can pass through a
 degenerate Undo payload (e.g. a bulk that flipped 0 rows)
-without affecting unrelated data.
- */
+without affecting unrelated data. Capped at 1000 ids per
+request — a longer list is rejected with a 400 to prevent
+a runaway "Undo" from stalling the API; the Add-flow's bulk
+undo passes back exactly the ids it just touched, so the
+practical ceiling is whatever pattern matched, well below
+this cap.
+
+   * @maxItems 1000
+   */
   ids: string[];
   /**
    * Guard category — only rows whose categoryId still equals this

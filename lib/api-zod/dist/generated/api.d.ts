@@ -836,6 +836,7 @@ Reusable for any future "from anywhere" bulk that needs a null
 target.
 
  */
+export declare const uncategorizeTransactionsByIdsBodyIdsMax = 1000;
 export declare const UncategorizeTransactionsByIdsBody: zod.ZodObject<{
     ids: zod.ZodArray<zod.ZodString, "many">;
     fromCategoryId: zod.ZodNullable<zod.ZodString>;

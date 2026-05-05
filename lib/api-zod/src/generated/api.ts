@@ -423,11 +423,14 @@ Reusable for any future "from anywhere" bulk that needs a null
 target.
 
  */
+export const uncategorizeTransactionsByIdsBodyIdsMax = 1000;
+
 export const UncategorizeTransactionsByIdsBody = zod.object({
   ids: zod
     .array(zod.string())
+    .max(uncategorizeTransactionsByIdsBodyIdsMax)
     .describe(
-      "Whitelist of transaction ids whose categoryId should be cleared.\nOnly rows owned by the requesting user are touched. An\nexplicitly-empty list is a no-op so callers can pass through a\ndegenerate Undo payload (e.g. a bulk that flipped 0 rows)\nwithout affecting unrelated data.\n",
+      'Whitelist of transaction ids whose categoryId should be cleared.\nOnly rows owned by the requesting user are touched. An\nexplicitly-empty list is a no-op so callers can pass through a\ndegenerate Undo payload (e.g. a bulk that flipped 0 rows)\nwithout affecting unrelated data. Capped at 1000 ids per\nrequest — a longer list is rejected with a 400 to prevent\na runaway \"Undo\" from stalling the API; the Add-flow\'s bulk\nundo passes back exactly the ids it just touched, so the\npractical ceiling is whatever pattern matched, well below\nthis cap.\n',
     ),
   fromCategoryId: zod
     .string()

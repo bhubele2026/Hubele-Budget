@@ -24,6 +24,7 @@ import {
   ListTransactionsQueryParams,
   RecategorizeTransactionsByPatternBody,
   UncategorizeTransactionsByIdsBody,
+  uncategorizeTransactionsByIdsBodyIdsMax,
   BulkSetForecastFlagBody,
 } from "@workspace/api-zod";
 
@@ -737,6 +738,27 @@ router.post(
   "/transactions/uncategorize-by-ids",
   requireAuth,
   async (req, res): Promise<void> => {
+    // Pre-validate the ids array length so callers get a clear,
+    // field-specific 400 ("Too many ids: …") instead of the generic
+    // zod "Array must contain at most N element(s)" message. Today the
+    // Add-flow's bulk Undo passes back exactly the ids it just touched
+    // so the practical ceiling is whatever pattern matched, but a
+    // future caller (or a user crafting a request directly) could
+    // submit an arbitrarily-long list and stall this request — the
+    // cap shields the API from that runaway. Mirrors the
+    // `maxItems: 1000` documented on UncategorizeByIdsInput in the
+    // OpenAPI spec; the regenerated zod schema also enforces it as
+    // defense-in-depth.
+    const rawIds = (req.body as { ids?: unknown } | null | undefined)?.ids;
+    if (
+      Array.isArray(rawIds) &&
+      rawIds.length > uncategorizeTransactionsByIdsBodyIdsMax
+    ) {
+      res.status(400).json({
+        error: `Too many ids: ${rawIds.length} exceeds the cap of ${uncategorizeTransactionsByIdsBodyIdsMax} per request.`,
+      });
+      return;
+    }
     const parsed = UncategorizeTransactionsByIdsBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
