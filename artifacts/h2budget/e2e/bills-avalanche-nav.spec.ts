@@ -4,6 +4,7 @@ import {
   createTestUser,
   signInAndOpen,
 } from "./helpers/clerk";
+import { seedDebt } from "./helpers/api";
 
 const provisionedUserIds: string[] = [];
 
@@ -20,7 +21,16 @@ test.describe("Bills → Avalanche navigation (#76)", () => {
       provisionedUserIds,
     );
 
+    // Sign in first so `page.request` carries the Clerk session cookie,
+    // then seed a debt via API so the Bills page is guaranteed to render
+    // a debt-min row to click. Without this the spec would degrade into
+    // a no-op for fresh users with no data.
     await signInAndOpen(page, email, password, "/bills");
+    const debt = await seedDebt(page);
+
+    // Re-open Bills so the freshly-seeded debt is included in the page's
+    // initial query payload (the page only refetches on its own clock).
+    await page.goto("/bills");
 
     await expect(
       page.getByRole("heading", { name: /bills/i }),
@@ -28,25 +38,19 @@ test.describe("Bills → Avalanche navigation (#76)", () => {
 
     expect(new URL(page.url()).pathname).toBe("/bills");
 
-    const debtRows = page.locator('[data-testid^="row-debt-min-"]');
-    const count = await debtRows.count();
+    const row = page.getByTestId(`row-debt-min-${debt.id}`);
+    await expect(row).toBeVisible({ timeout: 15_000 });
 
-    if (count > 0) {
-      const firstRow = debtRows.first();
-      const testId = await firstRow.getAttribute("data-testid");
-      const debtId = testId?.replace("row-debt-min-", "") ?? "";
+    await row.click();
 
-      await firstRow.click();
+    await page.waitForURL(/\/avalanche\?focus=/, { timeout: 10_000 });
 
-      await page.waitForURL(/\/avalanche\?focus=/, { timeout: 10_000 });
+    const url = new URL(page.url());
+    expect(url.pathname).toBe("/avalanche");
+    expect(url.searchParams.get("focus")).toBe(debt.id);
 
-      const url = new URL(page.url());
-      expect(url.pathname).toBe("/avalanche");
-      expect(url.searchParams.get("focus")).toBe(debtId);
-
-      await expect(
-        page.getByRole("heading", { name: /debt avalanche/i }),
-      ).toBeVisible({ timeout: 15_000 });
-    }
+    await expect(
+      page.getByRole("heading", { name: /^avalanche$/i }),
+    ).toBeVisible({ timeout: 15_000 });
   });
 });
