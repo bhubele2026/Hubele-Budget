@@ -1,13 +1,19 @@
 import { useMemo } from "react";
-import { useListPlaidItems } from "@workspace/api-client-react";
+import {
+  useListPlaidItems,
+  type PlaidItemDetail,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, AlertTriangle } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { RefreshCw, AlertTriangle, Link2 } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { usePlaidSync, formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
-import {
-  PlaidReconnectButton,
-  isPlaidReauthCode,
-} from "@/components/plaid-reconnect-button";
+import { PlaidReconnectButton } from "@/components/plaid-reconnect-button";
+import { findPlaidItemsNeedingReauth } from "@/components/plaid-reauth-banner";
 
 export function SyncButton({
   size = "sm",
@@ -19,26 +25,24 @@ export function SyncButton({
   const { data: plaidItems } = useListPlaidItems();
   const { runSync, isPending } = usePlaidSync();
 
-  const { mostRecent, hasItems, latestError, reauthItem } = useMemo(() => {
+  const { mostRecent, hasItems, latestError, reauthItems } = useMemo(() => {
     const items = plaidItems ?? [];
+    // (#214) Compute the *full* set of items that need re-authentication so the
+    // header chip's popover can list every broken bank, not just the first one
+    // we happened to iterate to. Power users with two simultaneously-broken
+    // banks now get a per-item Reconnect button for each, all from one place.
+    const { items: reauth } = findPlaidItemsNeedingReauth(items);
     if (items.length === 0) {
       return {
         mostRecent: null as Date | null,
         hasItems: false,
         latestError: null as string | null,
-        reauthItem: null as
-          | { id: string; institutionName: string | null }
-          | null,
+        reauthItems: reauth,
       };
     }
     let recent: Date | null = null;
     let recentForError: Date | null = null;
     let latest: string | null = null;
-    // Pick the first item that needs re-authentication so we can render a
-    // single Reconnect button next to the chip. (Multi-item users with two
-    // simultaneously-broken banks are extremely rare; one button is fine
-    // and the second will surface on the next sync after the first is fixed.)
-    let reauth: { id: string; institutionName: string | null } | null = null;
     for (const it of items) {
       if (it.lastSyncedAt) {
         const d = new Date(it.lastSyncedAt);
@@ -52,11 +56,13 @@ export function SyncButton({
           if (stamp) recentForError = stamp;
         }
       }
-      if (!reauth && isPlaidReauthCode(it.lastSyncErrorCode)) {
-        reauth = { id: it.id, institutionName: it.institutionName ?? null };
-      }
     }
-    return { mostRecent: recent, hasItems: true, latestError: latest, reauthItem: reauth };
+    return {
+      mostRecent: recent,
+      hasItems: true,
+      latestError: latest,
+      reauthItems: reauth,
+    };
   }, [plaidItems]);
 
   if (!hasItems) return null;
@@ -73,12 +79,8 @@ export function SyncButton({
   return (
     <div className="flex flex-col items-end leading-tight">
       <div className="flex items-center gap-1.5">
-        {reauthItem ? (
-          <PlaidReconnectButton
-            itemId={reauthItem.id}
-            institutionName={reauthItem.institutionName}
-            size={size}
-          />
+        {reauthItems.length > 0 ? (
+          <ReauthPopover items={reauthItems} size={size} />
         ) : null}
         <Button
           type="button"
@@ -107,5 +109,90 @@ export function SyncButton({
         </span>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * (#214) Popover trigger + per-bank Reconnect list shown next to the Sync
+ * chip when one or more Plaid items report a re-auth error code
+ * (ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION, PENDING_DISCONNECT). The
+ * trigger label always says "Reconnect" so the single-broken-bank case
+ * looks identical to the old inline button; a small count badge is added
+ * only when there are 2+ banks to reconnect, signalling that more than one
+ * is hiding inside.
+ *
+ * We deliberately keep the popover narrow and list-only — clicking a row's
+ * Reconnect button still invokes <PlaidReconnectButton> which fires the
+ * existing update-link-token flow for that specific item id, so a user with
+ * two broken banks can fix both back-to-back without having to wait for the
+ * next sync to surface the second one.
+ */
+function ReauthPopover({
+  items,
+  size,
+}: {
+  items: PlaidItemDetail[];
+  size: "default" | "sm" | "lg" | "icon";
+}) {
+  const count = items.length;
+  const triggerTitle =
+    count === 1
+      ? `Reconnect ${items[0].institutionName ?? "your bank"} via Plaid`
+      : `${count} banks need reconnecting`;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size={size}
+          title={triggerTitle}
+          data-testid="button-plaid-reconnect-trigger"
+        >
+          <Link2 className="w-3.5 h-3.5 mr-1" />
+          Reconnect
+          {count > 1 ? (
+            <span
+              className="ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-none text-destructive-foreground"
+              data-testid="badge-plaid-reconnect-count"
+            >
+              {count}
+            </span>
+          ) : null}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-72 p-2"
+        data-testid="popover-plaid-reconnect"
+      >
+        <div className="px-2 pb-2 text-xs text-muted-foreground">
+          {count === 1
+            ? "1 bank needs reconnecting"
+            : `${count} banks need reconnecting`}
+        </div>
+        <ul className="flex flex-col gap-1">
+          {items.map((it) => (
+            <li
+              key={it.id}
+              className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-accent"
+              data-testid={`row-plaid-reconnect-${it.id}`}
+            >
+              <span
+                className="truncate text-sm"
+                title={it.institutionName ?? "Unnamed bank"}
+              >
+                {it.institutionName ?? "Unnamed bank"}
+              </span>
+              <PlaidReconnectButton
+                itemId={it.id}
+                institutionName={it.institutionName}
+                size="sm"
+              />
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }

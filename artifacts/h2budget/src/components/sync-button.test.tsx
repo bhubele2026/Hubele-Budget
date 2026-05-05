@@ -216,7 +216,7 @@ describe("SyncButton", () => {
     });
   });
 
-  it("shows a Reconnect button next to the chip when an item has lastSyncErrorCode === 'ITEM_LOGIN_REQUIRED'", () => {
+  it("shows a Reconnect popover trigger when an item has lastSyncErrorCode === 'ITEM_LOGIN_REQUIRED'", async () => {
     plaidItems = [
       {
         id: "i-bad",
@@ -227,14 +227,23 @@ describe("SyncButton", () => {
       },
     ];
     renderButton();
-    // Reconnect button is keyed off the item id so multi-bank users get the
-    // right link_token. It must render alongside the existing Sync button.
-    expect(screen.getByTestId("button-plaid-reconnect-i-bad")).toBeTruthy();
+    // The trigger sits alongside the existing Sync button.
+    const trigger = screen.getByTestId("button-plaid-reconnect-trigger");
+    expect(trigger).toBeTruthy();
     expect(screen.getByTestId("button-sync-plaid")).toBeTruthy();
     expect(screen.getByTestId("text-sync-error")).toBeTruthy();
+    // No badge for the single-broken-bank case — trigger looks identical to
+    // the old inline button.
+    expect(screen.queryByTestId("badge-plaid-reconnect-count")).toBeNull();
+    // Opening the popover surfaces the per-item Reconnect button keyed off
+    // the item id so multi-bank users get the right link_token.
+    fireEvent.click(trigger);
+    await waitFor(() => {
+      expect(screen.getByTestId("button-plaid-reconnect-i-bad")).toBeTruthy();
+    });
   });
 
-  it("shows a Reconnect button for PENDING_EXPIRATION too (other re-auth code)", () => {
+  it("shows a Reconnect popover trigger for PENDING_EXPIRATION too (other re-auth code)", async () => {
     plaidItems = [
       {
         id: "i-pending",
@@ -245,10 +254,58 @@ describe("SyncButton", () => {
       },
     ];
     renderButton();
-    expect(screen.getByTestId("button-plaid-reconnect-i-pending")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("button-plaid-reconnect-trigger"));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("button-plaid-reconnect-i-pending"),
+      ).toBeTruthy();
+    });
   });
 
-  it("does NOT show a Reconnect button for non-reauth errors (e.g. RATE_LIMIT_EXCEEDED)", () => {
+  it("(#214) lists every broken bank in the popover, not just the first", async () => {
+    plaidItems = [
+      {
+        id: "i-chase",
+        institutionName: "Chase",
+        lastSyncedAt: new Date().toISOString(),
+        lastSyncError: "the login details of this item have changed",
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+      },
+      {
+        id: "i-wells",
+        institutionName: "Wells Fargo",
+        lastSyncedAt: new Date().toISOString(),
+        lastSyncError: "consent expiring soon",
+        lastSyncErrorCode: "PENDING_EXPIRATION",
+      },
+      {
+        id: "i-ok",
+        institutionName: "Healthy Bank",
+        lastSyncedAt: new Date().toISOString(),
+        lastSyncError: null,
+        lastSyncErrorCode: null,
+      },
+    ];
+    renderButton();
+    const trigger = screen.getByTestId("button-plaid-reconnect-trigger");
+    // Multi-broken-bank case shows a count badge so the user knows there's
+    // more than one item hiding inside the popover.
+    const badge = screen.getByTestId("badge-plaid-reconnect-count");
+    expect(badge.textContent).toBe("2");
+    fireEvent.click(trigger);
+    await waitFor(() => {
+      expect(screen.getByTestId("row-plaid-reconnect-i-chase")).toBeTruthy();
+    });
+    // Both broken banks must be listed with their own per-item Reconnect
+    // button so the user can fix each from one place.
+    expect(screen.getByTestId("button-plaid-reconnect-i-chase")).toBeTruthy();
+    expect(screen.getByTestId("button-plaid-reconnect-i-wells")).toBeTruthy();
+    // The healthy item is not listed.
+    expect(screen.queryByTestId("row-plaid-reconnect-i-ok")).toBeNull();
+    expect(screen.queryByTestId("button-plaid-reconnect-i-ok")).toBeNull();
+  });
+
+  it("does NOT show the Reconnect popover for non-reauth errors (e.g. RATE_LIMIT_EXCEEDED)", () => {
     plaidItems = [
       {
         id: "i-rate",
@@ -259,12 +316,14 @@ describe("SyncButton", () => {
       },
     ];
     renderButton();
-    // The chip still shows, but no Reconnect — re-auth wouldn't fix this.
+    // The chip still shows, but no Reconnect trigger — re-auth wouldn't fix
+    // this.
+    expect(screen.queryByTestId("button-plaid-reconnect-trigger")).toBeNull();
     expect(screen.queryByTestId("button-plaid-reconnect-i-rate")).toBeNull();
     expect(screen.getByTestId("text-sync-error")).toBeTruthy();
   });
 
-  it("does NOT show a Reconnect button when an item is healthy (no error code)", () => {
+  it("does NOT show the Reconnect popover when every item is healthy (no error code)", () => {
     plaidItems = [
       {
         id: "i-ok",
@@ -275,6 +334,9 @@ describe("SyncButton", () => {
       },
     ];
     renderButton();
+    // Acceptance: when zero items need reconnect, no popover/button group is
+    // rendered — chip behaves exactly as it does today.
+    expect(screen.queryByTestId("button-plaid-reconnect-trigger")).toBeNull();
     expect(screen.queryByTestId("button-plaid-reconnect-i-ok")).toBeNull();
   });
 
