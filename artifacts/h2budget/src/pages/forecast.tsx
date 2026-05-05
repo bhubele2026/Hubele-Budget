@@ -76,7 +76,7 @@ import { CSS } from "@dnd-kit/utilities";
 import confetti from "canvas-confetti";
 import { useToast } from "@/hooks/use-toast";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, formatRelativeTime } from "@/lib/utils";
 import {
   buildLineRegister,
   filterForecastTxns,
@@ -132,6 +132,29 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+// Tiny "Last auto-updated 12 minutes ago" / "Set manually 3 hours ago"
+// label rendered under the bank balance on the Forecast page. Extracted
+// so the page-level test (Task #285) can render it without spinning up
+// the entire ForecastPage and its many query hooks.
+export function BankSnapshotFreshness({
+  source,
+  at,
+  now,
+}: {
+  source: "manual" | "plaid";
+  at: string;
+  now?: Date;
+}) {
+  const prefix =
+    source === "plaid" ? "Last auto-updated " : "Set manually ";
+  return (
+    <div data-testid="text-bank-snapshot-freshness">
+      {prefix}
+      {formatRelativeTime(at, now)}
+    </div>
+  );
+}
 
 function statusBadge(s: string) {
   const map: Record<string, { label: string; cls: string }> = {
@@ -2015,6 +2038,10 @@ export default function ForecastPage() {
                   {data.bankSnapshot.name ?? "Checking"}
                   {data.bankSnapshot.mask ? ` ••${data.bankSnapshot.mask}` : ""} ·{" "}
                   {formatDate(data.bankSnapshot.at.slice(0, 10))}
+                  <BankSnapshotFreshness
+                    source={data.bankSnapshot.source}
+                    at={data.bankSnapshot.at}
+                  />
                 </>
               ) : (
                 <>No snapshot — using starting balance</>
