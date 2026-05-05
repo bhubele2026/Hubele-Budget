@@ -1337,10 +1337,10 @@ export default function AmexPage() {
           onSourceFilterChange={setSourceFilter}
           sourceOptions={[
             { value: "all", label: "All Amex sources" },
-            { value: "amex", label: "amex" },
-            { value: "plaid:amex", label: "plaid:amex" },
-            { value: "manual", label: "manual" },
-            { value: "import", label: "import" },
+            { value: "plaid:amex", label: "Amex (Plaid)" },
+            { value: "amex", label: "Amex (CSV)" },
+            { value: "manual", label: "Manual" },
+            { value: "import", label: "Imported" },
           ]}
           categoryFilter={categoryFilter}
           onCategoryFilterChange={setCategoryFilter}
