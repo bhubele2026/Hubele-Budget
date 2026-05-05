@@ -450,7 +450,12 @@ export function pickConfidentBankMatches(
 
 export type BucketEntry = {
   id: string;
-  status: "matched" | "missed" | "ignored_unforecasted" | "unplanned";
+  status:
+    | "matched"
+    | "missed"
+    | "ignored_unforecasted"
+    | "unplanned"
+    | "rescheduled";
   date: string;
   label: string;
   amount: number;
@@ -458,6 +463,8 @@ export type BucketEntry = {
   recurringItemId?: string | null;
   occurrenceDate?: string | null;
   matchedTxnId?: string | null;
+  /** Destination date for rescheduled entries (where the occurrence was moved to). */
+  rescheduledTo?: string | null;
 };
 
 export function buildBucket(opts: {
@@ -471,10 +478,42 @@ export function buildBucket(opts: {
   if (closedMonths.has(monthFilter)) return [];
 
   const planByKey = new Map(allPlan.map((p) => [`${p.itemId}|${p.date}`, p]));
+  // Plans whose original occurrence has been rescheduled live in `allPlan`
+  // under their NEW date; we also need lookup by their ORIGINAL key so
+  // bucket rows about the move can recover the plan's label/amount.
+  const planByOriginalKey = new Map<string, PlanLine>();
+  for (const p of allPlan) {
+    const orig = p.originalDate ?? p.date;
+    planByOriginalKey.set(`${p.itemId}|${orig}`, p);
+  }
   const bankById = new Map(allBank.map((b) => [b.txn.id, b]));
 
   const out: BucketEntry[] = [];
   for (const r of resolutions) {
+    // Rescheduled overrides: surface them in the bucket of the ORIGINAL
+    // occurrence's month so users can review what they moved out and undo.
+    if (r.status === "rescheduled") {
+      if (!r.recurringItemId || !r.occurrenceDate || !r.rescheduledTo) continue;
+      const mk = monthKey(r.occurrenceDate);
+      if (mk !== monthFilter) continue;
+      const p = planByOriginalKey.get(
+        `${r.recurringItemId}|${r.occurrenceDate}`,
+      );
+      out.push({
+        id: r.id,
+        status: "rescheduled",
+        date: r.occurrenceDate,
+        label: p?.label ?? "",
+        amount: p?.amount ?? 0,
+        monthKey: mk,
+        recurringItemId: r.recurringItemId,
+        occurrenceDate: r.occurrenceDate,
+        matchedTxnId: null,
+        rescheduledTo: r.rescheduledTo,
+      });
+      continue;
+    }
+
     let date: string | null = null;
     let label = "";
     let amount = 0;

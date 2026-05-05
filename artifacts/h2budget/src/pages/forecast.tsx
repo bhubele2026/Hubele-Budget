@@ -2301,48 +2301,55 @@ export default function ForecastPage() {
             })()}
 
             {(() => {
-              const rescheduled = ((data?.resolutions ?? []) as Resolution[]).filter(
-                (r) => r.status === "rescheduled" && r.rescheduledTo && monthKey(r.rescheduledTo) === monthFilter,
-              );
-              if (rescheduled.length === 0) return null;
+              const moved = bucket.filter((b) => b.status === "rescheduled");
+              if (moved.length === 0) return null;
               return (
                 <Card data-testid="rescheduled-bucket-panel">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
                       <CalendarDays className="w-4 h-4 text-violet-600" />
-                      Rescheduled into {monthFilter}
+                      Moved from {monthFilter}
                       <Badge variant="outline" className="ml-1 text-[10px]">
-                        {rescheduled.length}
+                        {moved.length}
                       </Badge>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="divide-y divide-border">
-                      {rescheduled.map((r) => (
+                      {moved.map((b) => (
                         <div
-                          key={r.id}
+                          key={b.id}
                           className="p-4 flex items-center justify-between gap-3"
-                          data-testid={`rescheduled-row-${r.id}`}
+                          data-testid={`rescheduled-row-${b.id}`}
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             {statusBadge("rescheduled")}
                             <div className="min-w-0">
                               <div className="font-medium text-sm truncate">
-                                {r.recurringItemId ?? "—"}
+                                {b.label || "—"}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                {r.occurrenceDate} → {formatDate(r.rescheduledTo!)}
+                                {formatDate(b.date)} → {formatDate(b.rescheduledTo!)}
                               </div>
                             </div>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onUndo(r.id)}
-                            data-testid={`rescheduled-undo-${r.id}`}
-                          >
-                            Undo
-                          </Button>
+                          <div className="flex items-center gap-4">
+                            <span
+                              className={`font-medium tabular-nums ${
+                                b.amount < 0 ? "text-destructive" : "text-primary"
+                              }`}
+                            >
+                              {formatCurrency(b.amount)}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onUndo(b.id)}
+                              data-testid={`rescheduled-undo-${b.id}`}
+                            >
+                              Undo
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>

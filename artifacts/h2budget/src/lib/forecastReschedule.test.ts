@@ -202,6 +202,156 @@ describe("Missed bucket panel — buildBucket + Undo source rows", () => {
   });
 });
 
+describe("Moved-from bucket panel — buildBucket emits rescheduled rows", () => {
+  it("returns rescheduled overrides keyed by the ORIGINAL occurrence month", () => {
+    const events = [ev("rec-mv", "2026-05-20", -1200, "rent")];
+    const resolutions: Resolution[] = [
+      {
+        id: "mv-1",
+        recurringItemId: "rec-mv",
+        occurrenceDate: "2026-05-20",
+        status: "rescheduled",
+        matchedTxnId: null,
+        rescheduledTo: "2026-06-05",
+      },
+    ];
+    const register = buildLineRegister({ ...baseOpts, events, resolutions });
+    const may = buildBucket({
+      allPlan: register.allPlan,
+      allBank: register.allBank,
+      resolutions,
+      closedMonths: new Set<string>(),
+      monthFilter: "2026-05",
+    }).filter((b) => b.status === "rescheduled");
+    expect(may).toHaveLength(1);
+    expect(may[0].id).toBe("mv-1");
+    expect(may[0].label).toBe("rent");
+    expect(may[0].amount).toBe(-1200);
+    expect(may[0].date).toBe("2026-05-20");
+    expect(may[0].rescheduledTo).toBe("2026-06-05");
+  });
+
+  it("does NOT show the moved row in the destination month's bucket", () => {
+    const events = [ev("rec-mv2", "2026-05-20", -300, "internet")];
+    const resolutions: Resolution[] = [
+      {
+        id: "mv-2",
+        recurringItemId: "rec-mv2",
+        occurrenceDate: "2026-05-20",
+        status: "rescheduled",
+        matchedTxnId: null,
+        rescheduledTo: "2026-06-05",
+      },
+    ];
+    const register = buildLineRegister({ ...baseOpts, events, resolutions });
+    const jun = buildBucket({
+      allPlan: register.allPlan,
+      allBank: register.allBank,
+      resolutions,
+      closedMonths: new Set<string>(),
+      monthFilter: "2026-06",
+    }).filter((b) => b.status === "rescheduled");
+    expect(jun).toHaveLength(0);
+  });
+
+  it("falls back to empty label/zero amount when the original event is outside the loaded window", () => {
+    // No events loaded → planByOriginalKey can't recover the label, but the
+    // bucket still emits the row so the user can Undo.
+    const resolutions: Resolution[] = [
+      {
+        id: "mv-orphan",
+        recurringItemId: "rec-gone",
+        occurrenceDate: "2026-05-15",
+        status: "rescheduled",
+        matchedTxnId: null,
+        rescheduledTo: "2026-06-15",
+      },
+    ];
+    const register = buildLineRegister({
+      ...baseOpts,
+      events: [],
+      resolutions,
+    });
+    const may = buildBucket({
+      allPlan: register.allPlan,
+      allBank: register.allBank,
+      resolutions,
+      closedMonths: new Set<string>(),
+      monthFilter: "2026-05",
+    }).filter((b) => b.status === "rescheduled");
+    expect(may).toHaveLength(1);
+    expect(may[0].id).toBe("mv-orphan");
+    expect(may[0].label).toBe("");
+    expect(may[0].amount).toBe(0);
+    expect(may[0].rescheduledTo).toBe("2026-06-15");
+  });
+
+  it("hides the moved row when the original month is closed", () => {
+    const events = [ev("rec-mv3", "2026-05-20", -75, "phone")];
+    const resolutions: Resolution[] = [
+      {
+        id: "mv-3",
+        recurringItemId: "rec-mv3",
+        occurrenceDate: "2026-05-20",
+        status: "rescheduled",
+        matchedTxnId: null,
+        rescheduledTo: "2026-06-05",
+      },
+    ];
+    const register = buildLineRegister({ ...baseOpts, events, resolutions });
+    const may = buildBucket({
+      allPlan: register.allPlan,
+      allBank: register.allBank,
+      resolutions,
+      closedMonths: new Set<string>(["2026-05"]),
+      monthFilter: "2026-05",
+    });
+    expect(may).toEqual([]);
+  });
+
+  it("ignores rescheduled rows missing rescheduledTo / occurrenceDate / itemId", () => {
+    const resolutions: Resolution[] = [
+      {
+        id: "mv-bad-1",
+        recurringItemId: null,
+        occurrenceDate: "2026-05-20",
+        status: "rescheduled",
+        matchedTxnId: null,
+        rescheduledTo: "2026-06-05",
+      },
+      {
+        id: "mv-bad-2",
+        recurringItemId: "rec-x",
+        occurrenceDate: null,
+        status: "rescheduled",
+        matchedTxnId: null,
+        rescheduledTo: "2026-06-05",
+      },
+      {
+        id: "mv-bad-3",
+        recurringItemId: "rec-x",
+        occurrenceDate: "2026-05-20",
+        status: "rescheduled",
+        matchedTxnId: null,
+        rescheduledTo: null,
+      },
+    ];
+    const register = buildLineRegister({
+      ...baseOpts,
+      events: [],
+      resolutions,
+    });
+    const bucket = buildBucket({
+      allPlan: register.allPlan,
+      allBank: register.allBank,
+      resolutions,
+      closedMonths: new Set<string>(),
+      monthFilter: "2026-05",
+    });
+    expect(bucket.filter((b) => b.status === "rescheduled")).toEqual([]);
+  });
+});
+
 describe("Reschedule → match suppresses the original event exactly once", () => {
   function bankTxn(id: string, date: string, amount: string): Transaction {
     return {
