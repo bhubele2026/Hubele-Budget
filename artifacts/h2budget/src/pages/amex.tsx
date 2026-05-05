@@ -118,7 +118,25 @@ export default function AmexPage() {
   const [memberFilter, setMemberFilter] = useState<string>("all");
 
   const currentMonth = useMemo<MonthKey>(() => monthKeyOf(new Date()), []);
-  const [selectedMonth, setSelectedMonth] = useState<MonthKey>(currentMonth);
+  // Task #168 — Budget page deep-links into the Amex page when a row's
+  // actuals are Amex-dominated. Honor `?month=YYYY-MM-01` from that link
+  // so the user lands on the same month they were viewing on Budget.
+  const [selectedMonth, setSelectedMonth] = useState<MonthKey>(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const m = params.get("month");
+      if (m && /^\d{4}-\d{2}-01$/.test(m)) {
+        return monthKeyFromISO(m);
+      }
+    }
+    return currentMonth;
+  });
+
+  // Task #168 — apply `?category=<name>` once categories load. Mirrors the
+  // Transactions page implementation: matches by category name (the deep
+  // link doesn't know the user's category UUIDs) and only runs on first
+  // load so manual filter changes aren't clobbered on refetch.
+  const categoryUrlApplied = useRef(false);
 
   // Server query: fetch the union of [selected month] ∪ [selected month →
   // current month] so we have everything needed for the month's rows AND
@@ -236,6 +254,25 @@ export default function AmexPage() {
     const m = new Map<string, string>();
     for (const c of categories ?? []) m.set(c.id, c.name);
     return m;
+  }, [categories]);
+
+  // Task #168 — once categories load, resolve `?category=<name>` from the
+  // URL into the matching id and seed the filter dropdown with it. Guarded
+  // so it only fires once; subsequent dropdown changes by the user stick.
+  useEffect(() => {
+    if (categoryUrlApplied.current || !categories?.length) return;
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const catName = params.get("category");
+    if (!catName) {
+      categoryUrlApplied.current = true;
+      return;
+    }
+    const match = categories.find((c) => c.name === catName);
+    if (match) {
+      setCategoryFilter(match.id);
+    }
+    categoryUrlApplied.current = true;
   }, [categories]);
 
   // All visible Amex/source-filtered txns (server-filtered).

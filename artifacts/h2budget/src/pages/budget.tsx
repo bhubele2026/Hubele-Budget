@@ -25,6 +25,29 @@ type SourceBreakdownEntry = {
   count: number;
   amount: string;
 };
+
+/**
+ * Task #168 — picks the destination page for a category drill-down based
+ * on which source contributed the most transactions to the line's actuals.
+ * Amex-dominated lines deep-link into the Amex page (which only shows
+ * Amex rows); everything else (including ties and lines with no actuals
+ * yet) goes to the Transactions / Chase page so behavior matches the
+ * pre-Amex-aware experience.
+ *
+ * Exported so the budget tests (and any future call site) can exercise
+ * the routing decision without rendering the page.
+ */
+export function pickCategoryDrillDownHref(
+  categoryName: string,
+  monthStart: string,
+  sourceBreakdown: SourceBreakdownEntry[] | null | undefined,
+): string {
+  const breakdown = sourceBreakdown ?? [];
+  const bankCount = breakdown.find((b) => b.source === "Bank")?.count ?? 0;
+  const amexCount = breakdown.find((b) => b.source === "Amex")?.count ?? 0;
+  const base = amexCount > bankCount ? "/amex" : "/transactions";
+  return `${base}?category=${encodeURIComponent(categoryName)}&month=${monthStart}`;
+}
 type BudgetLineWithActual = {
   id?: string | null;
   categoryId: string;
@@ -819,6 +842,19 @@ function BudgetLineRow({
   const isAvalanchePayment = line.categoryName === "Avalanche payment";
   const isReadOnly = sourceKind !== "manual";
 
+  // Task #168 — pick the destination page for category drill-down based on
+  // where this line's actuals actually came from. See
+  // `pickCategoryDrillDownHref` above for the routing rule.
+  const drillDownHref = useMemo(
+    () =>
+      pickCategoryDrillDownHref(
+        line.categoryName,
+        monthStart,
+        line.sourceBreakdown,
+      ),
+    [line.sourceBreakdown, line.categoryName, monthStart],
+  );
+
   return (
     <div
       className="group grid grid-cols-12 gap-4 px-4 py-3 items-center hover:bg-muted/10"
@@ -830,7 +866,7 @@ function BudgetLineRow({
             type="button"
             className="font-medium truncate hover:underline decoration-dotted underline-offset-2 text-left"
             title={`View ${line.categoryName} transactions`}
-            onClick={() => navigate(`/transactions?category=${encodeURIComponent(line.categoryName)}`)}
+            onClick={() => navigate(drillDownHref)}
           >
             {line.categoryName}
           </button>
@@ -1100,14 +1136,10 @@ function BudgetLineRow({
                   <button
                     type="button"
                     className="text-xs text-violet-700 hover:underline dark:text-violet-300"
-                    onClick={() =>
-                      navigate(
-                        `/transactions?category=${encodeURIComponent(line.categoryName)}&month=${monthStart}`,
-                      )
-                    }
+                    onClick={() => navigate(drillDownHref)}
                     data-testid={`button-view-all-${line.categoryId}`}
                   >
-                    View all in Transactions →
+                    View all in {drillDownHref.startsWith("/amex") ? "Amex" : "Transactions"} →
                   </button>
                 </div>
               </>
