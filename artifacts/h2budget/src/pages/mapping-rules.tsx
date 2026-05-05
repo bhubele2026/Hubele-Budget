@@ -1442,6 +1442,17 @@ export default function MappingRulesPage() {
     const rule = (rules ?? []).find((r) => r.id === ruleId);
     if (!rule) return;
     if (rule.categoryId === newCategoryId) return;
+    // Snapshot the rule's pre-drop shape so the toast's Undo action can
+    // PATCH it back. We capture the full input shape (not just
+    // categoryId) because the PATCH endpoint requires the complete
+    // MappingRuleInput body — same reason the forward path echoes them.
+    const previousCategoryId = rule.categoryId;
+    const previousPattern = rule.pattern;
+    const previousMatchType = rule.matchType;
+    const previousPriority = rule.priority;
+    const previousCat = previousCategoryId
+      ? catById.get(previousCategoryId)
+      : null;
     const targetCat = catById.get(newCategoryId);
     updateRule.mutate(
       {
@@ -1461,6 +1472,45 @@ export default function MappingRulesPage() {
             description: targetCat
               ? `“${rule.pattern}” → ${targetCat.name}`
               : `“${rule.pattern}” moved to a new category.`,
+            action: (
+              <ToastAction
+                altText="Undo rule reassignment"
+                data-testid="action-undo-rule-reassign"
+                onClick={() => {
+                  updateRule.mutate(
+                    {
+                      id: ruleId,
+                      data: {
+                        pattern: previousPattern,
+                        matchType: previousMatchType,
+                        categoryId: previousCategoryId,
+                        priority: previousPriority,
+                      },
+                    },
+                    {
+                      onSuccess: () => {
+                        invalidateRules();
+                        toast({
+                          title: "Reassignment undone",
+                          description: previousCat
+                            ? `“${previousPattern}” → ${previousCat.name}`
+                            : `“${previousPattern}” moved back to its previous category.`,
+                        });
+                      },
+                      onError: (e) => {
+                        toast({
+                          title: "Couldn't undo reassignment",
+                          description: (e as Error).message,
+                          variant: "destructive",
+                        });
+                      },
+                    },
+                  );
+                }}
+              >
+                Undo
+              </ToastAction>
+            ),
           });
         },
         onError: (err) => {
