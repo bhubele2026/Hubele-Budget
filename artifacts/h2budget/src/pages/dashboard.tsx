@@ -510,7 +510,7 @@ function DebtProgressCard({
   );
 }
 
-function ReimbursementsBox({
+export function ReimbursementsBox({
   transactions,
   isLoading,
   today,
