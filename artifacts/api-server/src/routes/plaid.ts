@@ -32,6 +32,7 @@ import {
   syncPlaidItem,
   syncAllForUser,
 } from "../lib/plaidSync";
+import { scheduleSyncForItem } from "../lib/plaidSyncScheduler";
 import { sendExpirationRemindersForUser } from "../lib/plaidExpirationReminder";
 import { PLAID_REAUTH_ERROR_CODES as PLAID_REAUTH_ERROR_CODES_LIB } from "../lib/plaidReauthCodes";
 import { verifyPlaidWebhook } from "../lib/plaidWebhookVerify";
@@ -1260,11 +1261,13 @@ router.post("/plaid/webhook", async (req, res): Promise<void> => {
       webhook_code === "INITIAL_UPDATE" ||
       webhook_code === "HISTORICAL_UPDATE"
     ) {
-      try {
-        await syncPlaidItem(item.userId, item.id);
-      } catch (e) {
-        req.log.error({ err: e }, "Webhook-triggered sync failed");
-      }
+      // Plaid often fires SYNC_UPDATES_AVAILABLE several times in quick
+      // succession (one per transaction batch). Hand off to a per-item
+      // scheduler that debounces a burst into a single syncPlaidItem call
+      // and records a trailing rerun if more webhooks arrive while one is
+      // already in-flight. The handler returns 200 immediately — the sync
+      // runs in the background.
+      scheduleSyncForItem(item.userId, item.id);
     }
   } else if (webhook_type === "ITEM") {
     if (webhook_code === "ERROR") {

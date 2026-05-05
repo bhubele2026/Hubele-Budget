@@ -66,10 +66,18 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import plaidRouter from "../routes/plaid";
+import {
+  _flushPlaidSyncSchedulerForTests,
+  _resetPlaidSyncSchedulerForTests,
+} from "../lib/plaidSyncScheduler";
 
 // Disable webhook signature verification for this suite — the verifier path
 // is exercised separately in plaidWebhookVerify.unit.test.ts.
 process.env.PLAID_WEBHOOK_VERIFICATION_DISABLED = "true";
+// Use a small but non-zero debounce window so a burst of webhooks fired
+// concurrently in a test all land before the timer fires. Tests then call
+// `_flushPlaidSyncSchedulerForTests()` to drain it immediately.
+process.env.PLAID_SYNC_DEBOUNCE_MS = "100";
 
 const app = express();
 app.use(express.json());
@@ -132,11 +140,13 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cleanup();
+  _resetPlaidSyncSchedulerForTests();
   await new Promise<void>((res) => server.close(() => res()));
 });
 
 beforeEach(async () => {
   await cleanup();
+  _resetPlaidSyncSchedulerForTests();
   transactionsSyncCalls.length = 0;
   itemGetCalls.length = 0;
   transactionsSyncMock = async () => ({
@@ -167,7 +177,56 @@ describe("POST /plaid/webhook — TRANSACTIONS events", () => {
       }),
     });
     expect(res.status).toBe(200);
+    await _flushPlaidSyncSchedulerForTests();
     expect(transactionsSyncCalls).toEqual([{ access_token: accessToken }]);
+  });
+
+  it("coalesces a burst of SYNC_UPDATES_AVAILABLE webhooks into a single syncPlaidItem call", async () => {
+    // Plaid commonly fires SYNC_UPDATES_AVAILABLE several times in quick
+    // succession (one per transaction batch). The webhook handler debounces
+    // these per-item so we only advance the cursor once.
+    const { externalItemId, accessToken } = await seedItem();
+
+    const burst = await Promise.all(
+      Array.from({ length: 5 }).map(() =>
+        fetch(`${baseUrl}/plaid/webhook`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            webhook_type: "TRANSACTIONS",
+            webhook_code: "SYNC_UPDATES_AVAILABLE",
+            item_id: externalItemId,
+          }),
+        }),
+      ),
+    );
+    for (const r of burst) expect(r.status).toBe(200);
+
+    await _flushPlaidSyncSchedulerForTests();
+    expect(transactionsSyncCalls).toEqual([{ access_token: accessToken }]);
+  });
+
+  it("dedupes per item — concurrent webhooks for two items each yield exactly one sync", async () => {
+    const a = await seedItem();
+    const b = await seedItem();
+
+    await Promise.all(
+      [a, a, a, b, b].map((seed) =>
+        fetch(`${baseUrl}/plaid/webhook`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            webhook_type: "TRANSACTIONS",
+            webhook_code: "SYNC_UPDATES_AVAILABLE",
+            item_id: seed.externalItemId,
+          }),
+        }),
+      ),
+    );
+
+    await _flushPlaidSyncSchedulerForTests();
+    const tokens = transactionsSyncCalls.map((c) => c.access_token).sort();
+    expect(tokens).toEqual([a.accessToken, b.accessToken].sort());
   });
 
   it("ignores TRANSACTIONS webhook codes we do not handle (e.g. RECURRING_*)", async () => {
@@ -182,6 +241,7 @@ describe("POST /plaid/webhook — TRANSACTIONS events", () => {
       }),
     });
     expect(res.status).toBe(200);
+    await _flushPlaidSyncSchedulerForTests();
     expect(transactionsSyncCalls).toEqual([]);
   });
 
@@ -196,6 +256,7 @@ describe("POST /plaid/webhook — TRANSACTIONS events", () => {
       }),
     });
     expect(res.status).toBe(200);
+    await _flushPlaidSyncSchedulerForTests();
     expect(transactionsSyncCalls).toEqual([]);
   });
 
