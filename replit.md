@@ -41,6 +41,32 @@ Currently hosts the **H2 Family Budget** application — a personal/family budge
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
+## Plaid OAuth redirect URI
+
+Plaid requires the `redirect_uri` we send in `linkTokenCreate` to match
+an entry on the Plaid dashboard's "Allowed redirect URIs" list **exactly**.
+The H2 Family Budget app's OAuth return route is `/plaid-oauth` (see
+`artifacts/h2budget/src/App.tsx` and `artifacts/h2budget/src/pages/plaid-oauth.tsx`).
+Non-OAuth banks bypass this and still link successfully, which is why
+misconfiguration here is silent — but every OAuth institution will fail
+to return to the app.
+
+Set the env var and dashboard entry to one of these canonical values:
+
+- **Production**: `PLAID_REDIRECT_URI=https://<your-deployment-host>/plaid-oauth`
+- **Replit dev**: `PLAID_REDIRECT_URI=https://<your-repl-domain>/plaid-oauth`
+  (the same value also goes into the Plaid dashboard for the sandbox client)
+
+The exact string you set in `PLAID_REDIRECT_URI` must be added — character
+for character, including scheme and trailing path with no extra slash —
+to the Plaid dashboard at **Team Settings → API → Allowed redirect URIs**
+for the matching environment (Sandbox / Development / Production).
+
+The API server logs a loud warning at boot if `PLAID_REDIRECT_URI` is set
+to a value that does not end in `/plaid-oauth`, so this misconfiguration
+cannot sit silently. Leaving it unset is allowed (Plaid Link skips OAuth
+mode entirely), but in that case OAuth banks like Chase will not work.
+
 ## Plaid product configuration
 
 This app runs with **`transactions` only** by default. Optional products

@@ -6,7 +6,7 @@ import {
 } from "@workspace/db";
 import { plaid } from "./plaid";
 import { logger } from "./logger";
-import { extractPlaidError } from "./plaidSync";
+import { extractPlaidError, plaidLogContext } from "./plaidSync";
 import { recordPlaidSyncAttempt } from "./plaidSyncAttempts";
 
 export type LiabilityRow = {
@@ -100,7 +100,7 @@ export async function fetchLiabilitiesForItem(
     // whatever /accounts/get returned so balance refresh still works.
     if (isLiabilitiesNotEnabled(e)) {
       logger.warn(
-        { userId, itemRowId },
+        { userId, itemRowId, ...plaidLogContext(e, "/liabilities/get") },
         "Liabilities not enabled on this Plaid client — falling back to /accounts/get balances only",
       );
     } else {

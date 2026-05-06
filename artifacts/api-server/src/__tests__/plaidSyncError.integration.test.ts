@@ -198,6 +198,39 @@ describe("extractPlaidError helper", () => {
     expect(out.code).toBeNull();
     expect(out.message).toBe("plain string failure");
   });
+
+  it("synthesizes a friendly fallback when Plaid returned an HTTP error with no error_message body (the bug behind the '400' chip)", () => {
+    // Plaid axios error with status 400 but data was empty / had no
+    // error_message. The bare e.message is the unhelpful axios string;
+    // extractPlaidError MUST replace it with a friendly synthesized
+    // message so this never lands in plaid_items.last_sync_error.
+    const err = {
+      message: "Request failed with status code 400",
+      response: { status: 400, data: {} },
+    };
+    const out = extractPlaidError(err);
+    expect(out.code).toBeNull();
+    expect(out.message).not.toBe("Request failed with status code 400");
+    expect(out.message).toMatch(/Plaid returned 400/);
+  });
+
+  it("synthesizes a friendly fallback when Plaid returned an error_code but no error_message", () => {
+    // Some Plaid endpoints occasionally omit error_message even when
+    // error_code is present. The friendly fallback must include the
+    // code so support can still triage from the chip text.
+    const err = {
+      message: "Request failed with status code 400",
+      response: {
+        status: 400,
+        data: { error_code: "INVALID_REQUEST", error_type: "INVALID_REQUEST" },
+      },
+    };
+    const out = extractPlaidError(err);
+    expect(out.code).toBe("INVALID_REQUEST");
+    expect(out.message).toMatch(/Plaid returned 400/);
+    expect(out.message).toContain("INVALID_REQUEST");
+    expect(out.message).not.toBe("Request failed with status code 400");
+  });
 });
 
 describe("/plaid/sync error unwrapping", () => {
@@ -400,6 +433,51 @@ describe("/plaid/sync error unwrapping", () => {
     const found = body.find((b) => b.id === itemRowId);
     expect(found).toBeTruthy();
     expect(found?.consentExpirationAt).toBe(cutoff.toISOString());
+  });
+
+  it("never writes the literal 'Request failed with status code 400' to lastSyncError when Plaid returns an axios 400 with an empty body (chip-leak regression)", async () => {
+    // The bug: a follow-up Plaid call returned 400 with no
+    // error_code/error_message, the bare axios message landed in
+    // lastSyncError, and the Transactions page chip showed the
+    // unhelpful "Request failed with status code 400" string. The fix
+    // is in extractPlaidError — make sure it actually flows through to
+    // the persisted column (and the route response).
+    const { itemRowId } = await seedItem();
+    transactionsSyncMock = async () => {
+      throw {
+        message: "Request failed with status code 400",
+        response: { status: 400, data: {} },
+      };
+    };
+
+    const res = await fetch(`${baseUrl}/plaid/sync`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ itemId: itemRowId }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      items: Array<{ error: string | null }>;
+    };
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].error).not.toBe("Request failed with status code 400");
+    expect(body.items[0].error).toMatch(/Plaid returned 400/);
+
+    const [row] = await db
+      .select({
+        lastSyncError: plaidItemsTable.lastSyncError,
+        lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+      })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    // Persisted chip text MUST be the friendly synthesized fallback,
+    // never the bare axios string.
+    expect(row?.lastSyncError).not.toBe("Request failed with status code 400");
+    expect(row?.lastSyncError).toMatch(/Plaid returned 400/);
+    // No structured code was returned, so the column stays null —
+    // exactly so the Reconnect button (gated on PLAID_REAUTH_ERROR_CODES)
+    // does not light up for a non-actionable transient 400.
+    expect(row?.lastSyncErrorCode).toBeNull();
   });
 
   it("clears lastSyncError + lastSyncErrorCode back to null on a healthy sync (regression check)", async () => {

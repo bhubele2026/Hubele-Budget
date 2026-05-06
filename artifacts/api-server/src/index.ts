@@ -35,6 +35,7 @@ if (isProd) {
     );
   }
   logger.info({ plaidEnv: env }, "Plaid configured");
+  validatePlaidRedirectUri();
 } else if (anyPlaid) {
   if (!process.env.PLAID_CLIENT_ID || !process.env.PLAID_SECRET) {
     throw new Error(
@@ -44,6 +45,39 @@ if (isProd) {
   // Throws if PLAID_ENV is missing or invalid.
   const env = getPlaidEnv();
   logger.info({ plaidEnv: env }, "Plaid configured");
+  validatePlaidRedirectUri();
+}
+
+/**
+ * Plaid requires the URL we send in `linkTokenCreate({ redirect_uri })`
+ * to match an entry on the Plaid dashboard's "Allowed redirect URIs"
+ * list *exactly*. The H2 Family Budget app's OAuth return route is
+ * `/plaid-oauth` (see artifacts/h2budget/src/App.tsx) — if
+ * `PLAID_REDIRECT_URI` is set to anything else (e.g. `…/transactions`),
+ * non-OAuth banks still work but every OAuth bank silently fails to
+ * return to the app. Surface the misconfiguration loudly at boot so it
+ * cannot sit silently in production. See replit.md → "Plaid OAuth
+ * redirect URI" for the canonical setup instructions.
+ */
+function validatePlaidRedirectUri(): void {
+  const raw = process.env.PLAID_REDIRECT_URI?.trim();
+  if (!raw) return;
+  let path = "";
+  try {
+    path = new URL(raw).pathname.replace(/\/+$/, "");
+  } catch {
+    logger.warn(
+      { plaidRedirectUri: raw },
+      "PLAID_REDIRECT_URI is set but not a valid URL — OAuth bank linking will fail",
+    );
+    return;
+  }
+  if (path !== "/plaid-oauth") {
+    logger.warn(
+      { plaidRedirectUri: raw, expectedPath: "/plaid-oauth" },
+      "PLAID_REDIRECT_URI does not point at the app's /plaid-oauth route — OAuth banks will silently fail to return to the app. Set this to https://<host>/plaid-oauth and add the same URL to the Plaid dashboard's Allowed redirect URIs.",
+    );
+  }
 }
 
 const rawPort = process.env["PORT"];

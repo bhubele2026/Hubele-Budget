@@ -27,6 +27,8 @@ export function tokenEnv(token: string | null | undefined): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 import {
+  extractPlaidError,
+  plaidLogContext,
   refreshConsentExpirationForItem,
   refreshConsentExpirationForUser,
   syncPlaidItem,
@@ -328,11 +330,11 @@ router.post("/plaid/link-token", requireAuth, async (req, res): Promise<void> =>
     // page shows the real reason (e.g. "Your account is not enabled for
     // liabilities") instead of a generic axios "Request failed with
     // status code 400" message.
-    const ax = e as { response?: { data?: { error_code?: string; error_message?: string } } };
-    const plaidCode = ax?.response?.data?.error_code;
-    const plaidMsg = ax?.response?.data?.error_message;
-    const msg = plaidMsg ?? (e instanceof Error ? e.message : "Plaid error");
-    req.log.error({ err: e }, "Plaid link token failed");
+    const { code: plaidCode, message: msg } = extractPlaidError(e);
+    req.log.error(
+      { err: e, ...plaidLogContext(e, "/link/token/create") },
+      "Plaid link token failed",
+    );
     res.status(500).json({
       error: msg,
       ...(plaidCode ? { code: plaidCode } : {}),
@@ -386,13 +388,11 @@ router.post(
         expiration: resp.data.expiration,
       });
     } catch (e) {
-      const ax = e as {
-        response?: { data?: { error_code?: string; error_message?: string } };
-      };
-      const plaidCode = ax?.response?.data?.error_code;
-      const plaidMsg = ax?.response?.data?.error_message;
-      const msg = plaidMsg ?? (e instanceof Error ? e.message : "Plaid error");
-      req.log.error({ err: e }, "Plaid update link token failed");
+      const { code: plaidCode, message: msg } = extractPlaidError(e);
+      req.log.error(
+        { err: e, ...plaidLogContext(e, "/link/token/create (update)") },
+        "Plaid update link token failed",
+      );
       res.status(500).json({
         error: msg,
         ...(plaidCode ? { code: plaidCode } : {}),
@@ -449,7 +449,10 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
         resolvedName = inst.data.institution.name;
       }
     } catch (e) {
-      req.log.warn({ err: e }, "Could not resolve institution metadata");
+      req.log.warn(
+        { err: e, ...plaidLogContext(e, "/item/get | /institutions/get_by_id") },
+        "Could not resolve institution metadata",
+      );
     }
 
     const slug = institutionSlug(resolvedName);
@@ -511,7 +514,10 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
           });
       }
     } catch (e) {
-      req.log.warn({ err: e }, "accountsGet failed");
+      req.log.warn(
+        { err: e, ...plaidLogContext(e, "/accounts/get") },
+        "accountsGet failed",
+      );
     }
 
     // Initial sync (last 90 days come via /transactions/sync naturally)
@@ -525,7 +531,11 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       await fetchLiabilitiesForItem(req.userId!, item!.id);
     } catch (e) {
       req.log.warn(
-        { err: e, itemRowId: item!.id },
+        {
+          err: e,
+          itemRowId: item!.id,
+          ...plaidLogContext(e, "/liabilities/get | /accounts/get (post-exchange)"),
+        },
         "fetchLiabilitiesForItem failed during exchange — post-Link dialog may show empty fields",
       );
     }
@@ -564,8 +574,11 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       })),
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Plaid exchange failed";
-    req.log.error({ err: e }, "Plaid exchange error");
+    const { message: msg } = extractPlaidError(e);
+    req.log.error(
+      { err: e, ...plaidLogContext(e, "/item/public_token/exchange") },
+      "Plaid exchange error",
+    );
     res.status(500).json({ error: msg });
   }
 });
@@ -1534,8 +1547,11 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
       : await syncAllForUser(req.userId!);
     res.json({ items: results });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Sync failed";
-    req.log.error({ err: e }, "Plaid sync failed");
+    const { message: msg } = extractPlaidError(e);
+    req.log.error(
+      { err: e, ...plaidLogContext(e, "POST /plaid/sync") },
+      "Plaid sync failed",
+    );
     res.status(500).json({ error: msg });
   }
 });

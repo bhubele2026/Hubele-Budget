@@ -61,13 +61,59 @@ export function extractPlaidError(e: unknown): {
   code: string | null;
   message: string;
 } {
-  const ax = e as { response?: { data?: PlaidErrorBody } };
+  const ax = e as {
+    response?: { status?: number; data?: PlaidErrorBody };
+  };
   const body = ax?.response?.data;
   const code = body?.error_code ?? null;
   const plaidMsg = body?.error_message;
   if (plaidMsg) return { code, message: plaidMsg };
+  const status = ax?.response?.status;
+  // When Plaid returned an HTTP error but no structured body fields
+  // (or only an error_code, no error_message), synthesize a friendly
+  // message instead of leaking the bare axios "Request failed with
+  // status code 400" string into user-visible sync error chips.
+  if (typeof status === "number") {
+    return {
+      code,
+      message: code
+        ? `Plaid returned ${status}: ${code}`
+        : `Plaid returned ${status}: unknown error`,
+    };
+  }
   if (e instanceof Error) return { code, message: e.message };
   return { code, message: String(e) };
+}
+
+/**
+ * Build a structured log context for a failed Plaid API call. Captures
+ * the HTTP status, Plaid `request_id`, `error_code`, and the endpoint
+ * name so we can root-cause Plaid 4xx/5xx incidents from server logs
+ * alone without a second round trip to Plaid support.
+ */
+export function plaidLogContext(
+  e: unknown,
+  endpoint: string,
+): Record<string, unknown> {
+  const ax = e as {
+    response?: {
+      status?: number;
+      data?: {
+        request_id?: string;
+        error_code?: string;
+        error_message?: string;
+        error_type?: string;
+      };
+    };
+  };
+  return {
+    plaidEndpoint: endpoint,
+    plaidStatus: ax?.response?.status,
+    plaidRequestId: ax?.response?.data?.request_id,
+    plaidErrorCode: ax?.response?.data?.error_code,
+    plaidErrorType: ax?.response?.data?.error_type,
+    plaidErrorMessage: ax?.response?.data?.error_message,
+  };
 }
 
 function plaidAmountToSigned(t: PlaidTxn): string {
@@ -483,6 +529,7 @@ export async function syncPlaidItem(
             checkingPlaidAccountId,
             code,
             err: message,
+            ...plaidLogContext(e, "/accounts/balance/get"),
           },
           "Plaid bank-snapshot balance refresh failed",
         );
