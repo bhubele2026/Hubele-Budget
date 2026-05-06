@@ -158,6 +158,11 @@ overrides:
   # drizzle-kit uses esbuild internally on an older version that's vulnerable, this overrides it
   "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0"
   esbuild: "0.27.3"
+  # Pin a single Vite major across the workspace. vitest@4 declares a permissive
+  # vite peer range (^6 || ^7 || ^8); without this override, a future install
+  # could resolve a second Vite major alongside the catalog Vite 7, bloating
+  # node_modules and risking subtle plugin/type drift in vite.config.ts.
+  vite: "^7.3.2"
   # Pin a single copy of @types/react and @types/react-dom across the workspace.
   # Without this, transitive deps (e.g. expo / react-native / clerk peers) pull
   # in @types/react@19.1.x while our catalog resolves @types/react@19.2.x,
