@@ -12,7 +12,8 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Plus, Loader2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Plus, Loader2, CheckCircle2, AlertTriangle, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { PostLinkDebtDialog } from "@/components/post-link-debt-dialog";
@@ -30,6 +31,30 @@ export const PLAID_RETURN_TO_STORAGE_KEY = "h2:plaid:return_to";
 const POST_LINK_POLL_DELAYS_MS = [
   3_000, 4_000, 6_000, 8_000, 10_000, 12_000, 15_000, 15_000, 18_000,
 ];
+const POST_LINK_TOTAL_ATTEMPTS = POST_LINK_POLL_DELAYS_MS.length;
+
+// (#368) Live status surfaced by the inline post-link panel. Replaces
+// the silent ~90s background poll + lone "Pulling your transactions"
+// toast with an observable progress indicator so users at slow banks
+// (Chase, Citi) can tell the import is healthy and not stuck.
+type PostLinkPhase =
+  | "preparing"
+  | "polling"
+  | "ready"
+  | "still-preparing"
+  | "error";
+
+export type PostLinkStatus = {
+  phase: PostLinkPhase;
+  // Number of polls completed (0 before the first attempt fires, so
+  // the progress bar advances after each /transactions/sync result).
+  attempt: number;
+  totalAttempts: number;
+  institutionName: string | null;
+  added: number;
+  modified: number;
+  errorMessage: string | null;
+};
 
 export function PlaidLinkButton({
   onLinked,
@@ -43,6 +68,11 @@ export function PlaidLinkButton({
     PlaidLiabilityAccount[]
   >([]);
   const [postLinkOpen, setPostLinkOpen] = useState(false);
+  // (#368) Live status for the inline progress panel rendered below the
+  // button while the post-link poll loop runs. `null` = panel hidden.
+  const [postLinkStatus, setPostLinkStatus] = useState<PostLinkStatus | null>(
+    null,
+  );
   const createLinkToken = useCreatePlaidLinkToken();
   const exchange = useExchangePlaidPublicToken();
   const { data: plaidEnv } = useGetPlaidEnvironment();
@@ -83,60 +113,101 @@ export function PlaidLinkButton({
   // Plaid /transactions/sync usually returns empty on the very first call
   // for a freshly-linked item — the historical batch is staged on Plaid's
   // backend and only becomes available a few seconds later (normally
-  // signaled by an INITIAL_UPDATE webhook). Poll silently a few times so
-  // the user sees their data without manually clicking Sync.
-  const pollAfterLink = useCallback(async () => {
-    let totalAdded = 0;
-    let totalModified = 0;
-    let lastErrors: string[] = [];
-    for (const delay of POST_LINK_POLL_DELAYS_MS) {
-      await new Promise((r) => setTimeout(r, delay));
+  // signaled by an INITIAL_UPDATE webhook). Poll a few times with a live
+  // progress indicator so the user can see the import is healthy.
+  const pollAfterLink = useCallback(
+    async (justLinkedItemId: string | undefined, institutionName: string | null) => {
+      let totalAdded = 0;
+      let totalModified = 0;
+      let lastErrors: string[] = [];
+      for (let i = 0; i < POST_LINK_POLL_DELAYS_MS.length; i++) {
+        const delay = POST_LINK_POLL_DELAYS_MS[i];
+        await new Promise((r) => setTimeout(r, delay));
+        if (cancelledRef.current) return;
+        // Scope each poll to the just-linked item when we have its row id
+        // so we don't drag every other linked bank along for the ride
+        // every few seconds.
+        const totals = await runSync({
+          silent: true,
+          ...(justLinkedItemId ? { itemId: justLinkedItemId } : {}),
+        });
+        if (cancelledRef.current) return;
+        totalAdded += totals.added;
+        totalModified += totals.modified;
+        lastErrors = totals.errors;
+        const attemptNumber = i + 1;
+        if (totals.errors.length > 0) {
+          // Stop polling early on hard errors — no point hammering a
+          // failing item every few seconds. Surface the per-item error
+          // (already prefixed with "Plaid:" / institution name where
+          // available) inline so the panel itself tells the user what
+          // broke and what to do next.
+          setPostLinkStatus({
+            phase: "error",
+            attempt: attemptNumber,
+            totalAttempts: POST_LINK_TOTAL_ATTEMPTS,
+            institutionName,
+            added: totalAdded,
+            modified: totalModified,
+            errorMessage: totals.errors
+              .map((m) => (m.startsWith("Plaid:") ? m : `Plaid: ${m}`))
+              .join("; "),
+          });
+          return;
+        }
+        if (totals.added > 0 || totals.modified > 0) {
+          setPostLinkStatus({
+            phase: "ready",
+            attempt: attemptNumber,
+            totalAttempts: POST_LINK_TOTAL_ATTEMPTS,
+            institutionName,
+            added: totalAdded,
+            modified: totalModified,
+            errorMessage: null,
+          });
+          return;
+        }
+        // Still empty — keep polling but advance the progress so the
+        // user can see we're actively working.
+        setPostLinkStatus({
+          phase: "polling",
+          attempt: attemptNumber,
+          totalAttempts: POST_LINK_TOTAL_ATTEMPTS,
+          institutionName,
+          added: totalAdded,
+          modified: totalModified,
+          errorMessage: null,
+        });
+      }
       if (cancelledRef.current) return;
-      const totals = await runSync({ silent: true });
-      if (cancelledRef.current) return;
-      totalAdded += totals.added;
-      totalModified += totals.modified;
-      lastErrors = totals.errors;
-      // Stop polling early on hard errors — no point hammering a
-      // failing item every few seconds. The toast below will surface
-      // the underlying Plaid error and Reconnect CTA.
-      if (totals.errors.length > 0) break;
-      if (totals.added > 0 || totals.modified > 0) break;
-    }
-    if (cancelledRef.current) return;
-    if (totalAdded + totalModified > 0) {
-      const parts: string[] = [];
-      if (totalAdded > 0) parts.push(`Added ${totalAdded}`);
-      if (totalModified > 0) parts.push(`updated ${totalModified}`);
-      toast({
-        title: "Transactions imported",
-        description: `${parts.join(", ")} from your newly linked account.`,
+      // Ran out of attempts with no rows — Plaid is slow but not broken.
+      setPostLinkStatus({
+        phase: "still-preparing",
+        attempt: POST_LINK_TOTAL_ATTEMPTS,
+        totalAttempts: POST_LINK_TOTAL_ATTEMPTS,
+        institutionName,
+        added: totalAdded,
+        modified: totalModified,
+        errorMessage:
+          lastErrors.length > 0
+            ? lastErrors
+                .map((m) => (m.startsWith("Plaid:") ? m : `Plaid: ${m}`))
+                .join("; ")
+            : null,
       });
-    } else if (lastErrors.length > 0) {
-      toast({
-        title: "Sync had errors",
-        description: lastErrors
-          .map((m) => (m.startsWith("Plaid:") ? m : `Plaid: ${m}`))
-          .join("; "),
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Still preparing transactions",
-        description:
-          "Your bank hasn't finished its initial export yet. Click Sync again in a minute, or new charges will appear automatically on the next refresh.",
-      });
-    }
-  }, [runSync, toast]);
+    },
+    [runSync],
+  );
 
   const onSuccess = useCallback(
     (publicToken: string, metadata: { institution?: { institution_id?: string; name?: string } | null }) => {
+      const institutionName = metadata.institution?.name ?? null;
       exchange.mutate(
         {
           data: {
             publicToken,
             institutionId: metadata.institution?.institution_id ?? null,
-            institutionName: metadata.institution?.name ?? null,
+            institutionName,
           },
         },
         {
@@ -157,9 +228,17 @@ export function PlaidLinkButton({
               // ignore — query invalidation below will retry without refresh
             }
             qc.invalidateQueries({ queryKey: getListPlaidLiabilityAccountsQueryKey() });
-            toast({
-              title: "Account linked",
-              description: "Pulling your transactions — this can take a few seconds.",
+            // (#368) Show an inline status panel instead of a one-shot
+            // toast so the user can watch the import progress instead of
+            // staring at a stale "Pulling your transactions" message.
+            setPostLinkStatus({
+              phase: "preparing",
+              attempt: 0,
+              totalAttempts: POST_LINK_TOTAL_ATTEMPTS,
+              institutionName,
+              added: 0,
+              modified: 0,
+              errorMessage: null,
             });
             setLinkToken(null);
             clearStoredLinkToken();
@@ -182,7 +261,7 @@ export function PlaidLinkButton({
 
             // Fire-and-forget background poll so the freshly-linked item
             // populates as soon as Plaid finishes the initial export.
-            void pollAfterLink();
+            void pollAfterLink(justLinkedItemId, institutionName);
           },
           onError: (err) => {
             toast({
@@ -252,6 +331,12 @@ export function PlaidLinkButton({
         )}
         {label ?? "Link a Bank or Card"}
       </Button>
+      {postLinkStatus && (
+        <PostLinkProgressPanel
+          status={postLinkStatus}
+          onDismiss={() => setPostLinkStatus(null)}
+        />
+      )}
       {postLinkOpen && postLinkAccounts.length > 0 && (
         <PostLinkDebtDialog
           open={postLinkOpen}
@@ -263,5 +348,114 @@ export function PlaidLinkButton({
         />
       )}
     </>
+  );
+}
+
+function PostLinkProgressPanel({
+  status,
+  onDismiss,
+}: {
+  status: PostLinkStatus;
+  onDismiss: () => void;
+}) {
+  const {
+    phase,
+    attempt,
+    totalAttempts,
+    institutionName,
+    added,
+    modified,
+    errorMessage,
+  } = status;
+  const bank = institutionName?.trim() || "your bank";
+  const percent = Math.min(
+    100,
+    Math.round(((phase === "ready" || phase === "still-preparing" || phase === "error" ? totalAttempts : attempt) / totalAttempts) * 100),
+  );
+  const dismissible = phase === "ready" || phase === "still-preparing" || phase === "error";
+
+  let title: string;
+  let detail: string;
+  if (phase === "preparing") {
+    title = `Linked ${bank}`;
+    detail = "Preparing your transactions…";
+  } else if (phase === "polling") {
+    title = `Pulling transactions from ${bank}`;
+    detail = `Checking for data — attempt ${attempt} of ${totalAttempts}.`;
+  } else if (phase === "ready") {
+    const parts: string[] = [];
+    if (added > 0) parts.push(`${added} added`);
+    if (modified > 0) parts.push(`${modified} updated`);
+    title = `Ready — ${parts.join(", ")}`;
+    detail = `Imported from ${bank}.`;
+  } else if (phase === "still-preparing") {
+    title = "Still preparing";
+    detail = `${bank} hasn't finished its initial export yet. Try Sync again in a minute, or new charges will appear automatically on the next refresh.`;
+  } else {
+    title = "Sync had errors";
+    detail = errorMessage ?? `Couldn't pull from ${bank}.`;
+  }
+
+  const variant =
+    phase === "error"
+      ? "border-destructive/40 bg-destructive/5"
+      : phase === "ready"
+        ? "border-emerald-500/40 bg-emerald-500/5"
+        : "border-border bg-muted/30";
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="panel-post-link-progress"
+      data-phase={phase}
+      className={`mt-3 rounded-md border p-3 text-sm ${variant}`}
+    >
+      <div className="flex items-start gap-2">
+        <div className="mt-0.5 shrink-0">
+          {phase === "preparing" || phase === "polling" ? (
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+          ) : phase === "ready" ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          ) : (
+            <AlertTriangle
+              className={`w-4 h-4 ${phase === "error" ? "text-destructive" : "text-amber-600"}`}
+            />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div
+            className="font-medium leading-tight"
+            data-testid="text-post-link-title"
+          >
+            {title}
+          </div>
+          <div
+            className="text-muted-foreground mt-0.5"
+            data-testid="text-post-link-detail"
+          >
+            {detail}
+          </div>
+          {(phase === "preparing" || phase === "polling") && (
+            <Progress
+              value={percent}
+              className="mt-2 h-1.5"
+              data-testid="progress-post-link"
+            />
+          )}
+        </div>
+        {dismissible && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Dismiss"
+            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            data-testid="button-post-link-dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
