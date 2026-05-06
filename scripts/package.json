@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "check-singleton-deps": "tsx ./src/checkSingletonDeps.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
