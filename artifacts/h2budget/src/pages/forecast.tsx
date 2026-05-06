@@ -225,6 +225,7 @@ function InboxCardView({
     ? { transform: CSS.Translate.toString(transform) }
     : undefined;
 
+  const canOneClick = !isOverlay && !!oneClickSuggestion;
   return (
     <div
       ref={setNodeRef}
@@ -233,7 +234,30 @@ function InboxCardView({
       onMouseLeave={onHoverChange ? () => onHoverChange(false) : undefined}
       onFocus={onHoverChange ? () => onHoverChange(true) : undefined}
       onBlur={onHoverChange ? () => onHoverChange(false) : undefined}
-      className={`rounded-md border bg-card p-3 flex items-center gap-3 shadow-sm transition-opacity ${
+      tabIndex={canOneClick ? 0 : undefined}
+      data-testid={canOneClick ? `inbox-card-${card.bank.txn.id}` : undefined}
+      aria-keyshortcuts={canOneClick ? "Enter" : undefined}
+      aria-label={
+        canOneClick && oneClickSuggestion
+          ? `Inbox card for ${card.bank.txn.description}. Press Enter to match to ${oneClickSuggestion.label} on ${oneClickSuggestion.date}.`
+          : undefined
+      }
+      onKeyDown={(e) => {
+        if (
+          canOneClick &&
+          oneClickSuggestion &&
+          e.key === "Enter" &&
+          !e.shiftKey &&
+          !e.metaKey &&
+          !e.ctrlKey &&
+          !e.altKey &&
+          e.target === e.currentTarget
+        ) {
+          e.preventDefault();
+          onMatchPick(oneClickSuggestion);
+        }
+      }}
+      className={`rounded-md border bg-card p-3 flex items-center gap-3 shadow-sm transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
         isDragging ? "opacity-30" : ""
       } ${isOverlay ? "shadow-lg ring-2 ring-primary/40 cursor-grabbing" : ""}`}
     >
@@ -282,8 +306,9 @@ function InboxCardView({
               className="h-8 text-xs"
               onClick={() => onMatchPick(oneClickSuggestion)}
               data-testid={`one-click-match-${card.bank.txn.id}`}
-              title={`Match to ${oneClickSuggestion.label} on ${oneClickSuggestion.date}`}
-              aria-label={`Match to ${oneClickSuggestion.label} on ${oneClickSuggestion.date}`}
+              title={`Match to ${oneClickSuggestion.label} on ${oneClickSuggestion.date} (press Enter)`}
+              aria-label={`Match to ${oneClickSuggestion.label} on ${oneClickSuggestion.date}. Shortcut: Enter.`}
+              aria-keyshortcuts="Enter"
             >
               Match
             </Button>
