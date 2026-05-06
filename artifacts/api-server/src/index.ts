@@ -161,6 +161,40 @@ app.listen(port, (err) => {
     );
     logger.info("Plaid daily consent refresh scheduled");
 
+    // (#369) Daily malformed access_token sweep. The boot-time scan
+    // (`flagMalformedAccessTokens` above) only runs on server restart,
+    // and the per-call guards in sync / liabilities / consent refresh
+    // only fire when those code paths actually execute. Walking every
+    // `plaid_items` row once a day catches a poison token (env mismatch,
+    // truncated row, manual DB edit) within 24h instead of "whenever
+    // the next sync happens to touch this item" — which surfaces the
+    // Reconnect CTA before the user notices a stale balance and lets
+    // support spot a sudden jump in flagged items via the daily count
+    // log line. Runs at 03:02 UTC, ahead of the 03:17 consent refresh
+    // so a freshly flagged item is already in the needs-reconnect state
+    // by the time the consent sweep walks it (and short-circuits its
+    // own Plaid call). Best-effort — never crashes the cron tick.
+    cron.schedule(
+      "2 3 * * *",
+      () => {
+        flagMalformedAccessTokens()
+          .then(({ scanned, flagged }) => {
+            logger.info(
+              { scanned, flagged },
+              "Daily Plaid malformed access_token sweep complete",
+            );
+          })
+          .catch((err) => {
+            logger.error(
+              { err },
+              "Daily Plaid malformed access_token sweep failed",
+            );
+          });
+      },
+      { timezone: "UTC" },
+    );
+    logger.info("Plaid daily malformed access_token sweep scheduled");
+
     // (#262) Daily disconnect reminder sweep. Walks every active Plaid
     // item across every user, finds those whose consent_expiration_time
     // falls inside the alert window (3 days by default), and emails the
