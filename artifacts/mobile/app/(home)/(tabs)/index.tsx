@@ -28,6 +28,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+import { usePlaidSync } from "@/hooks/usePlaidSync";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 
 function currentMonthKey(): string {
@@ -67,10 +68,19 @@ export default function DashboardScreen() {
     periodKey: monthKey,
   });
   const monthTxns = useListTransactions({ from: monthStart, limit: 5000 });
+  // (#358) Pull-to-refresh on the dashboard now also kicks a Plaid sync
+  // (mirroring the web app's behavior). The hook surfaces structured
+  // per-item failures as "<Institution>: <plain reason>" via Alert and
+  // adds a Reconnect CTA on re-auth — never the bare axios string.
+  const { runSync } = usePlaidSync();
 
   const onRefresh = async () => {
     setRefreshing(true);
     try {
+      // Kick a Plaid sync first so any new rows / errors are reflected
+      // when the queries below re-fetch. The hook owns its own user
+      // messaging (Alert), so we don't need to surface anything here.
+      await runSync();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() }),
