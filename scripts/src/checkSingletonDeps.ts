@@ -17,6 +17,9 @@ const SINGLETONS = [
   "react",
   "react-dom",
   "vite",
+  "zod",
+  "drizzle-orm",
+  "@tanstack/react-query",
 ];
 
 const __filename = fileURLToPath(import.meta.url);

@@ -170,3 +170,8 @@ overrides:
   # passing refs through React 19 components.
   "@types/react": "^19.2.0"
   "@types/react-dom": "^19.2.0"
+  # Pin a single copy of zod. Without this, transitive deps (e.g. orval's
+  # @scalar/openapi-types) pull in zod@4.x while our catalog resolves zod@3.x,
+  # which can produce duplicated schema instances and "two different types
+  # with this name exist" errors at runtime/typecheck.
+  zod: "^3.25.76"
