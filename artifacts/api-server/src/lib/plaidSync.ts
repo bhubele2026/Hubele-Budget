@@ -1333,9 +1333,16 @@ export async function refreshConsentExpirationForUser(
  * boot logs can surface "scanned 12 plaid items, flagged 1 malformed
  * token" instead of being silent on the recovery action.
  */
+export type FlaggedMalformedItem = {
+  itemRowId: string;
+  itemId: string;
+  institutionName: string | null;
+};
+
 export async function flagMalformedAccessTokens(): Promise<{
   scanned: number;
   flagged: number;
+  flaggedItems: FlaggedMalformedItem[];
 }> {
   const items = await db
     .select({
@@ -1347,9 +1354,15 @@ export async function flagMalformedAccessTokens(): Promise<{
     })
     .from(plaidItemsTable);
   let flagged = 0;
+  const flaggedItems: FlaggedMalformedItem[] = [];
   for (const it of items) {
     if (isValidPlaidAccessToken(it.accessToken)) continue;
     flagged++;
+    flaggedItems.push({
+      itemRowId: it.id,
+      itemId: it.itemId,
+      institutionName: it.institutionName,
+    });
     // Always write — same value twice is harmless, and we can't
     // distinguish a "real" ITEM_LOGIN_REQUIRED from our synthetic one
     // without re-checking the message column.
@@ -1363,7 +1376,7 @@ export async function flagMalformedAccessTokens(): Promise<{
       "[plaid-backfill] flagged item with malformed stored access_token as needs-reconnect",
     );
   }
-  return { scanned: items.length, flagged };
+  return { scanned: items.length, flagged, flaggedItems };
 }
 
 export async function refreshConsentExpirationForAllItems(): Promise<{

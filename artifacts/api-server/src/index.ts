@@ -7,6 +7,7 @@ import {
   syncAllForAllUsers,
 } from "./lib/plaidSync";
 import { sendExpirationRemindersForAllUsers } from "./lib/plaidExpirationReminder";
+import { maybeAlertOnMalformedTokenSpike } from "./lib/plaidMalformedTokenAlert";
 import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
 
@@ -178,11 +179,36 @@ app.listen(port, (err) => {
       "2 3 * * *",
       () => {
         flagMalformedAccessTokens()
-          .then(({ scanned, flagged }) => {
+          .then(async (summary) => {
             logger.info(
-              { scanned, flagged },
+              { scanned: summary.scanned, flagged: summary.flagged },
               "Daily Plaid malformed access_token sweep complete",
             );
+            // (#371) Spike alert: if today's count crosses the operator
+            // threshold (default 3 — well above the steady-state "one
+            // user mangled their own row" floor), email the operator
+            // with the count and a sample of affected institutions so
+            // a config-level breakage (env-var swap, bad migration)
+            // gets caught the same morning instead of via user
+            // complaints. Best-effort — never crashes the cron tick.
+            try {
+              const alert = await maybeAlertOnMalformedTokenSpike(summary);
+              if (alert.channel !== "skipped") {
+                logger.info(
+                  {
+                    channel: alert.channel,
+                    recipient: alert.recipient,
+                    flagged: summary.flagged,
+                  },
+                  "Plaid malformed-token spike alert dispatched",
+                );
+              }
+            } catch (err) {
+              logger.warn(
+                { err },
+                "Plaid malformed-token spike alert threw unexpectedly",
+              );
+            }
           })
           .catch((err) => {
             logger.error(
