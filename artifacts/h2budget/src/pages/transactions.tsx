@@ -27,7 +27,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, cn, moneyColorClass } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -1245,13 +1245,13 @@ export default function TransactionsPage() {
           <StatChip
             label="Money in"
             value={monthTotals.moneyIn}
-            valueClassName="text-emerald-700"
+            valueClassName="text-[hsl(var(--positive))]"
             testId="stat-money-in"
           />
           <StatChip
             label="Money out"
             value={monthTotals.moneyOut}
-            valueClassName="text-rose-700"
+            valueClassName="text-[hsl(var(--negative))]"
             testId="stat-money-out"
           />
           {hasLinkedChecking ? (
@@ -1271,13 +1271,7 @@ export default function TransactionsPage() {
           <StatChip
             label="Net change"
             value={monthTotals.netChange}
-            valueClassName={
-              monthTotals.netChange > 0
-                ? "text-emerald-700"
-                : monthTotals.netChange < 0
-                  ? "text-rose-700"
-                  : undefined
-            }
+            valueClassName={moneyColorClass(monthTotals.netChange)}
             signed
             testId="stat-net-change"
           />
@@ -1511,11 +1505,7 @@ export default function TransactionsPage() {
         const dayNet = items.reduce((s, t) => s + parseSigned(t.amount), 0);
         const dayNetNode = (
           <span
-            className={cn(
-              "tabular-nums",
-              dayNet > 0 && "text-emerald-700",
-              dayNet < 0 && "text-rose-700",
-            )}
+            className={cn("tabular-nums", moneyColorClass(dayNet))}
             data-testid={`day-net-${dayKey}`}
           >
             {dayNet > 0 ? `+${formatCurrency(dayNet)}` : formatCurrency(dayNet)}
@@ -1635,8 +1625,9 @@ export default function TransactionsPage() {
                       <span
                         className={cn(
                           "font-medium tabular-nums whitespace-nowrap",
-                          parseSigned(tx.amount) > 0 && "text-emerald-700",
-                          parseSigned(tx.amount) < 0 && "text-foreground",
+                          parseSigned(tx.amount) > 0
+                            ? "text-[hsl(var(--positive))]"
+                            : "text-foreground",
                         )}
                       >
                         {formatCurrency(tx.amount)}

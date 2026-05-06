@@ -1343,8 +1343,8 @@ function MonthlySnapshot({
               className={cn(
                 "text-3xl font-serif font-bold tabular-nums mt-1",
                 netPositive
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-destructive",
+                  ? "text-[hsl(var(--positive))]"
+                  : "text-[hsl(var(--negative))]",
               )}
             >
               {netPositive ? "" : "-"}

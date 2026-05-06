@@ -1800,7 +1800,7 @@ export default function ForecastPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+            <div className="text-2xl font-bold tabular-nums text-[hsl(var(--positive))]">
               {formatCurrency(proj?.projectedIncome ?? "0")}
             </div>
             <div className="text-xs text-muted-foreground mt-1">

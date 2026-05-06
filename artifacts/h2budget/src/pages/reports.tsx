@@ -148,11 +148,11 @@ function HeroTile({
 }) {
   const toneClass =
     tone === "good"
-      ? "text-emerald-700 dark:text-emerald-400"
+      ? "text-[hsl(var(--positive))]"
       : tone === "bad"
-        ? "text-destructive"
+        ? "text-[hsl(var(--negative))]"
         : tone === "amber"
-          ? "text-amber-700 dark:text-amber-400"
+          ? "text-[hsl(var(--warning))]"
           : "text-foreground";
   return (
     <Card className="rounded-2xl">
@@ -179,8 +179,8 @@ function HeroTile({
             className={cn(
               "text-[11px] mt-1 tabular-nums font-medium",
               (delta.pct >= 0) === delta.goodIfUp
-                ? "text-emerald-700 dark:text-emerald-400"
-                : "text-destructive",
+                ? "text-[hsl(var(--positive))]"
+                : "text-[hsl(var(--negative))]",
             )}
           >
             {delta.pct >= 0 ? "▲" : "▼"} {Math.abs(delta.pct).toFixed(1)}% vs prev
@@ -2052,7 +2052,7 @@ function BehaviorSection({
                 <div className="text-xs text-muted-foreground">
                   Biggest income this window
                 </div>
-                <div className="text-lg font-serif font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                <div className="text-lg font-serif font-semibold tabular-nums text-[hsl(var(--positive))]">
                   {hallOfFame.income
                     ? formatCurrency(hallOfFame.income.amount)
                     : "—"}
