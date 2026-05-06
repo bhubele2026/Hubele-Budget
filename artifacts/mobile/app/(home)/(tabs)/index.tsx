@@ -1,109 +1,132 @@
-import { useAuth } from "@clerk/expo";
-import { Feather } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import {
+  getGetAmexAnchorQueryKey,
+  getGetDashboardQueryKey,
+  getGetForecastQueryKey,
+  getListDashboardBudgetsQueryKey,
   getListTransactionsQueryKey,
+  type RecurringItem,
   type Transaction,
+  getGetSettingsQueryKey,
+  useGetAmexAnchor,
+  useGetDashboard,
+  useGetForecast,
+  useGetSettings,
+  useListDashboardBudgets,
   useListTransactions,
 } from "@workspace/api-client-react";
-import { Stack, useRouter, type Href } from "expo-router";
+import { Stack } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
-import { formatCurrency, formatDayShort, formatMonthLabel, monthKey } from "@/lib/format";
+import { formatCurrency, formatDateTime } from "@/lib/format";
 
-type Row =
-  | { kind: "header"; key: string; label: string; net: number; count: number }
-  | { kind: "txn"; key: string; txn: Transaction };
-
-function buildRows(txns: Transaction[]): Row[] {
-  const sorted = [...txns].sort((a, b) =>
-    a.occurredOn < b.occurredOn ? 1 : a.occurredOn > b.occurredOn ? -1 : 0,
-  );
-  const rows: Row[] = [];
-  let currentMonth = "";
-  let monthBuf: Transaction[] = [];
-
-  const flush = () => {
-    if (!currentMonth) return;
-    const net = monthBuf.reduce((s, t) => s + (Number(t.amount) || 0), 0);
-    rows.push({
-      kind: "header",
-      key: `h-${currentMonth}`,
-      label: formatMonthLabel(currentMonth),
-      net,
-      count: monthBuf.length,
-    });
-    for (const t of monthBuf) {
-      rows.push({ kind: "txn", key: t.id, txn: t });
-    }
-  };
-
-  for (const t of sorted) {
-    const mk = monthKey(t.occurredOn);
-    if (mk !== currentMonth) {
-      flush();
-      currentMonth = mk;
-      monthBuf = [];
-    }
-    monthBuf.push(t);
-  }
-  flush();
-  return rows;
+function currentMonthKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export default function TransactionsScreen() {
+function monthStartISO(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-01`;
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  debt: "Debt account",
+  anchor: "Manual anchor",
+  computed: "Computed",
+  missing: "No data",
+  manual: "Manual",
+  plaid: "Plaid",
+};
+
+export default function DashboardScreen() {
   const colors = useColors();
-  const router = useRouter();
-  const { signOut } = useAuth();
-  const [search, setSearch] = useState("");
-  const [limit, setLimit] = useState(200);
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
 
-  const { data, isLoading, isError, error, refetch, isRefetching } =
-    useListTransactions(
-      { limit },
-      {
-        query: {
-          queryKey: getListTransactionsQueryKey({ limit }),
-          gcTime: 5 * 60_000,
-        },
-      },
-    );
+  const monthKey = useMemo(currentMonthKey, []);
+  const monthStart = useMemo(monthStartISO, []);
 
-  const filtered = useMemo<Transaction[]>(() => {
-    const all = (data ?? []) as Transaction[];
-    const q = search.trim().toLowerCase();
-    if (!q) return all;
-    return all.filter(
-      (t) =>
-        t.description.toLowerCase().includes(q) ||
-        (t.notes ?? "").toLowerCase().includes(q),
-    );
-  }, [data, search]);
+  const dashboard = useGetDashboard();
+  const forecast = useGetForecast();
+  const amex = useGetAmexAnchor();
+  const settings = useGetSettings();
+  const weeklyBudgets = useListDashboardBudgets({
+    bucket: "weekly",
+    periodKey: monthKey,
+  });
+  const monthTxns = useListTransactions({ from: monthStart, limit: 5000 });
 
-  const rows = useMemo(() => buildRows(filtered), [filtered]);
-
-  const handleSignOut = () => {
-    Alert.alert("Sign out", "Sign out of H2 Budget?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign out",
-        style: "destructive",
-        onPress: () => signOut(),
-      },
-    ]);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetAmexAnchorQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() }),
+        queryClient.invalidateQueries({
+          queryKey: getListDashboardBudgetsQueryKey({
+            bucket: "weekly",
+            periodKey: monthKey,
+          }),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: getListTransactionsQueryKey({
+            from: monthStart,
+            limit: 5000,
+          }),
+        }),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
   };
+
+  const bankSnapshot = forecast.data?.bankSnapshot ?? null;
+  const chaseBalance = bankSnapshot ? Number(bankSnapshot.balance) || 0 : null;
+  const amexBalance = amex.data?.amexEndingBalance ?? null;
+  const amexOwed = amexBalance == null ? null : Math.abs(amexBalance);
+
+  const weeklySpend = useMemo(() => {
+    const all = (monthTxns.data ?? []) as Transaction[];
+    let sum = 0;
+    for (const t of all) {
+      if (!t.weeklyAllowance) continue;
+      const amt = Number(t.amount) || 0;
+      if (amt < 0) sum += -amt;
+    }
+    return sum;
+  }, [monthTxns.data]);
+
+  const weeklyTarget = useMemo(() => {
+    const rows = weeklyBudgets.data ?? [];
+    if (rows.length > 0) {
+      const fromBudgets = Number(rows[0].amount) || 0;
+      if (fromBudgets > 0) return fromBudgets;
+    }
+    const fromSettings = Number(settings.data?.weeklyAllowanceAmount) || 0;
+    return fromSettings;
+  }, [weeklyBudgets.data, settings.data?.weeklyAllowanceAmount]);
+
+  const upcomingBills: RecurringItem[] = useMemo(
+    () => (dashboard.data?.upcomingBills ?? []).slice(0, 6),
+    [dashboard.data?.upcomingBills],
+  );
+
+  const initialLoading =
+    dashboard.isLoading || forecast.isLoading || amex.isLoading;
 
   return (
     <SafeAreaView
@@ -111,269 +134,367 @@ export default function TransactionsScreen() {
       style={[styles.safe, { backgroundColor: colors.background }]}
     >
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.headerRow}>
-        <Text style={[styles.h1, { color: colors.foreground }]}>Transactions</Text>
-        <Pressable
-          onPress={handleSignOut}
-          hitSlop={12}
-          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+      <ScrollView
+        contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
+      >
+        <Text style={[styles.h1, { color: colors.foreground }]}>Dashboard</Text>
+
+        {initialLoading ? (
+          <View style={{ paddingTop: 60, alignItems: "center" }}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : (
+          <>
+            <BalancesSection
+              chaseBalance={chaseBalance}
+              chaseAt={bankSnapshot?.at ?? null}
+              chaseSource={bankSnapshot?.source ?? null}
+              amexOwed={amexOwed}
+              amexAt={amex.data?.asOf ?? null}
+              amexSource={amex.data?.source ?? null}
+            />
+
+            <WeeklySpendingSection
+              spent={weeklySpend}
+              target={weeklyTarget}
+            />
+
+            <UpcomingBillsSection bills={upcomingBills} />
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function BalancesSection(props: {
+  chaseBalance: number | null;
+  chaseAt: string | null;
+  chaseSource: string | null;
+  amexOwed: number | null;
+  amexAt: string | null;
+  amexSource: string | null;
+}) {
+  const colors = useColors();
+  return (
+    <View style={styles.balancesRow}>
+      <BalanceCard
+        label="Chase ending"
+        value={
+          props.chaseBalance == null
+            ? "—"
+            : formatCurrency(props.chaseBalance)
+        }
+        valueColor={
+          props.chaseBalance != null && props.chaseBalance < 0
+            ? colors.destructive
+            : colors.foreground
+        }
+        hint={
+          props.chaseAt
+            ? `as of ${formatDateTime(props.chaseAt)}`
+            : "Link Chase to see this"
+        }
+        sourceLabel={
+          props.chaseSource ? SOURCE_LABEL[props.chaseSource] : null
+        }
+      />
+      <BalanceCard
+        label="Amex owed"
+        value={props.amexOwed == null ? "—" : formatCurrency(props.amexOwed)}
+        valueColor={colors.foreground}
+        hint={
+          props.amexAt ? `as of ${formatDateTime(props.amexAt)}` : "No Amex data"
+        }
+        sourceLabel={
+          props.amexSource ? SOURCE_LABEL[props.amexSource] : null
+        }
+      />
+    </View>
+  );
+}
+
+function BalanceCard(props: {
+  label: string;
+  value: string;
+  valueColor: string;
+  hint: string;
+  sourceLabel: string | null;
+}) {
+  const colors = useColors();
+  return (
+    <View
+      style={[
+        styles.balanceCard,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+    >
+      <Text style={[styles.balanceLabel, { color: colors.mutedForeground }]}>
+        {props.label}
+      </Text>
+      <Text style={[styles.balanceValue, { color: props.valueColor }]}>
+        {props.value}
+      </Text>
+      <Text style={[styles.balanceHint, { color: colors.mutedForeground }]}>
+        {props.hint}
+      </Text>
+      {props.sourceLabel && (
+        <View
+          style={[
+            styles.sourceChip,
+            { backgroundColor: colors.accent, borderColor: colors.border },
+          ]}
         >
-          <Feather name="log-out" size={20} color={colors.mutedForeground} />
-        </Pressable>
+          <Text
+            style={[styles.sourceChipText, { color: colors.accentForeground }]}
+          >
+            {props.sourceLabel}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function WeeklySpendingSection(props: { spent: number; target: number }) {
+  const colors = useColors();
+  const { spent, target } = props;
+  const pct = target > 0 ? Math.min(100, (spent / target) * 100) : 0;
+  const over = target > 0 && spent > target;
+  const remaining = Math.max(0, target - spent);
+  return (
+    <View
+      style={[
+        styles.section,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+    >
+      <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+        This week's spending
+      </Text>
+      <View style={styles.weeklyRow}>
+        <Text
+          style={[
+            styles.weeklyValue,
+            { color: over ? colors.destructive : colors.foreground },
+          ]}
+        >
+          {formatCurrency(spent)}
+        </Text>
+        <Text
+          style={[styles.weeklyTarget, { color: colors.mutedForeground }]}
+        >
+          {" / "}
+          {target > 0 ? formatCurrency(target) : "no target"}
+        </Text>
       </View>
       <View
         style={[
-          styles.searchBox,
-          { backgroundColor: colors.card, borderColor: colors.border },
+          styles.progressTrack,
+          { backgroundColor: colors.muted },
         ]}
       >
-        <Feather name="search" size={16} color={colors.mutedForeground} />
-        <TextInput
-          style={[styles.searchInput, { color: colors.foreground }]}
-          placeholder="Search description or notes"
-          placeholderTextColor={colors.mutedForeground}
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={search}
-          onChangeText={setSearch}
-          returnKeyType="search"
+        <View
+          style={[
+            styles.progressFill,
+            {
+              width: `${pct}%`,
+              backgroundColor: over ? colors.destructive : colors.primary,
+            },
+          ]}
         />
-        {search.length > 0 && (
-          <Pressable onPress={() => setSearch("")} hitSlop={8}>
-            <Feather name="x" size={16} color={colors.mutedForeground} />
-          </Pressable>
-        )}
       </View>
+      <Text style={[styles.weeklyHint, { color: colors.mutedForeground }]}>
+        {target > 0
+          ? over
+            ? `Over by ${formatCurrency(spent - target)} this month`
+            : `${formatCurrency(remaining)} left this month`
+          : "Set a weekly target on the web app"}
+      </Text>
+    </View>
+  );
+}
 
-      {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      ) : isError ? (
-        <View style={styles.center}>
-          <Text style={[styles.errorText, { color: colors.destructive }]}>
-            Couldn't load transactions
-          </Text>
-          <Text
-            style={{
-              color: colors.mutedForeground,
-              textAlign: "center",
-              marginTop: 6,
-              paddingHorizontal: 24,
-            }}
-          >
-            {error instanceof Error ? error.message : "Unknown error"}
-          </Text>
-          <Pressable
-            onPress={() => refetch()}
-            style={({ pressed }) => [
-              styles.retryButton,
-              { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
-            ]}
-          >
-            <Text
-              style={{
-                color: colors.primaryForeground,
-                fontWeight: "600",
-              }}
-            >
-              Retry
-            </Text>
-          </Pressable>
-        </View>
-      ) : (
-        <FlatList
-          data={rows}
-          keyExtractor={(r) => r.key}
-          contentContainerStyle={{ paddingBottom: 120 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
-              tintColor={colors.primary}
-            />
-          }
-          onEndReachedThreshold={0.4}
-          onEndReached={() => {
-            if ((data?.length ?? 0) >= limit) {
-              setLimit((n) => n + 200);
-            }
+function UpcomingBillsSection(props: { bills: RecurringItem[] }) {
+  const colors = useColors();
+  return (
+    <View
+      style={[
+        styles.section,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+    >
+      <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+        Upcoming bills
+      </Text>
+      {props.bills.length === 0 ? (
+        <Text
+          style={{
+            color: colors.mutedForeground,
+            paddingVertical: 12,
+            textAlign: "center",
           }}
-          ListEmptyComponent={
-            <View style={styles.center}>
-              <Text style={{ color: colors.mutedForeground }}>
-                No transactions yet
+        >
+          All clear — no recurring bills on the radar.
+        </Text>
+      ) : (
+        <View style={{ marginTop: 4 }}>
+          {props.bills.map((b, i) => (
+            <View
+              key={b.id}
+              style={[
+                styles.billRow,
+                {
+                  borderBottomColor: colors.border,
+                  borderBottomWidth:
+                    i === props.bills.length - 1
+                      ? 0
+                      : StyleSheet.hairlineWidth,
+                },
+              ]}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.billName, { color: colors.foreground }]}
+                >
+                  {b.name}
+                </Text>
+                <Text
+                  style={[styles.billMeta, { color: colors.mutedForeground }]}
+                >
+                  {b.frequency}
+                  {b.dayOfMonth ? ` · day ${b.dayOfMonth}` : ""}
+                </Text>
+              </View>
+              <Text style={[styles.billAmount, { color: colors.foreground }]}>
+                {formatCurrency(b.amount)}
               </Text>
             </View>
-          }
-          renderItem={({ item }) => {
-            if (item.kind === "header") {
-              return (
-                <View
-                  style={[
-                    styles.monthHeader,
-                    {
-                      backgroundColor: colors.background,
-                      borderBottomColor: colors.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[styles.monthLabel, { color: colors.foreground }]}
-                  >
-                    {item.label}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.monthNet,
-                      {
-                        color:
-                          item.net >= 0 ? colors.success : colors.destructive,
-                      },
-                    ]}
-                  >
-                    {formatCurrency(item.net)}
-                  </Text>
-                </View>
-              );
-            }
-            const t = item.txn;
-            const amt = Number(t.amount) || 0;
-            return (
-              <Pressable
-                onPress={() =>
-                  router.push(`/(home)/transaction/${t.id}` as Href)
-                }
-                style={({ pressed }) => [
-                  styles.txnRow,
-                  {
-                    backgroundColor: pressed ? colors.accent : "transparent",
-                    borderBottomColor: colors.border,
-                  },
-                ]}
-              >
-                <View style={styles.txnLeft}>
-                  <Text
-                    numberOfLines={1}
-                    style={[styles.txnDesc, { color: colors.foreground }]}
-                  >
-                    {t.description}
-                  </Text>
-                  <Text
-                    style={[styles.txnMeta, { color: colors.mutedForeground }]}
-                  >
-                    {formatDayShort(t.occurredOn)} · {t.source}
-                    {t.isTransfer ? " · transfer" : ""}
-                  </Text>
-                </View>
-                <Text
-                  style={[
-                    styles.txnAmount,
-                    {
-                      color: amt >= 0 ? colors.success : colors.foreground,
-                    },
-                  ]}
-                >
-                  {formatCurrency(amt)}
-                </Text>
-              </Pressable>
-            );
-          }}
-        />
+          ))}
+        </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
   h1: {
     fontFamily: "Inter_700Bold",
     fontSize: 28,
+    marginBottom: 16,
   },
-  searchBox: {
+  balancesRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginHorizontal: 20,
-    marginVertical: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderRadius: 12,
+    gap: 12,
+    marginBottom: 16,
   },
-  searchInput: {
+  balanceCard: {
     flex: 1,
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    paddingVertical: 0,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
   },
-  center: {
-    paddingTop: 80,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  errorText: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 16,
-  },
-  retryButton: {
-    marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  monthHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  monthLabel: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 14,
+  balanceLabel: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
     textTransform: "uppercase",
     letterSpacing: 0.5,
+    marginBottom: 6,
   },
-  monthNet: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 14,
+  balanceValue: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 24,
+    fontVariant: ["tabular-nums"],
   },
-  txnRow: {
+  balanceHint: {
+    marginTop: 6,
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+  },
+  sourceChip: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  sourceChipText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 10,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  section: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionLabel: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  weeklyRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    marginBottom: 10,
+  },
+  weeklyValue: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 28,
+    fontVariant: ["tabular-nums"],
+  },
+  weeklyTarget: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 16,
+    fontVariant: ["tabular-nums"],
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+  },
+  weeklyHint: {
+    marginTop: 8,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+  },
+  billRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     gap: 12,
-    paddingHorizontal: 20,
     paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  txnLeft: {
-    flex: 1,
-    minWidth: 0,
-  },
-  txnDesc: {
+  billName: {
     fontFamily: "Inter_500Medium",
-    fontSize: 15,
-    marginBottom: 2,
+    fontSize: 14,
   },
-  txnMeta: {
+  billMeta: {
     fontFamily: "Inter_400Regular",
     fontSize: 12,
+    marginTop: 2,
+    textTransform: "capitalize",
   },
-  txnAmount: {
+  billAmount: {
     fontFamily: "Inter_600SemiBold",
-    fontSize: 15,
+    fontSize: 14,
     fontVariant: ["tabular-nums"],
   },
 });
+

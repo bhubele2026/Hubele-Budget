@@ -13,23 +13,14 @@ function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
+        <Icon sf={{ default: "house", selected: "house.fill" }} />
+        <Label>Dashboard</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="transactions">
         <Icon
           sf={{ default: "list.bullet", selected: "list.bullet.rectangle" }}
         />
         <Label>Transactions</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="amex">
-        <Icon sf={{ default: "creditcard", selected: "creditcard.fill" }} />
-        <Label>Amex</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="reconcile">
-        <Icon
-          sf={{
-            default: "checkmark.circle",
-            selected: "checkmark.circle.fill",
-          }}
-        />
-        <Label>Reconcile</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -76,36 +67,24 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          title: "Dashboard",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="house" tintColor={color} size={24} />
+            ) : (
+              <Feather name="home" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="transactions"
+        options={{
           title: "Transactions",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="list.bullet" tintColor={color} size={24} />
             ) : (
               <Feather name="list" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="amex"
-        options={{
-          title: "Amex",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="creditcard" tintColor={color} size={24} />
-            ) : (
-              <Feather name="credit-card" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="reconcile"
-        options={{
-          title: "Reconcile",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="checkmark.circle" tintColor={color} size={24} />
-            ) : (
-              <Feather name="check-circle" size={22} color={color} />
             ),
         }}
       />
