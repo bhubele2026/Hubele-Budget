@@ -42,6 +42,25 @@ function monthStartISO(): string {
   return `${d.getFullYear()}-${m}-01`;
 }
 
+function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function currentWeekRangeISO(): { start: string; end: string } {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  const offsetToMonday = day === 0 ? -6 : 1 - day;
+  const start = new Date(d);
+  start.setDate(d.getDate() + offsetToMonday);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start: toISODate(start), end: toISODate(end) };
+}
+
 const SOURCE_LABEL: Record<string, string> = {
   debt: "Debt account",
   anchor: "Manual anchor",
@@ -58,6 +77,11 @@ export default function DashboardScreen() {
 
   const monthKey = useMemo(currentMonthKey, []);
   const monthStart = useMemo(monthStartISO, []);
+  const weekRange = useMemo(currentWeekRangeISO, []);
+  const weekFetchFrom = useMemo(
+    () => (weekRange.start < monthStart ? weekRange.start : monthStart),
+    [weekRange.start, monthStart],
+  );
 
   const dashboard = useGetDashboard();
   const forecast = useGetForecast();
@@ -67,7 +91,7 @@ export default function DashboardScreen() {
     bucket: "weekly",
     periodKey: monthKey,
   });
-  const monthTxns = useListTransactions({ from: monthStart, limit: 5000 });
+  const monthTxns = useListTransactions({ from: weekFetchFrom, limit: 5000 });
   // (#358) Pull-to-refresh on the dashboard now also kicks a Plaid sync
   // (mirroring the web app's behavior). The hook surfaces structured
   // per-item failures as "<Institution>: <plain reason>" via Alert and
@@ -94,7 +118,7 @@ export default function DashboardScreen() {
         }),
         queryClient.invalidateQueries({
           queryKey: getListTransactionsQueryKey({
-            from: monthStart,
+            from: weekFetchFrom,
             limit: 5000,
           }),
         }),
@@ -114,11 +138,14 @@ export default function DashboardScreen() {
     let sum = 0;
     for (const t of all) {
       if (!t.weeklyAllowance) continue;
+      const occurredOn = String(t.occurredOn ?? "").slice(0, 10);
+      if (!occurredOn) continue;
+      if (occurredOn < weekRange.start || occurredOn > weekRange.end) continue;
       const amt = Number(t.amount) || 0;
       if (amt < 0) sum += -amt;
     }
     return sum;
-  }, [monthTxns.data]);
+  }, [monthTxns.data, weekRange.start, weekRange.end]);
 
   const weeklyTarget = useMemo(() => {
     const rows = weeklyBudgets.data ?? [];
@@ -324,8 +351,8 @@ function WeeklySpendingSection(props: { spent: number; target: number }) {
       <Text style={[styles.weeklyHint, { color: colors.mutedForeground }]}>
         {target > 0
           ? over
-            ? `Over by ${formatCurrency(spent - target)} this month`
-            : `${formatCurrency(remaining)} left this month`
+            ? `Over by ${formatCurrency(spent - target)} this week`
+            : `${formatCurrency(remaining)} left this week`
           : "Set a weekly target on the web app"}
       </Text>
     </View>
