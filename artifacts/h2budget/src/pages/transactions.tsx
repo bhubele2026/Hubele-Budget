@@ -14,6 +14,7 @@ import {
   getListTransactionsQueryKey,
   getGetForecastQueryKey,
   getGetBudgetMonthQueryKey,
+  useListPlaidItems,
   type Transaction,
   type RepointedRule,
   type MappingRule,
@@ -256,6 +257,21 @@ export default function TransactionsPage() {
   const effectiveAccountKey = selectedAccountKey ?? defaultAccountKey;
   const isManualAccount = effectiveAccountKey === "manual";
   const effectiveAccountInternalId = isManualAccount ? null : effectiveAccountKey;
+  // (#357) Map the currently-viewed account back to its owning Plaid
+  // item so the header SyncButton's inline error chip / Reconnect popover
+  // only surfaces failures relevant to *this* view. Manual accounts get
+  // an empty allow-list, which silences the chip entirely — a Chase
+  // re-auth error must not pollute the Manual account view.
+  const { data: plaidItemsForScope } = useListPlaidItems();
+  const relevantPlaidItemIds = useMemo<string[] | undefined>(() => {
+    if (isManualAccount) return [];
+    if (!effectiveAccountInternalId) return undefined;
+    const items = plaidItemsForScope ?? [];
+    const owning = items.find((it) =>
+      (it.accounts ?? []).some((a) => a.id === effectiveAccountInternalId),
+    );
+    return owning ? [owning.id] : [];
+  }, [isManualAccount, effectiveAccountInternalId, plaidItemsForScope]);
   // True when the user is viewing the same account that the bank
   // snapshot anchors. Used by header meta + as a "this is the primary
   // account" hint in the picker dropdown.
@@ -1188,7 +1204,11 @@ export default function TransactionsPage() {
       className="space-y-6"
       style={{ ["--pinned-pane-h" as string]: `${paneH}px` } as React.CSSProperties}
     >
-      <PlaidReauthBanner />
+      {/* (#357) Suppress the global Plaid re-auth banner while the user
+          is viewing a Manual account — the failing item isn't this view's
+          data, so the banner is misleading noise here. The banner is
+          still rendered on every other tab and on Settings. */}
+      {!isManualAccount && <PlaidReauthBanner />}
       <div
         ref={paneRef}
         className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-4"
@@ -1220,7 +1240,7 @@ export default function TransactionsPage() {
             <Button onClick={handleOpenNew} variant="outline" size="sm" data-testid="button-add-transaction">
               <Plus className="w-4 h-4 mr-1.5" /> Add transaction
             </Button>
-            <SyncButton />
+            <SyncButton relevantItemIds={relevantPlaidItemIds} />
             <PlaidLinkButton label="Connect a bank" />
           </>
         }

@@ -1650,8 +1650,21 @@ export interface PlaidSyncInput {
     /** @nullable */
     itemId?: string | null;
 }
+/**
+ * @nullable
+ */
+export type PlaidSyncResultItemsItemKind = (typeof PlaidSyncResultItemsItemKind)[keyof typeof PlaidSyncResultItemsItemKind] | null;
+export declare const PlaidSyncResultItemsItemKind: {
+    readonly reauth: "reauth";
+    readonly rate_limit: "rate_limit";
+    readonly institution_down: "institution_down";
+    readonly transient: "transient";
+    readonly unknown: "unknown";
+};
 export type PlaidSyncResultItemsItem = {
     itemId: string;
+    /** @nullable */
+    plaidItemRowId?: string | null;
     /** @nullable */
     institutionName?: string | null;
     added: number;
@@ -1662,6 +1675,18 @@ export type PlaidSyncResultItemsItem = {
     /** @nullable */
     error?: string | null;
     stillPreparing?: boolean;
+    /** @nullable */
+    plaidErrorCode?: string | null;
+    /** @nullable */
+    plaidErrorMessage?: string | null;
+    /** @nullable */
+    plaidDisplayMessage?: string | null;
+    /** @nullable */
+    requestId?: string | null;
+    /** @nullable */
+    httpStatus?: number | null;
+    /** @nullable */
+    kind?: PlaidSyncResultItemsItemKind;
 };
 export interface PlaidSyncResult {
     items: PlaidSyncResultItemsItem[];
@@ -1691,6 +1716,17 @@ export declare const PlaidSyncAttemptKind: {
     readonly balance: "balance";
     readonly liabilities: "liabilities";
 };
+/**
+ * @nullable
+ */
+export type PlaidSyncAttemptErrorKind = (typeof PlaidSyncAttemptErrorKind)[keyof typeof PlaidSyncAttemptErrorKind] | null;
+export declare const PlaidSyncAttemptErrorKind: {
+    readonly reauth: "reauth";
+    readonly rate_limit: "rate_limit";
+    readonly institution_down: "institution_down";
+    readonly transient: "transient";
+    readonly unknown: "unknown";
+};
 export interface PlaidSyncAttempt {
     id: string;
     attemptedAt: string;
@@ -1700,6 +1736,14 @@ export interface PlaidSyncAttempt {
     errorCode?: string | null;
     /** @nullable */
     errorMessage?: string | null;
+    /** @nullable */
+    plaidDisplayMessage?: string | null;
+    /** @nullable */
+    requestId?: string | null;
+    /** @nullable */
+    httpStatus?: number | null;
+    /** @nullable */
+    errorKind?: PlaidSyncAttemptErrorKind;
 }
 export interface PlaidSyncAttemptsResult {
     attempts: PlaidSyncAttempt[];

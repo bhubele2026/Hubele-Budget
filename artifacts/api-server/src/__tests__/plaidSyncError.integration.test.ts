@@ -86,6 +86,7 @@ import plaidRouter from "../routes/plaid";
 import {
   extractPlaidError,
   syncPlaidItem,
+  derivePlaidErrorKind,
 } from "../lib/plaidSync";
 
 const app = express();
@@ -187,16 +188,21 @@ describe("extractPlaidError helper", () => {
     expect(out.message).not.toBe("Request failed with status code 400");
   });
 
-  it("falls back to e.message when no Plaid response body is present", () => {
+  it("(#357) returns a generic reachability message — never the raw axios/network string — when there is no Plaid response body", () => {
     const out = extractPlaidError(new Error("network reset"));
     expect(out.code).toBeNull();
-    expect(out.message).toBe("network reset");
+    // MUST NOT echo "network reset" back to the user — the chip / toast
+    // would otherwise leak infra detail. The raw error stays in
+    // structured logs via plaidLogContext().
+    expect(out.message).not.toMatch(/network reset/i);
+    expect(out.message).toMatch(/couldn't reach plaid/i);
   });
 
-  it("returns String(e) for non-Error throws with no response body", () => {
+  it("(#357) returns the same generic reachability message for non-Error throws with no response body", () => {
     const out = extractPlaidError("plain string failure");
     expect(out.code).toBeNull();
-    expect(out.message).toBe("plain string failure");
+    expect(out.message).not.toMatch(/plain string failure/i);
+    expect(out.message).toMatch(/couldn't reach plaid/i);
   });
 
   it("synthesizes a friendly fallback when Plaid returned an HTTP error with no error_message body (the bug behind the '400' chip)", () => {
@@ -212,6 +218,87 @@ describe("extractPlaidError helper", () => {
     expect(out.code).toBeNull();
     expect(out.message).not.toBe("Request failed with status code 400");
     expect(out.message).toMatch(/Plaid returned 400/);
+  });
+
+  it("(#357) prefers display_message even when error_code is absent on a Plaid 400", () => {
+    // Plaid sometimes returns an HTTP 400 whose body has only a
+    // display_message (no error_code) — we still need to surface that
+    // friendly string instead of the raw axios "status code 400".
+    const err = {
+      message: "Request failed with status code 400",
+      response: {
+        status: 400,
+        data: {
+          display_message:
+            "Your bank is temporarily unavailable. Please try again shortly.",
+          request_id: "req-display-only",
+        },
+      },
+    };
+    const out = extractPlaidError(err);
+    expect(out.code).toBeNull();
+    expect(out.displayMessage).toMatch(/temporarily unavailable/);
+    expect(out.requestId).toBe("req-display-only");
+    expect(out.httpStatus).toBe(400);
+    expect(out.message).not.toMatch(/Request failed with status code 400/);
+  });
+
+  it("(#357) on a non-Plaid axios error (response present but no Plaid-shaped fields) still synthesizes a friendly message — never the bare axios string", () => {
+    // An upstream Plaid call could fail through a misconfigured proxy
+    // or some non-Plaid intermediary that returns its own error body.
+    // The extractor must not echo the bare axios message back to the
+    // user-visible chip.
+    const err = {
+      message: "Request failed with status code 502",
+      response: {
+        status: 502,
+        data: { detail: "upstream proxy went away", proxy: "edge-7" },
+      },
+    };
+    const out = extractPlaidError(err);
+    expect(out.code).toBeNull();
+    expect(out.httpStatus).toBe(502);
+    expect(out.message).not.toMatch(/Request failed with status code/);
+    expect(out.message).toMatch(/Plaid returned 502/);
+    // Non-Plaid response body must not pollute display_message either —
+    // we only ever surface Plaid's own display_message.
+    expect(out.displayMessage).toBeNull();
+  });
+
+  it("(#357) extracts plaid display_message and request_id and tags kind=reauth for ITEM_LOGIN_REQUIRED", () => {
+    const err = {
+      message: "Request failed with status code 400",
+      response: {
+        status: 400,
+        data: {
+          error_code: "ITEM_LOGIN_REQUIRED",
+          error_message: "the login details of this item have changed",
+          error_type: "ITEM_ERROR",
+          display_message:
+            "Please reconnect your account to continue syncing.",
+          request_id: "req-abc-123",
+        },
+      },
+    };
+    const out = extractPlaidError(err);
+    expect(out.code).toBe("ITEM_LOGIN_REQUIRED");
+    expect(out.displayMessage).toMatch(/reconnect your account/);
+    expect(out.requestId).toBe("req-abc-123");
+    expect(out.httpStatus).toBe(400);
+    expect(out.kind).toBe("reauth");
+  });
+
+  it("(#357) derivePlaidErrorKind buckets codes/status into the categorical CTA hint", () => {
+    expect(derivePlaidErrorKind("ITEM_LOGIN_REQUIRED", 400)).toBe("reauth");
+    expect(derivePlaidErrorKind("PENDING_EXPIRATION", 400)).toBe("reauth");
+    expect(derivePlaidErrorKind("RATE_LIMIT_EXCEEDED", 429)).toBe("rate_limit");
+    expect(derivePlaidErrorKind("INSTITUTION_DOWN", 400)).toBe(
+      "institution_down",
+    );
+    expect(derivePlaidErrorKind("PRODUCT_NOT_READY", 400)).toBe("transient");
+    expect(derivePlaidErrorKind(null, 500)).toBe("transient");
+    expect(derivePlaidErrorKind("SOMETHING_NEW", 400)).toBe("unknown");
+    expect(derivePlaidErrorKind(null, null)).toBe("unknown");
   });
 
   it("synthesizes a friendly fallback when Plaid returned an error_code but no error_message", () => {

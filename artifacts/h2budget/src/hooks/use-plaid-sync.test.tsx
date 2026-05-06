@@ -17,6 +17,21 @@ type SyncItem = {
   error: string | null;
   stillPreparing?: boolean;
   ruleAttributions?: RuleAttr[];
+  itemId?: string | null;
+  plaidItemRowId?: string | null;
+  institutionName?: string | null;
+  plaidErrorCode?: string | null;
+  plaidErrorMessage?: string | null;
+  plaidDisplayMessage?: string | null;
+  requestId?: string | null;
+  httpStatus?: number | null;
+  kind?:
+    | "reauth"
+    | "rate_limit"
+    | "institution_down"
+    | "transient"
+    | "unknown"
+    | null;
 };
 
 let syncResponse: { items: SyncItem[] } = { items: [] };
@@ -43,6 +58,15 @@ vi.mock("@workspace/api-client-react", () => ({
   useSyncPlaidTransactions: () => ({ mutate: mutateMock, isPending: false }),
   getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
   getListTransactionsQueryKey: () => ["/api/transactions"],
+}));
+
+// (#357) The Reconnect ToastAction now dispatches a window event instead of
+// navigating to /settings. Mock the listener module so we can spy on it.
+const dispatchPlaidReconnectMock = vi.fn();
+vi.mock("@/components/plaid-reconnect-listener", () => ({
+  dispatchPlaidReconnect: (
+    detail: { itemId: string; institutionName?: string | null },
+  ) => dispatchPlaidReconnectMock(detail),
 }));
 
 import { usePlaidSync } from "./use-plaid-sync";
@@ -72,6 +96,7 @@ beforeEach(() => {
   toastFn.mockClear();
   navigateFn.mockClear();
   mutateMock.mockClear();
+  dispatchPlaidReconnectMock.mockClear();
   syncResponse = { items: [] };
 });
 
@@ -218,5 +243,113 @@ describe("usePlaidSync — rule-attribution toast", () => {
     };
     expect(arg.action).toBeUndefined();
     expect(arg.description).toBe("Added 2.");
+  });
+});
+
+// (#357) — Surface real Plaid errors instead of bare axios strings.
+describe("usePlaidSync — #357 institution-named error toast", () => {
+  it("composes '<Institution>: <displayMessage>' and adds a Reconnect ToastAction for kind=reauth", async () => {
+    syncResponse = {
+      items: [
+        {
+          added: 0,
+          modified: 0,
+          removed: 0,
+          error: "the login details of this item have changed",
+          itemId: "item-chase-1",
+          plaidItemRowId: "row-chase-1",
+          institutionName: "Chase",
+          plaidErrorCode: "ITEM_LOGIN_REQUIRED",
+          plaidErrorMessage: "the login details of this item have changed",
+          plaidDisplayMessage:
+            "Please reconnect your account to continue syncing.",
+          requestId: "req-abc",
+          httpStatus: 400,
+          kind: "reauth",
+        },
+      ],
+    };
+    renderHarness();
+    fireEvent.click(screen.getByTestId("run-sync"));
+    await waitFor(() => expect(toastFn).toHaveBeenCalled());
+    const arg = toastFn.mock.calls[0][0] as {
+      title: string;
+      description: string;
+      variant?: string;
+      action?: React.ReactElement;
+    };
+    expect(arg.title).toBe("Sync had errors");
+    expect(arg.variant).toBe("destructive");
+    // Institution prefix + Plaid's display_message — never the raw axios
+    // "Request failed with status code 400" string.
+    expect(arg.description).toBe(
+      "Chase: Please reconnect your account to continue syncing.",
+    );
+    expect(arg.description).not.toMatch(/status code 400/i);
+    expect(arg.action).toBeDefined();
+    render(<>{arg.action}</>);
+    fireEvent.click(screen.getByTestId("button-toast-plaid-reconnect"));
+    // (#357) Reconnect must open Plaid Link in update mode for the
+    // failing item — never navigate to /settings.
+    expect(navigateFn).not.toHaveBeenCalledWith("/settings");
+    expect(dispatchPlaidReconnectMock).toHaveBeenCalledWith({
+      itemId: "row-chase-1",
+      institutionName: "Chase",
+    });
+  });
+
+  it("falls back to plaidErrorMessage when displayMessage is absent and omits Reconnect for non-reauth kinds", async () => {
+    syncResponse = {
+      items: [
+        {
+          added: 0,
+          modified: 0,
+          removed: 0,
+          error: "rate limit exceeded",
+          itemId: "item-amex-1",
+          institutionName: "American Express",
+          plaidErrorCode: "RATE_LIMIT_EXCEEDED",
+          plaidErrorMessage: "rate limit exceeded",
+          plaidDisplayMessage: null,
+          requestId: "req-xyz",
+          httpStatus: 429,
+          kind: "rate_limit",
+        },
+      ],
+    };
+    renderHarness();
+    fireEvent.click(screen.getByTestId("run-sync"));
+    await waitFor(() => expect(toastFn).toHaveBeenCalled());
+    const arg = toastFn.mock.calls[0][0] as {
+      description: string;
+      action?: React.ReactElement;
+    };
+    expect(arg.description).toBe("American Express: rate limit exceeded");
+    expect(arg.action).toBeUndefined();
+  });
+
+  it("uses a friendly description (not axios internals) when the request itself fails", async () => {
+    // Force the mutate to invoke onError instead of onSuccess so we
+    // exercise the network-failure branch.
+    mutateMock.mockImplementationOnce(
+      (
+        _vars: { data: { itemId?: string } },
+        opts: { onError?: (e: Error) => void },
+      ) => {
+        opts.onError?.(new Error("Request failed with status code 400"));
+      },
+    );
+    renderHarness();
+    fireEvent.click(screen.getByTestId("run-sync"));
+    await waitFor(() => expect(toastFn).toHaveBeenCalled());
+    const arg = toastFn.mock.calls[0][0] as {
+      title: string;
+      description: string;
+      variant?: string;
+    };
+    expect(arg.title).toBe("Sync failed");
+    expect(arg.variant).toBe("destructive");
+    expect(arg.description).not.toMatch(/status code 400/i);
+    expect(arg.description).toMatch(/couldn't reach the server/i);
   });
 });

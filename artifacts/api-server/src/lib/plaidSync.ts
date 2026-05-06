@@ -15,6 +15,53 @@ import { expandItem, parseISO, addDays, fmtISO } from "./cashSignal";
 import { refreshAmexAnchor } from "./amexAnchor";
 import { logger } from "./logger";
 import { recordPlaidSyncAttempt } from "./plaidSyncAttempts";
+import { PLAID_REAUTH_ERROR_CODES } from "./plaidReauthCodes";
+
+/**
+ * (#357) Categorical classification of a Plaid failure used by the frontend
+ * to decide which CTA to surface (Reconnect vs. retry vs. wait). Computed
+ * server-side so the toast/banner copy stays in sync across web and mobile
+ * clients without each having to maintain its own code-to-kind table.
+ *
+ *   * `reauth`           — needs Plaid Link in update mode (login expired,
+ *                          consent expiring/disconnecting).
+ *   * `rate_limit`       — Plaid throttled us; user just needs to wait.
+ *   * `institution_down` — Plaid couldn't reach the bank (transient
+ *                          institution-side outage).
+ *   * `transient`        — PRODUCT_NOT_READY / 5xx — retry shortly.
+ *   * `unknown`          — anything else (no actionable CTA).
+ */
+export type PlaidErrorKind =
+  | "reauth"
+  | "rate_limit"
+  | "institution_down"
+  | "transient"
+  | "unknown";
+
+export function derivePlaidErrorKind(
+  code: string | null,
+  status: number | null,
+): PlaidErrorKind {
+  if (code && PLAID_REAUTH_ERROR_CODES.has(code)) return "reauth";
+  if (code && code.startsWith("RATE_LIMIT")) return "rate_limit";
+  if (
+    code === "INSTITUTION_DOWN" ||
+    code === "INSTITUTION_NOT_RESPONDING" ||
+    code === "INSTITUTION_NOT_AVAILABLE" ||
+    code === "INSTITUTION_NO_LONGER_SUPPORTED"
+  ) {
+    return "institution_down";
+  }
+  if (
+    code === "PRODUCT_NOT_READY" ||
+    code === "INTERNAL_SERVER_ERROR" ||
+    code === "PLANNED_MAINTENANCE" ||
+    (typeof status === "number" && status >= 500)
+  ) {
+    return "transient";
+  }
+  return "unknown";
+}
 
 export type RuleAttribution = {
   ruleId: string;
@@ -24,11 +71,34 @@ export type RuleAttribution = {
 
 export type SyncResult = {
   itemId: string;
+  // (#357) Row id (`plaid_items.id`) of this item — the value the
+  // /plaid/link-token/update endpoint expects when the client wants to
+  // open Plaid Link in update mode for the failing bank. The external
+  // `itemId` above is Plaid's identifier and is NOT what update-mode
+  // routes accept, so we surface both.
+  plaidItemRowId: string;
   institutionName: string | null;
   added: number;
   modified: number;
   removed: number;
   autoCategorized: number;
+  // (#357) Structured error fields parallel to `error`. Populated only on
+  // failure so the client can render an actionable toast/banner without
+  // leaking raw axios strings ("Request failed with status code 400")
+  // and without the frontend having to re-derive what to do.
+  //   * plaidErrorCode    — Plaid's structured `error_code`
+  //   * plaidErrorMessage — Plaid's `error_message`
+  //   * plaidDisplayMessage — Plaid's `display_message` (user-friendly)
+  //   * requestId          — Plaid's `request_id` (for support triage)
+  //   * httpStatus         — HTTP status returned by Plaid
+  //   * kind               — categorical bucket: reauth | rate_limit |
+  //                          institution_down | transient | unknown
+  plaidErrorCode?: string | null;
+  plaidErrorMessage?: string | null;
+  plaidDisplayMessage?: string | null;
+  requestId?: string | null;
+  httpStatus?: number | null;
+  kind?: PlaidErrorKind | null;
   // Per-rule attribution breakdown for *newly added* rows that landed in a
   // category via the user's mapping_rules (i.e. one entry per winning rule,
   // sorted by count descending). Used by the frontend to surface a summary
@@ -49,6 +119,17 @@ type PlaidErrorBody = {
   error_code?: string;
   error_message?: string;
   error_type?: string;
+  display_message?: string;
+  request_id?: string;
+};
+
+export type ExtractedPlaidError = {
+  code: string | null;
+  message: string;
+  displayMessage: string | null;
+  requestId: string | null;
+  httpStatus: number | null;
+  kind: PlaidErrorKind;
 };
 
 /**
@@ -56,33 +137,46 @@ type PlaidErrorBody = {
  * error. The Plaid SDK throws axios errors whose `response.data` carries the
  * structured details we want to surface to users — falling back to the raw
  * `e.message` (e.g. "Request failed with status code 400") strips that info.
+ *
+ * (#357) Also returns Plaid's `display_message`, `request_id`, the HTTP
+ * status, and a derived `kind` so the per-item error the frontend
+ * renders includes everything support needs to triage without forcing
+ * each call site to dig into axios shapes themselves.
  */
-export function extractPlaidError(e: unknown): {
-  code: string | null;
-  message: string;
-} {
+export function extractPlaidError(e: unknown): ExtractedPlaidError {
   const ax = e as {
     response?: { status?: number; data?: PlaidErrorBody };
   };
   const body = ax?.response?.data;
   const code = body?.error_code ?? null;
   const plaidMsg = body?.error_message;
-  if (plaidMsg) return { code, message: plaidMsg };
-  const status = ax?.response?.status;
-  // When Plaid returned an HTTP error but no structured body fields
-  // (or only an error_code, no error_message), synthesize a friendly
-  // message instead of leaking the bare axios "Request failed with
-  // status code 400" string into user-visible sync error chips.
-  if (typeof status === "number") {
-    return {
-      code,
-      message: code
-        ? `Plaid returned ${status}: ${code}`
-        : `Plaid returned ${status}: unknown error`,
-    };
+  const displayMessage = body?.display_message ?? null;
+  const requestId = body?.request_id ?? null;
+  const status =
+    typeof ax?.response?.status === "number" ? ax.response.status : null;
+  const kind = derivePlaidErrorKind(code, status);
+
+  let message: string;
+  if (plaidMsg) {
+    message = plaidMsg;
+  } else if (status !== null) {
+    // When Plaid returned an HTTP error but no structured body fields
+    // (or only an error_code, no error_message), synthesize a friendly
+    // message instead of leaking the bare axios "Request failed with
+    // status code 400" string into user-visible sync error chips.
+    message = code
+      ? `Plaid returned ${status}: ${code}`
+      : `Plaid returned ${status}: unknown error`;
+  } else {
+    // (#357) No HTTP response at all (network reset, DNS, axios pre-flight
+    // failure, non-Error throw). ALWAYS use a generic reachability message
+    // here — never leak the raw underlying string into a user-visible
+    // chip / toast. The original error is still available in structured
+    // logs via plaidLogContext() for support triage.
+    message = "Couldn't reach Plaid — please try again.";
   }
-  if (e instanceof Error) return { code, message: e.message };
-  return { code, message: String(e) };
+
+  return { code, message, displayMessage, requestId, httpStatus: status, kind };
 }
 
 /**
@@ -480,6 +574,10 @@ export async function syncPlaidItem(
     // configured (#45). Keeps the forecast anchor fresh on every sync.
     let balanceRefreshError: string | null = null;
     let balanceRefreshErrorCode: string | null = null;
+    // (#357) Structured details of the balance-refresh failure so the
+    // per-item response carries the same enriched payload as the
+    // /transactions/sync catch path below.
+    let balanceErrorDetails: ExtractedPlaidError | null = null;
     if (
       checkingPlaidAccountId &&
       forecastSettings?.bankSnapshotAccountId &&
@@ -508,13 +606,15 @@ export async function syncPlaidItem(
         // Don't break the sync — but capture Plaid's real reason so the
         // user sees "balance refresh failed: <real plaid message>" rather
         // than a silent failure.
-        const { code, message } = extractPlaidError(e);
+        const extracted = extractPlaidError(e);
+        const { code, message } = extracted;
         // PRODUCT_NOT_READY on balance is just as transient as on
         // /transactions/sync — surface as still-preparing, never as a
         // hard error chip.
         if (code !== "PRODUCT_NOT_READY") {
           balanceRefreshError = `Balance refresh failed: ${message}`;
           balanceRefreshErrorCode = code;
+          balanceErrorDetails = extracted;
         }
         // (#45) Log per-item context so support can trace which user /
         // institution / Plaid error surfaced the lastSyncError chip on
@@ -571,6 +671,14 @@ export async function syncPlaidItem(
         success: !balanceRefreshError,
         errorCode: balanceRefreshErrorCode,
         errorMessage: balanceRefreshError,
+        // (#357) Persist the structured Plaid failure so the Settings →
+        // Recent activity row carries the same plain-English reason +
+        // Reconnect CTA the live toast does, without re-deriving from
+        // the raw axios error on render.
+        plaidDisplayMessage: balanceErrorDetails?.displayMessage ?? null,
+        requestId: balanceErrorDetails?.requestId ?? null,
+        httpStatus: balanceErrorDetails?.httpStatus ?? null,
+        errorKind: balanceErrorDetails?.kind ?? null,
       });
     }
 
@@ -582,6 +690,7 @@ export async function syncPlaidItem(
 
     return {
       itemId: item.itemId,
+      plaidItemRowId: itemRowId,
       institutionName: item.institutionName,
       added: added.length,
       modified: modified.length,
@@ -589,9 +698,20 @@ export async function syncPlaidItem(
       autoCategorized,
       ruleAttributions,
       error: balanceRefreshError,
+      // (#357) Mirror the structured fields onto the response so a
+      // failed balance refresh on an otherwise-healthy /transactions/sync
+      // still gives the client a real Plaid code + display message + kind
+      // to render in the toast — never just "Balance refresh failed".
+      plaidErrorCode: balanceErrorDetails?.code ?? null,
+      plaidErrorMessage: balanceErrorDetails?.message ?? null,
+      plaidDisplayMessage: balanceErrorDetails?.displayMessage ?? null,
+      requestId: balanceErrorDetails?.requestId ?? null,
+      httpStatus: balanceErrorDetails?.httpStatus ?? null,
+      kind: balanceErrorDetails?.kind ?? null,
     };
   } catch (e) {
-    const { code, message } = extractPlaidError(e);
+    const extracted = extractPlaidError(e);
+    const { code, message } = extracted;
     // PRODUCT_NOT_READY is Plaid still staging the historical batch for a
     // freshly linked item. It is transient and recovers on its own (or on
     // the very next Sync click). Don't write it into last_sync_error and
@@ -617,9 +737,14 @@ export async function syncPlaidItem(
         success: false,
         errorCode: code,
         errorMessage: message,
+        plaidDisplayMessage: extracted.displayMessage,
+        requestId: extracted.requestId,
+        httpStatus: extracted.httpStatus,
+        errorKind: "transient",
       });
       return {
         itemId: item.itemId,
+        plaidItemRowId: itemRowId,
         institutionName: item.institutionName,
         added: 0,
         modified: 0,
@@ -628,6 +753,16 @@ export async function syncPlaidItem(
         ruleAttributions: [],
         error: null,
         stillPreparing: true,
+        // (#357) PRODUCT_NOT_READY is structurally an error even though
+        // we surface it as a neutral toast — include the metadata so
+        // Settings → Recent activity / mobile can render the same
+        // structured payload as any other failure.
+        plaidErrorCode: code,
+        plaidErrorMessage: message,
+        plaidDisplayMessage: extracted.displayMessage,
+        requestId: extracted.requestId,
+        httpStatus: extracted.httpStatus,
+        kind: "transient",
       };
     }
     // (#238) When Plaid returns a re-auth code that carries a consent
@@ -710,9 +845,35 @@ export async function syncPlaidItem(
       success: false,
       errorCode: code,
       errorMessage: message,
+      plaidDisplayMessage: extracted.displayMessage,
+      requestId: extracted.requestId,
+      httpStatus: extracted.httpStatus,
+      errorKind: extracted.kind,
     });
+    // (#357) Always log the full structured Plaid context on the catch
+    // path so a user-reported "Couldn't sync Chase" ticket can be
+    // root-caused from server logs alone — request_id, http_status,
+    // error_code, display_message, item, institution.
+    logger.warn(
+      {
+        userId,
+        plaidItemId: itemRowId,
+        plaidItemIdExternal: item.itemId,
+        institutionName: item.institutionName,
+        plaidErrorCode: code,
+        plaidErrorMessage: message,
+        plaidDisplayMessage: extracted.displayMessage,
+        requestId: extracted.requestId,
+        httpStatus: extracted.httpStatus,
+        errorKind: extracted.kind,
+        rawError:
+          e instanceof Error ? { name: e.name, message: e.message } : String(e),
+      },
+      "[plaid-sync] /transactions/sync failed",
+    );
     return {
       itemId: item.itemId,
+      plaidItemRowId: itemRowId,
       institutionName: item.institutionName,
       added: 0,
       modified: 0,
@@ -720,6 +881,16 @@ export async function syncPlaidItem(
       autoCategorized: 0,
       ruleAttributions: [],
       error: message,
+      // (#357) Carry the full structured Plaid failure to the client so
+      // the toast can show "<Institution>: <plain English reason>" and
+      // surface a Reconnect CTA for kind=reauth without ever exposing
+      // raw axios "Request failed with status code 400" strings.
+      plaidErrorCode: code,
+      plaidErrorMessage: message,
+      plaidDisplayMessage: extracted.displayMessage,
+      requestId: extracted.requestId,
+      httpStatus: extracted.httpStatus,
+      kind: extracted.kind,
     };
   }
 }

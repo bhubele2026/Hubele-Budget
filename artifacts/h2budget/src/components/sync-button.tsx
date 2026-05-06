@@ -18,63 +18,105 @@ import { findPlaidItemsNeedingReauth } from "@/components/plaid-reauth-banner";
 export function SyncButton({
   size = "sm",
   variant = "outline",
+  relevantItemIds,
 }: {
   size?: "default" | "sm" | "lg" | "icon";
   variant?: "default" | "outline" | "ghost" | "secondary" | "destructive" | "link";
+  /**
+   * (#357) Optional allow-list of Plaid item ids this Sync chip should
+   * surface inline error / Reconnect state for. When provided, only items
+   * whose `id` is in the set contribute to the error chip and reauth
+   * popover — used by the Transactions page to suppress unrelated bank
+   * errors while the user is viewing a Manual account (the failing item
+   * isn't this view's data, so showing its error here is misleading).
+   * When omitted, behaves exactly as before (every item counts).
+   */
+  relevantItemIds?: string[];
 }) {
   const { data: plaidItems } = useListPlaidItems();
   const { runSync, isPending } = usePlaidSync();
 
-  const { mostRecent, hasItems, latestError, reauthItems } = useMemo(() => {
-    const items = plaidItems ?? [];
-    // (#214) Compute the *full* set of items that need re-authentication so the
-    // header chip's popover can list every broken bank, not just the first one
-    // we happened to iterate to. Power users with two simultaneously-broken
-    // banks now get a per-item Reconnect button for each, all from one place.
-    const { items: reauth } = findPlaidItemsNeedingReauth(items);
-    if (items.length === 0) {
-      return {
-        mostRecent: null as Date | null,
-        hasItems: false,
-        latestError: null as string | null,
-        reauthItems: reauth,
-      };
-    }
-    let recent: Date | null = null;
-    let recentForError: Date | null = null;
-    let latest: string | null = null;
-    for (const it of items) {
-      if (it.lastSyncedAt) {
-        const d = new Date(it.lastSyncedAt);
-        if (!Number.isNaN(d.getTime()) && (!recent || d > recent)) recent = d;
+  const { mostRecent, hasAnyItems, hasFilteredItems, latestError, reauthItems } =
+    useMemo(() => {
+      const allItems = plaidItems ?? [];
+      const filter = relevantItemIds ? new Set(relevantItemIds) : null;
+      const items = filter
+        ? allItems.filter((it) => filter.has(it.id))
+        : allItems;
+      // (#214) Compute the *full* set of items that need re-authentication so the
+      // header chip's popover can list every broken bank, not just the first one
+      // we happened to iterate to. Power users with two simultaneously-broken
+      // banks now get a per-item Reconnect button for each, all from one place.
+      // (#357) Scope the reauth popover to the filtered set as well — on a
+      // Manual transactions view the user shouldn't see "reconnect Chase"
+      // attached to a Cash account header.
+      const { items: reauth } = findPlaidItemsNeedingReauth(items);
+      if (items.length === 0) {
+        return {
+          mostRecent: null as Date | null,
+          // (#357) Distinguish "user has zero linked banks" (truly hide
+          // the Sync button) from "filter excluded everything" (still
+          // render the button so global sync remains a click away on
+          // the Manual transactions view) — the reviewer flagged the
+          // latter case being missing.
+          hasAnyItems: allItems.length > 0,
+          hasFilteredItems: false,
+          latestError: null as string | null,
+          reauthItems: reauth,
+        };
       }
-      if (it.lastSyncError) {
-        // Prefer the freshest error; fall back to first one we see.
-        const stamp = it.lastSyncedAt ? new Date(it.lastSyncedAt) : null;
-        if (!latest || (stamp && (!recentForError || stamp > recentForError))) {
-          latest = it.lastSyncError;
-          if (stamp) recentForError = stamp;
+      let recent: Date | null = null;
+      let recentForError: Date | null = null;
+      let latest: string | null = null;
+      for (const it of items) {
+        if (it.lastSyncedAt) {
+          const d = new Date(it.lastSyncedAt);
+          if (!Number.isNaN(d.getTime()) && (!recent || d > recent)) recent = d;
+        }
+        if (it.lastSyncError) {
+          // Prefer the freshest error; fall back to first one we see.
+          const stamp = it.lastSyncedAt ? new Date(it.lastSyncedAt) : null;
+          if (!latest || (stamp && (!recentForError || stamp > recentForError))) {
+            latest = it.lastSyncError;
+            if (stamp) recentForError = stamp;
+          }
         }
       }
-    }
-    return {
-      mostRecent: recent,
-      hasItems: true,
-      latestError: latest,
-      reauthItems: reauth,
-    };
-  }, [plaidItems]);
+      return {
+        mostRecent: recent,
+        hasAnyItems: true,
+        hasFilteredItems: true,
+        latestError: latest,
+        reauthItems: reauth,
+      };
+    }, [plaidItems, relevantItemIds]);
 
-  if (!hasItems) return null;
+  // (#357) Only short-circuit when the user has NO linked banks at all.
+  // When a filter is supplied but matches nothing (Manual transactions
+  // view), the button is still rendered so global sync remains
+  // available — we only suppress the bank-attributed error chip /
+  // reauth popover, since those would mislead the user on a Manual
+  // account view.
+  if (!hasAnyItems) return null;
 
-  const relative = mostRecent
-    ? `Last synced ${formatDistanceToNowStrict(mostRecent, { addSuffix: true })}`
-    : "Not yet synced";
+  const relative = hasFilteredItems
+    ? mostRecent
+      ? `Last synced ${formatDistanceToNowStrict(mostRecent, { addSuffix: true })}`
+      : "Not yet synced"
+    : // (#357) Manual transactions view: show a neutral hint instead of
+      // "Not yet synced" (which implies *this* account hasn't synced)
+      // so the global Sync button still reads sensibly.
+      "Sync linked banks";
 
   // Plaid errors are persisted on the server as the raw `error_message`
   // returned by Plaid. Prefix with "Plaid: " here so the chip / tooltip make
-  // it obvious where the message came from.
-  const displayError = latestError ? formatPlaidErrorForDisplay(latestError) : null;
+  // it obvious where the message came from. (#357) Only surface the chip
+  // for the filtered set so unrelated bank failures don't bleed onto a
+  // Manual account view.
+  const displayError =
+    hasFilteredItems && latestError
+      ? formatPlaidErrorForDisplay(latestError)
+      : null;
 
   return (
     <div className="flex flex-col items-end leading-tight">

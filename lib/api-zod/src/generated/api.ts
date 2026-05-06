@@ -2080,6 +2080,19 @@ export const ListPlaidSyncAttemptsResponse = zod.object({
       success: zod.boolean(),
       errorCode: zod.string().nullish(),
       errorMessage: zod.string().nullish(),
+      plaidDisplayMessage: zod.string().nullish(),
+      requestId: zod.string().nullish(),
+      httpStatus: zod.number().nullish(),
+      errorKind: zod
+        .union([
+          zod.literal("reauth"),
+          zod.literal("rate_limit"),
+          zod.literal("institution_down"),
+          zod.literal("transient"),
+          zod.literal("unknown"),
+          zod.literal(null),
+        ])
+        .nullish(),
     }),
   ),
 });
@@ -2139,6 +2152,7 @@ export const SyncPlaidTransactionsResponse = zod.object({
   items: zod.array(
     zod.object({
       itemId: zod.string(),
+      plaidItemRowId: zod.string().nullish(),
       institutionName: zod.string().nullish(),
       added: zod.number(),
       modified: zod.number(),
@@ -2153,6 +2167,21 @@ export const SyncPlaidTransactionsResponse = zod.object({
       ),
       error: zod.string().nullish(),
       stillPreparing: zod.boolean().optional(),
+      plaidErrorCode: zod.string().nullish(),
+      plaidErrorMessage: zod.string().nullish(),
+      plaidDisplayMessage: zod.string().nullish(),
+      requestId: zod.string().nullish(),
+      httpStatus: zod.number().nullish(),
+      kind: zod
+        .union([
+          zod.literal("reauth"),
+          zod.literal("rate_limit"),
+          zod.literal("institution_down"),
+          zod.literal("transient"),
+          zod.literal("unknown"),
+          zod.literal(null),
+        ])
+        .nullish(),
     }),
   ),
 });

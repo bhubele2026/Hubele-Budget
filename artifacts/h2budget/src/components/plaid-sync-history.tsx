@@ -10,7 +10,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, ArrowUp, ArrowDown } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowUp, ArrowDown, Link2 } from "lucide-react";
+import { dispatchPlaidReconnect } from "@/components/plaid-reconnect-listener";
 
 type SortKey = "attemptedAt" | "kind" | "success";
 type SortDir = "asc" | "desc";
@@ -41,7 +42,13 @@ function compareAttempts(
   return dir === "asc" ? cmp : -cmp;
 }
 
-export function PlaidSyncHistory({ itemId }: { itemId: string }) {
+export function PlaidSyncHistory({
+  itemId,
+  institutionName,
+}: {
+  itemId: string;
+  institutionName?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("attemptedAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -197,10 +204,53 @@ export function PlaidSyncHistory({ itemId }: { itemId: string }) {
                     </td>
                     <td
                       className="px-2 py-1.5 text-muted-foreground"
-                      title={a.errorMessage ?? undefined}
+                      title={
+                        a.plaidDisplayMessage ?? a.errorMessage ?? undefined
+                      }
                     >
-                      {a.errorMessage ? (
-                        <span className="line-clamp-1">{a.errorMessage}</span>
+                      {/* (#357) Prefer Plaid's `display_message` (the
+                          plain-English string Plaid recommends showing
+                          end-users), then fall back to error_message. */}
+                      {a.plaidDisplayMessage || a.errorMessage ? (
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className="line-clamp-2"
+                            data-testid={`sync-attempt-detail-${a.id}`}
+                          >
+                            {a.plaidDisplayMessage || a.errorMessage}
+                          </span>
+                          {(a.requestId || a.httpStatus !== null) && (
+                            <span className="text-[10px] text-muted-foreground/70 font-mono">
+                              {a.httpStatus !== null && a.httpStatus !== undefined
+                                ? `HTTP ${a.httpStatus}`
+                                : ""}
+                              {a.httpStatus !== null &&
+                              a.httpStatus !== undefined &&
+                              a.requestId
+                                ? " · "
+                                : ""}
+                              {a.requestId ? `req ${a.requestId}` : ""}
+                            </span>
+                          )}
+                          {a.errorKind === "reauth" && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[11px] self-start"
+                              onClick={() =>
+                                dispatchPlaidReconnect({
+                                  itemId,
+                                  institutionName,
+                                })
+                              }
+                              data-testid={`sync-attempt-reconnect-${a.id}`}
+                            >
+                              <Link2 className="w-3 h-3 mr-1" />
+                              Reconnect
+                            </Button>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-muted-foreground/60">—</span>
                       )}

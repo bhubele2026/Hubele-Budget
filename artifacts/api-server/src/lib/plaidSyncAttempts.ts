@@ -32,6 +32,13 @@ export async function recordPlaidSyncAttempt(opts: {
   success: boolean;
   errorCode?: string | null;
   errorMessage?: string | null;
+  // (#357) Enriched per-attempt failure metadata, mirrors the structured
+  // fields extractPlaidError() returns. All optional — for success rows
+  // and pre-#357 callers these stay null.
+  plaidDisplayMessage?: string | null;
+  requestId?: string | null;
+  httpStatus?: number | null;
+  errorKind?: string | null;
 }): Promise<void> {
   try {
     await db.insert(plaidSyncAttemptsTable).values({
@@ -41,6 +48,10 @@ export async function recordPlaidSyncAttempt(opts: {
       success: opts.success,
       errorCode: opts.errorCode ?? null,
       errorMessage: opts.errorMessage ?? null,
+      plaidDisplayMessage: opts.plaidDisplayMessage ?? null,
+      requestId: opts.requestId ?? null,
+      httpStatus: opts.httpStatus ?? null,
+      errorKind: opts.errorKind ?? null,
     });
   } catch (err) {
     logger.warn(
@@ -121,6 +132,13 @@ export async function listRecentSyncAttempts(
     success: r.success,
     errorCode: r.errorCode,
     errorMessage: r.errorMessage,
+    // (#357) Enriched per-attempt fields surfaced to Settings → Recent
+    // activity so a historical failure row carries the same plain-English
+    // reason + Reconnect CTA the live toast does.
+    plaidDisplayMessage: r.plaidDisplayMessage,
+    requestId: r.requestId,
+    httpStatus: r.httpStatus,
+    errorKind: r.errorKind,
   }));
 }
 

@@ -12,6 +12,7 @@ import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 
 import { Toaster } from "@/components/ui/toaster";
+import { PlaidReconnectListener } from "@/components/plaid-reconnect-listener";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
 import { SignInPage, SignUpPage } from "./pages/auth";
@@ -174,6 +175,11 @@ function ClerkProviderWithRoutes() {
             <Route component={ProtectedShell} />
           </Switch>
           <Toaster />
+          {/* (#357) Mounts a global listener that opens Plaid Link in
+              update mode whenever any surface (sync-error toast,
+              Settings → Recent activity row) dispatches the
+              "plaid:reconnect" event for a specific itemId. */}
+          <PlaidReconnectListener />
         </TooltipProvider>
       </QueryClientProvider>
     </ClerkProvider>

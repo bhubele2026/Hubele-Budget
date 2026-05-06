@@ -3072,6 +3072,13 @@ components:
             required: [itemId, added, modified, removed, autoCategorized, ruleAttributions]
             properties:
               itemId: { type: string }
+              # (#357) Row id (`plaid_items.id`) of this item — needed
+              # by the client when it dispatches the global
+              # "plaid:reconnect" event so the listener can call
+              # /plaid/link-token/update with the row id (the external
+              # `itemId` above is Plaid's identifier and is NOT what
+              # update-mode routes accept).
+              plaidItemRowId: { type: ["string", "null"] }
               institutionName: { type: ["string", "null"] }
               added: { type: integer }
               modified: { type: integer }
@@ -3095,6 +3102,33 @@ components:
               # state and does NOT show a destructive toast or persist a
               # red error chip.
               stillPreparing: { type: boolean }
+              # (#357) Structured Plaid failure metadata, populated only on
+              # error. Lets the frontend toast / inline header banner say
+              # "<Institution>: <plain-English reason>" + a Reconnect CTA
+              # without ever leaking raw axios "Request failed with status
+              # code 400" strings, and lets support correlate user reports
+              # back to Plaid's request_id without grepping logs.
+              plaidErrorCode: { type: ["string", "null"] }
+              plaidErrorMessage: { type: ["string", "null"] }
+              # Plaid's `display_message` — when present, this is the
+              # user-facing string Plaid itself recommends rendering.
+              plaidDisplayMessage: { type: ["string", "null"] }
+              # Plaid's `request_id` — quoted in support tickets so we
+              # can ask Plaid "what happened on this exact call?".
+              requestId: { type: ["string", "null"] }
+              # HTTP status returned by Plaid (e.g. 400, 429, 500).
+              httpStatus: { type: ["integer", "null"] }
+              # Categorical bucket the frontend uses to pick a CTA:
+              #   reauth, rate_limit, institution_down, transient, unknown.
+              kind:
+                type: ["string", "null"]
+                enum:
+                  - reauth
+                  - rate_limit
+                  - institution_down
+                  - transient
+                  - unknown
+                  - null
     PlaidConsentRefreshItem:
       type: object
       required:
@@ -3156,6 +3190,17 @@ components:
         # Human-readable message — Plaid's `error_message` when present,
         # otherwise the underlying error string. Null on success.
         errorMessage: { type: ["string", "null"] }
+        # (#357) Enriched per-attempt failure metadata so Settings →
+        # Recent activity can render exactly the same structured Plaid
+        # failure that the live sync toast renders, including a
+        # Reconnect CTA on reauth rows. All optional, populated only
+        # for failure rows that came from extractPlaidError().
+        plaidDisplayMessage: { type: ["string", "null"] }
+        requestId: { type: ["string", "null"] }
+        httpStatus: { type: ["integer", "null"] }
+        errorKind:
+          type: ["string", "null"]
+          enum: [reauth, rate_limit, institution_down, transient, unknown, null]
     PlaidSyncAttemptsResult:
       type: object
       required: [attempts]

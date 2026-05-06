@@ -5051,6 +5051,10 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         success: zod.ZodBoolean;
         errorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         errorMessage: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        plaidDisplayMessage: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        requestId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        httpStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"reauth">, zod.ZodLiteral<"rate_limit">, zod.ZodLiteral<"institution_down">, zod.ZodLiteral<"transient">, zod.ZodLiteral<"unknown">, zod.ZodLiteral<null>]>>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         kind: "balance" | "transactions" | "liabilities";
@@ -5058,6 +5062,10 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         success: boolean;
         errorCode?: string | null | undefined;
         errorMessage?: string | null | undefined;
+        plaidDisplayMessage?: string | null | undefined;
+        requestId?: string | null | undefined;
+        httpStatus?: number | null | undefined;
+        errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
     }, {
         id: string;
         kind: "balance" | "transactions" | "liabilities";
@@ -5065,6 +5073,10 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         success: boolean;
         errorCode?: string | null | undefined;
         errorMessage?: string | null | undefined;
+        plaidDisplayMessage?: string | null | undefined;
+        requestId?: string | null | undefined;
+        httpStatus?: number | null | undefined;
+        errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     attempts: {
@@ -5074,6 +5086,10 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         success: boolean;
         errorCode?: string | null | undefined;
         errorMessage?: string | null | undefined;
+        plaidDisplayMessage?: string | null | undefined;
+        requestId?: string | null | undefined;
+        httpStatus?: number | null | undefined;
+        errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
     }[];
 }, {
     attempts: {
@@ -5083,6 +5099,10 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         success: boolean;
         errorCode?: string | null | undefined;
         errorMessage?: string | null | undefined;
+        plaidDisplayMessage?: string | null | undefined;
+        requestId?: string | null | undefined;
+        httpStatus?: number | null | undefined;
+        errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
     }[];
 }>;
 /**
@@ -5203,6 +5223,7 @@ export declare const SyncPlaidTransactionsBody: zod.ZodObject<{
 export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
     items: zod.ZodArray<zod.ZodObject<{
         itemId: zod.ZodString;
+        plaidItemRowId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         institutionName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         added: zod.ZodNumber;
         modified: zod.ZodNumber;
@@ -5223,6 +5244,12 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         }>, "many">;
         error: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         stillPreparing: zod.ZodOptional<zod.ZodBoolean>;
+        plaidErrorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        plaidErrorMessage: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        plaidDisplayMessage: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        requestId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        httpStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        kind: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"reauth">, zod.ZodLiteral<"rate_limit">, zod.ZodLiteral<"institution_down">, zod.ZodLiteral<"transient">, zod.ZodLiteral<"unknown">, zod.ZodLiteral<null>]>>>;
     }, "strip", zod.ZodTypeAny, {
         itemId: string;
         added: number;
@@ -5234,9 +5261,16 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
             pattern: string;
             count: number;
         }[];
+        kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         institutionName?: string | null | undefined;
         stillPreparing?: boolean | undefined;
+        plaidDisplayMessage?: string | null | undefined;
+        requestId?: string | null | undefined;
+        httpStatus?: number | null | undefined;
+        plaidItemRowId?: string | null | undefined;
         error?: string | null | undefined;
+        plaidErrorCode?: string | null | undefined;
+        plaidErrorMessage?: string | null | undefined;
     }, {
         itemId: string;
         added: number;
@@ -5248,9 +5282,16 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
             pattern: string;
             count: number;
         }[];
+        kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         institutionName?: string | null | undefined;
         stillPreparing?: boolean | undefined;
+        plaidDisplayMessage?: string | null | undefined;
+        requestId?: string | null | undefined;
+        httpStatus?: number | null | undefined;
+        plaidItemRowId?: string | null | undefined;
         error?: string | null | undefined;
+        plaidErrorCode?: string | null | undefined;
+        plaidErrorMessage?: string | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     items: {
@@ -5264,9 +5305,16 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
             pattern: string;
             count: number;
         }[];
+        kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         institutionName?: string | null | undefined;
         stillPreparing?: boolean | undefined;
+        plaidDisplayMessage?: string | null | undefined;
+        requestId?: string | null | undefined;
+        httpStatus?: number | null | undefined;
+        plaidItemRowId?: string | null | undefined;
         error?: string | null | undefined;
+        plaidErrorCode?: string | null | undefined;
+        plaidErrorMessage?: string | null | undefined;
     }[];
 }, {
     items: {
@@ -5280,9 +5328,16 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
             pattern: string;
             count: number;
         }[];
+        kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         institutionName?: string | null | undefined;
         stillPreparing?: boolean | undefined;
+        plaidDisplayMessage?: string | null | undefined;
+        requestId?: string | null | undefined;
+        httpStatus?: number | null | undefined;
+        plaidItemRowId?: string | null | undefined;
         error?: string | null | undefined;
+        plaidErrorCode?: string | null | undefined;
+        plaidErrorMessage?: string | null | undefined;
     }[];
 }>;
 export declare const GetPlaidEnvironmentResponse: zod.ZodObject<{

@@ -5,10 +5,13 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { PlaidSyncResultItemsItemKind } from "./plaidSyncResultItemsItemKind";
 import type { RuleAttribution } from "./ruleAttribution";
 
 export type PlaidSyncResultItemsItem = {
   itemId: string;
+  /** @nullable */
+  plaidItemRowId?: string | null;
   /** @nullable */
   institutionName?: string | null;
   added: number;
@@ -19,4 +22,16 @@ export type PlaidSyncResultItemsItem = {
   /** @nullable */
   error?: string | null;
   stillPreparing?: boolean;
+  /** @nullable */
+  plaidErrorCode?: string | null;
+  /** @nullable */
+  plaidErrorMessage?: string | null;
+  /** @nullable */
+  plaidDisplayMessage?: string | null;
+  /** @nullable */
+  requestId?: string | null;
+  /** @nullable */
+  httpStatus?: number | null;
+  /** @nullable */
+  kind?: PlaidSyncResultItemsItemKind;
 };

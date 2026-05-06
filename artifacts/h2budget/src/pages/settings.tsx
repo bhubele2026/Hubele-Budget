@@ -730,7 +730,10 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <div className="mt-2 ml-8">
-                  <PlaidSyncHistory itemId={item.id} />
+                  <PlaidSyncHistory
+                    itemId={item.id}
+                    institutionName={item.institutionName}
+                  />
                 </div>
                 {item.accounts.length > 0 && (
                   <ul className="mt-3 ml-8 text-sm text-muted-foreground space-y-1">

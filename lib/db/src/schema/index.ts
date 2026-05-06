@@ -359,6 +359,21 @@ export const plaidSyncAttemptsTable = pgTable(
     success: boolean("success").notNull(),
     errorCode: text("error_code"),
     errorMessage: text("error_message"),
+    // (#357) Enriched per-attempt failure metadata so Settings → Recent
+    // activity (and any future surface) can render exactly the same
+    // structured Plaid failure the live sync toast renders, without a
+    // second round-trip to Plaid. All optional — populated only on
+    // failure rows that came from extractPlaidError().
+    plaidDisplayMessage: text("plaid_display_message"),
+    requestId: text("request_id"),
+    httpStatus: integer("http_status"),
+    // Categorical bucket: reauth | rate_limit | institution_down |
+    // transient | unknown. Lets the UI decide when to surface a
+    // Reconnect CTA on a historical row without re-deriving from the
+    // raw error_code each render. Named `errorKind` (col
+    // `error_kind`) so it doesn't collide with the existing `kind`
+    // column which records the Plaid product call.
+    errorKind: text("error_kind"),
   },
   (t) => ({
     itemTimeIdx: index("plaid_sync_attempts_item_time_idx").on(

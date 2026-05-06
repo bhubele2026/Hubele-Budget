@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { PlaidSyncAttemptErrorKind } from "./plaidSyncAttemptErrorKind";
 import type { PlaidSyncAttemptKind } from "./plaidSyncAttemptKind";
 
 export interface PlaidSyncAttempt {
@@ -16,4 +17,12 @@ export interface PlaidSyncAttempt {
   errorCode?: string | null;
   /** @nullable */
   errorMessage?: string | null;
+  /** @nullable */
+  plaidDisplayMessage?: string | null;
+  /** @nullable */
+  requestId?: string | null;
+  /** @nullable */
+  httpStatus?: number | null;
+  /** @nullable */
+  errorKind?: PlaidSyncAttemptErrorKind;
 }
