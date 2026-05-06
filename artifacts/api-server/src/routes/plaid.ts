@@ -14,6 +14,8 @@ import {
   institutionSlug,
   getPlaidEnv,
   isPlaidConfigured,
+  isValidPlaidAccessToken,
+  MALFORMED_PLAID_TOKEN_MESSAGE,
 } from "../lib/plaid";
 
 // Plaid issues access tokens prefixed with the environment they were
@@ -28,6 +30,7 @@ export function tokenEnv(token: string | null | undefined): string | null {
 }
 import {
   extractPlaidError,
+  markItemMalformedToken,
   plaidLogContext,
   refreshConsentExpirationForItem,
   refreshConsentExpirationForUser,
@@ -394,6 +397,24 @@ router.post(
       res.status(404).json({ error: "Plaid item not found" });
       return;
     }
+    // (#366) If the stored token is malformed, /link/token/create in
+    // update mode would 400 with the same opaque "INVALID_INPUT" Plaid
+    // returns for a bogus access_token. Short-circuit instead: flag the
+    // item as needing reconnect and tell the client to remove + relink
+    // from scratch (which mints a fresh token via /plaid/exchange).
+    if (!isValidPlaidAccessToken(item.accessToken)) {
+      await markItemMalformedToken(item.id);
+      req.log.warn(
+        { itemRowId: item.id, plaidItemIdExternal: item.itemId },
+        "[plaid-update] short-circuit: stored access_token failed isValidPlaidAccessToken — caller must remove + relink",
+      );
+      res.status(409).json({
+        error: MALFORMED_PLAID_TOKEN_MESSAGE,
+        code: "ITEM_LOGIN_REQUIRED",
+        action: "relink",
+      });
+      return;
+    }
     try {
       const redirectUri = process.env.PLAID_REDIRECT_URI?.trim();
       const resp = await plaid().linkTokenCreate({
@@ -435,6 +456,29 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     });
     const accessToken = exch.data.access_token;
     const itemId = exch.data.item_id;
+
+    // (#366) Centralized malformed-token guard. Plaid has, in rare
+    // post-OAuth-failure scenarios, returned an exchange response with
+    // an empty or truncated access_token. Persisting that value bricks
+    // every subsequent product call (transactions/sync, item/get,
+    // accounts/get, liabilities/get) for this row with an opaque 400.
+    // Refuse to persist instead and tell the client to retry the link
+    // flow — this is preferable to silently writing a poison row.
+    if (!isValidPlaidAccessToken(accessToken)) {
+      req.log.error(
+        {
+          plaidItemIdExternal: itemId,
+          accessTokenLength: typeof accessToken === "string" ? accessToken.length : 0,
+        },
+        "[plaid-exchange] refusing to persist malformed access_token returned by Plaid",
+      );
+      res.status(502).json({
+        error: MALFORMED_PLAID_TOKEN_MESSAGE,
+        code: "ITEM_LOGIN_REQUIRED",
+        action: "relink",
+      });
+      return;
+    }
 
     let resolvedName: string | null =
       typeof institutionName === "string" ? institutionName : null;
@@ -870,10 +914,20 @@ router.delete("/plaid/items/:id", requireAuth, async (req, res): Promise<void> =
     res.sendStatus(204);
     return;
   }
-  try {
-    await plaid().itemRemove({ access_token: item.accessToken });
-  } catch (e) {
-    req.log.warn({ err: e }, "Plaid itemRemove failed");
+  // (#366) Skip the upstream itemRemove when the stored token is
+  // malformed — Plaid would 400, and the user's intent is "delete
+  // locally" anyway. Local cleanup below still runs unconditionally.
+  if (isValidPlaidAccessToken(item.accessToken)) {
+    try {
+      await plaid().itemRemove({ access_token: item.accessToken });
+    } catch (e) {
+      req.log.warn({ err: e }, "Plaid itemRemove failed");
+    }
+  } else {
+    req.log.warn(
+      { itemRowId: item.id, plaidItemIdExternal: item.itemId },
+      "[plaid-items.delete] skipping upstream itemRemove — stored access_token is malformed; proceeding with local delete only",
+    );
   }
   // Reset source flags on any debts linked to accounts under this item.
   // The FK on debts.plaid_account_id has ON DELETE SET NULL, so the link
@@ -1334,12 +1388,22 @@ router.post(
     });
     let removed = 0;
     for (const item of targets) {
-      try {
-        // Best-effort: a sandbox/development token will be rejected by the
-        // production Plaid host, but we still want to free the local rows.
-        await plaid().itemRemove({ access_token: item.accessToken });
-      } catch (e) {
-        req.log.warn({ err: e, itemId: item.id }, "itemRemove failed during non-prod cleanup");
+      // (#366) Apply the same centralized guard as DELETE /plaid/items
+      // — never invoke itemRemove with a value that can't possibly be
+      // a valid Plaid token. Local cleanup below still proceeds.
+      if (isValidPlaidAccessToken(item.accessToken)) {
+        try {
+          // Best-effort: a sandbox/development token will be rejected by the
+          // production Plaid host, but we still want to free the local rows.
+          await plaid().itemRemove({ access_token: item.accessToken });
+        } catch (e) {
+          req.log.warn({ err: e, itemId: item.id }, "itemRemove failed during non-prod cleanup");
+        }
+      } else {
+        req.log.warn(
+          { itemId: item.id },
+          "[plaid-cleanup-non-prod] skipping upstream itemRemove — stored access_token is malformed; proceeding with local delete only",
+        );
       }
       const itemAccounts = await db
         .select({ id: plaidAccountsTable.id })

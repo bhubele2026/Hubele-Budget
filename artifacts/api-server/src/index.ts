@@ -2,6 +2,7 @@ import cron from "node-cron";
 import app from "./app";
 import { logger } from "./lib/logger";
 import {
+  flagMalformedAccessTokens,
   refreshConsentExpirationForAllItems,
   syncAllForAllUsers,
 } from "./lib/plaidSync";
@@ -103,6 +104,23 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
 
   if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
+    // (#366) One-shot backfill: flag any pre-existing rows whose stored
+    // access_token doesn't match the canonical `access-<env>-<opaque>`
+    // shape. Catches legacy rows from earlier env-mismatch incidents
+    // and ensures users see the Reconnect CTA on the next page load
+    // instead of waiting for the next hourly sync. Best-effort — never
+    // crashes boot.
+    flagMalformedAccessTokens()
+      .then(({ scanned, flagged }) => {
+        logger.info(
+          { scanned, flagged },
+          "Plaid malformed access_token boot scan complete",
+        );
+      })
+      .catch((err) => {
+        logger.error({ err }, "Plaid malformed access_token boot scan failed");
+      });
+
     cron.schedule("0 * * * *", () => {
       syncAllForAllUsers().catch((err) => {
         logger.error({ err }, "Hourly Plaid sync failed");

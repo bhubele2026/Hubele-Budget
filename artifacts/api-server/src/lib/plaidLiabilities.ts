@@ -4,9 +4,17 @@ import {
   plaidItemsTable,
   plaidAccountsTable,
 } from "@workspace/db";
-import { plaid } from "./plaid";
+import {
+  plaid,
+  isValidPlaidAccessToken,
+  MALFORMED_PLAID_TOKEN_MESSAGE,
+} from "./plaid";
 import { logger } from "./logger";
-import { extractPlaidError, plaidLogContext } from "./plaidSync";
+import {
+  extractPlaidError,
+  markItemMalformedToken,
+  plaidLogContext,
+} from "./plaidSync";
 import { recordPlaidSyncAttempt } from "./plaidSyncAttempts";
 
 export type LiabilityRow = {
@@ -77,6 +85,29 @@ export async function fetchLiabilitiesForItem(
       and(eq(plaidItemsTable.id, itemRowId), eq(plaidItemsTable.userId, userId)),
     );
   if (!item) return [];
+  // (#366) Centralized malformed-token guard. Without this, a bad
+  // row-level access_token would cascade into Plaid 400s on
+  // /accounts/get + /liabilities/get that the existing catch path
+  // would persist as the chip text. Short-circuit to the synthetic
+  // "needs reconnect" state so debt-only users still see the same
+  // Reconnect CTA on the Avalanche page that bank-only users see on
+  // Settings.
+  if (!isValidPlaidAccessToken(item.accessToken)) {
+    await markItemMalformedToken(itemRowId);
+    await recordPlaidSyncAttempt({
+      userId,
+      plaidItemId: itemRowId,
+      kind: "liabilities",
+      success: false,
+      errorCode: "ITEM_LOGIN_REQUIRED",
+      errorMessage: MALFORMED_PLAID_TOKEN_MESSAGE,
+    });
+    logger.warn(
+      { userId, itemRowId },
+      "[plaid-liabilities] short-circuit: stored access_token failed isValidPlaidAccessToken — flagged as needs-reconnect, no Plaid call made",
+    );
+    return [];
+  }
   let acctErr: unknown = null;
   let liabErr: unknown = null;
   // Always fetch latest balances via /accounts/get so debt-like accounts

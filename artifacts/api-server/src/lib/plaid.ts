@@ -10,6 +10,43 @@ import type { Transaction as PlaidTxn, RemovedTransaction } from "plaid";
 export const PLAID_VALID_ENVS = ["sandbox", "development", "production"] as const;
 export type PlaidEnv = (typeof PLAID_VALID_ENVS)[number];
 
+/**
+ * (#366) Centralized guard for the shape of a stored Plaid access token.
+ *
+ * Plaid mints tokens of the form `access-<env>-<opaque>` where `<env>` is
+ * one of the three PLAID_VALID_ENVS values and `<opaque>` is a non-empty
+ * URL-safe blob (alphanumerics + hyphens). Any other shape — empty,
+ * truncated, JSON-stringified, base64, etc. — has been seen in the wild
+ * after env-mismatch incidents and earlier write-path bugs. Sending such
+ * a value to /transactions/sync produces an opaque Plaid 400 that the
+ * Settings → Linked Banks chip surfaces verbatim, which is both
+ * unactionable for users and noisy for support.
+ *
+ * Every read/write site that touches `plaid_items.access_token` must
+ * call this guard FIRST and short-circuit on `false` instead of calling
+ * Plaid. The synthetic "needs reconnect" handling lives in plaidSync.ts
+ * (`markItemMalformedToken` + `synthesizeMalformedTokenSyncResult`).
+ */
+const PLAID_ACCESS_TOKEN_RE =
+  /^access-(sandbox|development|production)-[A-Za-z0-9-]+$/;
+
+export function isValidPlaidAccessToken(
+  token: string | null | undefined,
+): boolean {
+  if (typeof token !== "string" || token.length === 0) return false;
+  return PLAID_ACCESS_TOKEN_RE.test(token);
+}
+
+/**
+ * (#366) Friendly chip + toast copy used everywhere a malformed token is
+ * caught by the guard. Mirrors the per-code reason rendered in the
+ * frontend `PLAID_REAUTH_ERROR_REASONS["ITEM_LOGIN_REQUIRED"]` so the
+ * user gets a single consistent "reconnect" CTA — never a leaked Plaid
+ * 400 string.
+ */
+export const MALFORMED_PLAID_TOKEN_MESSAGE =
+  "Stored Plaid credential is malformed — please reconnect this bank.";
+
 export function getPlaidEnv(): PlaidEnv {
   const raw = process.env.PLAID_ENV;
   if (!raw) {

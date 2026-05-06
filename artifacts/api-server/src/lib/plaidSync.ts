@@ -9,7 +9,13 @@ import {
   forecastResolutionsTable,
   recurringItemsTable,
 } from "@workspace/db";
-import { plaid, institutionSlug, type PlaidTxn } from "./plaid";
+import {
+  plaid,
+  institutionSlug,
+  isValidPlaidAccessToken,
+  MALFORMED_PLAID_TOKEN_MESSAGE,
+  type PlaidTxn,
+} from "./plaid";
 import { loadUserRules, categorize } from "./autoCategorize";
 import { expandItem, parseISO, addDays, fmtISO } from "./cashSignal";
 import { refreshAmexAnchor } from "./amexAnchor";
@@ -210,6 +216,59 @@ export function plaidLogContext(
   };
 }
 
+/**
+ * (#366) Persist the synthetic "needs reconnect" state for an item whose
+ * stored access token failed `isValidPlaidAccessToken`. Re-uses
+ * `ITEM_LOGIN_REQUIRED` so the existing reauth banner / Settings chip /
+ * Reconnect button (all gated on `PLAID_REAUTH_ERROR_CODES`) light up
+ * exactly the same way they would if Plaid itself had returned the code.
+ *
+ * Returns the persisted columns so callers can fold them into the
+ * SyncResult without re-querying the row.
+ */
+export async function markItemMalformedToken(
+  itemRowId: string,
+): Promise<{ lastSyncError: string; lastSyncErrorCode: string }> {
+  const lastSyncError = MALFORMED_PLAID_TOKEN_MESSAGE;
+  const lastSyncErrorCode = "ITEM_LOGIN_REQUIRED";
+  await db
+    .update(plaidItemsTable)
+    .set({ lastSyncError, lastSyncErrorCode })
+    .where(eq(plaidItemsTable.id, itemRowId));
+  return { lastSyncError, lastSyncErrorCode };
+}
+
+/**
+ * (#366) Build the SyncResult that {sync,refresh}-style callers return
+ * when the guard short-circuits. Same shape as the Plaid-error catch
+ * branch so downstream consumers (web toast, mobile, recordPlaidSyncAttempt
+ * audit) can render it without a special case.
+ */
+export function synthesizeMalformedTokenSyncResult(item: {
+  id: string;
+  itemId: string;
+  institutionName: string | null;
+}): SyncResult {
+  const message = MALFORMED_PLAID_TOKEN_MESSAGE;
+  return {
+    itemId: item.itemId,
+    plaidItemRowId: item.id,
+    institutionName: item.institutionName,
+    added: 0,
+    modified: 0,
+    removed: 0,
+    autoCategorized: 0,
+    ruleAttributions: [],
+    error: message,
+    plaidErrorCode: "ITEM_LOGIN_REQUIRED",
+    plaidErrorMessage: message,
+    plaidDisplayMessage: message,
+    requestId: null,
+    httpStatus: null,
+    kind: "reauth",
+  };
+}
+
 function plaidAmountToSigned(t: PlaidTxn): string {
   // Plaid: positive = money out (debit). We use negative = spend.
   const n = Number(t.amount ?? 0);
@@ -241,6 +300,40 @@ export async function syncPlaidItem(
       ruleAttributions: [],
       error: "Item not found",
     };
+  }
+
+  // (#366) Centralized malformed-access-token guard. A bad value in
+  // `plaid_items.access_token` (legacy env-mismatch row, truncated
+  // string, etc.) would otherwise cascade into an opaque Plaid 400 on
+  // every product call and surface as a noisy "Request failed with
+  // status code 400" chip the user can't action. Short-circuit instead:
+  // mark the item as needing reconnect (synthesizing ITEM_LOGIN_REQUIRED
+  // so the existing reauth banner / Reconnect button light up), audit
+  // the attempt, and return a synthetic SyncResult — never call Plaid.
+  if (!isValidPlaidAccessToken(item.accessToken)) {
+    await markItemMalformedToken(itemRowId);
+    await recordPlaidSyncAttempt({
+      userId,
+      plaidItemId: itemRowId,
+      kind: "transactions",
+      success: false,
+      errorCode: "ITEM_LOGIN_REQUIRED",
+      errorMessage: MALFORMED_PLAID_TOKEN_MESSAGE,
+      plaidDisplayMessage: MALFORMED_PLAID_TOKEN_MESSAGE,
+      requestId: null,
+      httpStatus: null,
+      errorKind: "reauth",
+    });
+    logger.warn(
+      {
+        userId,
+        itemRowId,
+        plaidItemIdExternal: item.itemId,
+        institutionName: item.institutionName,
+      },
+      "[plaid-sync] short-circuit: stored access_token failed isValidPlaidAccessToken — flagged as needs-reconnect, no Plaid call made",
+    );
+    return synthesizeMalformedTokenSyncResult(item);
   }
 
   const slug = item.institutionSlug || institutionSlug(item.institutionName);
@@ -1104,6 +1197,27 @@ export async function refreshConsentExpirationForItem(
       error: "Item not found",
     };
   }
+  // (#366) Same malformed-token guard as syncPlaidItem — never invoke
+  // /item/get with a value that can't possibly be a valid Plaid token.
+  // Marks the item as needing reconnect so the daily cron's failure
+  // count surfaces it, but the user-visible state is the friendly
+  // "reconnect" copy rather than an opaque Plaid 400 echoed verbatim.
+  if (!isValidPlaidAccessToken(item.accessToken)) {
+    await markItemMalformedToken(item.id);
+    return {
+      itemRowId: item.id,
+      itemId: item.itemId,
+      institutionName: item.institutionName,
+      consentExpirationAt: item.consentExpirationAt
+        ? item.consentExpirationAt.toISOString()
+        : null,
+      consentExpirationLastRefreshedAt: item.consentExpirationLastRefreshedAt
+        ? item.consentExpirationLastRefreshedAt.toISOString()
+        : null,
+      changed: false,
+      error: MALFORMED_PLAID_TOKEN_MESSAGE,
+    };
+  }
   try {
     const itemResp = await plaid().itemGet({ access_token: item.accessToken });
     const cet = (itemResp.data.item as unknown as {
@@ -1206,6 +1320,52 @@ export async function refreshConsentExpirationForUser(
  * (per-item) but never thrown — the cron must never crash the process or
  * abort early on a single bad item.
  */
+/**
+ * (#366) One-shot backfill scan: walks every `plaid_items` row and flips
+ * those whose stored `access_token` fails `isValidPlaidAccessToken`
+ * into the synthetic `ITEM_LOGIN_REQUIRED` "needs reconnect" state.
+ * Idempotent — running it again on a row already flagged is a no-op
+ * write that does not surface to the user.
+ *
+ * Wired from `index.ts` to run once on boot so any pre-existing bad
+ * row immediately renders the Reconnect CTA, without waiting for the
+ * next sync attempt to discover the same condition. Returns counts so
+ * boot logs can surface "scanned 12 plaid items, flagged 1 malformed
+ * token" instead of being silent on the recovery action.
+ */
+export async function flagMalformedAccessTokens(): Promise<{
+  scanned: number;
+  flagged: number;
+}> {
+  const items = await db
+    .select({
+      id: plaidItemsTable.id,
+      accessToken: plaidItemsTable.accessToken,
+      itemId: plaidItemsTable.itemId,
+      institutionName: plaidItemsTable.institutionName,
+      lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+    })
+    .from(plaidItemsTable);
+  let flagged = 0;
+  for (const it of items) {
+    if (isValidPlaidAccessToken(it.accessToken)) continue;
+    flagged++;
+    // Always write — same value twice is harmless, and we can't
+    // distinguish a "real" ITEM_LOGIN_REQUIRED from our synthetic one
+    // without re-checking the message column.
+    await markItemMalformedToken(it.id);
+    logger.warn(
+      {
+        itemRowId: it.id,
+        plaidItemIdExternal: it.itemId,
+        institutionName: it.institutionName,
+      },
+      "[plaid-backfill] flagged item with malformed stored access_token as needs-reconnect",
+    );
+  }
+  return { scanned: items.length, flagged };
+}
+
 export async function refreshConsentExpirationForAllItems(): Promise<{
   scanned: number;
   updated: number;
