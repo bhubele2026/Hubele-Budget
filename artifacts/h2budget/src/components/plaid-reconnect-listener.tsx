@@ -3,6 +3,8 @@ import { usePlaidLink } from "react-plaid-link";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreatePlaidUpdateLinkToken,
+  useCreatePlaidLinkToken,
+  useExchangePlaidPublicToken,
   getListPlaidItemsQueryKey,
   getListTransactionsQueryKey,
   getListDebtsQueryKey,
@@ -41,7 +43,14 @@ export function PlaidReconnectListener() {
     null,
   );
   const [linkToken, setLinkToken] = useState<string | null>(null);
+  // (#367) Same 409→fresh-link fallback that PlaidReconnectButton uses,
+  // so a Reconnect click triggered from a sync-error toast can also
+  // recover items whose stored access_token can't be repaired in
+  // update mode (the previous "reconnect loop" symptom).
+  const [freshMode, setFreshMode] = useState(false);
   const createUpdateLinkToken = useCreatePlaidUpdateLinkToken();
+  const createLinkToken = useCreatePlaidLinkToken();
+  const exchange = useExchangePlaidPublicToken();
   const qc = useQueryClient();
   const { toast } = useToast();
   const { runSync } = usePlaidSync();
@@ -54,15 +63,40 @@ export function PlaidReconnectListener() {
   }, []);
 
   useEffect(() => {
+    function fetchFresh() {
+      setFreshMode(true);
+      createLinkToken.mutate(undefined, {
+        onSuccess: (data) => setLinkToken(data.linkToken),
+        onError: (err) => {
+          setPending(null);
+          setFreshMode(false);
+          toast({
+            title: "Could not start reconnect",
+            description: err instanceof Error ? err.message : String(err),
+            variant: "destructive",
+          });
+        },
+      });
+    }
     function onEvent(e: Event) {
       const detail = (e as CustomEvent<PlaidReconnectEventDetail>).detail;
       if (!detail || !detail.itemId) return;
       setPending(detail);
+      setFreshMode(false);
       createUpdateLinkToken.mutate(
         { data: { itemId: detail.itemId } },
         {
           onSuccess: (data) => setLinkToken(data.linkToken),
           onError: (err) => {
+            // (#367) 409 + action:"relink" → mint a new token via
+            // /plaid/link-token + /plaid/exchange instead of
+            // dropping the user back at the toast. Server-side
+            // self-heal in /plaid/exchange clears the chip.
+            const apiErr = err as { status?: number; data?: { action?: string } };
+            if (apiErr?.status === 409 && apiErr?.data?.action === "relink") {
+              fetchFresh();
+              return;
+            }
             setPending(null);
             toast({
               title: "Could not start reconnect",
@@ -75,13 +109,42 @@ export function PlaidReconnectListener() {
     }
     window.addEventListener(PLAID_RECONNECT_EVENT, onEvent);
     return () => window.removeEventListener(PLAID_RECONNECT_EVENT, onEvent);
-  }, [createUpdateLinkToken, toast]);
+  }, [createUpdateLinkToken, createLinkToken, toast]);
 
-  const onSuccess = useCallback(async () => {
+  const onSuccess = useCallback(async (publicToken: string, metadata: { institution?: { institution_id?: string; name?: string } | null }) => {
     const detail = pending;
+    const wasFresh = freshMode;
     setLinkToken(null);
     setPending(null);
+    setFreshMode(false);
     if (!detail || cancelledRef.current) return;
+    if (wasFresh) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          exchange.mutate(
+            {
+              data: {
+                publicToken,
+                institutionId: metadata.institution?.institution_id ?? null,
+                institutionName:
+                  metadata.institution?.name ?? detail.institutionName ?? null,
+              },
+            },
+            {
+              onSuccess: () => resolve(),
+              onError: (err) => reject(err),
+            },
+          );
+        });
+      } catch (err) {
+        toast({
+          title: "Reconnect failed",
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     toast({
       title: "Bank reconnected",
       description: detail.institutionName
@@ -105,7 +168,7 @@ export function PlaidReconnectListener() {
         variant: "destructive",
       });
     }
-  }, [pending, qc, runSync, toast]);
+  }, [pending, qc, runSync, toast, freshMode, exchange]);
 
   const { open, ready } = usePlaidLink({
     token: linkToken,
@@ -113,6 +176,7 @@ export function PlaidReconnectListener() {
     onExit: () => {
       setLinkToken(null);
       setPending(null);
+      setFreshMode(false);
     },
   });
 

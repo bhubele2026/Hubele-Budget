@@ -97,6 +97,24 @@ describe("isValidPlaidAccessToken", () => {
     ).toBe(true);
   });
 
+  // (#367) The previous `[A-Za-z0-9-]+` suffix regex was too strict —
+  // Plaid documents access tokens as opaque, and we have observed real
+  // tokens that contain underscores. Rejecting them poisoned the
+  // reconnect loop because the synthetic ITEM_LOGIN_REQUIRED would
+  // re-flag the row even after a successful Plaid Link relink.
+  it("accepts opaque tokens whose suffix contains underscores or mixed URL-safe chars", () => {
+    expect(
+      isValidPlaidAccessToken("access-production-abc_123_def-456"),
+    ).toBe(true);
+    expect(
+      isValidPlaidAccessToken("access-sandbox-AbC_xYz-9_8_7-zzz"),
+    ).toBe(true);
+    // tilde, plus, equals, hash, percent — all URL-safe printable ASCII
+    expect(
+      isValidPlaidAccessToken("access-production-abc~def+ghi=jkl#mno%pqr"),
+    ).toBe(true);
+  });
+
   it("rejects null, undefined, empty string, and non-string values", () => {
     expect(isValidPlaidAccessToken(null)).toBe(false);
     expect(isValidPlaidAccessToken(undefined)).toBe(false);
@@ -126,11 +144,27 @@ describe("isValidPlaidAccessToken", () => {
     expect(isValidPlaidAccessToken("ACCESS-sandbox-abc")).toBe(false);
   });
 
-  it("rejects illegal characters in the opaque segment (whitespace, slashes, JSON noise)", () => {
+  it("rejects clearly broken shapes (whitespace, JSON-quoted, multi-line)", () => {
+    // Whitespace / control chars are below printable ASCII — rejected.
     expect(isValidPlaidAccessToken("access-sandbox-abc 123")).toBe(false);
-    expect(isValidPlaidAccessToken("access-sandbox-abc/123")).toBe(false);
-    expect(isValidPlaidAccessToken("access-sandbox-abc.123")).toBe(false);
-    expect(isValidPlaidAccessToken('"access-sandbox-abc"')).toBe(false);
     expect(isValidPlaidAccessToken("access-sandbox-abc\n")).toBe(false);
+    expect(isValidPlaidAccessToken("access-sandbox-abc\t123")).toBe(false);
+    // JSON-stringified value (the actual poison shape we've observed):
+    // leading quote breaks the prefix, trailing quote breaks the suffix.
+    expect(isValidPlaidAccessToken('"access-sandbox-abc"')).toBe(false);
+    expect(isValidPlaidAccessToken("'access-sandbox-abc'")).toBe(false);
+  });
+
+  // (#367 follow-up) Plaid documents access tokens as opaque. Don't
+  // second-guess the contract by blocking individual punctuation chars
+  // — if the prefix matches and the suffix is printable-ASCII without
+  // whitespace, we accept. This prevents false-malformed flags if
+  // Plaid ever expands the token alphabet (base64 padding, URL-safe
+  // encodings, etc.).
+  it("accepts opaque suffixes containing punctuation Plaid could plausibly emit", () => {
+    expect(isValidPlaidAccessToken("access-production-abc.123")).toBe(true);
+    expect(isValidPlaidAccessToken("access-production-abc/123")).toBe(true);
+    expect(isValidPlaidAccessToken("access-production-abc+def=")).toBe(true);
+    expect(isValidPlaidAccessToken("access-production-abc:123")).toBe(true);
   });
 });

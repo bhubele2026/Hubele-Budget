@@ -27,8 +27,20 @@ export type PlaidEnv = (typeof PLAID_VALID_ENVS)[number];
  * Plaid. The synthetic "needs reconnect" handling lives in plaidSync.ts
  * (`markItemMalformedToken` + `synthesizeMalformedTokenSyncResult`).
  */
+// (#367) Plaid documents access tokens as opaque strings. The original
+// `[A-Za-z0-9-]+` suffix was over-strict — real tokens containing
+// underscores were being flagged "malformed", trapping users in a
+// reconnect loop. The intermediate fix added a forbidden-character
+// blocklist on top, but that still second-guesses Plaid's contract and
+// would mis-flag any future token shape that happens to include `.` /
+// `/` / `+` / `=` etc. (think base64 padding, URL-safe encodings).
+// The guard's only job is to reject *clearly broken* shapes that we've
+// actually seen poison rows from: empty values, wrong env segment,
+// JSON-stringified-with-quotes, whitespace, control chars, multi-line.
+// Anything that matches the prefix and is otherwise printable ASCII
+// without whitespace is treated as opaque and accepted.
 const PLAID_ACCESS_TOKEN_RE =
-  /^access-(sandbox|development|production)-[A-Za-z0-9-]+$/;
+  /^access-(sandbox|development|production)-[!-~]+$/;
 
 export function isValidPlaidAccessToken(
   token: string | null | undefined,

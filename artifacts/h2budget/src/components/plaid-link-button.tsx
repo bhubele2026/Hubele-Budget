@@ -20,8 +20,16 @@ import { PostLinkDebtDialog } from "@/components/post-link-debt-dialog";
 export const PLAID_LINK_TOKEN_STORAGE_KEY = "h2:plaid:link_token";
 export const PLAID_RETURN_TO_STORAGE_KEY = "h2:plaid:return_to";
 
-const POST_LINK_POLL_DELAY_MS = 5_000;
-const POST_LINK_POLL_MAX_ATTEMPTS = 6;
+// (#367) Plaid's first /transactions/sync after link returns empty for
+// a few seconds while the historical batch stages on Plaid's backend.
+// We previously polled 6× at fixed 5s = 30s total, which often gave
+// up *just* before the INITIAL_UPDATE webhook fired and left the user
+// thinking the link silently failed. Use a backoff schedule that sums
+// to ~90s so the post-link banner still resolves automatically for the
+// slow-staging institutions (Chase, Citi).
+const POST_LINK_POLL_DELAYS_MS = [
+  3_000, 4_000, 6_000, 8_000, 10_000, 12_000, 15_000, 15_000, 18_000,
+];
 
 export function PlaidLinkButton({
   onLinked,
@@ -81,14 +89,18 @@ export function PlaidLinkButton({
     let totalAdded = 0;
     let totalModified = 0;
     let lastErrors: string[] = [];
-    for (let attempt = 0; attempt < POST_LINK_POLL_MAX_ATTEMPTS; attempt++) {
-      await new Promise((r) => setTimeout(r, POST_LINK_POLL_DELAY_MS));
+    for (const delay of POST_LINK_POLL_DELAYS_MS) {
+      await new Promise((r) => setTimeout(r, delay));
       if (cancelledRef.current) return;
       const totals = await runSync({ silent: true });
       if (cancelledRef.current) return;
       totalAdded += totals.added;
       totalModified += totals.modified;
       lastErrors = totals.errors;
+      // Stop polling early on hard errors — no point hammering a
+      // failing item every few seconds. The toast below will surface
+      // the underlying Plaid error and Reconnect CTA.
+      if (totals.errors.length > 0) break;
       if (totals.added > 0 || totals.modified > 0) break;
     }
     if (cancelledRef.current) return;

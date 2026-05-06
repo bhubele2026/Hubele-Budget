@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import {
   useCreatePlaidUpdateLinkToken,
+  useCreatePlaidLinkToken,
+  useExchangePlaidPublicToken,
   getListPlaidItemsQueryKey,
   getListTransactionsQueryKey,
   getListDebtsQueryKey,
@@ -148,7 +150,16 @@ export function PlaidReconnectButton({
   size?: "default" | "sm" | "lg" | "icon";
 }) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
+  // (#367) When /plaid/link-token/update returns 409 + action:"relink"
+  // (the over-strict guard or a server-side malformed-token detection),
+  // fall back to the fresh-link flow that mints a brand-new
+  // access_token via /plaid/exchange. `freshMode` flips the onSuccess
+  // handler so it routes the public_token through exchange instead of
+  // assuming the existing access_token is still good.
+  const [freshMode, setFreshMode] = useState(false);
   const createUpdateLinkToken = useCreatePlaidUpdateLinkToken();
+  const createLinkToken = useCreatePlaidLinkToken();
+  const exchange = useExchangePlaidPublicToken();
   const qc = useQueryClient();
   const { toast } = useToast();
   const { runSync } = usePlaidSync();
@@ -162,12 +173,43 @@ export function PlaidReconnectButton({
     };
   }, []);
 
+  // (#367) Fall back to a brand-new link token when the server tells
+  // us the existing item can't be repaired with update mode (409 +
+  // action:"relink"). This is what breaks the reconnect loop: the user
+  // clicks Reconnect, the server says "this item's stored token is
+  // unusable, mint a new one", and we transparently launch Plaid Link
+  // in normal mode instead of bouncing the toast and stranding them.
+  const fetchFreshLinkToken = useCallback(() => {
+    setFreshMode(true);
+    createLinkToken.mutate(undefined, {
+      onSuccess: (data) => setLinkToken(data.linkToken),
+      onError: (err) => {
+        setFreshMode(false);
+        toast({
+          title: "Could not start reconnect",
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        });
+      },
+    });
+  }, [createLinkToken, toast]);
+
   const fetchToken = useCallback(() => {
+    setFreshMode(false);
     createUpdateLinkToken.mutate(
       { data: { itemId } },
       {
         onSuccess: (data) => setLinkToken(data.linkToken),
         onError: (err) => {
+          // (#367) Server signals "this item is past update-mode
+          // repair — re-link from scratch" with status 409 and
+          // body.action === "relink". Don't ask the user to retry
+          // manually; fall straight through to the fresh-link path.
+          const apiErr = err as { status?: number; data?: { action?: string } };
+          if (apiErr?.status === 409 && apiErr?.data?.action === "relink") {
+            fetchFreshLinkToken();
+            return;
+          }
           toast({
             title: "Could not start reconnect",
             description: err instanceof Error ? err.message : String(err),
@@ -176,11 +218,44 @@ export function PlaidReconnectButton({
         },
       },
     );
-  }, [createUpdateLinkToken, itemId, toast]);
+  }, [createUpdateLinkToken, itemId, toast, fetchFreshLinkToken]);
 
-  const onSuccess = useCallback(async () => {
+  const onSuccess = useCallback(async (publicToken: string, metadata: { institution?: { institution_id?: string; name?: string } | null }) => {
     setLinkToken(null);
+    const wasFresh = freshMode;
+    setFreshMode(false);
     if (cancelledRef.current) return;
+    // (#367) When this is the fresh-link fallback path (409 → relink),
+    // the public_token has to be exchanged for a new access_token via
+    // /plaid/exchange before we can sync. The server-side self-heal in
+    // exchange() also clears the stale lastSyncError chip, so the user
+    // gets back to a healthy item in one click.
+    if (wasFresh) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          exchange.mutate(
+            {
+              data: {
+                publicToken,
+                institutionId: metadata.institution?.institution_id ?? null,
+                institutionName: metadata.institution?.name ?? institutionName ?? null,
+              },
+            },
+            {
+              onSuccess: () => resolve(),
+              onError: (err) => reject(err),
+            },
+          );
+        });
+      } catch (err) {
+        toast({
+          title: "Reconnect failed",
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     toast({
       title: "Bank reconnected",
       description: institutionName
@@ -214,19 +289,25 @@ export function PlaidReconnectButton({
         variant: "destructive",
       });
     }
-  }, [institutionName, itemId, qc, runSync, toast]);
+  }, [institutionName, itemId, qc, runSync, toast, freshMode, exchange]);
 
   const { open, ready } = usePlaidLink({
     token: linkToken,
     onSuccess,
-    onExit: () => setLinkToken(null),
+    onExit: () => {
+      setLinkToken(null);
+      setFreshMode(false);
+    },
   });
 
   useEffect(() => {
     if (linkToken && ready) open();
   }, [linkToken, ready, open]);
 
-  const busy = createUpdateLinkToken.isPending;
+  const busy =
+    createUpdateLinkToken.isPending ||
+    createLinkToken.isPending ||
+    exchange.isPending;
 
   return (
     <Button

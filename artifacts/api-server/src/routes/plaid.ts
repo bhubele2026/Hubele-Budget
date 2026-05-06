@@ -522,6 +522,18 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     }
 
     const slug = institutionSlug(resolvedName);
+    // (#367) Compute `relinked` from the actual upsert path: was there
+    // already a row for this Plaid item_id (re-link of an existing,
+    // possibly chip-flagged item) or is this a brand-new insert
+    // (first-ever link of this institution for this user)? The Settings
+    // UI uses this to choose between "Bank reconnected" copy and the
+    // celebratory "Account linked" copy. Hardcoding `true` would
+    // misdrive the brand-new-link case.
+    const [existingItem] = await db
+      .select({ id: plaidItemsTable.id })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.itemId, itemId));
+    const relinked = !!existingItem;
     const [item] = await db
       .insert(plaidItemsTable)
       .values({
@@ -547,6 +559,21 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
           ...(consentRefreshedAt
             ? { consentExpirationLastRefreshedAt: consentRefreshedAt }
             : {}),
+          // (#367) Self-heal: when Plaid Link comes back through the
+          // exchange path it ALWAYS represents a freshly authorized
+          // item — any previously persisted reconnect-state error is
+          // by definition stale. Clearing the chip + the still-
+          // preparing timestamp here is what stops the "Reconnect
+          // loop" the user reported: previously, a successful relink
+          // left the synthetic ITEM_LOGIN_REQUIRED chip in place
+          // until the next /transactions/sync happened to succeed,
+          // which the over-strict token guard would then misclassify
+          // as malformed all over again.
+          lastSyncError: null,
+          lastSyncErrorCode: null,
+          stillPreparingSince: null,
+          consentExpirationLastRefreshError: null,
+          consentExpirationLastRefreshErrorCode: null,
         },
       })
       .returning();
@@ -580,8 +607,20 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
           });
       }
     } catch (e) {
+      // (#367) Unify Plaid log context: every line touching a Plaid
+      // item must carry userId + plaidItemRowId + plaidItemIdExternal
+      // so support can pivot from a single chip back to the originating
+      // request without grepping. plaidLogContext() handles the
+      // Plaid-API-specific fields (errorCode/displayMessage/requestId).
       req.log.warn(
-        { err: e, ...plaidLogContext(e, "/accounts/get") },
+        {
+          err: e,
+          userId: req.userId,
+          plaidItemRowId: item!.id,
+          plaidItemIdExternal: item!.itemId,
+          institutionName: item!.institutionName,
+          ...plaidLogContext(e, "/accounts/get"),
+        },
         "accountsGet failed",
       );
     }
@@ -598,8 +637,17 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
         item!.institutionSlug,
       );
     } catch (e) {
+      // (#367) Same context fields as the surrounding Plaid logs so
+      // support can correlate a missing-cutoff symptom with the
+      // exchange that should have set it.
       req.log.warn(
-        { err: e, itemRowId: item!.id },
+        {
+          err: e,
+          userId: req.userId,
+          plaidItemRowId: item!.id,
+          plaidItemIdExternal: item!.itemId,
+          institutionName: item!.institutionName,
+        },
         "autoDetectCutoffsForItem failed during exchange — first sync will not gate duplicates",
       );
     }
@@ -617,7 +665,10 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       req.log.warn(
         {
           err: e,
-          itemRowId: item!.id,
+          userId: req.userId,
+          plaidItemRowId: item!.id,
+          plaidItemIdExternal: item!.itemId,
+          institutionName: item!.institutionName,
           ...plaidLogContext(e, "/liabilities/get | /accounts/get (post-exchange)"),
         },
         "fetchLiabilitiesForItem failed during exchange — post-Link dialog may show empty fields",
@@ -635,6 +686,13 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       institutionId: item!.institutionId,
       institutionName: item!.institutionName,
       institutionSlug: item!.institutionSlug,
+      // (#367) Surface whether exchange ran against an existing row
+      // (true → a re-link of an item that had been chip-flagged, so
+      // show the calmer "Bank reconnected" copy) vs. a brand-new
+      // insert (false → first-ever link, show the celebratory
+      // "Account linked" copy). Computed from the pre-upsert lookup
+      // above, NOT hardcoded.
+      relinked,
       lastSyncedAt: item!.lastSyncedAt
         ? item!.lastSyncedAt.toISOString()
         : new Date().toISOString(),
