@@ -1328,20 +1328,29 @@ export default function TransactionsPage() {
             <SelectTrigger className="h-7 text-xs w-64" data-testid="select-chase-account">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent data-testid="chase-account-options">
               {(forecastData?.plaidCheckingAccounts ?? []).map((a) => {
                 const name = a.institutionName ?? a.name ?? "Checking";
                 const mask = a.mask ?? null;
                 const isSnapshot = bankSnapshot?.accountId === a.id;
                 return (
-                  <SelectItem key={a.id} value={a.id}>
+                  <SelectItem
+                    key={a.id}
+                    value={a.id}
+                    data-testid={`option-chase-account-${a.id}`}
+                  >
                     {name}
                     {mask ? ` ••${mask}` : ""}
                     {isSnapshot ? " · snapshot" : ""}
                   </SelectItem>
                 );
               })}
-              <SelectItem value="manual">Manual entries</SelectItem>
+              <SelectItem
+                value="manual"
+                data-testid="option-chase-account-manual"
+              >
+                Manual entries
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>

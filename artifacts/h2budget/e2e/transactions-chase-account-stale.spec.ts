@@ -181,8 +181,14 @@ test.describe("Chase per-account picker — stale selection self-heal (#316)", (
       timeout: 15_000,
     });
 
+    // Open the picker and switch to account B. Wait for the option to
+    // be visible after the trigger click — Radix Select renders
+    // SelectContent inside a portal, so options appear asynchronously
+    // after the trigger opens.
     await trigger.click();
-    await page.getByRole("option", { name: /Joint Checking/i }).click();
+    const optionB = page.getByTestId(`option-chase-account-${acctB.id}`);
+    await expect(optionB).toBeVisible({ timeout: 10_000 });
+    await optionB.click();
 
     await expect(page.getByTestId(`row-tx-${b1.id}`)).toBeVisible({
       timeout: 5_000,

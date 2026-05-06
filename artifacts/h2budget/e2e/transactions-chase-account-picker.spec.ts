@@ -206,23 +206,23 @@ test.describe("Chase per-account picker (#297, covers #103)", () => {
     await expect(endingBal).toContainText("$");
     await expect(endingBal).not.toContainText("Unavailable");
 
-    // The picker's effect rewrites the URL with `?account=…` for the
-    // initial selection too, so by now it should already point at A.
-    await expect
-      .poll(() => new URL(page.url()).searchParams.get("account"))
-      .toBe(acctA.id);
-    await expect
-      .poll(() => getStorageValue(page, "h2budget:chase-account"))
-      .toBe(acctA.id);
+    // No initial-load assertion on `?account=` / localStorage: the
+    // picker's persistence effect only writes those once the user has
+    // explicitly selected an account (the default-fallback case is left
+    // alone so the stale-selection self-heal can clear them). The
+    // stable signal that the snapshot account is selected on first
+    // render is the row + chip state asserted above.
 
     // --- Switch to account B via the picker. Day groups and chips should
     // re-filter to B-only, and Starting/Ending balance flip to the
     // "Unavailable" placeholder (no anchored balance for non-snapshot
-    // accounts).
+    // accounts). Wait for the option to be visible after opening the
+    // dropdown — Radix Select renders SelectContent inside a portal, so
+    // the option appears asynchronously after the trigger click.
     await trigger.click();
-    await page
-      .getByRole("option", { name: /Joint Checking/i })
-      .click();
+    const optionB = page.getByTestId(`option-chase-account-${acctB.id}`);
+    await expect(optionB).toBeVisible({ timeout: 10_000 });
+    await optionB.click();
 
     await expect(rowB1).toBeVisible({ timeout: 5_000 });
     await expect(rowB2).toBeVisible();
