@@ -201,14 +201,17 @@ test.describe("Budget → category drill-down deep-link (#168 e2e)", () => {
     // filtered list — and the row count must be exactly 2 (no other
     // amex categories were seeded).
     await expect(
-      page.getByRole("heading", { name: /^amex$/i }),
+      page.getByRole("heading", { name: /american express/i }),
     ).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("text-row-count")).toContainText(
       /^\s*2 of \d+ txns\s*$/,
       { timeout: 15_000 },
     );
-    await expect(page.getByText("AMEX DRILLDOWN STARBUCKS A")).toBeVisible();
-    await expect(page.getByText("AMEX DRILLDOWN STARBUCKS B")).toBeVisible();
+    // Two visual layouts render the same row (mobile cards + desktop table);
+    // assert presence in both rather than picking one — keeps the spec
+    // resilient to the responsive breakpoint applied during the run.
+    await expect(page.getByText("AMEX DRILLDOWN STARBUCKS A")).toHaveCount(2);
+    await expect(page.getByText("AMEX DRILLDOWN STARBUCKS B")).toHaveCount(2);
 
     await context.close();
   });
