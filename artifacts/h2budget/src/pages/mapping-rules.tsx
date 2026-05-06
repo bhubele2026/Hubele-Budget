@@ -60,6 +60,8 @@ import {
   ArrowDown,
   Beaker,
   GripVertical,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -141,6 +143,41 @@ function rememberDismissedFocusBatch(ids: readonly string[]): void {
     window.localStorage.setItem(
       FOCUS_PILL_DISMISSED_STORAGE_KEY,
       JSON.stringify(next),
+    );
+  } catch {
+    /* ignore quota / disabled storage */
+  }
+}
+
+// Task #336 — persist which category cards the user has collapsed on
+// the Mapping Rules page so the per-category grouping (Task #282) can
+// scale as a user accumulates categories. The collapsed state is keyed
+// by category id (or the literal "__uncategorized__" sentinel used by
+// the cardGroups grouping). State that points at a category that no
+// longer exists is harmless — it just means re-creating that category
+// later restores its previously-collapsed state.
+const COLLAPSED_CATEGORIES_STORAGE_KEY =
+  "h2budget:mappingRules:collapsedCategories";
+
+function loadCollapsedCategories(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_CATEGORIES_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((s): s is string => typeof s === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCollapsedCategories(ids: Set<string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      COLLAPSED_CATEGORIES_STORAGE_KEY,
+      JSON.stringify(Array.from(ids)),
     );
   } catch {
     /* ignore quota / disabled storage */
@@ -645,6 +682,23 @@ export default function MappingRulesPage() {
       return next;
     });
   const clearSelection = () => setSelected(new Set());
+
+  // Task #336 — collapsed-per-category state, hydrated from
+  // localStorage so the user's choices survive reloads. We persist on
+  // every change via the effect below.
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(
+    () => loadCollapsedCategories(),
+  );
+  useEffect(() => {
+    saveCollapsedCategories(collapsedCategories);
+  }, [collapsedCategories]);
+  const toggleCategoryCollapsed = (key: string) =>
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
@@ -1763,22 +1817,49 @@ export default function MappingRulesPage() {
     });
   }, [rules]);
 
-  // Header checkbox is scoped to the *currently filtered* (visible)
-  // rows. It reads as fully checked only when every visible row is
-  // selected, indeterminate when some are.
+  // Task #336 — the rules the user can actually see right now: rules
+  // in cards that are not collapsed, with the same "filters force
+  // expand" / "focus deep-link force expand" rules used in the render
+  // below. Bulk select-all is scoped to this set so a collapsed
+  // category card can't have its rows silently swept into a bulk
+  // delete or bulk category change.
+  const visibleRules = useMemo(() => {
+    const filterActive = !!searchQuery || focusFilterActive;
+    const out: MappingRule[] = [];
+    for (const group of cardGroups) {
+      const groupHasFocusTarget =
+        !!focusId && group.rules.some((r) => r.id === focusId);
+      const isCollapsed =
+        collapsedCategories.has(group.key) &&
+        !filterActive &&
+        !groupHasFocusTarget;
+      if (!isCollapsed) out.push(...group.rules);
+    }
+    return out;
+  }, [
+    cardGroups,
+    collapsedCategories,
+    searchQuery,
+    focusFilterActive,
+    focusId,
+  ]);
+
+  // Header checkbox is scoped to the *currently visible* (expanded +
+  // filtered) rows. It reads as fully checked only when every visible
+  // row is selected, indeterminate when some are.
   const visibleSelectionState: boolean | "indeterminate" = useMemo(() => {
-    if (filtered.length === 0) return false;
+    if (visibleRules.length === 0) return false;
     let selectedCount = 0;
-    for (const r of filtered) if (selected.has(r.id)) selectedCount++;
+    for (const r of visibleRules) if (selected.has(r.id)) selectedCount++;
     if (selectedCount === 0) return false;
-    if (selectedCount === filtered.length) return true;
+    if (selectedCount === visibleRules.length) return true;
     return "indeterminate";
-  }, [filtered, selected]);
+  }, [visibleRules, selected]);
 
   const toggleAllVisible = (on: boolean) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      for (const r of filtered) {
+      for (const r of visibleRules) {
         if (on) next.add(r.id);
         else next.delete(r.id);
       }
@@ -2143,12 +2224,48 @@ export default function MappingRulesPage() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between text-base">
                 <span>Rules grouped by category</span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  {sorted.length} total{" "}
-                  {searchQuery || focusFilterActive
-                    ? `· ${filtered.length} shown`
-                    : ""}
-                </span>
+                <div className="flex items-center gap-3">
+                  {cardGroups.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs font-normal"
+                      onClick={() => {
+                        // If every visible group is collapsed, treat
+                        // the button as Expand all; otherwise Collapse
+                        // all visible groups. We never touch state for
+                        // groups that aren't currently in cardGroups so
+                        // hidden-by-filter cards keep their setting.
+                        const allCollapsed = cardGroups.every((g) =>
+                          collapsedCategories.has(g.key),
+                        );
+                        setCollapsedCategories((prev) => {
+                          const next = new Set(prev);
+                          if (allCollapsed) {
+                            for (const g of cardGroups) next.delete(g.key);
+                          } else {
+                            for (const g of cardGroups) next.add(g.key);
+                          }
+                          return next;
+                        });
+                      }}
+                      data-testid="rule-collapse-all"
+                    >
+                      {cardGroups.every((g) =>
+                        collapsedCategories.has(g.key),
+                      )
+                        ? "Expand all"
+                        : "Collapse all"}
+                    </Button>
+                  )}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {sorted.length} total{" "}
+                    {searchQuery || focusFilterActive
+                      ? `· ${filtered.length} shown`
+                      : ""}
+                  </span>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -2160,14 +2277,14 @@ export default function MappingRulesPage() {
                   checked={visibleSelectionState}
                   onCheckedChange={(v) => toggleAllVisible(!!v)}
                   aria-label="Select all visible rules"
-                  disabled={filtered.length === 0}
+                  disabled={visibleRules.length === 0}
                   data-testid="rule-select-all"
                 />
                 <span className="text-xs text-muted-foreground">
                   {selected.size > 0
                     ? `${selected.size} selected`
-                    : searchQuery
-                      ? `Select all ${filtered.length} shown`
+                    : searchQuery || visibleRules.length !== sorted.length
+                      ? `Select all ${visibleRules.length} shown`
                       : "Select all"}
                 </span>
                 {selected.size > 0 && (
@@ -2265,18 +2382,49 @@ export default function MappingRulesPage() {
               </Card>
             ) : (
               <div className="space-y-4" data-testid="rule-category-cards">
-                {cardGroups.map((group) => (
+                {cardGroups.map((group) => {
+                  // Search and the focus-pill "Show only these" toggle
+                  // already prune the rule list; if a card survives that
+                  // filter the user wants to see its rules, so we ignore
+                  // the persisted collapsed state while a filter is
+                  // active. We also force-expand the card containing the
+                  // current ?focus deep-link target so the auto-scroll
+                  // lands on a visible row.
+                  const groupHasFocusTarget =
+                    !!focusId && group.rules.some((r) => r.id === focusId);
+                  const filterActive =
+                    !!searchQuery || focusFilterActive;
+                  const isCollapsed =
+                    collapsedCategories.has(group.key) &&
+                    !filterActive &&
+                    !groupHasFocusTarget;
+                  return (
                   <Card
                     key={group.key}
                     data-testid={`rule-category-card-${group.key}`}
+                    data-collapsed={isCollapsed ? "true" : undefined}
                   >
                     <CardHeader className="pb-2">
                       <CardTitle className="flex items-center justify-between text-base">
-                        <span
-                          data-testid={`rule-category-card-name-${group.key}`}
+                        <button
+                          type="button"
+                          onClick={() => toggleCategoryCollapsed(group.key)}
+                          className="flex items-center gap-2 text-left hover:text-foreground/80 -ml-1 px-1 py-0.5 rounded"
+                          aria-expanded={!isCollapsed}
+                          aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${group.name}`}
+                          data-testid={`rule-category-card-toggle-${group.key}`}
                         >
-                          {group.name}
-                        </span>
+                          {isCollapsed ? (
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                          )}
+                          <span
+                            data-testid={`rule-category-card-name-${group.key}`}
+                          >
+                            {group.name}
+                          </span>
+                        </button>
                         <Badge
                           variant="outline"
                           className="text-[10px] tabular-nums"
@@ -2287,6 +2435,7 @@ export default function MappingRulesPage() {
                         </Badge>
                       </CardTitle>
                     </CardHeader>
+                    {!isCollapsed && (
                     <CardContent className="p-0">
                       {/* Fixed-height scroll box per spec — keeps very
                         * large categories from dominating the page while
@@ -2482,8 +2631,10 @@ export default function MappingRulesPage() {
                         })}
                       </div>
                     </CardContent>
+                    )}
                   </Card>
-                ))}
+                  );
+                })}
               </div>
             )}
           </SortableContext>
