@@ -1636,6 +1636,7 @@ export type CashSignalEventsItem = {
   date: string;
   label: string;
   amount: string;
+  itemId?: string;
 };
 
 export interface CashSignal {

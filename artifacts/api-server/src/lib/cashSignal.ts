@@ -191,8 +191,12 @@ export type CashSignal = {
    * amount. The forecast chart uses this to mark big-bill days. Income
    * events and matched-out items are excluded — only entries that actually
    * dip the balance show up.
+   *
+   * `itemId` is the source recurring item id (or synthesized debt-min id),
+   * which lets the chart deep-link a marker click to the matching plan row
+   * in the register below.
    */
-  events?: Array<{ date: string; label: string; amount: string }>;
+  events?: Array<{ date: string; label: string; amount: string; itemId: string }>;
 };
 
 function r2(n: number): string {
@@ -384,7 +388,12 @@ export async function computeCashSignal(
   // include entries that ACTUALLY drag the balance down (negative amount,
   // post-anchor, not already matched out by a real txn) so the markers line
   // up with dips on the projected line.
-  const expenseEvents: Array<{ date: string; label: string; amount: number }> = [];
+  const expenseEvents: Array<{
+    date: string;
+    label: string;
+    amount: number;
+    itemId: string;
+  }> = [];
   for (const ev of events) {
     const origKey = `${ev.itemId}|${ev.date}`;
     const effectiveDate = rescheduledByKey.get(origKey) ?? ev.date;
@@ -397,6 +406,7 @@ export async function computeCashSignal(
         date: effectiveDate,
         label: ev.label,
         amount: ev.amount,
+        itemId: ev.itemId,
       });
     }
   }
@@ -482,6 +492,11 @@ export async function computeCashSignal(
     events: expenseEvents
       .filter((e) => e.date >= fromISO && e.date <= toISO)
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-      .map((e) => ({ date: e.date, label: e.label, amount: r2(e.amount) })),
+      .map((e) => ({
+        date: e.date,
+        label: e.label,
+        amount: r2(e.amount),
+        itemId: e.itemId,
+      })),
   };
 }

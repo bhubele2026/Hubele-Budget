@@ -3898,14 +3898,17 @@ export declare const GetForecastResponse: zod.ZodObject<{
             date: zod.ZodString;
             label: zod.ZodString;
             amount: zod.ZodString;
+            itemId: zod.ZodOptional<zod.ZodString>;
         }, "strip", zod.ZodTypeAny, {
             date: string;
             amount: string;
             label: string;
+            itemId?: string | undefined;
         }, {
             date: string;
             amount: string;
             label: string;
+            itemId?: string | undefined;
         }>, "many">>;
     }, "strip", zod.ZodTypeAny, {
         status: "ready" | "tight" | "not_yet" | "no_data";
@@ -3920,6 +3923,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             date: string;
             amount: string;
             label: string;
+            itemId?: string | undefined;
         }[] | undefined;
         startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
@@ -3947,6 +3951,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             date: string;
             amount: string;
             label: string;
+            itemId?: string | undefined;
         }[] | undefined;
         startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
@@ -4113,6 +4118,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             date: string;
             amount: string;
             label: string;
+            itemId?: string | undefined;
         }[] | undefined;
         startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
@@ -4227,6 +4233,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
             date: string;
             amount: string;
             label: string;
+            itemId?: string | undefined;
         }[] | undefined;
         startingBalance?: string | undefined;
         snapshotAt?: string | null | undefined;
@@ -4462,14 +4469,17 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         date: zod.ZodString;
         label: zod.ZodString;
         amount: zod.ZodString;
+        itemId: zod.ZodOptional<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         date: string;
         amount: string;
         label: string;
+        itemId?: string | undefined;
     }, {
         date: string;
         amount: string;
         label: string;
+        itemId?: string | undefined;
     }>, "many">>;
 }, "strip", zod.ZodTypeAny, {
     status: "ready" | "tight" | "not_yet" | "no_data";
@@ -4484,6 +4494,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         date: string;
         amount: string;
         label: string;
+        itemId?: string | undefined;
     }[] | undefined;
     startingBalance?: string | undefined;
     snapshotAt?: string | null | undefined;
@@ -4511,6 +4522,7 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         date: string;
         amount: string;
         label: string;
+        itemId?: string | undefined;
     }[] | undefined;
     startingBalance?: string | undefined;
     snapshotAt?: string | null | undefined;

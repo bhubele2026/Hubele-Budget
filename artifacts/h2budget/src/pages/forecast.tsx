@@ -449,6 +449,7 @@ function PlanDropRow({
   activeDragId,
   payoff,
   isBestSuggestion = false,
+  isHighlighted = false,
 }: {
   row: PlanLine;
   onSelect: (row: PlanLine) => void;
@@ -462,6 +463,12 @@ function PlanDropRow({
    * suggestion right now" decision so we don't recompute scoring per row.
    */
   isBestSuggestion?: boolean;
+  /**
+   * (#335) When the user clicks a big-bill marker (or a bill inside its
+   * tooltip), the matching plan row briefly pulses so they can see exactly
+   * which bill the dot was pointing at.
+   */
+  isHighlighted?: boolean;
 }) {
   const droppable = useDroppable({
     id: `plan:${row.itemId}|${row.date}`,
@@ -485,12 +492,16 @@ function PlanDropRow({
         }
       }}
       data-suggested-drop={showSuggestion ? "true" : undefined}
+      data-plan-key={`${row.itemId}|${row.date}`}
+      data-testid={`plan-row-${row.itemId}-${row.date}`}
       className={`w-full text-left p-4 flex items-center justify-between transition-colors cursor-pointer ${
         isOver
           ? "bg-primary/10 ring-2 ring-primary ring-inset"
-          : showSuggestion
-            ? "bg-amber-50 ring-2 ring-amber-400/70 ring-inset dark:bg-amber-950/20"
-            : "hover:bg-muted/50"
+          : isHighlighted
+            ? "bg-sky-50 ring-2 ring-sky-400 ring-inset dark:bg-sky-950/30"
+            : showSuggestion
+              ? "bg-amber-50 ring-2 ring-amber-400/70 ring-inset dark:bg-amber-950/20"
+              : "hover:bg-muted/50"
       }`}
     >
       <div className="flex items-center gap-3 min-w-0">
@@ -649,6 +660,40 @@ export default function ForecastPage() {
   // (#26) Tracks which inbox card is currently hovered/focused so the
   // matching plan row can light up before the user picks the card up.
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
+  // (#335) Active highlight for a plan row that the user just deep-linked to
+  // by clicking a big-bill marker (or a bill inside its tooltip). Cleared
+  // automatically after a short pulse so the row settles back to normal.
+  const [highlightedPlanKey, setHighlightedPlanKey] = useState<string | null>(
+    null,
+  );
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    },
+    [],
+  );
+  const jumpToPlan = (itemId: string, date: string) => {
+    const key = `${itemId}|${date}`;
+    setHighlightedPlanKey(key);
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(
+      () => setHighlightedPlanKey(null),
+      2000,
+    );
+    // Defer to next frame so the row is mounted/visible before scrolling.
+    requestAnimationFrame(() => {
+      const el = document.querySelector(
+        `[data-plan-key="${key.replace(/"/g, '\\"')}"]`,
+      );
+      if (el && "scrollIntoView" in el) {
+        (el as HTMLElement).scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    });
+  };
   const [reconciledNow, setReconciledNow] = useState(false);
   const [moveTarget, setMoveTarget] = useState<PlanLine | null>(null);
   const [moveDateDraft, setMoveDateDraft] = useState<string>("");
@@ -1598,7 +1643,10 @@ export default function ForecastPage() {
     const dailyByDate = new Map(dailySeries.map((d) => [d.rawDate, d.balance]));
     const byDate = new Map<
       string,
-      { total: number; bills: Array<{ label: string; amount: number }> }
+      {
+        total: number;
+        bills: Array<{ label: string; amount: number; itemId?: string }>;
+      }
     >();
     for (const e of evs) {
       const amt = Number(e.amount);
@@ -1606,7 +1654,7 @@ export default function ForecastPage() {
       if (!dailyByDate.has(e.date)) continue;
       const slot = byDate.get(e.date) ?? { total: 0, bills: [] };
       slot.total += amt;
-      slot.bills.push({ label: e.label, amount: amt });
+      slot.bills.push({ label: e.label, amount: amt, itemId: e.itemId });
       byDate.set(e.date, slot);
     }
     const bufferThreshold =
@@ -1902,40 +1950,108 @@ export default function ForecastPage() {
                   width={60}
                 />
                 <RechartsTooltip
-                  contentStyle={{
-                    background: "hsl(var(--background))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: 6,
-                    fontSize: 12,
-                  }}
-                  labelFormatter={(_label, payload) => {
-                    const p = payload?.[0]?.payload as
-                      | { rawDate?: string }
+                  // Allow the user to click bill names inside the tooltip
+                  // to deep-link into the register below (#335).
+                  wrapperStyle={{ pointerEvents: "auto" }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload || payload.length === 0) return null;
+                    const p = payload[0]?.payload as
+                      | { rawDate?: string; balance?: number }
                       | undefined;
-                    return p?.rawDate ? formatDate(p.rawDate) : String(_label);
+                    const rawDate = p?.rawDate;
+                    const balance = Number(p?.balance);
+                    const marker = rawDate ? bigBillByDate.get(rawDate) : undefined;
+                    return (
+                      <div
+                        style={{
+                          background: "hsl(var(--background))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: 6,
+                          fontSize: 12,
+                          padding: "8px 10px",
+                          minWidth: 160,
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                        }}
+                      >
+                        <div style={{ fontWeight: 600 }}>
+                          {rawDate ? formatDate(rawDate) : ""}
+                        </div>
+                        <div style={{ marginTop: 2 }}>
+                          Balance:{" "}
+                          <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                            {Number.isFinite(balance)
+                              ? formatCurrency(balance)
+                              : "—"}
+                          </span>
+                        </div>
+                        {marker && (
+                          <div style={{ marginTop: 6 }}>
+                            <div
+                              style={{
+                                fontSize: 10,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.04em",
+                                color: "hsl(var(--muted-foreground))",
+                                marginBottom: 4,
+                              }}
+                            >
+                              Big bills today
+                            </div>
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 2,
+                              }}
+                            >
+                              {marker.bills.map((b, idx) => {
+                                const canJump = !!b.itemId;
+                                return (
+                                  <button
+                                    key={`${b.itemId ?? "_"}-${idx}`}
+                                    type="button"
+                                    disabled={!canJump}
+                                    onClick={() => {
+                                      if (b.itemId)
+                                        jumpToPlan(b.itemId, marker.date);
+                                    }}
+                                    data-testid={`tooltip-bill-${marker.date}-${b.itemId ?? idx}`}
+                                    style={{
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      gap: 12,
+                                      padding: "2px 4px",
+                                      borderRadius: 4,
+                                      border: "none",
+                                      background: "transparent",
+                                      cursor: canJump ? "pointer" : "default",
+                                      textAlign: "left",
+                                      color: "inherit",
+                                      font: "inherit",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (canJump)
+                                        (e.currentTarget as HTMLElement).style.background =
+                                          "hsl(var(--muted))";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      (e.currentTarget as HTMLElement).style.background =
+                                        "transparent";
+                                    }}
+                                  >
+                                    <span style={{ minWidth: 0 }}>{b.label}</span>
+                                    <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                                      {formatCurrency(b.amount)}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
                   }}
-                  formatter={(v: number, _name, entry) => {
-                    const p = entry?.payload as
-                      | { rawDate?: string }
-                      | undefined;
-                    const marker = p?.rawDate
-                      ? bigBillByDate.get(p.rawDate)
-                      : undefined;
-                    if (marker) {
-                      const lines = marker.bills
-                        .map(
-                          (b) =>
-                            `${b.label}: ${formatCurrency(b.amount)}`,
-                        )
-                        .join("\n");
-                      return [
-                        `${formatCurrency(v)}\nBig bills today:\n${lines}`,
-                        "Balance",
-                      ];
-                    }
-                    return [formatCurrency(v), "Balance"];
-                  }}
-                  itemStyle={{ whiteSpace: "pre-line" }}
                 />
                 <Area
                   type="monotone"
@@ -1963,20 +2079,27 @@ export default function ForecastPage() {
                     />
                   </ReferenceLine>
                 )}
-                {bigBillMarkers.map((m) => (
-                  <ReferenceDot
-                    key={`big-bill-${m.date}`}
-                    x={m.date}
-                    y={m.balance}
-                    r={4}
-                    fill="hsl(var(--chart-1))"
-                    stroke="hsl(var(--background))"
-                    strokeWidth={1.5}
-                    ifOverflow="extendDomain"
-                    isFront
-                    data-testid={`big-bill-marker-${m.date}`}
-                  />
-                ))}
+                {bigBillMarkers.map((m) => {
+                  const top = m.bills.find((b) => !!b.itemId) ?? m.bills[0];
+                  return (
+                    <ReferenceDot
+                      key={`big-bill-${m.date}`}
+                      x={m.date}
+                      y={m.balance}
+                      r={6}
+                      fill="hsl(var(--chart-1))"
+                      stroke="hsl(var(--background))"
+                      strokeWidth={1.5}
+                      ifOverflow="extendDomain"
+                      isFront
+                      data-testid={`big-bill-marker-${m.date}`}
+                      cursor={top?.itemId ? "pointer" : undefined}
+                      onClick={() => {
+                        if (top?.itemId) jumpToPlan(top.itemId, m.date);
+                      }}
+                    />
+                  );
+                })}
                 {lowestPoint && (
                   <ReferenceDot
                     x={lowestPoint.x}
@@ -2364,6 +2487,10 @@ export default function ForecastPage() {
                           payoff={payoffsByItem.get(row.itemId)}
                           isBestSuggestion={
                             bestSuggestionPlanKey ===
+                            `${row.itemId}|${row.date}`
+                          }
+                          isHighlighted={
+                            highlightedPlanKey ===
                             `${row.itemId}|${row.date}`
                           }
                         />,
