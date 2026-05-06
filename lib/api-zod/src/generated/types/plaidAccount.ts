@@ -19,4 +19,8 @@ export interface PlaidAccount {
   type?: string | null;
   /** @nullable */
   subtype?: string | null;
+  /** @nullable */
+  importCutoffDate?: string | null;
+  /** @nullable */
+  firstSyncCompletedAt?: string | null;
 }

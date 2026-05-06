@@ -1607,6 +1607,10 @@ export interface PlaidAccount {
     type?: string | null;
     /** @nullable */
     subtype?: string | null;
+    /** @nullable */
+    importCutoffDate?: string | null;
+    /** @nullable */
+    firstSyncCompletedAt?: string | null;
 }
 export interface PlaidItemDetail {
     id: string;
@@ -1824,6 +1828,17 @@ export type ListDashboardBudgetsParams = {
 export type DeleteDashboardBudgetParams = {
     bucket: string;
     periodKey: string;
+};
+export type UpdatePlaidImportCutoffDateBody = {
+    /** @nullable */
+    importCutoffDate: string | null;
+};
+export type UpdatePlaidImportCutoffDate200 = {
+    id: string;
+    /** @nullable */
+    importCutoffDate: string | null;
+    /** @nullable */
+    firstSyncCompletedAt: string | null;
 };
 export type CleanupNonProdPlaidItems200 = {
     removed: number;

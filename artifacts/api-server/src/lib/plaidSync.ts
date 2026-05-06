@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -232,6 +232,7 @@ export async function syncPlaidItem(
   if (!item) {
     return {
       itemId: itemRowId,
+      plaidItemRowId: itemRowId,
       institutionName: null,
       added: 0,
       modified: 0,
@@ -305,6 +306,39 @@ export async function syncPlaidItem(
     if (ext) debtIdByPlaidAccount.set(ext, d.debtId);
   }
 
+  // (#361) Load every Plaid account belonging to this item so we can
+  // gate the very-first /transactions/sync's `added` rows on a per-
+  // account `import_cutoff_date`. Until each account's
+  // `first_sync_completed_at` is stamped (at the end of this method),
+  // rows whose `date` is on/before the cutoff are skipped (or merged
+  // with a manual row within ±7 days) so the user doesn't end up with
+  // duplicate Plaid rows shadowing the manual / imported history they
+  // already have. Built once per sync — even thousands of `added` rows
+  // only need a Map lookup per row.
+  const itemAccounts = await db
+    .select()
+    .from(plaidAccountsTable)
+    .where(
+      and(
+        eq(plaidAccountsTable.itemId, itemRowId),
+        eq(plaidAccountsTable.userId, userId),
+      ),
+    );
+  const acctByExternalId = new Map(
+    itemAccounts.map((a) => [a.accountId, a] as const),
+  );
+  // Map plaid account row id → linked debt ids (debts whose
+  // `plaidAccountId` points at this Plaid account row). Used as the
+  // merge-scope for credit-card accounts so the ±7-day merge only
+  // adopts manual rows attributed to the same debt.
+  const debtIdsByAcctRowId = new Map<string, string[]>();
+  for (const d of linkedDebts) {
+    if (!d.plaidAccountRowId) continue;
+    const arr = debtIdsByAcctRowId.get(d.plaidAccountRowId) ?? [];
+    arr.push(d.debtId);
+    debtIdsByAcctRowId.set(d.plaidAccountRowId, arr);
+  }
+
   let cursor = item.cursor ?? undefined;
   let added: PlaidTxn[] = [];
   let modified: PlaidTxn[] = [];
@@ -341,6 +375,12 @@ export async function syncPlaidItem(
     // below to credit per-rule attribution counts to first-sight rows only,
     // even though we walk added+modified together for the upsert.
     const addedTxnIds = new Set(added.map((t) => t.transaction_id));
+    // (#361) Counters returned to callers / tests so the
+    // first-sync-cutoff behavior is observable. Skipped rows never
+    // become transactions; merged rows attach `plaidTransactionId` to
+    // an existing manual row instead of inserting.
+    let firstSyncSkipped = 0;
+    let firstSyncMerged = 0;
     for (const t of [...added, ...modified]) {
       const description = t.merchant_name || t.name || "(no description)";
       // `personal_finance_category` is the modern Plaid taxonomy used to
@@ -416,6 +456,83 @@ export async function syncPlaidItem(
       const linkedDebtId = debtIdByPlaidAccount.get(t.account_id) ?? null;
       const debtId =
         linkedDebtId && Number(signedAmount) > 0 ? linkedDebtId : null;
+
+      // (#361) First-sync cutoff gate. For *added* rows on an account
+      // that hasn't yet completed its first sync AND has a cutoff on
+      // file:
+      //   - Within ±7 days of the cutoff, try to merge with an
+      //     unattached manual row (same userId+amount+date+source-
+      //     scope, plaidTransactionId NULL). On match, adopt the
+      //     plaid identifiers in-place instead of inserting — that's
+      //     how a near-cutoff manual row becomes the canonical Plaid
+      //     row without duplicating the user's history.
+      //   - Otherwise, when t.date <= cutoff, skip the insert
+      //     entirely. The user's existing manual / imported history
+      //     stays as-is and Plaid's overlapping rows are dropped on
+      //     the floor.
+      // `modified` rows are never gated (they're updates of rows we
+      // already inserted on a previous, post-cutoff sync).
+      const acctRow = acctByExternalId.get(t.account_id);
+      const isFirstSyncForAcct =
+        addedTxnIds.has(t.transaction_id) &&
+        acctRow != null &&
+        acctRow.firstSyncCompletedAt == null &&
+        acctRow.importCutoffDate != null;
+      if (isFirstSyncForAcct) {
+        const cutoffStr = acctRow.importCutoffDate as string;
+        const cutoffMs = parseISO(cutoffStr).getTime();
+        const txnMs = parseISO(t.date).getTime();
+        const daysFromCutoff = Math.abs(txnMs - cutoffMs) / 86_400_000;
+        if (daysFromCutoff <= 7) {
+          const debtScope = debtIdsByAcctRowId.get(acctRow.id) ?? [];
+          const isCheckingScope =
+            !!forecastSettings?.bankSnapshotAccountId &&
+            forecastSettings.bankSnapshotAccountId === acctRow.id;
+          let mergeWhere = null as ReturnType<typeof and> | null;
+          if (debtScope.length > 0) {
+            mergeWhere = and(
+              eq(transactionsTable.userId, userId),
+              eq(transactionsTable.occurredOn, t.date),
+              eq(transactionsTable.amount, signedAmount),
+              sql`${transactionsTable.plaidTransactionId} is null`,
+              inArray(transactionsTable.debtId, debtScope),
+              inArray(transactionsTable.source, ["manual", "amex"]),
+            );
+          } else if (isCheckingScope) {
+            mergeWhere = and(
+              eq(transactionsTable.userId, userId),
+              eq(transactionsTable.occurredOn, t.date),
+              eq(transactionsTable.amount, signedAmount),
+              sql`${transactionsTable.plaidTransactionId} is null`,
+              sql`${transactionsTable.debtId} is null`,
+              inArray(transactionsTable.source, ["manual", "bank"]),
+            );
+          }
+          if (mergeWhere) {
+            const [match] = await db
+              .select({ id: transactionsTable.id })
+              .from(transactionsTable)
+              .where(mergeWhere)
+              .limit(1);
+            if (match) {
+              await db
+                .update(transactionsTable)
+                .set({
+                  plaidTransactionId: t.transaction_id,
+                  plaidAccountId: t.account_id,
+                })
+                .where(eq(transactionsTable.id, match.id));
+              firstSyncMerged++;
+              continue;
+            }
+          }
+        }
+        if (parseISO(t.date).getTime() <= cutoffMs) {
+          firstSyncSkipped++;
+          continue;
+        }
+      }
+
       const values = {
         userId,
         occurredOn: t.date,
@@ -557,6 +674,24 @@ export async function syncPlaidItem(
         stillPreparingSince: null,
       })
       .where(eq(plaidItemsTable.id, itemRowId));
+
+    // (#361) Stamp `first_sync_completed_at` on every account belonging
+    // to this item that hasn't been stamped yet, so the cutoff gate
+    // above is permanently disabled for subsequent cursor-based syncs.
+    // Done after the upsert/remove pass so a mid-sync crash leaves the
+    // gate active and the next attempt can re-apply it.
+    await db
+      .update(plaidAccountsTable)
+      .set({ firstSyncCompletedAt: new Date() })
+      .where(
+        and(
+          eq(plaidAccountsTable.itemId, itemRowId),
+          eq(plaidAccountsTable.userId, userId),
+          sql`${plaidAccountsTable.firstSyncCompletedAt} is null`,
+        ),
+      );
+    void firstSyncSkipped;
+    void firstSyncMerged;
 
     // If this item is American Express, refresh the persisted Amex anchor so
     // GET /amex/anchor's `asOf` timestamp advances and the linked debt's

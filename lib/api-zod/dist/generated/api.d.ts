@@ -4768,6 +4768,8 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
         mask: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         type: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         subtype: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        importCutoffDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        firstSyncCompletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         accountId: string;
@@ -4776,6 +4778,8 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }, {
         id: string;
         accountId: string;
@@ -4784,6 +4788,8 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     id: string;
@@ -4797,6 +4803,8 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
@@ -4822,6 +4830,8 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
@@ -4860,6 +4870,8 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
         mask: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         type: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         subtype: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        importCutoffDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        firstSyncCompletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         accountId: string;
@@ -4868,6 +4880,8 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }, {
         id: string;
         accountId: string;
@@ -4876,6 +4890,8 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     id: string;
@@ -4889,6 +4905,8 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
@@ -4914,6 +4932,8 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
@@ -4952,6 +4972,8 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
         mask: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         type: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         subtype: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        importCutoffDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        firstSyncCompletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         accountId: string;
@@ -4960,6 +4982,8 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }, {
         id: string;
         accountId: string;
@@ -4968,6 +4992,8 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     id: string;
@@ -4981,6 +5007,8 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
@@ -5006,6 +5034,8 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
@@ -5106,6 +5136,43 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
     }[];
 }>;
 /**
+ * @summary (#361) Override the first-sync `import_cutoff_date` for a
+single Plaid account. Allowed only while
+`firstSyncCompletedAt` is still null — once the first sync
+has stamped that timestamp the gate is permanently off and a
+later override would silently do nothing (returns 409
+instead). Pass `null` to clear the cutoff so the first sync
+inserts every row Plaid returns.
+
+ */
+export declare const UpdatePlaidImportCutoffDateParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const UpdatePlaidImportCutoffDateBody: zod.ZodObject<{
+    importCutoffDate: zod.ZodNullable<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    importCutoffDate: string | null;
+}, {
+    importCutoffDate: string | null;
+}>;
+export declare const UpdatePlaidImportCutoffDateResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    importCutoffDate: zod.ZodNullable<zod.ZodString>;
+    firstSyncCompletedAt: zod.ZodNullable<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    importCutoffDate: string | null;
+    firstSyncCompletedAt: string | null;
+}, {
+    id: string;
+    importCutoffDate: string | null;
+    firstSyncCompletedAt: string | null;
+}>;
+/**
  * @summary (#274) Persist the user's dismissal of the dashboard "bank
 consent expiring soon" banner for this item. The server stamps
 `consentWarningDismissedForCutoff` with the current
@@ -5145,6 +5212,8 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
         mask: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         type: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         subtype: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        importCutoffDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        firstSyncCompletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         accountId: string;
@@ -5153,6 +5222,8 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }, {
         id: string;
         accountId: string;
@@ -5161,6 +5232,8 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     id: string;
@@ -5174,6 +5247,8 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
@@ -5199,6 +5274,8 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
         mask?: string | null | undefined;
         subtype?: string | null | undefined;
         officialName?: string | null | undefined;
+        importCutoffDate?: string | null | undefined;
+        firstSyncCompletedAt?: string | null | undefined;
     }[];
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;

@@ -2015,6 +2015,8 @@ export const ExchangePlaidPublicTokenResponse = zod.object({
       mask: zod.string().nullish(),
       type: zod.string().nullish(),
       subtype: zod.string().nullish(),
+      importCutoffDate: zod.string().nullish(),
+      firstSyncCompletedAt: zod.string().nullish(),
     }),
   ),
 });
@@ -2049,6 +2051,8 @@ export const ListPlaidItemsResponseItem = zod.object({
       mask: zod.string().nullish(),
       type: zod.string().nullish(),
       subtype: zod.string().nullish(),
+      importCutoffDate: zod.string().nullish(),
+      firstSyncCompletedAt: zod.string().nullish(),
     }),
   ),
 });
@@ -2098,6 +2102,30 @@ export const ListPlaidSyncAttemptsResponse = zod.object({
 });
 
 /**
+ * @summary (#361) Override the first-sync `import_cutoff_date` for a
+single Plaid account. Allowed only while
+`firstSyncCompletedAt` is still null — once the first sync
+has stamped that timestamp the gate is permanently off and a
+later override would silently do nothing (returns 409
+instead). Pass `null` to clear the cutoff so the first sync
+inserts every row Plaid returns.
+
+ */
+export const UpdatePlaidImportCutoffDateParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdatePlaidImportCutoffDateBody = zod.object({
+  importCutoffDate: zod.string().nullable(),
+});
+
+export const UpdatePlaidImportCutoffDateResponse = zod.object({
+  id: zod.string(),
+  importCutoffDate: zod.string().nullable(),
+  firstSyncCompletedAt: zod.string().nullable(),
+});
+
+/**
  * @summary (#274) Persist the user's dismissal of the dashboard "bank
 consent expiring soon" banner for this item. The server stamps
 `consentWarningDismissedForCutoff` with the current
@@ -2140,6 +2168,8 @@ export const DismissPlaidExpirationWarningResponse = zod.object({
       mask: zod.string().nullish(),
       type: zod.string().nullish(),
       subtype: zod.string().nullish(),
+      importCutoffDate: zod.string().nullish(),
+      firstSyncCompletedAt: zod.string().nullish(),
     }),
   ),
 });

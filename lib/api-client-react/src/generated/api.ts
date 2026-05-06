@@ -109,6 +109,8 @@ import type {
   TransactionInput,
   UncategorizeByIdsInput,
   UncategorizeByIdsResult,
+  UpdatePlaidImportCutoffDate200,
+  UpdatePlaidImportCutoffDateBody,
   UpdateTransactionResponse,
 } from "./api.schemas";
 
@@ -5753,6 +5755,111 @@ export function useListPlaidSyncAttempts<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary (#361) Override the first-sync `import_cutoff_date` for a
+single Plaid account. Allowed only while
+`firstSyncCompletedAt` is still null — once the first sync
+has stamped that timestamp the gate is permanently off and a
+later override would silently do nothing (returns 409
+instead). Pass `null` to clear the cutoff so the first sync
+inserts every row Plaid returns.
+
+ */
+export const getUpdatePlaidImportCutoffDateUrl = (id: string) => {
+  return `/api/plaid/accounts/${id}/import-cutoff`;
+};
+
+export const updatePlaidImportCutoffDate = async (
+  id: string,
+  updatePlaidImportCutoffDateBody: UpdatePlaidImportCutoffDateBody,
+  options?: RequestInit,
+): Promise<UpdatePlaidImportCutoffDate200> => {
+  return customFetch<UpdatePlaidImportCutoffDate200>(
+    getUpdatePlaidImportCutoffDateUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updatePlaidImportCutoffDateBody),
+    },
+  );
+};
+
+export const getUpdatePlaidImportCutoffDateMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePlaidImportCutoffDate>>,
+    TError,
+    { id: string; data: BodyType<UpdatePlaidImportCutoffDateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updatePlaidImportCutoffDate>>,
+  TError,
+  { id: string; data: BodyType<UpdatePlaidImportCutoffDateBody> },
+  TContext
+> => {
+  const mutationKey = ["updatePlaidImportCutoffDate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updatePlaidImportCutoffDate>>,
+    { id: string; data: BodyType<UpdatePlaidImportCutoffDateBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updatePlaidImportCutoffDate(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdatePlaidImportCutoffDateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updatePlaidImportCutoffDate>>
+>;
+export type UpdatePlaidImportCutoffDateMutationBody =
+  BodyType<UpdatePlaidImportCutoffDateBody>;
+export type UpdatePlaidImportCutoffDateMutationError = ErrorType<void>;
+
+/**
+ * @summary (#361) Override the first-sync `import_cutoff_date` for a
+single Plaid account. Allowed only while
+`firstSyncCompletedAt` is still null — once the first sync
+has stamped that timestamp the gate is permanently off and a
+later override would silently do nothing (returns 409
+instead). Pass `null` to clear the cutoff so the first sync
+inserts every row Plaid returns.
+
+ */
+export const useUpdatePlaidImportCutoffDate = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePlaidImportCutoffDate>>,
+    TError,
+    { id: string; data: BodyType<UpdatePlaidImportCutoffDateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updatePlaidImportCutoffDate>>,
+  TError,
+  { id: string; data: BodyType<UpdatePlaidImportCutoffDateBody> },
+  TContext
+> => {
+  return useMutation(getUpdatePlaidImportCutoffDateMutationOptions(options));
+};
 
 /**
  * @summary (#274) Persist the user's dismissal of the dashboard "bank

@@ -1164,6 +1164,47 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/PlaidSyncAttemptsResult" }
         "404": { description: Plaid item not found }
+  /plaid/accounts/{id}/import-cutoff:
+    patch:
+      operationId: updatePlaidImportCutoffDate
+      tags: [plaid]
+      summary: |
+        (#361) Override the first-sync `import_cutoff_date` for a
+        single Plaid account. Allowed only while
+        `firstSyncCompletedAt` is still null — once the first sync
+        has stamped that timestamp the gate is permanently off and a
+        later override would silently do nothing (returns 409
+        instead). Pass `null` to clear the cutoff so the first sync
+        inserts every row Plaid returns.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [importCutoffDate]
+              properties:
+                importCutoffDate: { type: ["string", "null"] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, importCutoffDate, firstSyncCompletedAt]
+                properties:
+                  id: { type: string }
+                  importCutoffDate: { type: ["string", "null"] }
+                  firstSyncCompletedAt: { type: ["string", "null"] }
+        "400": { description: Invalid date }
+        "404": { description: Plaid account not found }
+        "409": { description: First sync already completed }
   /plaid/items/{id}/dismiss-expiration-warning:
     post:
       operationId: dismissPlaidExpirationWarning
@@ -2978,6 +3019,26 @@ components:
         mask: { type: ["string", "null"] }
         type: { type: ["string", "null"] }
         subtype: { type: ["string", "null"] }
+        # (#361) First-sync dedupe gate. `importCutoffDate` is the
+        # inclusive YYYY-MM-DD upper bound on dates Plaid is allowed
+        # to insert during the very first /transactions/sync against
+        # this account: rows on/before it are skipped (assumed to
+        # overlap manual / imported history the user already has) and
+        # rows within ±7 days first try to merge with an unattached
+        # manual row at the same amount/date. Auto-detected at link
+        # time from existing manual rows; user-overridable via PATCH
+        # /plaid/accounts/{id}/import-cutoff while
+        # `firstSyncCompletedAt` is still null. Null when no overlap
+        # is detected (no gate — same as the legacy behavior).
+        importCutoffDate: { type: ["string", "null"] }
+        # (#361) Stamped at the end of the first successful
+        # /transactions/sync for this account. Until set, the cutoff
+        # gate above is active. After it is set, the gate is
+        # permanently disabled (subsequent cursor-based syncs behave
+        # exactly as today). The Settings date picker hides itself
+        # once this timestamp is non-null because the override is no
+        # longer accepted.
+        firstSyncCompletedAt: { type: ["string", "null"] }
     PlaidItemDetail:
       type: object
       required: [id, itemId, institutionSlug, accounts]

@@ -13,6 +13,7 @@ import {
   useListCategories,
   getListPlaidItemsQueryKey,
   useRefreshPlaidConsentExpirations,
+  useUpdatePlaidImportCutoffDate,
 } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { usePlaidSync, formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
@@ -736,12 +737,28 @@ export default function SettingsPage() {
                   />
                 </div>
                 {item.accounts.length > 0 && (
-                  <ul className="mt-3 ml-8 text-sm text-muted-foreground space-y-1">
+                  <ul className="mt-3 ml-8 text-sm text-muted-foreground space-y-2">
                     {item.accounts.map((a) => (
-                      <li key={a.id}>
-                        {a.name || a.officialName || "Account"}
-                        {a.mask ? ` ••${a.mask}` : ""}
-                        {a.subtype ? ` · ${a.subtype}` : ""}
+                      <li key={a.id} className="space-y-1">
+                        <div>
+                          {a.name || a.officialName || "Account"}
+                          {a.mask ? ` ••${a.mask}` : ""}
+                          {a.subtype ? ` · ${a.subtype}` : ""}
+                        </div>
+                        {/* (#361) First-sync dedupe gate. Once the
+                            account has completed its first sync the
+                            override is no longer accepted, so we hide
+                            the picker entirely (server returns 409 on
+                            late writes anyway). Until then the user
+                            can shift the auto-detected cutoff earlier
+                            (pull more history) or later (skip more
+                            potential duplicates). */}
+                        {!a.firstSyncCompletedAt && (
+                          <PlaidImportCutoffPicker
+                            accountId={a.id}
+                            initialValue={a.importCutoffDate ?? null}
+                          />
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -934,6 +951,77 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// (#361) Per-account picker for the first-sync `importCutoffDate`
+// override. Only mounted while the account's `firstSyncCompletedAt`
+// is null (the parent gates the render). On submit it PATCHes the
+// account, then invalidates the items list so the new value flows
+// back into the parent. Empty input -> null (clears the cutoff and
+// lets the first sync ingest everything Plaid returns).
+function PlaidImportCutoffPicker({
+  accountId,
+  initialValue,
+}: {
+  accountId: string;
+  initialValue: string | null;
+}) {
+  const [value, setValue] = useState<string>(initialValue ?? "");
+  useEffect(() => {
+    setValue(initialValue ?? "");
+  }, [initialValue]);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const mutation = useUpdatePlaidImportCutoffDate();
+  const dirty = (initialValue ?? "") !== value;
+  const onSave = () => {
+    mutation.mutate(
+      {
+        id: accountId,
+        data: { importCutoffDate: value === "" ? null : value },
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getListPlaidItemsQueryKey(),
+          });
+          toast({ title: "Import cutoff updated" });
+        },
+        onError: (e: unknown) => {
+          toast({
+            title: "Couldn't update cutoff",
+            description:
+              e instanceof Error ? e.message : "Please try again.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <Label htmlFor={`cutoff-${accountId}`} className="text-xs">
+        Import history after
+      </Label>
+      <Input
+        id={`cutoff-${accountId}`}
+        type="date"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="h-7 w-36 text-xs"
+      />
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs"
+        disabled={!dirty || mutation.isPending}
+        onClick={onSave}
+      >
+        Save
+      </Button>
     </div>
   );
 }

@@ -407,6 +407,22 @@ export const plaidAccountsTable = pgTable(
     liabilityDueDay: integer("liability_due_day"),
     liabilityStatementDay: integer("liability_statement_day"),
     liabilityLastFetchedAt: timestamp("liability_last_fetched_at", { withTimezone: true }),
+    // (#361) First-sync dedupe gate. `importCutoffDate` is the inclusive
+    // upper bound on dates Plaid is allowed to *insert* during the very
+    // first /transactions/sync against this account: rows whose `date` is
+    // on/before this cutoff are skipped (assumed to overlap manual /
+    // imported history the user already has). Rows within ±7 days of the
+    // cutoff first try to merge with an unattached manual row at the same
+    // amount/date — successful merges adopt `plaidTransactionId` /
+    // `plaidAccountId` instead of inserting a duplicate. Auto-detected
+    // at link time from the user's existing manual rows; user-overridable
+    // via Settings while `firstSyncCompletedAt` is still null.
+    importCutoffDate: date("import_cutoff_date"),
+    // (#361) Stamped at the end of the first successful /transactions/sync
+    // for this account. Until set, the cutoff gate above is active. After
+    // it is set, the gate is permanently disabled (subsequent cursor-based
+    // syncs behave exactly as today).
+    firstSyncCompletedAt: timestamp("first_sync_completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({

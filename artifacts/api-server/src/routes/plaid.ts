@@ -34,6 +34,10 @@ import {
   syncPlaidItem,
   syncAllForUser,
 } from "../lib/plaidSync";
+import {
+  autoDetectCutoffsForItem,
+  computeImportCutoffForAccount,
+} from "../lib/plaidImportCutoff";
 import { scheduleSyncForItem } from "../lib/plaidSyncScheduler";
 import { sendExpirationRemindersForUser } from "../lib/plaidExpirationReminder";
 import { PLAID_REAUTH_ERROR_CODES as PLAID_REAUTH_ERROR_CODES_LIB } from "../lib/plaidReauthCodes";
@@ -252,6 +256,24 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
         .set(patch)
         .where(and(eq(debtsTable.id, target.id), eq(debtsTable.userId, userId)))
         .returning();
+      // (#361) Now that this Plaid account is linked to a debt with
+      // (potentially) historical manual rows, re-compute the import
+      // cutoff so the account's first-sync gate covers them. Only
+      // applies while the gate is still active (firstSyncCompletedAt
+      // null) — otherwise leave any prior cutoff in place untouched.
+      if (account.firstSyncCompletedAt == null) {
+        const cutoff = await computeImportCutoffForAccount(
+          userId,
+          account,
+          null,
+        );
+        if (cutoff) {
+          await db
+            .update(plaidAccountsTable)
+            .set({ importCutoffDate: cutoff })
+            .where(eq(plaidAccountsTable.id, account.id));
+        }
+      }
       return { debt: updated ?? target, action: "linked-existing" };
     } catch (e) {
       // (#44) Concurrent linker beat us to this Plaid account — partial
@@ -520,6 +542,24 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       );
     }
 
+    // (#361) Before the very first /transactions/sync runs, auto-detect
+    // an `import_cutoff_date` for each freshly upserted account so the
+    // sync's `added` rows that overlap manual / imported history are
+    // skipped (or merged in-place) instead of duplicated. Best-effort:
+    // any failure here just leaves the cutoff null (no gate).
+    try {
+      await autoDetectCutoffsForItem(
+        req.userId!,
+        item!.id,
+        item!.institutionSlug,
+      );
+    } catch (e) {
+      req.log.warn(
+        { err: e, itemRowId: item!.id },
+        "autoDetectCutoffsForItem failed during exchange — first sync will not gate duplicates",
+      );
+    }
+
     // Initial sync (last 90 days come via /transactions/sync naturally)
     await syncPlaidItem(req.userId!, item!.id);
 
@@ -571,6 +611,10 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
         mask: a.mask,
         type: a.type,
         subtype: a.subtype,
+        importCutoffDate: a.importCutoffDate,
+        firstSyncCompletedAt: a.firstSyncCompletedAt
+          ? a.firstSyncCompletedAt.toISOString()
+          : null,
       })),
     });
   } catch (e) {
@@ -648,9 +692,87 @@ function serializePlaidItemDetail(
       mask: a.mask,
       type: a.type,
       subtype: a.subtype,
+      // (#361) First-sync dedupe gate. `importCutoffDate` is the
+      // inclusive upper bound on dates Plaid is allowed to insert on
+      // the first /transactions/sync; rows on/before it are skipped
+      // and rows within ±7 days first try to merge with an unattached
+      // manual row. `firstSyncCompletedAt` is stamped at the end of
+      // that sync, after which the gate is permanently off. Settings
+      // exposes a date picker that calls PATCH
+      // /plaid/accounts/{id}/import-cutoff to override the auto-
+      // detected value, but only while `firstSyncCompletedAt` is null.
+      importCutoffDate: a.importCutoffDate,
+      firstSyncCompletedAt: a.firstSyncCompletedAt
+        ? a.firstSyncCompletedAt.toISOString()
+        : null,
     })),
   };
 }
+
+// (#361) Override the auto-detected first-sync `import_cutoff_date`
+// for a single Plaid account. Only allowed while the account's
+// `first_sync_completed_at` is still null — once the first sync has
+// stamped that timestamp the gate is permanently off and a later
+// override would silently do nothing. Pass `null` to clear the
+// cutoff (Plaid's first sync will then insert every row it returns).
+router.patch(
+  "/plaid/accounts/:id/import-cutoff",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const id = String(req.params.id);
+    const body = (req.body ?? {}) as { importCutoffDate?: unknown };
+    const raw = body.importCutoffDate;
+    let cutoff: string | null;
+    if (raw === null) {
+      cutoff = null;
+    } else if (typeof raw === "string") {
+      // Accept a YYYY-MM-DD date string. Reject anything else so the
+      // client doesn't accidentally pass a Date object's full ISO
+      // string and get whatever Postgres' implicit cast produces.
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        res.status(400).json({
+          error: "importCutoffDate must be a YYYY-MM-DD string or null",
+        });
+        return;
+      }
+      cutoff = raw;
+    } else {
+      res.status(400).json({
+        error: "importCutoffDate must be a YYYY-MM-DD string or null",
+      });
+      return;
+    }
+    const [acct] = await db
+      .select()
+      .from(plaidAccountsTable)
+      .where(
+        and(
+          eq(plaidAccountsTable.id, id),
+          eq(plaidAccountsTable.userId, req.userId!),
+        ),
+      );
+    if (!acct) {
+      res.status(404).json({ error: "Plaid account not found" });
+      return;
+    }
+    if (acct.firstSyncCompletedAt) {
+      res.status(409).json({
+        error:
+          "First sync already completed — cutoff override is no longer accepted",
+      });
+      return;
+    }
+    await db
+      .update(plaidAccountsTable)
+      .set({ importCutoffDate: cutoff })
+      .where(eq(plaidAccountsTable.id, id));
+    res.json({
+      id: acct.id,
+      importCutoffDate: cutoff,
+      firstSyncCompletedAt: null,
+    });
+  },
+);
 
 router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
   const items = await db

@@ -173,5 +173,7 @@ export * from "./transactionInputWeeklyBucket";
 export * from "./transactionWeeklyBucket";
 export * from "./uncategorizeByIdsInput";
 export * from "./uncategorizeByIdsResult";
+export * from "./updatePlaidImportCutoffDate200";
+export * from "./updatePlaidImportCutoffDateBody";
 export * from "./updateTransactionResponse";
 export * from "./weeklyBucketLabels";
