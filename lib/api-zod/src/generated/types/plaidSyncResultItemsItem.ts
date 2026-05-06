@@ -5,8 +5,8 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
-import type { PlaidSyncResultItemsItemKind } from './plaidSyncResultItemsItemKind';
-import type { RuleAttribution } from './ruleAttribution';
+import type { PlaidSyncResultItemsItemKind } from "./plaidSyncResultItemsItemKind";
+import type { RuleAttribution } from "./ruleAttribution";
 
 export type PlaidSyncResultItemsItem = {
   itemId: string;

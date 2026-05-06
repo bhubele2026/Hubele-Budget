@@ -5,229 +5,361 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
-import * as zod from 'zod';
-
+import * as zod from "zod";
 
 /**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
-  "status": zod.string()
-})
-
+  status: zod.string(),
+});
 
 /**
  * @summary Dashboard summary
  */
 export const GetDashboardResponse = zod.object({
-  "totalDebt": zod.string(),
-  "monthlyIncome": zod.string(),
-  "monthlySpend": zod.string(),
-  "netCashflow": zod.string(),
-  "debtCount": zod.number(),
-  "activeDebtCount": zod.number(),
-  "paidThisMonth": zod.string(),
-  "paidLifetime": zod.string(),
-  "transactionCount": zod.number(),
-  "recentTransactions": zod.array(zod.object({
-  "id": zod.string(),
-  "occurredOn": zod.string(),
-  "occurredAt": zod.string().nullish(),
-  "description": zod.string(),
-  "amount": zod.string(),
-  "account": zod.string().nullish(),
-  "categoryId": zod.string().nullish(),
-  "forecastFlag": zod.boolean(),
-  "weeklyAllowance": zod.boolean(),
-  "weeklyBucket": zod.union([zod.literal('groceries'),zod.literal('dining'),zod.literal('entertainment'),zod.literal('misc'),zod.literal(null)]).nullish(),
-  "monthlyAllowance": zod.boolean(),
-  "unplannedAllowance": zod.boolean(),
-  "reimbursable": zod.boolean(),
-  "reimbursed": zod.boolean(),
-  "isTransfer": zod.boolean(),
-  "notes": zod.string().nullish(),
-  "source": zod.string(),
-  "member": zod.string().nullish(),
-  "owedBy": zod.string().nullish(),
-  "plaidTransactionId": zod.string().nullish(),
-  "plaidAccountId": zod.string().nullish(),
-  "debtId": zod.string().nullish(),
-  "matchedRuleId": zod.string().nullish().describe('Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n')
-})),
-  "topCategories": zod.array(zod.object({
-  "categoryName": zod.string(),
-  "total": zod.string()
-})),
-  "upcomingBills": zod.array(zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "kind": zod.string(),
-  "amount": zod.string(),
-  "frequency": zod.string(),
-  "dayOfMonth": zod.number().nullish(),
-  "anchorDate": zod.string().nullish(),
-  "active": zod.string(),
-  "categoryId": zod.string().nullish(),
-  "debtId": zod.string().nullish()
-}))
-})
-
+  totalDebt: zod.string(),
+  monthlyIncome: zod.string(),
+  monthlySpend: zod.string(),
+  netCashflow: zod.string(),
+  debtCount: zod.number(),
+  activeDebtCount: zod.number(),
+  paidThisMonth: zod.string(),
+  paidLifetime: zod.string(),
+  transactionCount: zod.number(),
+  recentTransactions: zod.array(
+    zod.object({
+      id: zod.string(),
+      occurredOn: zod.string(),
+      occurredAt: zod.string().nullish(),
+      description: zod.string(),
+      amount: zod.string(),
+      account: zod.string().nullish(),
+      categoryId: zod.string().nullish(),
+      forecastFlag: zod.boolean(),
+      weeklyAllowance: zod.boolean(),
+      weeklyBucket: zod
+        .union([
+          zod.literal("groceries"),
+          zod.literal("dining"),
+          zod.literal("entertainment"),
+          zod.literal("misc"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      monthlyAllowance: zod.boolean(),
+      unplannedAllowance: zod.boolean(),
+      reimbursable: zod.boolean(),
+      reimbursed: zod.boolean(),
+      isTransfer: zod.boolean(),
+      notes: zod.string().nullish(),
+      source: zod.string(),
+      member: zod.string().nullish(),
+      owedBy: zod.string().nullish(),
+      plaidTransactionId: zod.string().nullish(),
+      plaidAccountId: zod.string().nullish(),
+      debtId: zod.string().nullish(),
+      matchedRuleId: zod
+        .string()
+        .nullish()
+        .describe(
+          'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+        ),
+    }),
+  ),
+  topCategories: zod.array(
+    zod.object({
+      categoryName: zod.string(),
+      total: zod.string(),
+    }),
+  ),
+  upcomingBills: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      kind: zod.string(),
+      amount: zod.string(),
+      frequency: zod.string(),
+      dayOfMonth: zod.number().nullish(),
+      anchorDate: zod.string().nullish(),
+      active: zod.string(),
+      categoryId: zod.string().nullish(),
+      debtId: zod.string().nullish(),
+    }),
+  ),
+});
 
 export const ListTransactionsQueryParams = zod.object({
-  "from": zod.coerce.string().optional(),
-  "to": zod.coerce.string().optional(),
-  "limit": zod.coerce.number().optional(),
-  "source": zod.coerce.string().optional(),
-  "uncategorized": zod.coerce.boolean().optional(),
-  "excludeTransfers": zod.coerce.boolean().optional(),
-  "reimbursable": zod.coerce.boolean().optional(),
-  "search": zod.coerce.string().optional(),
-  "minAmount": zod.coerce.string().optional(),
-  "maxAmount": zod.coerce.string().optional(),
-  "categoryId": zod.coerce.string().optional()
-})
+  from: zod.coerce.string().optional(),
+  to: zod.coerce.string().optional(),
+  limit: zod.coerce.number().optional(),
+  source: zod.coerce.string().optional(),
+  uncategorized: zod.coerce.boolean().optional(),
+  excludeTransfers: zod.coerce.boolean().optional(),
+  reimbursable: zod.coerce.boolean().optional(),
+  search: zod.coerce.string().optional(),
+  minAmount: zod.coerce.string().optional(),
+  maxAmount: zod.coerce.string().optional(),
+  categoryId: zod.coerce.string().optional(),
+});
 
 export const ListTransactionsResponseItem = zod.object({
-  "id": zod.string(),
-  "occurredOn": zod.string(),
-  "occurredAt": zod.string().nullish(),
-  "description": zod.string(),
-  "amount": zod.string(),
-  "account": zod.string().nullish(),
-  "categoryId": zod.string().nullish(),
-  "forecastFlag": zod.boolean(),
-  "weeklyAllowance": zod.boolean(),
-  "weeklyBucket": zod.union([zod.literal('groceries'),zod.literal('dining'),zod.literal('entertainment'),zod.literal('misc'),zod.literal(null)]).nullish(),
-  "monthlyAllowance": zod.boolean(),
-  "unplannedAllowance": zod.boolean(),
-  "reimbursable": zod.boolean(),
-  "reimbursed": zod.boolean(),
-  "isTransfer": zod.boolean(),
-  "notes": zod.string().nullish(),
-  "source": zod.string(),
-  "member": zod.string().nullish(),
-  "owedBy": zod.string().nullish(),
-  "plaidTransactionId": zod.string().nullish(),
-  "plaidAccountId": zod.string().nullish(),
-  "debtId": zod.string().nullish(),
-  "matchedRuleId": zod.string().nullish().describe('Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n')
-})
-export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem)
-
-
-
-
+  id: zod.string(),
+  occurredOn: zod.string(),
+  occurredAt: zod.string().nullish(),
+  description: zod.string(),
+  amount: zod.string(),
+  account: zod.string().nullish(),
+  categoryId: zod.string().nullish(),
+  forecastFlag: zod.boolean(),
+  weeklyAllowance: zod.boolean(),
+  weeklyBucket: zod
+    .union([
+      zod.literal("groceries"),
+      zod.literal("dining"),
+      zod.literal("entertainment"),
+      zod.literal("misc"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  monthlyAllowance: zod.boolean(),
+  unplannedAllowance: zod.boolean(),
+  reimbursable: zod.boolean(),
+  reimbursed: zod.boolean(),
+  isTransfer: zod.boolean(),
+  notes: zod.string().nullish(),
+  source: zod.string(),
+  member: zod.string().nullish(),
+  owedBy: zod.string().nullish(),
+  plaidTransactionId: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+  debtId: zod.string().nullish(),
+  matchedRuleId: zod
+    .string()
+    .nullish()
+    .describe(
+      'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+    ),
+});
+export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem);
 
 export const CreateTransactionBody = zod.object({
-  "occurredOn": zod.string(),
-  "occurredAt": zod.string().nullish(),
-  "description": zod.string().min(1),
-  "amount": zod.string(),
-  "account": zod.string().nullish(),
-  "categoryId": zod.string().nullish(),
-  "forecastFlag": zod.boolean().optional(),
-  "weeklyAllowance": zod.boolean().optional(),
-  "weeklyBucket": zod.union([zod.literal('groceries'),zod.literal('dining'),zod.literal('entertainment'),zod.literal('misc'),zod.literal(null)]).nullish(),
-  "monthlyAllowance": zod.boolean().optional(),
-  "unplannedAllowance": zod.boolean().optional(),
-  "reimbursable": zod.boolean().optional(),
-  "reimbursed": zod.boolean().optional(),
-  "isTransfer": zod.boolean().optional(),
-  "notes": zod.string().nullish(),
-  "source": zod.string().optional(),
-  "member": zod.string().nullish(),
-  "owedBy": zod.string().nullish(),
-  "debtId": zod.string().nullish()
-})
-
+  occurredOn: zod.string(),
+  occurredAt: zod.string().nullish(),
+  description: zod.string().min(1),
+  amount: zod.string(),
+  account: zod.string().nullish(),
+  categoryId: zod.string().nullish(),
+  forecastFlag: zod.boolean().optional(),
+  weeklyAllowance: zod.boolean().optional(),
+  weeklyBucket: zod
+    .union([
+      zod.literal("groceries"),
+      zod.literal("dining"),
+      zod.literal("entertainment"),
+      zod.literal("misc"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  monthlyAllowance: zod.boolean().optional(),
+  unplannedAllowance: zod.boolean().optional(),
+  reimbursable: zod.boolean().optional(),
+  reimbursed: zod.boolean().optional(),
+  isTransfer: zod.boolean().optional(),
+  notes: zod.string().nullish(),
+  source: zod.string().optional(),
+  member: zod.string().nullish(),
+  owedBy: zod.string().nullish(),
+  debtId: zod.string().nullish(),
+});
 
 export const UpdateTransactionParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-
-
+  id: zod.coerce.string(),
+});
 
 export const UpdateTransactionBody = zod.object({
-  "occurredOn": zod.string().optional(),
-  "occurredAt": zod.string().nullish(),
-  "description": zod.string().min(1).optional(),
-  "amount": zod.string().optional(),
-  "account": zod.string().nullish(),
-  "categoryId": zod.string().nullish(),
-  "forecastFlag": zod.boolean().optional(),
-  "weeklyAllowance": zod.boolean().optional(),
-  "weeklyBucket": zod.union([zod.literal('groceries'),zod.literal('dining'),zod.literal('entertainment'),zod.literal('misc'),zod.literal(null)]).nullish(),
-  "monthlyAllowance": zod.boolean().optional(),
-  "unplannedAllowance": zod.boolean().optional(),
-  "reimbursable": zod.boolean().optional(),
-  "reimbursed": zod.boolean().optional(),
-  "isTransfer": zod.boolean().optional(),
-  "notes": zod.string().nullish(),
-  "source": zod.string().optional(),
-  "member": zod.string().nullish(),
-  "owedBy": zod.string().nullish(),
-  "debtId": zod.string().nullish(),
-  "rememberPattern": zod.string().nullish().describe('When set together with `categoryId`, the server upserts a\nmapping_rule (matchType=contains, priority=100) so that future\ntransactions with this description fragment auto-categorize the\nsame way. Used by the \"Categorize + remember\" affordance on the\nTransactions and Amex pages.\n')
-})
+  occurredOn: zod.string().optional(),
+  occurredAt: zod.string().nullish(),
+  description: zod.string().min(1).optional(),
+  amount: zod.string().optional(),
+  account: zod.string().nullish(),
+  categoryId: zod.string().nullish(),
+  forecastFlag: zod.boolean().optional(),
+  weeklyAllowance: zod.boolean().optional(),
+  weeklyBucket: zod
+    .union([
+      zod.literal("groceries"),
+      zod.literal("dining"),
+      zod.literal("entertainment"),
+      zod.literal("misc"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  monthlyAllowance: zod.boolean().optional(),
+  unplannedAllowance: zod.boolean().optional(),
+  reimbursable: zod.boolean().optional(),
+  reimbursed: zod.boolean().optional(),
+  isTransfer: zod.boolean().optional(),
+  notes: zod.string().nullish(),
+  source: zod.string().optional(),
+  member: zod.string().nullish(),
+  owedBy: zod.string().nullish(),
+  debtId: zod.string().nullish(),
+  rememberPattern: zod
+    .string()
+    .nullish()
+    .describe(
+      'When set together with `categoryId`, the server upserts a\nmapping_rule (matchType=contains, priority=100) so that future\ntransactions with this description fragment auto-categorize the\nsame way. Used by the \"Categorize + remember\" affordance on the\nTransactions and Amex pages.\n',
+    ),
+});
 
-export const UpdateTransactionResponse = zod.object({
-  "id": zod.string(),
-  "occurredOn": zod.string(),
-  "occurredAt": zod.string().nullish(),
-  "description": zod.string(),
-  "amount": zod.string(),
-  "account": zod.string().nullish(),
-  "categoryId": zod.string().nullish(),
-  "forecastFlag": zod.boolean(),
-  "weeklyAllowance": zod.boolean(),
-  "weeklyBucket": zod.union([zod.literal('groceries'),zod.literal('dining'),zod.literal('entertainment'),zod.literal('misc'),zod.literal(null)]).nullish(),
-  "monthlyAllowance": zod.boolean(),
-  "unplannedAllowance": zod.boolean(),
-  "reimbursable": zod.boolean(),
-  "reimbursed": zod.boolean(),
-  "isTransfer": zod.boolean(),
-  "notes": zod.string().nullish(),
-  "source": zod.string(),
-  "member": zod.string().nullish(),
-  "owedBy": zod.string().nullish(),
-  "plaidTransactionId": zod.string().nullish(),
-  "plaidAccountId": zod.string().nullish(),
-  "debtId": zod.string().nullish(),
-  "matchedRuleId": zod.string().nullish().describe('Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n')
-}).and(zod.object({
-  "repointedRules": zod.array(zod.object({
-  "ruleId": zod.string(),
-  "pattern": zod.string(),
-  "matchType": zod.enum(['contains', 'exact', 'starts_with']),
-  "fromCategoryId": zod.string(),
-  "toCategoryId": zod.string(),
-  "candidateCount": zod.number(),
-  "sampleTransactions": zod.array(zod.object({
-  "id": zod.string(),
-  "description": zod.string(),
-  "occurredOn": zod.string(),
-  "amount": zod.string(),
-  "matchedRuleId": zod.string().nullish().describe('Id of the mapping rule that auto-categorize would currently\nattribute for this sample row in its \*present\* category, or\nnull when no rule matches. Computed server-side identically\nto the GET \/transactions annotation so the \"Show matches\"\npreview dialog can render the same MatchedRuleChip\n(deep-link to \/mapping-rules?focus=<id> or \"manually\ncategorized\" hint) as every other transaction-list surface.\n')
-})).describe('First ~10 affected transactions, ordered most-recent first.\nEach entry is a thin slice (id, description, occurredOn, amount)\nsufficient for the toast\'s \"Show matches\" preview dialog.\n')
-}).describe('Reported by PATCH \/transactions\/:id when the auto-learn flow\nrepoints an existing mapping rule onto a new category. `candidateCount`\nis the number of older transactions that match this rule\'s pattern\nand currently sit in the rule\'s old category, i.e. the count that\nwould be flipped if the user accepts the \"apply to past transactions\ntoo\" prompt and POSTs to \/transactions\/recategorize-by-pattern with\nthese fields. `sampleTransactions` is a small preview (most-recent\nfirst, capped at 10) so the client can render a \"Show matches\" list\nbefore the user confirms the bulk re-categorize.\n')).describe('Empty unless this PATCH triggered the auto-learn flow to\nrepoint one or more existing mapping rules onto a new\ncategory. The client surfaces this as a \"apply to past\ntransactions too\" prompt.\n'),
-  "ruleAction": zod.object({
-  "kind": zod.enum(['created', 'created_priority_bump', 'skipped_generic', 'repointed', 'none']).describe('\* `created` — a new specific mapping rule was added for the\n  derived pattern.\n\* `created_priority_bump` — a new specific rule was added\n  and given a priority above an existing generic rule that\n  also matches; both rules are kept and the specific one\n  wins on future similar charges.\n\* `skipped_generic` — the auto-derived pattern would have\n  clobbered an existing generic rule, so no rule was\n  created. The generic rule is unchanged.\n\* `repointed` — at least one existing matching specific\n  rule was repointed onto the new category; no new rule was\n  created (the repoint covers it).\n\* `none` — nothing interesting happened (e.g. transfer,\n  same-category no-op, or no derivable pattern).\n'),
-  "pattern": zod.string().nullish().describe('Pattern for the new or repointed rule. Set for `created`,\n`created_priority_bump`, `skipped_generic`, and `repointed`.\n'),
-  "genericPattern": zod.string().nullish().describe('For `created_priority_bump` and `skipped_generic` — the\nexisting generic (1-token) pattern that already matches\nthis description and was deliberately left alone.\n'),
-  "ruleId": zod.string().nullish().describe('Id of the rule the auto-learn flow created or repointed.\nSet for `created`, `created_priority_bump`, and `repointed`\nso the client can offer an Undo affordance from the toast\n(DELETE the just-created rule, or PATCH the repointed rule\nback to its previous category). Null for `skipped_generic`\nand `none`.\n'),
-  "previousCategoryId": zod.string().nullish().describe('For `repointed` — the rule\'s previous categoryId before\nthis PATCH moved it onto the user\'s chosen category. Used\nby the client\'s Undo affordance to restore the rule\'s\noriginal aim. Null for the other kinds.\n'),
-  "matchType": zod.union([zod.literal('contains'),zod.literal('exact'),zod.literal('starts_with'),zod.literal(null)]).nullish().describe('Match type of the freshly created rule. Set for `created`\nand `created_priority_bump`. The client passes this\nthrough to \/transactions\/recategorize-by-pattern when the\nuser accepts the \"apply to past charges?\" prompt.\n'),
-  "toCategoryId": zod.string().nullish().describe('The category the freshly created rule points at. Set for\n`created` and `created_priority_bump`. Used as the\n`toCategoryId` for the bulk recategorize call when the\nuser accepts the \"apply to past charges?\" prompt.\n'),
-  "candidateCount": zod.number().nullish().describe('For `created` and `created_priority_bump` — the count of\nolder \*uncategorized\* transactions that match the freshly\ncreated rule\'s pattern (excluding the row that triggered\nthe auto-learn). This is what would be flipped onto\n`toCategoryId` if the user accepts the \"apply to past\ncharges?\" prompt and POSTs to\n\/transactions\/recategorize-by-pattern with\n`fromCategoryId: null`. Manually-categorized older rows\nare deliberately excluded so explicit user intent is\npreserved.\n')
-}).describe('Summary of what the auto-learn flow did to the user\'s mapping\nrules in response to this PATCH. Surfaced as a small toast\/note\nso the user understands why future similar charges will (or\nwon\'t) auto-categorize. The repoint case is also reported in\nmore detail via `repointedRules` (which drives the \"apply to\npast transactions too\" prompt). For the `created` \/\n`created_priority_bump` cases, the action also carries the\nmatch metadata + candidate count needed to drive the same\n\"apply to past charges?\" prompt against older \*uncategorized\*\nrows that match the freshly created rule.\n')
-}))
-
+export const UpdateTransactionResponse = zod
+  .object({
+    id: zod.string(),
+    occurredOn: zod.string(),
+    occurredAt: zod.string().nullish(),
+    description: zod.string(),
+    amount: zod.string(),
+    account: zod.string().nullish(),
+    categoryId: zod.string().nullish(),
+    forecastFlag: zod.boolean(),
+    weeklyAllowance: zod.boolean(),
+    weeklyBucket: zod
+      .union([
+        zod.literal("groceries"),
+        zod.literal("dining"),
+        zod.literal("entertainment"),
+        zod.literal("misc"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    monthlyAllowance: zod.boolean(),
+    unplannedAllowance: zod.boolean(),
+    reimbursable: zod.boolean(),
+    reimbursed: zod.boolean(),
+    isTransfer: zod.boolean(),
+    notes: zod.string().nullish(),
+    source: zod.string(),
+    member: zod.string().nullish(),
+    owedBy: zod.string().nullish(),
+    plaidTransactionId: zod.string().nullish(),
+    plaidAccountId: zod.string().nullish(),
+    debtId: zod.string().nullish(),
+    matchedRuleId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+      ),
+  })
+  .and(
+    zod.object({
+      repointedRules: zod
+        .array(
+          zod
+            .object({
+              ruleId: zod.string(),
+              pattern: zod.string(),
+              matchType: zod.enum(["contains", "exact", "starts_with"]),
+              fromCategoryId: zod.string(),
+              toCategoryId: zod.string(),
+              candidateCount: zod.number(),
+              sampleTransactions: zod
+                .array(
+                  zod.object({
+                    id: zod.string(),
+                    description: zod.string(),
+                    occurredOn: zod.string(),
+                    amount: zod.string(),
+                    matchedRuleId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Id of the mapping rule that auto-categorize would currently\nattribute for this sample row in its \*present\* category, or\nnull when no rule matches. Computed server-side identically\nto the GET \/transactions annotation so the \"Show matches\"\npreview dialog can render the same MatchedRuleChip\n(deep-link to \/mapping-rules?focus=<id> or \"manually\ncategorized\" hint) as every other transaction-list surface.\n',
+                      ),
+                  }),
+                )
+                .describe(
+                  'First ~10 affected transactions, ordered most-recent first.\nEach entry is a thin slice (id, description, occurredOn, amount)\nsufficient for the toast\'s \"Show matches\" preview dialog.\n',
+                ),
+            })
+            .describe(
+              'Reported by PATCH \/transactions\/:id when the auto-learn flow\nrepoints an existing mapping rule onto a new category. `candidateCount`\nis the number of older transactions that match this rule\'s pattern\nand currently sit in the rule\'s old category, i.e. the count that\nwould be flipped if the user accepts the \"apply to past transactions\ntoo\" prompt and POSTs to \/transactions\/recategorize-by-pattern with\nthese fields. `sampleTransactions` is a small preview (most-recent\nfirst, capped at 10) so the client can render a \"Show matches\" list\nbefore the user confirms the bulk re-categorize.\n',
+            ),
+        )
+        .describe(
+          'Empty unless this PATCH triggered the auto-learn flow to\nrepoint one or more existing mapping rules onto a new\ncategory. The client surfaces this as a \"apply to past\ntransactions too\" prompt.\n',
+        ),
+      ruleAction: zod
+        .object({
+          kind: zod
+            .enum([
+              "created",
+              "created_priority_bump",
+              "skipped_generic",
+              "repointed",
+              "none",
+            ])
+            .describe(
+              "\* `created` — a new specific mapping rule was added for the\n  derived pattern.\n\* `created_priority_bump` — a new specific rule was added\n  and given a priority above an existing generic rule that\n  also matches; both rules are kept and the specific one\n  wins on future similar charges.\n\* `skipped_generic` — the auto-derived pattern would have\n  clobbered an existing generic rule, so no rule was\n  created. The generic rule is unchanged.\n\* `repointed` — at least one existing matching specific\n  rule was repointed onto the new category; no new rule was\n  created (the repoint covers it).\n\* `none` — nothing interesting happened (e.g. transfer,\n  same-category no-op, or no derivable pattern).\n",
+            ),
+          pattern: zod
+            .string()
+            .nullish()
+            .describe(
+              "Pattern for the new or repointed rule. Set for `created`,\n`created_priority_bump`, `skipped_generic`, and `repointed`.\n",
+            ),
+          genericPattern: zod
+            .string()
+            .nullish()
+            .describe(
+              "For `created_priority_bump` and `skipped_generic` — the\nexisting generic (1-token) pattern that already matches\nthis description and was deliberately left alone.\n",
+            ),
+          ruleId: zod
+            .string()
+            .nullish()
+            .describe(
+              "Id of the rule the auto-learn flow created or repointed.\nSet for `created`, `created_priority_bump`, and `repointed`\nso the client can offer an Undo affordance from the toast\n(DELETE the just-created rule, or PATCH the repointed rule\nback to its previous category). Null for `skipped_generic`\nand `none`.\n",
+            ),
+          previousCategoryId: zod
+            .string()
+            .nullish()
+            .describe(
+              "For `repointed` — the rule's previous categoryId before\nthis PATCH moved it onto the user's chosen category. Used\nby the client's Undo affordance to restore the rule's\noriginal aim. Null for the other kinds.\n",
+            ),
+          matchType: zod
+            .union([
+              zod.literal("contains"),
+              zod.literal("exact"),
+              zod.literal("starts_with"),
+              zod.literal(null),
+            ])
+            .nullish()
+            .describe(
+              'Match type of the freshly created rule. Set for `created`\nand `created_priority_bump`. The client passes this\nthrough to \/transactions\/recategorize-by-pattern when the\nuser accepts the \"apply to past charges?\" prompt.\n',
+            ),
+          toCategoryId: zod
+            .string()
+            .nullish()
+            .describe(
+              'The category the freshly created rule points at. Set for\n`created` and `created_priority_bump`. Used as the\n`toCategoryId` for the bulk recategorize call when the\nuser accepts the \"apply to past charges?\" prompt.\n',
+            ),
+          candidateCount: zod
+            .number()
+            .nullish()
+            .describe(
+              'For `created` and `created_priority_bump` — the count of\nolder \*uncategorized\* transactions that match the freshly\ncreated rule\'s pattern (excluding the row that triggered\nthe auto-learn). This is what would be flipped onto\n`toCategoryId` if the user accepts the \"apply to past\ncharges?\" prompt and POSTs to\n\/transactions\/recategorize-by-pattern with\n`fromCategoryId: null`. Manually-categorized older rows\nare deliberately excluded so explicit user intent is\npreserved.\n',
+            ),
+        })
+        .describe(
+          'Summary of what the auto-learn flow did to the user\'s mapping\nrules in response to this PATCH. Surfaced as a small toast\/note\nso the user understands why future similar charges will (or\nwon\'t) auto-categorize. The repoint case is also reported in\nmore detail via `repointedRules` (which drives the \"apply to\npast transactions too\" prompt). For the `created` \/\n`created_priority_bump` cases, the action also carries the\nmatch metadata + candidate count needed to drive the same\n\"apply to past charges?\" prompt against older \*uncategorized\*\nrows that match the freshly created rule.\n',
+        ),
+    }),
+  );
 
 export const DeleteTransactionParams = zod.object({
-  "id": zod.coerce.string()
-})
-
+  id: zod.coerce.string(),
+});
 
 /**
  * @summary Bulk re-categorize past transactions whose description matches a
@@ -241,23 +373,46 @@ rule (e.g. an Amex/Cap One/Discover debt-payment rule moving from
 
 export const recategorizeTransactionsByPatternBodyIdsMax = 1000;
 
-
-
 export const RecategorizeTransactionsByPatternBody = zod.object({
-  "pattern": zod.string().min(1),
-  "matchType": zod.enum(['contains', 'exact', 'starts_with']),
-  "fromCategoryId": zod.string().nullable().describe('Only transactions currently in this category are touched.\nTransactions manually re-categorized to a different category\nare skipped to preserve explicit user intent. Pass `null`\nto target rows that are currently \*uncategorized\* — used\nby the \"apply to past charges?\" prompt that fires after\nthe auto-learn flow creates a brand-new specific rule\n(the candidates are older uncategorized rows that match\nthe new pattern; manually categorized rows are\npreserved).\n'),
-  "toCategoryId": zod.string(),
-  "ids": zod.array(zod.string()).max(recategorizeTransactionsByPatternBodyIdsMax).optional().describe('Optional whitelist of transaction ids to scope the bulk\nupdate to. When provided, the server only flips rows whose\nid is in this list AND whose categoryId still equals\n`fromCategoryId`. Used by the client\'s \"Undo\" affordance to\nrevert exactly the rows that the original bulk touched,\nskipping any the user has since re-edited. Capped at 1000\nids per request — a longer list is rejected with a 400 to\nprevent a hand-crafted payload from stalling the API; in\npractice the array is bounded by what currently matches\nthe pattern, well below this cap.\n'),
-  "ruleId": zod.string().optional().describe('Optional id of the mapping rule whose previous re-point\nshould be reversed alongside the transaction flip. When\nprovided, the server also updates that rule\'s categoryId\nto `toCategoryId` (after verifying ownership). The \"Undo\"\naffordance passes the original rule id with `from`\/`to`\nswapped so future matching transactions stop snapping\nonto the user\'s accidental category pick.\n')
-})
+  pattern: zod.string().min(1),
+  matchType: zod.enum(["contains", "exact", "starts_with"]),
+  fromCategoryId: zod
+    .string()
+    .nullable()
+    .describe(
+      'Only transactions currently in this category are touched.\nTransactions manually re-categorized to a different category\nare skipped to preserve explicit user intent. Pass `null`\nto target rows that are currently \*uncategorized\* — used\nby the \"apply to past charges?\" prompt that fires after\nthe auto-learn flow creates a brand-new specific rule\n(the candidates are older uncategorized rows that match\nthe new pattern; manually categorized rows are\npreserved).\n',
+    ),
+  toCategoryId: zod.string(),
+  ids: zod
+    .array(zod.string())
+    .max(recategorizeTransactionsByPatternBodyIdsMax)
+    .optional()
+    .describe(
+      'Optional whitelist of transaction ids to scope the bulk\nupdate to. When provided, the server only flips rows whose\nid is in this list AND whose categoryId still equals\n`fromCategoryId`. Used by the client\'s \"Undo\" affordance to\nrevert exactly the rows that the original bulk touched,\nskipping any the user has since re-edited. Capped at 1000\nids per request — a longer list is rejected with a 400 to\nprevent a hand-crafted payload from stalling the API; in\npractice the array is bounded by what currently matches\nthe pattern, well below this cap.\n',
+    ),
+  ruleId: zod
+    .string()
+    .optional()
+    .describe(
+      "Optional id of the mapping rule whose previous re-point\nshould be reversed alongside the transaction flip. When\nprovided, the server also updates that rule's categoryId\nto `toCategoryId` (after verifying ownership). The \"Undo\"\naffordance passes the original rule id with `from`\/`to`\nswapped so future matching transactions stop snapping\nonto the user's accidental category pick.\n",
+    ),
+});
 
 export const RecategorizeTransactionsByPatternResponse = zod.object({
-  "updated": zod.number().describe('Number of transactions whose categoryId was flipped.'),
-  "affectedMonths": zod.array(zod.string()).describe('Distinct YYYY-MM-01 month-start strings spanning the updated\ntransactions. Clients invalidate the corresponding budget month\nqueries so per-line actuals refresh.\n'),
-  "affectedIds": zod.array(zod.string()).describe('Ids of the transactions whose categoryId was flipped. The\nclient passes these back into the same endpoint with `from`\nand `to` swapped (and `ids` set) to implement one-click\n\"Undo\" of a bulk recategorization.\n')
-})
-
+  updated: zod
+    .number()
+    .describe("Number of transactions whose categoryId was flipped."),
+  affectedMonths: zod
+    .array(zod.string())
+    .describe(
+      "Distinct YYYY-MM-01 month-start strings spanning the updated\ntransactions. Clients invalidate the corresponding budget month\nqueries so per-line actuals refresh.\n",
+    ),
+  affectedIds: zod
+    .array(zod.string())
+    .describe(
+      'Ids of the transactions whose categoryId was flipped. The\nclient passes these back into the same endpoint with `from`\nand `to` swapped (and `ids` set) to implement one-click\n\"Undo\" of a bulk recategorization.\n',
+    ),
+});
 
 /**
  * @summary Bulk clear the categoryId on a list of transactions, scoped by an
@@ -273,19 +428,36 @@ target.
  */
 export const uncategorizeTransactionsByIdsBodyIdsMax = 1000;
 
-
-
 export const UncategorizeTransactionsByIdsBody = zod.object({
-  "ids": zod.array(zod.string()).max(uncategorizeTransactionsByIdsBodyIdsMax).describe('Whitelist of transaction ids whose categoryId should be cleared.\nOnly rows owned by the requesting user are touched. An\nexplicitly-empty list is a no-op so callers can pass through a\ndegenerate Undo payload (e.g. a bulk that flipped 0 rows)\nwithout affecting unrelated data. Capped at 1000 ids per\nrequest — a longer list is rejected with a 400 to prevent\na runaway \"Undo\" from stalling the API; the Add-flow\'s bulk\nundo passes back exactly the ids it just touched, so the\npractical ceiling is whatever pattern matched, well below\nthis cap.\n'),
-  "fromCategoryId": zod.string().nullable().describe('Guard category — only rows whose categoryId still equals this\nvalue are flipped to null. Pass the category id the rows were\nmoved into by the original bulk so any rows the user has since\nre-edited (away from that category) are preserved. Pass `null`\nto allow flipping rows that are already uncategorized — that\'s\nstill a no-op for those rows but keeps the same surface\nreusable for future \"from anywhere\" callers.\n')
-})
+  ids: zod
+    .array(zod.string())
+    .max(uncategorizeTransactionsByIdsBodyIdsMax)
+    .describe(
+      'Whitelist of transaction ids whose categoryId should be cleared.\nOnly rows owned by the requesting user are touched. An\nexplicitly-empty list is a no-op so callers can pass through a\ndegenerate Undo payload (e.g. a bulk that flipped 0 rows)\nwithout affecting unrelated data. Capped at 1000 ids per\nrequest — a longer list is rejected with a 400 to prevent\na runaway \"Undo\" from stalling the API; the Add-flow\'s bulk\nundo passes back exactly the ids it just touched, so the\npractical ceiling is whatever pattern matched, well below\nthis cap.\n',
+    ),
+  fromCategoryId: zod
+    .string()
+    .nullable()
+    .describe(
+      'Guard category — only rows whose categoryId still equals this\nvalue are flipped to null. Pass the category id the rows were\nmoved into by the original bulk so any rows the user has since\nre-edited (away from that category) are preserved. Pass `null`\nto allow flipping rows that are already uncategorized — that\'s\nstill a no-op for those rows but keeps the same surface\nreusable for future \"from anywhere\" callers.\n',
+    ),
+});
 
 export const UncategorizeTransactionsByIdsResponse = zod.object({
-  "updated": zod.number().describe('Number of transactions whose categoryId was cleared.'),
-  "affectedMonths": zod.array(zod.string()).describe('Distinct YYYY-MM-01 month-start strings spanning the cleared\ntransactions. Clients invalidate the corresponding budget month\nqueries so per-line actuals refresh.\n'),
-  "affectedIds": zod.array(zod.string()).describe('Ids of the transactions whose categoryId was actually cleared.\nMirrors RecategorizeByPatternResult.affectedIds so the toast\ncan report a precise count to the user.\n')
-})
-
+  updated: zod
+    .number()
+    .describe("Number of transactions whose categoryId was cleared."),
+  affectedMonths: zod
+    .array(zod.string())
+    .describe(
+      "Distinct YYYY-MM-01 month-start strings spanning the cleared\ntransactions. Clients invalidate the corresponding budget month\nqueries so per-line actuals refresh.\n",
+    ),
+  affectedIds: zod
+    .array(zod.string())
+    .describe(
+      "Ids of the transactions whose categoryId was actually cleared.\nMirrors RecategorizeByPatternResult.affectedIds so the toast\ncan report a precise count to the user.\n",
+    ),
+});
 
 /**
  * @summary Bulk set the forecast_flag on a list of transactions to a target
@@ -296,583 +468,748 @@ when the user has since toggled some of the rows back manually.
 
  */
 export const BulkSetForecastFlagBody = zod.object({
-  "ids": zod.array(zod.string()).describe('Transaction ids to flip. Only rows owned by the requesting\nuser whose current `forecast_flag` differs from the target\nvalue are touched — rows already at the target value are\nsilently skipped so a re-issue (e.g. one-click \"Undo\") is\nsafe even when the user has since toggled some rows back\nby hand.\n'),
-  "forecastFlag": zod.boolean().describe('Target value for `forecast_flag`. When `false` the server\nalso drops any forecast_resolutions pointing at the\naffected rows (mirroring the per-row PATCH cleanup) so the\nForecast inbox\/bucket stays consistent.\n')
-})
+  ids: zod
+    .array(zod.string())
+    .describe(
+      'Transaction ids to flip. Only rows owned by the requesting\nuser whose current `forecast_flag` differs from the target\nvalue are touched — rows already at the target value are\nsilently skipped so a re-issue (e.g. one-click \"Undo\") is\nsafe even when the user has since toggled some rows back\nby hand.\n',
+    ),
+  forecastFlag: zod
+    .boolean()
+    .describe(
+      "Target value for `forecast_flag`. When `false` the server\nalso drops any forecast_resolutions pointing at the\naffected rows (mirroring the per-row PATCH cleanup) so the\nForecast inbox\/bucket stays consistent.\n",
+    ),
+});
 
 export const BulkSetForecastFlagResponse = zod.object({
-  "updated": zod.number().describe('Number of transactions whose forecast_flag was flipped.'),
-  "affectedIds": zod.array(zod.string()).describe('Ids of the transactions whose forecast_flag was actually\nflipped. The client passes these back to the same endpoint\nwith `forecastFlag` inverted to implement one-click \"Undo\"\nof a bulk Send-to-Forecast \/ Remove-from-Forecast — rows\nthe user has since re-toggled by hand are naturally\nskipped because their current value already matches the\nnew target.\n')
-})
-
+  updated: zod
+    .number()
+    .describe("Number of transactions whose forecast_flag was flipped."),
+  affectedIds: zod
+    .array(zod.string())
+    .describe(
+      'Ids of the transactions whose forecast_flag was actually\nflipped. The client passes these back to the same endpoint\nwith `forecastFlag` inverted to implement one-click \"Undo\"\nof a bulk Send-to-Forecast \/ Remove-from-Forecast — rows\nthe user has since re-toggled by hand are naturally\nskipped because their current value already matches the\nnew target.\n',
+    ),
+});
 
 export const ListDebtsResponseItem = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "balance": zod.string(),
-  "originalBalance": zod.string().nullish(),
-  "apr": zod.string(),
-  "minPayment": zod.string(),
-  "payment": zod.string(),
-  "type": zod.string().nullish(),
-  "status": zod.string(),
-  "sortOrder": zod.number(),
-  "dueDay": zod.number().nullish(),
-  "statementDay": zod.number().nullish(),
-  "notes": zod.string().nullish(),
-  "lastBalanceUpdate": zod.string().nullish(),
-  "plaidAccountId": zod.string().nullish(),
-  "plaidLastSyncedAt": zod.string().nullish(),
-  "plaidLastSyncError": zod.string().nullish().describe('Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn\'t Plaid-linked.\n'),
-  "plaidLastSyncErrorCode": zod.string().nullish().describe('Structured `error_code` from the parent Plaid item\'s last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn\'t Plaid-linked.\n'),
-  "plaidConsentExpirationAt": zod.string().nullish().describe('(#238) ISO timestamp mirroring the parent Plaid item\'s\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn\'t\nPlaid-linked or Plaid never reported a cutoff for the item.\n'),
-  "balanceSource": zod.enum(['plaid', 'manual']),
-  "aprSource": zod.enum(['plaid', 'manual']),
-  "minPaymentSource": zod.enum(['plaid', 'manual']),
-  "plaidAccount": zod.union([zod.object({
-  "id": zod.string(),
-  "itemId": zod.string().nullish().describe('Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n'),
-  "name": zod.string().nullish(),
-  "mask": zod.string().nullish(),
-  "type": zod.string().nullish(),
-  "subtype": zod.string().nullish(),
-  "liabilityKind": zod.string().nullish(),
-  "institutionName": zod.string().nullish(),
-  "institutionSlug": zod.string().nullish()
-}),zod.null()]).optional()
-})
-export const ListDebtsResponse = zod.array(ListDebtsResponseItem)
-
-
-
-
+  id: zod.string(),
+  name: zod.string(),
+  balance: zod.string(),
+  originalBalance: zod.string().nullish(),
+  apr: zod.string(),
+  minPayment: zod.string(),
+  payment: zod.string(),
+  type: zod.string().nullish(),
+  status: zod.string(),
+  sortOrder: zod.number(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+  plaidLastSyncedAt: zod.string().nullish(),
+  plaidLastSyncError: zod
+    .string()
+    .nullish()
+    .describe(
+      "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidLastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidConsentExpirationAt: zod
+    .string()
+    .nullish()
+    .describe(
+      "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
+    ),
+  balanceSource: zod.enum(["plaid", "manual"]),
+  aprSource: zod.enum(["plaid", "manual"]),
+  minPaymentSource: zod.enum(["plaid", "manual"]),
+  plaidAccount: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        itemId: zod
+          .string()
+          .nullish()
+          .describe(
+            "Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n",
+          ),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+        type: zod.string().nullish(),
+        subtype: zod.string().nullish(),
+        liabilityKind: zod.string().nullish(),
+        institutionName: zod.string().nullish(),
+        institutionSlug: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
+export const ListDebtsResponse = zod.array(ListDebtsResponseItem);
 
 export const CreateDebtBody = zod.object({
-  "name": zod.string().min(1).optional(),
-  "balance": zod.string().optional(),
-  "apr": zod.string().optional(),
-  "minPayment": zod.string().optional(),
-  "payment": zod.string().optional(),
-  "type": zod.string().nullish(),
-  "status": zod.string().optional(),
-  "sortOrder": zod.number().optional(),
-  "dueDay": zod.number().nullish(),
-  "statementDay": zod.number().nullish(),
-  "notes": zod.string().nullish(),
-  "lastBalanceUpdate": zod.string().nullish()
-})
-
+  name: zod.string().min(1).optional(),
+  balance: zod.string().optional(),
+  apr: zod.string().optional(),
+  minPayment: zod.string().optional(),
+  payment: zod.string().optional(),
+  type: zod.string().nullish(),
+  status: zod.string().optional(),
+  sortOrder: zod.number().optional(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
+});
 
 export const LinkDebtToPlaidParams = zod.object({
-  "id": zod.coerce.string()
-})
+  id: zod.coerce.string(),
+});
 
 export const LinkDebtToPlaidBody = zod.object({
-  "plaidAccountId": zod.string()
-})
+  plaidAccountId: zod.string(),
+});
 
 export const LinkDebtToPlaidResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "balance": zod.string(),
-  "originalBalance": zod.string().nullish(),
-  "apr": zod.string(),
-  "minPayment": zod.string(),
-  "payment": zod.string(),
-  "type": zod.string().nullish(),
-  "status": zod.string(),
-  "sortOrder": zod.number(),
-  "dueDay": zod.number().nullish(),
-  "statementDay": zod.number().nullish(),
-  "notes": zod.string().nullish(),
-  "lastBalanceUpdate": zod.string().nullish(),
-  "plaidAccountId": zod.string().nullish(),
-  "plaidLastSyncedAt": zod.string().nullish(),
-  "plaidLastSyncError": zod.string().nullish().describe('Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn\'t Plaid-linked.\n'),
-  "plaidLastSyncErrorCode": zod.string().nullish().describe('Structured `error_code` from the parent Plaid item\'s last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn\'t Plaid-linked.\n'),
-  "plaidConsentExpirationAt": zod.string().nullish().describe('(#238) ISO timestamp mirroring the parent Plaid item\'s\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn\'t\nPlaid-linked or Plaid never reported a cutoff for the item.\n'),
-  "balanceSource": zod.enum(['plaid', 'manual']),
-  "aprSource": zod.enum(['plaid', 'manual']),
-  "minPaymentSource": zod.enum(['plaid', 'manual']),
-  "plaidAccount": zod.union([zod.object({
-  "id": zod.string(),
-  "itemId": zod.string().nullish().describe('Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n'),
-  "name": zod.string().nullish(),
-  "mask": zod.string().nullish(),
-  "type": zod.string().nullish(),
-  "subtype": zod.string().nullish(),
-  "liabilityKind": zod.string().nullish(),
-  "institutionName": zod.string().nullish(),
-  "institutionSlug": zod.string().nullish()
-}),zod.null()]).optional()
-})
-
+  id: zod.string(),
+  name: zod.string(),
+  balance: zod.string(),
+  originalBalance: zod.string().nullish(),
+  apr: zod.string(),
+  minPayment: zod.string(),
+  payment: zod.string(),
+  type: zod.string().nullish(),
+  status: zod.string(),
+  sortOrder: zod.number(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+  plaidLastSyncedAt: zod.string().nullish(),
+  plaidLastSyncError: zod
+    .string()
+    .nullish()
+    .describe(
+      "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidLastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidConsentExpirationAt: zod
+    .string()
+    .nullish()
+    .describe(
+      "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
+    ),
+  balanceSource: zod.enum(["plaid", "manual"]),
+  aprSource: zod.enum(["plaid", "manual"]),
+  minPaymentSource: zod.enum(["plaid", "manual"]),
+  plaidAccount: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        itemId: zod
+          .string()
+          .nullish()
+          .describe(
+            "Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n",
+          ),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+        type: zod.string().nullish(),
+        subtype: zod.string().nullish(),
+        liabilityKind: zod.string().nullish(),
+        institutionName: zod.string().nullish(),
+        institutionSlug: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
 
 export const UnlinkDebtFromPlaidParams = zod.object({
-  "id": zod.coerce.string()
-})
+  id: zod.coerce.string(),
+});
 
 export const UnlinkDebtFromPlaidResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "balance": zod.string(),
-  "originalBalance": zod.string().nullish(),
-  "apr": zod.string(),
-  "minPayment": zod.string(),
-  "payment": zod.string(),
-  "type": zod.string().nullish(),
-  "status": zod.string(),
-  "sortOrder": zod.number(),
-  "dueDay": zod.number().nullish(),
-  "statementDay": zod.number().nullish(),
-  "notes": zod.string().nullish(),
-  "lastBalanceUpdate": zod.string().nullish(),
-  "plaidAccountId": zod.string().nullish(),
-  "plaidLastSyncedAt": zod.string().nullish(),
-  "plaidLastSyncError": zod.string().nullish().describe('Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn\'t Plaid-linked.\n'),
-  "plaidLastSyncErrorCode": zod.string().nullish().describe('Structured `error_code` from the parent Plaid item\'s last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn\'t Plaid-linked.\n'),
-  "plaidConsentExpirationAt": zod.string().nullish().describe('(#238) ISO timestamp mirroring the parent Plaid item\'s\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn\'t\nPlaid-linked or Plaid never reported a cutoff for the item.\n'),
-  "balanceSource": zod.enum(['plaid', 'manual']),
-  "aprSource": zod.enum(['plaid', 'manual']),
-  "minPaymentSource": zod.enum(['plaid', 'manual']),
-  "plaidAccount": zod.union([zod.object({
-  "id": zod.string(),
-  "itemId": zod.string().nullish().describe('Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n'),
-  "name": zod.string().nullish(),
-  "mask": zod.string().nullish(),
-  "type": zod.string().nullish(),
-  "subtype": zod.string().nullish(),
-  "liabilityKind": zod.string().nullish(),
-  "institutionName": zod.string().nullish(),
-  "institutionSlug": zod.string().nullish()
-}),zod.null()]).optional()
-})
-
+  id: zod.string(),
+  name: zod.string(),
+  balance: zod.string(),
+  originalBalance: zod.string().nullish(),
+  apr: zod.string(),
+  minPayment: zod.string(),
+  payment: zod.string(),
+  type: zod.string().nullish(),
+  status: zod.string(),
+  sortOrder: zod.number(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+  plaidLastSyncedAt: zod.string().nullish(),
+  plaidLastSyncError: zod
+    .string()
+    .nullish()
+    .describe(
+      "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidLastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidConsentExpirationAt: zod
+    .string()
+    .nullish()
+    .describe(
+      "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
+    ),
+  balanceSource: zod.enum(["plaid", "manual"]),
+  aprSource: zod.enum(["plaid", "manual"]),
+  minPaymentSource: zod.enum(["plaid", "manual"]),
+  plaidAccount: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        itemId: zod
+          .string()
+          .nullish()
+          .describe(
+            "Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n",
+          ),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+        type: zod.string().nullish(),
+        subtype: zod.string().nullish(),
+        liabilityKind: zod.string().nullish(),
+        institutionName: zod.string().nullish(),
+        institutionSlug: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
 
 export const RefreshDebtFromPlaidParams = zod.object({
-  "id": zod.coerce.string()
-})
+  id: zod.coerce.string(),
+});
 
 export const RefreshDebtFromPlaidResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "balance": zod.string(),
-  "originalBalance": zod.string().nullish(),
-  "apr": zod.string(),
-  "minPayment": zod.string(),
-  "payment": zod.string(),
-  "type": zod.string().nullish(),
-  "status": zod.string(),
-  "sortOrder": zod.number(),
-  "dueDay": zod.number().nullish(),
-  "statementDay": zod.number().nullish(),
-  "notes": zod.string().nullish(),
-  "lastBalanceUpdate": zod.string().nullish(),
-  "plaidAccountId": zod.string().nullish(),
-  "plaidLastSyncedAt": zod.string().nullish(),
-  "plaidLastSyncError": zod.string().nullish().describe('Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn\'t Plaid-linked.\n'),
-  "plaidLastSyncErrorCode": zod.string().nullish().describe('Structured `error_code` from the parent Plaid item\'s last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn\'t Plaid-linked.\n'),
-  "plaidConsentExpirationAt": zod.string().nullish().describe('(#238) ISO timestamp mirroring the parent Plaid item\'s\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn\'t\nPlaid-linked or Plaid never reported a cutoff for the item.\n'),
-  "balanceSource": zod.enum(['plaid', 'manual']),
-  "aprSource": zod.enum(['plaid', 'manual']),
-  "minPaymentSource": zod.enum(['plaid', 'manual']),
-  "plaidAccount": zod.union([zod.object({
-  "id": zod.string(),
-  "itemId": zod.string().nullish().describe('Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n'),
-  "name": zod.string().nullish(),
-  "mask": zod.string().nullish(),
-  "type": zod.string().nullish(),
-  "subtype": zod.string().nullish(),
-  "liabilityKind": zod.string().nullish(),
-  "institutionName": zod.string().nullish(),
-  "institutionSlug": zod.string().nullish()
-}),zod.null()]).optional()
-})
-
+  id: zod.string(),
+  name: zod.string(),
+  balance: zod.string(),
+  originalBalance: zod.string().nullish(),
+  apr: zod.string(),
+  minPayment: zod.string(),
+  payment: zod.string(),
+  type: zod.string().nullish(),
+  status: zod.string(),
+  sortOrder: zod.number(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+  plaidLastSyncedAt: zod.string().nullish(),
+  plaidLastSyncError: zod
+    .string()
+    .nullish()
+    .describe(
+      "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidLastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidConsentExpirationAt: zod
+    .string()
+    .nullish()
+    .describe(
+      "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
+    ),
+  balanceSource: zod.enum(["plaid", "manual"]),
+  aprSource: zod.enum(["plaid", "manual"]),
+  minPaymentSource: zod.enum(["plaid", "manual"]),
+  plaidAccount: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        itemId: zod
+          .string()
+          .nullish()
+          .describe(
+            "Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n",
+          ),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+        type: zod.string().nullish(),
+        subtype: zod.string().nullish(),
+        liabilityKind: zod.string().nullish(),
+        institutionName: zod.string().nullish(),
+        institutionSlug: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
 
 export const ListPlaidLiabilityAccountsQueryParams = zod.object({
-  "refresh": zod.coerce.boolean().optional()
-})
+  refresh: zod.coerce.boolean().optional(),
+});
 
 export const ListPlaidLiabilityAccountsResponseItem = zod.object({
-  "id": zod.string(),
-  "accountId": zod.string(),
-  "itemId": zod.string().optional().describe('Internal Plaid item row id (UUID) of the parent item. Used by\nthe post-Link \"Add as debts\" dialog to scope the candidate\nlist to just the institution that was just linked.\n'),
-  "name": zod.string().nullish(),
-  "officialName": zod.string().nullish(),
-  "mask": zod.string().nullish(),
-  "type": zod.string().nullish(),
-  "subtype": zod.string().nullish(),
-  "liabilityKind": zod.string().nullish(),
-  "balance": zod.string().nullish(),
-  "apr": zod.string().nullish(),
-  "minPayment": zod.string().nullish(),
-  "lastFetchedAt": zod.string().nullish(),
-  "institutionId": zod.string().nullish(),
-  "institutionName": zod.string().nullish(),
-  "institutionSlug": zod.string().nullish(),
-  "linkedDebt": zod.union([zod.object({
-  "id": zod.string(),
-  "name": zod.string()
-}),zod.null()]).optional(),
-  "suggestedDebt": zod.union([zod.object({
-  "name": zod.string(),
-  "type": zod.string(),
-  "balance": zod.string().nullish(),
-  "apr": zod.string().nullish(),
-  "minPayment": zod.string().nullish(),
-  "dueDay": zod.number().nullish(),
-  "statementDay": zod.number().nullish()
-}),zod.null()]).optional()
-})
-export const ListPlaidLiabilityAccountsResponse = zod.array(ListPlaidLiabilityAccountsResponseItem)
-
+  id: zod.string(),
+  accountId: zod.string(),
+  itemId: zod
+    .string()
+    .optional()
+    .describe(
+      'Internal Plaid item row id (UUID) of the parent item. Used by\nthe post-Link \"Add as debts\" dialog to scope the candidate\nlist to just the institution that was just linked.\n',
+    ),
+  name: zod.string().nullish(),
+  officialName: zod.string().nullish(),
+  mask: zod.string().nullish(),
+  type: zod.string().nullish(),
+  subtype: zod.string().nullish(),
+  liabilityKind: zod.string().nullish(),
+  balance: zod.string().nullish(),
+  apr: zod.string().nullish(),
+  minPayment: zod.string().nullish(),
+  lastFetchedAt: zod.string().nullish(),
+  institutionId: zod.string().nullish(),
+  institutionName: zod.string().nullish(),
+  institutionSlug: zod.string().nullish(),
+  linkedDebt: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  suggestedDebt: zod
+    .union([
+      zod.object({
+        name: zod.string(),
+        type: zod.string(),
+        balance: zod.string().nullish(),
+        apr: zod.string().nullish(),
+        minPayment: zod.string().nullish(),
+        dueDay: zod.number().nullish(),
+        statementDay: zod.number().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
+export const ListPlaidLiabilityAccountsResponse = zod.array(
+  ListPlaidLiabilityAccountsResponseItem,
+);
 
 export const CreateDebtFromPlaidAccountParams = zod.object({
-  "plaidAccountId": zod.coerce.string()
-})
-
+  plaidAccountId: zod.coerce.string(),
+});
 
 export const BulkCreateDebtsFromPlaidAccountsBody = zod.object({
-  "accounts": zod.array(zod.object({
-  "plaidAccountId": zod.string(),
-  "name": zod.string().nullish()
-}))
-})
-
+  accounts: zod.array(
+    zod.object({
+      plaidAccountId: zod.string(),
+      name: zod.string().nullish(),
+    }),
+  ),
+});
 
 /**
  * @summary All recorded balance snapshots for the current user's debts
  */
 export const ListDebtBalanceHistoryResponseItem = zod.object({
-  "debtId": zod.string(),
-  "recordedOn": zod.string().describe('YYYY-MM-DD'),
-  "balance": zod.string()
-})
-export const ListDebtBalanceHistoryResponse = zod.array(ListDebtBalanceHistoryResponseItem)
-
+  debtId: zod.string(),
+  recordedOn: zod.string().describe("YYYY-MM-DD"),
+  balance: zod.string(),
+});
+export const ListDebtBalanceHistoryResponse = zod.array(
+  ListDebtBalanceHistoryResponseItem,
+);
 
 export const SyncDebtMinimumsResponse = zod.object({
-  "updated": zod.array(zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "oldMin": zod.string(),
-  "newMin": zod.string()
-}))
-})
-
+  updated: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      oldMin: zod.string(),
+      newMin: zod.string(),
+    }),
+  ),
+});
 
 /**
  * @summary Resolved monthly extra-payment amount
  */
 export const GetAvalancheExtraResponse = zod.object({
-  "source": zod.enum(['budget_net', 'budget_line', 'manual']),
-  "amount": zod.string(),
-  "monthStart": zod.string(),
-  "mode": zod.enum(['budgeted', 'actual']).optional(),
-  "availableMoney": zod.string().optional(),
-  "plannedAvalanchePayment": zod.string().optional(),
-  "plannedIncome": zod.string().optional(),
-  "plannedExpenses": zod.string().optional(),
-  "breakdown": zod.object({
-  "income": zod.string().optional(),
-  "expenses": zod.string().optional(),
-  "plannedIncome": zod.string().optional(),
-  "plannedExpenses": zod.string().optional(),
-  "categoryId": zod.string().nullish(),
-  "categoryName": zod.string().nullish(),
-  "planned": zod.string().optional(),
-  "actual": zod.string().optional()
-}).optional()
-})
-
+  source: zod.enum(["budget_net", "budget_line", "manual"]),
+  amount: zod.string(),
+  monthStart: zod.string(),
+  mode: zod.enum(["budgeted", "actual"]).optional(),
+  availableMoney: zod.string().optional(),
+  plannedAvalanchePayment: zod.string().optional(),
+  plannedIncome: zod.string().optional(),
+  plannedExpenses: zod.string().optional(),
+  breakdown: zod
+    .object({
+      income: zod.string().optional(),
+      expenses: zod.string().optional(),
+      plannedIncome: zod.string().optional(),
+      plannedExpenses: zod.string().optional(),
+      categoryId: zod.string().nullish(),
+      categoryName: zod.string().nullish(),
+      planned: zod.string().optional(),
+      actual: zod.string().optional(),
+    })
+    .optional(),
+});
 
 export const CreateDebtPaymentParams = zod.object({
-  "id": zod.coerce.string()
-})
+  id: zod.coerce.string(),
+});
 
 export const CreateDebtPaymentBody = zod.object({
-  "amount": zod.string(),
-  "occurredOn": zod.string(),
-  "account": zod.string().nullish(),
-  "notes": zod.string().nullish()
-})
-
+  amount: zod.string(),
+  occurredOn: zod.string(),
+  account: zod.string().nullish(),
+  notes: zod.string().nullish(),
+});
 
 export const GetAvalancheSettingsResponse = zod.object({
-  "strategy": zod.enum(['avalanche', 'snowball']),
-  "extraSource": zod.enum(['budget_net', 'budget_line', 'manual']),
-  "extraBudgetCategoryId": zod.string().nullish(),
-  "manualExtra": zod.string(),
-  "budgetMode": zod.enum(['budgeted', 'actual'])
-})
-
+  strategy: zod.enum(["avalanche", "snowball"]),
+  extraSource: zod.enum(["budget_net", "budget_line", "manual"]),
+  extraBudgetCategoryId: zod.string().nullish(),
+  manualExtra: zod.string(),
+  budgetMode: zod.enum(["budgeted", "actual"]),
+});
 
 export const UpdateAvalancheSettingsBody = zod.object({
-  "strategy": zod.enum(['avalanche', 'snowball']).optional(),
-  "extraSource": zod.enum(['budget_net', 'budget_line', 'manual']).optional(),
-  "extraBudgetCategoryId": zod.string().nullish(),
-  "manualExtra": zod.string().optional(),
-  "budgetMode": zod.enum(['budgeted', 'actual']).optional()
-})
+  strategy: zod.enum(["avalanche", "snowball"]).optional(),
+  extraSource: zod.enum(["budget_net", "budget_line", "manual"]).optional(),
+  extraBudgetCategoryId: zod.string().nullish(),
+  manualExtra: zod.string().optional(),
+  budgetMode: zod.enum(["budgeted", "actual"]).optional(),
+});
 
 export const UpdateAvalancheSettingsResponse = zod.object({
-  "strategy": zod.enum(['avalanche', 'snowball']),
-  "extraSource": zod.enum(['budget_net', 'budget_line', 'manual']),
-  "extraBudgetCategoryId": zod.string().nullish(),
-  "manualExtra": zod.string(),
-  "budgetMode": zod.enum(['budgeted', 'actual'])
-})
-
+  strategy: zod.enum(["avalanche", "snowball"]),
+  extraSource: zod.enum(["budget_net", "budget_line", "manual"]),
+  extraBudgetCategoryId: zod.string().nullish(),
+  manualExtra: zod.string(),
+  budgetMode: zod.enum(["budgeted", "actual"]),
+});
 
 export const UpdateDebtParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-
-
+  id: zod.coerce.string(),
+});
 
 export const UpdateDebtBody = zod.object({
-  "name": zod.string().min(1).optional(),
-  "balance": zod.string().optional(),
-  "apr": zod.string().optional(),
-  "minPayment": zod.string().optional(),
-  "payment": zod.string().optional(),
-  "type": zod.string().nullish(),
-  "status": zod.string().optional(),
-  "sortOrder": zod.number().optional(),
-  "dueDay": zod.number().nullish(),
-  "statementDay": zod.number().nullish(),
-  "notes": zod.string().nullish(),
-  "lastBalanceUpdate": zod.string().nullish()
-})
+  name: zod.string().min(1).optional(),
+  balance: zod.string().optional(),
+  apr: zod.string().optional(),
+  minPayment: zod.string().optional(),
+  payment: zod.string().optional(),
+  type: zod.string().nullish(),
+  status: zod.string().optional(),
+  sortOrder: zod.number().optional(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
+});
 
 export const UpdateDebtResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "balance": zod.string(),
-  "originalBalance": zod.string().nullish(),
-  "apr": zod.string(),
-  "minPayment": zod.string(),
-  "payment": zod.string(),
-  "type": zod.string().nullish(),
-  "status": zod.string(),
-  "sortOrder": zod.number(),
-  "dueDay": zod.number().nullish(),
-  "statementDay": zod.number().nullish(),
-  "notes": zod.string().nullish(),
-  "lastBalanceUpdate": zod.string().nullish(),
-  "plaidAccountId": zod.string().nullish(),
-  "plaidLastSyncedAt": zod.string().nullish(),
-  "plaidLastSyncError": zod.string().nullish().describe('Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn\'t Plaid-linked.\n'),
-  "plaidLastSyncErrorCode": zod.string().nullish().describe('Structured `error_code` from the parent Plaid item\'s last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn\'t Plaid-linked.\n'),
-  "plaidConsentExpirationAt": zod.string().nullish().describe('(#238) ISO timestamp mirroring the parent Plaid item\'s\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn\'t\nPlaid-linked or Plaid never reported a cutoff for the item.\n'),
-  "balanceSource": zod.enum(['plaid', 'manual']),
-  "aprSource": zod.enum(['plaid', 'manual']),
-  "minPaymentSource": zod.enum(['plaid', 'manual']),
-  "plaidAccount": zod.union([zod.object({
-  "id": zod.string(),
-  "itemId": zod.string().nullish().describe('Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n'),
-  "name": zod.string().nullish(),
-  "mask": zod.string().nullish(),
-  "type": zod.string().nullish(),
-  "subtype": zod.string().nullish(),
-  "liabilityKind": zod.string().nullish(),
-  "institutionName": zod.string().nullish(),
-  "institutionSlug": zod.string().nullish()
-}),zod.null()]).optional()
-})
-
+  id: zod.string(),
+  name: zod.string(),
+  balance: zod.string(),
+  originalBalance: zod.string().nullish(),
+  apr: zod.string(),
+  minPayment: zod.string(),
+  payment: zod.string(),
+  type: zod.string().nullish(),
+  status: zod.string(),
+  sortOrder: zod.number(),
+  dueDay: zod.number().nullish(),
+  statementDay: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  lastBalanceUpdate: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+  plaidLastSyncedAt: zod.string().nullish(),
+  plaidLastSyncError: zod
+    .string()
+    .nullish()
+    .describe(
+      "Latest sync error from the parent Plaid item, surfaced on debts\nso users see when balance\/APR\/min-payment values may be stale\nbecause Plaid refresh is failing (e.g. ITEM_LOGIN_REQUIRED).\nnull when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidLastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      "Structured `error_code` from the parent Plaid item's last failed\nsync (e.g. ITEM_LOGIN_REQUIRED, PENDING_EXPIRATION). Mirrors the\nvalue on the parent PlaidItem so the Debts \/ Avalanche UI can\ndecide when to render an inline \"Reconnect\" affordance on the\nrow. null when sync is healthy or the debt isn't Plaid-linked.\n",
+    ),
+  plaidConsentExpirationAt: zod
+    .string()
+    .nullish()
+    .describe(
+      "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
+    ),
+  balanceSource: zod.enum(["plaid", "manual"]),
+  aprSource: zod.enum(["plaid", "manual"]),
+  minPaymentSource: zod.enum(["plaid", "manual"]),
+  plaidAccount: zod
+    .union([
+      zod.object({
+        id: zod.string(),
+        itemId: zod
+          .string()
+          .nullish()
+          .describe(
+            "Internal Plaid item row id (UUID) of the parent item. Used by\nthe Debts \/ Avalanche UI to mint an update-mode link token via\n<PlaidReconnectButton> when the item is in a re-auth state.\n",
+          ),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+        type: zod.string().nullish(),
+        subtype: zod.string().nullish(),
+        liabilityKind: zod.string().nullish(),
+        institutionName: zod.string().nullish(),
+        institutionSlug: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
 
 export const DeleteDebtParams = zod.object({
-  "id": zod.coerce.string()
-})
-
+  id: zod.coerce.string(),
+});
 
 export const ListRecurringItemsResponseItem = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "kind": zod.string(),
-  "amount": zod.string(),
-  "frequency": zod.string(),
-  "dayOfMonth": zod.number().nullish(),
-  "anchorDate": zod.string().nullish(),
-  "active": zod.string(),
-  "categoryId": zod.string().nullish(),
-  "debtId": zod.string().nullish()
-})
-export const ListRecurringItemsResponse = zod.array(ListRecurringItemsResponseItem)
-
+  id: zod.string(),
+  name: zod.string(),
+  kind: zod.string(),
+  amount: zod.string(),
+  frequency: zod.string(),
+  dayOfMonth: zod.number().nullish(),
+  anchorDate: zod.string().nullish(),
+  active: zod.string(),
+  categoryId: zod.string().nullish(),
+  debtId: zod.string().nullish(),
+});
+export const ListRecurringItemsResponse = zod.array(
+  ListRecurringItemsResponseItem,
+);
 
 export const CreateRecurringItemBody = zod.object({
-  "name": zod.string(),
-  "kind": zod.string().optional(),
-  "amount": zod.string().optional(),
-  "frequency": zod.string().optional(),
-  "dayOfMonth": zod.number().nullish(),
-  "anchorDate": zod.string().nullish(),
-  "active": zod.string().optional(),
-  "categoryId": zod.string().nullish(),
-  "debtId": zod.string().nullish()
-})
-
+  name: zod.string(),
+  kind: zod.string().optional(),
+  amount: zod.string().optional(),
+  frequency: zod.string().optional(),
+  dayOfMonth: zod.number().nullish(),
+  anchorDate: zod.string().nullish(),
+  active: zod.string().optional(),
+  categoryId: zod.string().nullish(),
+  debtId: zod.string().nullish(),
+});
 
 export const UpdateRecurringItemParams = zod.object({
-  "id": zod.coerce.string()
-})
+  id: zod.coerce.string(),
+});
 
 export const UpdateRecurringItemBody = zod.object({
-  "name": zod.string(),
-  "kind": zod.string().optional(),
-  "amount": zod.string().optional(),
-  "frequency": zod.string().optional(),
-  "dayOfMonth": zod.number().nullish(),
-  "anchorDate": zod.string().nullish(),
-  "active": zod.string().optional(),
-  "categoryId": zod.string().nullish(),
-  "debtId": zod.string().nullish()
-})
+  name: zod.string(),
+  kind: zod.string().optional(),
+  amount: zod.string().optional(),
+  frequency: zod.string().optional(),
+  dayOfMonth: zod.number().nullish(),
+  anchorDate: zod.string().nullish(),
+  active: zod.string().optional(),
+  categoryId: zod.string().nullish(),
+  debtId: zod.string().nullish(),
+});
 
 export const UpdateRecurringItemResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "kind": zod.string(),
-  "amount": zod.string(),
-  "frequency": zod.string(),
-  "dayOfMonth": zod.number().nullish(),
-  "anchorDate": zod.string().nullish(),
-  "active": zod.string(),
-  "categoryId": zod.string().nullish(),
-  "debtId": zod.string().nullish()
-})
-
+  id: zod.string(),
+  name: zod.string(),
+  kind: zod.string(),
+  amount: zod.string(),
+  frequency: zod.string(),
+  dayOfMonth: zod.number().nullish(),
+  anchorDate: zod.string().nullish(),
+  active: zod.string(),
+  categoryId: zod.string().nullish(),
+  debtId: zod.string().nullish(),
+});
 
 export const DeleteRecurringItemParams = zod.object({
-  "id": zod.coerce.string()
-})
-
+  id: zod.coerce.string(),
+});
 
 export const ListCategoriesResponseItem = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "kind": zod.string(),
-  "groupName": zod.string(),
-  "sourceKind": zod.enum(['manual', 'auto_bills', 'auto_debts']),
-  "sortOrder": zod.number()
-})
-export const ListCategoriesResponse = zod.array(ListCategoriesResponseItem)
-
+  id: zod.string(),
+  name: zod.string(),
+  kind: zod.string(),
+  groupName: zod.string(),
+  sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
+  sortOrder: zod.number(),
+});
+export const ListCategoriesResponse = zod.array(ListCategoriesResponseItem);
 
 export const CreateCategoryBody = zod.object({
-  "name": zod.string(),
-  "kind": zod.string().optional(),
-  "groupName": zod.string().optional(),
-  "sourceKind": zod.enum(['manual', 'auto_bills', 'auto_debts']).optional(),
-  "sortOrder": zod.number().optional()
-})
-
+  name: zod.string(),
+  kind: zod.string().optional(),
+  groupName: zod.string().optional(),
+  sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]).optional(),
+  sortOrder: zod.number().optional(),
+});
 
 export const DeleteCategoryParams = zod.object({
-  "id": zod.coerce.string()
-})
-
+  id: zod.coerce.string(),
+});
 
 export const GetBudgetMonthParams = zod.object({
-  "monthStart": zod.coerce.string()
-})
+  monthStart: zod.coerce.string(),
+});
 
 export const GetBudgetMonthResponse = zod.object({
-  "monthStart": zod.string(),
-  "note": zod.string().nullish(),
-  "monthPinned": zod.boolean().describe('True when the user has pinned this month, which causes every\nauto-pulled line with a persisted budget_lines value to use that\nstored value instead of the live Bills\/Debts derivation.\n'),
-  "lines": zod.array(zod.object({
-  "id": zod.string().nullish(),
-  "categoryId": zod.string(),
-  "categoryName": zod.string(),
-  "plannedAmount": zod.string(),
-  "actualAmount": zod.string(),
-  "note": zod.string().nullish(),
-  "groupName": zod.string(),
-  "sourceKind": zod.enum(['manual', 'auto_bills', 'auto_debts']),
-  "sortOrder": zod.number(),
-  "kind": zod.string(),
-  "pinned": zod.boolean().describe('True when this line\'s persisted planned amount is being used in\nplace of the live Bills\/Debts derivation. Driven by either the\nmonth-level pin or the per-line pin.\n'),
-  "sourceBreakdown": zod.array(zod.object({
-  "source": zod.enum(['Bank', 'Amex', 'Other']),
-  "count": zod.number(),
-  "amount": zod.string()
-})).optional().describe('Per-source breakdown of the actuals that contribute to this\nbudget line. Used to render Bank\/Amex badges with counts on the\nbudget page so the user can see at a glance where the spend came\nfrom. Transfers are excluded from these counts.\n')
-})),
-  "groups": zod.array(zod.object({
-  "groupName": zod.string(),
-  "plannedTotal": zod.string(),
-  "actualTotal": zod.string(),
-  "lines": zod.array(zod.object({
-  "id": zod.string().nullish(),
-  "categoryId": zod.string(),
-  "categoryName": zod.string(),
-  "plannedAmount": zod.string(),
-  "actualAmount": zod.string(),
-  "note": zod.string().nullish(),
-  "groupName": zod.string(),
-  "sourceKind": zod.enum(['manual', 'auto_bills', 'auto_debts']),
-  "sortOrder": zod.number(),
-  "kind": zod.string(),
-  "pinned": zod.boolean().describe('True when this line\'s persisted planned amount is being used in\nplace of the live Bills\/Debts derivation. Driven by either the\nmonth-level pin or the per-line pin.\n'),
-  "sourceBreakdown": zod.array(zod.object({
-  "source": zod.enum(['Bank', 'Amex', 'Other']),
-  "count": zod.number(),
-  "amount": zod.string()
-})).optional().describe('Per-source breakdown of the actuals that contribute to this\nbudget line. Used to render Bank\/Amex badges with counts on the\nbudget page so the user can see at a glance where the spend came\nfrom. Transfers are excluded from these counts.\n')
-}))
-})),
-  "summary": zod.object({
-  "income": zod.object({
-  "budget": zod.string(),
-  "actual": zod.string()
-}),
-  "expenses": zod.object({
-  "budget": zod.string(),
-  "actual": zod.string()
-}),
-  "net": zod.object({
-  "budget": zod.string(),
-  "actual": zod.string()
-}),
-  "percentSpent": zod.object({
-  "budget": zod.string(),
-  "actual": zod.string()
-})
-})
-})
-
+  monthStart: zod.string(),
+  note: zod.string().nullish(),
+  monthPinned: zod
+    .boolean()
+    .describe(
+      "True when the user has pinned this month, which causes every\nauto-pulled line with a persisted budget_lines value to use that\nstored value instead of the live Bills\/Debts derivation.\n",
+    ),
+  lines: zod.array(
+    zod.object({
+      id: zod.string().nullish(),
+      categoryId: zod.string(),
+      categoryName: zod.string(),
+      plannedAmount: zod.string(),
+      actualAmount: zod.string(),
+      note: zod.string().nullish(),
+      groupName: zod.string(),
+      sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
+      sortOrder: zod.number(),
+      kind: zod.string(),
+      pinned: zod
+        .boolean()
+        .describe(
+          "True when this line's persisted planned amount is being used in\nplace of the live Bills\/Debts derivation. Driven by either the\nmonth-level pin or the per-line pin.\n",
+        ),
+      sourceBreakdown: zod
+        .array(
+          zod.object({
+            source: zod.enum(["Bank", "Amex", "Other"]),
+            count: zod.number(),
+            amount: zod.string(),
+          }),
+        )
+        .optional()
+        .describe(
+          "Per-source breakdown of the actuals that contribute to this\nbudget line. Used to render Bank\/Amex badges with counts on the\nbudget page so the user can see at a glance where the spend came\nfrom. Transfers are excluded from these counts.\n",
+        ),
+    }),
+  ),
+  groups: zod.array(
+    zod.object({
+      groupName: zod.string(),
+      plannedTotal: zod.string(),
+      actualTotal: zod.string(),
+      lines: zod.array(
+        zod.object({
+          id: zod.string().nullish(),
+          categoryId: zod.string(),
+          categoryName: zod.string(),
+          plannedAmount: zod.string(),
+          actualAmount: zod.string(),
+          note: zod.string().nullish(),
+          groupName: zod.string(),
+          sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
+          sortOrder: zod.number(),
+          kind: zod.string(),
+          pinned: zod
+            .boolean()
+            .describe(
+              "True when this line's persisted planned amount is being used in\nplace of the live Bills\/Debts derivation. Driven by either the\nmonth-level pin or the per-line pin.\n",
+            ),
+          sourceBreakdown: zod
+            .array(
+              zod.object({
+                source: zod.enum(["Bank", "Amex", "Other"]),
+                count: zod.number(),
+                amount: zod.string(),
+              }),
+            )
+            .optional()
+            .describe(
+              "Per-source breakdown of the actuals that contribute to this\nbudget line. Used to render Bank\/Amex badges with counts on the\nbudget page so the user can see at a glance where the spend came\nfrom. Transfers are excluded from these counts.\n",
+            ),
+        }),
+      ),
+    }),
+  ),
+  summary: zod.object({
+    income: zod.object({
+      budget: zod.string(),
+      actual: zod.string(),
+    }),
+    expenses: zod.object({
+      budget: zod.string(),
+      actual: zod.string(),
+    }),
+    net: zod.object({
+      budget: zod.string(),
+      actual: zod.string(),
+    }),
+    percentSpent: zod.object({
+      budget: zod.string(),
+      actual: zod.string(),
+    }),
+  }),
+});
 
 /**
  * @summary Seed default categories and May 2026 budget lines (idempotent)
  */
 export const SeedDefaultBudgetResponse = zod.object({
-  "categoriesInserted": zod.number(),
-  "linesInserted": zod.number(),
-  "mappingRulesInserted": zod.number().optional(),
-  "alreadySeeded": zod.boolean()
-})
-
+  categoriesInserted: zod.number(),
+  linesInserted: zod.number(),
+  mappingRulesInserted: zod.number().optional(),
+  alreadySeeded: zod.boolean(),
+});
 
 export const UpsertBudgetLineBody = zod.object({
-  "monthStart": zod.string(),
-  "categoryId": zod.string(),
-  "plannedAmount": zod.string(),
-  "note": zod.string().nullish()
-})
+  monthStart: zod.string(),
+  categoryId: zod.string(),
+  plannedAmount: zod.string(),
+  note: zod.string().nullish(),
+});
 
 export const UpsertBudgetLineResponse = zod.object({
-  "id": zod.string(),
-  "monthStart": zod.string(),
-  "categoryId": zod.string(),
-  "plannedAmount": zod.string(),
-  "note": zod.string().nullish()
-})
-
+  id: zod.string(),
+  monthStart: zod.string(),
+  categoryId: zod.string(),
+  plannedAmount: zod.string(),
+  note: zod.string().nullish(),
+});
 
 /**
  * @summary Pin (or unpin) every auto-pulled line in a month to its currently
@@ -883,19 +1220,18 @@ causes the response to fall back to the live derivation again.
 
  */
 export const PinBudgetMonthParams = zod.object({
-  "monthStart": zod.coerce.string()
-})
+  monthStart: zod.coerce.string(),
+});
 
 export const PinBudgetMonthBody = zod.object({
-  "pinned": zod.boolean()
-})
+  pinned: zod.boolean(),
+});
 
 export const PinBudgetMonthResponse = zod.object({
-  "monthStart": zod.string(),
-  "monthPinned": zod.boolean(),
-  "linesPinned": zod.number()
-})
-
+  monthStart: zod.string(),
+  monthPinned: zod.boolean(),
+  linesPinned: zod.number(),
+});
 
 /**
  * @summary Pin (or unpin) a single auto-pulled budget line for a given month so
@@ -904,60 +1240,55 @@ Pinning snapshots the current derived amount into budget_lines.
 
  */
 export const PinBudgetLineBody = zod.object({
-  "monthStart": zod.string(),
-  "categoryId": zod.string(),
-  "pinned": zod.boolean()
-})
+  monthStart: zod.string(),
+  categoryId: zod.string(),
+  pinned: zod.boolean(),
+});
 
 export const PinBudgetLineResponse = zod.object({
-  "monthStart": zod.string(),
-  "monthPinned": zod.boolean(),
-  "linesPinned": zod.number()
-})
-
+  monthStart: zod.string(),
+  monthPinned: zod.boolean(),
+  linesPinned: zod.number(),
+});
 
 export const ListMappingRulesResponseItem = zod.object({
-  "id": zod.string(),
-  "pattern": zod.string(),
-  "matchType": zod.string(),
-  "categoryId": zod.string().nullish(),
-  "priority": zod.number()
-})
-export const ListMappingRulesResponse = zod.array(ListMappingRulesResponseItem)
-
+  id: zod.string(),
+  pattern: zod.string(),
+  matchType: zod.string(),
+  categoryId: zod.string().nullish(),
+  priority: zod.number(),
+});
+export const ListMappingRulesResponse = zod.array(ListMappingRulesResponseItem);
 
 export const CreateMappingRuleBody = zod.object({
-  "pattern": zod.string(),
-  "matchType": zod.string().optional(),
-  "categoryId": zod.string().nullish(),
-  "priority": zod.number().optional()
-})
-
+  pattern: zod.string(),
+  matchType: zod.string().optional(),
+  categoryId: zod.string().nullish(),
+  priority: zod.number().optional(),
+});
 
 export const UpdateMappingRuleParams = zod.object({
-  "id": zod.coerce.string()
-})
+  id: zod.coerce.string(),
+});
 
 export const UpdateMappingRuleBody = zod.object({
-  "pattern": zod.string(),
-  "matchType": zod.string().optional(),
-  "categoryId": zod.string().nullish(),
-  "priority": zod.number().optional()
-})
+  pattern: zod.string(),
+  matchType: zod.string().optional(),
+  categoryId: zod.string().nullish(),
+  priority: zod.number().optional(),
+});
 
 export const UpdateMappingRuleResponse = zod.object({
-  "id": zod.string(),
-  "pattern": zod.string(),
-  "matchType": zod.string(),
-  "categoryId": zod.string().nullish(),
-  "priority": zod.number()
-})
-
+  id: zod.string(),
+  pattern: zod.string(),
+  matchType: zod.string(),
+  categoryId: zod.string().nullish(),
+  priority: zod.number(),
+});
 
 export const DeleteMappingRuleParams = zod.object({
-  "id": zod.coerce.string()
-})
-
+  id: zod.coerce.string(),
+});
 
 /**
  * Replace the priority of every rule whose id appears in `orderedIds`.
@@ -969,18 +1300,23 @@ same shape as GET /mapping-rules).
 
  */
 export const ReorderMappingRulesBody = zod.object({
-  "orderedIds": zod.array(zod.string()).describe('Rule IDs in the desired display order, highest priority first.\nIDs not belonging to the calling user are ignored. IDs of rules\nthe user owns but that are missing from this list keep their\nexisting priorities and rank below the reordered set.\n')
-})
+  orderedIds: zod
+    .array(zod.string())
+    .describe(
+      "Rule IDs in the desired display order, highest priority first.\nIDs not belonging to the calling user are ignored. IDs of rules\nthe user owns but that are missing from this list keep their\nexisting priorities and rank below the reordered set.\n",
+    ),
+});
 
 export const ReorderMappingRulesResponseItem = zod.object({
-  "id": zod.string(),
-  "pattern": zod.string(),
-  "matchType": zod.string(),
-  "categoryId": zod.string().nullish(),
-  "priority": zod.number()
-})
-export const ReorderMappingRulesResponse = zod.array(ReorderMappingRulesResponseItem)
-
+  id: zod.string(),
+  pattern: zod.string(),
+  matchType: zod.string(),
+  categoryId: zod.string().nullish(),
+  priority: zod.number(),
+});
+export const ReorderMappingRulesResponse = zod.array(
+  ReorderMappingRulesResponseItem,
+);
 
 /**
  * Preview which of the user's mapping rules would match the given
@@ -989,23 +1325,41 @@ the auto-categorize flow would actually pick.
 
  */
 export const TestMappingRulesBody = zod.object({
-  "description": zod.string().describe('Transaction description fragment to test against the user\'s rules.')
-})
+  description: zod
+    .string()
+    .describe(
+      "Transaction description fragment to test against the user's rules.",
+    ),
+});
 
 export const TestMappingRulesResponse = zod.object({
-  "matches": zod.array(zod.object({
-  "rule": zod.object({
-  "id": zod.string(),
-  "pattern": zod.string(),
-  "matchType": zod.string(),
-  "categoryId": zod.string().nullish(),
-  "priority": zod.number()
-}),
-  "winner": zod.boolean().describe('True for the single rule the auto-categorize flow would pick\n(highest-priority match with a non-null categoryId).\n')
-})).describe('Every rule whose pattern matches the description, sorted by\npriority descending — same order the categorize() hot path uses.\n'),
-  "winningCategoryId": zod.string().nullable().describe('The category that auto-categorize would assign, or null when no\nmatching rule has a category.\n')
-})
-
+  matches: zod
+    .array(
+      zod.object({
+        rule: zod.object({
+          id: zod.string(),
+          pattern: zod.string(),
+          matchType: zod.string(),
+          categoryId: zod.string().nullish(),
+          priority: zod.number(),
+        }),
+        winner: zod
+          .boolean()
+          .describe(
+            "True for the single rule the auto-categorize flow would pick\n(highest-priority match with a non-null categoryId).\n",
+          ),
+      }),
+    )
+    .describe(
+      "Every rule whose pattern matches the description, sorted by\npriority descending — same order the categorize() hot path uses.\n",
+    ),
+  winningCategoryId: zod
+    .string()
+    .nullable()
+    .describe(
+      "The category that auto-categorize would assign, or null when no\nmatching rule has a category.\n",
+    ),
+});
 
 /**
  * Preview how many existing transactions would be affected if the given
@@ -1019,29 +1373,56 @@ Read-only — the rule is not modified and no transactions are touched.
 
  */
 export const PreviewMappingRuleRecategorizeParams = zod.object({
-  "id": zod.coerce.string()
-})
+  id: zod.coerce.string(),
+});
 
 export const PreviewMappingRuleRecategorizeBody = zod.object({
-  "toCategoryId": zod.string().describe('The category the user is considering moving the rule to. The\npreview is computed against the rule\'s \*current\* `categoryId` as\nthe `fromCategoryId`; if the rule is currently uncategorized\n(`categoryId: null`) or `toCategoryId` already matches it, the\nresponse reports `candidateCount: 0`.\n')
-})
+  toCategoryId: zod
+    .string()
+    .describe(
+      "The category the user is considering moving the rule to. The\npreview is computed against the rule's \*current\* `categoryId` as\nthe `fromCategoryId`; if the rule is currently uncategorized\n(`categoryId: null`) or `toCategoryId` already matches it, the\nresponse reports `candidateCount: 0`.\n",
+    ),
+});
 
-export const PreviewMappingRuleRecategorizeResponse = zod.object({
-  "ruleId": zod.string(),
-  "pattern": zod.string(),
-  "matchType": zod.enum(['contains', 'exact', 'starts_with']),
-  "fromCategoryId": zod.string().nullable().describe('The rule\'s current `categoryId` at preview time. `null` when the\nrule is currently uncategorized — in that case `candidateCount` is\nalways `0` because the bulk-recategorize endpoint requires a\nconcrete from-category to scope the update.\n'),
-  "toCategoryId": zod.string(),
-  "candidateCount": zod.number().describe('Number of transactions whose description matches the rule\'s\npattern AND that currently sit in `fromCategoryId`. `0` when the\ntarget equals the from-category, when the rule is uncategorized,\nor when no historical rows match.\n'),
-  "sampleTransactions": zod.array(zod.object({
-  "id": zod.string(),
-  "description": zod.string(),
-  "occurredOn": zod.string(),
-  "amount": zod.string(),
-  "matchedRuleId": zod.string().nullish().describe('Id of the mapping rule that auto-categorize would currently\nattribute for this sample row in its \*present\* category, or\nnull when no rule matches. Computed server-side identically\nto the GET \/transactions annotation so the \"Show matches\"\npreview dialog can render the same MatchedRuleChip\n(deep-link to \/mapping-rules?focus=<id> or \"manually\ncategorized\" hint) as every other transaction-list surface.\n')
-})).describe('First ~10 affected transactions, ordered most-recent first. Same\nthin slice (id, description, occurredOn, amount) used by\n`RepointedRule.sampleTransactions`.\n')
-}).describe('Read-only preview of the bulk-recategorize that would happen if the\nMapping Rules edit UI saved a new `categoryId` for this rule and then\ncalled POST \/transactions\/recategorize-by-pattern with the same\n`{ pattern, matchType, fromCategoryId, toCategoryId }`. Mirrors the\n`RepointedRule` shape so the same preview Dialog can render either.\n')
-
+export const PreviewMappingRuleRecategorizeResponse = zod
+  .object({
+    ruleId: zod.string(),
+    pattern: zod.string(),
+    matchType: zod.enum(["contains", "exact", "starts_with"]),
+    fromCategoryId: zod
+      .string()
+      .nullable()
+      .describe(
+        "The rule's current `categoryId` at preview time. `null` when the\nrule is currently uncategorized — in that case `candidateCount` is\nalways `0` because the bulk-recategorize endpoint requires a\nconcrete from-category to scope the update.\n",
+      ),
+    toCategoryId: zod.string(),
+    candidateCount: zod
+      .number()
+      .describe(
+        "Number of transactions whose description matches the rule's\npattern AND that currently sit in `fromCategoryId`. `0` when the\ntarget equals the from-category, when the rule is uncategorized,\nor when no historical rows match.\n",
+      ),
+    sampleTransactions: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          description: zod.string(),
+          occurredOn: zod.string(),
+          amount: zod.string(),
+          matchedRuleId: zod
+            .string()
+            .nullish()
+            .describe(
+              'Id of the mapping rule that auto-categorize would currently\nattribute for this sample row in its \*present\* category, or\nnull when no rule matches. Computed server-side identically\nto the GET \/transactions annotation so the \"Show matches\"\npreview dialog can render the same MatchedRuleChip\n(deep-link to \/mapping-rules?focus=<id> or \"manually\ncategorized\" hint) as every other transaction-list surface.\n',
+            ),
+        }),
+      )
+      .describe(
+        "First ~10 affected transactions, ordered most-recent first. Same\nthin slice (id, description, occurredOn, amount) used by\n`RepointedRule.sampleTransactions`.\n",
+      ),
+  })
+  .describe(
+    "Read-only preview of the bulk-recategorize that would happen if the\nMapping Rules edit UI saved a new `categoryId` for this rule and then\ncalled POST \/transactions\/recategorize-by-pattern with the same\n`{ pattern, matchType, fromCategoryId, toCategoryId }`. Mirrors the\n`RepointedRule` shape so the same preview Dialog can render either.\n",
+  );
 
 /**
  * Read-only preview of the bulk-recategorize that *would* happen if the
@@ -1060,410 +1441,524 @@ no rule exists yet to scope by — mirrors how the post-create
 Read-only — no rule is created and no transactions are touched.
 
  */
-export const PreviewMappingRuleRecategorizeByPatternBody = zod.object({
-  "pattern": zod.string().describe('The literal pattern the unsaved rule would match against\ntransaction descriptions.\n'),
-  "matchType": zod.enum(['contains', 'exact', 'starts_with']),
-  "toCategoryId": zod.string().optional().describe('Optional. The category the unsaved rule would assign\nmatching rows to. Echoed back in the response when supplied\nso the client can confirm the preview lines up with the\ncurrently-picked category, but doesn\'t affect the count.\n')
-}).describe('Pattern shape used by the \"Add New Rule\" form\'s inline preview.\nCarries the unsaved rule directly so the server can compute\nthe candidate count + sample list against older \*uncategorized\*\nrows without persisting anything.\n\n`toCategoryId` is optional: the candidate count + samples only\ndepend on `pattern` + `matchType` (the bulk recategorize always\nscopes to uncategorized rows), so the Add form can fire the\nsame request as soon as the user has typed a pattern — before\nthey pick a destination category — and avoid a refetch when\nthe category is then chosen.\n')
+export const PreviewMappingRuleRecategorizeByPatternBody = zod
+  .object({
+    pattern: zod
+      .string()
+      .describe(
+        "The literal pattern the unsaved rule would match against\ntransaction descriptions.\n",
+      ),
+    matchType: zod.enum(["contains", "exact", "starts_with"]),
+    toCategoryId: zod
+      .string()
+      .optional()
+      .describe(
+        "Optional. The category the unsaved rule would assign\nmatching rows to. Echoed back in the response when supplied\nso the client can confirm the preview lines up with the\ncurrently-picked category, but doesn't affect the count.\n",
+      ),
+  })
+  .describe(
+    'Pattern shape used by the \"Add New Rule\" form\'s inline preview.\nCarries the unsaved rule directly so the server can compute\nthe candidate count + sample list against older \*uncategorized\*\nrows without persisting anything.\n\n`toCategoryId` is optional: the candidate count + samples only\ndepend on `pattern` + `matchType` (the bulk recategorize always\nscopes to uncategorized rows), so the Add form can fire the\nsame request as soon as the user has typed a pattern — before\nthey pick a destination category — and avoid a refetch when\nthe category is then chosen.\n',
+  );
 
-export const PreviewMappingRuleRecategorizeByPatternResponse = zod.object({
-  "pattern": zod.string(),
-  "matchType": zod.enum(['contains', 'exact', 'starts_with']),
-  "fromCategoryId": zod.string().nullable().describe('Always `null` for the by-pattern preview — the Add flow scopes\nits bulk recategorize to uncategorized rows only, so explicit\nuser category edits aren\'t trampled. Surfaced as an explicit\nfield for symmetry with `MappingRuleRecategorizePreview`.\n'),
-  "toCategoryId": zod.string().nullable().describe('Echo of the request\'s `toCategoryId`. `null` when the caller\npreviewed before picking a destination category — the\ncandidate count + samples are still meaningful (they only\ndepend on pattern + matchType against uncategorized rows),\nbut the client should render a neutral \"would match N\nuncategorized past transactions\" banner instead of the\n\"will move into <category>\" copy.\n'),
-  "candidateCount": zod.number().describe('Number of \*uncategorized\* transactions whose description matches\nthe unsaved rule\'s pattern. `0` when no historical rows match.\n'),
-  "sampleTransactions": zod.array(zod.object({
-  "id": zod.string(),
-  "description": zod.string(),
-  "occurredOn": zod.string(),
-  "amount": zod.string(),
-  "matchedRuleId": zod.string().nullish().describe('Id of the mapping rule that auto-categorize would currently\nattribute for this sample row in its \*present\* category, or\nnull when no rule matches. Computed server-side identically\nto the GET \/transactions annotation so the \"Show matches\"\npreview dialog can render the same MatchedRuleChip\n(deep-link to \/mapping-rules?focus=<id> or \"manually\ncategorized\" hint) as every other transaction-list surface.\n')
-})).describe('First ~10 affected transactions, ordered most-recent first. Same\nthin slice (id, description, occurredOn, amount) used by\n`RepointedRule.sampleTransactions`.\n')
-}).describe('Read-only preview of the bulk-recategorize that \*would\* happen if the\nMapping Rules \"Add New Rule\" form created a rule with the given\n`{ pattern, matchType, toCategoryId }` and then chained\nPOST \/transactions\/recategorize-by-pattern against the older\nuncategorized rows it would match. Mirrors `MappingRuleRecategorizePreview`\nminus the `ruleId` (no rule exists yet) so the same preview banner +\n\"Show matches\" Dialog can render either.\n')
-
+export const PreviewMappingRuleRecategorizeByPatternResponse = zod
+  .object({
+    pattern: zod.string(),
+    matchType: zod.enum(["contains", "exact", "starts_with"]),
+    fromCategoryId: zod
+      .string()
+      .nullable()
+      .describe(
+        "Always `null` for the by-pattern preview — the Add flow scopes\nits bulk recategorize to uncategorized rows only, so explicit\nuser category edits aren't trampled. Surfaced as an explicit\nfield for symmetry with `MappingRuleRecategorizePreview`.\n",
+      ),
+    toCategoryId: zod
+      .string()
+      .nullable()
+      .describe(
+        'Echo of the request\'s `toCategoryId`. `null` when the caller\npreviewed before picking a destination category — the\ncandidate count + samples are still meaningful (they only\ndepend on pattern + matchType against uncategorized rows),\nbut the client should render a neutral \"would match N\nuncategorized past transactions\" banner instead of the\n\"will move into <category>\" copy.\n',
+      ),
+    candidateCount: zod
+      .number()
+      .describe(
+        "Number of \*uncategorized\* transactions whose description matches\nthe unsaved rule's pattern. `0` when no historical rows match.\n",
+      ),
+    sampleTransactions: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          description: zod.string(),
+          occurredOn: zod.string(),
+          amount: zod.string(),
+          matchedRuleId: zod
+            .string()
+            .nullish()
+            .describe(
+              'Id of the mapping rule that auto-categorize would currently\nattribute for this sample row in its \*present\* category, or\nnull when no rule matches. Computed server-side identically\nto the GET \/transactions annotation so the \"Show matches\"\npreview dialog can render the same MatchedRuleChip\n(deep-link to \/mapping-rules?focus=<id> or \"manually\ncategorized\" hint) as every other transaction-list surface.\n',
+            ),
+        }),
+      )
+      .describe(
+        "First ~10 affected transactions, ordered most-recent first. Same\nthin slice (id, description, occurredOn, amount) used by\n`RepointedRule.sampleTransactions`.\n",
+      ),
+  })
+  .describe(
+    'Read-only preview of the bulk-recategorize that \*would\* happen if the\nMapping Rules \"Add New Rule\" form created a rule with the given\n`{ pattern, matchType, toCategoryId }` and then chained\nPOST \/transactions\/recategorize-by-pattern against the older\nuncategorized rows it would match. Mirrors `MappingRuleRecategorizePreview`\nminus the `ruleId` (no rule exists yet) so the same preview banner +\n\"Show matches\" Dialog can render either.\n',
+  );
 
 export const GetSettingsResponse = zod.object({
-  "weeklyAllowanceAmount": zod.string(),
-  "monthlyAllowanceAmount": zod.string(),
-  "unplannedAllowanceAmount": zod.string(),
-  "primaryAccount": zod.string().nullish(),
-  "preferences": zod.union([zod.object({
-  "weeklyBucketLabels": zod.object({
-  "groceries": zod.string().optional(),
-  "dining": zod.string().optional(),
-  "entertainment": zod.string().optional(),
-  "misc": zod.string().optional()
-}).optional(),
-  "daysSinceTrackers": zod.array(zod.object({
-  "id": zod.string(),
-  "label": zod.string(),
-  "matchType": zod.enum(['category', 'keyword']),
-  "matchValue": zod.string()
-})).optional()
-}),zod.null()]).optional()
-})
-
+  weeklyAllowanceAmount: zod.string(),
+  monthlyAllowanceAmount: zod.string(),
+  unplannedAllowanceAmount: zod.string(),
+  primaryAccount: zod.string().nullish(),
+  preferences: zod
+    .union([
+      zod.object({
+        weeklyBucketLabels: zod
+          .object({
+            groceries: zod.string().optional(),
+            dining: zod.string().optional(),
+            entertainment: zod.string().optional(),
+            misc: zod.string().optional(),
+          })
+          .optional(),
+        daysSinceTrackers: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              label: zod.string(),
+              matchType: zod.enum(["category", "keyword"]),
+              matchValue: zod.string(),
+            }),
+          )
+          .optional(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
 
 export const UpdateSettingsBody = zod.object({
-  "weeklyAllowanceAmount": zod.string().optional(),
-  "monthlyAllowanceAmount": zod.string().optional(),
-  "unplannedAllowanceAmount": zod.string().optional(),
-  "primaryAccount": zod.string().nullish(),
-  "preferences": zod.union([zod.object({
-  "weeklyBucketLabels": zod.object({
-  "groceries": zod.string().optional(),
-  "dining": zod.string().optional(),
-  "entertainment": zod.string().optional(),
-  "misc": zod.string().optional()
-}).optional(),
-  "daysSinceTrackers": zod.array(zod.object({
-  "id": zod.string(),
-  "label": zod.string(),
-  "matchType": zod.enum(['category', 'keyword']),
-  "matchValue": zod.string()
-})).optional()
-}),zod.null()]).optional()
-})
+  weeklyAllowanceAmount: zod.string().optional(),
+  monthlyAllowanceAmount: zod.string().optional(),
+  unplannedAllowanceAmount: zod.string().optional(),
+  primaryAccount: zod.string().nullish(),
+  preferences: zod
+    .union([
+      zod.object({
+        weeklyBucketLabels: zod
+          .object({
+            groceries: zod.string().optional(),
+            dining: zod.string().optional(),
+            entertainment: zod.string().optional(),
+            misc: zod.string().optional(),
+          })
+          .optional(),
+        daysSinceTrackers: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              label: zod.string(),
+              matchType: zod.enum(["category", "keyword"]),
+              matchValue: zod.string(),
+            }),
+          )
+          .optional(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
 
 export const UpdateSettingsResponse = zod.object({
-  "weeklyAllowanceAmount": zod.string(),
-  "monthlyAllowanceAmount": zod.string(),
-  "unplannedAllowanceAmount": zod.string(),
-  "primaryAccount": zod.string().nullish(),
-  "preferences": zod.union([zod.object({
-  "weeklyBucketLabels": zod.object({
-  "groceries": zod.string().optional(),
-  "dining": zod.string().optional(),
-  "entertainment": zod.string().optional(),
-  "misc": zod.string().optional()
-}).optional(),
-  "daysSinceTrackers": zod.array(zod.object({
-  "id": zod.string(),
-  "label": zod.string(),
-  "matchType": zod.enum(['category', 'keyword']),
-  "matchValue": zod.string()
-})).optional()
-}),zod.null()]).optional()
-})
-
+  weeklyAllowanceAmount: zod.string(),
+  monthlyAllowanceAmount: zod.string(),
+  unplannedAllowanceAmount: zod.string(),
+  primaryAccount: zod.string().nullish(),
+  preferences: zod
+    .union([
+      zod.object({
+        weeklyBucketLabels: zod
+          .object({
+            groceries: zod.string().optional(),
+            dining: zod.string().optional(),
+            entertainment: zod.string().optional(),
+            misc: zod.string().optional(),
+          })
+          .optional(),
+        daysSinceTrackers: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              label: zod.string(),
+              matchType: zod.enum(["category", "keyword"]),
+              matchValue: zod.string(),
+            }),
+          )
+          .optional(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+});
 
 export const GetForecastQueryParams = zod.object({
-  "days": zod.coerce.number().optional()
-})
+  days: zod.coerce.number().optional(),
+});
 
 export const GetForecastResponse = zod.object({
-  "fromDate": zod.string(),
-  "toDate": zod.string(),
-  "events": zod.array(zod.object({
-  "date": zod.string(),
-  "itemId": zod.string(),
-  "label": zod.string(),
-  "kind": zod.string(),
-  "amount": zod.number()
-})),
-  "transactions": zod.array(zod.object({
-  "id": zod.string(),
-  "occurredOn": zod.string(),
-  "occurredAt": zod.string().nullish(),
-  "description": zod.string(),
-  "amount": zod.string(),
-  "account": zod.string().nullish(),
-  "categoryId": zod.string().nullish(),
-  "forecastFlag": zod.boolean(),
-  "weeklyAllowance": zod.boolean(),
-  "weeklyBucket": zod.union([zod.literal('groceries'),zod.literal('dining'),zod.literal('entertainment'),zod.literal('misc'),zod.literal(null)]).nullish(),
-  "monthlyAllowance": zod.boolean(),
-  "unplannedAllowance": zod.boolean(),
-  "reimbursable": zod.boolean(),
-  "reimbursed": zod.boolean(),
-  "isTransfer": zod.boolean(),
-  "notes": zod.string().nullish(),
-  "source": zod.string(),
-  "member": zod.string().nullish(),
-  "owedBy": zod.string().nullish(),
-  "plaidTransactionId": zod.string().nullish(),
-  "plaidAccountId": zod.string().nullish(),
-  "debtId": zod.string().nullish(),
-  "matchedRuleId": zod.string().nullish().describe('Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n')
-})),
-  "resolutions": zod.array(zod.object({
-  "id": zod.string(),
-  "recurringItemId": zod.string().nullish(),
-  "occurrenceDate": zod.string().nullish(),
-  "status": zod.string(),
-  "matchedTxnId": zod.string().nullish(),
-  "rescheduledTo": zod.string().nullish(),
-  "txnDate": zod.string().nullish(),
-  "txnDescription": zod.string().nullish(),
-  "txnAmount": zod.string().nullish(),
-  "txnForecastFlag": zod.boolean().nullish()
-})),
-  "closedMonths": zod.array(zod.string()),
-  "settings": zod.object({
-  "daysAhead": zod.number(),
-  "startingBalance": zod.string(),
-  "cashBuffer": zod.string()
-}),
-  "bankSnapshot": zod.union([zod.object({
-  "balance": zod.string(),
-  "at": zod.string(),
-  "source": zod.enum(['manual', 'plaid']),
-  "accountId": zod.string().nullish(),
-  "name": zod.string().nullish(),
-  "mask": zod.string().nullish()
-}),zod.null()]).optional(),
-  "cashSignal": zod.union([zod.object({
-  "bankToday": zod.string(),
-  "lowestProjected": zod.string(),
-  "lowestDate": zod.string().nullable(),
-  "cashBuffer": zod.string(),
-  "status": zod.enum(['ready', 'tight', 'not_yet', 'no_data']),
-  "maxSafeExtra": zod.string(),
-  "snapshotAt": zod.string().nullish(),
-  "snapshotSource": zod.string().nullish(),
-  "horizonDays": zod.number().optional(),
-  "fromDate": zod.string().optional(),
-  "toDate": zod.string().optional(),
-  "startingBalance": zod.string().optional(),
-  "endingBalance": zod.string().optional(),
-  "endingDate": zod.string().nullish(),
-  "projectedIncome": zod.string().optional(),
-  "projectedExpenses": zod.string().optional(),
-  "acceptedImpact": zod.string().optional(),
-  "daily": zod.array(zod.object({
-  "date": zod.string(),
-  "balance": zod.string()
-})).optional(),
-  "events": zod.array(zod.object({
-  "date": zod.string(),
-  "label": zod.string(),
-  "amount": zod.string()
-})).optional()
-}),zod.null()]).optional(),
-  "plaidCheckingAccounts": zod.array(zod.object({
-  "id": zod.string(),
-  "accountId": zod.string(),
-  "name": zod.string().nullish(),
-  "mask": zod.string().nullish(),
-  "subtype": zod.string().nullish(),
-  "institutionName": zod.string().nullish()
-})),
-  "monthSnapshots": zod.record(zod.string(), zod.object({
-  "balance": zod.string(),
-  "at": zod.string(),
-  "gap": zod.string().nullish(),
-  "forecastEnd": zod.string().nullish(),
-  "bankEnd": zod.string().nullish(),
-  "pending": zod.number().nullish(),
-  "reconciled": zod.boolean().nullish(),
-  "closedAt": zod.string().nullish()
-})).optional(),
-  "accountSnapshots": zod.record(zod.string(), zod.object({
-  "balance": zod.string(),
-  "at": zod.string(),
-  "source": zod.enum(['manual', 'plaid']),
-  "name": zod.string().nullish(),
-  "mask": zod.string().nullish()
-})).optional()
-})
-
+  fromDate: zod.string(),
+  toDate: zod.string(),
+  events: zod.array(
+    zod.object({
+      date: zod.string(),
+      itemId: zod.string(),
+      label: zod.string(),
+      kind: zod.string(),
+      amount: zod.number(),
+    }),
+  ),
+  transactions: zod.array(
+    zod.object({
+      id: zod.string(),
+      occurredOn: zod.string(),
+      occurredAt: zod.string().nullish(),
+      description: zod.string(),
+      amount: zod.string(),
+      account: zod.string().nullish(),
+      categoryId: zod.string().nullish(),
+      forecastFlag: zod.boolean(),
+      weeklyAllowance: zod.boolean(),
+      weeklyBucket: zod
+        .union([
+          zod.literal("groceries"),
+          zod.literal("dining"),
+          zod.literal("entertainment"),
+          zod.literal("misc"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      monthlyAllowance: zod.boolean(),
+      unplannedAllowance: zod.boolean(),
+      reimbursable: zod.boolean(),
+      reimbursed: zod.boolean(),
+      isTransfer: zod.boolean(),
+      notes: zod.string().nullish(),
+      source: zod.string(),
+      member: zod.string().nullish(),
+      owedBy: zod.string().nullish(),
+      plaidTransactionId: zod.string().nullish(),
+      plaidAccountId: zod.string().nullish(),
+      debtId: zod.string().nullish(),
+      matchedRuleId: zod
+        .string()
+        .nullish()
+        .describe(
+          'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+        ),
+    }),
+  ),
+  resolutions: zod.array(
+    zod.object({
+      id: zod.string(),
+      recurringItemId: zod.string().nullish(),
+      occurrenceDate: zod.string().nullish(),
+      status: zod.string(),
+      matchedTxnId: zod.string().nullish(),
+      rescheduledTo: zod.string().nullish(),
+      txnDate: zod.string().nullish(),
+      txnDescription: zod.string().nullish(),
+      txnAmount: zod.string().nullish(),
+      txnForecastFlag: zod.boolean().nullish(),
+    }),
+  ),
+  closedMonths: zod.array(zod.string()),
+  settings: zod.object({
+    daysAhead: zod.number(),
+    startingBalance: zod.string(),
+    cashBuffer: zod.string(),
+  }),
+  bankSnapshot: zod
+    .union([
+      zod.object({
+        balance: zod.string(),
+        at: zod.string(),
+        source: zod.enum(["manual", "plaid"]),
+        accountId: zod.string().nullish(),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  cashSignal: zod
+    .union([
+      zod.object({
+        bankToday: zod.string(),
+        lowestProjected: zod.string(),
+        lowestDate: zod.string().nullable(),
+        cashBuffer: zod.string(),
+        status: zod.enum(["ready", "tight", "not_yet", "no_data"]),
+        maxSafeExtra: zod.string(),
+        snapshotAt: zod.string().nullish(),
+        snapshotSource: zod.string().nullish(),
+        horizonDays: zod.number().optional(),
+        fromDate: zod.string().optional(),
+        toDate: zod.string().optional(),
+        startingBalance: zod.string().optional(),
+        endingBalance: zod.string().optional(),
+        endingDate: zod.string().nullish(),
+        projectedIncome: zod.string().optional(),
+        projectedExpenses: zod.string().optional(),
+        acceptedImpact: zod.string().optional(),
+        daily: zod
+          .array(
+            zod.object({
+              date: zod.string(),
+              balance: zod.string(),
+            }),
+          )
+          .optional(),
+        events: zod
+          .array(
+            zod.object({
+              date: zod.string(),
+              label: zod.string(),
+              amount: zod.string(),
+            }),
+          )
+          .optional(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  plaidCheckingAccounts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      name: zod.string().nullish(),
+      mask: zod.string().nullish(),
+      subtype: zod.string().nullish(),
+      institutionName: zod.string().nullish(),
+    }),
+  ),
+  monthSnapshots: zod
+    .record(
+      zod.string(),
+      zod.object({
+        balance: zod.string(),
+        at: zod.string(),
+        gap: zod.string().nullish(),
+        forecastEnd: zod.string().nullish(),
+        bankEnd: zod.string().nullish(),
+        pending: zod.number().nullish(),
+        reconciled: zod.boolean().nullish(),
+        closedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  accountSnapshots: zod
+    .record(
+      zod.string(),
+      zod.object({
+        balance: zod.string(),
+        at: zod.string(),
+        source: zod.enum(["manual", "plaid"]),
+        name: zod.string().nullish(),
+        mask: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+});
 
 export const GetForecastSettingsResponse = zod.object({
-  "daysAhead": zod.number(),
-  "startingBalance": zod.string(),
-  "cashBuffer": zod.string()
-})
-
+  daysAhead: zod.number(),
+  startingBalance: zod.string(),
+  cashBuffer: zod.string(),
+});
 
 export const UpdateForecastSettingsBody = zod.object({
-  "daysAhead": zod.number().optional(),
-  "startingBalance": zod.string().optional(),
-  "cashBuffer": zod.string().optional()
-})
+  daysAhead: zod.number().optional(),
+  startingBalance: zod.string().optional(),
+  cashBuffer: zod.string().optional(),
+});
 
 export const UpdateForecastSettingsResponse = zod.object({
-  "daysAhead": zod.number(),
-  "startingBalance": zod.string(),
-  "cashBuffer": zod.string()
-})
-
+  daysAhead: zod.number(),
+  startingBalance: zod.string(),
+  cashBuffer: zod.string(),
+});
 
 export const UpsertForecastResolutionBody = zod.object({
-  "recurringItemId": zod.string().nullish(),
-  "occurrenceDate": zod.string().nullish(),
-  "status": zod.string(),
-  "matchedTxnId": zod.string().nullish(),
-  "rescheduledTo": zod.string().nullish()
-})
+  recurringItemId: zod.string().nullish(),
+  occurrenceDate: zod.string().nullish(),
+  status: zod.string(),
+  matchedTxnId: zod.string().nullish(),
+  rescheduledTo: zod.string().nullish(),
+});
 
 export const UpsertForecastResolutionResponse = zod.object({
-  "id": zod.string(),
-  "recurringItemId": zod.string().nullish(),
-  "occurrenceDate": zod.string().nullish(),
-  "status": zod.string(),
-  "matchedTxnId": zod.string().nullish(),
-  "rescheduledTo": zod.string().nullish(),
-  "txnDate": zod.string().nullish(),
-  "txnDescription": zod.string().nullish(),
-  "txnAmount": zod.string().nullish(),
-  "txnForecastFlag": zod.boolean().nullish()
-})
-
+  id: zod.string(),
+  recurringItemId: zod.string().nullish(),
+  occurrenceDate: zod.string().nullish(),
+  status: zod.string(),
+  matchedTxnId: zod.string().nullish(),
+  rescheduledTo: zod.string().nullish(),
+  txnDate: zod.string().nullish(),
+  txnDescription: zod.string().nullish(),
+  txnAmount: zod.string().nullish(),
+  txnForecastFlag: zod.boolean().nullish(),
+});
 
 export const DeleteForecastResolutionParams = zod.object({
-  "id": zod.coerce.string()
-})
-
+  id: zod.coerce.string(),
+});
 
 export const SetForecastBankSnapshotBody = zod.object({
-  "balance": zod.string().nullish(),
-  "plaidAccountId": zod.string().nullish()
-})
+  balance: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+});
 
 export const SetForecastBankSnapshotResponse = zod.object({
-  "balance": zod.string(),
-  "at": zod.string(),
-  "source": zod.enum(['manual', 'plaid']),
-  "accountId": zod.string().nullish(),
-  "name": zod.string().nullish(),
-  "mask": zod.string().nullish()
-})
-
+  balance: zod.string(),
+  at: zod.string(),
+  source: zod.enum(["manual", "plaid"]),
+  accountId: zod.string().nullish(),
+  name: zod.string().nullish(),
+  mask: zod.string().nullish(),
+});
 
 export const RefreshForecastBankBody = zod.object({
-  "plaidAccountId": zod.string().nullish()
-})
+  plaidAccountId: zod.string().nullish(),
+});
 
 export const RefreshForecastBankResponse = zod.object({
-  "balance": zod.string(),
-  "at": zod.string(),
-  "source": zod.enum(['manual', 'plaid']),
-  "accountId": zod.string().nullish(),
-  "name": zod.string().nullish(),
-  "mask": zod.string().nullish()
-})
-
+  balance: zod.string(),
+  at: zod.string(),
+  source: zod.enum(["manual", "plaid"]),
+  accountId: zod.string().nullish(),
+  name: zod.string().nullish(),
+  mask: zod.string().nullish(),
+});
 
 export const GetForecastCashSignalQueryParams = zod.object({
-  "horizonDays": zod.coerce.number().optional(),
-  "fromDate": zod.coerce.string().optional()
-})
+  horizonDays: zod.coerce.number().optional(),
+  fromDate: zod.coerce.string().optional(),
+});
 
 export const GetForecastCashSignalResponse = zod.object({
-  "bankToday": zod.string(),
-  "lowestProjected": zod.string(),
-  "lowestDate": zod.string().nullable(),
-  "cashBuffer": zod.string(),
-  "status": zod.enum(['ready', 'tight', 'not_yet', 'no_data']),
-  "maxSafeExtra": zod.string(),
-  "snapshotAt": zod.string().nullish(),
-  "snapshotSource": zod.string().nullish(),
-  "horizonDays": zod.number().optional(),
-  "fromDate": zod.string().optional(),
-  "toDate": zod.string().optional(),
-  "startingBalance": zod.string().optional(),
-  "endingBalance": zod.string().optional(),
-  "endingDate": zod.string().nullish(),
-  "projectedIncome": zod.string().optional(),
-  "projectedExpenses": zod.string().optional(),
-  "acceptedImpact": zod.string().optional(),
-  "daily": zod.array(zod.object({
-  "date": zod.string(),
-  "balance": zod.string()
-})).optional(),
-  "events": zod.array(zod.object({
-  "date": zod.string(),
-  "label": zod.string(),
-  "amount": zod.string()
-})).optional()
-})
-
+  bankToday: zod.string(),
+  lowestProjected: zod.string(),
+  lowestDate: zod.string().nullable(),
+  cashBuffer: zod.string(),
+  status: zod.enum(["ready", "tight", "not_yet", "no_data"]),
+  maxSafeExtra: zod.string(),
+  snapshotAt: zod.string().nullish(),
+  snapshotSource: zod.string().nullish(),
+  horizonDays: zod.number().optional(),
+  fromDate: zod.string().optional(),
+  toDate: zod.string().optional(),
+  startingBalance: zod.string().optional(),
+  endingBalance: zod.string().optional(),
+  endingDate: zod.string().nullish(),
+  projectedIncome: zod.string().optional(),
+  projectedExpenses: zod.string().optional(),
+  acceptedImpact: zod.string().optional(),
+  daily: zod
+    .array(
+      zod.object({
+        date: zod.string(),
+        balance: zod.string(),
+      }),
+    )
+    .optional(),
+  events: zod
+    .array(
+      zod.object({
+        date: zod.string(),
+        label: zod.string(),
+        amount: zod.string(),
+      }),
+    )
+    .optional(),
+});
 
 export const CloseForecastMonthBody = zod.object({
-  "monthKey": zod.string(),
-  "gap": zod.string().nullish(),
-  "forecastEnd": zod.string().nullish(),
-  "bankEnd": zod.string().nullish(),
-  "pending": zod.number().nullish(),
-  "reconciled": zod.boolean().nullish()
-})
+  monthKey: zod.string(),
+  gap: zod.string().nullish(),
+  forecastEnd: zod.string().nullish(),
+  bankEnd: zod.string().nullish(),
+  pending: zod.number().nullish(),
+  reconciled: zod.boolean().nullish(),
+});
 
 export const CloseForecastMonthResponse = zod.object({
-  "id": zod.string(),
-  "monthKey": zod.string()
-})
-
+  id: zod.string(),
+  monthKey: zod.string(),
+});
 
 export const ReopenForecastMonthParams = zod.object({
-  "monthKey": zod.coerce.string()
-})
-
+  monthKey: zod.coerce.string(),
+});
 
 export const GetAmexAnchorResponse = zod.object({
-  "amexEndingBalance": zod.number().nullable(),
-  "asOf": zod.string(),
-  "source": zod.enum(['debt', 'anchor', 'computed', 'missing'])
-})
-
+  amexEndingBalance: zod.number().nullable(),
+  asOf: zod.string(),
+  source: zod.enum(["debt", "anchor", "computed", "missing"]),
+});
 
 export const SetAmexAnchorBody = zod.object({
-  "balance": zod.number(),
-  "asOf": zod.string().nullish()
-})
+  balance: zod.number(),
+  asOf: zod.string().nullish(),
+});
 
 export const SetAmexAnchorResponse = zod.object({
-  "amexEndingBalance": zod.number().nullable(),
-  "asOf": zod.string(),
-  "source": zod.enum(['debt', 'anchor', 'computed', 'missing'])
-})
-
+  amexEndingBalance: zod.number().nullable(),
+  asOf: zod.string(),
+  source: zod.enum(["debt", "anchor", "computed", "missing"]),
+});
 
 export const DeleteAmexAnchorResponse = zod.object({
-  "ok": zod.boolean()
-})
-
+  ok: zod.boolean(),
+});
 
 export const ListDashboardBudgetsQueryParams = zod.object({
-  "bucket": zod.coerce.string().optional(),
-  "periodKey": zod.coerce.string().optional()
-})
+  bucket: zod.coerce.string().optional(),
+  periodKey: zod.coerce.string().optional(),
+});
 
 export const ListDashboardBudgetsResponseItem = zod.object({
-  "id": zod.string(),
-  "bucket": zod.string(),
-  "periodKey": zod.string(),
-  "amount": zod.string(),
-  "isDefault": zod.boolean()
-})
-export const ListDashboardBudgetsResponse = zod.array(ListDashboardBudgetsResponseItem)
-
+  id: zod.string(),
+  bucket: zod.string(),
+  periodKey: zod.string(),
+  amount: zod.string(),
+  isDefault: zod.boolean(),
+});
+export const ListDashboardBudgetsResponse = zod.array(
+  ListDashboardBudgetsResponseItem,
+);
 
 export const UpsertDashboardBudgetBody = zod.object({
-  "bucket": zod.string(),
-  "periodKey": zod.string(),
-  "amount": zod.string()
-})
+  bucket: zod.string(),
+  periodKey: zod.string(),
+  amount: zod.string(),
+});
 
 export const UpsertDashboardBudgetResponse = zod.object({
-  "id": zod.string(),
-  "bucket": zod.string(),
-  "periodKey": zod.string(),
-  "amount": zod.string(),
-  "isDefault": zod.boolean()
-})
-
+  id: zod.string(),
+  bucket: zod.string(),
+  periodKey: zod.string(),
+  amount: zod.string(),
+  isDefault: zod.boolean(),
+});
 
 export const DeleteDashboardBudgetQueryParams = zod.object({
-  "bucket": zod.coerce.string(),
-  "periodKey": zod.coerce.string()
-})
-
+  bucket: zod.coerce.string(),
+  periodKey: zod.coerce.string(),
+});
 
 export const CreatePlaidLinkTokenResponse = zod.object({
-  "linkToken": zod.string(),
-  "expiration": zod.string()
-})
-
+  linkToken: zod.string(),
+  expiration: zod.string(),
+});
 
 /**
  * @summary Create a Plaid Link token in update mode for an existing item, so the
@@ -1472,86 +1967,100 @@ ITEM_LOGIN_REQUIRED (or another re-auth code).
 
  */
 export const CreatePlaidUpdateLinkTokenBody = zod.object({
-  "itemId": zod.string().describe('Internal Plaid item row id (UUID) of the item that needs\nre-authentication. Used to look up the stored access_token and\ncreate a Plaid Link token in update mode.\n')
-})
+  itemId: zod
+    .string()
+    .describe(
+      "Internal Plaid item row id (UUID) of the item that needs\nre-authentication. Used to look up the stored access_token and\ncreate a Plaid Link token in update mode.\n",
+    ),
+});
 
 export const CreatePlaidUpdateLinkTokenResponse = zod.object({
-  "linkToken": zod.string(),
-  "expiration": zod.string()
-})
-
+  linkToken: zod.string(),
+  expiration: zod.string(),
+});
 
 export const ExchangePlaidPublicTokenBody = zod.object({
-  "publicToken": zod.string(),
-  "institutionId": zod.string().nullish(),
-  "institutionName": zod.string().nullish()
-})
+  publicToken: zod.string(),
+  institutionId: zod.string().nullish(),
+  institutionName: zod.string().nullish(),
+});
 
 export const ExchangePlaidPublicTokenResponse = zod.object({
-  "id": zod.string(),
-  "itemId": zod.string(),
-  "institutionId": zod.string().nullish(),
-  "institutionName": zod.string().nullish(),
-  "institutionSlug": zod.string(),
-  "lastSyncedAt": zod.string().nullish(),
-  "lastSyncError": zod.string().nullish(),
-  "lastSyncErrorCode": zod.string().nullish().describe('Plaid\'s structured `error_code` from the most recent failed\nsync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,\nPENDING_EXPIRATION). Null when sync is healthy or when the\nprevious failure had no structured code. Used by the UI to\ndecide when to surface the \"Reconnect\" button next to the\nsync chip.\n'),
-  "stillPreparing": zod.boolean().optional(),
-  "stillPreparingSince": zod.string().nullish(),
-  "consentExpirationAt": zod.string().nullish(),
-  "consentExpirationLastRefreshedAt": zod.string().nullish(),
-  "consentExpirationLastRefreshError": zod.string().nullish(),
-  "consentExpirationLastRefreshErrorCode": zod.string().nullish(),
-  "consentWarningDismissedForCutoff": zod.string().nullish(),
-  "accounts": zod.array(zod.object({
-  "id": zod.string(),
-  "accountId": zod.string(),
-  "name": zod.string().nullish(),
-  "officialName": zod.string().nullish(),
-  "mask": zod.string().nullish(),
-  "type": zod.string().nullish(),
-  "subtype": zod.string().nullish(),
-  "importCutoffDate": zod.string().nullish(),
-  "firstSyncCompletedAt": zod.string().nullish()
-}))
-})
-
+  id: zod.string(),
+  itemId: zod.string(),
+  institutionId: zod.string().nullish(),
+  institutionName: zod.string().nullish(),
+  institutionSlug: zod.string(),
+  lastSyncedAt: zod.string().nullish(),
+  lastSyncError: zod.string().nullish(),
+  lastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      'Plaid\'s structured `error_code` from the most recent failed\nsync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,\nPENDING_EXPIRATION). Null when sync is healthy or when the\nprevious failure had no structured code. Used by the UI to\ndecide when to surface the \"Reconnect\" button next to the\nsync chip.\n',
+    ),
+  stillPreparing: zod.boolean().optional(),
+  stillPreparingSince: zod.string().nullish(),
+  consentExpirationAt: zod.string().nullish(),
+  consentExpirationLastRefreshedAt: zod.string().nullish(),
+  consentExpirationLastRefreshError: zod.string().nullish(),
+  consentExpirationLastRefreshErrorCode: zod.string().nullish(),
+  consentWarningDismissedForCutoff: zod.string().nullish(),
+  accounts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      name: zod.string().nullish(),
+      officialName: zod.string().nullish(),
+      mask: zod.string().nullish(),
+      type: zod.string().nullish(),
+      subtype: zod.string().nullish(),
+      importCutoffDate: zod.string().nullish(),
+      firstSyncCompletedAt: zod.string().nullish(),
+    }),
+  ),
+});
 
 export const ListPlaidItemsResponseItem = zod.object({
-  "id": zod.string(),
-  "itemId": zod.string(),
-  "institutionId": zod.string().nullish(),
-  "institutionName": zod.string().nullish(),
-  "institutionSlug": zod.string(),
-  "lastSyncedAt": zod.string().nullish(),
-  "lastSyncError": zod.string().nullish(),
-  "lastSyncErrorCode": zod.string().nullish().describe('Plaid\'s structured `error_code` from the most recent failed\nsync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,\nPENDING_EXPIRATION). Null when sync is healthy or when the\nprevious failure had no structured code. Used by the UI to\ndecide when to surface the \"Reconnect\" button next to the\nsync chip.\n'),
-  "stillPreparing": zod.boolean().optional(),
-  "stillPreparingSince": zod.string().nullish(),
-  "consentExpirationAt": zod.string().nullish(),
-  "consentExpirationLastRefreshedAt": zod.string().nullish(),
-  "consentExpirationLastRefreshError": zod.string().nullish(),
-  "consentExpirationLastRefreshErrorCode": zod.string().nullish(),
-  "consentWarningDismissedForCutoff": zod.string().nullish(),
-  "accounts": zod.array(zod.object({
-  "id": zod.string(),
-  "accountId": zod.string(),
-  "name": zod.string().nullish(),
-  "officialName": zod.string().nullish(),
-  "mask": zod.string().nullish(),
-  "type": zod.string().nullish(),
-  "subtype": zod.string().nullish(),
-  "importCutoffDate": zod.string().nullish(),
-  "firstSyncCompletedAt": zod.string().nullish()
-}))
-})
-export const ListPlaidItemsResponse = zod.array(ListPlaidItemsResponseItem)
-
+  id: zod.string(),
+  itemId: zod.string(),
+  institutionId: zod.string().nullish(),
+  institutionName: zod.string().nullish(),
+  institutionSlug: zod.string(),
+  lastSyncedAt: zod.string().nullish(),
+  lastSyncError: zod.string().nullish(),
+  lastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      'Plaid\'s structured `error_code` from the most recent failed\nsync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,\nPENDING_EXPIRATION). Null when sync is healthy or when the\nprevious failure had no structured code. Used by the UI to\ndecide when to surface the \"Reconnect\" button next to the\nsync chip.\n',
+    ),
+  stillPreparing: zod.boolean().optional(),
+  stillPreparingSince: zod.string().nullish(),
+  consentExpirationAt: zod.string().nullish(),
+  consentExpirationLastRefreshedAt: zod.string().nullish(),
+  consentExpirationLastRefreshError: zod.string().nullish(),
+  consentExpirationLastRefreshErrorCode: zod.string().nullish(),
+  consentWarningDismissedForCutoff: zod.string().nullish(),
+  accounts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      name: zod.string().nullish(),
+      officialName: zod.string().nullish(),
+      mask: zod.string().nullish(),
+      type: zod.string().nullish(),
+      subtype: zod.string().nullish(),
+      importCutoffDate: zod.string().nullish(),
+      firstSyncCompletedAt: zod.string().nullish(),
+    }),
+  ),
+});
+export const ListPlaidItemsResponse = zod.array(ListPlaidItemsResponseItem);
 
 export const DeletePlaidItemParams = zod.object({
-  "id": zod.coerce.string()
-})
-
+  id: zod.coerce.string(),
+});
 
 /**
  * @summary (#279) Most recent Plaid sync attempts for a single linked item.
@@ -1563,24 +2072,34 @@ last 10 syncs") instead of only seeing the latest
 
  */
 export const ListPlaidSyncAttemptsParams = zod.object({
-  "id": zod.coerce.string()
-})
+  id: zod.coerce.string(),
+});
 
 export const ListPlaidSyncAttemptsResponse = zod.object({
-  "attempts": zod.array(zod.object({
-  "id": zod.string(),
-  "attemptedAt": zod.string(),
-  "kind": zod.enum(['transactions', 'balance', 'liabilities']),
-  "success": zod.boolean(),
-  "errorCode": zod.string().nullish(),
-  "errorMessage": zod.string().nullish(),
-  "plaidDisplayMessage": zod.string().nullish(),
-  "requestId": zod.string().nullish(),
-  "httpStatus": zod.number().nullish(),
-  "errorKind": zod.union([zod.literal('reauth'),zod.literal('rate_limit'),zod.literal('institution_down'),zod.literal('transient'),zod.literal('unknown'),zod.literal(null)]).nullish()
-}))
-})
-
+  attempts: zod.array(
+    zod.object({
+      id: zod.string(),
+      attemptedAt: zod.string(),
+      kind: zod.enum(["transactions", "balance", "liabilities"]),
+      success: zod.boolean(),
+      errorCode: zod.string().nullish(),
+      errorMessage: zod.string().nullish(),
+      plaidDisplayMessage: zod.string().nullish(),
+      requestId: zod.string().nullish(),
+      httpStatus: zod.number().nullish(),
+      errorKind: zod
+        .union([
+          zod.literal("reauth"),
+          zod.literal("rate_limit"),
+          zod.literal("institution_down"),
+          zod.literal("transient"),
+          zod.literal("unknown"),
+          zod.literal(null),
+        ])
+        .nullish(),
+    }),
+  ),
+});
 
 /**
  * @summary (#361) Override the first-sync `import_cutoff_date` for a
@@ -1593,19 +2112,18 @@ inserts every row Plaid returns.
 
  */
 export const UpdatePlaidImportCutoffDateParams = zod.object({
-  "id": zod.coerce.string()
-})
+  id: zod.coerce.string(),
+});
 
 export const UpdatePlaidImportCutoffDateBody = zod.object({
-  "importCutoffDate": zod.string().nullable()
-})
+  importCutoffDate: zod.string().nullable(),
+});
 
 export const UpdatePlaidImportCutoffDateResponse = zod.object({
-  "id": zod.string(),
-  "importCutoffDate": zod.string().nullable(),
-  "firstSyncCompletedAt": zod.string().nullable()
-})
-
+  id: zod.string(),
+  importCutoffDate: zod.string().nullable(),
+  firstSyncCompletedAt: zod.string().nullable(),
+});
 
 /**
  * @summary (#274) Persist the user's dismissal of the dashboard "bank
@@ -1617,81 +2135,107 @@ cutoff (e.g. after a successful re-consent).
 
  */
 export const DismissPlaidExpirationWarningParams = zod.object({
-  "id": zod.coerce.string()
-})
+  id: zod.coerce.string(),
+});
 
 export const DismissPlaidExpirationWarningResponse = zod.object({
-  "id": zod.string(),
-  "itemId": zod.string(),
-  "institutionId": zod.string().nullish(),
-  "institutionName": zod.string().nullish(),
-  "institutionSlug": zod.string(),
-  "lastSyncedAt": zod.string().nullish(),
-  "lastSyncError": zod.string().nullish(),
-  "lastSyncErrorCode": zod.string().nullish().describe('Plaid\'s structured `error_code` from the most recent failed\nsync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,\nPENDING_EXPIRATION). Null when sync is healthy or when the\nprevious failure had no structured code. Used by the UI to\ndecide when to surface the \"Reconnect\" button next to the\nsync chip.\n'),
-  "stillPreparing": zod.boolean().optional(),
-  "stillPreparingSince": zod.string().nullish(),
-  "consentExpirationAt": zod.string().nullish(),
-  "consentExpirationLastRefreshedAt": zod.string().nullish(),
-  "consentExpirationLastRefreshError": zod.string().nullish(),
-  "consentExpirationLastRefreshErrorCode": zod.string().nullish(),
-  "consentWarningDismissedForCutoff": zod.string().nullish(),
-  "accounts": zod.array(zod.object({
-  "id": zod.string(),
-  "accountId": zod.string(),
-  "name": zod.string().nullish(),
-  "officialName": zod.string().nullish(),
-  "mask": zod.string().nullish(),
-  "type": zod.string().nullish(),
-  "subtype": zod.string().nullish(),
-  "importCutoffDate": zod.string().nullish(),
-  "firstSyncCompletedAt": zod.string().nullish()
-}))
-})
-
+  id: zod.string(),
+  itemId: zod.string(),
+  institutionId: zod.string().nullish(),
+  institutionName: zod.string().nullish(),
+  institutionSlug: zod.string(),
+  lastSyncedAt: zod.string().nullish(),
+  lastSyncError: zod.string().nullish(),
+  lastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      'Plaid\'s structured `error_code` from the most recent failed\nsync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,\nPENDING_EXPIRATION). Null when sync is healthy or when the\nprevious failure had no structured code. Used by the UI to\ndecide when to surface the \"Reconnect\" button next to the\nsync chip.\n',
+    ),
+  stillPreparing: zod.boolean().optional(),
+  stillPreparingSince: zod.string().nullish(),
+  consentExpirationAt: zod.string().nullish(),
+  consentExpirationLastRefreshedAt: zod.string().nullish(),
+  consentExpirationLastRefreshError: zod.string().nullish(),
+  consentExpirationLastRefreshErrorCode: zod.string().nullish(),
+  consentWarningDismissedForCutoff: zod.string().nullish(),
+  accounts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      name: zod.string().nullish(),
+      officialName: zod.string().nullish(),
+      mask: zod.string().nullish(),
+      type: zod.string().nullish(),
+      subtype: zod.string().nullish(),
+      importCutoffDate: zod.string().nullish(),
+      firstSyncCompletedAt: zod.string().nullish(),
+    }),
+  ),
+});
 
 export const SyncPlaidTransactionsBody = zod.object({
-  "itemId": zod.string().nullish()
-})
+  itemId: zod.string().nullish(),
+});
 
 export const SyncPlaidTransactionsResponse = zod.object({
-  "items": zod.array(zod.object({
-  "itemId": zod.string(),
-  "plaidItemRowId": zod.string().nullish(),
-  "institutionName": zod.string().nullish(),
-  "added": zod.number(),
-  "modified": zod.number(),
-  "removed": zod.number(),
-  "autoCategorized": zod.number(),
-  "ruleAttributions": zod.array(zod.object({
-  "ruleId": zod.string(),
-  "pattern": zod.string(),
-  "count": zod.number()
-})),
-  "error": zod.string().nullish(),
-  "stillPreparing": zod.boolean().optional(),
-  "plaidErrorCode": zod.string().nullish(),
-  "plaidErrorMessage": zod.string().nullish(),
-  "plaidDisplayMessage": zod.string().nullish(),
-  "requestId": zod.string().nullish(),
-  "httpStatus": zod.number().nullish(),
-  "kind": zod.union([zod.literal('reauth'),zod.literal('rate_limit'),zod.literal('institution_down'),zod.literal('transient'),zod.literal('unknown'),zod.literal(null)]).nullish()
-}))
-})
-
+  items: zod.array(
+    zod.object({
+      itemId: zod.string(),
+      plaidItemRowId: zod.string().nullish(),
+      institutionName: zod.string().nullish(),
+      added: zod.number(),
+      modified: zod.number(),
+      removed: zod.number(),
+      autoCategorized: zod.number(),
+      ruleAttributions: zod.array(
+        zod.object({
+          ruleId: zod.string(),
+          pattern: zod.string(),
+          count: zod.number(),
+        }),
+      ),
+      error: zod.string().nullish(),
+      stillPreparing: zod.boolean().optional(),
+      plaidErrorCode: zod.string().nullish(),
+      plaidErrorMessage: zod.string().nullish(),
+      plaidDisplayMessage: zod.string().nullish(),
+      requestId: zod.string().nullish(),
+      httpStatus: zod.number().nullish(),
+      kind: zod
+        .union([
+          zod.literal("reauth"),
+          zod.literal("rate_limit"),
+          zod.literal("institution_down"),
+          zod.literal("transient"),
+          zod.literal("unknown"),
+          zod.literal(null),
+        ])
+        .nullish(),
+    }),
+  ),
+});
 
 export const GetPlaidEnvironmentResponse = zod.object({
-  "env": zod.union([zod.literal('sandbox'),zod.literal('development'),zod.literal('production'),zod.literal(null)]).nullable(),
-  "configured": zod.boolean(),
-  "configError": zod.string().nullish(),
-  "nonProdItemCount": zod.number(),
-  "nonProdItems": zod.array(zod.object({
-  "id": zod.string(),
-  "institutionName": zod.string().nullish(),
-  "env": zod.string().nullable()
-}))
-})
-
+  env: zod
+    .union([
+      zod.literal("sandbox"),
+      zod.literal("development"),
+      zod.literal("production"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  configured: zod.boolean(),
+  configError: zod.string().nullish(),
+  nonProdItemCount: zod.number(),
+  nonProdItems: zod.array(
+    zod.object({
+      id: zod.string(),
+      institutionName: zod.string().nullish(),
+      env: zod.string().nullable(),
+    }),
+  ),
+});
 
 /**
  * @summary (#253) Manually refresh `consent_expiration_time` for every Plaid
@@ -1702,211 +2246,211 @@ waiting up to 24h for the next scheduled run.
 
  */
 export const RefreshPlaidConsentExpirationsResponse = zod.object({
-  "scanned": zod.number(),
-  "updated": zod.number(),
-  "failed": zod.number(),
-  "items": zod.array(zod.object({
-  "itemRowId": zod.string(),
-  "itemId": zod.string(),
-  "institutionName": zod.string().nullish(),
-  "consentExpirationAt": zod.string().nullish(),
-  "consentExpirationLastRefreshedAt": zod.string().nullish(),
-  "changed": zod.boolean(),
-  "error": zod.string().nullish()
-}))
-})
-
+  scanned: zod.number(),
+  updated: zod.number(),
+  failed: zod.number(),
+  items: zod.array(
+    zod.object({
+      itemRowId: zod.string(),
+      itemId: zod.string(),
+      institutionName: zod.string().nullish(),
+      consentExpirationAt: zod.string().nullish(),
+      consentExpirationLastRefreshedAt: zod.string().nullish(),
+      changed: zod.boolean(),
+      error: zod.string().nullish(),
+    }),
+  ),
+});
 
 export const CleanupNonProdPlaidItemsResponse = zod.object({
-  "removed": zod.number()
-})
-
+  removed: zod.number(),
+});
 
 export const GetBillsSummaryResponse = zod.object({
-  "income": zod.array(zod.object({
-  "item": zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "kind": zod.string(),
-  "amount": zod.string(),
-  "frequency": zod.string(),
-  "dayOfMonth": zod.number().nullish(),
-  "anchorDate": zod.string().nullish(),
-  "active": zod.string(),
-  "categoryId": zod.string().nullish(),
-  "debtId": zod.string().nullish()
-}),
-  "nextOccurrence": zod.string().nullable(),
-  "monthlyAmount": zod.string(),
-  "actualAmount": zod.string()
-})),
-  "bills": zod.array(zod.object({
-  "item": zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "kind": zod.string(),
-  "amount": zod.string(),
-  "frequency": zod.string(),
-  "dayOfMonth": zod.number().nullish(),
-  "anchorDate": zod.string().nullish(),
-  "active": zod.string(),
-  "categoryId": zod.string().nullish(),
-  "debtId": zod.string().nullish()
-}),
-  "nextOccurrence": zod.string().nullable(),
-  "monthlyAmount": zod.string(),
-  "actualAmount": zod.string()
-})),
-  "debtMins": zod.array(zod.object({
-  "debtId": zod.string(),
-  "debtName": zod.string(),
-  "amount": zod.string(),
-  "minPayment": zod.string(),
-  "nextOccurrence": zod.string().nullish(),
-  "source": zod.enum(['plaid', 'manual']),
-  "locked": zod.boolean(),
-  "linkedRecurringId": zod.string().nullish(),
-  "dueDay": zod.number().nullish(),
-  "endsThisCycle": zod.boolean().optional()
-})),
-  "monthly": zod.object({
-  "income": zod.string(),
-  "bills": zod.string(),
-  "debtMin": zod.string(),
-  "totalOutflow": zod.string(),
-  "net": zod.string(),
-  "active": zod.number(),
-  "monthStart": zod.string(),
-  "monthEnd": zod.string()
-})
-})
-
+  income: zod.array(
+    zod.object({
+      item: zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        kind: zod.string(),
+        amount: zod.string(),
+        frequency: zod.string(),
+        dayOfMonth: zod.number().nullish(),
+        anchorDate: zod.string().nullish(),
+        active: zod.string(),
+        categoryId: zod.string().nullish(),
+        debtId: zod.string().nullish(),
+      }),
+      nextOccurrence: zod.string().nullable(),
+      monthlyAmount: zod.string(),
+      actualAmount: zod.string(),
+    }),
+  ),
+  bills: zod.array(
+    zod.object({
+      item: zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        kind: zod.string(),
+        amount: zod.string(),
+        frequency: zod.string(),
+        dayOfMonth: zod.number().nullish(),
+        anchorDate: zod.string().nullish(),
+        active: zod.string(),
+        categoryId: zod.string().nullish(),
+        debtId: zod.string().nullish(),
+      }),
+      nextOccurrence: zod.string().nullable(),
+      monthlyAmount: zod.string(),
+      actualAmount: zod.string(),
+    }),
+  ),
+  debtMins: zod.array(
+    zod.object({
+      debtId: zod.string(),
+      debtName: zod.string(),
+      amount: zod.string(),
+      minPayment: zod.string(),
+      nextOccurrence: zod.string().nullish(),
+      source: zod.enum(["plaid", "manual"]),
+      locked: zod.boolean(),
+      linkedRecurringId: zod.string().nullish(),
+      dueDay: zod.number().nullish(),
+      endsThisCycle: zod.boolean().optional(),
+    }),
+  ),
+  monthly: zod.object({
+    income: zod.string(),
+    bills: zod.string(),
+    debtMin: zod.string(),
+    totalOutflow: zod.string(),
+    net: zod.string(),
+    active: zod.number(),
+    monthStart: zod.string(),
+    monthEnd: zod.string(),
+  }),
+});
 
 export const ImportWorkbookBody = zod.object({
-  "file": zod.instanceof(File)
-})
+  file: zod.instanceof(File),
+});
 
 export const ImportWorkbookResponse = zod.object({
-  "batchId": zod.string(),
-  "counts": zod.record(zod.string(), zod.number()),
-  "ruleAttributions": zod.array(zod.object({
-  "ruleId": zod.string(),
-  "pattern": zod.string(),
-  "count": zod.number()
-}))
-})
-
+  batchId: zod.string(),
+  counts: zod.record(zod.string(), zod.number()),
+  ruleAttributions: zod.array(
+    zod.object({
+      ruleId: zod.string(),
+      pattern: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+});
 
 /**
  * @summary Returns information about the current authenticated user, including whether they are the owner.
  */
 export const GetMeResponse = zod.object({
-  "userId": zod.string(),
-  "email": zod.string().nullish(),
-  "displayName": zod.string().nullish(),
-  "isOwner": zod.boolean()
-})
-
+  userId: zod.string(),
+  email: zod.string().nullish(),
+  displayName: zod.string().nullish(),
+  isOwner: zod.boolean(),
+});
 
 /**
  * @summary List all invitations (owner only).
  */
 export const ListInvitationsResponseItem = zod.object({
-  "id": zod.string(),
-  "emailAddress": zod.string(),
-  "status": zod.enum(['pending', 'accepted', 'revoked', 'expired']),
-  "createdAt": zod.number(),
-  "updatedAt": zod.number(),
-  "url": zod.string().nullish(),
-  "revoked": zod.boolean().nullish()
-})
-export const ListInvitationsResponse = zod.array(ListInvitationsResponseItem)
-
+  id: zod.string(),
+  emailAddress: zod.string(),
+  status: zod.enum(["pending", "accepted", "revoked", "expired"]),
+  createdAt: zod.number(),
+  updatedAt: zod.number(),
+  url: zod.string().nullish(),
+  revoked: zod.boolean().nullish(),
+});
+export const ListInvitationsResponse = zod.array(ListInvitationsResponseItem);
 
 /**
  * @summary Send a new invitation by email (owner only).
  */
 export const CreateInvitationBody = zod.object({
-  "email": zod.string().email()
-})
-
+  email: zod.string().email(),
+});
 
 /**
  * @summary Revoke a pending invitation (owner only).
  */
 export const RevokeInvitationParams = zod.object({
-  "id": zod.coerce.string()
-})
+  id: zod.coerce.string(),
+});
 
 export const RevokeInvitationResponse = zod.object({
-  "id": zod.string(),
-  "emailAddress": zod.string(),
-  "status": zod.enum(['pending', 'accepted', 'revoked', 'expired']),
-  "createdAt": zod.number(),
-  "updatedAt": zod.number(),
-  "url": zod.string().nullish(),
-  "revoked": zod.boolean().nullish()
-})
-
+  id: zod.string(),
+  emailAddress: zod.string(),
+  status: zod.enum(["pending", "accepted", "revoked", "expired"]),
+  createdAt: zod.number(),
+  updatedAt: zod.number(),
+  url: zod.string().nullish(),
+  revoked: zod.boolean().nullish(),
+});
 
 /**
  * @summary Resend a pending invitation (owner only). Revokes the existing invite and creates a new one for the same email.
  */
 export const ResendInvitationParams = zod.object({
-  "id": zod.coerce.string()
-})
-
+  id: zod.coerce.string(),
+});
 
 /**
  * @summary Check whether the given email has a pending invitation. Public endpoint used by the sign-in page to help invited users who try to sign in before accepting their email invite.
  */
 export const CheckInvitationBody = zod.object({
-  "email": zod.string().email()
-})
+  email: zod.string().email(),
+});
 
 export const CheckInvitationResponse = zod.object({
-  "email": zod.string(),
-  "hasPending": zod.boolean()
-})
-
+  email: zod.string(),
+  hasPending: zod.boolean(),
+});
 
 /**
  * @summary List all current members (owner only).
  */
 export const ListMembersResponseItem = zod.object({
-  "id": zod.string(),
-  "email": zod.string().nullish(),
-  "displayName": zod.string().nullish(),
-  "imageUrl": zod.string().nullish(),
-  "isOwner": zod.boolean(),
-  "createdAt": zod.number().nullish(),
-  "lastSignInAt": zod.number().nullish()
-})
-export const ListMembersResponse = zod.array(ListMembersResponseItem)
-
+  id: zod.string(),
+  email: zod.string().nullish(),
+  displayName: zod.string().nullish(),
+  imageUrl: zod.string().nullish(),
+  isOwner: zod.boolean(),
+  createdAt: zod.number().nullish(),
+  lastSignInAt: zod.number().nullish(),
+});
+export const ListMembersResponse = zod.array(ListMembersResponseItem);
 
 /**
  * @summary Remove a member's access (owner only). Deletes the Clerk user and their profile row.
  */
 export const RemoveMemberParams = zod.object({
-  "id": zod.coerce.string()
-})
-
+  id: zod.coerce.string(),
+});
 
 /**
  * @summary Seed the user's Chase checking with April 2026 transactions (idempotent)
  */
 export const SeedAprilChaseResponse = zod.object({
-  "alreadySeeded": zod.boolean(),
-  "inserted": zod.number(),
-  "skipped": zod.number(),
-  "categorized": zod.number(),
-  "transfers": zod.number(),
-  "rulesAdded": zod.number(),
-  "endingBalance": zod.string(),
-  "syntheticAccount": zod.boolean(),
-  "accountId": zod.string(),
-  "snapshotRepaired": zod.boolean().describe('True when an existing manual bank snapshot still equal to the prior incorrect April ending balance was rewritten to the corrected value during this seed run. Use to invalidate cached forecast \/ bank snapshot queries even when no transactions or rules were inserted.')
-})
-
-
+  alreadySeeded: zod.boolean(),
+  inserted: zod.number(),
+  skipped: zod.number(),
+  categorized: zod.number(),
+  transfers: zod.number(),
+  rulesAdded: zod.number(),
+  endingBalance: zod.string(),
+  syntheticAccount: zod.boolean(),
+  accountId: zod.string(),
+  snapshotRepaired: zod
+    .boolean()
+    .describe(
+      "True when an existing manual bank snapshot still equal to the prior incorrect April ending balance was rewritten to the corrected value during this seed run. Use to invalidate cached forecast \/ bank snapshot queries even when no transactions or rules were inserted.",
+    ),
+});
