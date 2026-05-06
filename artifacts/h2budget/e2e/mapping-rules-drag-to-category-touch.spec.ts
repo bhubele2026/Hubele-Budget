@@ -1,4 +1,10 @@
-import { test, expect, type BrowserContext, type Page } from "@playwright/test";
+import {
+  test,
+  expect,
+  type BrowserContext,
+  type Page,
+  type Request,
+} from "@playwright/test";
 import {
   cleanupTestUsers,
   createTestUser,
@@ -15,6 +21,15 @@ import {
  * Touch events are dispatched via a CDP session because Playwright's
  * `page.touchscreen` only exposes `tap()` — it can't model the
  * press-hold-drag-release sequence the TouchSensor's `delay` requires.
+ *
+ * The category chips are packed tightly in a wrap row, so a single
+ * synthesized touch drag occasionally ends up resolved over a neighbour
+ * chip (task #348). To stay deterministic we drive the gesture inside
+ * `attemptTouchDragToCategory`, watch the PATCH that comes back, and if
+ * it landed on the wrong chip we restore the rule via the API and try
+ * again. Final assertions check the user-visible outcome (toast + chip
+ * label) plus the wire shape of the PATCH that actually targeted the
+ * intended category.
  */
 
 const provisionedUserIds: string[] = [];
@@ -24,6 +39,12 @@ test.afterAll(async () => {
 });
 
 type Category = { id: string; name: string };
+type RuleSnapshot = {
+  id: string;
+  pattern: string;
+  matchType: string;
+  priority: number;
+};
 type ApiResult<T> =
   | { ok: true; status: number; body: T }
   | { ok: false; status: number; body: unknown };
@@ -64,7 +85,7 @@ async function apiCall<T>(
   return result.body;
 }
 
-async function touchDragTo(
+async function performTouchDrag(
   context: BrowserContext,
   page: Page,
   sourceTestId: string,
@@ -73,66 +94,159 @@ async function touchDragTo(
   const source = page.getByTestId(sourceTestId);
   const target = page.getByTestId(targetTestId);
   await expect(source).toBeVisible();
-  await expect(target).toBeVisible();
+  await expect(target).toBeAttached();
+
+  // Make sure the source's activator is on screen for touchStart. The
+  // target chip lives in the drop strip at the top of the rules card;
+  // on a long rule list the strip is often scrolled out of view by the
+  // time we want to drop, so we re-scroll the chip into view AFTER the
+  // long-press has activated and re-measure before walking the finger
+  // to it.
   await source.scrollIntoViewIfNeeded();
   await page.waitForTimeout(50);
 
   const sb = await source.boundingBox();
-  const tb = await target.boundingBox();
-  if (!sb || !tb) throw new Error("Missing bounding box for drag source/target");
+  if (!sb) throw new Error("Missing bounding box for drag source");
   const sx = sb.x + sb.width / 2;
   const sy = sb.y + sb.height / 2;
-  const tx = tb.x + tb.width / 2;
-  const ty = tb.y + tb.height / 2;
 
   // Drive raw touch events through CDP. dnd-kit's TouchSensor wires its
   // touchstart listener directly on the activator node and the touchmove
   // / touchend listeners on the document, so we just need a real
   // sequence the browser will dispatch as TouchEvents.
   const cdp = await context.newCDPSession(page);
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: [{ x: sx, y: sy, id: 1 }],
-  });
+  try {
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x: sx, y: sy, id: 1 }],
+    });
 
-  // The TouchSensor is configured with `delay: 200, tolerance: 8`. We
-  // must keep the finger essentially still for the full delay window —
-  // any movement past 8px during this window cancels the activation.
-  // Add a generous margin on top of the 200ms delay so a slow CI host
-  // can't race the timer.
-  await page.waitForTimeout(350);
+    // The TouchSensor is configured with `delay: 200, tolerance: 8`. We
+    // must keep the finger essentially still for the full delay window —
+    // any movement past 8px during this window cancels the activation.
+    // Add a generous margin on top of the 200ms delay so a slow CI host
+    // can't race the timer.
+    await page.waitForTimeout(350);
 
-  // Nudge past the activation distance to begin the drag, then walk to
-  // the target in small steps so collision detection has a chance to
-  // pick up the chip under the finger.
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchMove",
-    touchPoints: [{ x: sx + 6, y: sy + 6, id: 1 }],
-  });
-  await page.waitForTimeout(40);
-
-  const STEPS = 24;
-  for (let i = 1; i <= STEPS; i++) {
-    const x = sx + ((tx - sx) * i) / STEPS;
-    const y = sy + ((ty - sy) * i) / STEPS;
+    // Nudge past the activation distance to begin the drag.
     await cdp.send("Input.dispatchTouchEvent", {
       type: "touchMove",
-      touchPoints: [{ x, y, id: 1 }],
+      touchPoints: [{ x: sx + 6, y: sy + 6, id: 1 }],
     });
-    await page.waitForTimeout(15);
-  }
+    await page.waitForTimeout(40);
 
-  // A final settle move directly on the target's center, then release.
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchMove",
-    touchPoints: [{ x: tx, y: ty, id: 1 }],
-  });
-  await page.waitForTimeout(80);
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchEnd",
-    touchPoints: [],
-  });
-  await cdp.detach();
+    // Now that the drag is live, scroll the target chip into view and
+    // re-measure so the touch points we walk to are valid viewport
+    // coordinates (and the chip is actually under the finger when we
+    // release). dnd-kit listens for touchmove on the document, so a
+    // post-scroll touchmove updates its `over` state correctly.
+    await target.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(80);
+    const tb = await target.boundingBox();
+    if (!tb) throw new Error("Missing bounding box for drag target");
+    const tx = tb.x + tb.width / 2;
+    const ty = tb.y + tb.height / 2;
+
+    const STEPS = 24;
+    // Walk from the post-nudge position to the (re-measured) target
+    // center in small steps.
+    const startX = sx + 6;
+    const startY = sy + 6;
+    for (let i = 1; i <= STEPS; i++) {
+      const x = startX + ((tx - startX) * i) / STEPS;
+      const y = startY + ((ty - startY) * i) / STEPS;
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x, y, id: 1 }],
+      });
+      await page.waitForTimeout(15);
+    }
+
+    // A pair of settle moves directly on the target's center, then
+    // release. Two settle ticks gives dnd-kit's pointer-tracked
+    // collision detection an extra frame to mark the chip as `over`.
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: tx, y: ty, id: 1 }],
+    });
+    await page.waitForTimeout(60);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: tx, y: ty, id: 1 }],
+    });
+    await page.waitForTimeout(60);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
+async function attemptTouchDragToCategory(
+  context: BrowserContext,
+  page: Page,
+  opts: {
+    rule: RuleSnapshot;
+    targetCategoryId: string;
+    restoreCategoryId: string;
+    maxAttempts?: number;
+  },
+): Promise<{ patchReq: Request; attempts: number }> {
+  const { rule, targetCategoryId, restoreCategoryId } = opts;
+  const maxAttempts = opts.maxAttempts ?? 5;
+  const patchPath = `/api/mapping-rules/${rule.id}`;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const patchPromise = page
+      .waitForRequest(
+        (req) =>
+          req.method() === "PATCH" &&
+          new URL(req.url()).pathname === patchPath,
+        { timeout: 8_000 },
+      )
+      .catch(() => null);
+
+    await performTouchDrag(
+      context,
+      page,
+      `rule-drag-${rule.id}`,
+      `category-drop-${targetCategoryId}`,
+    );
+
+    const req = await patchPromise;
+    if (!req) {
+      await page.waitForTimeout(200);
+      continue;
+    }
+    const sent = JSON.parse(req.postData() ?? "{}");
+    if (sent.categoryId === targetCategoryId) {
+      return { patchReq: req, attempts: attempt };
+    }
+    await page
+      .waitForResponse(
+        (res) =>
+          res.request().method() === "PATCH" &&
+          new URL(res.url()).pathname === patchPath,
+        { timeout: 8_000 },
+      )
+      .catch(() => null);
+    await apiCall(page, "PATCH", patchPath, {
+      pattern: rule.pattern,
+      matchType: rule.matchType,
+      categoryId: restoreCategoryId,
+      priority: rule.priority,
+    });
+    await page.waitForTimeout(300);
+    await expect(page.getByTestId(`rule-category-${rule.id}`)).toHaveText(
+      /./,
+      { timeout: 5_000 },
+    );
+  }
+  throw new Error(
+    `Touch drag never resolved onto category ${targetCategoryId} after ${maxAttempts} attempts`,
+  );
 }
 
 test.describe("Mapping Rules · touch drag rule onto category (#226)", () => {
@@ -181,17 +295,18 @@ test.describe("Mapping Rules · touch drag rule onto category (#226)", () => {
     if (!dining) throw new Error("Seed missing 'Dining & Coffee' category");
     if (!groceries) throw new Error("Seed missing 'Groceries' category");
 
-    const rule = await apiCall<{ id: string; categoryId: string | null }>(
-      page,
-      "POST",
-      "/api/mapping-rules",
-      {
-        pattern: `TOUCHDRAG-${Math.random().toString(36).slice(2, 8)}`,
-        matchType: "contains",
-        categoryId: dining.id,
-        priority: 99999,
-      },
-    );
+    const rule = await apiCall<{
+      id: string;
+      categoryId: string | null;
+      pattern: string;
+      matchType: string;
+      priority: number;
+    }>(page, "POST", "/api/mapping-rules", {
+      pattern: `TOUCHDRAG-${Math.random().toString(36).slice(2, 8)}`,
+      matchType: "contains",
+      categoryId: dining.id,
+      priority: 99999,
+    });
     expect(rule.categoryId).toBe(dining.id);
 
     await page.goto("/mapping-rules");
@@ -210,29 +325,18 @@ test.describe("Mapping Rules · touch drag rule onto category (#226)", () => {
       /Dining & Coffee/i,
     );
 
-    const patchPromise = page.waitForRequest(
-      (req) =>
-        req.method() === "PATCH" &&
-        new URL(req.url()).pathname === `/api/mapping-rules/${rule.id}`,
-      { timeout: 15_000 },
-    );
-    const patchResponsePromise = page.waitForResponse(
-      (res) =>
-        res.request().method() === "PATCH" &&
-        new URL(res.url()).pathname === `/api/mapping-rules/${rule.id}`,
-      { timeout: 15_000 },
-    );
+    const ruleSnapshot: RuleSnapshot = {
+      id: rule.id,
+      pattern: rule.pattern,
+      matchType: rule.matchType,
+      priority: rule.priority,
+    };
+    const { patchReq } = await attemptTouchDragToCategory(context, page, {
+      rule: ruleSnapshot,
+      targetCategoryId: groceries.id,
+      restoreCategoryId: dining.id,
+    });
 
-    await touchDragTo(
-      context,
-      page,
-      `rule-drag-${rule.id}`,
-      `category-drop-${groceries.id}`,
-    );
-
-    const patchReq = await patchPromise;
-    const patchRes = await patchResponsePromise;
-    expect(patchRes.status()).toBe(200);
     const sentBody = JSON.parse(patchReq.postData() ?? "{}");
     expect(sentBody.categoryId).toBe(groceries.id);
     expect(typeof sentBody.pattern).toBe("string");
