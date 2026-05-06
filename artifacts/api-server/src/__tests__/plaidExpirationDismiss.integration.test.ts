@@ -42,6 +42,12 @@ vi.mock("../lib/plaid", async () => {
 import { db, plaidItemsTable } from "@workspace/db";
 import plaidRouter from "../routes/plaid";
 
+type DismissResponse = {
+  id: string;
+  consentExpirationAt: string | null;
+  consentWarningDismissedForCutoff: string | null;
+};
+
 const app = express();
 app.use(express.json());
 app.use((req: { log?: unknown }, _res, next) => {
@@ -104,7 +110,7 @@ describe("(#274) POST /plaid/items/:id/dismiss-expiration-warning", () => {
       { method: "POST" },
     );
     expect(r.status).toBe(200);
-    const body = await r.json();
+    const body = (await r.json()) as DismissResponse;
     expect(body.id).toBe(id);
     expect(body.consentWarningDismissedForCutoff).toBe(cutoff.toISOString());
 
@@ -129,7 +135,7 @@ describe("(#274) POST /plaid/items/:id/dismiss-expiration-warning", () => {
       { method: "POST" },
     );
     expect(r2.status).toBe(200);
-    const body = await r2.json();
+    const body = (await r2.json()) as DismissResponse;
     expect(body.consentWarningDismissedForCutoff).toBe(cutoff.toISOString());
   });
 
@@ -140,7 +146,7 @@ describe("(#274) POST /plaid/items/:id/dismiss-expiration-warning", () => {
       { method: "POST" },
     );
     expect(r.status).toBe(200);
-    const body = await r.json();
+    const body = (await r.json()) as DismissResponse;
     expect(body.consentWarningDismissedForCutoff).toBeNull();
     expect(body.consentExpirationAt).toBeNull();
   });
