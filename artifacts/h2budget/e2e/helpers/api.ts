@@ -102,3 +102,18 @@ export async function seedRecurringBill(
   );
   return { id: row.id, name: row.name, dayOfMonth };
 }
+
+/**
+ * Seed a manual bank snapshot via the same `/api/forecast/bank-snapshot`
+ * endpoint the Forecast "Set manually" dialog uses. Posting just a balance
+ * (no `plaidAccountId`) creates a manual-source snapshot anchored to today,
+ * which is enough to make the Dashboard's Chase ending-balance tile and the
+ * Transactions page's snapshot meta line render the shared
+ * `BankSnapshotFreshness` label (#333).
+ */
+export async function seedManualBankSnapshot(
+  page: Page,
+  balance = "1234.56",
+): Promise<void> {
+  await postJson(page, "/api/forecast/bank-snapshot", { balance });
+}
