@@ -66,6 +66,21 @@ Plaid-linked or Plaid never reported a cutoff for the item.
    * @nullable
    */
   plaidConsentExpirationAt?: string | null;
+  /**
+   * (#320) Mirrors the parent Plaid item's
+`consentExpirationLastRefreshError` — the latest /item/get
+failure captured during the consent-refresh path (manual
+"Refresh disconnect dates" button, on-sync PENDING_EXPIRATION
+refresh, or daily cron). Surfaced on debts so the inline
+DebtReauthBanner can warn users when the disconnect-date
+check itself has been failing ("Couldn't verify disconnect
+date: …"), not just when a sync failed. Null when the
+consent-refresh path is healthy or the debt isn't
+Plaid-linked.
+
+   * @nullable
+   */
+  plaidConsentExpirationLastRefreshError?: string | null;
   balanceSource: DebtBalanceSource;
   aprSource: DebtAprSource;
   minPaymentSource: DebtMinPaymentSource;

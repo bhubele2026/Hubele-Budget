@@ -9,6 +9,8 @@ vi.mock("@workspace/api-client-react", () => ({
   useUnlinkDebtFromPlaid: () => ({ mutate: vi.fn(), isPending: false }),
   useRefreshDebtFromPlaid: () => ({ mutate: vi.fn(), isPending: false }),
   useCreatePlaidUpdateLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreatePlaidLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  useExchangePlaidPublicToken: () => ({ mutate: vi.fn(), isPending: false }),
   getListDebtsQueryKey: () => ["/api/debts"],
   getListPlaidLiabilityAccountsQueryKey: () => ["/api/plaid/liability-accounts"],
   getGetBillsSummaryQueryKey: () => ["/api/bills/summary"],
@@ -260,6 +262,80 @@ describe("(#211) DebtReauthBanner", () => {
     ]);
     const banner = screen.getByTestId("banner-debt-reauth");
     expect(banner.textContent).toContain("Your bank needs reconnecting");
+  });
+
+  it("(#320) shows the consent-refresh failure inline so a stale disconnect date is visible from the debt banner", () => {
+    // Same goal as the page-top PlaidReauthBanner: when the
+    // disconnect-date check itself has been failing, the dated
+    // 'Chase will disconnect on …' subline could be reading off a
+    // stale cutoff. Surface that here so a user looking only at the
+    // debts page can tell.
+    renderBanner([
+      makeDebt({
+        id: "d1",
+        plaidLastSyncErrorCode: "PENDING_DISCONNECT",
+        plaidConsentExpirationAt: "2026-05-21T15:30:00.000Z",
+        plaidConsentExpirationLastRefreshError: "ITEM_LOGIN_REQUIRED",
+      } as Partial<Debt> & { id: string }),
+    ]);
+    const note = screen.getByTestId(
+      "text-debt-reauth-consent-refresh-error-item-chase",
+    );
+    expect(note.textContent).toContain("Couldn't verify disconnect date");
+    expect(note.textContent).toContain("ITEM_LOGIN_REQUIRED");
+  });
+
+  it("(#320) hides the consent-refresh line when the next refresh succeeds (error is cleared)", () => {
+    const qc = new QueryClient();
+    const { rerender } = render(
+      <QueryClientProvider client={qc}>
+        <DebtReauthBanner
+          debts={[
+            makeDebt({
+              id: "d1",
+              plaidLastSyncErrorCode: "PENDING_DISCONNECT",
+              plaidConsentExpirationAt: "2026-05-21T15:30:00.000Z",
+              plaidConsentExpirationLastRefreshError: "ITEM_LOGIN_REQUIRED",
+            } as Partial<Debt> & { id: string }),
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    expect(
+      screen.getByTestId("text-debt-reauth-consent-refresh-error-item-chase"),
+    ).toBeTruthy();
+
+    rerender(
+      <QueryClientProvider client={qc}>
+        <DebtReauthBanner
+          debts={[
+            makeDebt({
+              id: "d1",
+              plaidLastSyncErrorCode: "PENDING_DISCONNECT",
+              plaidConsentExpirationAt: "2026-05-21T15:30:00.000Z",
+              plaidConsentExpirationLastRefreshError: null,
+            } as Partial<Debt> & { id: string }),
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    expect(
+      screen.queryByTestId(
+        "text-debt-reauth-consent-refresh-error-item-chase",
+      ),
+    ).toBeNull();
+    // Banner stays mounted (debt still needs reconnect); only the
+    // consent-refresh subline went away.
+    expect(screen.getByTestId("banner-debt-reauth")).toBeTruthy();
+  });
+
+  it("(#320) does not render the consent-refresh line when the field is null", () => {
+    renderBanner([
+      makeDebt({ id: "d1", plaidLastSyncErrorCode: "ITEM_LOGIN_REQUIRED" }),
+    ]);
+    expect(
+      screen.queryByTestId("text-debt-reauth-consent-refresh-error-item-chase"),
+    ).toBeNull();
   });
 
   it("hides itself when the user clicks the dismiss button", () => {

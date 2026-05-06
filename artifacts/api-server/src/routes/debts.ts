@@ -169,6 +169,15 @@ function shapeDebt(
       d.plaidAccountId && item?.consentExpirationAt
         ? item.consentExpirationAt.toISOString()
         : null,
+    // (#320) Mirror the parent item's consent-refresh failure so the
+    // inline DebtReauthBanner can warn that the disconnect-date check
+    // itself has been failing — not just /transactions/sync. Surfaced
+    // alongside `plaidLastSyncError` (separate field so a healthy sync
+    // doesn't erase a stale consent-refresh failure and vice versa).
+    plaidConsentExpirationLastRefreshError:
+      d.plaidAccountId && item?.consentExpirationLastRefreshError
+        ? item.consentExpirationLastRefreshError
+        : null,
     plaidAccount: acct
       ? {
           id: acct.id,

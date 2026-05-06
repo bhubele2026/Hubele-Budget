@@ -526,6 +526,12 @@ export const ListDebtsResponseItem = zod.object({
     .describe(
       "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
     ),
+  plaidConsentExpirationLastRefreshError: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#320) Mirrors the parent Plaid item\'s\n`consentExpirationLastRefreshError` — the latest \/item\/get\nfailure captured during the consent-refresh path (manual\n\"Refresh disconnect dates\" button, on-sync PENDING_EXPIRATION\nrefresh, or daily cron). Surfaced on debts so the inline\nDebtReauthBanner can warn users when the disconnect-date\ncheck itself has been failing (\"Couldn\'t verify disconnect\ndate: …\"), not just when a sync failed. Null when the\nconsent-refresh path is healthy or the debt isn\'t\nPlaid-linked.\n',
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -611,6 +617,12 @@ export const LinkDebtToPlaidResponse = zod.object({
     .describe(
       "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
     ),
+  plaidConsentExpirationLastRefreshError: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#320) Mirrors the parent Plaid item\'s\n`consentExpirationLastRefreshError` — the latest \/item\/get\nfailure captured during the consent-refresh path (manual\n\"Refresh disconnect dates\" button, on-sync PENDING_EXPIRATION\nrefresh, or daily cron). Surfaced on debts so the inline\nDebtReauthBanner can warn users when the disconnect-date\ncheck itself has been failing (\"Couldn\'t verify disconnect\ndate: …\"), not just when a sync failed. Null when the\nconsent-refresh path is healthy or the debt isn\'t\nPlaid-linked.\n',
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -676,6 +688,12 @@ export const UnlinkDebtFromPlaidResponse = zod.object({
     .describe(
       "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
     ),
+  plaidConsentExpirationLastRefreshError: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#320) Mirrors the parent Plaid item\'s\n`consentExpirationLastRefreshError` — the latest \/item\/get\nfailure captured during the consent-refresh path (manual\n\"Refresh disconnect dates\" button, on-sync PENDING_EXPIRATION\nrefresh, or daily cron). Surfaced on debts so the inline\nDebtReauthBanner can warn users when the disconnect-date\ncheck itself has been failing (\"Couldn\'t verify disconnect\ndate: …\"), not just when a sync failed. Null when the\nconsent-refresh path is healthy or the debt isn\'t\nPlaid-linked.\n',
+    ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
@@ -740,6 +758,12 @@ export const RefreshDebtFromPlaidResponse = zod.object({
     .nullish()
     .describe(
       "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
+    ),
+  plaidConsentExpirationLastRefreshError: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#320) Mirrors the parent Plaid item\'s\n`consentExpirationLastRefreshError` — the latest \/item\/get\nfailure captured during the consent-refresh path (manual\n\"Refresh disconnect dates\" button, on-sync PENDING_EXPIRATION\nrefresh, or daily cron). Surfaced on debts so the inline\nDebtReauthBanner can warn users when the disconnect-date\ncheck itself has been failing (\"Couldn\'t verify disconnect\ndate: …\"), not just when a sync failed. Null when the\nconsent-refresh path is healthy or the debt isn\'t\nPlaid-linked.\n',
     ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
@@ -971,6 +995,12 @@ export const UpdateDebtResponse = zod.object({
     .nullish()
     .describe(
       "(#238) ISO timestamp mirroring the parent Plaid item's\n`consent_expiration_time` — the cutoff after which the bank\nwill be auto-disconnected unless the user re-consents. Powers\nthe dated PENDING_EXPIRATION \/ PENDING_DISCONNECT subline copy\non the DebtReauthBanner (\"Chase will disconnect on May 21 —\nreconnect now to keep it linked.\"). Null when the debt isn't\nPlaid-linked or Plaid never reported a cutoff for the item.\n",
+    ),
+  plaidConsentExpirationLastRefreshError: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#320) Mirrors the parent Plaid item\'s\n`consentExpirationLastRefreshError` — the latest \/item\/get\nfailure captured during the consent-refresh path (manual\n\"Refresh disconnect dates\" button, on-sync PENDING_EXPIRATION\nrefresh, or daily cron). Surfaced on debts so the inline\nDebtReauthBanner can warn users when the disconnect-date\ncheck itself has been failing (\"Couldn\'t verify disconnect\ndate: …\"), not just when a sync failed. Null when the\nconsent-refresh path is healthy or the debt isn\'t\nPlaid-linked.\n',
     ),
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),

@@ -10,6 +10,7 @@ import {
   isPlaidReauthCode,
   plaidReauthReason,
 } from "@/components/plaid-reconnect-button";
+import { formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
 
 /**
  * (#217) Page-top "reconnect your bank" banner driven off `/plaid/items`.
@@ -100,6 +101,13 @@ export function PlaidReauthBannerView({
     consentExpirationAt: worst.consentExpirationAt,
     institutionName: worst.institutionName,
   });
+  // (#320) Mirror the Settings → Linked Accounts inline warning: when the
+  // disconnect-date check itself has been failing, surface that here too
+  // so a user looking at the page-top banner ("Chase will disconnect on
+  // May 21") can tell that the cutoff date may be stale. Distinct from
+  // `lastSyncError` so a healthy /transactions/sync doesn't erase a
+  // stuck consent-refresh failure (and vice versa).
+  const consentRefreshError = worst.consentExpirationLastRefreshError ?? null;
 
   return (
     <div
@@ -118,6 +126,15 @@ export function PlaidReauthBannerView({
         >
           {subline}
         </div>
+        {consentRefreshError && (
+          <div
+            className="text-xs opacity-90 mt-0.5"
+            data-testid={`text-plaid-reauth-consent-refresh-error-${worst.id}`}
+          >
+            Couldn't verify disconnect date:{" "}
+            {formatPlaidErrorForDisplay(consentRefreshError)}
+          </div>
+        )}
       </div>
       <PlaidReconnectButton
         itemId={worst.id}

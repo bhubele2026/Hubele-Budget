@@ -6,6 +6,8 @@ import React from "react";
 vi.mock("@workspace/api-client-react", () => ({
   useListPlaidItems: () => ({ data: [], isLoading: false }),
   useCreatePlaidUpdateLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreatePlaidLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  useExchangePlaidPublicToken: () => ({ mutate: vi.fn(), isPending: false }),
   getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
   getListTransactionsQueryKey: () => ["/api/transactions"],
   getListDebtsQueryKey: () => ["/api/debts"],
@@ -408,6 +410,92 @@ describe("(#217) PlaidReauthBannerView", () => {
     const subline = screen.getByTestId("text-plaid-reauth-subline");
     expect(subline.textContent).toContain("disconnect this bank soon");
     expect(subline.textContent).not.toMatch(/will disconnect on/i);
+  });
+
+  it("(#320) shows the consent-refresh failure inline so a stale disconnect date is visible from the page-top banner", () => {
+    // Mirrors the Settings → Linked Accounts inline warning from #265:
+    // when /item/get has been failing on the consent-refresh path, the
+    // dated 'Chase will disconnect on May 21' subline could be reading
+    // off a stale cutoff. The banner must surface that without making
+    // the user open Settings to discover it.
+    renderBanner([
+      makeItem({
+        id: "i-stale-consent",
+        institutionName: "Chase",
+        lastSyncErrorCode: "PENDING_DISCONNECT",
+        consentExpirationAt: "2026-05-21T15:30:00.000Z",
+        consentExpirationLastRefreshError: "ITEM_LOGIN_REQUIRED",
+      }),
+    ]);
+    const note = screen.getByTestId(
+      "text-plaid-reauth-consent-refresh-error-i-stale-consent",
+    );
+    expect(note.textContent).toContain("Couldn't verify disconnect date");
+    expect(note.textContent).toContain("ITEM_LOGIN_REQUIRED");
+  });
+
+  it("(#320) hides the consent-refresh line when the next refresh succeeds (error is cleared)", () => {
+    // The same reactive prop-change behavior we already pin for the
+    // re-auth code: a healthy refresh nulls out
+    // `consentExpirationLastRefreshError`, the parent refetches, and
+    // the inline warning must disappear so the banner doesn't lie.
+    const qc = new QueryClient();
+    const { rerender } = render(
+      <QueryClientProvider client={qc}>
+        <PlaidReauthBannerView
+          items={[
+            makeItem({
+              id: "i-recovers",
+              institutionName: "Chase",
+              lastSyncErrorCode: "PENDING_DISCONNECT",
+              consentExpirationAt: "2026-05-21T15:30:00.000Z",
+              consentExpirationLastRefreshError: "ITEM_LOGIN_REQUIRED",
+            }),
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    expect(
+      screen.getByTestId("text-plaid-reauth-consent-refresh-error-i-recovers"),
+    ).toBeTruthy();
+
+    rerender(
+      <QueryClientProvider client={qc}>
+        <PlaidReauthBannerView
+          items={[
+            makeItem({
+              id: "i-recovers",
+              institutionName: "Chase",
+              lastSyncErrorCode: "PENDING_DISCONNECT",
+              consentExpirationAt: "2026-05-21T15:30:00.000Z",
+              consentExpirationLastRefreshError: null,
+            }),
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    expect(
+      screen.queryByTestId(
+        "text-plaid-reauth-consent-refresh-error-i-recovers",
+      ),
+    ).toBeNull();
+    // The rest of the banner is still mounted (the item still needs
+    // reconnecting) — only the consent-refresh subline went away.
+    expect(screen.getByTestId("banner-plaid-reauth")).toBeTruthy();
+  });
+
+  it("(#320) does not render the consent-refresh line when the field is null", () => {
+    renderBanner([
+      makeItem({
+        id: "i-clean",
+        institutionName: "Chase",
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+        consentExpirationLastRefreshError: null,
+      }),
+    ]);
+    expect(
+      screen.queryByTestId("text-plaid-reauth-consent-refresh-error-i-clean"),
+    ).toBeNull();
   });
 
   it("disappears once the items list reports everything healthy again", () => {

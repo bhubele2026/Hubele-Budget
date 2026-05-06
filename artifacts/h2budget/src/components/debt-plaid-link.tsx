@@ -31,6 +31,7 @@ import {
   isPlaidReauthCode,
   plaidReauthReason,
 } from "@/components/plaid-reconnect-button";
+import { formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
 
 function relTime(iso: string | null | undefined): string {
   if (!iso) return "never";
@@ -507,6 +508,16 @@ export type ReauthInstitution = {
    * linked."). Null when Plaid never reported a cutoff for the item.
    */
   consentExpirationAt: string | null;
+  /**
+   * (#320) Mirror of the parent Plaid item's
+   * `consentExpirationLastRefreshError` (latest /item/get failure on the
+   * consent-refresh path: manual button, on-sync PENDING_EXPIRATION
+   * refresh, or daily cron). Captured from the first affected debt under
+   * the same item-level invariant as the other fields here. Drives the
+   * "Couldn't verify disconnect date: …" subline so a user reading the
+   * banner's dated cutoff knows when that date itself may be stale.
+   */
+  consentExpirationLastRefreshError: string | null;
   debts: Debt[];
 };
 
@@ -540,6 +551,11 @@ export function findDebtsNeedingReauth(
         // shares the parent item's consent_expiration_time, so the first
         // debt's value is representative.
         consentExpirationAt: d.plaidConsentExpirationAt ?? null,
+        // (#320) Same item-level invariant — every debt under the item
+        // shares its parent's consent-refresh failure, so the first
+        // debt's value is representative.
+        consentExpirationLastRefreshError:
+          d.plaidConsentExpirationLastRefreshError ?? null,
         debts: [d],
       });
     }
@@ -605,6 +621,11 @@ export function DebtReauthBanner({ debts }: { debts: Debt[] | null | undefined }
     institutionName: worst.institutionName,
   });
   const debtImpact = `${debtCount} debt${debtCount === 1 ? "" : "s"} may be out of date — reconnect to refresh balance, APR, and minimum payment.`;
+  // (#320) Surface the consent-refresh failure inline (matches the copy
+  // already shown on Settings → Linked Accounts and on the page-top
+  // PlaidReauthBanner) so a user looking only at the debts page can tell
+  // when the disconnect cutoff date itself may be stale.
+  const consentRefreshError = worst.consentExpirationLastRefreshError;
 
   return (
     <div
@@ -626,6 +647,15 @@ export function DebtReauthBanner({ debts }: { debts: Debt[] | null | undefined }
         >
           {debtImpact}
         </div>
+        {consentRefreshError && (
+          <div
+            className="text-xs opacity-90 mt-0.5"
+            data-testid={`text-debt-reauth-consent-refresh-error-${worst.itemId}`}
+          >
+            Couldn't verify disconnect date:{" "}
+            {formatPlaidErrorForDisplay(consentRefreshError)}
+          </div>
+        )}
       </div>
       <PlaidReconnectButton
         itemId={worst.itemId}
