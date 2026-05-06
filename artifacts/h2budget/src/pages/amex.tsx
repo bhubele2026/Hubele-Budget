@@ -45,7 +45,7 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { CreditCard } from "lucide-react";
+import { CreditCard, RefreshCw } from "lucide-react";
 import { CategoryPicker } from "@/components/category-picker";
 import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -55,8 +55,14 @@ import { formatCurrency } from "@/lib/utils";
 import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
-import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
+import {
+  PlaidReauthBannerView,
+} from "@/components/plaid-reauth-banner";
 import { SyncButton } from "@/components/sync-button";
+import { useListPlaidItems } from "@workspace/api-client-react";
+import { usePlaidSync } from "@/hooks/use-plaid-sync";
+import { cn } from "@/lib/utils";
+import { relevantAmexPlaidItemIds } from "@/pages/amexPlaidScope";
 import { computeBalanceAtEndOf } from "@/lib/accountBalance";
 import {
   compareNewestFirst,
@@ -373,6 +379,54 @@ export default function AmexPage() {
     }
     return s;
   }, [all]);
+
+  // (#373) Mirror the Chase page's per-page item scoping. Map the Amex
+  // card(s) currently shown back to their owning Plaid item id(s) so the
+  // re-auth banner, the header SyncButton's inline error chip / Reconnect
+  // popover, and the per-item "Refresh from Plaid" button only react to
+  // the Plaid item(s) that own this page's data — Chase issues never
+  // bleed onto the Amex page (and vice versa).
+  const { data: plaidItemsForScope } = useListPlaidItems();
+  // Defense-in-depth scope signal: any debt that looks like Amex (by
+  // name) and carries a `plaidAccountId` (internal row id) — covers
+  // the freshly-linked-but-no-transactions case where the txn-derived
+  // signal is empty.
+  const amexDebtAccountRowIds = useMemo<Set<string>>(() => {
+    const s = new Set<string>();
+    for (const d of debts ?? []) {
+      if (
+        d.plaidAccountId &&
+        /amex|american\s*express/i.test(d.name)
+      ) {
+        s.add(d.plaidAccountId);
+      }
+    }
+    return s;
+  }, [debts]);
+  const relevantPlaidItemIds = useMemo<string[]>(
+    () =>
+      relevantAmexPlaidItemIds(
+        plaidItemsForScope,
+        amexPlaidAccountIds,
+        amexDebtAccountRowIds,
+      ),
+    [amexPlaidAccountIds, amexDebtAccountRowIds, plaidItemsForScope],
+  );
+  const scopedPlaidItems = useMemo(() => {
+    const items = plaidItemsForScope ?? [];
+    if (relevantPlaidItemIds.length === 0) return [];
+    const allow = new Set(relevantPlaidItemIds);
+    return items.filter((it) => allow.has(it.id));
+  }, [plaidItemsForScope, relevantPlaidItemIds]);
+  const { runSync, isPending: isAmexSyncing } = usePlaidSync();
+  const handleRefreshAmex = () => {
+    if (relevantPlaidItemIds.length === 0) return;
+    // Sync every Amex-owning Plaid item in scope so multi-card / multi-
+    // item households don't get a partial refresh from a single click.
+    for (const itemId of relevantPlaidItemIds) {
+      void runSync({ itemId });
+    }
+  };
 
   // Find the linked Amex debt (if any) for the anchor balance. Prefer
   // matching by the Plaid account that actually feeds this page's
@@ -1170,7 +1224,15 @@ export default function AmexPage() {
       className="space-y-6"
       style={{ ["--pinned-pane-h" as string]: `${paneH}px` } as React.CSSProperties}
     >
-      <PlaidReauthBanner />
+      {/* (#373) Suppress the global Plaid re-auth banner on the Amex
+          page and instead render it filtered to just the Amex card's
+          Plaid item(s) — Chase issues must not appear on this page.
+          When no Amex Plaid item is in scope (manual-only), nothing
+          renders, mirroring the Chase page's `!isManualAccount`
+          suppression. */}
+      {scopedPlaidItems.length > 0 && (
+        <PlaidReauthBannerView items={scopedPlaidItems} />
+      )}
       <div
         ref={paneRef}
         className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-4"
@@ -1181,7 +1243,24 @@ export default function AmexPage() {
           icon={<CreditCard className="h-7 w-7 text-blue-600" />}
           actions={
             <>
-              <SyncButton />
+              {relevantPlaidItemIds.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefreshAmex}
+                  disabled={isAmexSyncing}
+                  data-testid="button-refresh-amex"
+                >
+                  <RefreshCw
+                    className={cn(
+                      "w-4 h-4 mr-1.5",
+                      isAmexSyncing && "animate-spin",
+                    )}
+                  />
+                  Refresh from Plaid
+                </Button>
+              )}
+              <SyncButton relevantItemIds={relevantPlaidItemIds} />
               <PlaidLinkButton label="Connect a card" />
             </>
           }
