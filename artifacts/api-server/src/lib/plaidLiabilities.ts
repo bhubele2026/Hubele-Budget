@@ -101,6 +101,8 @@ export async function fetchLiabilitiesForItem(
       success: false,
       errorCode: "ITEM_LOGIN_REQUIRED",
       errorMessage: MALFORMED_PLAID_TOKEN_MESSAGE,
+      plaidDisplayMessage: MALFORMED_PLAID_TOKEN_MESSAGE,
+      errorKind: "reauth",
     });
     logger.warn(
       { userId, itemRowId },
@@ -154,7 +156,8 @@ export async function fetchLiabilitiesForItem(
   const fetchErr = acctErr ?? liabErr;
   if (!acctResp && !resp) {
     if (fetchErr) {
-      const { code, message } = extractPlaidError(fetchErr);
+      const extracted = extractPlaidError(fetchErr);
+      const { code, message } = extracted;
       await db
         .update(plaidItemsTable)
         .set({
@@ -169,6 +172,9 @@ export async function fetchLiabilitiesForItem(
         );
       // (#279) Audit the failed liability fetch so the Recent activity
       // panel surfaces it alongside transaction sync failures.
+      // (#359) Carry through Plaid's display_message / request_id /
+      // http_status / kind so Settings → Recent activity can show the
+      // plain-English reason and quote the request id.
       await recordPlaidSyncAttempt({
         userId,
         plaidItemId: itemRowId,
@@ -176,6 +182,10 @@ export async function fetchLiabilitiesForItem(
         success: false,
         errorCode: code,
         errorMessage: message,
+        plaidDisplayMessage: extracted.displayMessage,
+        requestId: extracted.requestId,
+        httpStatus: extracted.httpStatus,
+        errorKind: extracted.kind,
       });
     }
     throw new PlaidLiabilitiesError(
@@ -183,7 +193,8 @@ export async function fetchLiabilitiesForItem(
     );
   }
   if (fetchErr) {
-    const { code, message } = extractPlaidError(fetchErr);
+    const extracted = extractPlaidError(fetchErr);
+    const { code, message } = extracted;
     await db
       .update(plaidItemsTable)
       .set({
@@ -196,6 +207,9 @@ export async function fetchLiabilitiesForItem(
           eq(plaidItemsTable.userId, userId),
         ),
       );
+    // (#359) Persist Plaid's display_message / request_id / http_status /
+    // kind so Settings → Recent activity can show the plain-English
+    // reason and quote the request id when filing support tickets.
     await recordPlaidSyncAttempt({
       userId,
       plaidItemId: itemRowId,
@@ -203,6 +217,10 @@ export async function fetchLiabilitiesForItem(
       success: false,
       errorCode: code,
       errorMessage: message,
+      plaidDisplayMessage: extracted.displayMessage,
+      requestId: extracted.requestId,
+      httpStatus: extracted.httpStatus,
+      errorKind: extracted.kind,
     });
   } else if (acctResp) {
     await db

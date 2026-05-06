@@ -220,7 +220,10 @@ export function PlaidSyncHistory({
                             {a.plaidDisplayMessage || a.errorMessage}
                           </span>
                           {(a.requestId || a.httpStatus !== null) && (
-                            <span className="text-[10px] text-muted-foreground/70 font-mono">
+                            <span
+                              className="text-[10px] text-muted-foreground/70 font-mono"
+                              data-testid={`sync-attempt-meta-${a.id}`}
+                            >
                               {a.httpStatus !== null && a.httpStatus !== undefined
                                 ? `HTTP ${a.httpStatus}`
                                 : ""}
@@ -229,7 +232,7 @@ export function PlaidSyncHistory({
                               a.requestId
                                 ? " · "
                                 : ""}
-                              {a.requestId ? `req ${a.requestId}` : ""}
+                              {a.requestId ? `Request id: ${a.requestId}` : ""}
                             </span>
                           )}
                           {a.errorKind === "reauth" && (
