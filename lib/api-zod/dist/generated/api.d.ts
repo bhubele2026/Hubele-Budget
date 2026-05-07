@@ -46,6 +46,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         reimbursed: zod.ZodBoolean;
         reviewed: zod.ZodBoolean;
         isTransfer: zod.ZodBoolean;
+        isTransferUserOverridden: zod.ZodBoolean;
         notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         source: zod.ZodString;
         member: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -67,6 +68,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         reimbursed: boolean;
         reviewed: boolean;
         isTransfer: boolean;
+        isTransferUserOverridden: boolean;
         source: string;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -92,6 +94,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         reimbursed: boolean;
         reviewed: boolean;
         isTransfer: boolean;
+        isTransferUserOverridden: boolean;
         source: string;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -172,6 +175,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         reimbursed: boolean;
         reviewed: boolean;
         isTransfer: boolean;
+        isTransferUserOverridden: boolean;
         source: string;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -224,6 +228,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         reimbursed: boolean;
         reviewed: boolean;
         isTransfer: boolean;
+        isTransferUserOverridden: boolean;
         source: string;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -308,6 +313,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     reimbursed: zod.ZodBoolean;
     reviewed: zod.ZodBoolean;
     isTransfer: zod.ZodBoolean;
+    isTransferUserOverridden: zod.ZodBoolean;
     notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     source: zod.ZodString;
     member: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -329,6 +335,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     reimbursed: boolean;
     reviewed: boolean;
     isTransfer: boolean;
+    isTransferUserOverridden: boolean;
     source: string;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -354,6 +361,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     reimbursed: boolean;
     reviewed: boolean;
     isTransfer: boolean;
+    isTransferUserOverridden: boolean;
     source: string;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -384,6 +392,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     reimbursed: zod.ZodBoolean;
     reviewed: zod.ZodBoolean;
     isTransfer: zod.ZodBoolean;
+    isTransferUserOverridden: zod.ZodBoolean;
     notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     source: zod.ZodString;
     member: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -405,6 +414,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     reimbursed: boolean;
     reviewed: boolean;
     isTransfer: boolean;
+    isTransferUserOverridden: boolean;
     source: string;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -430,6 +440,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     reimbursed: boolean;
     reviewed: boolean;
     isTransfer: boolean;
+    isTransferUserOverridden: boolean;
     source: string;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -598,6 +609,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     reimbursed: zod.ZodBoolean;
     reviewed: zod.ZodBoolean;
     isTransfer: zod.ZodBoolean;
+    isTransferUserOverridden: zod.ZodBoolean;
     notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     source: zod.ZodString;
     member: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -619,6 +631,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     reimbursed: boolean;
     reviewed: boolean;
     isTransfer: boolean;
+    isTransferUserOverridden: boolean;
     source: string;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -644,6 +657,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     reimbursed: boolean;
     reviewed: boolean;
     isTransfer: boolean;
+    isTransferUserOverridden: boolean;
     source: string;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
@@ -3820,6 +3834,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         reimbursed: zod.ZodBoolean;
         reviewed: zod.ZodBoolean;
         isTransfer: zod.ZodBoolean;
+        isTransferUserOverridden: zod.ZodBoolean;
         notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         source: zod.ZodString;
         member: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -3841,6 +3856,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         reimbursed: boolean;
         reviewed: boolean;
         isTransfer: boolean;
+        isTransferUserOverridden: boolean;
         source: string;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -3866,6 +3882,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         reimbursed: boolean;
         reviewed: boolean;
         isTransfer: boolean;
+        isTransferUserOverridden: boolean;
         source: string;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -4142,6 +4159,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         reimbursed: boolean;
         reviewed: boolean;
         isTransfer: boolean;
+        isTransferUserOverridden: boolean;
         source: string;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
@@ -4258,6 +4276,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         reimbursed: boolean;
         reviewed: boolean;
         isTransfer: boolean;
+        isTransferUserOverridden: boolean;
         source: string;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;

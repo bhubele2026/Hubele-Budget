@@ -765,7 +765,11 @@ export async function syncPlaidItem(
             description: values.description,
             amount: values.amount,
             notes: values.notes,
-            isTransfer: values.isTransfer,
+            // (#479) Honor the user's manual override of `isTransfer`. When
+            // `is_transfer_user_overridden` is true on the existing row,
+            // preserve its current value instead of letting the auto-
+            // categorize transfer heuristic re-flip it on every sync.
+            isTransfer: sql`CASE WHEN ${transactionsTable.isTransferUserOverridden} THEN ${transactionsTable.isTransfer} ELSE ${values.isTransfer} END`,
             ...(debtId ? { debtId } : {}),
             ...(isChecking && !cat.isTransfer ? { forecastFlag: true } : {}),
           },
@@ -1863,7 +1867,10 @@ export async function runGapBackfillForItem(
               description: values.description,
               amount: values.amount,
               notes: values.notes,
-              isTransfer: values.isTransfer,
+              // (#479) See twin onConflictDoUpdate above — the gap-backfill
+              // path must honor the user's manual `isTransfer` override the
+              // same way as the cursor sync path.
+              isTransfer: sql`CASE WHEN ${transactionsTable.isTransferUserOverridden} THEN ${transactionsTable.isTransfer} ELSE ${values.isTransfer} END`,
               ...(debtId ? { debtId } : {}),
             },
           });

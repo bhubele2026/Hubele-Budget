@@ -46,7 +46,7 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { Check, CreditCard, RefreshCw } from "lucide-react";
+import { Check, CreditCard, RefreshCw, X } from "lucide-react";
 import { CategoryPicker } from "@/components/category-picker";
 import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -1942,11 +1942,37 @@ export default function AmexPage() {
                       {t.isTransfer && (
                         <Badge
                           variant="outline"
-                          className="text-[10px] border-slate-300 text-slate-700 bg-slate-50"
+                          className="inline-flex items-center gap-1 text-[10px] border-slate-300 text-slate-700 bg-slate-50"
                           title="Excluded from budget actuals"
                           data-testid={`badge-transfer-mobile-${t.id}`}
                         >
                           Transfer
+                          <button
+                            type="button"
+                            aria-label="Clear Transfer flag"
+                            data-testid={`button-clear-transfer-mobile-${t.id}`}
+                            className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-slate-200/60"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateTx.mutate(
+                                { id: t.id, data: { isTransfer: false } },
+                                {
+                                  onSuccess: () => {
+                                    qc.invalidateQueries({
+                                      queryKey: getListTransactionsQueryKey(),
+                                    });
+                                    qc.invalidateQueries({
+                                      queryKey: getGetBudgetMonthQueryKey(
+                                        `${t.occurredOn.slice(0, 7)}-01`,
+                                      ),
+                                    });
+                                  },
+                                },
+                              );
+                            }}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
                         </Badge>
                       )}
                       <MatchedRuleChip
@@ -2011,11 +2037,37 @@ export default function AmexPage() {
                           {t.isTransfer && (
                             <Badge
                               variant="outline"
-                              className="mt-1 text-[10px] border-slate-300 text-slate-700 bg-slate-50"
+                              className="mt-1 inline-flex items-center gap-1 text-[10px] border-slate-300 text-slate-700 bg-slate-50"
                               title="Excluded from budget actuals"
                               data-testid={`badge-transfer-${t.id}`}
                             >
                               Transfer
+                              <button
+                                type="button"
+                                aria-label="Clear Transfer flag"
+                                data-testid={`button-clear-transfer-${t.id}`}
+                                className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-slate-200/60"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateTx.mutate(
+                                    { id: t.id, data: { isTransfer: false } },
+                                    {
+                                      onSuccess: () => {
+                                        qc.invalidateQueries({
+                                          queryKey: getListTransactionsQueryKey(),
+                                        });
+                                        qc.invalidateQueries({
+                                          queryKey: getGetBudgetMonthQueryKey(
+                                            `${t.occurredOn.slice(0, 7)}-01`,
+                                          ),
+                                        });
+                                      },
+                                    },
+                                  );
+                                }}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
                             </Badge>
                           )}
                           <div className="mt-1">

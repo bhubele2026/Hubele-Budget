@@ -6,6 +6,7 @@ import {
   type Transaction,
   useCreateTransaction,
   useListTransactions,
+  useUpdateTransaction,
 } from "@workspace/api-client-react";
 import * as Haptics from "expo-haptics";
 import { Stack, useRouter, type Href } from "expo-router";
@@ -126,6 +127,14 @@ export default function TransactionsScreen() {
 
   const invalidateLists = () =>
     queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+
+  const updateTx = useUpdateTransaction();
+  const clearTransfer = (id: string) => {
+    updateTx.mutate(
+      { id, data: { isTransfer: false } },
+      { onSuccess: () => invalidateLists() },
+    );
+  };
 
   return (
     <SafeAreaView
@@ -283,12 +292,46 @@ export default function TransactionsScreen() {
                   >
                     {t.description}
                   </Text>
-                  <Text
-                    style={[styles.txnMeta, { color: colors.mutedForeground }]}
-                  >
-                    {formatDayShort(t.occurredOn)} · {t.source}
-                    {t.isTransfer ? " · transfer" : ""}
-                  </Text>
+                  <View style={styles.txnMetaRow}>
+                    <Text
+                      style={[
+                        styles.txnMeta,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      {formatDayShort(t.occurredOn)} · {t.source}
+                    </Text>
+                    {t.isTransfer ? (
+                      <Pressable
+                        accessibilityLabel="Clear transfer flag"
+                        hitSlop={8}
+                        onPress={() => clearTransfer(t.id)}
+                        style={({ pressed }) => [
+                          styles.transferPill,
+                          {
+                            borderColor: colors.border,
+                            backgroundColor: pressed
+                              ? colors.accent
+                              : "transparent",
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.transferPillText,
+                            { color: colors.mutedForeground },
+                          ]}
+                        >
+                          transfer
+                        </Text>
+                        <Feather
+                          name="x"
+                          size={11}
+                          color={colors.mutedForeground}
+                        />
+                      </Pressable>
+                    ) : null}
+                  </View>
                 </View>
                 <Text
                   style={[
@@ -740,6 +783,26 @@ const styles = StyleSheet.create({
   txnMeta: {
     fontFamily: "Inter_400Regular",
     fontSize: 12,
+  },
+  txnMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+    flexWrap: "wrap",
+  },
+  transferPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  transferPillText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
   },
   txnAmount: {
     fontFamily: "Inter_600SemiBold",

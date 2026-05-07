@@ -1482,7 +1482,7 @@ components:
 
     Transaction:
       type: object
-      required: [id, occurredOn, description, amount, forecastFlag, weeklyAllowance, monthlyAllowance, unplannedAllowance, reimbursable, reimbursed, reviewed, isTransfer, source]
+      required: [id, occurredOn, description, amount, forecastFlag, weeklyAllowance, monthlyAllowance, unplannedAllowance, reimbursable, reimbursed, reviewed, isTransfer, isTransferUserOverridden, source]
       properties:
         id: { type: string }
         occurredOn: { type: string }
@@ -1507,6 +1507,18 @@ components:
             false; toggled explicitly by the user (never auto-set on
             categorize).
         isTransfer: { type: boolean }
+        isTransferUserOverridden:
+          type: boolean
+          description: |
+            True when the user has explicitly toggled `isTransfer` on this
+            row (cleared the auto-flag from the row's "Transfer" pill, picked
+            a real category on a transfer row, or flipped the toggle in the
+            Edit dialog). The Plaid sync / XLSX import / aprilChaseSeed
+            re-categorize paths honor this and skip the description/PFC
+            transfer heuristic so future syncs of the same row don't
+            silently re-flag it as a transfer. Server-managed: writes to
+            this field are not accepted via the input schema — toggling
+            `isTransfer` in PATCH /transactions/:id sets it automatically.
         notes: { type: ["string", "null"] }
         source: { type: string }
         member: { type: ["string", "null"] }

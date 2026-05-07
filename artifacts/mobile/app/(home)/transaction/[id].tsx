@@ -3,11 +3,14 @@ import {
   getListTransactionsQueryKey,
   type Transaction,
   useListTransactions,
+  useUpdateTransaction,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -43,18 +46,22 @@ function Row(props: {
   );
 }
 
-function Flag(props: { active: boolean; label: string }) {
+function Flag(props: {
+  active: boolean;
+  label: string;
+  onPress?: () => void;
+  testID?: string;
+}) {
   const colors = useColors();
-  return (
-    <View
-      style={[
-        styles.flag,
-        {
-          backgroundColor: props.active ? colors.accent : colors.muted,
-          borderColor: colors.border,
-        },
-      ]}
-    >
+  const style = [
+    styles.flag,
+    {
+      backgroundColor: props.active ? colors.accent : colors.muted,
+      borderColor: colors.border,
+    },
+  ];
+  const inner = (
+    <>
       <Feather
         name={props.active ? "check" : "x"}
         size={12}
@@ -72,6 +79,23 @@ function Flag(props: { active: boolean; label: string }) {
       >
         {props.label}
       </Text>
+    </>
+  );
+  if (props.onPress) {
+    return (
+      <Pressable
+        style={style}
+        onPress={props.onPress}
+        testID={props.testID}
+        accessibilityRole="button"
+      >
+        {inner}
+      </Pressable>
+    );
+  }
+  return (
+    <View style={style} testID={props.testID}>
+      {inner}
     </View>
   );
 }
@@ -79,6 +103,8 @@ function Flag(props: { active: boolean; label: string }) {
 export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
+  const qc = useQueryClient();
+  const updateTx = useUpdateTransaction();
 
   // Use cached transactions list to look up by id; falls back to refetch
   // when the cache is empty (deep-link).
@@ -180,7 +206,23 @@ export default function TransactionDetailScreen() {
         <Flag active={t.unplannedAllowance} label="Unplanned" />
         <Flag active={t.reimbursable} label="Reimbursable" />
         <Flag active={t.reimbursed} label="Reimbursed" />
-        <Flag active={t.isTransfer} label="Transfer" />
+        <Flag
+          active={t.isTransfer}
+          label="Transfer"
+          testID="flag-transfer"
+          onPress={() => {
+            updateTx.mutate(
+              { id: t.id, data: { isTransfer: !t.isTransfer } },
+              {
+                onSuccess: () => {
+                  qc.invalidateQueries({
+                    queryKey: getListTransactionsQueryKey({ limit: 200 }),
+                  });
+                },
+              },
+            );
+          }}
+        />
       </View>
 
       <View style={styles.rows}>

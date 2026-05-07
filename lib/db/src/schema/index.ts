@@ -200,6 +200,15 @@ export const transactionsTable = pgTable(
     reimbursed: boolean("reimbursed").notNull().default(false),
     reviewed: boolean("reviewed").notNull().default(false),
     isTransfer: boolean("is_transfer").notNull().default(false),
+    // (#479) When true, the user has explicitly toggled `isTransfer`
+    // (cleared the auto-flag from the row's "Transfer" pill, picked a real
+    // category on a transfer row, or flipped the toggle in the Edit dialog).
+    // The Plaid sync / XLSX import / aprilChaseSeed re-categorize paths
+    // honor this flag and skip the description/PFC transfer heuristic so
+    // future syncs of the same row don't silently re-flag it as a transfer.
+    isTransferUserOverridden: boolean("is_transfer_user_overridden")
+      .notNull()
+      .default(false),
     importBatchId: uuid("import_batch_id"),
     notes: text("notes"),
     source: text("source").notNull().default("manual"),

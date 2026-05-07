@@ -69,6 +69,7 @@ import {
   Landmark,
   RefreshCw,
   CalendarDays,
+  X,
 } from "lucide-react";
 import {
   Popover,
@@ -131,6 +132,11 @@ const formSchema = z.object({
   unplannedAllowance: z.boolean().default(false),
   reimbursable: z.boolean().default(false),
   reimbursed: z.boolean().default(false),
+  // (#479) Edit-dialog toggle that mirrors the row-level "Transfer" pill.
+  // Sent on PATCH only when the value differs from the row's existing
+  // `isTransfer`, so opening the dialog on a non-transfer row and saving
+  // unrelated fields doesn't silently set `isTransferUserOverridden`.
+  isTransfer: z.boolean().default(false),
 });
 
 /**
@@ -632,6 +638,7 @@ export default function TransactionsPage() {
       unplannedAllowance: false,
       reimbursable: false,
       reimbursed: false,
+      isTransfer: false,
     },
   });
 
@@ -656,6 +663,7 @@ export default function TransactionsPage() {
       unplannedAllowance: false,
       reimbursable: false,
       reimbursed: false,
+      isTransfer: false,
     });
     setIsDialogOpen(true);
   };
@@ -681,6 +689,7 @@ export default function TransactionsPage() {
       unplannedAllowance: tx.unplannedAllowance,
       reimbursable: tx.reimbursable,
       reimbursed: tx.reimbursed,
+      isTransfer: tx.isTransfer,
     });
     setIsDialogOpen(true);
   };
@@ -718,9 +727,14 @@ export default function TransactionsPage() {
   }, [isDialogOpen, editingTx, dialogAutoMatchedRule, form]);
 
   const onSubmit = (values: FormValues) => {
-    const { kind, categoryId, ...rest } = values;
+    const { kind, categoryId, isTransfer, ...rest } = values;
     const basePayload = { ...rest, amount: normalizeAmount(values.amount, kind) };
     if (editingTx) {
+      // (#479) Only forward `isTransfer` when the toggle's value differs
+      // from the row's current flag — saving unrelated edits on a row the
+      // user never intended to reclassify must not silently set
+      // `isTransferUserOverridden` server-side.
+      const transferChanged = isTransfer !== editingTx.isTransfer;
       // Task #234 — Edit dialog now exposes the same Category combobox
       // the Add dialog uses. Only forward `categoryId` when the user
       // actually picked something different so a no-op save doesn't
@@ -732,9 +746,9 @@ export default function TransactionsPage() {
       // suggests.
       const categoryChanged =
         (categoryId ?? null) !== (editingTx.categoryId ?? null);
-      const editPayload = categoryChanged
-        ? { ...basePayload, categoryId: categoryId ?? null }
-        : basePayload;
+      const editPayload: Record<string, unknown> = { ...basePayload };
+      if (categoryChanged) editPayload.categoryId = categoryId ?? null;
+      if (transferChanged) editPayload.isTransfer = isTransfer;
       updateTx.mutate(
         { id: editingTx.id, data: editPayload },
         {
@@ -792,7 +806,14 @@ export default function TransactionsPage() {
       // what auto-categorize would have chosen) bypasses that fallback
       // and keeps `autoCategorizedRuleId` null in the response, which
       // suppresses the redundant "Categorized by rule X" toast.
-      const payload = { ...basePayload, categoryId: categoryId ?? null };
+      const payload: Record<string, unknown> = {
+        ...basePayload,
+        categoryId: categoryId ?? null,
+      };
+      // (#479) Only forward isTransfer on create when the user explicitly
+      // toggled it on — otherwise let the server's auto-categorize pipeline
+      // (POST handler) compute the flag from the description heuristic.
+      if (isTransfer) payload.isTransfer = true;
       createTx.mutate(
         { data: payload },
         {
@@ -1661,6 +1682,18 @@ export default function TransactionsPage() {
                 <FormField control={form.control} name="unplannedAllowance" render={({ field }) => (
                   <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Unplanned Allow</FormLabel></FormItem>
                 )} />
+                <FormField control={form.control} name="isTransfer" render={({ field }) => (
+                  <FormItem className="flex items-center gap-2 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-is-transfer"
+                      />
+                    </FormControl>
+                    <FormLabel>Transfer</FormLabel>
+                  </FormItem>
+                )} />
               </div>
               <div className="flex justify-end pt-4">
                 <Button type="submit" disabled={createTx.isPending || updateTx.isPending}>Save</Button>
@@ -1788,7 +1821,7 @@ export default function TransactionsPage() {
                           rules={mappingRules}
                           testIdSuffix={tx.id}
                         />
-                        {!tx.categoryId && !tx.isTransfer && (
+                        {!tx.categoryId && (
                           <CategorizeChip
                             tx={tx}
                             categories={categories ?? []}
@@ -1798,10 +1831,37 @@ export default function TransactionsPage() {
                         {tx.isTransfer && (
                           <Badge
                             variant="outline"
-                            className="text-xs border-slate-300 text-slate-700 bg-slate-50"
+                            className="inline-flex items-center gap-1 text-xs border-slate-300 text-slate-700 bg-slate-50"
                             data-testid={`badge-transfer-${tx.id}`}
                           >
                             Transfer
+                            <button
+                              type="button"
+                              aria-label="Clear Transfer flag"
+                              data-testid={`button-clear-transfer-${tx.id}`}
+                              className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-slate-200/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateTx.mutate(
+                                  { id: tx.id, data: { isTransfer: false } },
+                                  {
+                                    onSuccess: () => {
+                                      queryClient.invalidateQueries({
+                                        queryKey: getListTransactionsQueryKey(),
+                                      });
+                                      queryClient.invalidateQueries({
+                                        queryKey: getGetBudgetMonthQueryKey(
+                                          `${tx.occurredOn.slice(0, 7)}-01`,
+                                        ),
+                                      });
+                                      toast({ title: "Cleared Transfer flag" });
+                                    },
+                                  },
+                                );
+                              }}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
                           </Badge>
                         )}
                         {tx.forecastFlag && (() => {

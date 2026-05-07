@@ -235,9 +235,41 @@ router.patch(
       res.status(400).json({ error: "Invalid debtId" });
       return;
     }
+    // (#479) Detect explicit user intent to set the Transfer flag or pick a
+    // category, then derive `isTransferUserOverridden` so future Plaid syncs
+    // / XLSX imports / aprilChaseSeed re-categorize passes won't re-flip the
+    // row's `isTransfer` from the description+PFC heuristic. Two triggers:
+    //   - body explicitly sets `isTransfer` (true OR false) — the user
+    //     toggled the Transfer flag in the Edit dialog or cleared the
+    //     "Transfer" pill on a list row.
+    //   - body sets a non-null `categoryId` without `isTransfer` — picking
+    //     a real category implicitly classifies the row, which we treat
+    //     as the user disagreeing with any auto-Transfer heuristic. As a
+    //     side-effect we also flip `isTransfer` to false so the row stops
+    //     being filtered out of budget actuals (the rule-learning gate
+    //     below uses the post-update `row.isTransfer`, so this also lets
+    //     the auto-learn flow create a mapping rule for what was a
+    //     transfer-flagged charge).
+    const bodyHasIsTransfer = Object.prototype.hasOwnProperty.call(
+      req.body ?? {},
+      "isTransfer",
+    );
+    const bodyHasCategoryId = Object.prototype.hasOwnProperty.call(
+      req.body ?? {},
+      "categoryId",
+    );
+    const pickingCategory =
+      bodyHasCategoryId && patch.categoryId !== null && patch.categoryId !== undefined;
+    const patchToApply: Record<string, unknown> = { ...patch };
+    if (bodyHasIsTransfer || pickingCategory) {
+      patchToApply.isTransferUserOverridden = true;
+    }
+    if (pickingCategory && !bodyHasIsTransfer) {
+      patchToApply.isTransfer = false;
+    }
     const [row] = await db
       .update(transactionsTable)
-      .set(patch)
+      .set(patchToApply)
       .where(
         and(
           eq(transactionsTable.id, params.data.id),

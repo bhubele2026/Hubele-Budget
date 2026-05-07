@@ -1622,6 +1622,23 @@ export declare const transactionsTable: import("drizzle-orm/pg-core").PgTableWit
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        isTransferUserOverridden: import("drizzle-orm/pg-core").PgColumn<{
+            name: "is_transfer_user_overridden";
+            tableName: "transactions";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         importBatchId: import("drizzle-orm/pg-core").PgColumn<{
             name: "import_batch_id";
             tableName: "transactions";
@@ -3869,6 +3886,7 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
     reimbursed: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     reviewed: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     isTransfer: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
+    isTransferUserOverridden: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     importBatchId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     source: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     member: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
