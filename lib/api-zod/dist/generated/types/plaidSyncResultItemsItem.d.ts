@@ -36,5 +36,7 @@ export type PlaidSyncResultItemsItem = {
     httpStatus?: number | null;
     /** @nullable */
     kind?: PlaidSyncResultItemsItemKind;
+    /** @nullable */
+    lastOccurredOn?: string | null;
 };
 //# sourceMappingURL=plaidSyncResultItemsItem.d.ts.map

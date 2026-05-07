@@ -127,6 +127,15 @@ export type SyncResult = {
   // rows came back, and so the panel can show a "still importing
   // recent activity" hint when the max date isn't current-month.
   importedDateRange?: { min: string; max: string } | null;
+  // (#402) Most recent occurredOn (YYYY-MM-DD) across rows touched by this
+  // sync — i.e. the max over `added ∪ modified`. Lets the post-link
+  // progress panel deep-link "View imported transactions" straight to the
+  // month that actually contains the freshly-imported rows for the
+  // just-linked item, instead of having the client fall back to a global
+  // "most recent transaction" lookup that can point at an unrelated
+  // newer charge from a different bank. Null when this run touched no
+  // rows (or on the failure / still-preparing branches).
+  lastOccurredOn?: string | null;
 };
 
 type PlaidErrorBody = {
@@ -937,6 +946,22 @@ export async function syncPlaidItem(
       attributionCounts.values(),
     ).sort((a, b) => b.count - a.count);
 
+    // (#402) Compute the most recent occurredOn across rows this run
+    // actually touched so the post-link panel can deep-link to that
+    // month directly. Plaid txns carry a YYYY-MM-DD `date`, which is
+    // what we persist into transactions.occurredOn, so a lexicographic
+    // max is correct.
+    let lastOccurredOn: string | null = null;
+    for (const t of added) {
+      if (t.date && (!lastOccurredOn || t.date > lastOccurredOn)) {
+        lastOccurredOn = t.date;
+      }
+    }
+    for (const t of modified) {
+      if (t.date && (!lastOccurredOn || t.date > lastOccurredOn)) {
+        lastOccurredOn = t.date;
+      }
+    }
     return {
       itemId: item.itemId,
       plaidItemRowId: itemRowId,
@@ -953,6 +978,7 @@ export async function syncPlaidItem(
           ? { min: insertedMinDate, max: insertedMaxDate }
           : null,
       error: balanceRefreshError,
+      lastOccurredOn,
       // (#357) Mirror the structured fields onto the response so a
       // failed balance refresh on an otherwise-healthy /transactions/sync
       // still gives the client a real Plaid code + display message + kind

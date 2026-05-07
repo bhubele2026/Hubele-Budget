@@ -65,6 +65,14 @@ export type SyncTotals = {
   // tell the user when only historical rows came back. Null when no
   // item inserted anything.
   importedDateRange: { min: string; max: string } | null;
+  // (#402) Most recent occurredOn (YYYY-MM-DD) across rows touched by this
+  // sync, taken as the max of each item's `lastOccurredOn`. The post-link
+  // progress panel uses this — when the caller scoped the sync to a
+  // freshly-linked item — to deep-link "View imported transactions" to
+  // the exact month containing the new rows for that item, instead of
+  // falling back to a global most-recent-transaction lookup that can
+  // point at an unrelated charge from another bank.
+  lastOccurredOn: string | null;
 };
 
 const ZERO: SyncTotals = {
@@ -76,6 +84,7 @@ const ZERO: SyncTotals = {
   stillPreparing: false,
   ruleAttribution: { totalAttributed: 0, top: [], extraRules: 0, ruleIds: [] },
   importedDateRange: null,
+  lastOccurredOn: null,
 };
 
 const STILL_PREPARING_MESSAGE =
@@ -166,6 +175,12 @@ export function usePlaidSync() {
                     if (aggMin === null || min < aggMin) aggMin = min;
                     if (aggMax === null || max > aggMax) aggMax = max;
                   }
+                  if (
+                    r.lastOccurredOn &&
+                    (!acc.lastOccurredOn || r.lastOccurredOn > acc.lastOccurredOn)
+                  ) {
+                    acc.lastOccurredOn = r.lastOccurredOn;
+                  }
                   for (const a of r.ruleAttributions ?? []) {
                     const existing = aggregatedAttr.get(a.ruleId);
                     if (existing) {
@@ -189,6 +204,7 @@ export function usePlaidSync() {
                   stillPreparing: false,
                   ruleAttribution: ZERO.ruleAttribution,
                   importedDateRange: null,
+                  lastOccurredOn: null,
                 },
               );
               totals.importedDateRange =

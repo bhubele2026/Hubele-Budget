@@ -1261,7 +1261,10 @@ export default function AmexPage() {
                 </Button>
               )}
               <SyncButton relevantItemIds={relevantPlaidItemIds} />
-              <PlaidLinkButton label="Connect a card" />
+              <PlaidLinkButton
+                label="Connect a card"
+                viewTransactionsPath="/amex"
+              />
             </>
           }
         />

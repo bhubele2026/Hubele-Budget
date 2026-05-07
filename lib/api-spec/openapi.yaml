@@ -3219,6 +3219,16 @@ components:
                   - transient
                   - unknown
                   - null
+              # (#402) Most recent occurredOn (YYYY-MM-DD) across rows
+              # this run actually touched (added ∪ modified). The
+              # post-link progress panel uses this to deep-link "View
+              # imported transactions" straight to the month with the
+              # freshly-imported rows for the just-linked item, instead
+              # of falling back to a global most-recent-transaction
+              # lookup that can point at an unrelated newer charge from
+              # another bank. Null when this run touched no rows or on
+              # the failure / still-preparing branches.
+              lastOccurredOn: { type: ["string", "null"] }
     PlaidConsentRefreshItem:
       type: object
       required:

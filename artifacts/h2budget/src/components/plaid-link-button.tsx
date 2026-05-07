@@ -11,9 +11,10 @@ import {
   type PlaidLiabilityAccount,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Loader2, CheckCircle2, AlertTriangle, X } from "lucide-react";
+import { Plus, Loader2, CheckCircle2, AlertTriangle, X, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { PostLinkDebtDialog } from "@/components/post-link-debt-dialog";
@@ -60,12 +61,19 @@ export type PostLinkStatus = {
   // importing recent activity" hint when no current-month rows have
   // landed yet.
   importedDateRange: { min: string; max: string } | null;
+  // (#402) First-of-month string ("YYYY-MM-01") used by the "View
+  // imported transactions" deep-link in the Ready panel. Server-
+  // provided per-item `lastOccurredOn` (max date across rows touched
+  // by this sync) is bucketed into a month key. Null on non-ready
+  // phases.
+  mostRecentMonth: string | null;
 };
 
 export function PlaidLinkButton({
   onLinked,
   onImportReady,
   label,
+  viewTransactionsPath = "/transactions",
 }: {
   onLinked?: () => void;
   /**
@@ -78,6 +86,13 @@ export function PlaidLinkButton({
    */
   onImportReady?: (info: { added: number; modified: number }) => void;
   label?: string;
+  /**
+   * (#402) Base path for the "View imported transactions" deep-link in
+   * the Ready panel. Defaults to /transactions (Chase). The Amex page
+   * passes "/amex" so credit-card imports land on the page that actually
+   * shows the new rows instead of the bank-only Transactions list.
+   */
+  viewTransactionsPath?: string;
 } = {}) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [postLinkAccounts, setPostLinkAccounts] = useState<
@@ -180,10 +195,25 @@ export function PlaidLinkButton({
               .map((m) => (m.startsWith("Plaid:") ? m : `Plaid: ${m}`))
               .join("; "),
             importedDateRange,
+            mostRecentMonth: null,
           });
           return;
         }
         if (totals.added > 0 || totals.modified > 0) {
+          // (#402) Resolve the month that contains the freshly-imported
+          // rows so the Ready panel can deep-link "View imported
+          // transactions" straight to it. The server now reports
+          // `lastOccurredOn` per item (max date across rows touched by
+          // this sync), and runSync aggregates that into totals — and
+          // because we scope the post-link poll to the just-linked
+          // itemId, that aggregate IS this item's most recent imported
+          // row. As a defensive fallback for an unexpected null, use
+          // today's month so the link is always present in Ready.
+          const occurredOn = totals.lastOccurredOn;
+          const mostRecentMonth =
+            occurredOn && occurredOn.length >= 7
+              ? `${occurredOn.slice(0, 7)}-01`
+              : `${new Date().toISOString().slice(0, 7)}-01`;
           setPostLinkStatus({
             phase: "ready",
             attempt: attemptNumber,
@@ -193,6 +223,7 @@ export function PlaidLinkButton({
             modified: totalModified,
             errorMessage: null,
             importedDateRange,
+            mostRecentMonth,
           });
           // (#400) Tell the host page (e.g. Chase /transactions) that
           // the freshly-linked import has landed, so it can jump the
@@ -218,6 +249,7 @@ export function PlaidLinkButton({
           modified: totalModified,
           errorMessage: null,
           importedDateRange,
+          mostRecentMonth: null,
         });
       }
       if (cancelledRef.current) return;
@@ -238,6 +270,7 @@ export function PlaidLinkButton({
                 .map((m) => (m.startsWith("Plaid:") ? m : `Plaid: ${m}`))
                 .join("; ")
             : null,
+        mostRecentMonth: null,
       });
     },
     [runSync, onImportReady, qc],
@@ -284,6 +317,7 @@ export function PlaidLinkButton({
               modified: 0,
               errorMessage: null,
               importedDateRange: null,
+              mostRecentMonth: null,
             });
             setLinkToken(null);
             clearStoredLinkToken();
@@ -379,6 +413,7 @@ export function PlaidLinkButton({
       {postLinkStatus && (
         <PostLinkProgressPanel
           status={postLinkStatus}
+          viewTransactionsPath={viewTransactionsPath}
           onDismiss={() => setPostLinkStatus(null)}
         />
       )}
@@ -422,9 +457,11 @@ function firstOfCurrentMonthIso(today: Date = new Date()): string {
 
 export function PostLinkProgressPanel({
   status,
+  viewTransactionsPath,
   onDismiss,
 }: {
   status: PostLinkStatus;
+  viewTransactionsPath: string;
   onDismiss: () => void;
 }) {
   const {
@@ -436,6 +473,7 @@ export function PostLinkProgressPanel({
     modified,
     errorMessage,
     importedDateRange,
+    mostRecentMonth,
   } = status;
   const bank = institutionName?.trim() || "your bank";
   const dateRangeLabel = importedDateRange
@@ -539,6 +577,19 @@ export function PostLinkProgressPanel({
               className="mt-2 h-1.5"
               data-testid="progress-post-link"
             />
+          )}
+          {phase === "ready" && mostRecentMonth && (
+            <div className="mt-2">
+              <Link
+                href={`${viewTransactionsPath}?month=${mostRecentMonth}`}
+                onClick={onDismiss}
+                className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-background px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-500/10"
+                data-testid="link-post-link-view-transactions"
+              >
+                View imported transactions
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           )}
         </div>
         {dismissible && (
