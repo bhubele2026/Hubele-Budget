@@ -79,6 +79,10 @@ import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { BucketBubbles, type BucketFlags, type BucketKey } from "@/components/bucket-bubbles";
 import { computeBalanceAtEndOf } from "@/lib/accountBalance";
+import {
+  chaseMonthTotals,
+  dedupeTransactionsByIdentity,
+} from "@/lib/chaseScope";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import {
   compareNewestFirst,
@@ -369,12 +373,15 @@ export default function TransactionsPage() {
   }, [selectedAccountKey, forecastData?.plaidCheckingAccounts]);
 
   // Scope to the linked checking account (or manual rows when nothing linked).
+  // (#443) Dedupe by Plaid transaction id (or row id) so duplicate survivor
+  // rows left behind by the #429/#408 dedupe work cannot inflate the
+  // Money in / Money out tiles or the rolling-balance net change.
   const chaseTransactions = useMemo(() => {
     const all = transactions ?? [];
-    if (chasePlaidAccountId) {
-      return all.filter((t) => t.plaidAccountId === chasePlaidAccountId);
-    }
-    return all.filter((t) => !t.plaidAccountId);
+    const scoped = chasePlaidAccountId
+      ? all.filter((t) => t.plaidAccountId === chasePlaidAccountId)
+      : all.filter((t) => !t.plaidAccountId);
+    return dedupeTransactionsByIdentity(scoped);
   }, [transactions, chasePlaidAccountId]);
 
   // ---- Filters & month navigation ----
@@ -504,17 +511,13 @@ export default function TransactionsPage() {
   }, [monthScoped, search, from, to, sourceFilter, memberFilter, categoryFilter, categoryById]);
 
   // ---- Per-month money in/out & balance math ----
-  const monthTotals = useMemo(() => {
-    let moneyIn = 0;
-    let moneyOut = 0;
-    for (const t of filtered) {
-      const a = parseSigned(t.amount);
-      if (a >= 0) moneyIn += a;
-      else moneyOut += a; // negative
-    }
-    const netChange = moneyIn + moneyOut;
-    return { moneyIn, moneyOut: Math.abs(moneyOut), netChange };
-  }, [filtered]);
+  // (#443) `chaseMonthTotals` is the single source of truth for the bubble
+  // math — it re-applies the month filter at compute time so we cannot
+  // accidentally regress to counting cross-month rows here.
+  const monthTotals = useMemo(
+    () => chaseMonthTotals(filtered, selectedMonth),
+    [filtered, selectedMonth],
+  );
 
   // Net change per month for the entire scoped set (for rolling balance).
   const netChangeByMonth = useMemo(() => {
