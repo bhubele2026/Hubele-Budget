@@ -634,6 +634,26 @@ export default function ForecastPage() {
     }
   }, [forecastFromDate]);
 
+  // Active tab is controlled so deep-links from other pages (e.g. the
+  // Chase page's "N awaiting match in Review Bucket" chip) can land
+  // directly on the Review Bucket via `/forecast#bucket`.
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#bucket") {
+      return "bucket";
+    }
+    return "register";
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onHashChange = () => {
+      if (window.location.hash === "#bucket") setActiveTab("bucket");
+      else if (window.location.hash === "" || window.location.hash === "#register")
+        setActiveTab("register");
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
   const { data, isLoading } = useGetForecast({ days: horizonDays });
   const { data: cashProjection, isLoading: cashProjectionLoading } =
     useGetForecastCashSignal({
@@ -2216,7 +2236,18 @@ export default function ForecastPage() {
         <AvalancheReadyCard />
       </div>
 
-      <Tabs defaultValue="register" className="w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => {
+          setActiveTab(v);
+          if (typeof window !== "undefined") {
+            const hash = v === "bucket" ? "#bucket" : "";
+            const next = `${window.location.pathname}${window.location.search}${hash}`;
+            window.history.replaceState(null, "", next);
+          }
+        }}
+        className="w-full"
+      >
         <TabsList>
           <TabsTrigger value="register">Active Register</TabsTrigger>
           <TabsTrigger value="bucket">Review Bucket</TabsTrigger>

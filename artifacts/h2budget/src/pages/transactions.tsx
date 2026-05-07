@@ -910,6 +910,39 @@ export default function TransactionsPage() {
     }
   };
 
+  // (#422) Index forecast resolutions by their matched bank txn id so we
+  // can show a per-row state badge ("In Review Bucket" while awaiting a
+  // match, "Matched", or "Unplanned") and derive the header pending-count
+  // chip without an extra API call. Both surfaces stay live because the
+  // Forecast page already invalidates `getGetForecastQueryKey()` on
+  // every match / unplanned action.
+  const resolutionByTxnId = useMemo(() => {
+    const m = new Map<string, { status: string }>();
+    for (const r of forecastData?.resolutions ?? []) {
+      if (r.matchedTxnId) m.set(r.matchedTxnId, { status: r.status });
+    }
+    return m;
+  }, [forecastData?.resolutions]);
+
+  // Count of this account's "sent" rows in the currently-viewed month
+  // that are still sitting in the Review Bucket (no matched / unplanned
+  // resolution yet). Powers the clickable header chip.
+  const awaitingMatchCount = useMemo(() => {
+    let n = 0;
+    for (const tx of monthScoped) {
+      if (!tx.forecastFlag) continue;
+      const r = resolutionByTxnId.get(tx.id);
+      if (!r) {
+        n += 1;
+        continue;
+      }
+      if (r.status !== "matched" && r.status !== "ignored_unforecasted" && r.status !== "unplanned") {
+        n += 1;
+      }
+    }
+    return n;
+  }, [monthScoped, resolutionByTxnId]);
+
   // The configured Chase checking account's external Plaid account_id.
   // Forecast is scoped to this single account, not to all depository
   // accounts the user might have linked.
@@ -1381,6 +1414,31 @@ export default function TransactionsPage() {
           Manual entries · No bank balance is tracked for hand-entered rows.
         </div>
       )}
+      {/* (#422) Header pending-count chip — at-a-glance signal of how
+          many "sent" rows for this account/period are still sitting in
+          the Forecast Review Bucket awaiting a match. Clickable so the
+          user can jump straight to the bucket and resolve them. */}
+      <div className="flex items-center gap-2 flex-wrap" data-testid="chase-bucket-summary">
+        {awaitingMatchCount > 0 ? (
+          <Link
+            href="/forecast#bucket"
+            data-testid="link-bucket-pending-count"
+            className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 text-amber-900 px-2.5 py-0.5 text-xs hover-elevate active-elevate-2"
+            title="Open the Forecast Review Bucket"
+          >
+            <Inbox className="w-3 h-3" />
+            <span className="font-medium tabular-nums">{awaitingMatchCount}</span>
+            <span>awaiting match in Review Bucket</span>
+          </Link>
+        ) : (
+          <span
+            className="text-xs text-muted-foreground"
+            data-testid="text-bucket-empty"
+          >
+            All sent items reconciled.
+          </span>
+        )}
+      </div>
       {(forecastData?.plaidCheckingAccounts?.length ?? 0) > 1 && (
         <div className="flex items-center gap-2" data-testid="chase-account-picker">
           <span className="text-xs text-muted-foreground">View account:</span>
@@ -1655,15 +1713,46 @@ export default function TransactionsPage() {
                             Transfer
                           </Badge>
                         )}
-                        {tx.forecastFlag && (
-                          <Badge
-                            variant="outline"
-                            className="text-xs border-emerald-200 text-emerald-700 bg-emerald-50"
-                            data-testid={`badge-sent-${tx.id}`}
-                          >
-                            <Inbox className="w-3 h-3 mr-1" /> Sent · pending in Forecast
-                          </Badge>
-                        )}
+                        {tx.forecastFlag && (() => {
+                          const r = resolutionByTxnId.get(tx.id);
+                          if (r?.status === "matched") {
+                            return (
+                              <Badge
+                                variant="outline"
+                                className="text-xs border-primary/30 text-primary bg-primary/15"
+                                data-testid={`badge-forecast-state-${tx.id}`}
+                                data-forecast-state="matched"
+                              >
+                                <Inbox className="w-3 h-3 mr-1" /> Matched
+                              </Badge>
+                            );
+                          }
+                          if (
+                            r?.status === "ignored_unforecasted" ||
+                            r?.status === "unplanned"
+                          ) {
+                            return (
+                              <Badge
+                                variant="outline"
+                                className="text-xs border-slate-300 text-slate-700 bg-slate-50"
+                                data-testid={`badge-forecast-state-${tx.id}`}
+                                data-forecast-state="unplanned"
+                              >
+                                <Inbox className="w-3 h-3 mr-1" /> Unplanned
+                              </Badge>
+                            );
+                          }
+                          return (
+                            <Badge
+                              variant="outline"
+                              className="text-xs border-amber-200 text-amber-800 bg-amber-50"
+                              data-testid={`badge-forecast-state-${tx.id}`}
+                              data-forecast-state="in-review-bucket"
+                            >
+                              <Inbox className="w-3 h-3 mr-1" /> In Review Bucket
+                            </Badge>
+                          );
+                        })()}
                         <BucketBubbles
                           flags={{
                             weekly: !!tx.weeklyAllowance,
