@@ -75,6 +75,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import confetti from "canvas-confetti";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -82,6 +83,7 @@ import {
   buildLineRegister,
   filterForecastTxns,
   buildBucket,
+  type BucketEntry,
   monthKey,
   isBankTxn,
   suggestPlanMatchesForBank,
@@ -474,6 +476,7 @@ function PlanDropRow({
   row,
   onSelect,
   onMove,
+  onMarkMissed,
   activeDragId,
   payoff,
   isBestSuggestion = false,
@@ -482,6 +485,10 @@ function PlanDropRow({
   row: PlanLine;
   onSelect: (row: PlanLine) => void;
   onMove?: (row: PlanLine) => void;
+  /** (#480) Per-row "Mark missed" handler. Surfaced as an explicit button
+   *  alongside "Move to…" so users don't have to discover the row click
+   *  (which now also routes through this same handler). */
+  onMarkMissed?: (row: PlanLine) => void;
   activeDragId: string | null;
   payoff?: PayoffInfo;
   /**
@@ -521,6 +528,11 @@ function PlanDropRow({
   const showSuggestion = !isOverEligible && isBestSuggestion;
   const canMove =
     !!onMove && (row.status === "pending_plan" || row.status === "future");
+  // (#480) Mark-missed is only meaningful while the row is still pending —
+  // once it's matched/missed/rescheduled there's nothing to "miss".
+  const canMarkMissed =
+    !!onMarkMissed &&
+    (row.status === "pending_plan" || row.status === "future");
   // (#456) During an active drag, mark every eligible plan row as a valid
   // drop target so the user sees there are many places they can land. The
   // row directly under the cursor (`isOverEligible`) gets a stronger
@@ -618,6 +630,21 @@ function PlanDropRow({
             title="Move this occurrence to a future date"
           >
             Move to…
+          </Button>
+        )}
+        {canMarkMissed && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMarkMissed?.(row);
+            }}
+            data-testid={`mark-missed-${row.itemId}-${row.date}`}
+            title="Move this occurrence into the Missed bucket"
+          >
+            Mark missed
           </Button>
         )}
       </div>
@@ -1487,29 +1514,49 @@ export default function ForecastPage() {
     }
   };
 
+  // (#480) Mark a pending plan occurrence as missed. The previous
+  // implementation used a blocking `window.confirm()`; we now mutate
+  // immediately and surface a toast with an Undo action so the flow
+  // matches the rest of the app (toast-driven, non-blocking) while
+  // still being recoverable from a misclick.
+  const onMarkMissed = (row: PlanLine) => {
+    if (row.status === "matched" || row.status === "missed") return;
+    upsertResolution.mutate(
+      {
+        data: {
+          status: "missed",
+          recurringItemId: row.itemId,
+          occurrenceDate: row.originalDate ?? row.date,
+        },
+      },
+      {
+        onSuccess: (created: { id?: string } | undefined) => {
+          invalidate();
+          const newId = created?.id;
+          toast({
+            title: "Marked missed",
+            description: `${row.label || "Occurrence"} · ${formatDate(row.date)}`,
+            action: newId ? (
+              <ToastAction
+                altText="Undo mark missed"
+                onClick={() => onUndo(newId)}
+                data-testid="toast-undo-mark-missed"
+              >
+                Undo
+              </ToastAction>
+            ) : undefined,
+          });
+        },
+      },
+    );
+  };
+  // Row click on a pending plan occurrence routes through the same
+  // mark-missed handler so the previously-buried gesture is preserved
+  // for muscle-memory users while the explicit button is the
+  // discoverable path.
   const onSelectPlan = (row: PlanLine) => {
     if (row.status === "matched" || row.status === "missed") return;
-    if (
-      confirm(
-        `Mark "${row.label}" as missed for ${formatDate(row.date)}? You can drag a Chase checking transaction here to match instead.`,
-      )
-    ) {
-      upsertResolution.mutate(
-        {
-          data: {
-            status: "missed",
-            recurringItemId: row.itemId,
-            occurrenceDate: row.originalDate ?? row.date,
-          },
-        },
-        {
-          onSuccess: () => {
-            invalidate();
-            toast({ title: "Marked missed" });
-          },
-        },
-      );
-    }
+    onMarkMissed(row);
   };
 
   const onMoveStart = (row: PlanLine) => {
@@ -1558,6 +1605,67 @@ export default function ForecastPage() {
             (e as Error).message ?? "Failed to move occurrence";
           setMoveError(message);
           toast({ title: message, variant: "destructive" });
+        },
+      },
+    );
+  };
+
+  // (#480) From the Missed bucket: open the existing Move-to date
+  // picker pre-filled for that occurrence. Saving routes through the
+  // existing `onMoveSave` path which upserts a `rescheduled` resolution
+  // for `(recurringItemId, occurrenceDate)`. The backend POST endpoint
+  // deletes the prior `missed` resolution at that key before inserting,
+  // so the row leaves the Missed bucket and reappears at the new date
+  // automatically.
+  const onSetNewDateFromBucket = (b: BucketEntry) => {
+    if (!b.recurringItemId || !b.occurrenceDate) return;
+    setMoveTarget({
+      kind: "plan",
+      date: b.date,
+      itemId: b.recurringItemId,
+      label: b.label,
+      amount: b.amount,
+      status: "missed",
+      originalDate: b.occurrenceDate,
+    });
+    setMoveDateDraft("");
+    setMoveError(null);
+  };
+  // (#480) Skip a Missed-bucket occurrence: persist a `skipped`
+  // resolution that hides the row from the register, the bucket, and
+  // the projection (server `cashSignal` and client `forecastMatch`
+  // both filter on this status). The backend upsert replaces the
+  // prior `missed` resolution at the same key so we don't accumulate
+  // dead rows. Toast carries an Undo action that deletes the new
+  // resolution — leaving no resolution at all, which restores the
+  // row to its natural pending/missed state on the next render.
+  const onSkipFromBucket = (b: BucketEntry) => {
+    if (!b.recurringItemId || !b.occurrenceDate) return;
+    upsertResolution.mutate(
+      {
+        data: {
+          status: "skipped",
+          recurringItemId: b.recurringItemId,
+          occurrenceDate: b.occurrenceDate,
+        },
+      },
+      {
+        onSuccess: (created: { id?: string } | undefined) => {
+          invalidate();
+          const newId = created?.id;
+          toast({
+            title: "Skipped",
+            description: `${b.label || "Occurrence"} · ${formatDate(b.date)}`,
+            action: newId ? (
+              <ToastAction
+                altText="Undo skip"
+                onClick={() => onUndo(newId)}
+                data-testid="toast-undo-skip"
+              >
+                Undo
+              </ToastAction>
+            ) : undefined,
+          });
         },
       },
     );
@@ -2660,6 +2768,7 @@ export default function ForecastPage() {
                           row={row}
                           onSelect={onSelectPlan}
                           onMove={onMoveStart}
+                          onMarkMissed={onMarkMissed}
                           activeDragId={activeDragId}
                           payoff={payoffsByItem.get(row.itemId)}
                           isBestSuggestion={
@@ -2728,17 +2837,42 @@ export default function ForecastPage() {
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2 flex-wrap justify-end">
                             <span
-                              className={`font-medium tabular-nums ${
+                              className={`font-medium tabular-nums mr-2 ${
                                 b.amount < 0 ? "text-destructive" : "text-primary"
                               }`}
                             >
                               {formatCurrency(b.amount)}
                             </span>
+                            {b.recurringItemId && b.occurrenceDate && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => onSetNewDateFromBucket(b)}
+                                data-testid={`missed-set-new-date-${b.id}`}
+                                title="Reschedule this occurrence to a future date"
+                              >
+                                Set new date
+                              </Button>
+                            )}
+                            {b.recurringItemId && b.occurrenceDate && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                onClick={() => onSkipFromBucket(b)}
+                                data-testid={`missed-skip-${b.id}`}
+                                title="Clear this occurrence — won't return or affect the projection"
+                              >
+                                Skip
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
+                              className="h-7 px-2 text-xs"
                               onClick={() => onUndo(b.id)}
                               data-testid={`missed-undo-${b.id}`}
                             >

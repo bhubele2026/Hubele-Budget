@@ -376,6 +376,11 @@ export async function computeCashSignal(
   const matchedPlanKeys = new Set<string>();
   const matchedTxnIds = new Set<string>();
   const rescheduledByKey = new Map<string, string>();
+  // (#480) Plan occurrences the user explicitly Skipped from the Missed
+  // bucket are excluded from the projected balance entirely — same key
+  // shape as `matchedPlanKeys` so the existing `events` loop can drop
+  // them with one extra check.
+  const skippedPlanKeys = new Set<string>();
   for (const r of resolutions) {
     if (r.status === "matched") {
       if (r.recurringItemId && r.occurrenceDate) {
@@ -392,6 +397,12 @@ export async function computeCashSignal(
         `${r.recurringItemId}|${r.occurrenceDate}`,
         r.rescheduledTo,
       );
+    } else if (
+      r.status === "skipped" &&
+      r.recurringItemId &&
+      r.occurrenceDate
+    ) {
+      skippedPlanKeys.add(`${r.recurringItemId}|${r.occurrenceDate}`);
     }
   }
 
@@ -413,6 +424,9 @@ export async function computeCashSignal(
     if (effectiveDate <= anchorISO) continue; // already baked into snapshot
     const matched = matchedPlanKeys.has(origKey);
     if (matched) continue;
+    // (#480) Skipped occurrences must NOT contribute to the projection
+    // (chart line, lowest, ending balance, expenseEvents markers).
+    if (skippedPlanKeys.has(origKey)) continue;
     items.push({ date: effectiveDate, amount: ev.amount, matched: false });
     if (ev.amount < 0) {
       expenseEvents.push({

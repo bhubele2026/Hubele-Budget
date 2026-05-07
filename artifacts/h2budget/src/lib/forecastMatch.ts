@@ -48,6 +48,7 @@ export type ResolutionStatus =
   | "matched"
   | "missed"
   | "dismissed"
+  | "skipped"
   | "ignored_unforecasted"
   | "unplanned";
 
@@ -161,7 +162,7 @@ export function buildLineRegister(opts: {
     if (r.matchedTxnId) byTxn.set(r.matchedTxnId, r);
   }
 
-  const allPlan: PlanLine[] = events.map((ev) => {
+  const allPlan: PlanLine[] = events.flatMap((ev) => {
     const origKey = `${ev.itemId}|${ev.date}`;
     const origRes = byEventKey.get(origKey);
     let date = ev.date;
@@ -171,6 +172,11 @@ export function buildLineRegister(opts: {
       const atNew = byEventKey.get(`${ev.itemId}|${date}`);
       if (atNew && atNew.id !== origRes.id) stored = atNew;
     }
+    // (#480) "Skip" from the Missed bucket: drop the occurrence entirely.
+    // The row should not appear in the register, the bucket, or the
+    // running-balance projection for the selected month. Backend cash
+    // signal applies the same filter so chart math stays consistent.
+    if (stored?.status === "skipped") return [];
     const evMs = parseISO(date);
     let status: PlanLineStatus;
     if (stored?.status === "matched") status = "matched";
@@ -178,7 +184,7 @@ export function buildLineRegister(opts: {
       status = "missed";
     else if (evMs > todayMs) status = "future";
     else status = "pending_plan";
-    return {
+    return [{
       kind: "plan" as const,
       date,
       itemId: ev.itemId,
@@ -188,7 +194,7 @@ export function buildLineRegister(opts: {
       resolutionId: stored?.id,
       matchedTxnId: stored?.matchedTxnId ?? null,
       originalDate: date !== ev.date ? ev.date : undefined,
-    };
+    }];
   });
 
   const allBank: BankLine[] = txns.map((t) => {
@@ -639,6 +645,8 @@ export function buildBucket(opts: {
     else if (r.status === "missed" || r.status === "dismissed") status = "missed";
     else if (r.status === "ignored_unforecasted") status = "ignored_unforecasted";
     else if (r.status === "unplanned") status = "unplanned";
+    // (#480) `skipped` resolutions intentionally produce no bucket row —
+    // a Skip from the Missed bucket should clear the occurrence entirely.
     else continue;
 
     out.push({
