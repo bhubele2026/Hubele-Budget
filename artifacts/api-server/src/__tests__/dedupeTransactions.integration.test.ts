@@ -9,6 +9,7 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import {
+  dedupeTransactionsAcrossAccountsForUser,
   dedupeTransactionsForAccount,
   dedupeTransactionsForUser,
 } from "../lib/dedupeTransactions";
@@ -285,6 +286,160 @@ describe("dedupeTransactionsForAccount (#452)", () => {
     const report = await dedupeTransactionsForUser(TEST_USER);
     expect(report.accountsScanned).toBeGreaterThanOrEqual(2);
     expect(report.duplicatesRemoved).toBe(2);
+    const remaining = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(remaining).toHaveLength(2);
+  });
+});
+
+describe("dedupeTransactionsAcrossAccountsForUser (#475-followup)", () => {
+  it("collapses duplicates across multiple plaid_account_id strings for the same bank family, preferring the live account", async () => {
+    await cleanup();
+    // Live (currently linked) Chase account.
+    const liveAcct = await seedAccount();
+    // Two orphan account strings (plaid_account_id present on rows but
+    // no surviving plaid_accounts row) — simulates the post-re-link
+    // duplicate-account_id explosion.
+    const orphanA = `chase-orphan-a-${randomUUID().slice(0, 8)}`;
+    const orphanB = `chase-orphan-b-${randomUUID().slice(0, 8)}`;
+
+    // 3 twins of the same Toyota charge across 3 different account_ids
+    // and 3 different plaid_transaction_ids.
+    for (const [acct, pid] of [
+      [orphanA, "ptx-a"],
+      [orphanB, "ptx-b"],
+      [liveAcct, "ptx-c"],
+    ] as const) {
+      await insertTxn({
+        plaidAccountId: acct,
+        plaidTransactionId: pid,
+        occurredOn: "2026-05-04",
+        amount: "-672.80",
+        description: "TOYOTA",
+        source: "plaid:chase",
+      });
+    }
+    // An Amex row that happens to share date+amount+desc must NOT be
+    // collapsed with the Chase rows.
+    await insertTxn({
+      plaidAccountId: "amex-acct",
+      occurredOn: "2026-05-04",
+      amount: "-672.80",
+      description: "TOYOTA",
+      source: "plaid:amex",
+    });
+
+    const report = await dedupeTransactionsAcrossAccountsForUser(TEST_USER);
+    expect(report.duplicatesRemoved).toBe(2);
+    expect(report.groupsScanned).toBe(1);
+
+    const remaining = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    // 1 chase survivor + 1 amex (untouched) = 2 rows.
+    expect(remaining).toHaveLength(2);
+    const chase = remaining.find((r) => r.source === "plaid:chase");
+    expect(chase).toBeTruthy();
+    // Survivor was repointed onto the live account so it renders under
+    // the user's currently-linked Chase row.
+    expect(chase!.plaidAccountId).toBe(liveAcct);
+
+    // Idempotency: a second pass is a no-op.
+    const second = await dedupeTransactionsAcrossAccountsForUser(TEST_USER);
+    expect(second.duplicatesRemoved).toBe(0);
+    expect(second.groupsScanned).toBe(0);
+  });
+
+  it("does NOT collapse legitimate same-day same-amount same-desc rows across two live linked accounts at the same bank", async () => {
+    await cleanup();
+    // Two REAL linked Chase accounts (e.g. checking + savings or two
+    // cards). Both account_ids resolve to live plaid_accounts rows.
+    const liveA = await seedAccount();
+    const liveB = await seedAccount();
+    await insertTxn({
+      plaidAccountId: liveA,
+      plaidTransactionId: "ptx-a",
+      occurredOn: "2026-05-04",
+      amount: "-5.00",
+      description: "STARBUCKS",
+      source: "plaid:chase",
+    });
+    await insertTxn({
+      plaidAccountId: liveB,
+      plaidTransactionId: "ptx-b",
+      occurredOn: "2026-05-04",
+      amount: "-5.00",
+      description: "STARBUCKS",
+      source: "plaid:chase",
+    });
+
+    const report = await dedupeTransactionsAcrossAccountsForUser(TEST_USER);
+    expect(report.duplicatesRemoved).toBe(0);
+    const remaining = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(remaining).toHaveLength(2);
+  });
+
+  it("does NOT collapse a coincidental orphan+live pair created near-simultaneously (real twin charges, not relink residue)", async () => {
+    await cleanup();
+    const live = await seedAccount();
+    const orphan = `chase-orphan-${randomUUID().slice(0, 8)}`;
+    const t = Date.now();
+    await insertTxn(
+      {
+        plaidAccountId: orphan,
+        plaidTransactionId: "ptx-orphan",
+        occurredOn: "2026-05-04",
+        amount: "-5.00",
+        description: "STARBUCKS",
+        source: "plaid:chase",
+      },
+      new Date(t),
+    );
+    await insertTxn(
+      {
+        plaidAccountId: live,
+        plaidTransactionId: "ptx-live",
+        occurredOn: "2026-05-04",
+        amount: "-5.00",
+        description: "STARBUCKS",
+        source: "plaid:chase",
+      },
+      new Date(t + 60 * 1000), // 1 minute apart — real twin charges
+    );
+    const report = await dedupeTransactionsAcrossAccountsForUser(TEST_USER);
+    expect(report.duplicatesRemoved).toBe(0);
+    const remaining = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(remaining).toHaveLength(2);
+  });
+
+  it("does NOT touch manual transactions even when they share a key", async () => {
+    await cleanup();
+    await seedAccount();
+    await insertTxn({
+      plaidAccountId: "manual-no-link",
+      occurredOn: "2026-05-04",
+      amount: "-12.34",
+      description: "COFFEE",
+      source: "manual",
+    });
+    await insertTxn({
+      plaidAccountId: "manual-no-link",
+      occurredOn: "2026-05-04",
+      amount: "-12.34",
+      description: "COFFEE",
+      source: "manual",
+    });
+    const report = await dedupeTransactionsAcrossAccountsForUser(TEST_USER);
+    expect(report.duplicatesRemoved).toBe(0);
     const remaining = await db
       .select()
       .from(transactionsTable)

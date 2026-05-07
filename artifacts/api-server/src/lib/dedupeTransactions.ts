@@ -2,6 +2,7 @@ import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import {
   db,
   forecastResolutionsTable,
+  plaidAccountsTable,
   transactionsTable,
 } from "@workspace/db";
 
@@ -260,6 +261,263 @@ export async function dedupeTransactionsForAccount(
  * the user. Used by the admin endpoint and by the post-sync cleanup
  * pass when we need to scan multiple accounts at once.
  */
+/**
+ * (#475-followup) Map a transactions row's `source` to a coarse bank
+ * family used as a partition key for cross-account dedupe. When a user
+ * re-links the same bank multiple times, each link mints a fresh
+ * `plaid_accounts.account_id` (external string), so duplicate rows for
+ * the same real posting end up in DIFFERENT account partitions and
+ * `dedupeTransactionsForAccount` (scoped to one external account_id)
+ * cannot see them as twins. Grouping by source family keeps Chase
+ * rows from accidentally collapsing with same-day Amex rows that
+ * happen to share an amount and description.
+ */
+function bankFamily(source: string | null | undefined): string | null {
+  if (!source) return "manual";
+  const s = source.toLowerCase();
+  if (s === "manual") return "manual";
+  if (s === "chase" || s === "plaid:chase") return "chase";
+  if (s === "amex" || s === "plaid:amex") return "amex";
+  // Other plaid:<slug> forms — partition by the slug so they still
+  // group correctly without leaking across institutions.
+  if (s.startsWith("plaid:")) return s.slice("plaid:".length);
+  return s;
+}
+
+/**
+ * (#475-followup) Cross-account dedupe: collapse rows that share
+ * `(userId, bankFamily, occurredOn, amount, normalizedDescription)`
+ * even when their `plaid_account_id` strings differ. This is the case
+ * after a user re-links the same bank repeatedly — each link gets its
+ * own `plaid_accounts.account_id`, and Plaid mints a fresh
+ * `plaid_transaction_id` per link, so neither the per-account dedupe
+ * nor the `transactions_plaid_txn_uq` index catches the duplicates.
+ *
+ * Survivor selection, state-merge, resolution-repoint, and delete-
+ * before-patch ordering are identical to `dedupeTransactionsForAccount`.
+ * The survivor's `plaid_account_id` is preferentially set to the
+ * external account id whose `plaid_accounts` row still exists, so
+ * surviving rows continue to render under the user's currently-linked
+ * account.
+ */
+export async function dedupeTransactionsAcrossAccountsForUser(
+  userId: string,
+): Promise<DedupeTxnReport & { rowsScanned: number }> {
+  const report: DedupeTxnReport & { rowsScanned: number } = {
+    groupsScanned: 0,
+    duplicatesRemoved: 0,
+    resolutionsRepointed: 0,
+    rowsScanned: 0,
+  };
+
+  // Fast pre-check (no transaction): collect distinct plaid_account_id
+  // strings actually used by this user's Plaid-origin transactions and
+  // see which ones no longer resolve to a live `plaid_accounts` row.
+  // If none are orphaned, this user has no cross-account duplicate
+  // residue to clean and the heal short-circuits — keeps the
+  // /forecast hot path cheap once cleaned.
+  const usedAccts = await db
+    .selectDistinct({ plaidAccountId: transactionsTable.plaidAccountId })
+    .from(transactionsTable)
+    .where(
+      and(
+        eq(transactionsTable.userId, userId),
+        sql`${transactionsTable.plaidAccountId} is not null` as SQL<unknown>,
+        sql`${transactionsTable.source} like 'plaid:%'` as SQL<unknown>,
+      ),
+    );
+  const usedExternalIds = usedAccts
+    .map((a) => a.plaidAccountId)
+    .filter((v): v is string => typeof v === "string" && v.length > 0);
+  if (usedExternalIds.length === 0) return report;
+
+  const live = await db
+    .select({ accountId: plaidAccountsTable.accountId })
+    .from(plaidAccountsTable)
+    .where(
+      and(
+        eq(plaidAccountsTable.userId, userId),
+        inArray(plaidAccountsTable.accountId, usedExternalIds),
+      ),
+    );
+  const liveAccountIds = new Set<string>(live.map((l) => l.accountId));
+  const orphanAccountIds = new Set<string>(
+    usedExternalIds.filter((id) => !liveAccountIds.has(id)),
+  );
+  if (orphanAccountIds.size === 0) return report;
+
+  return await db.transaction(async (tx) => {
+    // Only inspect Plaid-origin rows. Manual rows are user-authored and
+    // must not be auto-collapsed even if their fields happen to match.
+    const rows = await tx
+      .select()
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.userId, userId),
+          sql`${transactionsTable.source} like 'plaid:%'` as SQL<unknown>,
+        ),
+      );
+    report.rowsScanned = rows.length;
+    if (rows.length < 2) return report;
+
+    const groups = new Map<string, TxnRow[]>();
+    for (const r of rows) {
+      const fam = bankFamily(r.source);
+      if (!fam) continue;
+      const k = `${fam}|${groupKey(r)}`;
+      const arr = groups.get(k);
+      if (arr) arr.push(r);
+      else groups.set(k, [r]);
+    }
+
+    // Only collapse groups where at least one row is on an orphan
+    // (no surviving plaid_accounts row) account_id. That is the real
+    // relink-residue signature. Two legitimate same-day same-amount
+    // same-description rows from two REAL linked accounts at the same
+    // institution will have BOTH rows on live accounts and will be
+    // skipped — preserving them.
+    // Relink-residue fingerprint: collapse only when we are highly
+    // confident the rows are re-imports of the same underlying
+    // posting, not an unrelated coincidental twin.
+    //   - At least one row must sit on an orphan account_id (defunct
+    //     link), AND
+    //   - Either the group has 3+ copies (a relink storm always
+    //     produces many — the production user has 11-12 per posting),
+    //     OR the createdAt spread between an orphan member and a
+    //     non-orphan member is >= 24h (real same-day double charges
+    //     land near-simultaneously; re-imported residue is hours/days
+    //     after the original).
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const dupGroups = Array.from(groups.values()).filter((g) => {
+      if (g.length < 2) return false;
+      const orphans = g.filter(
+        (r) => r.plaidAccountId && orphanAccountIds.has(r.plaidAccountId),
+      );
+      if (orphans.length === 0) return false;
+      if (g.length >= 3) return true;
+      const others = g.filter(
+        (r) => !r.plaidAccountId || !orphanAccountIds.has(r.plaidAccountId),
+      );
+      if (others.length === 0) return true; // all-orphan duplicates are still residue
+      const orphanTimes = orphans
+        .map((r) => r.createdAt?.getTime())
+        .filter((n): n is number => typeof n === "number");
+      const otherTimes = others
+        .map((r) => r.createdAt?.getTime())
+        .filter((n): n is number => typeof n === "number");
+      if (orphanTimes.length === 0 || otherTimes.length === 0) return false;
+      const minSpread = Math.min(
+        ...orphanTimes.flatMap((a) =>
+          otherTimes.map((b) => Math.abs(a - b)),
+        ),
+      );
+      return minSpread >= ONE_DAY_MS;
+    });
+    if (dupGroups.length === 0) return report;
+
+    const candidateIds = dupGroups.flatMap((g) => g.map((r) => r.id));
+    const resolutions = candidateIds.length
+      ? await tx
+          .select({
+            id: forecastResolutionsTable.id,
+            matchedTxnId: forecastResolutionsTable.matchedTxnId,
+          })
+          .from(forecastResolutionsTable)
+          .where(
+            and(
+              eq(forecastResolutionsTable.userId, userId),
+              inArray(forecastResolutionsTable.matchedTxnId, candidateIds),
+            ),
+          )
+      : [];
+    const resolutionsByTxn = new Map<string, string[]>();
+    for (const r of resolutions) {
+      if (!r.matchedTxnId) continue;
+      const arr = resolutionsByTxn.get(r.matchedTxnId) ?? [];
+      arr.push(r.id);
+      resolutionsByTxn.set(r.matchedTxnId, arr);
+    }
+
+    for (const group of dupGroups) {
+      report.groupsScanned += 1;
+      const scored = group
+        .map((row) => ({
+          row,
+          score: userStateScore(row, resolutionsByTxn.has(row.id))
+            // Bonus point for being on the currently-linked account so
+            // an active row beats an orphan-account twin at score-tie.
+            + (row.plaidAccountId && liveAccountIds.has(row.plaidAccountId)
+              ? 1
+              : 0),
+          createdAt: row.createdAt?.getTime() ?? 0,
+        }))
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          return a.createdAt - b.createdAt;
+        });
+      const survivor = scored[0].row;
+      const losers = scored.slice(1).map((s) => s.row);
+
+      let patch: Partial<typeof transactionsTable.$inferInsert> = {};
+      for (const loser of losers) {
+        const p = mergeStatePatch({ ...survivor, ...patch } as TxnRow, loser);
+        patch = { ...patch, ...p };
+      }
+      // If the survivor is on an orphan account but a loser is on the
+      // currently-linked one, repoint the survivor onto the live id so
+      // the post-cleanup row renders under the user's active account.
+      if (
+        (!survivor.plaidAccountId ||
+          !liveAccountIds.has(survivor.plaidAccountId)) &&
+        !patch.plaidAccountId
+      ) {
+        const liveLoser = losers.find(
+          (l) => l.plaidAccountId && liveAccountIds.has(l.plaidAccountId),
+        );
+        if (liveLoser?.plaidAccountId) {
+          patch.plaidAccountId = liveLoser.plaidAccountId;
+        }
+      }
+
+      const loserIds = losers.map((l) => l.id);
+      const repointable = loserIds.filter((id) => resolutionsByTxn.has(id));
+      if (repointable.length > 0) {
+        const updated = await tx
+          .update(forecastResolutionsTable)
+          .set({ matchedTxnId: survivor.id })
+          .where(
+            and(
+              eq(forecastResolutionsTable.userId, userId),
+              inArray(forecastResolutionsTable.matchedTxnId, repointable),
+            ),
+          )
+          .returning({ id: forecastResolutionsTable.id });
+        report.resolutionsRepointed += updated.length;
+      }
+
+      await tx
+        .delete(transactionsTable)
+        .where(
+          and(
+            eq(transactionsTable.userId, userId),
+            inArray(transactionsTable.id, loserIds),
+          ),
+        );
+      report.duplicatesRemoved += loserIds.length;
+
+      if (Object.keys(patch).length > 0) {
+        await tx
+          .update(transactionsTable)
+          .set(patch)
+          .where(eq(transactionsTable.id, survivor.id));
+      }
+    }
+
+    return report;
+  });
+}
+
 export async function dedupeTransactionsForUser(
   userId: string,
 ): Promise<DedupeTxnReport & { accountsScanned: number }> {

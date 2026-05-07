@@ -28,7 +28,10 @@ import {
 import { plaid } from "../lib/plaid";
 import { archiveExpiredOneTime } from "./bills";
 import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
-import { dedupeTransactionsForUser } from "../lib/dedupeTransactions";
+import {
+  dedupeTransactionsForUser,
+  dedupeTransactionsAcrossAccountsForUser,
+} from "../lib/dedupeTransactions";
 
 const router: IRouter = Router();
 
@@ -224,6 +227,23 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
         { userId, err: err instanceof Error ? err.message : String(err) },
       );
     }
+  }
+  // (#475-followup) Heal cross-account transaction duplicates left behind
+  // by repeated re-links of the same bank: each re-link minted a fresh
+  // `plaid_accounts.account_id` and Plaid issued fresh
+  // `plaid_transaction_id`s, so neither the per-account dedupe nor the
+  // `transactions_plaid_txn_uq` index catches the resulting twins. This
+  // collapses rows by (bankFamily, occurredOn, amount, normalizedDesc)
+  // across all of a user's `plaid_account_id` partitions. Idempotent:
+  // a clean account is a no-op (the inner transaction reads, finds no
+  // duplicate groups, and returns).
+  try {
+    await dedupeTransactionsAcrossAccountsForUser(userId);
+  } catch (err) {
+    console.error(
+      "[forecast] cross-account transaction dedupe failed",
+      { userId, err: err instanceof Error ? err.message : String(err) },
+    );
   }
   const days = Number(req.query.days) || settings.daysAhead || 90;
 
