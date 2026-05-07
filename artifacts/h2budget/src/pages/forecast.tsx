@@ -85,6 +85,7 @@ import {
   monthKey,
   isBankTxn,
   suggestPlanMatchesForBank,
+  filterDropdownPlans,
   rankPlansForBank,
   pickConfidentBankMatches,
   pickOneClickBankMatches,
@@ -1109,14 +1110,21 @@ export default function ForecastPage() {
   const sortedPlansByCard = useMemo(() => {
     const m = new Map<string, PlanLine[]>();
     if (!register) return m;
-    const pendingPlans = register.allPlan.filter(
-      (r) => r.status === "pending_plan" || r.status === "future",
+    // (#457) Narrow the dropdown source list before ranking: keep only
+    // pending/future plans, dropping anything outside the current-month
+    // / today+3w window or already matched to another bank txn. `today`
+    // is computed once per render so all cards share the same window.
+    const pendingPlans = filterDropdownPlans(
+      register.allPlan.filter(
+        (r) => r.status === "pending_plan" || r.status === "future",
+      ),
+      today,
     );
     for (const c of bankInbox) {
       m.set(c.bank.txn.id, rankPlansForBank(c.bank, pendingPlans));
     }
     return m;
-  }, [bankInbox, register]);
+  }, [bankInbox, register, today]);
 
   // Window key for confetti persistence: from→to
   const windowKey = data ? `${data.fromDate}_${data.toDate}` : null;

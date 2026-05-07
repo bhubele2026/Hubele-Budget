@@ -380,6 +380,47 @@ export function suggestPlanMatchesForBank(
  *  doesn't match the bank row are ranked last (in their original order)
  *  so callers can still expose them without losing the obvious filter.
  */
+/** (#457) Trim the per-card "Choose a planned" dropdown to the items a
+ *  user could realistically be matching this bank transaction to right
+ *  now. Excludes:
+ *    - plans dated before the first day of the current month (stale),
+ *    - plans dated after `max(end of current month, today + 21d)` (so a
+ *      late-month bank txn can still reach into early next month),
+ *    - plans already matched to another bank transaction (defensive: the
+ *      caller usually pre-filters to pending/future, but a stray
+ *      `matchedTxnId` would still slip through that status check).
+ *
+ *  Date math is done in the same local-day basis the rest of forecast
+ *  uses (parseISO drops to local midnight). `today` is injectable for
+ *  tests; defaults to `new Date()`. */
+export function filterDropdownPlans(
+  plans: PlanLine[],
+  today: Date = new Date(),
+): PlanLine[] {
+  const startOfMonth = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    1,
+  ).getTime();
+  const endOfMonth = new Date(
+    today.getFullYear(),
+    today.getMonth() + 1,
+    0,
+  ).getTime();
+  const todayMidnight = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  ).getTime();
+  const threeWeeksOut = todayMidnight + 21 * DAY;
+  const upperBound = Math.max(endOfMonth, threeWeeksOut);
+  return plans.filter((p) => {
+    if (p.matchedTxnId) return false;
+    const ms = parseISO(p.date);
+    return ms >= startOfMonth && ms <= upperBound;
+  });
+}
+
 export function rankPlansForBank(
   bank: Pick<BankLine, "amount" | "date" | "txn">,
   plans: PlanLine[],
