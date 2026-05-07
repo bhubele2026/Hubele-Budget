@@ -54,7 +54,7 @@ import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
@@ -745,7 +745,7 @@ export default function AmexPage() {
         : endingBalance.source === "anchor"
           ? "From saved anchor"
           : endingBalance.source === "plaid"
-            ? "From Plaid"
+            ? "Live from Plaid"
             : "Calculated";
     let asOfLabel: string | null = null;
     if (endingBalance.asOf) {
@@ -758,14 +758,29 @@ export default function AmexPage() {
         });
       }
     }
-    const footer = asOfLabel
-      ? `${sourceLabel} · as of ${asOfLabel}`
-      : sourceLabel;
+    // (#498) For the live Plaid fallback, lead the footer with a
+    // human-friendly "Updated X ago" so users can see at a glance how
+    // fresh the balance actually is — the absolute date is preserved
+    // in the tooltip below.
+    const relativeAsOf =
+      endingBalance.source === "plaid"
+        ? formatRelativeTime(endingBalance.asOf)
+        : "";
+    const footer =
+      endingBalance.source === "plaid"
+        ? relativeAsOf
+          ? `${sourceLabel} · Updated ${relativeAsOf}`
+          : sourceLabel
+        : asOfLabel
+          ? `${sourceLabel} · as of ${asOfLabel}`
+          : sourceLabel;
     const tooltip =
       endingBalance.source === "computed"
         ? `${footer}\nRunning sum of imported transactions. Set an actual balance to anchor the chip to the real card.`
-        : footer;
-    return { sourceLabel, asOfLabel, footer, tooltip };
+        : endingBalance.source === "plaid" && asOfLabel
+          ? `${sourceLabel} · as of ${asOfLabel}\nFetched directly from Plaid's per-account balance. Click refresh to re-fetch.`
+          : footer;
+    return { sourceLabel, asOfLabel, relativeAsOf, footer, tooltip };
   }, [endingBalance]);
 
   // Trailing 12-month ending-balance series, anchored at the snapshot
@@ -1582,8 +1597,37 @@ export default function AmexPage() {
               tooltip={endingBalanceMeta?.tooltip}
               testId="stat-ending-balance"
               action={
-                endingBalance.source === "computed" ||
-                endingBalance.source === "anchor" ? (
+                endingBalance.source === "plaid" ? (
+                  // (#498) Refresh affordance for the live Plaid balance.
+                  // Triggers `runSync` for every Amex-owning Plaid item in
+                  // scope and the success path inside `usePlaidSync`
+                  // already invalidates `["/api/amex/anchor"]`, so the
+                  // tile picks up the fresh per-account balance without
+                  // a full page reload. While the sync is in flight we
+                  // keep the existing cached value visible and only swap
+                  // the button label, so we don't re-introduce the
+                  // stuck-loading regression Task #483 fixed.
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-[11px] border-blue-300 text-blue-900 bg-white/60 hover:bg-white"
+                    onClick={handleRefreshAmex}
+                    disabled={
+                      isAmexSyncing || relevantPlaidItemIds.length === 0
+                    }
+                    data-testid="button-refresh-plaid-balance"
+                    title="Re-fetch the live Amex balance from Plaid"
+                  >
+                    <RefreshCw
+                      className={cn(
+                        "h-3 w-3 mr-1",
+                        isAmexSyncing && "animate-spin",
+                      )}
+                    />
+                    {isAmexSyncing ? "Refreshing…" : "Refresh"}
+                  </Button>
+                ) : endingBalance.source === "computed" ||
+                  endingBalance.source === "anchor" ? (
                   <Popover
                     open={anchorOpen}
                     onOpenChange={(o) => {
