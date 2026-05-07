@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse } from "./api.schemas";
+import type { AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -217,6 +217,55 @@ export declare const useUncategorizeTransactionsByIds: <TError = ErrorType<unkno
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof uncategorizeTransactionsByIds>>, TError, {
     data: BodyType<UncategorizeByIdsInput>;
+}, TContext>;
+/**
+ * @summary Apply the same patch to a list of transactions in a single
+request. Replaces the per-row PATCH /transactions/{id} fan-out
+used by the Amex / All-transactions bulk action bar (bulk
+recategorize, bulk bucket, bulk owed-by, bulk reimbursable,
+bulk reviewed) so a 500-row selection costs one round-trip
+instead of 500. The patch is the same shape as TransactionInput
+but only the fields the caller wants changed should be set —
+omitted fields are left alone. Unlike the per-row PATCH this
+endpoint does NOT trigger the auto-learn mapping-rule flow:
+bulk recategorize is an explicit user-driven action and the
+rule-learning toast is only meaningful for one-off edits.
+
+ */
+export declare const getBulkUpdateTransactionsUrl: () => string;
+export declare const bulkUpdateTransactions: (bulkUpdateTransactionsInput: BulkUpdateTransactionsInput, options?: RequestInit) => Promise<BulkUpdateTransactionsResult>;
+export declare const getBulkUpdateTransactionsMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateTransactions>>, TError, {
+        data: BodyType<BulkUpdateTransactionsInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateTransactions>>, TError, {
+    data: BodyType<BulkUpdateTransactionsInput>;
+}, TContext>;
+export type BulkUpdateTransactionsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkUpdateTransactions>>>;
+export type BulkUpdateTransactionsMutationBody = BodyType<BulkUpdateTransactionsInput>;
+export type BulkUpdateTransactionsMutationError = ErrorType<unknown>;
+/**
+ * @summary Apply the same patch to a list of transactions in a single
+request. Replaces the per-row PATCH /transactions/{id} fan-out
+used by the Amex / All-transactions bulk action bar (bulk
+recategorize, bulk bucket, bulk owed-by, bulk reimbursable,
+bulk reviewed) so a 500-row selection costs one round-trip
+instead of 500. The patch is the same shape as TransactionInput
+but only the fields the caller wants changed should be set —
+omitted fields are left alone. Unlike the per-row PATCH this
+endpoint does NOT trigger the auto-learn mapping-rule flow:
+bulk recategorize is an explicit user-driven action and the
+rule-learning toast is only meaningful for one-off edits.
+
+ */
+export declare const useBulkUpdateTransactions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateTransactions>>, TError, {
+        data: BodyType<BulkUpdateTransactionsInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof bulkUpdateTransactions>>, TError, {
+    data: BodyType<BulkUpdateTransactionsInput>;
 }, TContext>;
 /**
  * @summary Bulk set the forecast_flag on a list of transactions to a target

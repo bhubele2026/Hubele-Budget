@@ -492,6 +492,92 @@ export const UncategorizeTransactionsByIdsResponse = zod.object({
 });
 
 /**
+ * @summary Apply the same patch to a list of transactions in a single
+request. Replaces the per-row PATCH /transactions/{id} fan-out
+used by the Amex / All-transactions bulk action bar (bulk
+recategorize, bulk bucket, bulk owed-by, bulk reimbursable,
+bulk reviewed) so a 500-row selection costs one round-trip
+instead of 500. The patch is the same shape as TransactionInput
+but only the fields the caller wants changed should be set —
+omitted fields are left alone. Unlike the per-row PATCH this
+endpoint does NOT trigger the auto-learn mapping-rule flow:
+bulk recategorize is an explicit user-driven action and the
+rule-learning toast is only meaningful for one-off edits.
+
+ */
+export const bulkUpdateTransactionsBodyIdsMax = 1000;
+
+export const BulkUpdateTransactionsBody = zod.object({
+  ids: zod
+    .array(zod.string())
+    .max(bulkUpdateTransactionsBodyIdsMax)
+    .describe(
+      "Whitelist of transaction ids to apply `patch` to. Only rows\nowned by the requesting user are touched; ids that don't\nresolve are reported back individually in `results` with\n`ok: false`. Capped at 1000 ids per request — a longer list\nis rejected with a 400 to prevent a hand-crafted payload\nfrom stalling the API; the bulk action bar today is sized\nwell below this cap (a single account-page month rarely\nexceeds a few hundred rows).\n",
+    ),
+  patch: zod.object({
+    occurredOn: zod.string().optional(),
+    occurredAt: zod.string().nullish(),
+    description: zod.string().min(1).optional(),
+    amount: zod.string().optional(),
+    account: zod.string().nullish(),
+    categoryId: zod.string().nullish(),
+    forecastFlag: zod.boolean().optional(),
+    weeklyAllowance: zod.boolean().optional(),
+    weeklyBucket: zod
+      .union([
+        zod.literal("groceries"),
+        zod.literal("dining"),
+        zod.literal("entertainment"),
+        zod.literal("misc"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    monthlyAllowance: zod.boolean().optional(),
+    unplannedAllowance: zod.boolean().optional(),
+    reimbursable: zod.boolean().optional(),
+    reimbursed: zod.boolean().optional(),
+    reviewed: zod.boolean().optional(),
+    isTransfer: zod.boolean().optional(),
+    notes: zod.string().nullish(),
+    source: zod.string().optional(),
+    member: zod.string().nullish(),
+    owedBy: zod.string().nullish(),
+    debtId: zod.string().nullish(),
+    rememberPattern: zod
+      .string()
+      .nullish()
+      .describe(
+        'When set together with `categoryId`, the server upserts a\nmapping_rule (matchType=contains, priority=100) so that future\ntransactions with this description fragment auto-categorize the\nsame way. Used by the \"Categorize + remember\" affordance on the\nTransactions and Amex pages.\n',
+      ),
+  }),
+});
+
+export const BulkUpdateTransactionsResponse = zod.object({
+  updated: zod
+    .number()
+    .describe("Number of rows actually written (sum of ok-true results)."),
+  results: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        ok: zod.boolean(),
+        error: zod
+          .string()
+          .nullish()
+          .describe('Short reason when `ok` is false (e.g. \"not found\").'),
+      }),
+    )
+    .describe(
+      "One entry per input id, in the same order. `ok: true` for\nrows that were updated; `ok: false` with a short `error`\nstring for rows that don't belong to the user or otherwise\ncouldn't be written. Mirrors the per-id success\/failure\nshape the previous client-side fan-out used so the existing\n\"Updated 12, 1 failed\" toast keeps working.\n",
+    ),
+  affectedMonths: zod
+    .array(zod.string())
+    .describe(
+      "Distinct YYYY-MM-01 month-start strings spanning the\nupdated rows. Clients invalidate the corresponding budget\nmonth queries so per-line actuals refresh.\n",
+    ),
+});
+
+/**
  * @summary Bulk set the forecast_flag on a list of transactions to a target
 boolean value. Returns the ids that were actually flipped (rows
 whose flag already matched the target are skipped) so the client

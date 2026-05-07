@@ -896,6 +896,174 @@ export declare const UncategorizeTransactionsByIdsResponse: zod.ZodObject<{
     affectedIds: string[];
 }>;
 /**
+ * @summary Apply the same patch to a list of transactions in a single
+request. Replaces the per-row PATCH /transactions/{id} fan-out
+used by the Amex / All-transactions bulk action bar (bulk
+recategorize, bulk bucket, bulk owed-by, bulk reimbursable,
+bulk reviewed) so a 500-row selection costs one round-trip
+instead of 500. The patch is the same shape as TransactionInput
+but only the fields the caller wants changed should be set —
+omitted fields are left alone. Unlike the per-row PATCH this
+endpoint does NOT trigger the auto-learn mapping-rule flow:
+bulk recategorize is an explicit user-driven action and the
+rule-learning toast is only meaningful for one-off edits.
+
+ */
+export declare const bulkUpdateTransactionsBodyIdsMax = 1000;
+export declare const BulkUpdateTransactionsBody: zod.ZodObject<{
+    ids: zod.ZodArray<zod.ZodString, "many">;
+    patch: zod.ZodObject<{
+        occurredOn: zod.ZodOptional<zod.ZodString>;
+        occurredAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        description: zod.ZodOptional<zod.ZodString>;
+        amount: zod.ZodOptional<zod.ZodString>;
+        account: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        forecastFlag: zod.ZodOptional<zod.ZodBoolean>;
+        weeklyAllowance: zod.ZodOptional<zod.ZodBoolean>;
+        weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
+        monthlyAllowance: zod.ZodOptional<zod.ZodBoolean>;
+        unplannedAllowance: zod.ZodOptional<zod.ZodBoolean>;
+        reimbursable: zod.ZodOptional<zod.ZodBoolean>;
+        reimbursed: zod.ZodOptional<zod.ZodBoolean>;
+        reviewed: zod.ZodOptional<zod.ZodBoolean>;
+        isTransfer: zod.ZodOptional<zod.ZodBoolean>;
+        notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        source: zod.ZodOptional<zod.ZodString>;
+        member: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        owedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        rememberPattern: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        occurredOn?: string | undefined;
+        occurredAt?: string | null | undefined;
+        description?: string | undefined;
+        amount?: string | undefined;
+        account?: string | null | undefined;
+        categoryId?: string | null | undefined;
+        forecastFlag?: boolean | undefined;
+        weeklyAllowance?: boolean | undefined;
+        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        monthlyAllowance?: boolean | undefined;
+        unplannedAllowance?: boolean | undefined;
+        reimbursable?: boolean | undefined;
+        reimbursed?: boolean | undefined;
+        reviewed?: boolean | undefined;
+        isTransfer?: boolean | undefined;
+        notes?: string | null | undefined;
+        source?: string | undefined;
+        member?: string | null | undefined;
+        owedBy?: string | null | undefined;
+        debtId?: string | null | undefined;
+        rememberPattern?: string | null | undefined;
+    }, {
+        occurredOn?: string | undefined;
+        occurredAt?: string | null | undefined;
+        description?: string | undefined;
+        amount?: string | undefined;
+        account?: string | null | undefined;
+        categoryId?: string | null | undefined;
+        forecastFlag?: boolean | undefined;
+        weeklyAllowance?: boolean | undefined;
+        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        monthlyAllowance?: boolean | undefined;
+        unplannedAllowance?: boolean | undefined;
+        reimbursable?: boolean | undefined;
+        reimbursed?: boolean | undefined;
+        reviewed?: boolean | undefined;
+        isTransfer?: boolean | undefined;
+        notes?: string | null | undefined;
+        source?: string | undefined;
+        member?: string | null | undefined;
+        owedBy?: string | null | undefined;
+        debtId?: string | null | undefined;
+        rememberPattern?: string | null | undefined;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    ids: string[];
+    patch: {
+        occurredOn?: string | undefined;
+        occurredAt?: string | null | undefined;
+        description?: string | undefined;
+        amount?: string | undefined;
+        account?: string | null | undefined;
+        categoryId?: string | null | undefined;
+        forecastFlag?: boolean | undefined;
+        weeklyAllowance?: boolean | undefined;
+        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        monthlyAllowance?: boolean | undefined;
+        unplannedAllowance?: boolean | undefined;
+        reimbursable?: boolean | undefined;
+        reimbursed?: boolean | undefined;
+        reviewed?: boolean | undefined;
+        isTransfer?: boolean | undefined;
+        notes?: string | null | undefined;
+        source?: string | undefined;
+        member?: string | null | undefined;
+        owedBy?: string | null | undefined;
+        debtId?: string | null | undefined;
+        rememberPattern?: string | null | undefined;
+    };
+}, {
+    ids: string[];
+    patch: {
+        occurredOn?: string | undefined;
+        occurredAt?: string | null | undefined;
+        description?: string | undefined;
+        amount?: string | undefined;
+        account?: string | null | undefined;
+        categoryId?: string | null | undefined;
+        forecastFlag?: boolean | undefined;
+        weeklyAllowance?: boolean | undefined;
+        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        monthlyAllowance?: boolean | undefined;
+        unplannedAllowance?: boolean | undefined;
+        reimbursable?: boolean | undefined;
+        reimbursed?: boolean | undefined;
+        reviewed?: boolean | undefined;
+        isTransfer?: boolean | undefined;
+        notes?: string | null | undefined;
+        source?: string | undefined;
+        member?: string | null | undefined;
+        owedBy?: string | null | undefined;
+        debtId?: string | null | undefined;
+        rememberPattern?: string | null | undefined;
+    };
+}>;
+export declare const BulkUpdateTransactionsResponse: zod.ZodObject<{
+    updated: zod.ZodNumber;
+    results: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        ok: zod.ZodBoolean;
+        error: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        ok: boolean;
+        error?: string | null | undefined;
+    }, {
+        id: string;
+        ok: boolean;
+        error?: string | null | undefined;
+    }>, "many">;
+    affectedMonths: zod.ZodArray<zod.ZodString, "many">;
+}, "strip", zod.ZodTypeAny, {
+    updated: number;
+    affectedMonths: string[];
+    results: {
+        id: string;
+        ok: boolean;
+        error?: string | null | undefined;
+    }[];
+}, {
+    updated: number;
+    affectedMonths: string[];
+    results: {
+        id: string;
+        ok: boolean;
+        error?: string | null | undefined;
+    }[];
+}>;
+/**
  * @summary Bulk set the forecast_flag on a list of transactions to a target
 boolean value. Returns the ids that were actually flipped (rows
 whose flag already matched the target are skipped) so the client
@@ -5506,13 +5674,13 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
             count: number;
         }[];
         kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
+        error?: string | null | undefined;
         institutionName?: string | null | undefined;
         stillPreparing?: boolean | undefined;
         plaidDisplayMessage?: string | null | undefined;
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
         plaidItemRowId?: string | null | undefined;
-        error?: string | null | undefined;
         importedDateRange?: {
             min: string;
             max: string;
@@ -5532,13 +5700,13 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
             count: number;
         }[];
         kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
+        error?: string | null | undefined;
         institutionName?: string | null | undefined;
         stillPreparing?: boolean | undefined;
         plaidDisplayMessage?: string | null | undefined;
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
         plaidItemRowId?: string | null | undefined;
-        error?: string | null | undefined;
         importedDateRange?: {
             min: string;
             max: string;
@@ -5560,13 +5728,13 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
             count: number;
         }[];
         kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
+        error?: string | null | undefined;
         institutionName?: string | null | undefined;
         stillPreparing?: boolean | undefined;
         plaidDisplayMessage?: string | null | undefined;
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
         plaidItemRowId?: string | null | undefined;
-        error?: string | null | undefined;
         importedDateRange?: {
             min: string;
             max: string;
@@ -5588,13 +5756,13 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
             count: number;
         }[];
         kind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
+        error?: string | null | undefined;
         institutionName?: string | null | undefined;
         stillPreparing?: boolean | undefined;
         plaidDisplayMessage?: string | null | undefined;
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
         plaidItemRowId?: string | null | undefined;
-        error?: string | null | undefined;
         importedDateRange?: {
             min: string;
             max: string;
@@ -5667,18 +5835,18 @@ export declare const RefreshPlaidConsentExpirationsResponse: zod.ZodObject<{
         itemId: string;
         itemRowId: string;
         changed: boolean;
+        error?: string | null | undefined;
         institutionName?: string | null | undefined;
         consentExpirationAt?: string | null | undefined;
         consentExpirationLastRefreshedAt?: string | null | undefined;
-        error?: string | null | undefined;
     }, {
         itemId: string;
         itemRowId: string;
         changed: boolean;
+        error?: string | null | undefined;
         institutionName?: string | null | undefined;
         consentExpirationAt?: string | null | undefined;
         consentExpirationLastRefreshedAt?: string | null | undefined;
-        error?: string | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     updated: number;
@@ -5686,10 +5854,10 @@ export declare const RefreshPlaidConsentExpirationsResponse: zod.ZodObject<{
         itemId: string;
         itemRowId: string;
         changed: boolean;
+        error?: string | null | undefined;
         institutionName?: string | null | undefined;
         consentExpirationAt?: string | null | undefined;
         consentExpirationLastRefreshedAt?: string | null | undefined;
-        error?: string | null | undefined;
     }[];
     scanned: number;
     failed: number;
@@ -5699,10 +5867,10 @@ export declare const RefreshPlaidConsentExpirationsResponse: zod.ZodObject<{
         itemId: string;
         itemRowId: string;
         changed: boolean;
+        error?: string | null | undefined;
         institutionName?: string | null | undefined;
         consentExpirationAt?: string | null | undefined;
         consentExpirationLastRefreshedAt?: string | null | undefined;
-        error?: string | null | undefined;
     }[];
     scanned: number;
     failed: number;

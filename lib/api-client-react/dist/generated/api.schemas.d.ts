@@ -496,6 +496,48 @@ export interface UncategorizeByIdsResult {
    */
     affectedIds: string[];
 }
+export interface BulkUpdateTransactionsInput {
+    /**
+     * Whitelist of transaction ids to apply `patch` to. Only rows
+  owned by the requesting user are touched; ids that don't
+  resolve are reported back individually in `results` with
+  `ok: false`. Capped at 1000 ids per request — a longer list
+  is rejected with a 400 to prevent a hand-crafted payload
+  from stalling the API; the bulk action bar today is sized
+  well below this cap (a single account-page month rarely
+  exceeds a few hundred rows).
+  
+     * @maxItems 1000
+     */
+    ids: string[];
+    patch: TransactionInput;
+}
+export interface BulkUpdateTransactionResult {
+    id: string;
+    ok: boolean;
+    /**
+     * Short reason when `ok` is false (e.g. "not found").
+     * @nullable
+     */
+    error?: string | null;
+}
+export interface BulkUpdateTransactionsResult {
+    /** Number of rows actually written (sum of ok-true results). */
+    updated: number;
+    /** One entry per input id, in the same order. `ok: true` for
+  rows that were updated; `ok: false` with a short `error`
+  string for rows that don't belong to the user or otherwise
+  couldn't be written. Mirrors the per-id success/failure
+  shape the previous client-side fan-out used so the existing
+  "Updated 12, 1 failed" toast keeps working.
+   */
+    results: BulkUpdateTransactionResult[];
+    /** Distinct YYYY-MM-01 month-start strings spanning the
+  updated rows. Clients invalidate the corresponding budget
+  month queries so per-line actuals refresh.
+   */
+    affectedMonths: string[];
+}
 export interface BulkSetForecastFlagInput {
     /** Transaction ids to flip. Only rows owned by the requesting
   user whose current `forecast_flag` differs from the target

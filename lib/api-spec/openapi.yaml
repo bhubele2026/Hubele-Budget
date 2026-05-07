@@ -186,6 +186,34 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/UncategorizeByIdsResult" }
 
+  /transactions/bulk-update:
+    post:
+      operationId: bulkUpdateTransactions
+      tags: [transactions]
+      summary: |
+        Apply the same patch to a list of transactions in a single
+        request. Replaces the per-row PATCH /transactions/{id} fan-out
+        used by the Amex / All-transactions bulk action bar (bulk
+        recategorize, bulk bucket, bulk owed-by, bulk reimbursable,
+        bulk reviewed) so a 500-row selection costs one round-trip
+        instead of 500. The patch is the same shape as TransactionInput
+        but only the fields the caller wants changed should be set —
+        omitted fields are left alone. Unlike the per-row PATCH this
+        endpoint does NOT trigger the auto-learn mapping-rule flow:
+        bulk recategorize is an explicit user-driven action and the
+        rule-learning toast is only meaningful for one-off edits.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkUpdateTransactionsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkUpdateTransactionsResult" }
+
   /transactions/bulk-set-forecast-flag:
     post:
       operationId: bulkSetForecastFlag
@@ -1890,6 +1918,61 @@ components:
             Mirrors RecategorizeByPatternResult.affectedIds so the toast
             can report a precise count to the user.
           items: { type: string }
+
+    BulkUpdateTransactionsInput:
+      type: object
+      required: [ids, patch]
+      properties:
+        ids:
+          type: array
+          maxItems: 1000
+          description: |
+            Whitelist of transaction ids to apply `patch` to. Only rows
+            owned by the requesting user are touched; ids that don't
+            resolve are reported back individually in `results` with
+            `ok: false`. Capped at 1000 ids per request — a longer list
+            is rejected with a 400 to prevent a hand-crafted payload
+            from stalling the API; the bulk action bar today is sized
+            well below this cap (a single account-page month rarely
+            exceeds a few hundred rows).
+          items: { type: string }
+        patch:
+          $ref: "#/components/schemas/TransactionInput"
+
+    BulkUpdateTransactionsResult:
+      type: object
+      required: [updated, results, affectedMonths]
+      properties:
+        updated:
+          type: integer
+          description: Number of rows actually written (sum of ok-true results).
+        results:
+          type: array
+          description: |
+            One entry per input id, in the same order. `ok: true` for
+            rows that were updated; `ok: false` with a short `error`
+            string for rows that don't belong to the user or otherwise
+            couldn't be written. Mirrors the per-id success/failure
+            shape the previous client-side fan-out used so the existing
+            "Updated 12, 1 failed" toast keeps working.
+          items: { $ref: "#/components/schemas/BulkUpdateTransactionResult" }
+        affectedMonths:
+          type: array
+          description: |
+            Distinct YYYY-MM-01 month-start strings spanning the
+            updated rows. Clients invalidate the corresponding budget
+            month queries so per-line actuals refresh.
+          items: { type: string }
+
+    BulkUpdateTransactionResult:
+      type: object
+      required: [id, ok]
+      properties:
+        id: { type: string }
+        ok: { type: boolean }
+        error:
+          type: ["string", "null"]
+          description: Short reason when `ok` is false (e.g. "not found").
 
     BulkSetForecastFlagInput:
       type: object

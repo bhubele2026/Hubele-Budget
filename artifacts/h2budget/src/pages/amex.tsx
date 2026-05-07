@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import {
   useListTransactions,
   useUpdateTransaction,
+  useBulkUpdateTransactions,
   useListCategories,
   useListDebts,
   useListMappingRules,
@@ -11,6 +12,7 @@ import {
   getGetBudgetMonthQueryKey,
   type Transaction,
   type RepointedRule,
+  type BulkUpdateTransactionsInput,
 } from "@workspace/api-client-react";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import {
@@ -257,6 +259,7 @@ export default function AmexPage() {
     staleTime: 60_000,
   });
   const updateTx = useUpdateTransaction();
+  const bulkUpdateTx = useBulkUpdateTransactions();
   const buildRuleUndoAction = useRuleActionUndo();
   const weeklyLabels = useWeeklyBucketLabels();
 
@@ -1129,49 +1132,81 @@ export default function AmexPage() {
 
   // (#485) Bulk progress chip — drives the determinate "Updating X of N…"
   // affordance on the bulk action bar. `total === 0` means idle.
+  // (#502) Now usually flips done == total in a single tick because
+  // every bulk action is one server-side request, but kept around so
+  // the bulk-bucket grouping path (which can issue a small handful of
+  // requests, one per derived weeklyBucket value) still shows progress.
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number }>({
     done: 0,
     total: 0,
   });
-  // (#485) Generic bulk runner shared by every bulk action below. Bumped
-  // the worker pool from 6 → 12 so large selections finish noticeably
-  // faster, and threads progress updates back through `setBulkProgress`
-  // so callers get a determinate indicator for free.
+  // (#502) Generic bulk runner shared by every bulk action below.
+  // Replaces the old per-row PATCH /transactions/{id} fan-out with a
+  // single POST /transactions/bulk-update per *unique patch*, so a
+  // 500-row recategorize collapses from 500 HTTP round-trips to 1.
+  // The bulk-bucket caller derives the per-row weeklyBucket from each
+  // row's category, so it groups ids by stable patch-key and fires
+  // one bulk request per group (still tiny — at most 4 groups).
   const runBulkPatch = async (
     ids: string[],
-    buildPatch: (id: string) => Parameters<typeof updateTx.mutateAsync>[0]["data"] | null,
+    buildPatch: (
+      id: string,
+    ) => BulkUpdateTransactionsInput["patch"] | null,
   ): Promise<{ id: string; ok: boolean; err?: string }[]> => {
     if (!ids.length) return [];
-    const CONCURRENCY = 12;
+    // Group ids by JSON-stringified patch so callers that produce the
+    // same patch for every id (the common case) make a single request.
+    const groups = new Map<
+      string,
+      { patch: BulkUpdateTransactionsInput["patch"]; ids: string[] }
+    >();
     const results: { id: string; ok: boolean; err?: string }[] = [];
-    let cursor = 0;
-    let done = 0;
-    setBulkProgress({ done: 0, total: ids.length });
-    const worker = async () => {
-      while (cursor < ids.length) {
-        const i = cursor++;
-        const id = ids[i];
-        const patch = buildPatch(id);
-        if (!patch) {
-          results.push({ id, ok: false, err: "missing" });
-          done += 1;
-          setBulkProgress({ done, total: ids.length });
-          continue;
-        }
-        try {
-          await updateTx.mutateAsync({ id, data: patch });
-          results.push({ id, ok: true });
-        } catch (e) {
-          results.push({ id, ok: false, err: (e as Error).message });
-        }
-        done += 1;
-        setBulkProgress({ done, total: ids.length });
+    for (const id of ids) {
+      const patch = buildPatch(id);
+      if (!patch) {
+        results.push({ id, ok: false, err: "missing" });
+        continue;
       }
-    };
+      const key = JSON.stringify(patch);
+      const existing = groups.get(key);
+      if (existing) existing.ids.push(id);
+      else groups.set(key, { patch, ids: [id] });
+    }
+    const total = Array.from(groups.values()).reduce(
+      (acc, g) => acc + g.ids.length,
+      0,
+    );
+    let done = 0;
+    setBulkProgress({ done: 0, total });
     try {
-      await Promise.all(
-        Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
-      );
+      for (const { patch, ids: groupIds } of groups.values()) {
+        try {
+          const res = await bulkUpdateTx.mutateAsync({
+            data: { ids: groupIds, patch },
+          });
+          const okSet = new Set(
+            res.results.filter((r) => r.ok).map((r) => r.id),
+          );
+          for (const id of groupIds) {
+            if (okSet.has(id)) {
+              results.push({ id, ok: true });
+            } else {
+              const r = res.results.find((x) => x.id === id);
+              results.push({
+                id,
+                ok: false,
+                err: r?.error ?? "not found",
+              });
+            }
+          }
+        } catch (e) {
+          for (const id of groupIds) {
+            results.push({ id, ok: false, err: (e as Error).message });
+          }
+        }
+        done += groupIds.length;
+        setBulkProgress({ done, total });
+      }
     } finally {
       setBulkProgress({ done: 0, total: 0 });
     }
@@ -1274,24 +1309,9 @@ export default function AmexPage() {
   const bulkSetReviewed = async (next: boolean) => {
     const ids = Array.from(selected);
     if (!ids.length) return;
-    const CONCURRENCY = 6;
-    const results: { id: string; ok: boolean; err?: string }[] = [];
-    let cursor = 0;
-    const worker = async () => {
-      while (cursor < ids.length) {
-        const i = cursor++;
-        const id = ids[i];
-        try {
-          await updateTx.mutateAsync({ id, data: { reviewed: next } });
-          results.push({ id, ok: true });
-        } catch (e) {
-          results.push({ id, ok: false, err: (e as Error).message });
-        }
-      }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
-    );
+    // (#502) Was a bespoke 6-way concurrent fan-out — now one server-
+    // side bulk-update call, same as the other bulk actions.
+    const results = await runBulkPatch(ids, () => ({ reviewed: next }));
     invalidateTxns();
     const okCount = results.filter((r) => r.ok).length;
     const failed = results.filter((r) => !r.ok);

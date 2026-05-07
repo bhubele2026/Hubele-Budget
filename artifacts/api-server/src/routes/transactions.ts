@@ -31,6 +31,8 @@ import {
   UncategorizeTransactionsByIdsBody,
   uncategorizeTransactionsByIdsBodyIdsMax,
   BulkSetForecastFlagBody,
+  BulkUpdateTransactionsBody,
+  bulkUpdateTransactionsBodyIdsMax,
 } from "@workspace/api-zod";
 
 void UpdateTransactionBody;
@@ -811,6 +813,141 @@ router.post(
  * null. Pass `null` to allow flipping rows already uncategorized
  * (a no-op for those rows, but keeps the surface symmetric).
  */
+/**
+ * Apply the same partial patch to many transaction rows in a single
+ * request. Replaces the per-row PATCH /transactions/:id fan-out the
+ * Amex / All-transactions bulk action bar used to issue (one HTTP
+ * round-trip per selected row, recently capped at 12-way concurrency)
+ * — for a 500-row selection this collapses 500 HTTP calls into 1.
+ *
+ * Notably this endpoint does *not* run the per-row PATCH's auto-learn
+ * / mapping-rule flow when `categoryId` is set: bulk recategorize is
+ * an explicit user action and the auto-learn toast (created /
+ * repointed / "apply to past charges?") is only meaningful for one-
+ * off edits. Mirroring it for a 200-row bulk would either fire 200
+ * toasts or show the action for the first row only — both confusing.
+ *
+ * The forecast_flag bookkeeping that PATCH does (drop matching
+ * forecast_resolutions when forecastFlag is flipped to false) IS
+ * mirrored here so the Forecast inbox stays consistent.
+ */
+router.post(
+  "/transactions/bulk-update",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    // Pre-validate the ids array length so callers get a clear,
+    // field-specific 400 instead of the generic zod "Array must
+    // contain at most N element(s)" message.
+    const rawIds = (req.body as { ids?: unknown } | null | undefined)?.ids;
+    if (
+      Array.isArray(rawIds) &&
+      rawIds.length > bulkUpdateTransactionsBodyIdsMax
+    ) {
+      res.status(400).json({
+        error: `Too many ids: ${rawIds.length} exceeds the cap of ${bulkUpdateTransactionsBodyIdsMax} per request.`,
+      });
+      return;
+    }
+    const parsed = BulkUpdateTransactionsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const userId = req.userId!;
+    const { ids, patch } = parsed.data;
+    if (ids.length === 0) {
+      res.json({ updated: 0, results: [], affectedMonths: [] });
+      return;
+    }
+    // `rememberPattern` is intentionally ignored on the bulk endpoint
+    // (see route-level comment). Strip it before handing the patch to
+    // drizzle so it doesn't accidentally land in a column write.
+    const {
+      rememberPattern: _rememberPattern,
+      ...drizzlePatch
+    } = patch as typeof patch & { rememberPattern?: string | null };
+    void _rememberPattern;
+    if (
+      drizzlePatch.debtId &&
+      !(await userOwnsDebt(userId, drizzlePatch.debtId))
+    ) {
+      res.status(400).json({ error: "Invalid debtId" });
+      return;
+    }
+    // Empty patch (e.g. caller sent only `ids`) — nothing to write,
+    // but report a per-id "ok" for each owned row so the toast still
+    // makes sense. Cheap to detect and avoids issuing a no-op UPDATE.
+    if (Object.keys(drizzlePatch).length === 0) {
+      const owned = await db
+        .select({
+          id: transactionsTable.id,
+          occurredOn: transactionsTable.occurredOn,
+        })
+        .from(transactionsTable)
+        .where(
+          and(
+            eq(transactionsTable.userId, userId),
+            inArray(transactionsTable.id, ids),
+          ),
+        );
+      const ownedIds = new Set(owned.map((r) => r.id));
+      const monthSet = new Set<string>();
+      for (const r of owned) monthSet.add(`${r.occurredOn.slice(0, 7)}-01`);
+      res.json({
+        updated: 0,
+        results: ids.map((id) => ({
+          id,
+          ok: ownedIds.has(id),
+          error: ownedIds.has(id) ? null : "not found",
+        })),
+        affectedMonths: Array.from(monthSet).sort(),
+      });
+      return;
+    }
+    const updated = await db
+      .update(transactionsTable)
+      .set(drizzlePatch)
+      .where(
+        and(
+          eq(transactionsTable.userId, userId),
+          inArray(transactionsTable.id, ids),
+        ),
+      )
+      .returning({
+        id: transactionsTable.id,
+        occurredOn: transactionsTable.occurredOn,
+      });
+    const okIds = new Set(updated.map((r) => r.id));
+    // Mirror per-row PATCH cleanup: if forecast_flag was flipped off,
+    // drop any forecast_resolutions pointing at the affected rows so
+    // the Forecast inbox/bucket stays consistent.
+    if (patch.forecastFlag === false && updated.length > 0) {
+      await db
+        .delete(forecastResolutionsTable)
+        .where(
+          and(
+            eq(forecastResolutionsTable.userId, userId),
+            inArray(
+              forecastResolutionsTable.matchedTxnId,
+              updated.map((r) => r.id),
+            ),
+          ),
+        );
+    }
+    const monthSet = new Set<string>();
+    for (const r of updated) monthSet.add(`${r.occurredOn.slice(0, 7)}-01`);
+    res.json({
+      updated: updated.length,
+      results: ids.map((id) => ({
+        id,
+        ok: okIds.has(id),
+        error: okIds.has(id) ? null : "not found",
+      })),
+      affectedMonths: Array.from(monthSet).sort(),
+    });
+  },
+);
+
 router.post(
   "/transactions/uncategorize-by-ids",
   requireAuth,

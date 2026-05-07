@@ -32,6 +32,8 @@ import type {
   BulkCreateDebtsFromPlaidResponse,
   BulkSetForecastFlagInput,
   BulkSetForecastFlagResult,
+  BulkUpdateTransactionsInput,
+  BulkUpdateTransactionsResult,
   CashSignal,
   Category,
   CategoryInput,
@@ -813,6 +815,118 @@ export const useUncategorizeTransactionsByIds = <
   TContext
 > => {
   return useMutation(getUncategorizeTransactionsByIdsMutationOptions(options));
+};
+
+/**
+ * @summary Apply the same patch to a list of transactions in a single
+request. Replaces the per-row PATCH /transactions/{id} fan-out
+used by the Amex / All-transactions bulk action bar (bulk
+recategorize, bulk bucket, bulk owed-by, bulk reimbursable,
+bulk reviewed) so a 500-row selection costs one round-trip
+instead of 500. The patch is the same shape as TransactionInput
+but only the fields the caller wants changed should be set —
+omitted fields are left alone. Unlike the per-row PATCH this
+endpoint does NOT trigger the auto-learn mapping-rule flow:
+bulk recategorize is an explicit user-driven action and the
+rule-learning toast is only meaningful for one-off edits.
+
+ */
+export const getBulkUpdateTransactionsUrl = () => {
+  return `/api/transactions/bulk-update`;
+};
+
+export const bulkUpdateTransactions = async (
+  bulkUpdateTransactionsInput: BulkUpdateTransactionsInput,
+  options?: RequestInit,
+): Promise<BulkUpdateTransactionsResult> => {
+  return customFetch<BulkUpdateTransactionsResult>(
+    getBulkUpdateTransactionsUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(bulkUpdateTransactionsInput),
+    },
+  );
+};
+
+export const getBulkUpdateTransactionsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkUpdateTransactions>>,
+    TError,
+    { data: BodyType<BulkUpdateTransactionsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkUpdateTransactions>>,
+  TError,
+  { data: BodyType<BulkUpdateTransactionsInput> },
+  TContext
+> => {
+  const mutationKey = ["bulkUpdateTransactions"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkUpdateTransactions>>,
+    { data: BodyType<BulkUpdateTransactionsInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkUpdateTransactions(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BulkUpdateTransactionsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof bulkUpdateTransactions>>
+>;
+export type BulkUpdateTransactionsMutationBody =
+  BodyType<BulkUpdateTransactionsInput>;
+export type BulkUpdateTransactionsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Apply the same patch to a list of transactions in a single
+request. Replaces the per-row PATCH /transactions/{id} fan-out
+used by the Amex / All-transactions bulk action bar (bulk
+recategorize, bulk bucket, bulk owed-by, bulk reimbursable,
+bulk reviewed) so a 500-row selection costs one round-trip
+instead of 500. The patch is the same shape as TransactionInput
+but only the fields the caller wants changed should be set —
+omitted fields are left alone. Unlike the per-row PATCH this
+endpoint does NOT trigger the auto-learn mapping-rule flow:
+bulk recategorize is an explicit user-driven action and the
+rule-learning toast is only meaningful for one-off edits.
+
+ */
+export const useBulkUpdateTransactions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkUpdateTransactions>>,
+    TError,
+    { data: BodyType<BulkUpdateTransactionsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof bulkUpdateTransactions>>,
+  TError,
+  { data: BodyType<BulkUpdateTransactionsInput> },
+  TContext
+> => {
+  return useMutation(getBulkUpdateTransactionsMutationOptions(options));
 };
 
 /**
