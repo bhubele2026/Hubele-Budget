@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Link } from "wouter";
 import {
   useListTransactions,
@@ -196,13 +197,32 @@ export default function AmexPage() {
   // load so manual filter changes aren't clobbered on refetch.
   const categoryUrlApplied = useRef(false);
 
-  // Server query: fetch the union of [selected month] ∪ [selected month →
-  // current month] so we have everything needed for the month's rows AND
-  // for rolling the ending balance between the anchor and the selected
-  // month. Per-row From/To narrows further client-side.
-  const queryParams = useMemo(() => {
-    // Widen window to cover the trailing-12-month trend chart, which
-    // anchors at currentMonth and rolls back to (selectedMonth - 11).
+  // (#485) Two focused queries:
+  //   1. `monthQueryParams` — the rows the visible list, stats, and
+  //      day-group running balances need. Tightly capped to a single
+  //      month so the page paints quickly.
+  //   2. `trendQueryParams` — the wider 12-month window the trend
+  //      chart needs, plus the rolling ending-balance computation
+  //      (`netChangeByMonth`) and Plaid-item scoping. Hydrates after
+  //      the list so it never blocks the first paint.
+  const MONTH_LIMIT = 1000;
+  const sourceParam = useMemo(
+    () =>
+      sourceFilter && sourceFilter !== "all"
+        ? sourceFilter
+        : AMEX_SOURCES.join(","),
+    [sourceFilter],
+  );
+  const monthQueryParams = useMemo(
+    () => ({
+      limit: MONTH_LIMIT,
+      from: monthFirstISO(selectedMonth),
+      to: monthLastISO(selectedMonth),
+      source: sourceParam,
+    }),
+    [sourceParam, selectedMonth],
+  );
+  const trendQueryParams = useMemo(() => {
     const trendStart = shiftMonth(selectedMonth, -11);
     const candidates = [selectedMonth, currentMonth, trendStart];
     let earlier = candidates[0];
@@ -211,20 +231,17 @@ export default function AmexPage() {
       if (compareMonth(c, earlier) < 0) earlier = c;
       if (compareMonth(c, later) > 0) later = c;
     }
-    const p: { source?: string; limit?: number; from?: string; to?: string } = {
+    return {
       limit: 5000,
       from: monthFirstISO(earlier),
       to: monthLastISO(later),
+      source: sourceParam,
     };
-    if (sourceFilter && sourceFilter !== "all") {
-      p.source = sourceFilter;
-    } else {
-      p.source = AMEX_SOURCES.join(",");
-    }
-    return p;
-  }, [sourceFilter, selectedMonth, currentMonth]);
+  }, [sourceParam, selectedMonth, currentMonth]);
 
-  const { data: txns, isLoading } = useListTransactions(queryParams);
+  const { data: monthTxns, isLoading } = useListTransactions(monthQueryParams);
+  // Lower-priority — page renders as soon as the month query resolves.
+  const { data: wideTxns } = useListTransactions(trendQueryParams);
   const { data: categories } = useListCategories();
   const { data: debts } = useListDebts();
   const { data: mappingRules } = useListMappingRules();
@@ -333,24 +350,36 @@ export default function AmexPage() {
     categoryUrlApplied.current = true;
   }, [categories]);
 
-  // All visible Amex/source-filtered txns (server-filtered).
-  const all = txns ?? [];
+  // (#485) `monthAll` drives the visible list/stats/filters and resolves
+  // immediately from the focused month query. `wideAll` covers the rolling
+  // 12-month window the trend chart and ending-balance roll-forward need.
+  // Until the wider query hydrates, `wideAll` falls back to `monthAll` so
+  // memos derived from it still produce reasonable values for the
+  // selected month.
+  const monthAll = monthTxns ?? [];
+  const wideAll = wideTxns ?? monthAll;
+
+  // (#485) When the month query hits the server cap, surface a small hint
+  // so users know their filters need to narrow rather than silently
+  // truncating.
+  const monthCapHit = monthAll.length >= MONTH_LIMIT;
 
   // Members from server-returned set so the dropdown reflects current source.
   const members = useMemo(() => {
     const s = new Set<string>();
-    for (const t of all) if (t.member) s.add(t.member);
+    for (const t of monthAll) if (t.member) s.add(t.member);
     return Array.from(s).sort();
-  }, [all]);
+  }, [monthAll]);
 
-  // Restrict to the selected calendar month before any other client-side
-  // filtering. The From/To inputs further narrow within the month.
+  // The month query is already server-scoped to the selected month, but
+  // we still pin the filter as a safety net (e.g. if a future caller
+  // widens the query without updating this scope).
   const monthScoped = useMemo(() => {
-    return all.filter((t) => {
+    return monthAll.filter((t) => {
       const mk = monthKeyFromISO(t.occurredOn);
       return compareMonth(mk, selectedMonth) === 0;
     });
-  }, [all, selectedMonth]);
+  }, [monthAll, selectedMonth]);
 
   // Apply client-side filters.
   const filtered = useMemo(() => {
@@ -409,23 +438,23 @@ export default function AmexPage() {
   // each month a consistent ending balance.
   const netChangeByMonth = useMemo(() => {
     const m = new Map<string, number>();
-    for (const t of all) {
+    for (const t of wideAll) {
       const mk = monthKeyFromISO(t.occurredOn);
       const k = `${mk.year}-${mk.month}`;
       m.set(k, (m.get(k) ?? 0) + parseSigned(t.amount));
     }
     return m;
-  }, [all]);
+  }, [wideAll]);
 
   // Distinct Plaid account IDs present on the Amex-source transactions.
   // These identify the actual Amex card account(s) feeding this page.
   const amexPlaidAccountIds = useMemo(() => {
     const s = new Set<string>();
-    for (const t of all) {
+    for (const t of wideAll) {
       if (t.plaidAccountId) s.add(t.plaidAccountId);
     }
     return s;
-  }, [all]);
+  }, [wideAll]);
 
   // (#373) Mirror the Chase page's per-page item scoping. Map the Amex
   // card(s) currently shown back to their owning Plaid item id(s) so the
@@ -617,10 +646,10 @@ export default function AmexPage() {
   }, [resolvedAnchor.asOf, currentMonth]);
 
   const anchorMonthTxns = useMemo(() => {
-    return all.filter(
+    return wideAll.filter(
       (t) => compareMonth(monthKeyFromISO(t.occurredOn), anchorMonth) === 0,
     );
-  }, [all, anchorMonth]);
+  }, [wideAll, anchorMonth]);
 
   const endingBalance = useMemo(() => {
     if (resolvedAnchor.anchor === null) {
@@ -732,12 +761,12 @@ export default function AmexPage() {
 
   const knownPayers = useMemo(() => {
     const set = new Set<string>();
-    for (const t of all) {
+    for (const t of wideAll) {
       const v = (t.owedBy ?? "").trim();
       if (v) set.add(v);
     }
     return Array.from(set).sort();
-  }, [all]);
+  }, [wideAll]);
   const owedByListId = "amex-owed-by-suggestions";
 
   // Bulk selection
@@ -790,7 +819,7 @@ export default function AmexPage() {
     categoryId: string | null,
     rememberPattern?: string | null,
   ) => {
-    const tx = all.find((t) => t.id === id);
+    const tx = wideAll.find((t) => t.id === id);
     try {
       const updated = await updateTx.mutateAsync({
         id,
@@ -1098,6 +1127,57 @@ export default function AmexPage() {
     }
   };
 
+  // (#485) Bulk progress chip — drives the determinate "Updating X of N…"
+  // affordance on the bulk action bar. `total === 0` means idle.
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number }>({
+    done: 0,
+    total: 0,
+  });
+  // (#485) Generic bulk runner shared by every bulk action below. Bumped
+  // the worker pool from 6 → 12 so large selections finish noticeably
+  // faster, and threads progress updates back through `setBulkProgress`
+  // so callers get a determinate indicator for free.
+  const runBulkPatch = async (
+    ids: string[],
+    buildPatch: (id: string) => Parameters<typeof updateTx.mutateAsync>[0]["data"] | null,
+  ): Promise<{ id: string; ok: boolean; err?: string }[]> => {
+    if (!ids.length) return [];
+    const CONCURRENCY = 12;
+    const results: { id: string; ok: boolean; err?: string }[] = [];
+    let cursor = 0;
+    let done = 0;
+    setBulkProgress({ done: 0, total: ids.length });
+    const worker = async () => {
+      while (cursor < ids.length) {
+        const i = cursor++;
+        const id = ids[i];
+        const patch = buildPatch(id);
+        if (!patch) {
+          results.push({ id, ok: false, err: "missing" });
+          done += 1;
+          setBulkProgress({ done, total: ids.length });
+          continue;
+        }
+        try {
+          await updateTx.mutateAsync({ id, data: patch });
+          results.push({ id, ok: true });
+        } catch (e) {
+          results.push({ id, ok: false, err: (e as Error).message });
+        }
+        done += 1;
+        setBulkProgress({ done, total: ids.length });
+      }
+    };
+    try {
+      await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
+      );
+    } finally {
+      setBulkProgress({ done: 0, total: 0 });
+    }
+    return results;
+  };
+
   const bulkSetBucket = async (
     bucket: "" | "weekly" | "monthly" | "unplanned",
     weeklyBucket?: typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket],
@@ -1105,44 +1185,25 @@ export default function AmexPage() {
     const ids = Array.from(selected);
     if (!ids.length) return;
     const byId = new Map(filtered.map((t) => [t.id, t] as const));
-    const CONCURRENCY = 6;
-    const results: { id: string; ok: boolean; err?: string }[] = [];
-    let cursor = 0;
-    const worker = async () => {
-      while (cursor < ids.length) {
-        const i = cursor++;
-        const id = ids[i];
-        const t = byId.get(id);
-        if (!t) {
-          results.push({ id, ok: false, err: "missing" });
-          continue;
-        }
-        let wb: typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket] | null = null;
-        if (bucket === "weekly") {
-          wb =
-            weeklyBucket ??
-            t.weeklyBucket ??
-            defaultWeeklyBucketFor(categoryById.get(t.categoryId ?? "") ?? "");
-        }
-        try {
-          await updateTx.mutateAsync({
-            id,
-            data: {
-              weeklyAllowance: bucket === "weekly",
-              monthlyAllowance: bucket === "monthly",
-              unplannedAllowance: bucket === "unplanned",
-              weeklyBucket: wb,
-            },
-          });
-          results.push({ id, ok: true });
-        } catch (e) {
-          results.push({ id, ok: false, err: (e as Error).message });
-        }
+    const results = await runBulkPatch(ids, (id) => {
+      const t = byId.get(id);
+      if (!t) return null;
+      let wb:
+        | typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket]
+        | null = null;
+      if (bucket === "weekly") {
+        wb =
+          weeklyBucket ??
+          t.weeklyBucket ??
+          defaultWeeklyBucketFor(categoryById.get(t.categoryId ?? "") ?? "");
       }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
-    );
+      return {
+        weeklyAllowance: bucket === "weekly",
+        monthlyAllowance: bucket === "monthly",
+        unplannedAllowance: bucket === "unplanned",
+        weeklyBucket: wb,
+      };
+    });
     invalidateTxns();
     const okCount = results.filter((r) => r.ok).length;
     const failed = results.filter((r) => !r.ok);
@@ -1160,25 +1221,8 @@ export default function AmexPage() {
   const bulkSetCategory = async (categoryId: string | null) => {
     const ids = Array.from(selected);
     if (!ids.length) return;
-    const byId = new Map(all.map((t) => [t.id, t] as const));
-    const CONCURRENCY = 6;
-    const results: { id: string; ok: boolean; err?: string }[] = [];
-    let cursor = 0;
-    const worker = async () => {
-      while (cursor < ids.length) {
-        const i = cursor++;
-        const id = ids[i];
-        try {
-          await updateTx.mutateAsync({ id, data: { categoryId } });
-          results.push({ id, ok: true });
-        } catch (e) {
-          results.push({ id, ok: false, err: (e as Error).message });
-        }
-      }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
-    );
+    const byId = new Map(wideAll.map((t) => [t.id, t] as const));
+    const results = await runBulkPatch(ids, () => ({ categoryId }));
     const okIds = new Set(results.filter((r) => r.ok).map((r) => r.id));
     const failed = results.filter((r) => !r.ok);
     invalidateTxns();
@@ -1211,24 +1255,7 @@ export default function AmexPage() {
     if (!ids.length) return;
     const trimmed = raw.trim();
     const next: string | null = trimmed.length === 0 ? null : trimmed;
-    const CONCURRENCY = 6;
-    const results: { id: string; ok: boolean; err?: string }[] = [];
-    let cursor = 0;
-    const worker = async () => {
-      while (cursor < ids.length) {
-        const i = cursor++;
-        const id = ids[i];
-        try {
-          await updateTx.mutateAsync({ id, data: { owedBy: next } });
-          results.push({ id, ok: true });
-        } catch (e) {
-          results.push({ id, ok: false, err: (e as Error).message });
-        }
-      }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
-    );
+    const results = await runBulkPatch(ids, () => ({ owedBy: next }));
     invalidateTxns();
     const okCount = results.filter((r) => r.ok).length;
     const failed = results.filter((r) => !r.ok);
@@ -1284,24 +1311,7 @@ export default function AmexPage() {
   const bulkSetReimbursable = async (next: boolean) => {
     const ids = Array.from(selected);
     if (!ids.length) return;
-    const CONCURRENCY = 6;
-    const results: { id: string; ok: boolean; err?: string }[] = [];
-    let cursor = 0;
-    const worker = async () => {
-      while (cursor < ids.length) {
-        const i = cursor++;
-        const id = ids[i];
-        try {
-          await updateTx.mutateAsync({ id, data: { reimbursable: next } });
-          results.push({ id, ok: true });
-        } catch (e) {
-          results.push({ id, ok: false, err: (e as Error).message });
-        }
-      }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
-    );
+    const results = await runBulkPatch(ids, () => ({ reimbursable: next }));
     invalidateTxns();
     const okCount = results.filter((r) => r.ok).length;
     const failed = results.filter((r) => !r.ok);
@@ -1673,8 +1683,18 @@ export default function AmexPage() {
           memberFilter={memberFilter}
           onMemberFilterChange={setMemberFilter}
           rightSlot={
-            <div className="text-xs text-muted-foreground ml-auto" data-testid="text-row-count">
-              {filtered.length} of {monthScoped.length} txns
+            <div className="text-xs ml-auto flex flex-col items-end" data-testid="text-row-count">
+              <span className="text-muted-foreground">
+                {filtered.length} of {monthScoped.length} txns
+              </span>
+              {monthCapHit && (
+                <span
+                  className="text-[10px] text-amber-700"
+                  data-testid="text-month-cap-hit"
+                >
+                  Showing first {MONTH_LIMIT} — narrow your filters
+                </span>
+              )}
             </div>
           }
         />
@@ -1775,6 +1795,14 @@ export default function AmexPage() {
               Clear
             </Button>
           </div>
+          {bulkProgress.total > 0 && (
+            <span
+              className="text-xs text-blue-900 font-mono tabular-nums"
+              data-testid="text-bulk-progress"
+            >
+              Updating {bulkProgress.done}/{bulkProgress.total}…
+            </span>
+          )}
           <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
             Clear
           </Button>
@@ -1786,7 +1814,11 @@ export default function AmexPage() {
           No transactions match these filters.
         </CardContent></Card>
       )}
-      {groups.map(([dayKey, items]) => {
+      <VirtualizedDayGroups
+        groups={groups}
+        todayKey={todayKey}
+        todayRef={todayRef}
+        renderGroup={([dayKey, items]) => {
         const dayTotal = items.reduce((s, t) => s + parseAbs(t.amount), 0);
         const ids = items.map((t) => t.id);
         const allSelected = ids.every((id) => selected.has(id));
@@ -2063,13 +2095,97 @@ export default function AmexPage() {
               </div>
           </DayGroup>
         );
-      })}
+        }}
+      />
       <datalist id={owedByListId}>
         {knownPayers.map((p) => (
           <option key={p} value={p} />
         ))}
       </datalist>
       {previewDialog}
+    </div>
+  );
+}
+
+// (#485) Window-virtualized list of day groups. Renders only the
+// groups currently in the viewport (plus a small overscan), so the
+// Amex page stays smooth even when a month has hundreds of rows.
+// Uses padding spacers (instead of absolute positioning) so the
+// `position: sticky` day-header inside `DayGroup` continues to work
+// against the page scroll container.
+function VirtualizedDayGroups<G>({
+  groups,
+  todayKey,
+  todayRef,
+  renderGroup,
+}: {
+  groups: [string, G[]][];
+  todayKey: string;
+  todayRef: React.MutableRefObject<HTMLDivElement | null>;
+  renderGroup: (entry: [string, G[]]) => React.ReactNode;
+}) {
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+  useEffect(() => {
+    const el = parentRef.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      setScrollMargin(rect.top + window.scrollY);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(document.body);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  const virtualizer = useWindowVirtualizer({
+    count: groups.length,
+    estimateSize: (i) => 64 + groups[i][1].length * 72,
+    overscan: 4,
+    scrollMargin,
+  });
+
+  // Find the index of today's group so we can ensure it stays mounted
+  // (the auto-scroll-to-today effect relies on its DOM ref).
+  const todayIdx = useMemo(
+    () => groups.findIndex(([k]) => k === todayKey),
+    [groups, todayKey],
+  );
+
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+  const paddingBottom =
+    virtualItems.length > 0
+      ? totalSize - virtualItems[virtualItems.length - 1].end
+      : 0;
+
+  // Collect indices to render: the virtual window plus today (so the
+  // initial scroll-into-view always finds an element).
+  const indices = new Set(virtualItems.map((vi) => vi.index));
+  if (todayIdx >= 0) indices.add(todayIdx);
+  const sorted = Array.from(indices).sort((a, b) => a - b);
+
+  return (
+    <div ref={parentRef} className="space-y-6">
+      <div style={{ paddingTop, paddingBottom }}>
+        <div className="space-y-6">
+          {sorted.map((index) => (
+            <div
+              key={groups[index][0]}
+              data-index={index}
+              ref={virtualizer.measureElement}
+            >
+              {renderGroup(groups[index])}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
