@@ -140,6 +140,15 @@ import {
 // Dashboard and Transactions pages too (Task #333).
 export { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 
+// (#456) Shared predicate: a plan row can accept a drag-to-match drop iff
+// it's a still-open occurrence (pending or upcoming). Used by both the
+// `PlanDropRow` visual treatment and the page-level `onDragEnd` handler so
+// the rendered "blocked" state and the actual rejection logic can never
+// drift apart.
+function isPlanRowMatchEligible(row: Pick<PlanLine, "status">): boolean {
+  return row.status === "pending_plan" || row.status === "future";
+}
+
 function statusBadge(s: string) {
   const map: Record<string, { label: string; cls: string }> = {
     pending_plan: { label: "Pending plan", cls: "bg-amber-100 text-amber-900 border-amber-200" },
@@ -227,6 +236,10 @@ function InboxCardView({
     : undefined;
 
   const canOneClick = !isOverlay && !!oneClickSuggestion;
+  // (#456) Show the explicit drag hint only on rows where the user has no
+  // one-click match to fall back on — those are the rows where users
+  // historically miss that drag-to-match exists at all.
+  const showDragHint = !isOverlay && !oneClickSuggestion;
   return (
     <div
       ref={setNodeRef}
@@ -236,7 +249,11 @@ function InboxCardView({
       onFocus={onHoverChange ? () => onHoverChange(true) : undefined}
       onBlur={onHoverChange ? () => onHoverChange(false) : undefined}
       tabIndex={canOneClick ? 0 : undefined}
-      data-testid={canOneClick ? `inbox-card-${card.bank.txn.id}` : undefined}
+      data-testid={
+        canOneClick
+          ? `inbox-card-${card.bank.txn.id}`
+          : `inbox-card-draggable-${card.bank.txn.id}`
+      }
       aria-keyshortcuts={canOneClick ? "Enter" : undefined}
       aria-label={
         canOneClick && oneClickSuggestion
@@ -265,8 +282,10 @@ function InboxCardView({
       <button
         {...listeners}
         {...attributes}
-        className="touch-none cursor-grab text-muted-foreground hover:text-foreground"
-        aria-label="Drag to match"
+        className="touch-none cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-md p-1.5 -m-1 inline-flex items-center justify-center min-w-[32px] min-h-[32px] focus-visible:ring-2 focus-visible:ring-primary/40 outline-none"
+        aria-label="Drag to match onto a planned item"
+        title="Drag onto a planned item to match"
+        data-testid={`inbox-drag-handle-${card.bank.txn.id}`}
         type="button"
       >
         <GripVertical className="w-4 h-4" />
@@ -275,6 +294,14 @@ function InboxCardView({
         <div className="font-medium text-sm truncate">
           {card.bank.txn.description}
         </div>
+        {showDragHint && (
+          <div
+            className="text-[11px] text-muted-foreground italic mt-0.5"
+            data-testid={`inbox-drag-hint-${card.bank.txn.id}`}
+          >
+            Drag onto a planned item to match
+          </div>
+        )}
         <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
           <span>{formatDate(card.bank.date)}</span>
           {categoryName && (
@@ -471,15 +498,36 @@ function PlanDropRow({
    */
   isHighlighted?: boolean;
 }) {
+  // (#456) Keep ALL plan rows registered as droppable — even matched/missed
+  // ones — so a stray drop doesn't silently no-op. The parent decides
+  // whether to apply the match or surface a rejection toast based on
+  // `row.status` in `onDragEnd`. Eligibility uses the shared helper so the
+  // visual "blocked" state and the drop handler can never disagree.
+  const isEligible = isPlanRowMatchEligible(row);
   const droppable = useDroppable({
     id: `plan:${row.itemId}|${row.date}`,
     data: { kind: "plan", planRow: row },
-    disabled: row.status === "matched" || row.status === "missed",
   });
-  const isOver = droppable.isOver && activeDragId !== null;
-  const showSuggestion = !isOver && isBestSuggestion;
+  const isDragActive = activeDragId !== null;
+  // (#456) Only treat hover-over as a "valid drop" highlight when the row
+  // is actually eligible. Ineligible rows stay registered as droppable
+  // (so `onDragEnd` can surface a rejection toast) but must NEVER render
+  // the strong primary-ring affordance — otherwise the UI implies a
+  // valid drop and then rejects on release. Ineligible-hover gets its
+  // own distinct destructive treatment so the user knows they're over a
+  // blocked target.
+  const isOverEligible = droppable.isOver && isDragActive && isEligible;
+  const isOverBlocked = droppable.isOver && isDragActive && !isEligible;
+  const showSuggestion = !isOverEligible && isBestSuggestion;
   const canMove =
     !!onMove && (row.status === "pending_plan" || row.status === "future");
+  // (#456) During an active drag, mark every eligible plan row as a valid
+  // drop target so the user sees there are many places they can land. The
+  // row directly under the cursor (`isOverEligible`) gets a stronger
+  // highlight via the existing primary ring. Ineligible rows show a clear
+  // disabled style.
+  const showDropAffordance = isDragActive && isEligible && !isOverEligible;
+  const showDropBlocked = isDragActive && !isEligible;
   return (
     <div
       ref={droppable.setNodeRef}
@@ -493,16 +541,25 @@ function PlanDropRow({
         }
       }}
       data-suggested-drop={showSuggestion ? "true" : undefined}
+      data-drop-eligible={
+        isDragActive ? (isEligible ? "true" : "false") : undefined
+      }
       data-plan-key={`${row.itemId}|${row.date}`}
       data-testid={`plan-row-${row.itemId}-${row.date}`}
       className={`w-full text-left p-4 flex items-center justify-between transition-colors cursor-pointer ${
-        isOver
+        isOverEligible
           ? "bg-primary/10 ring-2 ring-primary ring-inset"
-          : isHighlighted
-            ? "bg-sky-50 ring-2 ring-sky-400 ring-inset dark:bg-sky-950/30"
-            : showSuggestion
-              ? "bg-amber-50 ring-2 ring-amber-400/70 ring-inset dark:bg-amber-950/20"
-              : "hover:bg-muted/50"
+          : isOverBlocked
+            ? "bg-destructive/5 ring-2 ring-destructive/60 ring-inset opacity-60 cursor-not-allowed"
+            : isHighlighted
+              ? "bg-sky-50 ring-2 ring-sky-400 ring-inset dark:bg-sky-950/30"
+              : showSuggestion
+                ? "bg-amber-50 ring-2 ring-amber-400/70 ring-inset dark:bg-amber-950/20"
+                : showDropAffordance
+                  ? "bg-primary/[0.04] ring-1 ring-dashed ring-primary/40 ring-inset"
+                  : showDropBlocked
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:bg-muted/50"
       }`}
     >
       <div className="flex items-center gap-3 min-w-0">
@@ -685,6 +742,24 @@ export default function ForecastPage() {
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [draftSnapshot, setDraftSnapshot] = useState("");
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  // (#456) First-time hint above the bank inbox explaining the
+  // drag-to-match gesture. Persisted dismissal in localStorage so it never
+  // comes back once the user closes it.
+  const [dragHintDismissed, setDragHintDismissed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("h2budget:forecastDragHintDismissed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const dismissDragHint = () => {
+    setDragHintDismissed(true);
+    try {
+      localStorage.setItem("h2budget:forecastDragHintDismissed", "1");
+    } catch {
+      /* no-op */
+    }
+  };
   // (#26) Tracks which inbox card is currently hovered/focused so the
   // matching plan row can light up before the user picks the card up.
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
@@ -1216,7 +1291,27 @@ export default function ForecastPage() {
       | { txnId?: string }
       | undefined;
     if (overData?.kind === "plan" && overData.planRow && activeData?.txnId) {
-      matchInboxToPlan(activeData.txnId, overData.planRow);
+      const planRow = overData.planRow;
+      // (#456) Plan rows that aren't pending/future stay registered as
+      // droppable so this branch can surface a clear rejection toast
+      // instead of silently dropping the user's gesture on the floor.
+      // Mirrors the `isEligible` predicate in `PlanDropRow` so the visual
+      // "blocked" state and the actual drop handler can never disagree.
+      if (!isPlanRowMatchEligible(planRow)) {
+        const reason =
+          planRow.status === "matched"
+            ? "already matched"
+            : planRow.status === "missed"
+              ? "marked missed"
+              : `not available (${planRow.status})`;
+        toast({
+          title: `Can't match here`,
+          description: `${planRow.label} on ${formatDate(planRow.date)} is ${reason}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      matchInboxToPlan(activeData.txnId, planRow);
     }
   };
 
@@ -2321,6 +2416,33 @@ export default function ForecastPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
+                {/* (#456) First-time drag-to-match callout. Only shown when
+                    the user has at least one unresolved inbox row to act on
+                    AND hasn't dismissed the hint yet. */}
+                {!dragHintDismissed && bankInbox.length > 0 && (
+                  <div
+                    className="flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100"
+                    data-testid="drag-to-match-hint"
+                    role="note"
+                  >
+                    <GripVertical className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <div className="flex-1">
+                      <span className="font-medium">Tip:</span> drag any inbox
+                      row onto a planned item to match it — even when there's
+                      no suggestion.
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs -my-1"
+                      onClick={dismissDragHint}
+                      data-testid="drag-to-match-hint-dismiss"
+                      aria-label="Dismiss drag-to-match tip"
+                    >
+                      Got it
+                    </Button>
+                  </div>
+                )}
                 {/* (#27) Selection-scoped bulk bar */}
                 {selectedBankIds.size > 0 && (
                   <div
