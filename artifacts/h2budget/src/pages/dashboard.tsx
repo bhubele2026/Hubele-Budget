@@ -446,23 +446,32 @@ function MonthlyLikeSection({
                 {recent.map((t) => {
                   const amt = Number(t.amount) || 0;
                   const srcLabel = nonAmexSourceLabel(t.source);
+                  // (#488) Jump back to the transaction on the Transactions
+                  // page so the user can re-categorise / undo a mistag
+                  // without hunting for it. The page reads `?tx=` and
+                  // scrolls + highlights the row when it mounts; `?month=`
+                  // pins the right month so the row is in the visible set.
+                  const txMonthISO = `${t.occurredOn.slice(0, 7)}-01`;
                   return (
-                    <div
+                    <Link
                       key={t.id}
-                      className="flex items-center justify-between gap-3 text-sm"
+                      href={`/transactions?tx=${encodeURIComponent(t.id)}&month=${txMonthISO}`}
+                      className="block -mx-1 px-1 rounded hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       data-testid={`row-${bucket}-${t.id}`}
                     >
-                      <div className="flex items-baseline gap-3 min-w-0">
-                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground w-12 shrink-0">
-                          {new Date(t.occurredOn + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <div className="flex items-baseline gap-3 min-w-0">
+                          <span className="text-[10px] uppercase tracking-widest text-muted-foreground w-12 shrink-0">
+                            {new Date(t.occurredOn + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </span>
+                          <span className="truncate">{t.description}</span>
+                          {srcLabel && <SourceTag label={srcLabel} />}
+                        </div>
+                        <span className={`tabular-nums font-mono ${amt < 0 ? "text-destructive" : "text-foreground"}`}>
+                          {amt < 0 ? "-" : ""}{formatCurrency(Math.abs(amt))}
                         </span>
-                        <span className="truncate">{t.description}</span>
-                        {srcLabel && <SourceTag label={srcLabel} />}
                       </div>
-                      <span className={`tabular-nums font-mono ${amt < 0 ? "text-destructive" : "text-foreground"}`}>
-                        {amt < 0 ? "-" : ""}{formatCurrency(Math.abs(amt))}
-                      </span>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>

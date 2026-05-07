@@ -1344,6 +1344,60 @@ export default function TransactionsPage() {
     }
   }, [isLoading, groups.length]);
 
+  // (#488) Deep-link from the dashboard's Unplanned spending recent list.
+  // When `?tx=<id>` is present we scroll the matching row into view and
+  // pulse a temporary highlight ring so the user can see exactly which
+  // row corresponds to the dashboard line they tapped. The param is then
+  // stripped from the URL so reloads / future navigation don't re-trigger
+  // the highlight after the user has interacted with the page.
+  const [focusTxId, setFocusTxId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("tx");
+  });
+  const focusHandledRef = useRef(false);
+  useEffect(() => {
+    if (!focusTxId || focusHandledRef.current) return;
+    if (isLoading) return;
+    // Wait until the row is mounted (the right month / filters might still
+    // be settling). requestAnimationFrame defers past the current commit.
+    const tryScroll = () => {
+      const el = document.querySelector(
+        `[data-testid="row-tx-${CSS.escape(focusTxId)}"]`,
+      );
+      if (!el) return false;
+      (el as HTMLElement).scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      // Override the "scroll to today" effect so it doesn't yank focus
+      // away after we've landed on the deep-linked row.
+      scrolledRef.current = true;
+      return true;
+    };
+    requestAnimationFrame(() => {
+      if (!tryScroll()) {
+        // Row may not be mounted yet — try once more on the next frame.
+        requestAnimationFrame(() => {
+          tryScroll();
+        });
+      }
+    });
+    focusHandledRef.current = true;
+    // Strip the `?tx=` param so a reload doesn't re-pulse the highlight,
+    // but keep `?month=` and other params intact.
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      params.delete("tx");
+      const qs = params.toString();
+      const next = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
+      window.history.replaceState(null, "", next);
+    }
+    // Clear the highlight after a short pulse so the row settles back.
+    const t = setTimeout(() => setFocusTxId(null), 2000);
+    return () => clearTimeout(t);
+  }, [focusTxId, isLoading, groups.length]);
+
   // Measure the pinned top pane so day-group headers (and the bulk bar)
   // can stick directly beneath it via a CSS variable.
   const paneRef = useRef<HTMLDivElement | null>(null);
@@ -1782,6 +1836,8 @@ export default function TransactionsPage() {
                   className={cn(
                     "p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-muted/30 transition-colors",
                     tx.forecastFlag && "opacity-60 bg-muted/20",
+                    focusTxId === tx.id &&
+                      "ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/30",
                   )}
                   data-testid={`row-tx-${tx.id}`}
                   data-sent={tx.forecastFlag ? "true" : "false"}
