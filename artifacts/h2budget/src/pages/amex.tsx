@@ -432,17 +432,40 @@ export default function AmexPage() {
   // matching by the Plaid account that actually feeds this page's
   // transactions so renaming the debt doesn't break the link. Fall back
   // to the legacy name regex when no Plaid link exists on either side.
+  //
+  // (#416) When the user's Amex login owns multiple physical cards (e.g.
+  // three cards under one Plaid item, each with its own debt row), sum
+  // the balances and adopt the most recent updatedAt as the anchor's
+  // asOf so the Ending Balance tile reflects the combined liability
+  // across every card on this page rather than just the first match.
   const amexDebt = useMemo(() => {
     if (!debts) return null;
+    let matches: typeof debts = [];
     if (amexPlaidAccountIds.size > 0) {
-      const byAccount = debts.find(
+      matches = debts.filter(
         (d) => d.plaidAccountId && amexPlaidAccountIds.has(d.plaidAccountId),
       );
-      if (byAccount) return byAccount;
     }
-    return (
-      debts.find((d) => /amex|american\s*express/i.test(d.name)) ?? null
+    if (matches.length === 0) {
+      matches = debts.filter((d) => /amex|american\s*express/i.test(d.name));
+    }
+    if (matches.length === 0) return null;
+    if (matches.length === 1) return matches[0];
+    const totalBalance = matches.reduce(
+      (acc, d) => acc + parseSigned(d.balance),
+      0,
     );
+    const latestUpdate = matches.reduce<string | null>((acc, d) => {
+      const cand = d.lastBalanceUpdate ?? d.plaidLastSyncedAt ?? null;
+      if (!cand) return acc;
+      if (!acc) return cand;
+      return cand > acc ? cand : acc;
+    }, null);
+    return {
+      ...matches[0],
+      balance: String(totalBalance),
+      lastBalanceUpdate: latestUpdate,
+    };
   }, [debts, amexPlaidAccountIds]);
 
   // Resolve the anchor (balance + as-of timestamp) from either the linked

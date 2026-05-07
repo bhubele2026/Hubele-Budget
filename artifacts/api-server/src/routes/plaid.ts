@@ -57,6 +57,7 @@ import {
   listRecentSyncAttempts,
   PLAID_SYNC_ATTEMPT_LIST_LIMIT,
 } from "../lib/plaidSyncAttempts";
+import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
 import { debtsTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -851,6 +852,35 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
           ...plaidLogContext(e, "/liabilities/get | /accounts/get (post-exchange)"),
         },
         "fetchLiabilitiesForItem failed during exchange — post-Link dialog may show empty fields",
+      );
+    }
+
+    // (#416) After every successful link/relink, run an institution-
+    // agnostic dedupe pass over this user's plaid_accounts so a re-link
+    // that minted brand-new account_ids for the same physical card
+    // (institution + mask) collapses to one row. The (institution,
+    // mask) upsert guard above (#410) already prevents most of these,
+    // but this final sweep catches stray rows from older items that
+    // pre-date the guard, mirroring the heal hook on /amex/anchor.
+    try {
+      const healed = await dedupePlaidAccountsForUser(req.userId!);
+      if (
+        healed &&
+        (healed.duplicatesRemoved > 0 ||
+          healed.debtsRepointed > 0 ||
+          healed.transactionsRepointed > 0 ||
+          healed.snapshotRepointed ||
+          healed.syntheticDropped)
+      ) {
+        req.log.info(
+          { userId: req.userId, ...healed },
+          "[plaid-exchange] dedupePlaidAccountsForUser healed duplicates after relink",
+        );
+      }
+    } catch (e) {
+      req.log.warn(
+        { err: e },
+        "[plaid-exchange] dedupePlaidAccountsForUser failed (non-fatal)",
       );
     }
 

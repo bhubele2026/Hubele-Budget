@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { AMEX_TXN_SOURCES } from "../lib/amexAnchor";
+import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
 
 const router: IRouter = Router();
 
@@ -27,6 +28,68 @@ const router: IRouter = Router();
 router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
 
+  // (#416) One-shot heal hook. Collapse any duplicate Amex
+  // `plaid_accounts` rows the user accumulated from re-linking
+  // American Express (one Plaid item, three physical cards) AND merge
+  // any duplicate `debts` rows pointing at the same survivor account,
+  // before we resolve the ending-balance anchor. Gated by
+  // `settings.preferences.amexCleanupDoneAt` so the heal runs once
+  // per user instead of on every Amex page hit; once stamped, the
+  // (institution, mask) upsert guard at /plaid/exchange and the
+  // post-exchange dedupe sweep keep things clean going forward.
+  try {
+    const [prefRow] = await db
+      .select({ preferences: settingsTable.preferences })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, userId));
+    const prefs =
+      (prefRow?.preferences as Record<string, unknown> | null | undefined) ??
+      {};
+    const alreadyCleaned =
+      typeof prefs.amexCleanupDoneAt === "string" &&
+      prefs.amexCleanupDoneAt.length > 0;
+    if (!alreadyCleaned) {
+      const report = await dedupePlaidAccountsForUser(userId);
+      if (
+        report.duplicatesRemoved > 0 ||
+        report.snapshotRepointed ||
+        report.syntheticDropped
+      ) {
+        req.log.info(
+          { userId, ...report },
+          "[amex-anchor] one-shot heal collapsed duplicate plaid_accounts on Amex page hit",
+        );
+      }
+      // NB: a parallel debt-side merge is unnecessary because the
+      // `debts_plaid_account_unique` constraint already prevents two
+      // debt rows from pointing at the same plaid_account — the
+      // dedupe above repoints surviving debts atomically.
+      const nextPrefs = {
+        ...prefs,
+        amexCleanupDoneAt: new Date().toISOString(),
+      };
+      if (prefRow) {
+        await db
+          .update(settingsTable)
+          .set({ preferences: nextPrefs, updatedAt: new Date() })
+          .where(eq(settingsTable.userId, userId));
+      } else {
+        await db
+          .insert(settingsTable)
+          .values({ userId, preferences: nextPrefs })
+          .onConflictDoUpdate({
+            target: settingsTable.userId,
+            set: { preferences: nextPrefs, updatedAt: new Date() },
+          });
+      }
+    }
+  } catch (e) {
+    req.log.warn(
+      { err: e, userId },
+      "[amex-anchor] one-shot heal failed (non-fatal)",
+    );
+  }
+
   const acctRows = await db
     .selectDistinct({ plaidAccountId: transactionsTable.plaidAccountId })
     .from(transactionsTable)
@@ -41,9 +104,18 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     .map((r) => r.plaidAccountId)
     .filter((v): v is string => !!v);
 
-  let debt: { id: string; balance: string; updatedAt: Date | null } | undefined;
+  // (#416) Aggregate across every Amex debt row when the user has more
+  // than one (one Plaid item with three physical cards yields three
+  // debt rows). Sum the balances and use the most recent updatedAt as
+  // the asOf so the Amex page's Ending Balance tile reflects the
+  // combined liability across all cards rather than just whichever row
+  // happened to come back first.
+  let debt:
+    | { id: string; balance: string; updatedAt: Date | null }
+    | undefined;
+  let debtRows: { id: string; balance: string; updatedAt: Date | null }[] = [];
   if (amexPlaidAccountIds.length > 0) {
-    const [byAcct] = await db
+    debtRows = await db
       .select({
         id: debtsTable.id,
         balance: debtsTable.balance,
@@ -55,12 +127,10 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
           eq(debtsTable.userId, userId),
           sql`${debtsTable.plaidAccountId}::text = ANY(${amexPlaidAccountIds})`,
         ),
-      )
-      .limit(1);
-    debt = byAcct;
+      );
   }
-  if (!debt) {
-    const [byName] = await db
+  if (debtRows.length === 0) {
+    debtRows = await db
       .select({
         id: debtsTable.id,
         balance: debtsTable.balance,
@@ -72,9 +142,23 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
           eq(debtsTable.userId, userId),
           sql`${debtsTable.name} ~* '(amex|american\\s*express)'`,
         ),
-      )
-      .limit(1);
-    debt = byName;
+      );
+  }
+  if (debtRows.length > 0) {
+    const totalBalance = debtRows.reduce(
+      (acc, r) => acc + Number(r.balance ?? 0),
+      0,
+    );
+    const latestUpdatedAt = debtRows.reduce<Date | null>((acc, r) => {
+      if (!r.updatedAt) return acc;
+      if (!acc) return r.updatedAt;
+      return r.updatedAt > acc ? r.updatedAt : acc;
+    }, null);
+    debt = {
+      id: debtRows[0].id,
+      balance: String(totalBalance),
+      updatedAt: latestUpdatedAt,
+    };
   }
 
   // Always read the settings anchor (even when a debt row resolves) so we

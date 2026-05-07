@@ -1,6 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
+  budgetCategoriesTable,
   db,
+  debtBalanceHistoryTable,
   debtsTable,
   forecastSettingsTable,
   plaidAccountsTable,
@@ -149,18 +151,145 @@ export async function dedupePlaidAccountsForUser(
           .returning({ id: transactionsTable.id });
         report.transactionsRepointed += updatedTxns.length;
       }
-      // debts.plaidAccountId is the row uuid.
-      const updatedDebts = await tx
-        .update(debtsTable)
-        .set({ plaidAccountId: survivor.acct.id, updatedAt: new Date() })
+      // debts.plaidAccountId is the row uuid. The DB enforces
+      // `debts_plaid_account_unique`, so if the survivor already has
+      // its own debt row we cannot blindly repoint the loser's debt
+      // onto the survivor's account id (the unique constraint would
+      // fire and the whole transaction would roll back, leaving the
+      // user's duplicate state unhealed). When that happens, repoint
+      // the loser-debt's manual transactions onto the survivor-debt
+      // and delete the loser-debt row instead. (#416)
+      const [survivorDebt] = await tx
+        .select({ id: debtsTable.id })
+        .from(debtsTable)
+        .where(
+          and(
+            eq(debtsTable.userId, userId),
+            eq(debtsTable.plaidAccountId, survivor.acct.id),
+          ),
+        );
+      const loserDebts = await tx
+        .select({ id: debtsTable.id })
+        .from(debtsTable)
         .where(
           and(
             eq(debtsTable.userId, userId),
             eq(debtsTable.plaidAccountId, loser.acct.id),
           ),
-        )
-        .returning({ id: debtsTable.id });
-      report.debtsRepointed += updatedDebts.length;
+        );
+      if (survivorDebt && loserDebts.length > 0) {
+        const loserIds = loserDebts.map((d) => d.id);
+        // Repoint manual transactions onto the survivor-debt.
+        await tx
+          .update(transactionsTable)
+          .set({ debtId: survivorDebt.id })
+          .where(
+            and(
+              eq(transactionsTable.userId, userId),
+              inArray(transactionsTable.debtId, loserIds),
+            ),
+          );
+        // Repoint debt_balance_history rows onto the survivor-debt
+        // BEFORE deleting loser-debt (FK is `on delete cascade`, so
+        // a naive delete would drop the user's balance history).
+        // The (userId, debtId, day) unique constraint means we must
+        // skip any (debtId, day) that already exists on the
+        // survivor — keep the survivor's row in that case and drop
+        // the loser's row when it cascades. (#416)
+        const survivorHistoryDays = await tx
+          .select({ recordedOn: debtBalanceHistoryTable.recordedOn })
+          .from(debtBalanceHistoryTable)
+          .where(
+            and(
+              eq(debtBalanceHistoryTable.userId, userId),
+              eq(debtBalanceHistoryTable.debtId, survivorDebt.id),
+            ),
+          );
+        const survivorDays = new Set(
+          survivorHistoryDays.map((r) => String(r.recordedOn)),
+        );
+        const loserHistory = await tx
+          .select({
+            id: debtBalanceHistoryTable.id,
+            recordedOn: debtBalanceHistoryTable.recordedOn,
+          })
+          .from(debtBalanceHistoryTable)
+          .where(
+            and(
+              eq(debtBalanceHistoryTable.userId, userId),
+              inArray(debtBalanceHistoryTable.debtId, loserIds),
+            ),
+          );
+        const repointableIds = loserHistory
+          .filter((r) => !survivorDays.has(String(r.recordedOn)))
+          .map((r) => r.id);
+        if (repointableIds.length > 0) {
+          await tx
+            .update(debtBalanceHistoryTable)
+            .set({ debtId: survivorDebt.id })
+            .where(
+              and(
+                eq(debtBalanceHistoryTable.userId, userId),
+                inArray(debtBalanceHistoryTable.id, repointableIds),
+              ),
+            );
+        }
+        // Repoint debt-linked budget_categories onto the
+        // survivor-debt. The (userId, debtId) unique constraint
+        // means at most one category may be repointed; if the
+        // survivor already has one, the loser's category cascades
+        // away when its debt is deleted. (#416)
+        const [survivorCategory] = await tx
+          .select({ id: budgetCategoriesTable.id })
+          .from(budgetCategoriesTable)
+          .where(
+            and(
+              eq(budgetCategoriesTable.userId, userId),
+              eq(budgetCategoriesTable.debtId, survivorDebt.id),
+            ),
+          );
+        if (!survivorCategory) {
+          const loserCategories = await tx
+            .select({ id: budgetCategoriesTable.id })
+            .from(budgetCategoriesTable)
+            .where(
+              and(
+                eq(budgetCategoriesTable.userId, userId),
+                inArray(budgetCategoriesTable.debtId, loserIds),
+              ),
+            );
+          if (loserCategories.length > 0) {
+            // Promote the first loser-category to the survivor-debt;
+            // any remaining loser-categories cascade with the debt
+            // delete (and would have collided on the unique anyway).
+            await tx
+              .update(budgetCategoriesTable)
+              .set({ debtId: survivorDebt.id })
+              .where(eq(budgetCategoriesTable.id, loserCategories[0]!.id));
+          }
+        }
+        await tx
+          .delete(debtsTable)
+          .where(
+            and(
+              eq(debtsTable.userId, userId),
+              inArray(debtsTable.id, loserIds),
+            ),
+          );
+        report.debtsRepointed += loserDebts.length;
+      } else if (loserDebts.length > 0) {
+        const updatedDebts = await tx
+          .update(debtsTable)
+          .set({ plaidAccountId: survivor.acct.id, updatedAt: new Date() })
+          .where(
+            and(
+              eq(debtsTable.userId, userId),
+              eq(debtsTable.plaidAccountId, loser.acct.id),
+            ),
+          )
+          .returning({ id: debtsTable.id });
+        report.debtsRepointed += updatedDebts.length;
+      }
       // Snapshot pointer (per-user, uuid).
       if (settings?.bankSnapshotAccountId === loser.acct.id) {
         await repointSnapshotTo(survivor.acct.id);
