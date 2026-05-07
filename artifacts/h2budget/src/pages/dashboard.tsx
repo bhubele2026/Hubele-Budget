@@ -1131,19 +1131,7 @@ function fmtMonthStart(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
-function MonthlySnapshot({
-  today,
-  totalDebt,
-  activeDebtCount,
-  chaseEndingBalance,
-  bankSnapshot,
-}: {
-  today: Date;
-  totalDebt: string;
-  activeDebtCount: number;
-  chaseEndingBalance: (monthStart: string) => number | null;
-  bankSnapshot: { source: "manual" | "plaid"; at: string } | null;
-}) {
+function useMonthlySnapshotState(today: Date) {
   const currentMonthStart = useMemo(
     () => fmtMonthStart(new Date(today.getFullYear(), today.getMonth(), 1)),
     [today],
@@ -1177,65 +1165,41 @@ function MonthlySnapshot({
     setMonthStart(next);
   };
 
-  const { data: budget, isLoading } = useGetBudgetMonth(monthStart);
-  const summary = budget?.summary;
+  return {
+    monthStart,
+    monthDate,
+    monthLabel,
+    shortMonth,
+    offset,
+    canPrev,
+    canNext,
+    stepMonth,
+  };
+}
 
-  const incomeActual = parseFloat(summary?.income.actual ?? "0") || 0;
-  const incomeBudget = parseFloat(summary?.income.budget ?? "0") || 0;
-  const expensesActual = parseFloat(summary?.expenses.actual ?? "0") || 0;
-  const expensesBudget = parseFloat(summary?.expenses.budget ?? "0") || 0;
+type MonthlySnapshotState = ReturnType<typeof useMonthlySnapshotState>;
 
-  // Split debt vs everyday expenses using auto_debts groups in the response.
-  const paidThisMonth = useMemo(() => {
-    if (!budget) return 0;
-    let sum = 0;
-    for (const g of budget.groups ?? []) {
-      for (const l of g.lines ?? []) {
-        if (l.sourceKind === "auto_debts") {
-          sum += parseFloat(l.actualAmount) || 0;
-        }
-      }
-    }
-    return sum;
-  }, [budget]);
-
-  const everydaySpend = Math.max(0, expensesActual - paidThisMonth);
-  const net = incomeActual - everydaySpend - paidThisMonth;
-  const netPositive = net >= 0;
-
-  const daysInMonth = new Date(
-    monthDate.getFullYear(),
-    monthDate.getMonth() + 1,
-    0,
-  ).getDate();
-  const isCurrentMonth = offset === 0;
-  const dayOfMonth = isCurrentMonth ? today.getDate() : daysInMonth;
-  const monthElapsedPct = (dayOfMonth / daysInMonth) * 100;
-
-  const spentPct =
-    expensesBudget > 0
-      ? Math.min(100, (expensesActual / expensesBudget) * 100)
-      : 0;
-  const spentPctRaw =
-    expensesBudget > 0 ? (expensesActual / expensesBudget) * 100 : 0;
-
-  const paceDelta = spentPctRaw - monthElapsedPct;
-  let paceLabel: "ON PACE" | "AHEAD" | "BEHIND" = "ON PACE";
-  let paceClass = "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300";
-  if (paceDelta > 5) {
-    paceLabel = "BEHIND";
-    paceClass =
-      "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300";
-  } else if (paceDelta < -5) {
-    paceLabel = "AHEAD";
-    paceClass =
-      "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300";
-  }
-  const overspent = expensesBudget > 0 && expensesActual > expensesBudget;
-  const remaining = Math.max(0, expensesBudget - expensesActual);
+function MonthlySnapshotTiles({
+  state,
+  totalDebt,
+  activeDebtCount,
+  chaseEndingBalance,
+  bankSnapshot,
+}: {
+  state: MonthlySnapshotState;
+  totalDebt: string;
+  activeDebtCount: number;
+  chaseEndingBalance: (monthStart: string) => number | null;
+  bankSnapshot: { source: "manual" | "plaid"; at: string } | null;
+}) {
+  const { monthStart, monthLabel, shortMonth, canPrev, canNext, stepMonth } =
+    state;
 
   return (
-    <section className="space-y-4" data-testid="dashboard-monthly-snapshot">
+    <section
+      className="space-y-4"
+      data-testid="dashboard-monthly-snapshot-tiles"
+    >
       <div className="flex items-center justify-center gap-4">
         <Button
           variant="ghost"
@@ -1339,24 +1303,98 @@ function MonthlySnapshot({
             <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
               Net {shortMonth}
             </div>
-            <div
-              className={cn(
-                "text-3xl font-serif font-bold tabular-nums mt-1",
-                netPositive
-                  ? "text-[hsl(var(--positive))]"
-                  : "text-[hsl(var(--negative))]",
-              )}
-            >
-              {netPositive ? "" : "-"}
-              {formatCurrency(Math.abs(net))}
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              income − spend − debt paid
-            </div>
+            <NetMonthValue state={state} />
           </CardContent>
         </Card>
       </div>
+    </section>
+  );
+}
 
+function NetMonthValue({ state }: { state: MonthlySnapshotState }) {
+  const { monthStart } = state;
+  const { data: budget } = useGetBudgetMonth(monthStart);
+  const summary = budget?.summary;
+  const incomeActual = parseFloat(summary?.income.actual ?? "0") || 0;
+  const expensesActual = parseFloat(summary?.expenses.actual ?? "0") || 0;
+  const paidThisMonth = useMemo(() => {
+    if (!budget) return 0;
+    let sum = 0;
+    for (const g of budget.groups ?? []) {
+      for (const l of g.lines ?? []) {
+        if (l.sourceKind === "auto_debts") {
+          sum += parseFloat(l.actualAmount) || 0;
+        }
+      }
+    }
+    return sum;
+  }, [budget]);
+  const everydaySpend = Math.max(0, expensesActual - paidThisMonth);
+  const net = incomeActual - everydaySpend - paidThisMonth;
+  const netPositive = net >= 0;
+  return (
+    <>
+      <div
+        className={cn(
+          "text-3xl font-serif font-bold tabular-nums mt-1",
+          netPositive
+            ? "text-[hsl(var(--positive))]"
+            : "text-[hsl(var(--negative))]",
+        )}
+      >
+        {netPositive ? "" : "-"}
+        {formatCurrency(Math.abs(net))}
+      </div>
+      <div className="text-xs text-muted-foreground mt-1">
+        income − spend − debt paid
+      </div>
+    </>
+  );
+}
+
+function MonthVsPlanPanel({ state, today }: { state: MonthlySnapshotState; today: Date }) {
+  const { monthStart, monthDate, shortMonth, offset } = state;
+  const { data: budget, isLoading } = useGetBudgetMonth(monthStart);
+  const summary = budget?.summary;
+
+  const incomeActual = parseFloat(summary?.income.actual ?? "0") || 0;
+  const incomeBudget = parseFloat(summary?.income.budget ?? "0") || 0;
+  const expensesActual = parseFloat(summary?.expenses.actual ?? "0") || 0;
+  const expensesBudget = parseFloat(summary?.expenses.budget ?? "0") || 0;
+
+  const daysInMonth = new Date(
+    monthDate.getFullYear(),
+    monthDate.getMonth() + 1,
+    0,
+  ).getDate();
+  const isCurrentMonth = offset === 0;
+  const dayOfMonth = isCurrentMonth ? today.getDate() : daysInMonth;
+  const monthElapsedPct = (dayOfMonth / daysInMonth) * 100;
+
+  const spentPct =
+    expensesBudget > 0
+      ? Math.min(100, (expensesActual / expensesBudget) * 100)
+      : 0;
+  const spentPctRaw =
+    expensesBudget > 0 ? (expensesActual / expensesBudget) * 100 : 0;
+
+  const paceDelta = spentPctRaw - monthElapsedPct;
+  let paceLabel: "ON PACE" | "AHEAD" | "BEHIND" = "ON PACE";
+  let paceClass = "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300";
+  if (paceDelta > 5) {
+    paceLabel = "BEHIND";
+    paceClass =
+      "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300";
+  } else if (paceDelta < -5) {
+    paceLabel = "AHEAD";
+    paceClass =
+      "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300";
+  }
+  const overspent = expensesBudget > 0 && expensesActual > expensesBudget;
+  const remaining = Math.max(0, expensesBudget - expensesActual);
+
+  return (
+    <section className="space-y-4" data-testid="dashboard-monthly-snapshot">
       <Card data-testid="card-month-vs-plan">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-base">{shortMonth} vs plan</CardTitle>
@@ -1437,6 +1475,37 @@ function MonthlySnapshot({
         </CardContent>
       </Card>
     </section>
+  );
+}
+
+function DashboardSnapshotSection({
+  today,
+  totalDebt,
+  activeDebtCount,
+  chaseEndingBalance,
+  bankSnapshot,
+}: {
+  today: Date;
+  totalDebt: string;
+  activeDebtCount: number;
+  chaseEndingBalance: (monthStart: string) => number | null;
+  bankSnapshot: { source: "manual" | "plaid"; at: string } | null;
+}) {
+  const state = useMonthlySnapshotState(today);
+  return (
+    <>
+      <DashboardHero today={today} />
+      <MonthlySnapshotTiles
+        state={state}
+        totalDebt={totalDebt}
+        activeDebtCount={activeDebtCount}
+        chaseEndingBalance={chaseEndingBalance}
+        bankSnapshot={bankSnapshot}
+      />
+      <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 pt-4 md:pt-6 pb-4 bg-background border-b shadow-sm">
+        <MonthVsPlanPanel state={state} today={today} />
+      </div>
+    </>
   );
 }
 
@@ -1769,20 +1838,17 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <DebtReauthBanner debts={debts} />
       <PlaidExpiringSoonList />
-      <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-8">
-        <DashboardHero today={today} />
-        <MonthlySnapshot
-          today={today}
-          totalDebt={data.totalDebt}
-          activeDebtCount={data.activeDebtCount}
-          chaseEndingBalance={chaseEndingBalance}
-          bankSnapshot={
-            bankSnapshot
-              ? { source: bankSnapshot.source, at: bankSnapshot.at }
-              : null
-          }
-        />
-      </div>
+      <DashboardSnapshotSection
+        today={today}
+        totalDebt={data.totalDebt}
+        activeDebtCount={data.activeDebtCount}
+        chaseEndingBalance={chaseEndingBalance}
+        bankSnapshot={
+          bankSnapshot
+            ? { source: bankSnapshot.source, at: bankSnapshot.at }
+            : null
+        }
+      />
 
       <DashboardMonthlyBuckets
         today={today}
