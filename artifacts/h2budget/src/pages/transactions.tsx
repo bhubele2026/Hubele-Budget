@@ -176,6 +176,26 @@ function parseSigned(amount: string | number): number {
   return Number(amount) || 0;
 }
 
+// Task #451 — Render a transaction's `source` (e.g. `plaid:chase`,
+// `amex`, `manual`) as a calm, human-readable label for the
+// transactions list. Plaid-tagged sources surface the institution
+// name first ("Chase") with a muted " · Plaid" suffix so the user
+// knows where the row came from without the raw colon-separated
+// string shouting at them. Falls back to a Title-Cased version of
+// the raw source for anything we don't recognize.
+function formatTransactionSource(source: string | null | undefined): string {
+  if (!source) return "";
+  const s = source.trim();
+  if (!s) return "";
+  const titleCase = (w: string) =>
+    w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w;
+  if (s.toLowerCase().startsWith("plaid:")) {
+    const inst = s.slice("plaid:".length);
+    return `${titleCase(inst) || "Plaid"} · Plaid`;
+  }
+  return titleCase(s);
+}
+
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -1687,19 +1707,25 @@ export default function TransactionsPage() {
                       data-testid={`select-${tx.id}`}
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <div className="flex items-baseline gap-2 mb-1 flex-wrap">
                         <span className="font-medium text-foreground truncate">
                           {tx.description}
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          {tx.source}
+                        <span
+                          className="text-[11px] text-muted-foreground/80"
+                          data-testid={`text-source-${tx.id}`}
+                        >
+                          {formatTransactionSource(tx.source)}
                         </span>
                       </div>
-                      <div className="flex flex-wrap gap-1 items-center">
+                      <div className="flex flex-wrap gap-1.5 items-center">
                         {tx.categoryId && categoryById.get(tx.categoryId) && (
-                          <Badge variant="outline" className="text-xs border-violet-200 text-violet-700 bg-violet-50">
-                            {categoryById.get(tx.categoryId)}
-                          </Badge>
+                          <InlineCategoryPicker
+                            tx={tx}
+                            currentName={categoryById.get(tx.categoryId)!}
+                            categories={categories ?? []}
+                            onPick={(catId) => handleQuickCategorize(tx, catId)}
+                          />
                         )}
                         <MatchedRuleChip
                           categoryId={tx.categoryId}
@@ -1924,6 +1950,79 @@ function suggestCategories(
     }
   }
   return out;
+}
+
+/**
+ * Task #451 — Inline category override surfaced on rows that already
+ * have a category (whether assigned by a mapping rule or set manually).
+ * The category badge itself acts as the picker trigger so changing the
+ * category is one click instead of opening the pencil/edit dialog.
+ * Picking a new category routes through the same `onPick` handler the
+ * uncategorized-row `CategorizeChip` uses (`handleQuickCategorize`),
+ * so the same PATCH flow, "Categorized" toast, ruleAction-aware undo,
+ * and bulk-recategorize prompts all fire identically.
+ */
+function InlineCategoryPicker({
+  tx,
+  currentName,
+  categories,
+  onPick,
+}: {
+  tx: Transaction;
+  currentName: string;
+  categories: { id: string; name: string }[];
+  onPick: (categoryId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Badge
+          variant="outline"
+          role="button"
+          tabIndex={0}
+          className="cursor-pointer text-xs font-medium border-violet-200 text-violet-700 bg-violet-50 hover:bg-violet-100 transition-colors"
+          data-testid={`badge-category-${tx.id}`}
+          title="Change category"
+        >
+          {currentName}
+        </Badge>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search category…" />
+          <CommandList>
+            <CommandEmpty>No category</CommandEmpty>
+            <CommandGroup>
+              {categories.map((c) => (
+                <CommandItem
+                  key={c.id}
+                  value={c.name}
+                  onSelect={() => {
+                    setOpen(false);
+                    // Skip the no-op PATCH when the user picks the
+                    // category the row already has — avoids surfacing
+                    // a misleading "Categorized" toast and prevents
+                    // the server's mapping-rule auto-learn / repoint
+                    // side effects from firing on a same-category
+                    // selection.
+                    if (c.id === tx.categoryId) return;
+                    onPick(c.id);
+                  }}
+                  data-testid={`option-inline-category-${tx.id}-${c.id}`}
+                >
+                  {c.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+          <div className="border-t px-2 py-1.5 text-[11px] text-muted-foreground">
+            Picking a category will remember this merchant.
+          </div>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function CategorizeChip({

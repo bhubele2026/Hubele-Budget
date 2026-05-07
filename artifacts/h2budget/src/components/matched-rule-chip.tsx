@@ -58,7 +58,7 @@ export function MatchedRuleChip({
             href={`/mapping-rules?focus=${encodeURIComponent(matched.id)}`}
             className={
               compact
-                ? "inline-flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:underline underline-offset-2 max-w-[200px] truncate"
+                ? "inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground hover:underline underline-offset-2 max-w-[200px] truncate"
                 : "inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground hover:underline underline-offset-2 max-w-[280px] truncate"
             }
             data-testid={`link-matched-rule-${testIdSuffix}`}
@@ -66,9 +66,7 @@ export function MatchedRuleChip({
             title={`Matched by rule "${matched.pattern}" (${label}). Jump to it.`}
           >
             <Wand2 className={compact ? "w-2.5 h-2.5 shrink-0" : "w-3 h-3 shrink-0"} />
-            <span className="truncate">
-              rule: <span className="font-mono">{matched.pattern}</span>
-            </span>
+            <span className="truncate font-mono">{matched.pattern}</span>
           </Link>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="text-[11px] max-w-xs">
