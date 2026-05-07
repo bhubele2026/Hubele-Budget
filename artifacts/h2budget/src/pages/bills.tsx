@@ -20,6 +20,7 @@ import {
   type BillsDebtMinRow,
 } from "@workspace/api-client-react";
 import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
+import { formatBillRowAmount } from "@/lib/billsRowAmount";
 import { computePayoffsByDebt, filterDebtMinRowsByPayoff } from "@/lib/forecastDebts";
 import { Lock, PartyPopper } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -822,6 +823,12 @@ function BillGroupCard({
               const active = isActive(item);
               const amt = Number(monthlyAmount) || 0;
               const actual = Number(actualAmount) || 0;
+              // (#413) Display the per-event amount the user entered (e.g.
+              // "+$4,050.00 biweekly") instead of the smoothed monthly
+              // projection. The badge below still compares actual vs.
+              // monthlyAmount so paid/partial status is unchanged.
+              const perEvent = Number(item.amount) || 0;
+              const display = formatBillRowAmount(perEvent, item.frequency, sign);
               // (#70) Status of the actual vs. planned amount this month.
               // - "paid": actual covers ≥99% of planned (a small float fudge)
               // - "partial": some money has moved but not the full plan
@@ -868,9 +875,13 @@ function BillGroupCard({
                   </div>
                   <div className="flex flex-col items-end gap-0.5">
                     <div className={`text-sm font-semibold tabular-nums ${tint}`}>
-                      {sign}
-                      {formatCurrency(amt)}
+                      {display.amountText}
                     </div>
+                    {display.monthlyHint ? (
+                      <div className="text-[11px] text-muted-foreground tabular-nums">
+                        {display.monthlyHint}
+                      </div>
+                    ) : null}
                     {active && status !== "none" ? (
                       <div
                         className={`text-[11px] tabular-nums flex items-center gap-1 ${
