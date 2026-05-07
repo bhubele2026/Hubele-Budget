@@ -521,6 +521,41 @@ export async function dedupeTransactionsAcrossAccountsForUser(
 export async function dedupeTransactionsForUser(
   userId: string,
 ): Promise<DedupeTxnReport & { accountsScanned: number }> {
+  const totals: DedupeTxnReport & { accountsScanned: number } = {
+    groupsScanned: 0,
+    duplicatesRemoved: 0,
+    resolutionsRepointed: 0,
+    accountsScanned: 0,
+  };
+
+  // (#475-followup perf) Fast pre-check on the /forecast hot path:
+  // a single aggregate query asks "are there any duplicate groups
+  // anywhere in this user's plaid-account rows?" — uses the same
+  // (plaid_account_id, occurredOn, amount, normalized description)
+  // group key the per-account heal uses. Once the user's data is
+  // clean (the steady state after the one-time relink cleanup), this
+  // returns zero and we skip the full per-account scan + transaction
+  // entirely. A noisy user still pays the full cost on the next load.
+  const dupeProbe = await db.execute<{ dup_groups: number }>(sql`
+    select count(*)::int as dup_groups from (
+      select 1
+      from ${transactionsTable}
+      where ${transactionsTable.userId} = ${userId}
+        and ${transactionsTable.plaidAccountId} is not null
+      group by
+        ${transactionsTable.plaidAccountId},
+        ${transactionsTable.occurredOn},
+        ${transactionsTable.amount},
+        btrim(lower(regexp_replace(coalesce(${transactionsTable.description}, ''), '\s+', ' ', 'g')))
+      having count(*) > 1
+      limit 1
+    ) as g
+  `);
+  const dupRows = (dupeProbe as { rows?: Array<{ dup_groups: number }> }).rows
+    ?? (dupeProbe as unknown as Array<{ dup_groups: number }>);
+  const dupCount = Number(dupRows?.[0]?.dup_groups ?? 0);
+  if (dupCount === 0) return totals;
+
   const accounts = await db
     .selectDistinct({ plaidAccountId: transactionsTable.plaidAccountId })
     .from(transactionsTable)
@@ -530,12 +565,6 @@ export async function dedupeTransactionsForUser(
         sql`${transactionsTable.plaidAccountId} is not null` as SQL<unknown>,
       ),
     );
-  const totals: DedupeTxnReport & { accountsScanned: number } = {
-    groupsScanned: 0,
-    duplicatesRemoved: 0,
-    resolutionsRepointed: 0,
-    accountsScanned: 0,
-  };
   for (const a of accounts) {
     if (!a.plaidAccountId) continue;
     totals.accountsScanned += 1;

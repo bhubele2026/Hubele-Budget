@@ -30,7 +30,32 @@ import SettingsPage from "./pages/settings";
 import PlaidOAuthPage from "./pages/plaid-oauth";
 import NotFound from "./pages/not-found";
 
-const queryClient = new QueryClient();
+// (#475-followup perf) The default `staleTime: 0` plus
+// `refetchOnWindowFocus: true` was firing duplicate refetches of the
+// same query on every page navigation and every tab switch. With 13+
+// pages calling useListTransactions / useGetForecast / useGetDashboard,
+// this is the dominant cost of the "everything loads slow" complaint.
+//   - staleTime 30s: revisiting a page within 30s reuses the cache.
+//   - gcTime 5min: keeps the cache around long enough to make
+//     back-and-forth navigation feel instant.
+//   - refetchOnWindowFocus off: switching browser tabs no longer
+//     re-fires every query on the page.
+//   - retry 1: 4xx errors (auth, validation) don't retry endlessly.
+// Mutations still invalidate as before, so write-through freshness
+// is unchanged — only stale cache reads are reused.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+    mutations: {
+      retry: 0,
+    },
+  },
+});
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,

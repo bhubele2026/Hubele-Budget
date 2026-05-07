@@ -259,6 +259,50 @@ describe("dedupeTransactionsForAccount (#452)", () => {
     expect(r2).toEqual(r1);
   });
 
+  it("dedupeTransactionsForUser fast pre-check: clean data short-circuits with zero accountsScanned", async () => {
+    await cleanup();
+    const acct = await seedAccount();
+    await insertTxn({
+      plaidAccountId: acct,
+      occurredOn: "2026-04-10",
+      amount: "-2.00",
+      description: "Lone row",
+    });
+    const r = await dedupeTransactionsForUser(TEST_USER);
+    expect(r.duplicatesRemoved).toBe(0);
+    // Pre-check returned 0 dup groups so the per-account loop never ran.
+    expect(r.accountsScanned).toBe(0);
+  });
+
+  it("dedupeTransactionsForUser pre-check still detects duplicates that differ only by leading/trailing whitespace", async () => {
+    // Probe SQL must match the JS normalizeDescription (lower + collapse
+    // whitespace + trim). If it doesn't, edge-whitespace duplicates
+    // would falsely short-circuit.
+    await cleanup();
+    const acct = await seedAccount();
+    await insertTxn(
+      {
+        plaidAccountId: acct,
+        occurredOn: "2026-04-15",
+        amount: "-3.50",
+        description: "Coffee",
+      },
+      new Date(Date.now() - 60_000),
+    );
+    await insertTxn(
+      {
+        plaidAccountId: acct,
+        occurredOn: "2026-04-15",
+        amount: "-3.50",
+        description: "  Coffee  ",
+      },
+      new Date(Date.now() - 1000),
+    );
+    const r = await dedupeTransactionsForUser(TEST_USER);
+    expect(r.duplicatesRemoved).toBe(1);
+    expect(r.accountsScanned).toBeGreaterThanOrEqual(1);
+  });
+
   it("dedupeTransactionsForUser scans every plaid account belonging to the user", async () => {
     await cleanup();
     const acctA = await seedAccount();
