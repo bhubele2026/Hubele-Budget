@@ -1252,9 +1252,11 @@ export default function AmexPage() {
           <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 min-w-[280px]">
-          {endingBalance.source === "missing" ? (
+          {endingBalance.source === "missing" ||
+          (endingBalance.source !== "loading" &&
+            endingBalance.value === null) ? (
             <div
-              className="rounded-md border border-dashed border-blue-300 bg-blue-50/60 px-3 py-2 text-blue-900"
+              className="rounded-md border border-dashed border-blue-300 bg-blue-50/60 px-3 py-2 text-blue-900 min-w-0"
               data-testid="stat-ending-balance"
             >
               <div className="text-[10px] uppercase tracking-widest text-blue-700">
@@ -1263,7 +1265,7 @@ export default function AmexPage() {
               <div className="font-mono tabular-nums font-semibold text-base text-blue-900/70">
                 Not set
               </div>
-              <div className="mt-1 flex flex-col gap-1">
+              <div className="mt-1 flex flex-col gap-1 min-w-0">
                 <Popover
                   open={anchorOpen}
                   onOpenChange={(o) => {
@@ -1337,7 +1339,21 @@ export default function AmexPage() {
               </div>
             </div>
           ) : endingBalance.source === "loading" ? (
-            <Skeleton className="h-[88px] w-full" data-testid="stat-ending-balance-loading" />
+            <div
+              className="rounded-md border bg-card px-3 py-2 min-w-0"
+              data-testid="stat-ending-balance"
+            >
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Ending balance
+              </div>
+              <div className="font-mono tabular-nums font-semibold text-base text-muted-foreground">
+                Loading…
+              </div>
+              <Skeleton
+                className="h-3 w-16 mt-1"
+                data-testid="stat-ending-balance-loading"
+              />
+            </div>
           ) : (
             <StatChip
               label="Ending balance"
