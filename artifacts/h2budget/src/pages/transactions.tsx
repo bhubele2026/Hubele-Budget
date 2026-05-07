@@ -68,6 +68,7 @@ import {
   Wand2,
   Landmark,
   RefreshCw,
+  CalendarDays,
 } from "lucide-react";
 import {
   Popover,
@@ -1092,6 +1093,103 @@ export default function TransactionsPage() {
     }
   };
 
+  // Task #454 — Inline amount edit. Mirrors the Edit dialog's PATCH
+  // path (same `updateTx` mutation, same `normalizeAmount` sign /
+  // currency formatting) so flipping a typo'd amount on a row stays
+  // in sync with the rest of the page (totals, running balance,
+  // forecast invalidation). Sign is preserved from the row's current
+  // amount: an expense stays an expense, income stays income.
+  const handleQuickAmount = async (tx: Transaction, raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      toast({
+        title: "Enter an amount",
+        variant: "destructive",
+      });
+      return false;
+    }
+    const parsed = parseFloat(trimmed);
+    if (Number.isNaN(parsed)) {
+      toast({
+        title: "Invalid amount",
+        description: "Enter a number like 12.34.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    const currentKind: "expense" | "income" =
+      parseSigned(tx.amount) >= 0 ? "income" : "expense";
+    const next = normalizeAmount(trimmed, currentKind);
+    if (next === tx.amount) return true;
+    try {
+      const updated = await updateTx.mutateAsync({
+        id: tx.id,
+        data: { amount: next },
+      });
+      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+      queryClient.invalidateQueries({
+        queryKey: getGetBudgetMonthQueryKey(
+          `${updated.occurredOn.slice(0, 7)}-01`,
+        ),
+      });
+      toast({ title: "Amount updated" });
+      return true;
+    } catch (e) {
+      toast({
+        title: "Couldn't update amount",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  // Task #454 — Inline date edit. Same PATCH path / invalidations as
+  // the Edit dialog so the row visibly hops to its new day group and
+  // any month-scoped totals (forecast, budget actuals) refresh. Both
+  // the source and destination months are invalidated when the move
+  // crosses a month boundary so the budget page's "this month" view
+  // doesn't show stale numbers either.
+  const handleQuickDate = async (tx: Transaction, raw: string) => {
+    const next = (raw ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) {
+      toast({
+        title: "Pick a date",
+        variant: "destructive",
+      });
+      return false;
+    }
+    if (next === tx.occurredOn.slice(0, 10)) return true;
+    try {
+      const updated = await updateTx.mutateAsync({
+        id: tx.id,
+        data: { occurredOn: next },
+      });
+      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+      const oldMonth = `${tx.occurredOn.slice(0, 7)}-01`;
+      const newMonth = `${updated.occurredOn.slice(0, 7)}-01`;
+      queryClient.invalidateQueries({
+        queryKey: getGetBudgetMonthQueryKey(oldMonth),
+      });
+      if (newMonth !== oldMonth) {
+        queryClient.invalidateQueries({
+          queryKey: getGetBudgetMonthQueryKey(newMonth),
+        });
+      }
+      toast({ title: "Date updated" });
+      return true;
+    } catch (e) {
+      toast({
+        title: "Couldn't update date",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   const handleRefreshBank = () => {
     refreshBank.mutate({ data: { plaidAccountId: effectiveAccountInternalId ?? null } }, {
       onSuccess: () => {
@@ -1819,16 +1917,11 @@ export default function TransactionsPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="flex flex-col items-end">
-                      <span
-                        className={cn(
-                          "font-medium tabular-nums whitespace-nowrap",
-                          parseSigned(tx.amount) > 0
-                            ? "text-[hsl(var(--positive))]"
-                            : "text-foreground",
-                        )}
-                      >
-                        {formatCurrency(tx.amount)}
-                      </span>
+                      <InlineAmountEditor
+                        tx={tx}
+                        onSave={(raw) => handleQuickAmount(tx, raw)}
+                        disabled={updateTx.isPending}
+                      />
                       {runningBalanceMap.has(tx.id) && (
                         <span className="text-[11px] tabular-nums text-muted-foreground">
                           bal {formatCurrency(runningBalanceMap.get(tx.id)!)}
@@ -1836,6 +1929,11 @@ export default function TransactionsPage() {
                       )}
                     </div>
                     <div className="flex gap-1 items-center">
+                      <InlineDateMover
+                        tx={tx}
+                        onSave={(raw) => handleQuickDate(tx, raw)}
+                        disabled={updateTx.isPending}
+                      />
                       {tx.forecastFlag ? (
                         <Button
                           variant="outline"
@@ -2020,6 +2118,196 @@ function InlineCategoryPicker({
             Picking a category will remember this merchant.
           </div>
         </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * Task #454 — Inline amount editor surfaced as the row's amount label.
+ * Clicking the amount opens a small popover with a numeric input that
+ * routes through `handleQuickAmount` (same `updateTx` PATCH path as
+ * the Edit dialog). Sign / currency formatting is preserved by
+ * `normalizeAmount` so an expense stays an expense and an income
+ * stays an income — only the magnitude changes. Submitting an
+ * unchanged value is a no-op (no toast, no PATCH).
+ */
+function InlineAmountEditor({
+  tx,
+  onSave,
+  disabled,
+}: {
+  tx: Transaction;
+  onSave: (raw: string) => Promise<boolean>;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const initial = Math.abs(parseSigned(tx.amount)).toFixed(2);
+  const [draft, setDraft] = useState(initial);
+  useEffect(() => {
+    if (open) setDraft(Math.abs(parseSigned(tx.amount)).toFixed(2));
+  }, [open, tx.amount]);
+  const submit = async () => {
+    const ok = await onSave(draft);
+    if (ok) setOpen(false);
+  };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={cn(
+            "font-medium tabular-nums whitespace-nowrap cursor-pointer rounded px-1 -mx-1 hover:bg-muted/40 transition-colors",
+            parseSigned(tx.amount) > 0
+              ? "text-[hsl(var(--positive))]"
+              : "text-foreground",
+          )}
+          title="Edit amount"
+          data-testid={`amount-${tx.id}`}
+        >
+          {formatCurrency(tx.amount)}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-3" align="end">
+        <div className="space-y-2">
+          <label
+            htmlFor={`inline-amount-input-${tx.id}`}
+            className="text-xs text-muted-foreground"
+          >
+            New amount
+          </label>
+          <Input
+            id={`inline-amount-input-${tx.id}`}
+            data-testid={`input-inline-amount-${tx.id}`}
+            type="number"
+            step="0.01"
+            min="0"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void submit();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setOpen(false);
+              }
+            }}
+            autoFocus
+          />
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setOpen(false)}
+              data-testid={`button-cancel-inline-amount-${tx.id}`}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void submit()}
+              disabled={disabled}
+              data-testid={`button-save-inline-amount-${tx.id}`}
+            >
+              Save
+            </Button>
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            {parseSigned(tx.amount) >= 0
+              ? "Positive (income) — sign preserved."
+              : "Negative (expense) — sign preserved."}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * Task #454 — Inline date mover. Lives next to the per-row action
+ * buttons as a small calendar icon. Clicking opens a date input that
+ * PATCHes `occurredOn` through the same `updateTx` flow as the Edit
+ * dialog so the row visibly hops to its new day group without forcing
+ * a full dialog round trip. Submitting the same date is a no-op.
+ */
+function InlineDateMover({
+  tx,
+  onSave,
+  disabled,
+}: {
+  tx: Transaction;
+  onSave: (raw: string) => Promise<boolean>;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const initial = tx.occurredOn.slice(0, 10);
+  const [draft, setDraft] = useState(initial);
+  useEffect(() => {
+    if (open) setDraft(tx.occurredOn.slice(0, 10));
+  }, [open, tx.occurredOn]);
+  const submit = async () => {
+    const ok = await onSave(draft);
+    if (ok) setOpen(false);
+  };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled={disabled}
+          title="Move to a different day"
+          data-testid={`button-inline-date-${tx.id}`}
+        >
+          <CalendarDays className="w-4 h-4 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-60 p-3" align="end">
+        <div className="space-y-2">
+          <label
+            htmlFor={`inline-date-input-${tx.id}`}
+            className="text-xs text-muted-foreground"
+          >
+            Move to
+          </label>
+          <Input
+            id={`inline-date-input-${tx.id}`}
+            data-testid={`input-inline-date-${tx.id}`}
+            type="date"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void submit();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setOpen(false);
+              }
+            }}
+            autoFocus
+          />
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setOpen(false)}
+              data-testid={`button-cancel-inline-date-${tx.id}`}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void submit()}
+              disabled={disabled}
+              data-testid={`button-save-inline-date-${tx.id}`}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
       </PopoverContent>
     </Popover>
   );
