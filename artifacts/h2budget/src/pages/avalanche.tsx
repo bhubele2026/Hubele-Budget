@@ -287,6 +287,15 @@ export default function AvalanchePage() {
     Number.isFinite(n) ? Math.max(0, Math.min(MANUAL_EXTRA_CAP, n)) : 0;
   const rawManualExtra = Number(settings?.manualExtra ?? 0);
   const manualExtra = clampManual(rawManualExtra);
+  // Local drag state for the Avalanche budget slider. While the user is
+  // dragging the thumb we read from this so the UI tracks the cursor; on
+  // release we persist via `onValueCommit` and clear local state once the
+  // server-backed `manualExtra` catches up (see effect below).
+  const [manualExtraDraft, setManualExtraDraft] = useState<number | null>(null);
+  useEffect(() => {
+    setManualExtraDraft(null);
+  }, [manualExtra]);
+  const liveManualExtra = manualExtraDraft ?? manualExtra;
   const rawResolvedExtraAmount = Number(resolvedExtra?.amount ?? manualExtra);
   // When the source is manual, the API echoes the raw saved manualExtra back
   // as `resolvedExtra.amount`. Clamp it here too so a stale > $5k value can't
@@ -497,7 +506,7 @@ export default function AvalanchePage() {
   // read above, so the slider value is guaranteed to be within range.
   const availableMoney = Number(resolvedExtra?.availableMoney ?? 0);
   const budgetCap = MANUAL_EXTRA_CAP;
-  const roomLeft = availableMoney - manualExtra;
+  const roomLeft = availableMoney - liveManualExtra;
   const overBudget = roomLeft < 0;
 
   // Progress: paid-down vs the per-debt `originalBalance` anchor captured
@@ -1003,15 +1012,18 @@ export default function AvalanchePage() {
                     </span>
                   </div>
                   <Slider
-                    value={[Math.min(manualExtra, budgetCap)]}
+                    value={[Math.min(liveManualExtra, budgetCap)]}
                     min={0}
                     max={budgetCap}
                     step={25}
-                    onValueChange={(v) =>
+                    onValueChange={(v) => setManualExtraDraft(v[0] ?? 0)}
+                    onValueCommit={(v) => {
+                      const next = v[0] ?? 0;
+                      setManualExtraDraft(next);
                       updateSettings.mutate({
-                        data: { manualExtra: (v[0] ?? 0).toFixed(2) },
-                      })
-                    }
+                        data: { manualExtra: next.toFixed(2) },
+                      });
+                    }}
                   />
                   <div
                     className={`text-xs mt-2 ${overBudget ? "text-destructive font-medium" : "text-muted-foreground"}`}
