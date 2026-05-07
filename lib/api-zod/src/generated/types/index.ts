@@ -141,6 +141,7 @@ export * from "./plaidSyncAttemptsResult";
 export * from "./plaidSyncInput";
 export * from "./plaidSyncResult";
 export * from "./plaidSyncResultItemsItem";
+export * from "./plaidSyncResultItemsItemImportedDateRange";
 export * from "./plaidSyncResultItemsItemKind";
 export * from "./plaidUpdateLinkTokenInput";
 export * from "./recategorizeByPatternInput";

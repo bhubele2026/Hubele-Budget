@@ -59,6 +59,12 @@ export type SyncTotals = {
   // every item in this sync. Aggregated by ruleId so a sync that touches two
   // banks doesn't double-count "STARBUCKS" once per item.
   ruleAttribution: RuleAttributionSummary;
+  // (#403) Aggregated min/max occurredOn across every item's
+  // `importedDateRange`. Powers the "Imported N transactions from
+  // Mar 5 – Apr 28" caption on the post-link panel and lets the panel
+  // tell the user when only historical rows came back. Null when no
+  // item inserted anything.
+  importedDateRange: { min: string; max: string } | null;
 };
 
 const ZERO: SyncTotals = {
@@ -69,6 +75,7 @@ const ZERO: SyncTotals = {
   errorDetails: [],
   stillPreparing: false,
   ruleAttribution: { totalAttributed: 0, top: [], extraRules: 0, ruleIds: [] },
+  importedDateRange: null,
 };
 
 const STILL_PREPARING_MESSAGE =
@@ -127,6 +134,12 @@ export function usePlaidSync() {
                 string,
                 { ruleId: string; pattern: string; count: number }
               >();
+              // (#403) Aggregate the per-item importedDateRange so the
+              // post-link panel can show the inserted-rows window
+              // across every item this sync touched. Skipped when an
+              // item didn't insert anything (importedDateRange null).
+              let aggMin: string | null = null;
+              let aggMax: string | null = null;
               const totals = items.reduce<SyncTotals>(
                 (acc, r) => {
                   acc.added += r.added ?? 0;
@@ -148,6 +161,11 @@ export function usePlaidSync() {
                     });
                   }
                   if (r.stillPreparing) acc.stillPreparing = true;
+                  if (r.importedDateRange) {
+                    const { min, max } = r.importedDateRange;
+                    if (aggMin === null || min < aggMin) aggMin = min;
+                    if (aggMax === null || max > aggMax) aggMax = max;
+                  }
                   for (const a of r.ruleAttributions ?? []) {
                     const existing = aggregatedAttr.get(a.ruleId);
                     if (existing) {
@@ -170,8 +188,11 @@ export function usePlaidSync() {
                   errorDetails: [],
                   stillPreparing: false,
                   ruleAttribution: ZERO.ruleAttribution,
+                  importedDateRange: null,
                 },
               );
+              totals.importedDateRange =
+                aggMin && aggMax ? { min: aggMin, max: aggMax } : null;
               totals.ruleAttribution = buildRuleAttributionSummary(
                 Array.from(aggregatedAttr.values()).sort(
                   (a, b) => b.count - a.count,

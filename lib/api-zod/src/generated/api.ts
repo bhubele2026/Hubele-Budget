@@ -2229,6 +2229,12 @@ export const SyncPlaidTransactionsResponse = zod.object({
       ),
       error: zod.string().nullish(),
       stillPreparing: zod.boolean().optional(),
+      importedDateRange: zod
+        .object({
+          min: zod.string(),
+          max: zod.string(),
+        })
+        .nullish(),
       plaidErrorCode: zod.string().nullish(),
       plaidErrorMessage: zod.string().nullish(),
       plaidDisplayMessage: zod.string().nullish(),

@@ -119,6 +119,14 @@ export type SyncResult = {
   // whose historical batch is still being staged). Treated as a transient,
   // non-destructive state by the frontend.
   stillPreparing?: boolean;
+  // (#403) Date range (YYYY-MM-DD) covering the rows actually inserted
+  // by this sync — `min` is the oldest occurredOn, `max` the newest.
+  // Null when nothing was inserted (zero added). Surfaced in the
+  // post-link "Ready — N added" panel so users can see at a glance
+  // whether their *current* month landed or whether only historical
+  // rows came back, and so the panel can show a "still importing
+  // recent activity" hint when the max date isn't current-month.
+  importedDateRange?: { min: string; max: string } | null;
 };
 
 type PlaidErrorBody = {
@@ -474,6 +482,18 @@ export async function syncPlaidItem(
     // an existing manual row instead of inserting.
     let firstSyncSkipped = 0;
     let firstSyncMerged = 0;
+    // (#403) Track the oldest / newest occurredOn that actually
+    // landed as a freshly inserted row this sync, so the post-link
+    // panel can show "Imported N transactions from Mar 5 – Apr 28"
+    // (or flag "still importing recent activity" when the max date
+    // is not in the current month). Skipped + merged rows are
+    // excluded — they don't represent new data Plaid handed us.
+    let insertedMinDate: string | null = null;
+    let insertedMaxDate: string | null = null;
+    const noteInsertedDate = (date: string): void => {
+      if (insertedMinDate === null || date < insertedMinDate) insertedMinDate = date;
+      if (insertedMaxDate === null || date > insertedMaxDate) insertedMaxDate = date;
+    };
     for (const t of [...added, ...modified]) {
       const description = t.merchant_name || t.name || "(no description)";
       // `personal_finance_category` is the modern Plaid taxonomy used to
@@ -641,6 +661,7 @@ export async function syncPlaidItem(
         notes: t.pending ? "[pending]" : null,
         forecastFlag: isChecking && !cat.isTransfer,
       };
+      noteInsertedDate(values.occurredOn);
       const [row] = await db
         .insert(transactionsTable)
         .values(values)
@@ -925,6 +946,12 @@ export async function syncPlaidItem(
       removed: removed.length,
       autoCategorized,
       ruleAttributions,
+      // (#403) Min/max date among the rows we actually wrote — null
+      // when nothing was inserted.
+      importedDateRange:
+        insertedMinDate && insertedMaxDate
+          ? { min: insertedMinDate, max: insertedMaxDate }
+          : null,
       error: balanceRefreshError,
       // (#357) Mirror the structured fields onto the response so a
       // failed balance refresh on an otherwise-healthy /transactions/sync

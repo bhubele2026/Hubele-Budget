@@ -30,6 +30,37 @@ type PlaidAccountRow = typeof plaidAccountsTable.$inferSelect;
  *     restricted to `source` in ("manual", "bank") with `debtId IS
  *     NULL`.
  */
+/**
+ * (#403) Clamp an auto-detected cutoff so it can never reach into the
+ * current calendar month. Without this, a stray manual / imported row
+ * dated in the current month (e.g. a placeholder budget entry, or an
+ * Amex statement that overlaps the link day) drives the cutoff
+ * forward and the very first /transactions/sync silently drops every
+ * Plaid row up to that date — which is exactly the "linked Chase but
+ * May activity is missing" symptom the user reported. We always want
+ * the user's *current month* of bank activity to land, even when their
+ * manual history extends into it.
+ *
+ * `today` is injectable so tests can pin a deterministic clock.
+ */
+export function clampCutoffBeforeCurrentMonth(
+  cutoff: string | null,
+  today: Date = new Date(),
+): string | null {
+  if (!cutoff) return null;
+  // Compute YYYY-MM-{lastDayOfPriorMonth} in UTC to match the YYYY-MM-DD
+  // strings stored in transactions.occurred_on.
+  const y = today.getUTCFullYear();
+  const m = today.getUTCMonth(); // 0-based; first-of-current-month
+  // `Date.UTC(y, m, 0)` rolls back to the last day of the prior month.
+  const priorMonthEnd = new Date(Date.UTC(y, m, 0));
+  const yyyy = priorMonthEnd.getUTCFullYear();
+  const mm = String(priorMonthEnd.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(priorMonthEnd.getUTCDate()).padStart(2, "0");
+  const ceiling = `${yyyy}-${mm}-${dd}`;
+  return cutoff > ceiling ? ceiling : cutoff;
+}
+
 export async function computeImportCutoffForAccount(
   userId: string,
   account: PlaidAccountRow,
@@ -63,7 +94,7 @@ export async function computeImportCutoffForAccount(
             inArray(transactionsTable.source, ["manual", "amex"]),
           ),
         );
-      if (r?.maxDate) return r.maxDate;
+      if (r?.maxDate) return clampCutoffBeforeCurrentMonth(r.maxDate);
     }
     if (institutionSlug === "amex") {
       const [r] = await db
@@ -77,7 +108,7 @@ export async function computeImportCutoffForAccount(
             eq(transactionsTable.source, "amex"),
           ),
         );
-      if (r?.maxDate) return r.maxDate;
+      if (r?.maxDate) return clampCutoffBeforeCurrentMonth(r.maxDate);
     }
     return null;
   }
@@ -99,7 +130,7 @@ export async function computeImportCutoffForAccount(
             sql`${transactionsTable.debtId} is null`,
           ),
         );
-      if (r?.maxDate) return r.maxDate;
+      if (r?.maxDate) return clampCutoffBeforeCurrentMonth(r.maxDate);
     }
   }
   return null;
@@ -126,18 +157,25 @@ export async function autoDetectCutoffsForItem(
       ),
     );
   for (const acct of accounts) {
+    // (#403) Once first sync stamps `firstSyncCompletedAt` the gate is
+    // permanently off — never recompute. But while it's still null
+    // (e.g. a re-link of an item whose initial sync never finished, or
+    // whose stale cutoff sits in the future and is silently blocking
+    // recent rows) we DO recompute every time the user comes back
+    // through Plaid Link. That is what makes a re-link reliably
+    // refresh a stale cutoff without forcing the user to clear it by
+    // hand.
     if (acct.firstSyncCompletedAt) continue;
-    if (acct.importCutoffDate) continue;
     const cutoff = await computeImportCutoffForAccount(
       userId,
       acct,
       institutionSlug,
     );
-    if (cutoff) {
-      await db
-        .update(plaidAccountsTable)
-        .set({ importCutoffDate: cutoff })
-        .where(eq(plaidAccountsTable.id, acct.id));
-    }
+    // Always write the freshly computed value (even when null) so a
+    // previously over-shooting cutoff is cleared on re-link.
+    await db
+      .update(plaidAccountsTable)
+      .set({ importCutoffDate: cutoff })
+      .where(eq(plaidAccountsTable.id, acct.id));
   }
 }

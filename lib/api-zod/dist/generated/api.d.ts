@@ -5351,6 +5351,16 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         }>, "many">;
         error: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         stillPreparing: zod.ZodOptional<zod.ZodBoolean>;
+        importedDateRange: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
+            min: zod.ZodString;
+            max: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            min: string;
+            max: string;
+        }, {
+            min: string;
+            max: string;
+        }>>>;
         plaidErrorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         plaidErrorMessage: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         plaidDisplayMessage: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -5376,6 +5386,10 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         httpStatus?: number | null | undefined;
         plaidItemRowId?: string | null | undefined;
         error?: string | null | undefined;
+        importedDateRange?: {
+            min: string;
+            max: string;
+        } | null | undefined;
         plaidErrorCode?: string | null | undefined;
         plaidErrorMessage?: string | null | undefined;
     }, {
@@ -5397,6 +5411,10 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         httpStatus?: number | null | undefined;
         plaidItemRowId?: string | null | undefined;
         error?: string | null | undefined;
+        importedDateRange?: {
+            min: string;
+            max: string;
+        } | null | undefined;
         plaidErrorCode?: string | null | undefined;
         plaidErrorMessage?: string | null | undefined;
     }>, "many">;
@@ -5420,6 +5438,10 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         httpStatus?: number | null | undefined;
         plaidItemRowId?: string | null | undefined;
         error?: string | null | undefined;
+        importedDateRange?: {
+            min: string;
+            max: string;
+        } | null | undefined;
         plaidErrorCode?: string | null | undefined;
         plaidErrorMessage?: string | null | undefined;
     }[];
@@ -5443,6 +5465,10 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         httpStatus?: number | null | undefined;
         plaidItemRowId?: string | null | undefined;
         error?: string | null | undefined;
+        importedDateRange?: {
+            min: string;
+            max: string;
+        } | null | undefined;
         plaidErrorCode?: string | null | undefined;
         plaidErrorMessage?: string | null | undefined;
     }[];

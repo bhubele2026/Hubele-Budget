@@ -1884,6 +1884,14 @@ export interface PlaidSyncInput {
 /**
  * @nullable
  */
+export type PlaidSyncResultItemsItemImportedDateRange = {
+  min: string;
+  max: string;
+} | null;
+
+/**
+ * @nullable
+ */
 export type PlaidSyncResultItemsItemKind =
   | (typeof PlaidSyncResultItemsItemKind)[keyof typeof PlaidSyncResultItemsItemKind]
   | null;
@@ -1910,6 +1918,8 @@ export type PlaidSyncResultItemsItem = {
   /** @nullable */
   error?: string | null;
   stillPreparing?: boolean;
+  /** @nullable */
+  importedDateRange?: PlaidSyncResultItemsItemImportedDateRange;
   /** @nullable */
   plaidErrorCode?: string | null;
   /** @nullable */

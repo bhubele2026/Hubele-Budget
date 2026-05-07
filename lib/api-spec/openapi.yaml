@@ -3177,6 +3177,21 @@ components:
               # state and does NOT show a destructive toast or persist a
               # red error chip.
               stillPreparing: { type: boolean }
+              # (#403) Min / max occurredOn (YYYY-MM-DD) across the rows
+              # actually inserted by this sync. Null when nothing was
+              # inserted. The post-link "Ready — N added" panel uses
+              # this to show "Imported N transactions from Mar 5 –
+              # Apr 28" so the user can immediately tell whether the
+              # window includes their current month or only historical
+              # rows (in which case the panel surfaces a "still
+              # importing recent activity" hint instead of a silent
+              # success).
+              importedDateRange:
+                type: ["object", "null"]
+                required: [min, max]
+                properties:
+                  min: { type: string }
+                  max: { type: string }
               # (#357) Structured Plaid failure metadata, populated only on
               # error. Lets the frontend toast / inline header banner say
               # "<Institution>: <plain-English reason>" + a Reconnect CTA

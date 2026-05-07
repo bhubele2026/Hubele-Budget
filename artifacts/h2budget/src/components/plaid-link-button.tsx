@@ -54,6 +54,12 @@ export type PostLinkStatus = {
   added: number;
   modified: number;
   errorMessage: string | null;
+  // (#403) YYYY-MM-DD min/max occurredOn across the rows actually
+  // inserted by every poll so far. Powers the "Imported N
+  // transactions from Mar 5 – Apr 28" caption and the "still
+  // importing recent activity" hint when no current-month rows have
+  // landed yet.
+  importedDateRange: { min: string; max: string } | null;
 };
 
 export function PlaidLinkButton({
@@ -130,6 +136,10 @@ export function PlaidLinkButton({
       let totalAdded = 0;
       let totalModified = 0;
       let lastErrors: string[] = [];
+      // (#403) Accumulate the inserted-rows window across every poll
+      // so the panel caption shows the full span the import covers.
+      let aggMin: string | null = null;
+      let aggMax: string | null = null;
       for (let i = 0; i < POST_LINK_POLL_DELAYS_MS.length; i++) {
         const delay = POST_LINK_POLL_DELAYS_MS[i];
         await new Promise((r) => setTimeout(r, delay));
@@ -146,6 +156,13 @@ export function PlaidLinkButton({
         totalModified += totals.modified;
         lastErrors = totals.errors;
         const attemptNumber = i + 1;
+        if (totals.importedDateRange) {
+          const { min, max } = totals.importedDateRange;
+          if (aggMin === null || min < aggMin) aggMin = min;
+          if (aggMax === null || max > aggMax) aggMax = max;
+        }
+        const importedDateRange =
+          aggMin && aggMax ? { min: aggMin, max: aggMax } : null;
         if (totals.errors.length > 0) {
           // Stop polling early on hard errors — no point hammering a
           // failing item every few seconds. Surface the per-item error
@@ -162,6 +179,7 @@ export function PlaidLinkButton({
             errorMessage: totals.errors
               .map((m) => (m.startsWith("Plaid:") ? m : `Plaid: ${m}`))
               .join("; "),
+            importedDateRange,
           });
           return;
         }
@@ -174,6 +192,7 @@ export function PlaidLinkButton({
             added: totalAdded,
             modified: totalModified,
             errorMessage: null,
+            importedDateRange,
           });
           // (#400) Tell the host page (e.g. Chase /transactions) that
           // the freshly-linked import has landed, so it can jump the
@@ -198,9 +217,12 @@ export function PlaidLinkButton({
           added: totalAdded,
           modified: totalModified,
           errorMessage: null,
+          importedDateRange,
         });
       }
       if (cancelledRef.current) return;
+      const importedDateRange =
+        aggMin && aggMax ? { min: aggMin, max: aggMax } : null;
       // Ran out of attempts with no rows — Plaid is slow but not broken.
       setPostLinkStatus({
         phase: "still-preparing",
@@ -209,6 +231,7 @@ export function PlaidLinkButton({
         institutionName,
         added: totalAdded,
         modified: totalModified,
+        importedDateRange,
         errorMessage:
           lastErrors.length > 0
             ? lastErrors
@@ -260,6 +283,7 @@ export function PlaidLinkButton({
               added: 0,
               modified: 0,
               errorMessage: null,
+              importedDateRange: null,
             });
             setLinkToken(null);
             clearStoredLinkToken();
@@ -372,7 +396,31 @@ export function PlaidLinkButton({
   );
 }
 
-function PostLinkProgressPanel({
+// (#403) "YYYY-MM-DD" → "May 5". Uses UTC parts to stay timezone-stable
+// so the displayed range matches what landed in occurred_on.
+function formatYmdShort(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map((s) => Number(s));
+  if (!y || !m || !d) return ymd;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+export function formatImportedDateRange(min: string, max: string): string {
+  if (min === max) return formatYmdShort(min);
+  return `${formatYmdShort(min)} – ${formatYmdShort(max)}`;
+}
+
+function firstOfCurrentMonthIso(today: Date = new Date()): string {
+  const yyyy = today.getUTCFullYear();
+  const mm = String(today.getUTCMonth() + 1).padStart(2, "0");
+  return `${yyyy}-${mm}-01`;
+}
+
+export function PostLinkProgressPanel({
   status,
   onDismiss,
 }: {
@@ -387,8 +435,22 @@ function PostLinkProgressPanel({
     added,
     modified,
     errorMessage,
+    importedDateRange,
   } = status;
   const bank = institutionName?.trim() || "your bank";
+  const dateRangeLabel = importedDateRange
+    ? formatImportedDateRange(importedDateRange.min, importedDateRange.max)
+    : null;
+  // (#403) When the import landed but the newest inserted row is
+  // older than today's calendar month, surface a "still importing
+  // recent activity" hint so the user understands why their dashboard
+  // tiles for the current period are still showing $0 — instead of
+  // taking a green "Ready" panel as confirmation that everything is
+  // present.
+  const recentActivityMissing =
+    phase === "ready" &&
+    importedDateRange != null &&
+    importedDateRange.max < firstOfCurrentMonthIso();
   const percent = Math.min(
     100,
     Math.round(((phase === "ready" || phase === "still-preparing" || phase === "error" ? totalAttempts : attempt) / totalAttempts) * 100),
@@ -408,7 +470,21 @@ function PostLinkProgressPanel({
     if (added > 0) parts.push(`${added} added`);
     if (modified > 0) parts.push(`${modified} updated`);
     title = `Ready — ${parts.join(", ")}`;
-    detail = `Imported from ${bank}.`;
+    // (#403) Replace the generic "Imported from <bank>" copy with the
+    // actual date span the rows cover, so users can immediately tell
+    // whether the window includes their current-month activity. When
+    // none of the inserted rows are current-month, swap in the
+    // "still importing recent activity" hint instead of a silent
+    // success — the user just told us their dashboard tiles for the
+    // visible period are at $0 and we don't want to confirm "Ready"
+    // when in fact only historical data has landed.
+    detail = recentActivityMissing
+      ? dateRangeLabel
+        ? `Imported ${dateRangeLabel} from ${bank}. Still importing recent activity — check back shortly.`
+        : `Imported historical data from ${bank}. Still importing recent activity — check back shortly.`
+      : dateRangeLabel
+        ? `Imported ${dateRangeLabel} from ${bank}.`
+        : `Imported from ${bank}.`;
   } else if (phase === "still-preparing") {
     title = "Still preparing";
     detail = `${bank} hasn't finished its initial export yet. Try Sync again in a minute, or new charges will appear automatically on the next refresh.`;
