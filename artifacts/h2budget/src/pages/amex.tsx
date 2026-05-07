@@ -469,6 +469,56 @@ export default function AmexPage() {
       matches = debts.filter((d) => /amex|american\s*express/i.test(d.name));
     }
     if (matches.length === 0) return null;
+    // (#449) Collapse debts that share the same physical card
+    // (institution + mask) before summing. Defends against the harder
+    // mid-re-link variant of #442: if a sync briefly fires before
+    // `dedupePlaidAccountsForUser` collapses (institution, mask)
+    // groups, transactions can land referencing both the real and
+    // the duplicate `plaid_accounts` row id — so both ids end up in
+    // `amexPlaidAccountIds`, both linked debts pass the filter, and
+    // `amexDebt` would otherwise sum ~2x the real liability. We map
+    // each debt's `plaidAccountId` (row uuid) to its (institution,
+    // mask) via the live Plaid items payload, dedupe per group by
+    // keeping the most recently updated debt, and then aggregate.
+    if (matches.length > 1) {
+      const accountMeta = new Map<
+        string,
+        { institution: string; mask: string }
+      >();
+      for (const item of plaidItemsForScope ?? []) {
+        const inst = (item.institutionName ?? "").toLowerCase();
+        for (const acct of item.accounts ?? []) {
+          if (acct.mask) {
+            accountMeta.set(acct.id, {
+              institution: inst,
+              mask: acct.mask.toLowerCase(),
+            });
+          }
+        }
+      }
+      const byPhysicalCard = new Map<string, (typeof debts)[number]>();
+      const ungrouped: (typeof debts)[number][] = [];
+      for (const d of matches) {
+        const meta = d.plaidAccountId
+          ? accountMeta.get(d.plaidAccountId)
+          : undefined;
+        if (!meta) {
+          ungrouped.push(d);
+          continue;
+        }
+        const key = `${meta.institution}|${meta.mask}`;
+        const existing = byPhysicalCard.get(key);
+        if (!existing) {
+          byPhysicalCard.set(key, d);
+        } else {
+          const a =
+            existing.lastBalanceUpdate ?? existing.plaidLastSyncedAt ?? "";
+          const b = d.lastBalanceUpdate ?? d.plaidLastSyncedAt ?? "";
+          if (b > a) byPhysicalCard.set(key, d);
+        }
+      }
+      matches = [...byPhysicalCard.values(), ...ungrouped];
+    }
     if (matches.length === 1) return matches[0];
     const totalBalance = matches.reduce(
       (acc, d) => acc + parseSigned(d.balance),
@@ -485,7 +535,7 @@ export default function AmexPage() {
       balance: String(totalBalance),
       lastBalanceUpdate: latestUpdate,
     };
-  }, [debts, amexPlaidAccountIds]);
+  }, [debts, amexPlaidAccountIds, plaidItemsForScope]);
 
   // Resolve the anchor (balance + as-of timestamp) from either the linked
   // Amex debt or the server-side anchor fallback.
