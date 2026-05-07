@@ -578,6 +578,7 @@ const HORIZON_OPTS: HorizonOpt[] = [
 
 const FORECAST_FROM_KEY = "h2budget:forecastFromDate";
 const FORECAST_HORIZON_KEY = "h2budget:forecastHorizonDays";
+const FORECAST_MIN_FROM_DATE = "2026-05-01";
 
 function todayISO(): string {
   const d = new Date();
@@ -585,6 +586,11 @@ function todayISO(): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
+}
+
+function clampForecastFrom(value: string): string {
+  if (!value) return FORECAST_MIN_FROM_DATE;
+  return value < FORECAST_MIN_FROM_DATE ? FORECAST_MIN_FROM_DATE : value;
 }
 
 function shortDate(iso: string): string {
@@ -607,9 +613,10 @@ export default function ForecastPage() {
   });
   const [forecastFromDate, setForecastFromDate] = useState<string>(() => {
     try {
-      return sessionStorage.getItem(FORECAST_FROM_KEY) || todayISO();
+      const stored = sessionStorage.getItem(FORECAST_FROM_KEY);
+      return clampForecastFrom(stored || FORECAST_MIN_FROM_DATE);
     } catch {
-      return todayISO();
+      return FORECAST_MIN_FROM_DATE;
     }
   });
   useEffect(() => {
@@ -1697,7 +1704,8 @@ export default function ForecastPage() {
               id="forecast-from"
               type="date"
               value={forecastFromDate}
-              onChange={(e) => setForecastFromDate(e.target.value || todayISO())}
+              min={FORECAST_MIN_FROM_DATE}
+              onChange={(e) => setForecastFromDate(clampForecastFrom(e.target.value))}
               className="h-9 w-[160px]"
               data-testid="input-forecast-from"
             />
