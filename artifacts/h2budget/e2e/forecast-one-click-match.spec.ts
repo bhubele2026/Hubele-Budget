@@ -285,16 +285,30 @@ test.describe("Forecast inbox one-click Match button (#318)", () => {
       timeout: 15_000,
     });
 
-    // Both cards must be present in the inbox so we know we're not just
-    // measuring "card not rendered yet".
-    await expect(page.getByTestId(`select-bank-${a.id}`)).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.getByTestId(`select-bank-${b.id}`)).toBeVisible();
+    // (#478) Active Register inbox shows one row at a time; we step
+    // through the pager to assert that *both* cards exist (not just
+    // "card not rendered yet") and that *neither* card exposes the
+    // one-click Match button — the picker drops both because the only
+    // high-confidence plan is contested.
+    await expect(page.getByTestId("bank-inbox-pager-indicator")).toContainText(
+      "1 of 2",
+      { timeout: 15_000 },
+    );
 
-    // Neither card should expose the one-click Match button — the picker
-    // drops both because the only high-confidence plan is contested.
-    await expect(page.getByTestId(`one-click-match-${a.id}`)).toHaveCount(0);
-    await expect(page.getByTestId(`one-click-match-${b.id}`)).toHaveCount(0);
+    const pagerNext = page.getByTestId("bank-inbox-pager-next");
+    const toCheck = new Set([a.id, b.id]);
+    for (let step = 0; step < 3 && toCheck.size > 0; step++) {
+      for (const id of [...toCheck]) {
+        const cb = page.getByTestId(`select-bank-${id}`);
+        if (await cb.isVisible().catch(() => false)) {
+          await expect(page.getByTestId(`one-click-match-${id}`)).toHaveCount(
+            0,
+          );
+          toCheck.delete(id);
+        }
+      }
+      if (toCheck.size > 0) await pagerNext.click();
+    }
+    expect(toCheck.size).toBe(0);
   });
 });

@@ -238,12 +238,13 @@ test.describe("Forecast inbox bulk match-confident (#323)", () => {
       await page.getByRole("tab", { name: /Active Register/i }).click();
     }
 
-    const selectA = page.getByTestId(`select-bank-${a.id}`);
-    const selectB = page.getByTestId(`select-bank-${b.id}`);
-    const selectC = page.getByTestId(`select-bank-${c.id}`);
-    await expect(selectA).toBeVisible({ timeout: 15_000 });
-    await expect(selectB).toBeVisible();
-    await expect(selectC).toBeVisible();
+    // (#478) The Active Register inbox now shows one pending row at a
+    // time with a Prev/Next pager — only the first row's checkbox is in
+    // the DOM until we page over to the others.
+    await expect(page.getByTestId("bank-inbox-pager-indicator")).toContainText(
+      "1 of 3",
+      { timeout: 15_000 },
+    );
 
     // The header-level "Match all confident (2)" button confirms our seed
     // produced exactly two confident matches before we even open the
@@ -254,10 +255,22 @@ test.describe("Forecast inbox bulk match-confident (#323)", () => {
 
     // Select all three rows. The selection-scoped button must report the
     // matchable subset (2), not the selection size (3) — that's the
-    // `matchableCount` gate in the bar's render.
-    await selectA.click();
-    await selectB.click();
-    await selectC.click();
+    // `matchableCount` gate in the bar's render. With one-at-a-time
+    // (#478) we page between rows to reach each checkbox; pager order is
+    // reverse-chronological so we make this loop order-agnostic.
+    const pagerNext = page.getByTestId("bank-inbox-pager-next");
+    const toSelect = new Set([a.id, b.id, c.id]);
+    for (let step = 0; step < 4 && toSelect.size > 0; step++) {
+      for (const id of [...toSelect]) {
+        const cb = page.getByTestId(`select-bank-${id}`);
+        if (await cb.isVisible().catch(() => false)) {
+          await cb.click();
+          toSelect.delete(id);
+        }
+      }
+      if (toSelect.size > 0) await pagerNext.click();
+    }
+    expect(toSelect.size).toBe(0);
 
     const selectionBar = page.getByTestId("bank-inbox-selection-bar");
     await expect(selectionBar).toBeVisible();

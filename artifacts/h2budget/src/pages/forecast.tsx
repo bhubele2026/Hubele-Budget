@@ -129,6 +129,8 @@ import {
   AlertCircle,
   History,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   Tooltip,
@@ -790,6 +792,10 @@ export default function ForecastPage() {
   // (#26) Tracks which inbox card is currently hovered/focused so the
   // matching plan row can light up before the user picks the card up.
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
+  // (#478) When matching the bank inbox to the forecast on the Active
+  // Register, show one pending row at a time so the forecast underneath stays
+  // visible. The index is clamped to the current `bankInbox` length below.
+  const [activeInboxIndex, setActiveInboxIndex] = useState(0);
   // (#335) Active highlight for a plan row that the user just deep-linked to
   // by clicking a big-bill marker (or a bill inside its tooltip). Cleared
   // automatically after a short pulse so the row settles back to normal.
@@ -1027,6 +1033,19 @@ export default function ForecastPage() {
       return changed ? next : prev;
     });
   }, [bankInboxIdSet]);
+
+  // (#478) Keep `activeInboxIndex` valid as `bankInbox` shrinks (rows being
+  // matched, marked unplanned, or removed) or grows. We don't advance the
+  // index when the visible row resolves — the next pending row naturally
+  // takes that slot — but we clamp it so it never falls off the end.
+  useEffect(() => {
+    setActiveInboxIndex((idx) => {
+      if (bankInbox.length === 0) return 0;
+      if (idx > bankInbox.length - 1) return bankInbox.length - 1;
+      if (idx < 0) return 0;
+      return idx;
+    });
+  }, [bankInbox.length]);
 
   // Bank rows already resolved (matched or marked unplanned) in the current
   // month — used for an undo affordance directly on the bank card.
@@ -2609,11 +2628,64 @@ export default function ForecastPage() {
                     )}
                   </div>
                 ) : (
-                  bankInbox.map((card) => {
+                  (() => {
+                    // (#478) Show one pending row at a time so the forecast
+                    // underneath stays visible. The pager lets users skip
+                    // around manually; resolving the visible row naturally
+                    // advances because the next pending row takes its slot.
+                    const safeIndex = Math.min(
+                      Math.max(activeInboxIndex, 0),
+                      bankInbox.length - 1,
+                    );
+                    const card = bankInbox[safeIndex];
                     const sugs = bankSuggestions.get(card.bank.txn.id) ?? [];
                     const txnId = card.bank.txn.id;
                     const isSelected = selectedBankIds.has(txnId);
                     return (
+                      <>
+                        <div
+                          className="flex items-center justify-between gap-2 px-1"
+                          data-testid="bank-inbox-pager"
+                        >
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() =>
+                              setActiveInboxIndex((i) =>
+                                Math.max(0, i - 1),
+                              )
+                            }
+                            disabled={safeIndex === 0}
+                            data-testid="bank-inbox-pager-prev"
+                            aria-label="Previous pending inbox row"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                            Prev
+                          </Button>
+                          <span
+                            className="text-xs text-muted-foreground tabular-nums"
+                            data-testid="bank-inbox-pager-indicator"
+                          >
+                            {safeIndex + 1} of {bankInbox.length}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() =>
+                              setActiveInboxIndex((i) =>
+                                Math.min(bankInbox.length - 1, i + 1),
+                              )
+                            }
+                            disabled={safeIndex >= bankInbox.length - 1}
+                            data-testid="bank-inbox-pager-next"
+                            aria-label="Next pending inbox row"
+                          >
+                            Next
+                            <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                          </Button>
+                        </div>
                       <div key={card.id} className="space-y-1">
                         <div className="flex items-stretch gap-2">
                           <div className="flex items-start pt-3 pl-1">
@@ -2681,8 +2753,9 @@ export default function ForecastPage() {
                           </Button>
                         </div>
                       </div>
+                      </>
                     );
-                  })
+                  })()
                 )}
                 {bankResolvedThisMonth.length > 0 && (
                   <div

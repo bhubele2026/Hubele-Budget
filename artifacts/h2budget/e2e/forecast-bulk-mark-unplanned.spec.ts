@@ -126,17 +126,31 @@ test.describe("Forecast inbox bulk mark-unplanned (#276)", () => {
       timeout: 15_000,
     });
 
-    const selectA = page.getByTestId(`select-bank-${a.id}`);
-    const selectB = page.getByTestId(`select-bank-${b.id}`);
-    const selectC = page.getByTestId(`select-bank-${c.id}`);
-    await expect(selectA).toBeVisible({ timeout: 15_000 });
-    await expect(selectB).toBeVisible();
-    await expect(selectC).toBeVisible();
+    // (#478) The Active Register inbox now shows one pending row at a
+    // time with a Prev/Next pager, so we step through the pager to reach
+    // each row's checkbox. Wait for the pager to render with all 3 rows.
+    await expect(page.getByTestId("bank-inbox-pager-indicator")).toContainText(
+      "1 of 3",
+      { timeout: 15_000 },
+    );
 
-    // Select rows A and B; leave C alone so we can confirm the bulk action
-    // is scoped to the selection (not "mark all unplanned").
-    await selectA.click();
-    await selectB.click();
+    // Select rows A and B by paging through the inbox; leave C alone so
+    // we can confirm the bulk action is scoped to the selection (not
+    // "mark all unplanned"). The pager order is reverse-chronological,
+    // so we make this loop order-agnostic.
+    const pagerNext = page.getByTestId("bank-inbox-pager-next");
+    const toSelect = new Set([a.id, b.id]);
+    for (let step = 0; step < 3 && toSelect.size > 0; step++) {
+      for (const id of [...toSelect]) {
+        const cb = page.getByTestId(`select-bank-${id}`);
+        if (await cb.isVisible().catch(() => false)) {
+          await cb.click();
+          toSelect.delete(id);
+        }
+      }
+      if (toSelect.size > 0) await pagerNext.click();
+    }
+    expect(toSelect.size).toBe(0);
 
     const selectionBar = page.getByTestId("bank-inbox-selection-bar");
     await expect(selectionBar).toBeVisible();
