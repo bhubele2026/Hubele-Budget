@@ -238,7 +238,7 @@ describe("Budget inline categorize popover (#90/#280)", () => {
     expect(idxOtherHeader).toBeLessThan(idxOtherRow);
   });
 
-  it("falls back to a neutral '+N' badge and a single 'Uncategorized this month' section when nothing matches", async () => {
+  it("hides the categorize badge entirely when no uncategorized txn matches a rule or the category name (#417)", async () => {
     rules = []; // no rule for cat-1
     txns = [
       {
@@ -254,18 +254,10 @@ describe("Budget inline categorize popover (#90/#280)", () => {
 
     renderPage();
 
-    const trigger = screen.getByTestId("button-categorize-cat-1");
-    expect(trigger.getAttribute("data-suggested-count")).toBe("0");
-    expect(trigger.textContent).toMatch(/\+1/);
-
-    fireEvent.click(trigger);
-    const list = await screen.findByTestId("uncategorized-list-cat-1");
-    // No Suggested header in this state — the only header is the fallback.
-    expect(within(list).queryByText(/Suggested/)).toBeNull();
-    expect(within(list).getByText(/Uncategorized this month/)).toBeTruthy();
-    expect(
-      within(list).getByTestId("button-assign-tx-only-to-cat-1"),
-    ).toBeTruthy();
+    // #417 removed the neutral "+N" fallback so unrelated uncategorized
+    // txns no longer add a noisy chip to every Budget row. The badge only
+    // renders when there is at least one rule/name-suggested match.
+    expect(screen.queryByTestId("button-categorize-cat-1")).toBeNull();
   });
 
   it("calls update-transaction with the row's categoryId and invalidates txns + budget month on success", async () => {

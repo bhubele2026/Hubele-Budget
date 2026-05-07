@@ -1015,9 +1015,10 @@ function BudgetLineRow({
 
   return (
     <div
-      className="group grid grid-cols-12 gap-4 px-4 py-3 items-center hover:bg-muted/10"
+      className="group px-4 py-1.5 hover:bg-muted/10"
       data-testid={`row-budget-${line.categoryId}`}
     >
+    <div className="grid grid-cols-12 gap-4 items-center">
       <div className="col-span-12 md:col-span-5 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           {(() => {
@@ -1049,7 +1050,6 @@ function BudgetLineRow({
               </button>
             );
           })()}
-          {sourceKind !== "manual" && <SourceBadge kind={sourceKind} />}
           {(line.sourceBreakdown ?? []).map((b) => (
             <Badge
               key={b.source}
@@ -1082,36 +1082,24 @@ function BudgetLineRow({
               Pinned
             </Badge>
           )}
-          {/* #90 / #176 — inline categorize from Budget. Surfaces
-              uncategorized transactions in the current month and lets the
-              user assign one to this row's category in one click. Item 4
-              hint: when one or more descriptions match an existing rule for
-              this category (or contain the category name), the badge turns
-              violet and shows the suggested count; otherwise it falls back
-              to a neutral "+N other" affordance. */}
-          {uncategorizedTxns.length > 0 && (
+          {/* #90 / #176 / #417 — inline categorize from Budget. Surfaces
+              the violet "N matches" hint only when one or more
+              uncategorized transactions match an existing rule for this
+              category or contain the category name. Click to assign in
+              one tap. The neutral "+N other" fallback was removed in
+              #417 to keep rows compact. */}
+          {suggestedTxns.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
                 <Badge
                   variant="outline"
-                  className={cn(
-                    "text-[10px] font-normal cursor-pointer border-dashed",
-                    suggestedTxns.length > 0
-                      ? "border-violet-300 text-violet-700 bg-violet-50 hover:border-violet-500 dark:bg-violet-950/30 dark:text-violet-300"
-                      : "border-muted-foreground/40 hover:border-foreground hover:text-foreground",
-                  )}
-                  title={
-                    suggestedTxns.length > 0
-                      ? `${suggestedTxns.length} uncategorized transaction${suggestedTxns.length === 1 ? "" : "s"} look like ${line.categoryName} (rule or name match) — click to assign.`
-                      : `${uncategorizedTxns.length} uncategorized transaction${uncategorizedTxns.length === 1 ? "" : "s"} this month — assign one to ${line.categoryName}.`
-                  }
+                  className="text-[10px] font-normal cursor-pointer border-dashed border-violet-300 text-violet-700 bg-violet-50 hover:border-violet-500 dark:bg-violet-950/30 dark:text-violet-300"
+                  title={`${suggestedTxns.length} uncategorized transaction${suggestedTxns.length === 1 ? "" : "s"} look like ${line.categoryName} (rule or name match) — click to assign.`}
                   data-testid={`button-categorize-${line.categoryId}`}
                   data-suggested-count={suggestedTxns.length}
                 >
                   <Tag className="w-3 h-3 mr-1" />
-                  {suggestedTxns.length > 0
-                    ? `${suggestedTxns.length} match${suggestedTxns.length === 1 ? "" : "es"}`
-                    : `+${uncategorizedTxns.length}`}
+                  {`${suggestedTxns.length} match${suggestedTxns.length === 1 ? "" : "es"}`}
                 </Badge>
               </PopoverTrigger>
               <PopoverContent className="w-80 p-3" align="start">
@@ -1218,22 +1206,17 @@ function BudgetLineRow({
             </div>
           )}
         </div>
-        {line.note && (
-          <div className="text-xs text-muted-foreground mt-0.5">
-            {line.note}
-          </div>
-        )}
       </div>
       <div className="col-span-3 md:col-span-2 text-right">
         {isReadOnly ? (
-          <div className="font-mono text-sm py-2 pr-3">
+          <div className="font-mono text-sm py-1 pr-3">
             {formatCurrency(line.plannedAmount)}
           </div>
         ) : (
           <Input
             type="number"
             step="1"
-            className="h-8 text-right bg-transparent border-transparent hover:border-input focus:bg-background font-mono"
+            className="h-7 text-right bg-transparent border-transparent hover:border-input focus:bg-background font-mono"
             defaultValue={planned.toString()}
             onBlur={(e) => {
               if (e.target.value !== planned.toString()) {
@@ -1390,6 +1373,76 @@ function BudgetLineRow({
       <div className="col-span-3 md:col-span-1 text-right font-mono text-sm text-muted-foreground">
         {pct === null ? "—" : `${pct}%`}
       </div>
+    </div>
+    {contributingTxns.length > 0 && (
+      <div
+        className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground tabular-nums"
+        data-testid={`analysis-strip-${line.categoryId}`}
+      >
+        <span>
+          <span className="font-mono">{formatCurrency(actual)}</span>
+          <span className="text-muted-foreground/70"> spent</span>
+        </span>
+        <span className="text-muted-foreground/40">·</span>
+        <span>
+          <span className="font-mono">{formatCurrency(planned)}</span>
+          <span className="text-muted-foreground/70"> planned</span>
+        </span>
+        {pct !== null && (
+          <>
+            <span className="text-muted-foreground/40">·</span>
+            <span>
+              <span className="font-mono">{pct}%</span>
+              <span className="text-muted-foreground/70"> of plan</span>
+            </span>
+          </>
+        )}
+        {planned > 0 && (
+          <>
+            <span className="text-muted-foreground/40">·</span>
+            <span className={cn("font-mono", diffColor)}>
+              {diff >= 0
+                ? `${formatCurrency(Math.abs(diff))} ${isIncome ? "over plan" : "remaining"}`
+                : `${formatCurrency(Math.abs(diff))} ${isIncome ? "under plan" : "over"}`}
+            </span>
+          </>
+        )}
+        {planned > 0 && !isIncome && (() => {
+          const monthDate = new Date(monthStart + "T00:00:00");
+          const year = monthDate.getUTCFullYear();
+          const month = monthDate.getUTCMonth();
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          const today = new Date();
+          const sameMonth =
+            today.getUTCFullYear() === year && today.getUTCMonth() === month;
+          if (!sameMonth) return null;
+          const dayOfMonth = today.getUTCDate();
+          const expectedPct = Math.round((dayOfMonth / daysInMonth) * 100);
+          if (pct === null) return null;
+          const aheadBy = pct - expectedPct;
+          const paceLabel =
+            Math.abs(aheadBy) <= 5
+              ? "on pace"
+              : aheadBy > 0
+                ? `${aheadBy}% ahead of pace`
+                : `${Math.abs(aheadBy)}% under pace`;
+          const paceColor =
+            Math.abs(aheadBy) <= 5
+              ? "text-muted-foreground"
+              : aheadBy > 0
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-emerald-600 dark:text-emerald-400";
+          return (
+            <>
+              <span className="text-muted-foreground/40">·</span>
+              <span className={paceColor} data-testid={`analysis-pace-${line.categoryId}`}>
+                {paceLabel}
+              </span>
+            </>
+          );
+        })()}
+      </div>
+    )}
     </div>
   );
 }
