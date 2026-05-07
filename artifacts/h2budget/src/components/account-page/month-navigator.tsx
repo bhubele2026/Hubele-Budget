@@ -23,10 +23,13 @@ export function shiftMonth(mk: MonthKey, delta: number): MonthKey {
 }
 
 export function formatMonthLabel(mk: MonthKey): string {
-  return new Date(mk.year, mk.month, 1).toLocaleDateString("en-US", {
+  // Compact `MMM 'YY` form (e.g. `May '26`) so the navigator pill stays
+  // narrow and leaves more horizontal room for the KPI tiles next to it.
+  const month = new Date(mk.year, mk.month, 1).toLocaleDateString("en-US", {
     month: "short",
-    year: "numeric",
   });
+  const yy = String(mk.year % 100).padStart(2, "0");
+  return `${month} '${yy}`;
 }
 
 function isoDate(d: Date): string {
@@ -50,19 +53,19 @@ export function MonthNavigator({
   onChange: (next: MonthKey) => void;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-md border bg-card px-2 py-2">
+    <div className="inline-flex items-center gap-0.5 rounded-md border bg-card px-1 py-1">
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-6 w-6"
         onClick={() => onChange(shiftMonth(value, -1))}
         aria-label="Previous month"
         data-testid="button-prev-month"
       >
-        <ChevronLeft className="h-4 w-4" />
+        <ChevronLeft className="h-3.5 w-3.5" />
       </Button>
       <div
-        className="min-w-[88px] text-center font-mono text-sm font-semibold tabular-nums"
+        className="min-w-[58px] text-center font-mono text-xs font-semibold tabular-nums"
         data-testid="text-selected-month"
       >
         {formatMonthLabel(value)}
@@ -70,12 +73,12 @@ export function MonthNavigator({
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-6 w-6"
         onClick={() => onChange(shiftMonth(value, 1))}
         aria-label="Next month"
         data-testid="button-next-month"
       >
-        <ChevronRight className="h-4 w-4" />
+        <ChevronRight className="h-3.5 w-3.5" />
       </Button>
     </div>
   );

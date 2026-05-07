@@ -1228,8 +1228,10 @@ export default function AmexPage() {
           }
         />
 
-      <div className="flex items-stretch gap-4 flex-wrap">
-        <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="shrink-0">
+          <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 min-w-[280px]">
           {endingBalance.source === "missing" ? (
             <div
