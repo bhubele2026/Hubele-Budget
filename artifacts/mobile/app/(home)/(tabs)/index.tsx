@@ -36,10 +36,32 @@ function currentMonthKey(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function monthStartISO(): string {
-  const d = new Date();
+// Parity with the web dashboard: pull a year of history so the Unplanned
+// month cycler can scroll back into prior months without a refetch (#487).
+function monthsAgoStartISO(monthsBack: number): string {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
   const m = String(d.getMonth() + 1).padStart(2, "0");
   return `${d.getFullYear()}-${m}-01`;
+}
+
+function monthBoundsForOffset(offset: number): {
+  start: string;
+  end: string;
+  label: string;
+} {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0);
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate(),
+    ).padStart(2, "0")}`;
+  const label = start.toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+  return { start: fmt(start), end: fmt(end), label };
 }
 
 function toISODate(d: Date): string {
@@ -76,12 +98,13 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const monthKey = useMemo(currentMonthKey, []);
-  const monthStart = useMemo(monthStartISO, []);
   const weekRange = useMemo(currentWeekRangeISO, []);
-  const weekFetchFrom = useMemo(
-    () => (weekRange.start < monthStart ? weekRange.start : monthStart),
-    [weekRange.start, monthStart],
-  );
+  // (#487) Pull a rolling year so the Unplanned month cycler can scroll
+  // back into prior months without an extra fetch. Mirrors web behavior.
+  const txnFetchFrom = useMemo(() => {
+    const earliest = monthsAgoStartISO(12);
+    return weekRange.start < earliest ? weekRange.start : earliest;
+  }, [weekRange.start]);
 
   const dashboard = useGetDashboard();
   const forecast = useGetForecast();
@@ -91,7 +114,7 @@ export default function DashboardScreen() {
     bucket: "weekly",
     periodKey: monthKey,
   });
-  const monthTxns = useListTransactions({ from: weekFetchFrom, limit: 5000 });
+  const monthTxns = useListTransactions({ from: txnFetchFrom, limit: 5000 });
   // (#358) Pull-to-refresh on the dashboard now also kicks a Plaid sync
   // (mirroring the web app's behavior). The hook surfaces structured
   // per-item failures as "<Institution>: <plain reason>" via Alert and
@@ -118,7 +141,7 @@ export default function DashboardScreen() {
         }),
         queryClient.invalidateQueries({
           queryKey: getListTransactionsQueryKey({
-            from: weekFetchFrom,
+            from: txnFetchFrom,
             limit: 5000,
           }),
         }),
@@ -162,6 +185,23 @@ export default function DashboardScreen() {
     [dashboard.data?.upcomingBills],
   );
 
+  // (#487) Mirror the web dashboard: a txn marked Unplanned in the
+  // forecast inbox writes a resolution of `ignored_unforecasted`
+  // (legacy `unplanned`) against the bank txn's id. Surface that set
+  // so the Unplanned tile counts those rows alongside ones whose
+  // `unplannedAllowance` flag was set manually.
+  const resolvedUnplannedTxnIds = useMemo(() => {
+    const ids = new Set<string>();
+    const rs = forecast.data?.resolutions ?? [];
+    for (const r of rs) {
+      if (!r.matchedTxnId) continue;
+      if (r.status === "ignored_unforecasted" || r.status === "unplanned") {
+        ids.add(r.matchedTxnId);
+      }
+    }
+    return ids;
+  }, [forecast.data?.resolutions]);
+
   const initialLoading =
     dashboard.isLoading || forecast.isLoading || amex.isLoading;
 
@@ -201,6 +241,11 @@ export default function DashboardScreen() {
             <WeeklySpendingSection
               spent={weeklySpend}
               target={weeklyTarget}
+            />
+
+            <UnplannedSpendingSection
+              transactions={(monthTxns.data ?? []) as Transaction[]}
+              resolvedUnplannedTxnIds={resolvedUnplannedTxnIds}
             />
 
             <UpcomingBillsSection bills={upcomingBills} />
@@ -355,6 +400,151 @@ function WeeklySpendingSection(props: { spent: number; target: number }) {
             : `${formatCurrency(remaining)} left this week`
           : "Set a weekly target on the web app"}
       </Text>
+    </View>
+  );
+}
+
+function UnplannedSpendingSection(props: {
+  transactions: Transaction[];
+  resolvedUnplannedTxnIds: ReadonlySet<string>;
+}) {
+  const colors = useColors();
+  const [monthOffset, setMonthOffset] = useState(0);
+  const bounds = useMemo(
+    () => monthBoundsForOffset(monthOffset),
+    [monthOffset],
+  );
+
+  // (#487) Mirror web: count any txn whose `unplannedAllowance` flag is
+  // set OR whose forecast resolution stamps it ignored_unforecasted /
+  // unplanned. Bucket by `occurredOn` so switching months does the
+  // right thing.
+  const monthRows = useMemo(() => {
+    const rows: Transaction[] = [];
+    for (const t of props.transactions) {
+      const occurredOn = String(t.occurredOn ?? "").slice(0, 10);
+      if (!occurredOn) continue;
+      if (occurredOn < bounds.start || occurredOn > bounds.end) continue;
+      const tagged =
+        t.unplannedAllowance ||
+        props.resolvedUnplannedTxnIds.has(t.id);
+      if (!tagged) continue;
+      rows.push(t);
+    }
+    rows.sort((a, b) =>
+      String(b.occurredOn ?? "").localeCompare(String(a.occurredOn ?? "")),
+    );
+    return rows;
+  }, [props.transactions, props.resolvedUnplannedTxnIds, bounds.start, bounds.end]);
+
+  const total = useMemo(() => {
+    let sum = 0;
+    for (const t of monthRows) {
+      const amt = Number(t.amount) || 0;
+      if (amt < 0) sum += -amt;
+    }
+    return sum;
+  }, [monthRows]);
+
+  const recent = monthRows.slice(0, 5);
+
+  return (
+    <View
+      style={[
+        styles.section,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+      testID="unplanned-spending-section"
+    >
+      <View style={styles.unplannedHeader}>
+        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+          Unplanned spending
+        </Text>
+        <View style={styles.monthCycler}>
+          <Text
+            onPress={() => setMonthOffset((m) => m - 1)}
+            style={[styles.cyclerBtn, { color: colors.foreground, borderColor: colors.border }]}
+            accessibilityLabel="Previous month"
+            testID="unplanned-prev-month"
+          >
+            ‹
+          </Text>
+          <Text
+            style={[styles.cyclerLabel, { color: colors.mutedForeground }]}
+            testID="unplanned-month-label"
+          >
+            {bounds.label}
+          </Text>
+          <Text
+            onPress={() =>
+              setMonthOffset((m) => (m >= 0 ? m : m + 1))
+            }
+            style={[
+              styles.cyclerBtn,
+              {
+                color: monthOffset >= 0 ? colors.mutedForeground : colors.foreground,
+                borderColor: colors.border,
+                opacity: monthOffset >= 0 ? 0.4 : 1,
+              },
+            ]}
+            accessibilityLabel="Next month"
+            testID="unplanned-next-month"
+          >
+            ›
+          </Text>
+        </View>
+      </View>
+      <Text
+        style={[styles.weeklyValue, { color: colors.foreground }]}
+        testID="unplanned-total"
+      >
+        {formatCurrency(total)}
+      </Text>
+      {recent.length === 0 ? (
+        <Text
+          style={{
+            color: colors.mutedForeground,
+            paddingVertical: 12,
+            textAlign: "center",
+          }}
+        >
+          Nothing tagged Unplanned this month.
+        </Text>
+      ) : (
+        <View style={{ marginTop: 8 }}>
+          {recent.map((t, i) => (
+            <View
+              key={t.id}
+              style={[
+                styles.billRow,
+                {
+                  borderBottomColor: colors.border,
+                  borderBottomWidth:
+                    i === recent.length - 1 ? 0 : StyleSheet.hairlineWidth,
+                },
+              ]}
+              testID={`unplanned-row-${t.id}`}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.billName, { color: colors.foreground }]}
+                >
+                  {t.description}
+                </Text>
+                <Text
+                  style={[styles.billMeta, { color: colors.mutedForeground }]}
+                >
+                  {String(t.occurredOn ?? "").slice(0, 10)}
+                </Text>
+              </View>
+              <Text style={[styles.billAmount, { color: colors.foreground }]}>
+                {formatCurrency(Math.abs(Number(t.amount) || 0))}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -532,6 +722,37 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     fontSize: 14,
     fontVariant: ["tabular-nums"],
+  },
+  unplannedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    gap: 8,
+  },
+  monthCycler: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  cyclerBtn: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 18,
+    minWidth: 28,
+    textAlign: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  cyclerLabel: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    minWidth: 110,
+    textAlign: "center",
   },
 });
 
