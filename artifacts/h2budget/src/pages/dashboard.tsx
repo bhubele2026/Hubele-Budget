@@ -18,8 +18,11 @@ import {
   type MappingRule,
 } from "@workspace/api-client-react";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
-import { computeBalanceAtEndOf } from "@/lib/accountBalance";
-import { monthKeyFromISO, type MonthKey } from "@/components/account-page";
+import {
+  computeChaseEndOfMonthBalance,
+  scopeChaseTransactions,
+} from "@/lib/chaseEndingBalance";
+import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1690,52 +1693,52 @@ export default function DashboardPage() {
   const { data: allTxns } = useListTransactions({ limit: 5000 });
 
   const bankSnapshot = forecastData?.bankSnapshot ?? null;
+  // (#475) Use the same per-account snapshot resolution + scoping the
+  // Chase Transactions page uses, so the dashboard tile and the Chase
+  // page's "Ending balance" header agree for any month — including
+  // future months that roll forward and past months that roll back
+  // through synced Chase transactions.
+  const accountSnapshots = forecastData?.accountSnapshots ?? {};
+  const plaidCheckingAccounts = useMemo(
+    () => forecastData?.plaidCheckingAccounts ?? [],
+    [forecastData?.plaidCheckingAccounts],
+  );
+  const chaseEffectiveSnapshot = useMemo(
+    () =>
+      deriveEffectiveSnapshot({
+        bankSnapshot,
+        accountSnapshots,
+        // The dashboard's Chase tile is always anchored to the primary
+        // bank snapshot's own account (no per-account picker here), so
+        // the helper resolves to `bankSnapshot` directly and stays in
+        // lock-step with the Chase page when viewed on its default
+        // account.
+        selectedAccountInternalId: bankSnapshot?.accountId ?? null,
+        plaidCheckingAccounts,
+      }),
+    [bankSnapshot, accountSnapshots, plaidCheckingAccounts],
+  );
   const chasePlaidAccountId = useMemo(() => {
     if (!bankSnapshot?.accountId) return null;
-    const acct = (forecastData?.plaidCheckingAccounts ?? []).find(
+    const acct = plaidCheckingAccounts.find(
       (a) => a.id === bankSnapshot.accountId,
     );
     return acct?.accountId ?? null;
-  }, [bankSnapshot?.accountId, forecastData?.plaidCheckingAccounts]);
+  }, [bankSnapshot?.accountId, plaidCheckingAccounts]);
 
-  const chaseTransactions = useMemo(() => {
-    const all = allTxns ?? [];
-    if (chasePlaidAccountId) {
-      return all.filter((t) => t.plaidAccountId === chasePlaidAccountId);
-    }
-    return all.filter((t) => !t.plaidAccountId);
-  }, [allTxns, chasePlaidAccountId]);
-
-  const chaseNetChangeByMonth = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const t of chaseTransactions) {
-      const mk = monthKeyFromISO(t.occurredOn);
-      const k = `${mk.year}-${mk.month}`;
-      m.set(k, (m.get(k) ?? 0) + (Number(t.amount) || 0));
-    }
-    return m;
-  }, [chaseTransactions]);
-
-  const chaseAnchorBalance = bankSnapshot
-    ? Number(bankSnapshot.balance) || 0
-    : null;
-  const chaseAnchorMonth = useMemo<MonthKey | null>(() => {
-    if (!bankSnapshot?.at) return null;
-    return monthKeyFromISO(bankSnapshot.at);
-  }, [bankSnapshot?.at]);
+  const chaseTransactions = useMemo(
+    () => scopeChaseTransactions(allTxns ?? [], chasePlaidAccountId),
+    [allTxns, chasePlaidAccountId],
+  );
 
   const chaseEndingBalance = useMemo(() => {
-    return (monthStart: string): number | null => {
-      if (chaseAnchorBalance === null || chaseAnchorMonth === null) return null;
-      const target = monthKeyFromISO(monthStart);
-      return computeBalanceAtEndOf({
-        anchorBalance: chaseAnchorBalance,
-        anchorMonth: chaseAnchorMonth,
-        netChangeByMonth: chaseNetChangeByMonth,
-        target,
+    return (monthStart: string): number | null =>
+      computeChaseEndOfMonthBalance({
+        monthStart,
+        effectiveSnapshot: chaseEffectiveSnapshot,
+        chaseTransactions,
       });
-    };
-  }, [chaseAnchorBalance, chaseAnchorMonth, chaseNetChangeByMonth]);
+  }, [chaseEffectiveSnapshot, chaseTransactions]);
   // All-time reimbursables — no date window, server filters by reimbursable=true.
   const { data: reimbTxns, isLoading: reimbLoading } = useListTransactions({
     reimbursable: true,

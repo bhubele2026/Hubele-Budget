@@ -79,12 +79,11 @@ import { isBankTxn } from "@/lib/forecastMatch";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { BucketBubbles, type BucketFlags, type BucketKey } from "@/components/bucket-bubbles";
-import { computeBalanceAtEndOf } from "@/lib/accountBalance";
+import { chaseMonthTotals } from "@/lib/chaseScope";
 import {
-  chaseMonthTotals,
-  dedupeTransactionsByIdentity,
-  isChaseFallbackSource,
-} from "@/lib/chaseScope";
+  makeChaseBalanceAtEndOf,
+  scopeChaseTransactions,
+} from "@/lib/chaseEndingBalance";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import {
   compareNewestFirst,
@@ -398,20 +397,14 @@ export default function TransactionsPage() {
   // (#443) Dedupe by Plaid transaction id (or row id) so duplicate survivor
   // rows left behind by the #429/#408 dedupe work cannot inflate the
   // Money in / Money out tiles or the rolling-balance net change.
+  // (#475) Both the per-account scoping/dedupe and the per-account
+  // fallback live in `scopeChaseTransactions` so the dashboard's
+  // "Chase ending balance" tile sees exactly the same activity set.
+  // (#448) When no Plaid checking account is linked, the helper
+  // tightens the fallback to only Chase-source + manual rows so the
+  // Chase page can't sweep in Amex / debt activity.
   const chaseTransactions = useMemo(() => {
-    const all = transactions ?? [];
-    // (#448) When no Plaid checking account is linked, the previous
-    // fallback `!t.plaidAccountId` swept in *every* non-Plaid row the
-    // user owned — including Amex and other debt rows — making the
-    // Chase page show transactions that don't belong to it. Tighten
-    // the fallback to only Chase-source + manual rows, mirroring the
-    // `AMEX_SOURCES` parity pattern on the Amex page.
-    const scoped = chasePlaidAccountId
-      ? all.filter((t) => t.plaidAccountId === chasePlaidAccountId)
-      : all.filter(
-          (t) => !t.plaidAccountId && isChaseFallbackSource(t.source),
-        );
-    return dedupeTransactionsByIdentity(scoped);
+    return scopeChaseTransactions(transactions ?? [], chasePlaidAccountId);
   }, [transactions, chasePlaidAccountId]);
 
   // ---- Filters & month navigation ----
@@ -549,55 +542,19 @@ export default function TransactionsPage() {
     [filtered, selectedMonth],
   );
 
-  // Net change per month for the entire scoped set (for rolling balance).
-  const netChangeByMonth = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const t of chaseTransactions) {
-      const mk = monthKeyFromISO(t.occurredOn);
-      const k = `${mk.year}-${mk.month}`;
-      m.set(k, (m.get(k) ?? 0) + parseSigned(t.amount));
-    }
-    return m;
-  }, [chaseTransactions]);
-
-  // #103/#296 — anchor balance math to whichever snapshot covers the
-  // currently-viewed account (primary or per-account). Manual accounts
-  // and Plaid accounts that have never been refreshed still render
-  // Starting/Ending balance as "unavailable".
-  const anchorBalance = effectiveSnapshot
-    ? Number(effectiveSnapshot.balance) || 0
-    : null;
-  // Anchor the rolling balance at the snapshot's month. The snapshot
-  // value is the known balance as of `effectiveSnapshot.at` (typically
-  // a mid-month Plaid sync). End-of-anchor-month is reconstructed by
-  // the helper as snapshot + sum(post-snapshot txns in anchor month).
-  const anchorMonth = useMemo<MonthKey>(() => {
-    if (effectiveSnapshot?.at) return monthKeyFromISO(effectiveSnapshot.at);
-    return currentMonth;
-  }, [effectiveSnapshot?.at, currentMonth]);
-
-  // Transactions that occurred in the anchor month (the snapshot's month).
-  // Used to reconstruct end-of-anchor-month from the mid-month snapshot:
-  // endOfAnchorMonth = snapshot + sum(post-snapshot txns in anchor month).
-  const anchorMonthTxns = useMemo(() => {
-    return chaseTransactions.filter(
-      (t) => compareMonth(monthKeyFromISO(t.occurredOn), anchorMonth) === 0,
-    );
-  }, [chaseTransactions, anchorMonth]);
-
-  const balanceAtEndOf = useMemo(() => {
-    return (mk: MonthKey): number | null => {
-      if (anchorBalance === null) return null;
-      return computeBalanceAtEndOf({
-        anchorBalance,
-        anchorMonth,
-        netChangeByMonth,
-        target: mk,
-        anchorAt: effectiveSnapshot?.at ?? null,
-        anchorMonthTxns,
-      });
-    };
-  }, [anchorBalance, anchorMonth, netChangeByMonth, effectiveSnapshot?.at, anchorMonthTxns]);
+  // (#475) Anchor + per-month balance math is shared with the
+  // dashboard's "Chase ending balance" tile via `makeChaseBalanceAtEndOf`,
+  // so the two surfaces always agree for any month. The closure
+  // returns `null` when no effective snapshot is available (Manual
+  // account, or Plaid account that has never been refreshed).
+  const balanceAtEndOf = useMemo(
+    () =>
+      makeChaseBalanceAtEndOf({
+        effectiveSnapshot,
+        chaseTransactions,
+      }),
+    [effectiveSnapshot, chaseTransactions],
+  );
 
   const endingBalance = useMemo(
     () => balanceAtEndOf(selectedMonth),
@@ -609,7 +566,7 @@ export default function TransactionsPage() {
   );
 
   const balanceTrend = useMemo<TrendPoint[]>(() => {
-    if (anchorBalance === null) return [];
+    if (!effectiveSnapshot) return [];
     const points: TrendPoint[] = [];
     for (let i = 11; i >= 0; i--) {
       const mk = shiftMonth(selectedMonth, -i);
@@ -623,7 +580,7 @@ export default function TransactionsPage() {
       });
     }
     return points;
-  }, [anchorBalance, balanceAtEndOf, selectedMonth]);
+  }, [effectiveSnapshot, balanceAtEndOf, selectedMonth]);
 
   // Anchor every same-day balance assignment to the canonical
   // newest-first comparator (occurredOn DESC, occurredAt DESC nulls
