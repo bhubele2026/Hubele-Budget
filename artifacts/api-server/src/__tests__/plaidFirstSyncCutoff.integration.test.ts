@@ -321,9 +321,108 @@ describe("(#361) Plaid first-sync import cutoff", () => {
         ),
       );
     expect(matched).toHaveLength(1);
-    expect(matched[0].source).toBe("manual");
+    // (#452) The merge now upgrades `source` to `plaid:<slug>` so the
+    // surviving row no longer claims to be a manual entry.
+    expect(matched[0].source).toBe("plaid:amex");
     expect(matched[0].amount).toBe("-42.00");
     expect(matched[0].description).toBe("Coffee — manually entered before link");
+  });
+
+  it("(#452) absorbs a manual row dated well before the cutoff (no longer a ±7-day window)", async () => {
+    const { itemRowId, externalAcctId, debtId } = await seedAmexCardScenario({
+      withLinkedDebt: true,
+      manualDates: ["2026-02-28"],
+    });
+    // A manual row dated Jan 5 — six weeks before the cutoff. The
+    // pre-#452 ±7-day gate would have left it stranded AND would have
+    // skipped Plaid's matching row, leaving the user looking at a
+    // stale manual line. Post-#452, anything <= cutoff is fair game.
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER,
+      occurredOn: "2026-01-05",
+      description: "Annual fee — typed in last month",
+      amount: "-95.00",
+      source: "manual",
+      debtId,
+    });
+    await autoDetectCutoffsForItem(TEST_USER, itemRowId, "amex");
+
+    nextSyncResponse = {
+      added: [
+        {
+          transaction_id: "plaid-old-manual-merge",
+          account_id: externalAcctId,
+          date: "2026-01-05",
+          amount: 95.0,
+          name: "Annual Membership Fee",
+        },
+      ],
+      modified: [],
+      removed: [],
+    };
+    await syncPlaidItem(TEST_USER, itemRowId);
+
+    const merged = await db
+      .select()
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.userId, TEST_USER),
+          eq(transactionsTable.plaidTransactionId, "plaid-old-manual-merge"),
+        ),
+      );
+    expect(merged).toHaveLength(1);
+    expect(merged[0].source).toBe("plaid:amex");
+    // Description preserved from the manual row.
+    expect(merged[0].description).toBe("Annual fee — typed in last month");
+  });
+
+  it("(#452) absorbs a pending→posted near-miss (±$0.01, ±3 days) instead of inserting a duplicate", async () => {
+    const { itemRowId, externalAcctId, debtId } = await seedAmexCardScenario({
+      withLinkedDebt: true,
+      manualDates: ["2026-02-28"],
+    });
+    // Manual "pending" row at $19.99 on 2026-02-25.
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER,
+      occurredOn: "2026-02-25",
+      description: "Coffee (pending)",
+      amount: "-19.99",
+      source: "manual",
+      debtId,
+      notes: "[pending]",
+    });
+    await autoDetectCutoffsForItem(TEST_USER, itemRowId, "amex");
+
+    nextSyncResponse = {
+      added: [
+        {
+          transaction_id: "plaid-pending-posted",
+          account_id: externalAcctId,
+          // 2 days later, 1¢ apart — must merge, not insert a twin.
+          date: "2026-02-27",
+          amount: 20.0,
+          name: "Coffee shop",
+        },
+      ],
+      modified: [],
+      removed: [],
+    };
+    await syncPlaidItem(TEST_USER, itemRowId);
+
+    const remaining = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    // Two manual rows seeded (the cutoff seed + the pending coffee). The
+    // coffee row should now carry the Plaid id and source — not be
+    // duplicated. So we still expect 2 rows total.
+    expect(remaining).toHaveLength(2);
+    const merged = remaining.find(
+      (r) => r.plaidTransactionId === "plaid-pending-posted",
+    );
+    expect(merged).toBeDefined();
+    expect(merged!.source).toBe("plaid:amex");
   });
 
   it("does not gate added rows once firstSyncCompletedAt is stamped", async () => {

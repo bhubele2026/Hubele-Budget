@@ -28,6 +28,7 @@ import {
 import { plaid } from "../lib/plaid";
 import { archiveExpiredOneTime } from "./bills";
 import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
+import { dedupeTransactionsForUser } from "../lib/dedupeTransactions";
 
 const router: IRouter = Router();
 
@@ -641,6 +642,20 @@ router.post(
   requireAuth,
   async (req, res): Promise<void> => {
     const report = await dedupePlaidAccountsForUser(req.userId!);
+    res.json(report);
+  },
+);
+
+// (#452) Maintenance endpoint: collapse duplicate `transactions` rows
+// across every Plaid account belonging to the calling user. Same key
+// as the /transactions/sync post-upsert pass — `(userId, plaidAccountId,
+// occurredOn, amount, normalizedDescription)` — so it's safe to run
+// at any time. Idempotent: a clean ledger reports zero duplicates.
+router.post(
+  "/forecast/dedupe-transactions",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const report = await dedupeTransactionsForUser(req.userId!);
     res.json(report);
   },
 );

@@ -19,6 +19,7 @@ import {
 } from "./plaid";
 import { loadUserRules, categorize } from "./autoCategorize";
 import { expandItem, parseISO, addDays, fmtISO } from "./cashSignal";
+import { dedupeTransactionsForAccount } from "./dedupeTransactions";
 import { refreshAmexAnchor } from "./amexAnchor";
 import { logger } from "./logger";
 import { recordPlaidSyncAttempt } from "./plaidSyncAttempts";
@@ -631,52 +632,100 @@ export async function syncPlaidItem(
         const cutoffStr = acctRow.importCutoffDate as string;
         const cutoffMs = parseISO(cutoffStr).getTime();
         const txnMs = parseISO(t.date).getTime();
-        const daysFromCutoff = Math.abs(txnMs - cutoffMs) / 86_400_000;
-        if (daysFromCutoff <= 7) {
-          const debtScope = debtIdsByAcctRowId.get(acctRow.id) ?? [];
-          const isCheckingScope =
-            !!forecastSettings?.bankSnapshotAccountId &&
-            forecastSettings.bankSnapshotAccountId === acctRow.id;
-          let mergeWhere = null as ReturnType<typeof and> | null;
-          if (debtScope.length > 0) {
-            mergeWhere = and(
+        const debtScope = debtIdsByAcctRowId.get(acctRow.id) ?? [];
+        const isCheckingScope =
+          !!forecastSettings?.bankSnapshotAccountId &&
+          forecastSettings.bankSnapshotAccountId === acctRow.id;
+        // (#452) Widened first-sync merge. Two independent merge
+        // attempts so any manual row the user already typed in for
+        // this account can be absorbed instead of insert-duplicating
+        // alongside Plaid's row:
+        //   1. Exact (date, amount) match on a manual row whose
+        //      occurredOn is on/before the import cutoff. The previous
+        //      ±7-day window meant a manual row dated weeks before the
+        //      cutoff would survive AND Plaid's row would be skipped,
+        //      leaving the user looking at a stale manual line. Now
+        //      anything on/before the cutoff is fair game so the same
+        //      real posting always collapses to a single Plaid-owned
+        //      row.
+        //   2. Pending→posted reconciliation: amount within $0.01 and
+        //      date within ±3 days. A manually-entered "pending" row
+        //      typically lands a day or two before the posted Plaid
+        //      row, often with a slightly different cents value (tip,
+        //      currency rounding). Capturing those near-twins prevents
+        //      the doubled-row complaint at the heart of #452.
+        // On either match we adopt the Plaid identifiers in-place and
+        // upgrade `source` to `plaid:<slug>` so the row stops claiming
+        // it was manually entered.
+        const sourceScope = debtScope.length > 0
+          ? ["manual", "amex"]
+          : ["manual", "bank"];
+        const baseScope = debtScope.length > 0
+          ? and(
               eq(transactionsTable.userId, userId),
-              eq(transactionsTable.occurredOn, t.date),
-              eq(transactionsTable.amount, signedAmount),
               sql`${transactionsTable.plaidTransactionId} is null`,
               inArray(transactionsTable.debtId, debtScope),
-              inArray(transactionsTable.source, ["manual", "amex"]),
-            );
-          } else if (isCheckingScope) {
-            mergeWhere = and(
-              eq(transactionsTable.userId, userId),
-              eq(transactionsTable.occurredOn, t.date),
-              eq(transactionsTable.amount, signedAmount),
-              sql`${transactionsTable.plaidTransactionId} is null`,
-              sql`${transactionsTable.debtId} is null`,
-              inArray(transactionsTable.source, ["manual", "bank"]),
-            );
-          }
-          if (mergeWhere) {
-            const [match] = await db
+              inArray(transactionsTable.source, sourceScope),
+            )
+          : isCheckingScope
+            ? and(
+                eq(transactionsTable.userId, userId),
+                sql`${transactionsTable.plaidTransactionId} is null`,
+                sql`${transactionsTable.debtId} is null`,
+                inArray(transactionsTable.source, sourceScope),
+              )
+            : null;
+        let mergedTo: string | null = null;
+        if (baseScope) {
+          // Attempt 1: exact (date, amount), occurredOn <= cutoff.
+          const [exactMatch] = await db
+            .select({ id: transactionsTable.id })
+            .from(transactionsTable)
+            .where(
+              and(
+                baseScope,
+                eq(transactionsTable.occurredOn, t.date),
+                eq(transactionsTable.amount, signedAmount),
+                sql`${transactionsTable.occurredOn} <= ${cutoffStr}`,
+              ),
+            )
+            .limit(1);
+          if (exactMatch) mergedTo = exactMatch.id;
+          // Attempt 2: pending→posted (±$0.01, ±3 days).
+          if (!mergedTo) {
+            const lowDate = fmtISO(addDays(parseISO(t.date), -3));
+            const highDate = fmtISO(addDays(parseISO(t.date), 3));
+            const signed = Number(signedAmount);
+            const lowAmt = (signed - 0.01).toFixed(2);
+            const highAmt = (signed + 0.01).toFixed(2);
+            const [fuzzyMatch] = await db
               .select({ id: transactionsTable.id })
               .from(transactionsTable)
-              .where(mergeWhere)
+              .where(
+                and(
+                  baseScope,
+                  sql`${transactionsTable.occurredOn} >= ${lowDate}`,
+                  sql`${transactionsTable.occurredOn} <= ${highDate}`,
+                  sql`${transactionsTable.amount}::numeric between ${lowAmt}::numeric and ${highAmt}::numeric`,
+                ),
+              )
               .limit(1);
-            if (match) {
-              await db
-                .update(transactionsTable)
-                .set({
-                  plaidTransactionId: t.transaction_id,
-                  plaidAccountId: t.account_id,
-                })
-                .where(eq(transactionsTable.id, match.id));
-              firstSyncMerged++;
-              continue;
-            }
+            if (fuzzyMatch) mergedTo = fuzzyMatch.id;
           }
         }
-        if (parseISO(t.date).getTime() <= cutoffMs) {
+        if (mergedTo) {
+          await db
+            .update(transactionsTable)
+            .set({
+              plaidTransactionId: t.transaction_id,
+              plaidAccountId: t.account_id,
+              source,
+            })
+            .where(eq(transactionsTable.id, mergedTo));
+          firstSyncMerged++;
+          continue;
+        }
+        if (txnMs <= cutoffMs) {
           firstSyncSkipped++;
           continue;
         }
@@ -728,6 +777,30 @@ export async function syncPlaidItem(
           amount: Number(values.amount),
           date: values.occurredOn,
         });
+      }
+    }
+
+    // (#452) Row-level dedupe pass over every Plaid account this
+    // sync touched. The `transactions_plaid_txn_uq` unique index
+    // is on `plaid_transaction_id` alone, so when the same real
+    // posting arrives a second time under a different Plaid item
+    // (re-link, cross-item duplicate, or a near-cutoff manual row
+    // that escaped the merge window in #361) it survives the upsert
+    // and would otherwise show up as a doubled line on the
+    // Transactions page. Run before auto-match so a freshly-deleted
+    // loser id never lands in `forecast_resolutions.matched_txn_id`.
+    const touchedExternalAcctIds = new Set<string>();
+    for (const t of [...added, ...modified]) {
+      if (t.account_id) touchedExternalAcctIds.add(t.account_id);
+    }
+    for (const externalAcctId of touchedExternalAcctIds) {
+      try {
+        await dedupeTransactionsForAccount(userId, externalAcctId);
+      } catch (e) {
+        logger.warn(
+          { userId, itemRowId, externalAcctId, err: e },
+          "[plaid-sync] post-upsert dedupeTransactionsForAccount failed (non-fatal)",
+        );
       }
     }
 

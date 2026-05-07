@@ -212,7 +212,8 @@ describe("(#373) Amex re-sync of an already-reconciled card adds zero duplicates
     expect(merged).toBeDefined();
     // Merge adopts the manual row in place — keeps the manual description /
     // negative-amount sign, just stamps the Plaid id onto it.
-    expect(merged!.source).toBe("manual");
+    // (#452) Merge now upgrades `source` to `plaid:<slug>`.
+    expect(merged!.source).toBe("plaid:amex");
     expect(merged!.amount).toBe("-42.00");
 
     const [acctAfterFirst] = await db

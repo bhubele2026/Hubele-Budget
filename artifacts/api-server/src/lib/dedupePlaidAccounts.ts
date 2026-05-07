@@ -10,6 +10,7 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import { SYNTHETIC_ACCOUNT_ID } from "./aprilChaseSeed";
+import { dedupeTransactionsForAccount } from "./dedupeTransactions";
 
 export type DedupeReport = {
   groupsScanned: number;
@@ -27,6 +28,15 @@ export type DedupeReport = {
   // surviving row first via (institutionName, mask) matching — those
   // also bump `accountSnapshotsRepointed`.
   accountSnapshotsPruned: number;
+  // (#452) Number of duplicate `transactions` rows collapsed by the
+  // post-merge row-level dedupe pass that runs in the same
+  // transaction. Optional so callers from before #452 keep type-
+  // checking; the implementation always populates it.
+  transactionsDeduped?: number;
+  // (#452) Number of `forecast_resolutions.matched_txn_id` rows
+  // repointed onto a survivor transaction during the row-level
+  // dedupe pass.
+  transactionResolutionsRepointed?: number;
 };
 
 type AcctRow = typeof plaidAccountsTable.$inferSelect;
@@ -81,6 +91,8 @@ export async function dedupePlaidAccountsForUser(
     syntheticDropped: false,
     accountSnapshotsRepointed: 0,
     accountSnapshotsPruned: 0,
+    transactionsDeduped: 0,
+    transactionResolutionsRepointed: 0,
   };
 
   return await db.transaction(async (tx) => {
@@ -316,6 +328,22 @@ export async function dedupePlaidAccountsForUser(
       await tx
         .delete(plaidAccountsTable)
         .where(eq(plaidAccountsTable.id, loser.acct.id));
+      // (#452) After the loser's transactions have been repointed onto
+      // the survivor's external account_id, the survivor may now own
+      // two `transactions` rows (one from each former Plaid item) for
+      // the same real posting. Run the row-level dedupe in the same
+      // transaction so the cleanup is atomic with the account merge —
+      // never leaves the user briefly looking at a doubled ledger.
+      const txnReport = await dedupeTransactionsForAccount(
+        userId,
+        survivor.acct.accountId,
+        tx,
+      );
+      report.transactionsDeduped =
+        (report.transactionsDeduped ?? 0) + txnReport.duplicatesRemoved;
+      report.transactionResolutionsRepointed =
+        (report.transactionResolutionsRepointed ?? 0) +
+        txnReport.resolutionsRepointed;
       report.duplicatesRemoved += 1;
     };
 
