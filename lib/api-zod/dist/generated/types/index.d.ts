@@ -83,6 +83,7 @@ export * from "./debtMinPaymentSource";
 export * from "./debtPaymentInput";
 export * from "./debtPaymentResult";
 export * from "./debtPlaidAccount";
+export * from "./dedupeTransactionsReport";
 export * from "./deleteAmexAnchor200";
 export * from "./deleteDashboardBudgetParams";
 export * from "./forecastBundle";

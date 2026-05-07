@@ -4452,6 +4452,22 @@ export declare const SetForecastBankSnapshotResponse: zod.ZodObject<{
     mask?: string | null | undefined;
     accountId?: string | null | undefined;
 }>;
+export declare const DedupeTransactionsResponse: zod.ZodObject<{
+    groupsScanned: zod.ZodNumber;
+    duplicatesRemoved: zod.ZodNumber;
+    resolutionsRepointed: zod.ZodNumber;
+    accountsScanned: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    groupsScanned: number;
+    duplicatesRemoved: number;
+    resolutionsRepointed: number;
+    accountsScanned: number;
+}, {
+    groupsScanned: number;
+    duplicatesRemoved: number;
+    resolutionsRepointed: number;
+    accountsScanned: number;
+}>;
 export declare const RefreshForecastBankBody: zod.ZodObject<{
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {

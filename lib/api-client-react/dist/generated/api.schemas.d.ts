@@ -1571,6 +1571,12 @@ export interface RefreshBankInput {
     /** @nullable */
     plaidAccountId?: string | null;
 }
+export interface DedupeTransactionsReport {
+    groupsScanned: number;
+    duplicatesRemoved: number;
+    resolutionsRepointed: number;
+    accountsScanned: number;
+}
 export type AmexAnchorSource = (typeof AmexAnchorSource)[keyof typeof AmexAnchorSource];
 export declare const AmexAnchorSource: {
     readonly debt: "debt";

@@ -14,6 +14,9 @@ import {
   getListPlaidItemsQueryKey,
   useRefreshPlaidConsentExpirations,
   useUpdatePlaidImportCutoffDate,
+  useDedupeTransactions,
+  getListTransactionsQueryKey,
+  getGetForecastQueryKey,
 } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { usePlaidSync, formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
@@ -99,6 +102,7 @@ export default function SettingsPage() {
   }, [hasPreparingItem]);
   const deletePlaidItem = useDeletePlaidItem();
   const refreshConsentExpirations = useRefreshPlaidConsentExpirations();
+  const dedupeTransactions = useDedupeTransactions();
   const { runSync, isPending: isSyncPending } = usePlaidSync();
   // Track which row's per-item Sync button was just clicked so only THAT
   // row's spinner spins (the underlying mutation is global, so without this
@@ -157,6 +161,47 @@ export default function SettingsPage() {
       onError: (err) => {
         toast({
           title: "Refresh failed",
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        });
+      },
+    });
+  };
+
+  // (#458) One-click cleanup for users who already have duplicate
+  // Chase/Plaid rows from before the post-sync dedupe pass landed.
+  // Hits the same /forecast/dedupe-transactions endpoint task #452
+  // exposed; idempotent, so re-running on a clean ledger reports 0.
+  // Confirms first because the merge is destructive (loser rows are
+  // deleted), then invalidates the transactions + forecast caches so
+  // any open page reflects the collapsed ledger immediately.
+  const handleDedupeTransactions = () => {
+    if (
+      !confirm(
+        "Scan all linked accounts and merge duplicate transactions into one row? This can't be undone, but it's safe to run more than once.",
+      )
+    )
+      return;
+    dedupeTransactions.mutate(undefined, {
+      onSuccess: (res) => {
+        queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+        const removed = res.duplicatesRemoved;
+        const accounts = res.accountsScanned;
+        toast({
+          title:
+            removed === 0
+              ? "No duplicates found"
+              : `Merged ${removed} duplicate${removed === 1 ? "" : "s"}`,
+          description:
+            removed === 0
+              ? `Scanned ${accounts} account${accounts === 1 ? "" : "s"} — your ledger is already clean.`
+              : `Scanned ${accounts} account${accounts === 1 ? "" : "s"} and repointed ${res.resolutionsRepointed} forecast match${res.resolutionsRepointed === 1 ? "" : "es"}.`,
+        });
+      },
+      onError: (err) => {
+        toast({
+          title: "Cleanup failed",
           description: err instanceof Error ? err.message : String(err),
           variant: "destructive",
         });
@@ -551,6 +596,36 @@ export default function SettingsPage() {
                   }`}
                 />
                 Refresh disconnect dates
+              </Button>
+            </div>
+          )}
+          {(plaidItems ?? []).length > 0 && (
+            // (#458) Surfaces the /forecast/dedupe-transactions cleanup
+            // so users with pre-fix duplicate Chase/Plaid rows can fix
+            // their own ledger without contacting support. Sits next to
+            // the consent-refresh row so all "maintenance" actions on
+            // linked accounts are co-located.
+            <div
+              className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-muted/10 p-3"
+              data-testid="row-dedupe-transactions"
+            >
+              <div className="text-xs text-muted-foreground">
+                Find and merge duplicate transactions across your linked
+                accounts. Safe to run any time.
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDedupeTransactions}
+                disabled={dedupeTransactions.isPending}
+                data-testid="button-dedupe-transactions"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 mr-1.5 ${
+                    dedupeTransactions.isPending ? "animate-spin" : ""
+                  }`}
+                />
+                Clean up duplicate transactions
               </Button>
             </div>
           )}

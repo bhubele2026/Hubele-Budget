@@ -919,6 +919,16 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BankSnapshot" }
+  /forecast/dedupe-transactions:
+    post:
+      operationId: dedupeTransactions
+      tags: [forecast]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DedupeTransactionsReport" }
   /forecast/refresh-bank:
     post:
       operationId: refreshForecastBank
@@ -2947,6 +2957,14 @@ components:
       type: object
       properties:
         plaidAccountId: { type: ["string", "null"] }
+    DedupeTransactionsReport:
+      type: object
+      required: [groupsScanned, duplicatesRemoved, resolutionsRepointed, accountsScanned]
+      properties:
+        groupsScanned: { type: integer }
+        duplicatesRemoved: { type: integer }
+        resolutionsRepointed: { type: integer }
+        accountsScanned: { type: integer }
     AccountSnapshot:
       type: object
       required: [balance, at, source]

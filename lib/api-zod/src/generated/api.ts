@@ -1917,6 +1917,13 @@ export const SetForecastBankSnapshotResponse = zod.object({
   mask: zod.string().nullish(),
 });
 
+export const DedupeTransactionsResponse = zod.object({
+  groupsScanned: zod.number(),
+  duplicatesRemoved: zod.number(),
+  resolutionsRepointed: zod.number(),
+  accountsScanned: zod.number(),
+});
+
 export const RefreshForecastBankBody = zod.object({
   plaidAccountId: zod.string().nullish(),
 });

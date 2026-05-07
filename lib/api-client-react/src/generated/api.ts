@@ -54,6 +54,7 @@ import type {
   DebtLinkInput,
   DebtPaymentInput,
   DebtPaymentResult,
+  DedupeTransactionsReport,
   DeleteAmexAnchor200,
   DeleteDashboardBudgetParams,
   ForecastBundle,
@@ -4441,6 +4442,81 @@ export const useSetForecastBankSnapshot = <
   TContext
 > => {
   return useMutation(getSetForecastBankSnapshotMutationOptions(options));
+};
+
+export const getDedupeTransactionsUrl = () => {
+  return `/api/forecast/dedupe-transactions`;
+};
+
+export const dedupeTransactions = async (
+  options?: RequestInit,
+): Promise<DedupeTransactionsReport> => {
+  return customFetch<DedupeTransactionsReport>(getDedupeTransactionsUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getDedupeTransactionsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dedupeTransactions>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof dedupeTransactions>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["dedupeTransactions"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof dedupeTransactions>>,
+    void
+  > = () => {
+    return dedupeTransactions(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DedupeTransactionsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof dedupeTransactions>>
+>;
+
+export type DedupeTransactionsMutationError = ErrorType<unknown>;
+
+export const useDedupeTransactions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dedupeTransactions>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof dedupeTransactions>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getDedupeTransactionsMutationOptions(options));
 };
 
 export const getRefreshForecastBankUrl = () => {
