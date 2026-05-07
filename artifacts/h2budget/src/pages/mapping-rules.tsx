@@ -428,7 +428,16 @@ function SortableRuleRow({
 
 export default function MappingRulesPage() {
   const { data: rules, isLoading: rulesLoading } = useListMappingRules();
-  const { data: categories, isLoading: catsLoading } = useListCategories();
+  const { data: allCategories, isLoading: catsLoading } = useListCategories();
+  // (#474) Hide `excludeFromBudget` categories (today: just "Uncategorized")
+  // from every mapping-rules surface — assign-to dropdowns, bulk change
+  // dropdown, drag-and-drop strip, and the per-category cards. Mapping
+  // rules cannot target a category that's outside the budget; the API
+  // also rejects POST/PATCH attempts so this is purely a UX guard.
+  const categories = useMemo(
+    () => (allCategories ?? []).filter((c) => !c.excludeFromBudget),
+    [allCategories],
+  );
 
   const queryClient = useQueryClient();
   const { toast } = useToast();

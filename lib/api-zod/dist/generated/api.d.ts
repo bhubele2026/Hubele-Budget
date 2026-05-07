@@ -2470,6 +2470,7 @@ export declare const ListCategoriesResponseItem: zod.ZodObject<{
     groupName: zod.ZodString;
     sourceKind: zod.ZodEnum<["manual", "auto_bills", "auto_debts"]>;
     sortOrder: zod.ZodNumber;
+    excludeFromBudget: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     name: string;
@@ -2477,6 +2478,7 @@ export declare const ListCategoriesResponseItem: zod.ZodObject<{
     sortOrder: number;
     groupName: string;
     sourceKind: "manual" | "auto_bills" | "auto_debts";
+    excludeFromBudget?: boolean | undefined;
 }, {
     id: string;
     name: string;
@@ -2484,6 +2486,7 @@ export declare const ListCategoriesResponseItem: zod.ZodObject<{
     sortOrder: number;
     groupName: string;
     sourceKind: "manual" | "auto_bills" | "auto_debts";
+    excludeFromBudget?: boolean | undefined;
 }>;
 export declare const ListCategoriesResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -2492,6 +2495,7 @@ export declare const ListCategoriesResponse: zod.ZodArray<zod.ZodObject<{
     groupName: zod.ZodString;
     sourceKind: zod.ZodEnum<["manual", "auto_bills", "auto_debts"]>;
     sortOrder: zod.ZodNumber;
+    excludeFromBudget: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     name: string;
@@ -2499,6 +2503,7 @@ export declare const ListCategoriesResponse: zod.ZodArray<zod.ZodObject<{
     sortOrder: number;
     groupName: string;
     sourceKind: "manual" | "auto_bills" | "auto_debts";
+    excludeFromBudget?: boolean | undefined;
 }, {
     id: string;
     name: string;
@@ -2506,6 +2511,7 @@ export declare const ListCategoriesResponse: zod.ZodArray<zod.ZodObject<{
     sortOrder: number;
     groupName: string;
     sourceKind: "manual" | "auto_bills" | "auto_debts";
+    excludeFromBudget?: boolean | undefined;
 }>, "many">;
 export declare const CreateCategoryBody: zod.ZodObject<{
     name: zod.ZodString;

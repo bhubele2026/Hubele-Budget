@@ -5,7 +5,18 @@ export type SeedCategory = {
   sourceKind: "manual" | "auto_bills" | "auto_debts";
   planned: string;
   note: string | null;
+  // (#474) When true, the category is created with `exclude_from_budget=true`
+  // and is omitted from every Budget page roll-up (planned, actual, groups,
+  // summary). Used for the system-managed "Uncategorized" category. No
+  // budget_lines row is seeded for these categories.
+  excludeFromBudget?: boolean;
 };
+
+// (#474) Canonical name for the system-managed Uncategorized category. Picked
+// on Transactions/Chase/Amex to mark a row as triaged without contaminating
+// budget math. Excluded from the Budget page entirely (treated like
+// transfers in actuals roll-ups). Mapping rules cannot target it.
+export const UNCATEGORIZED_CATEGORY_NAME = "Uncategorized";
 
 export const SEED_MONTH = "2026-05-01";
 
@@ -286,6 +297,21 @@ export const SEED_CATEGORIES: SeedCategory[] = [
   { groupName: "Savings & Debt Payoff", kind: "expense", sourceKind: "manual", name: "Investments & Retirement", planned: "0", note: "Investments + extra retirement contributions" },
   { groupName: "Savings & Debt Payoff", kind: "expense", sourceKind: "manual", name: "Kids' Savings / 529", planned: "0", note: "Resume after high-APR debt is gone" },
   { groupName: "Savings & Debt Payoff", kind: "expense", sourceKind: "manual", name: "Tax Sinking Fund", planned: "0", note: "Save for next April taxes (~$1,500/yr)" },
+
+  // (#474) System-managed Uncategorized category. Picked on a transaction
+  // to mark it as triaged without contaminating budget math. Excluded from
+  // the Budget page entirely (no group, no totals). `groupName` is set to
+  // the same name so it never sneaks into a real group when filtering is
+  // disabled. No budget_lines row is seeded for it.
+  {
+    groupName: UNCATEGORIZED_CATEGORY_NAME,
+    kind: "expense",
+    sourceKind: "manual",
+    name: UNCATEGORIZED_CATEGORY_NAME,
+    planned: "0",
+    note: null,
+    excludeFromBudget: true,
+  },
 ];
 
 // Maps every old (pre-consolidation) category name to its new consolidated

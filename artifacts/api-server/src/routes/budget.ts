@@ -33,6 +33,7 @@ import {
   SEED_GROUP_ORDER,
   SEED_MONTH,
   SEED_RECURRING_ITEMS,
+  UNCATEGORIZED_CATEGORY_NAME,
 } from "../lib/budgetSeed";
 import {
   SEED_MAPPING_RULES,
@@ -575,7 +576,38 @@ async function reconcileMay2026Amounts(userId: string): Promise<void> {
   await syncAvalanchePaymentCategory(userId, MAY_2026_MONTH);
 }
 
+// (#474) Idempotently ensure the system-managed "Uncategorized" category
+// exists for the user. Picked on Transactions/Chase/Amex to mark a row as
+// triaged without contaminating budget math. Stored with
+// `exclude_from_budget=true` so the Budget page filters it out of every
+// roll-up (planned, actual, group, summary) — same way transfers are
+// excluded from actuals. Idempotent via the (userId, name) unique index;
+// also self-heals legacy rows that pre-date the flag by flipping it on.
+async function ensureUncategorizedCategory(userId: string): Promise<void> {
+  const sortOrderByGroup = new Map<string, number>();
+  SEED_GROUP_ORDER.forEach((g, i) => sortOrderByGroup.set(g, i * 100));
+  // Park it well after the canonical groups so any debug surface that
+  // ignores `exclude_from_budget` still renders it last.
+  const sortOrder = (SEED_GROUP_ORDER.length + 10) * 100;
+  await db
+    .insert(budgetCategoriesTable)
+    .values({
+      userId,
+      name: UNCATEGORIZED_CATEGORY_NAME,
+      kind: "expense",
+      groupName: UNCATEGORIZED_CATEGORY_NAME,
+      sourceKind: "manual",
+      sortOrder,
+      excludeFromBudget: true,
+    })
+    .onConflictDoUpdate({
+      target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+      set: { excludeFromBudget: true },
+    });
+}
+
 router.get("/budget/categories", requireAuth, async (req, res): Promise<void> => {
+  await ensureUncategorizedCategory(req.userId!);
   const rows = await db
     .select()
     .from(budgetCategoriesTable)
@@ -669,6 +701,7 @@ router.post(
               groupName: seed.groupName,
               sourceKind: seed.sourceKind,
               sortOrder,
+              excludeFromBudget: seed.excludeFromBudget ?? false,
             })
             .returning();
           if (row) byName.set(row.name, row);
@@ -676,7 +709,8 @@ router.post(
         } else if (
           cur.groupName !== seed.groupName ||
           cur.sourceKind !== seed.sourceKind ||
-          cur.kind !== seed.kind
+          cur.kind !== seed.kind ||
+          cur.excludeFromBudget !== (seed.excludeFromBudget ?? false)
         ) {
           // Backfill metadata for existing categories without overwriting their identity.
           await tx
@@ -685,6 +719,7 @@ router.post(
               groupName: seed.groupName,
               sourceKind: seed.sourceKind,
               kind: seed.kind,
+              excludeFromBudget: seed.excludeFromBudget ?? false,
               sortOrder,
             })
             .where(eq(budgetCategoriesTable.id, cur.id));
@@ -740,6 +775,9 @@ router.post(
 
       let linesInserted = 0;
       for (const seed of SEED_CATEGORIES) {
+        // (#474) Excluded categories (e.g. Uncategorized) never get a
+        // budget_lines row — they're not part of the budget.
+        if (seed.excludeFromBudget) continue;
         const cat = byName.get(seed.name);
         if (!cat) continue;
         const cur = lineByCat.get(cat.id);
@@ -940,6 +978,10 @@ router.get(
     // Gated by a per-user flag, so it's a no-op on subsequent requests.
     await migrateBudgetCategoriesV2(req.userId!);
 
+    // (#474) Ensure the system-managed Uncategorized category exists and
+    // carries `exclude_from_budget=true`. Idempotent — safe on every GET.
+    await ensureUncategorizedCategory(req.userId!);
+
     // One-time reconciliation of May 2026 planned amounts to the user's
     // canonical source-of-truth values (task #106). Only runs when this
     // request is for May 2026; gated by a per-user flag thereafter.
@@ -966,11 +1008,18 @@ router.get(
         ),
       );
 
-    const cats = await db
+    const allCats = await db
       .select()
       .from(budgetCategoriesTable)
       .where(eq(budgetCategoriesTable.userId, req.userId!))
       .orderBy(asc(budgetCategoriesTable.sortOrder), asc(budgetCategoriesTable.name));
+
+    // (#474) Filter out `exclude_from_budget` categories (today: just the
+    // system-managed "Uncategorized" row) before computing planned/actual
+    // roll-ups. Their actuals contribute to nothing — same treatment as
+    // transfers. They never appear as a line, in a group, or in the
+    // month-summary totals.
+    const cats = allCats.filter((c) => !c.excludeFromBudget);
 
     let lines = await db
       .select()

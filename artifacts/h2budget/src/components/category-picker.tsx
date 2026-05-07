@@ -39,6 +39,19 @@ export function CategoryPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [remember, setRemember] = useState(true);
+  // (#474) When the system-managed "Uncategorized" category exists in the
+  // list, the hard-coded "Uncategorized" command item picks its real id so
+  // the row gets a stored category (and the orange "Categorize" pill goes
+  // away). On legacy users without it seeded yet, the option falls back to
+  // setting categoryId=null — same as before this task. We also drop the
+  // duplicate iteration of the real Uncategorized row from the main list
+  // so it isn't shown twice.
+  const uncategorizedCat = categories.find(
+    (c) => c.name === "Uncategorized",
+  );
+  const pickableCategories = uncategorizedCat
+    ? categories.filter((c) => c.id !== uncategorizedCat.id)
+    : categories;
   const current = value
     ? categories.find((c) => c.id === value)?.name ?? "Unknown"
     : "Uncategorized";
@@ -65,19 +78,29 @@ export function CategoryPicker({
             <CommandGroup>
               <CommandItem
                 onSelect={() => {
-                  onChange(null);
+                  if (uncategorizedCat) {
+                    onChange(
+                      uncategorizedCat.id,
+                      remember && pattern ? pattern : null,
+                    );
+                  } else {
+                    onChange(null);
+                  }
                   setOpen(false);
                 }}
               >
                 <Check
                   className={cn(
                     "mr-2 h-3 w-3",
-                    value === null ? "opacity-100" : "opacity-0",
+                    value === null ||
+                      (uncategorizedCat && value === uncategorizedCat.id)
+                      ? "opacity-100"
+                      : "opacity-0",
                   )}
                 />
                 Uncategorized
               </CommandItem>
-              {categories.map((c) => (
+              {pickableCategories.map((c) => (
                 <CommandItem
                   key={c.id}
                   onSelect={() => {

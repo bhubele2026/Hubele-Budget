@@ -1068,6 +1068,16 @@ export interface Category {
   groupName: string;
   sourceKind: CategorySourceKind;
   sortOrder: number;
+  /** (#474) When true, this category is omitted from every Budget
+page roll-up (planned, actual, group totals, summary) — same
+way transfers are excluded from actuals. Today only the
+system-managed "Uncategorized" category carries this flag;
+it is exposed in the categories list so the row-level
+category pickers on Transactions/Chase/Amex can offer it as
+a triage option, while the mapping-rules UI hides it (the
+API also rejects rules that target it).
+ */
+  excludeFromBudget?: boolean;
 }
 
 export type CategoryInputSourceKind =

@@ -17,6 +17,10 @@ import {
 } from "../lib/autoCategorize";
 import { selectPatternCandidates } from "../lib/patternCandidates";
 import {
+  EXCLUDED_CATEGORY_RULE_ERROR,
+  isExcludedCategory,
+} from "../lib/excludedCategory";
+import {
   CreateTransactionBody,
   UpdateTransactionBody,
   UpdateTransactionParams,
@@ -381,7 +385,16 @@ router.patch(
       toCategoryId: null,
       candidateCount: null,
     };
-    if (patch.categoryId && !row.isTransfer) {
+    // (#474) When the user picks an `exclude_from_budget` category
+    // (today: just the system-managed "Uncategorized") on a row, the
+    // transaction is updated as a manual triage marker but NO mapping
+    // rule is created or repointed. Auto-categorize must never sweep
+    // future charges into Uncategorized — that surface exists only as
+    // a manual pick from the picker. Same effect as the explicit guard
+    // in routes/mapping.ts, just enforced here at the auto-learn site.
+    const targetIsExcluded =
+      patch.categoryId && (await isExcludedCategory(req.userId!, patch.categoryId));
+    if (patch.categoryId && !row.isTransfer && !targetIsExcluded) {
       const userId = req.userId!;
       const description = row.description ?? "";
       const allRules = await loadUserRules(userId);
@@ -655,6 +668,18 @@ router.post(
     const userId = req.userId!;
     const { pattern, matchType, fromCategoryId, toCategoryId, ids, ruleId } =
       parsed.data;
+    // (#474) Reject any attempt to repoint a mapping rule onto an
+    // `exclude_from_budget` category. The bulk-row UPDATE itself is
+    // fine (the user may legitimately want to mark a batch of rows
+    // as Uncategorized via Undo flows), but the optional `ruleId`
+    // branch below would otherwise create a rule that auto-categorizes
+    // future charges into Uncategorized — exactly what mapping.ts
+    // forbids on direct CRUD. Guard only when a ruleId is supplied so
+    // the row-only path keeps working.
+    if (ruleId && (await isExcludedCategory(userId, toCategoryId))) {
+      res.status(400).json({ error: EXCLUDED_CATEGORY_RULE_ERROR });
+      return;
+    }
     // `fromCategoryId === null` means "rows currently uncategorized" — used
     // by the "apply to past charges?" prompt that follows a freshly created
     // mapping rule. The same-category short-circuit only applies when the

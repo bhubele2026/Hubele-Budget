@@ -1,6 +1,10 @@
 import { Router, type IRouter } from "express";
 import { and, eq, desc } from "drizzle-orm";
-import { db, mappingRulesTable } from "@workspace/db";
+import { db, budgetCategoriesTable, mappingRulesTable } from "@workspace/db";
+import {
+  EXCLUDED_CATEGORY_RULE_ERROR,
+  isExcludedCategory,
+} from "../lib/excludedCategory";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   CreateMappingRuleBody,
@@ -26,6 +30,23 @@ function normalizeMatchType(
   return "contains";
 }
 
+// (#474) Reject mapping rules that point at an `exclude_from_budget`
+// category. Returns true when the caller has already responded with a
+// 400 and the route should bail out. Thin wrapper around the shared
+// `isExcludedCategory` helper so all rule-mutating endpoints stay
+// in lockstep.
+async function rejectIfExcludedCategory(
+  userId: string,
+  categoryId: string | null | undefined,
+  res: import("express").Response,
+): Promise<boolean> {
+  if (await isExcludedCategory(userId, categoryId)) {
+    res.status(400).json({ error: EXCLUDED_CATEGORY_RULE_ERROR });
+    return true;
+  }
+  return false;
+}
+
 const router: IRouter = Router();
 
 router.get("/mapping-rules", requireAuth, async (req, res): Promise<void> => {
@@ -44,6 +65,9 @@ router.post("/mapping-rules", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const userId = req.userId!;
+  if (await rejectIfExcludedCategory(userId, parsed.data.categoryId, res)) {
+    return;
+  }
   const [row] = await db
     .insert(mappingRulesTable)
     .values({ ...parsed.data, userId })
@@ -392,6 +416,11 @@ router.patch(
     const parsed = UpdateMappingRuleBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    if (
+      await rejectIfExcludedCategory(req.userId!, parsed.data.categoryId, res)
+    ) {
       return;
     }
     const [row] = await db

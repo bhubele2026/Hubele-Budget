@@ -107,6 +107,13 @@ export const budgetCategoriesTable = pgTable(
     sourceKind: text("source_kind").notNull().default("manual"),
     sortOrder: integer("sort_order").notNull().default(0),
     debtId: uuid("debt_id").references(() => debtsTable.id, { onDelete: "cascade" }),
+    // (#474) When true the category is omitted from the Budget page entirely:
+    // its planned line is never rendered, its actuals do not roll up into any
+    // group/summary total, and the mapping-rules UI hides it from category
+    // pickers (and the API rejects rules pointing at it). Used by the
+    // system-managed "Uncategorized" category so users can mark a row as
+    // triaged without contaminating budget math.
+    excludeFromBudget: boolean("exclude_from_budget").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({

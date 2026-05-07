@@ -1160,6 +1160,12 @@ export const ListCategoriesResponseItem = zod.object({
   groupName: zod.string(),
   sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
   sortOrder: zod.number(),
+  excludeFromBudget: zod
+    .boolean()
+    .optional()
+    .describe(
+      '(#474) When true, this category is omitted from every Budget\npage roll-up (planned, actual, group totals, summary) — same\nway transfers are excluded from actuals. Today only the\nsystem-managed \"Uncategorized\" category carries this flag;\nit is exposed in the categories list so the row-level\ncategory pickers on Transactions\/Chase\/Amex can offer it as\na triage option, while the mapping-rules UI hides it (the\nAPI also rejects rules that target it).\n',
+    ),
 });
 export const ListCategoriesResponse = zod.array(ListCategoriesResponseItem);
 
