@@ -585,15 +585,6 @@ export function ReimbursementsBox({
     [reimbursable],
   );
 
-  const knownPayers = useMemo(() => {
-    const s = new Set<string>();
-    for (const t of reimbursable) {
-      const v = (t.owedBy ?? "").trim();
-      if (v) s.add(v);
-    }
-    return Array.from(s).sort((a, b) => a.localeCompare(b));
-  }, [reimbursable]);
-
   const pendingByPayer = useMemo(() => {
     const map = new Map<string, { total: number; count: number }>();
     for (const t of pending) {
@@ -642,44 +633,6 @@ export function ReimbursementsBox({
   ) => {
     for (const [key, data] of snapshot) {
       qc.setQueryData(key, data);
-    }
-  };
-
-  const applyOptimisticOwedBy = (id: string, next: string | null) => {
-    const queries = qc.getQueriesData<Transaction[]>({
-      queryKey: getListTransactionsQueryKey(),
-    });
-    const snapshot: Array<[readonly unknown[], Transaction[] | undefined]> = [];
-    for (const [key, data] of queries) {
-      snapshot.push([key, data]);
-      if (!Array.isArray(data)) continue;
-      let changed = false;
-      const updated = data.map((row) => {
-        if (row.id !== id) return row;
-        if ((row.owedBy ?? null) === next) return row;
-        changed = true;
-        return { ...row, owedBy: next };
-      });
-      if (changed) qc.setQueryData(key, updated);
-    }
-    return snapshot;
-  };
-
-  const setOwedBy = async (t: Transaction, raw: string) => {
-    const trimmed = raw.trim();
-    const next: string | null = trimmed.length === 0 ? null : trimmed;
-    if ((t.owedBy ?? null) === next) return;
-    const snapshot = applyOptimisticOwedBy(t.id, next);
-    try {
-      await updateTx.mutateAsync({ id: t.id, data: { owedBy: next } });
-      qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
-    } catch (e) {
-      rollback(snapshot);
-      toast({
-        title: "Couldn't update owed by",
-        description: (e as Error).message,
-        variant: "destructive",
-      });
     }
   };
 
@@ -826,8 +779,6 @@ export function ReimbursementsBox({
     lastClickedIdRef.current = id;
   };
 
-  const owedByListId = "dashboard-owed-by-suggestions";
-
   const renderRow = (t: Transaction, reimbursed: boolean) => {
     const amt = expenseAmount(t);
     const inSelectMode = selectionMode && !reimbursed;
@@ -885,27 +836,6 @@ export function ReimbursementsBox({
             />
           </div>
         </div>
-        <Input
-          key={t.owedBy ?? ""}
-          list={owedByListId}
-          defaultValue={t.owedBy ?? ""}
-          placeholder="Owed by…"
-          aria-label={`Owed by for ${t.description}`}
-          className="h-7 w-32 text-xs"
-          onBlur={(e) => {
-            if ((e.currentTarget.value.trim() || null) !== (t.owedBy ?? null)) {
-              setOwedBy(t, e.currentTarget.value);
-            }
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              (e.currentTarget as HTMLInputElement).blur();
-            } else if (e.key === "Escape") {
-              (e.currentTarget as HTMLInputElement).value = t.owedBy ?? "";
-              (e.currentTarget as HTMLInputElement).blur();
-            }
-          }}
-        />
         <span
           className={cn(
             "font-medium tabular-nums font-mono",
@@ -920,11 +850,6 @@ export function ReimbursementsBox({
 
   return (
     <Card>
-      <datalist id={owedByListId}>
-        {knownPayers.map((p) => (
-          <option key={p} value={p} />
-        ))}
-      </datalist>
       <CardHeader className="space-y-2 pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Receipt className="w-4 h-4" /> Reimbursements
