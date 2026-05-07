@@ -418,6 +418,25 @@ export default function AmexPage() {
     const allow = new Set(relevantPlaidItemIds);
     return items.filter((it) => allow.has(it.id));
   }, [plaidItemsForScope, relevantPlaidItemIds]);
+  // Map external Plaid `account_id` → short display label for the source
+  // card (e.g. "Amex Gold ••1002"). Built from the linked Plaid items so
+  // each Amex transaction row can show which physical card it came from.
+  const cardLabelByPlaidAccountId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const it of plaidItemsForScope ?? []) {
+      for (const a of it.accounts ?? []) {
+        const name = (a.name ?? a.officialName ?? "").trim();
+        const mask = (a.mask ?? "").trim();
+        let label: string;
+        if (name && mask) label = `${name} ••${mask}`;
+        else if (name) label = name;
+        else if (mask) label = `••${mask}`;
+        else continue;
+        m.set(a.accountId, label);
+      }
+    }
+    return m;
+  }, [plaidItemsForScope]);
   const { runSync, isPending: isAmexSyncing } = usePlaidSync();
   const handleRefreshAmex = () => {
     if (relevantPlaidItemIds.length === 0) return;
@@ -1618,8 +1637,13 @@ export default function AmexPage() {
                             {t.notes}
                           </div>
                         )}
-                        <div className="text-[11px] text-muted-foreground mt-0.5">
-                          {t.member ?? "—"}
+                        <div
+                          className="text-[11px] text-muted-foreground mt-0.5"
+                          data-testid={`text-card-mobile-${t.id}`}
+                        >
+                          {(t.plaidAccountId &&
+                            cardLabelByPlaidAccountId.get(t.plaidAccountId)) ||
+                            "—"}
                         </div>
                       </div>
                       <div className="flex flex-col items-end">
@@ -1725,8 +1749,13 @@ export default function AmexPage() {
                             </div>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                          {t.member ?? "—"}
+                        <td
+                          className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap"
+                          data-testid={`text-card-${t.id}`}
+                        >
+                          {(t.plaidAccountId &&
+                            cardLabelByPlaidAccountId.get(t.plaidAccountId)) ||
+                            "—"}
                         </td>
                         <td className="px-3 py-2">
                           <CategoryPicker
