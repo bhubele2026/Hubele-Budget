@@ -249,10 +249,15 @@ export default function AmexPage() {
   const { data: mappingRules } = useListMappingRules();
   // Server-provided Amex anchor: fallback used when the Amex debt row is
   // missing or renamed.
-  const { data: amexAnchorResp, isLoading: amexAnchorLoading } = useQuery<{
+  const {
+    data: amexAnchorResp,
+    isLoading: amexAnchorLoading,
+    isError: amexAnchorError,
+    fetchStatus: amexAnchorFetchStatus,
+  } = useQuery<{
     amexEndingBalance: number | null;
     asOf: string;
-    source: "debt" | "anchor" | "computed" | "missing";
+    source: "debt" | "anchor" | "computed" | "plaid" | "missing";
   }>({
     queryKey: ["/api/amex/anchor"],
     queryFn: () => customFetch("/api/amex/anchor", { method: "GET" }),
@@ -620,7 +625,7 @@ export default function AmexPage() {
   // Amex debt or the server-side anchor fallback.
   const resolvedAnchor = useMemo(() => {
     let anchor: number | null = null;
-    let resolvedSource: "debt" | "anchor" | "computed" = "debt";
+    let resolvedSource: "debt" | "anchor" | "computed" | "plaid" = "debt";
     let asOf: string | null = null;
     if (amexDebt) {
       anchor = parseSigned(amexDebt.balance);
@@ -656,7 +661,16 @@ export default function AmexPage() {
 
   const endingBalance = useMemo(() => {
     if (resolvedAnchor.anchor === null) {
-      const loading = amexAnchorLoading || amexAnchorResp === undefined;
+      // (#483) Treat the tile as "loading" only while the anchor query
+      // is genuinely in flight (initial fetch with no cached data).
+      // Once the response has landed (or errored out), fall through to
+      // the existing "Not set" empty state so the tile never sits on
+      // "Loading…" indefinitely when the server resolves to missing.
+      const loading =
+        amexAnchorLoading &&
+        amexAnchorFetchStatus === "fetching" &&
+        amexAnchorResp === undefined &&
+        !amexAnchorError;
       return {
         value: null as number | null,
         source: (loading ? "loading" : "missing") as "loading" | "missing",
@@ -680,6 +694,8 @@ export default function AmexPage() {
     resolvedAnchor,
     amexAnchorResp,
     amexAnchorLoading,
+    amexAnchorFetchStatus,
+    amexAnchorError,
     netChangeByMonth,
     selectedMonth,
     anchorMonth,
@@ -704,7 +720,8 @@ export default function AmexPage() {
     if (
       endingBalance.source !== "debt" &&
       endingBalance.source !== "anchor" &&
-      endingBalance.source !== "computed"
+      endingBalance.source !== "computed" &&
+      endingBalance.source !== "plaid"
     ) {
       return null;
     }
@@ -713,7 +730,9 @@ export default function AmexPage() {
         ? "From debt row"
         : endingBalance.source === "anchor"
           ? "From saved anchor"
-          : "Calculated";
+          : endingBalance.source === "plaid"
+            ? "From Plaid"
+            : "Calculated";
     let asOfLabel: string | null = null;
     if (endingBalance.asOf) {
       const d = new Date(endingBalance.asOf);

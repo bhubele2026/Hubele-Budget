@@ -37,6 +37,7 @@ vi.mock("wouter", () => ({
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => (
     <a href={href}>{children}</a>
   ),
+  useLocation: () => ["/amex", () => undefined] as const,
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -105,6 +106,11 @@ vi.mock("@workspace/api-client-react", () => {
     // PlaidReauthBanner (rendered by amex.tsx) calls useListPlaidItems
     // at module load. Empty list keeps the banner inert.
     useListPlaidItems: () => ({ data: [] }),
+    // usePlaidSync (called from amex.tsx) wraps useSyncPlaidTransactions.
+    useSyncPlaidTransactions: () => ({
+      mutateAsync: async () => ({ added: 0, modified: 0, removed: 0 }),
+      isPending: false,
+    }),
     customFetch: async (
       url: string,
       init: { method?: string; body?: string } = {},

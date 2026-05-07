@@ -218,6 +218,12 @@ export function usePlaidSync() {
               if (totals.added + totals.modified + totals.removed > 0) {
                 qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
               }
+              // (#483) Refresh the Amex ending-balance tile after every
+              // Plaid sync so the "Refresh from Plaid" button on the Amex
+              // page picks up the freshly-fetched per-account balances
+              // without forcing a manual reload. Cheap (single GET) and
+              // a no-op for users without an Amex item linked.
+              qc.invalidateQueries({ queryKey: ["/api/amex/anchor"] });
               if (!silent) {
                 if (totals.errorDetails.length > 0) {
                   // (#357) Compose "<Institution>: <reason>" lines so the

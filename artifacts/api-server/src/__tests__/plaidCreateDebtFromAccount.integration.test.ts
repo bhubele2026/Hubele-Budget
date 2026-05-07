@@ -641,11 +641,19 @@ describe("Amex anchor regression after auto-create-debt", () => {
       apr: "0.2799",
       minPayment: "40.00",
     });
-    // Pre-condition: no debt, no anchor, no txns → /amex/anchor "missing".
+    // Pre-condition: no debt, no anchor, no txns. With the live-Plaid
+    // fallback (#483), /amex/anchor surfaces the linked account's
+    // liabilityBalance as source="plaid" so the tile is never stuck on
+    // "Loading..." / "Not set" while a balance is sitting on the
+    // plaid_accounts row.
     const before = await fetch(`${baseUrl}/amex/anchor`);
     expect(before.status).toBe(200);
-    const beforeBody = (await before.json()) as { source: string };
-    expect(beforeBody.source).toBe("missing");
+    const beforeBody = (await before.json()) as {
+      source: string;
+      amexEndingBalance: number | null;
+    };
+    expect(beforeBody.source).toBe("plaid");
+    expect(beforeBody.amexEndingBalance).toBeCloseTo(750.25);
 
     const create = await fetch(
       `${baseUrl}/plaid/liability-accounts/${plaidAccountId}/create-debt`,

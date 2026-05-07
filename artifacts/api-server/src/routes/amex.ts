@@ -3,6 +3,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   debtsTable,
+  plaidAccountsTable,
+  plaidItemsTable,
   transactionsTable,
   settingsTable,
 } from "@workspace/db";
@@ -100,9 +102,32 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
         sql`${transactionsTable.plaidAccountId} is not null`,
       ),
     );
-  const amexPlaidAccountIds = acctRows
-    .map((r) => r.plaidAccountId)
-    .filter((v): v is string => !!v);
+  const amexPlaidAccountIdSet = new Set<string>(
+    acctRows
+      .map((r) => r.plaidAccountId)
+      .filter((v): v is string => !!v),
+  );
+
+  // (#483) Also discover Amex-owned Plaid accounts directly from
+  // `plaid_items.institution_slug` so a freshly-linked Amex item with
+  // no transactions yet still lights up the Plaid balance fallback
+  // below — txn-derived discovery alone misses the no-transactions
+  // window between Plaid Link completing and the first
+  // /transactions/sync run landing rows on this user.
+  const amexAcctRows = await db
+    .select({ accountId: plaidAccountsTable.accountId })
+    .from(plaidAccountsTable)
+    .innerJoin(plaidItemsTable, eq(plaidAccountsTable.itemId, plaidItemsTable.id))
+    .where(
+      and(
+        eq(plaidAccountsTable.userId, userId),
+        sql`${plaidItemsTable.institutionSlug} ~* '(amex|american[-_\\s]*express)'`,
+      ),
+    );
+  for (const r of amexAcctRows) {
+    if (r.accountId) amexPlaidAccountIdSet.add(r.accountId);
+  }
+  const amexPlaidAccountIds = Array.from(amexPlaidAccountIdSet);
 
   // (#416) Aggregate across every Amex debt row when the user has more
   // than one (one Plaid item with three physical cards yields three
@@ -125,7 +150,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
       .where(
         and(
           eq(debtsTable.userId, userId),
-          sql`${debtsTable.plaidAccountId}::text = ANY(${amexPlaidAccountIds})`,
+          inArray(sql`${debtsTable.plaidAccountId}::text`, amexPlaidAccountIds),
         ),
       );
   }
@@ -199,6 +224,47 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
         amexEndingBalance: n,
         asOf: anchor.asOf ?? new Date().toISOString(),
         source: "anchor" as const,
+      });
+      return;
+    }
+  }
+
+  // (#483) No linked Amex debt row, no manual anchor — fall back to the
+  // live Plaid liability balances cached on the Amex-owned
+  // `plaid_accounts` rows. Sums across every linked sub-account so a
+  // single login that owns three physical Amex cards still shows the
+  // combined liability. The "as of" timestamp is the most recent
+  // `liability_last_fetched_at` across the rows that contributed.
+  if (amexPlaidAccountIds.length > 0) {
+    const balRows = await db
+      .select({
+        liabilityBalance: plaidAccountsTable.liabilityBalance,
+        liabilityLastFetchedAt: plaidAccountsTable.liabilityLastFetchedAt,
+      })
+      .from(plaidAccountsTable)
+      .where(
+        and(
+          eq(plaidAccountsTable.userId, userId),
+          inArray(plaidAccountsTable.accountId, amexPlaidAccountIds),
+        ),
+      );
+    let total = 0;
+    let any = false;
+    let latest: Date | null = null;
+    for (const r of balRows) {
+      if (r.liabilityBalance == null) continue;
+      const n = Number(r.liabilityBalance);
+      if (!Number.isFinite(n)) continue;
+      total += n;
+      any = true;
+      const t = r.liabilityLastFetchedAt;
+      if (t && (!latest || t > latest)) latest = t;
+    }
+    if (any) {
+      res.json({
+        amexEndingBalance: total,
+        asOf: (latest ?? new Date()).toISOString(),
+        source: "plaid" as const,
       });
       return;
     }
