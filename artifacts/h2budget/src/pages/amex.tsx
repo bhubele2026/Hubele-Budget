@@ -241,7 +241,21 @@ export default function AmexPage() {
     };
   }, [sourceParam, selectedMonth, currentMonth]);
 
-  const { data: monthTxns, isLoading } = useListTransactions(monthQueryParams);
+  // (#501) Auto-refresh the visible month when the Amex tab regains
+  // focus or the user navigates back to the page. React Query keeps
+  // the previously-fetched rows in cache while the background refetch
+  // runs, so the list updates in place without flashing the loading
+  // skeleton (the skeleton is gated on `isLoading`, which only fires
+  // on the *initial* fetch — `isFetching` would, but we don't gate on
+  // it). Only the focused month query opts in; the wider 12-month
+  // trend query stays lazy to avoid extra work on every focus.
+  const { data: monthTxns, isLoading } = useListTransactions(monthQueryParams, {
+    query: {
+      queryKey: getListTransactionsQueryKey(monthQueryParams),
+      refetchOnWindowFocus: true,
+      refetchOnMount: "always",
+    },
+  });
   // Lower-priority — page renders as soon as the month query resolves.
   const { data: wideTxns } = useListTransactions(trendQueryParams);
   const { data: categories } = useListCategories();
