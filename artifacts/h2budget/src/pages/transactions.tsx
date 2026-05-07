@@ -383,11 +383,16 @@ export default function TransactionsPage() {
   const currentMonth = useMemo<MonthKey>(() => monthKeyOf(new Date()), []);
   // Seed selectedMonth from a `?month=YYYY-MM-01` URL param (used by Budget
   // page deep-links), falling back to the current month.
+  // (#400) Track whether the initial selected month came from a `?month=`
+  // URL param so the post-import auto-jump effect below can respect a
+  // deliberate deep-link and not yank the user away from it.
+  const monthPinnedFromUrlRef = useRef(false);
   const [selectedMonth, setSelectedMonth] = useState<MonthKey>(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const m = params.get("month");
       if (m && /^\d{4}-\d{2}-01$/.test(m)) {
+        monthPinnedFromUrlRef.current = true;
         return monthKeyFromISO(m);
       }
     }
@@ -435,6 +440,41 @@ export default function TransactionsPage() {
     for (const t of chaseTransactions) if (t.member) s.add(t.member);
     return Array.from(s).sort();
   }, [chaseTransactions]);
+
+  // (#400) After a fresh Plaid link/import, jump the month navigator to
+  // the most recent month that actually has imported rows for the
+  // currently-viewed account. Without this, the user lands on whatever
+  // month they had selected before linking — frequently a month with
+  // zero new rows — and sees an empty table even though the import
+  // succeeded ("Ready — 116 added"). The flag is armed by the
+  // PlaidLinkButton's onImportReady callback and consumed by the effect
+  // below once `chaseTransactions` has updated to reflect the import.
+  // We never override an explicit `?month=` deep-link — those represent
+  // deliberate user intent (e.g. coming from the Budget page) and the
+  // user should stay where they asked to be even if that month is empty.
+  const [pendingPostImportJump, setPendingPostImportJump] = useState(false);
+  useEffect(() => {
+    if (!pendingPostImportJump) return;
+    if (monthPinnedFromUrlRef.current) {
+      setPendingPostImportJump(false);
+      return;
+    }
+    if (chaseTransactions.length === 0) return;
+    const currentHasData = chaseTransactions.some(
+      (t) => compareMonth(monthKeyFromISO(t.occurredOn), selectedMonth) === 0,
+    );
+    if (currentHasData) {
+      setPendingPostImportJump(false);
+      return;
+    }
+    let max: MonthKey | null = null;
+    for (const t of chaseTransactions) {
+      const mk = monthKeyFromISO(t.occurredOn);
+      if (!max || compareMonth(mk, max) > 0) max = mk;
+    }
+    if (max) setSelectedMonth(max);
+    setPendingPostImportJump(false);
+  }, [pendingPostImportJump, chaseTransactions, selectedMonth]);
 
   const monthScoped = useMemo(() => {
     return chaseTransactions.filter((t) => {
@@ -1241,7 +1281,10 @@ export default function TransactionsPage() {
               <Plus className="w-4 h-4 mr-1.5" /> Add transaction
             </Button>
             <SyncButton relevantItemIds={relevantPlaidItemIds} />
-            <PlaidLinkButton label="Connect a bank" />
+            <PlaidLinkButton
+              label="Connect a bank"
+              onImportReady={() => setPendingPostImportJump(true)}
+            />
           </>
         }
       />

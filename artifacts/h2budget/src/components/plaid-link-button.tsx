@@ -58,9 +58,19 @@ export type PostLinkStatus = {
 
 export function PlaidLinkButton({
   onLinked,
+  onImportReady,
   label,
 }: {
   onLinked?: () => void;
+  /**
+   * Fires once per link flow when the post-link poll detects that the
+   * freshly-linked item has produced rows (the panel reaches `ready`).
+   * Used by callers (e.g. the Chase transactions page) to jump the
+   * month navigator to the most recent month that actually has imported
+   * data, so the user sees their transactions immediately instead of an
+   * empty-state pinned to the currently-selected month.
+   */
+  onImportReady?: (info: { added: number; modified: number }) => void;
   label?: string;
 } = {}) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
@@ -165,6 +175,17 @@ export function PlaidLinkButton({
             modified: totalModified,
             errorMessage: null,
           });
+          // (#400) Tell the host page (e.g. Chase /transactions) that
+          // the freshly-linked import has landed, so it can jump the
+          // month navigator to whichever month actually has the new
+          // rows instead of leaving the user staring at an empty list.
+          // Also force a refetch of /plaid/items so the SyncButton chip
+          // and reauth banner clear without a page reload — the prior
+          // invalidate inside runSync() is enough in most cases, but
+          // a defensive refetch here guarantees the post-import UI is
+          // consistent in the same render pass as the new transactions.
+          onImportReady?.({ added: totalAdded, modified: totalModified });
+          void qc.refetchQueries({ queryKey: getListPlaidItemsQueryKey() });
           return;
         }
         // Still empty — keep polling but advance the progress so the
@@ -196,7 +217,7 @@ export function PlaidLinkButton({
             : null,
       });
     },
-    [runSync],
+    [runSync, onImportReady, qc],
   );
 
   const onSuccess = useCallback(

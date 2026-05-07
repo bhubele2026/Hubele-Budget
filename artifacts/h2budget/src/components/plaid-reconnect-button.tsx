@@ -269,6 +269,16 @@ export function PlaidReconnectButton({
     const totals = await runSync({ itemId, silent: true });
     if (cancelledRef.current) return;
     qc.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
+    // (#400) Belt-and-braces refetch so the SyncButton chip + page-top
+    // reauth banner clear immediately on success. invalidateQueries
+    // alone usually triggers a refetch on active observers, but on
+    // pages where the list has been silently re-rendered the prior
+    // run-sync invalidate inside usePlaidSync can have already kicked
+    // a refetch that races this one and returns *before* the server
+    // commits the cleared lastSyncError, leaving the chip stale until
+    // the next manual refresh. Forcing a fresh refetch here closes
+    // that window.
+    void qc.refetchQueries({ queryKey: getListPlaidItemsQueryKey() });
     // (#211) The page-top "reconnect your bank" banner reads
     // plaidLastSyncErrorCode off /debts. Once sync succeeds the server has
     // cleared that code, but the cached debts list still carries the old
