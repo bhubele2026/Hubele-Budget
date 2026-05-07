@@ -78,17 +78,33 @@ import {
   DebtPlaidSource,
   DebtReauthBanner,
 } from "@/components/debt-plaid-link";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const MANUAL_EXTRA_CAP = 5000;
 const MAX_DISPLAY_INTEREST = 1_000_000;
 const MAX_UNDERWATER_VISIBLE = 5;
+
+// (#421) Tagged checking-account payments to a debt show up immediately even
+// before the creditor reports the new balance via Plaid. We subtract any
+// pendingPaymentTotal from the reported balance so the avalanche math, the
+// totals, and the projected payoff dates reflect what the user has already
+// paid — clamped at zero so a tagging mistake can't push the balance below 0.
+function effectiveDebtBalance(d: Debt): number {
+  const reported = Number(d.balance) || 0;
+  const pending = d.pendingPaymentTotal != null ? Number(d.pendingPaymentTotal) || 0 : 0;
+  return Math.max(0, reported - pending);
+}
 
 function debtToSim(d: Debt): SimDebt {
   return {
     id: d.id,
     name: d.name,
     apr: Number(d.apr),
-    balance: Number(d.balance),
+    balance: effectiveDebtBalance(d),
     minPayment: Number(d.minPayment),
     status: d.status,
   };
@@ -1314,6 +1330,47 @@ export default function AvalanchePage() {
                             <span>{fmtMoney(d.balance)}</span>
                             <DebtPlaidIndicator debt={dbt} field="balance" />
                           </div>
+                          {(() => {
+                            // (#421) Show a "−$X pending" hint when the user
+                            // has tagged checking-account payments to this
+                            // debt that the creditor hasn't yet reflected
+                            // in the reported balance. The displayed balance
+                            // already nets these out (effectiveDebtBalance);
+                            // the tooltip explains why it's lower than the
+                            // raw balance Plaid still has on file.
+                            const pendingTotal = dbt.pendingPaymentTotal != null
+                              ? Number(dbt.pendingPaymentTotal) || 0
+                              : 0;
+                            const pendingCount = dbt.pendingPaymentCount ?? 0;
+                            if (pendingTotal <= 0) return null;
+                            const reported = Number(dbt.balance) || 0;
+                            return (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => e.stopPropagation()}
+                                    data-testid={`debt-pending-${dbt.id}`}
+                                    className="mt-0.5 text-[11px] text-emerald-700 dark:text-emerald-400 underline decoration-dotted underline-offset-2 cursor-help"
+                                  >
+                                    −{fmtMoney(pendingTotal)} pending
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-[260px] text-left">
+                                  <div className="space-y-1">
+                                    <div>
+                                      {pendingCount === 1
+                                        ? "1 tagged payment hasn't shown up at the creditor yet."
+                                        : `${pendingCount} tagged payments haven't shown up at the creditor yet.`}
+                                    </div>
+                                    <div className="opacity-90">
+                                      Reported {fmtMoney(reported)} − pending {fmtMoney(pendingTotal)} = {fmtMoney(Math.max(0, reported - pendingTotal))}
+                                    </div>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })()}
                           <DebtLastSynced debt={dbt} />
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">

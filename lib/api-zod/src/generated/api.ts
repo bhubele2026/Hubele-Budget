@@ -535,6 +535,18 @@ export const ListDebtsResponseItem = zod.object({
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
+  pendingPaymentTotal: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#421) Sum (as a money string, e.g. \"200.00\") of payment-direction\ntransactions tagged to this debt that the creditor has not yet\nreflected in the reported `balance`. A transaction counts as\npending when it\'s tagged to the debt (auto or manual), has a\npositive (payment-direction) amount, and is dated strictly after\nthe debt\'s last creditor-reported balance timestamp\n(`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`\nfor manual). The Avalanche \/ Debts UI subtracts this from\n`balance` to render an \"effective\" balance and show a small\n\"−$X pending\" hint. Null when the debt has no pending payments.\n',
+    ),
+  pendingPaymentCount: zod
+    .number()
+    .nullish()
+    .describe(
+      "(#421) Number of tagged payment-direction transactions counted\nin `pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+    ),
   plaidAccount: zod
     .union([
       zod.object({
@@ -626,6 +638,18 @@ export const LinkDebtToPlaidResponse = zod.object({
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
+  pendingPaymentTotal: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#421) Sum (as a money string, e.g. \"200.00\") of payment-direction\ntransactions tagged to this debt that the creditor has not yet\nreflected in the reported `balance`. A transaction counts as\npending when it\'s tagged to the debt (auto or manual), has a\npositive (payment-direction) amount, and is dated strictly after\nthe debt\'s last creditor-reported balance timestamp\n(`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`\nfor manual). The Avalanche \/ Debts UI subtracts this from\n`balance` to render an \"effective\" balance and show a small\n\"−$X pending\" hint. Null when the debt has no pending payments.\n',
+    ),
+  pendingPaymentCount: zod
+    .number()
+    .nullish()
+    .describe(
+      "(#421) Number of tagged payment-direction transactions counted\nin `pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+    ),
   plaidAccount: zod
     .union([
       zod.object({
@@ -697,6 +721,18 @@ export const UnlinkDebtFromPlaidResponse = zod.object({
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
+  pendingPaymentTotal: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#421) Sum (as a money string, e.g. \"200.00\") of payment-direction\ntransactions tagged to this debt that the creditor has not yet\nreflected in the reported `balance`. A transaction counts as\npending when it\'s tagged to the debt (auto or manual), has a\npositive (payment-direction) amount, and is dated strictly after\nthe debt\'s last creditor-reported balance timestamp\n(`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`\nfor manual). The Avalanche \/ Debts UI subtracts this from\n`balance` to render an \"effective\" balance and show a small\n\"−$X pending\" hint. Null when the debt has no pending payments.\n',
+    ),
+  pendingPaymentCount: zod
+    .number()
+    .nullish()
+    .describe(
+      "(#421) Number of tagged payment-direction transactions counted\nin `pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+    ),
   plaidAccount: zod
     .union([
       zod.object({
@@ -768,6 +804,18 @@ export const RefreshDebtFromPlaidResponse = zod.object({
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
+  pendingPaymentTotal: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#421) Sum (as a money string, e.g. \"200.00\") of payment-direction\ntransactions tagged to this debt that the creditor has not yet\nreflected in the reported `balance`. A transaction counts as\npending when it\'s tagged to the debt (auto or manual), has a\npositive (payment-direction) amount, and is dated strictly after\nthe debt\'s last creditor-reported balance timestamp\n(`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`\nfor manual). The Avalanche \/ Debts UI subtracts this from\n`balance` to render an \"effective\" balance and show a small\n\"−$X pending\" hint. Null when the debt has no pending payments.\n',
+    ),
+  pendingPaymentCount: zod
+    .number()
+    .nullish()
+    .describe(
+      "(#421) Number of tagged payment-direction transactions counted\nin `pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+    ),
   plaidAccount: zod
     .union([
       zod.object({
@@ -1005,6 +1053,18 @@ export const UpdateDebtResponse = zod.object({
   balanceSource: zod.enum(["plaid", "manual"]),
   aprSource: zod.enum(["plaid", "manual"]),
   minPaymentSource: zod.enum(["plaid", "manual"]),
+  pendingPaymentTotal: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#421) Sum (as a money string, e.g. \"200.00\") of payment-direction\ntransactions tagged to this debt that the creditor has not yet\nreflected in the reported `balance`. A transaction counts as\npending when it\'s tagged to the debt (auto or manual), has a\npositive (payment-direction) amount, and is dated strictly after\nthe debt\'s last creditor-reported balance timestamp\n(`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`\nfor manual). The Avalanche \/ Debts UI subtracts this from\n`balance` to render an \"effective\" balance and show a small\n\"−$X pending\" hint. Null when the debt has no pending payments.\n',
+    ),
+  pendingPaymentCount: zod
+    .number()
+    .nullish()
+    .describe(
+      "(#421) Number of tagged payment-direction transactions counted\nin `pendingPaymentTotal`. Null \/ 0 when there are none.\n",
+    ),
   plaidAccount: zod
     .union([
       zod.object({

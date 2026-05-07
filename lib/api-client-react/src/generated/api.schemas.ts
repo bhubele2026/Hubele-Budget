@@ -668,6 +668,28 @@ Plaid-linked.
   balanceSource: DebtBalanceSource;
   aprSource: DebtAprSource;
   minPaymentSource: DebtMinPaymentSource;
+  /**
+   * (#421) Sum (as a money string, e.g. "200.00") of payment-direction
+transactions tagged to this debt that the creditor has not yet
+reflected in the reported `balance`. A transaction counts as
+pending when it's tagged to the debt (auto or manual), has a
+positive (payment-direction) amount, and is dated strictly after
+the debt's last creditor-reported balance timestamp
+(`plaidLastSyncedAt` for Plaid-sourced debts; `lastBalanceUpdate`
+for manual). The Avalanche / Debts UI subtracts this from
+`balance` to render an "effective" balance and show a small
+"−$X pending" hint. Null when the debt has no pending payments.
+
+   * @nullable
+   */
+  pendingPaymentTotal?: string | null;
+  /**
+   * (#421) Number of tagged payment-direction transactions counted
+in `pendingPaymentTotal`. Null / 0 when there are none.
+
+   * @nullable
+   */
+  pendingPaymentCount?: number | null;
   plaidAccount?: DebtPlaidAccount | null;
 }
 
