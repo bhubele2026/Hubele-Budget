@@ -1713,13 +1713,13 @@ export default function ForecastPage() {
   return (
     <div className="space-y-6">
       <PlaidReauthBanner />
-      <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-6">
-      <div className="flex justify-between items-start gap-4 flex-wrap">
+      <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-2 md:pt-3 pb-2 bg-background border-b shadow-sm space-y-2">
+      <div className="flex justify-between items-center gap-3 flex-wrap">
         <div>
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium leading-none">
             Section IV — Forecast
           </div>
-          <h1 className="text-2xl font-serif font-bold text-foreground tracking-tight mt-1">
+          <h1 className="text-lg font-serif font-bold text-foreground tracking-tight mt-0.5 leading-tight">
             Plan register — you decide every match.
           </h1>
         </div>
@@ -1734,22 +1734,22 @@ export default function ForecastPage() {
               value={forecastFromDate}
               min={FORECAST_MIN_FROM_DATE}
               onChange={(e) => setForecastFromDate(clampForecastFrom(e.target.value))}
-              className="h-9 w-[160px]"
+              className="h-8 w-[150px] text-xs"
               data-testid="input-forecast-from"
             />
           </div>
-          <Button variant="outline" asChild>
+          <Button variant="outline" size="sm" asChild className="h-8">
             <Link href="/bills" data-testid="link-manage-bills">
               Manage in Bills
             </Link>
           </Button>
-          <Button variant="outline" onClick={openSettings}>
-            <SettingsIcon className="w-4 h-4 mr-2" /> Settings
+          <Button variant="outline" size="sm" onClick={openSettings} className="h-8">
+            <SettingsIcon className="w-3.5 h-3.5 mr-1.5" /> Settings
           </Button>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap" data-testid="horizon-tabs">
+      <div className="flex items-center gap-1.5 flex-wrap" data-testid="horizon-tabs">
         {HORIZON_OPTS.map((h) => {
           const active = horizonDays === h.days;
           return (
@@ -1758,7 +1758,7 @@ export default function ForecastPage() {
               variant={active ? "default" : "outline"}
               size="sm"
               onClick={() => setHorizonDays(h.days)}
-              className="text-xs tracking-wider"
+              className="text-xs tracking-wider h-7 px-2.5"
               data-testid={`horizon-${h.days}`}
             >
               {h.label}
@@ -1769,14 +1769,14 @@ export default function ForecastPage() {
 
       {/* Hero: Current Forecast Balance */}
       <Card data-testid="card-forecast-hero" className="border-2">
-        <CardContent className="p-6">
-          <div className="flex justify-between items-start gap-6 flex-wrap">
-            <div className="space-y-2 min-w-0">
-              <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        <CardContent className="p-3">
+          <div className="flex justify-between items-center gap-4 flex-wrap">
+            <div className="space-y-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium leading-none">
                 Current Forecast Balance
               </div>
               <div
-                className={`text-5xl font-bold tabular-nums ${
+                className={`text-3xl font-bold tabular-nums leading-tight ${
                   Number.isFinite(endingNum) && endingNum < 0
                     ? "text-destructive"
                     : "text-foreground"
@@ -1787,7 +1787,7 @@ export default function ForecastPage() {
                   ? formatCurrency(endingNum)
                   : formatCurrency(0)}
               </div>
-              <div className="text-sm text-muted-foreground space-y-0.5 pt-1">
+              <div className="text-xs text-muted-foreground leading-snug">
                 <div>
                   Bank balance before {formatDate(forecastFromDate)}:{" "}
                   <span className="tabular-nums font-medium text-foreground">
