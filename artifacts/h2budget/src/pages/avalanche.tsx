@@ -18,6 +18,7 @@ import {
   getGetAvalancheExtraQueryKey,
   getGetBillsSummaryQueryKey,
   getGetForecastQueryKey,
+  getGetBudgetMonthQueryKey,
 } from "@workspace/api-client-react";
 import type { Debt } from "@workspace/api-client-react";
 import { Slider } from "@/components/ui/slider";
@@ -190,6 +191,20 @@ export default function AvalanchePage() {
         // UI stays in sync the moment the slider commits.
         qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
         qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+        // The slider commit also writes the current month's "Avalanche
+        // payment" budget line on the server, so invalidate every cached
+        // getBudgetMonth so the Budget page card refreshes immediately.
+        // The query key is `[`/api/budget/months/${monthStart}`]`, so we
+        // match the family by URL prefix rather than a fixed key.
+        qc.invalidateQueries({
+          predicate: (q) => {
+            const first = q.queryKey[0];
+            return (
+              typeof first === "string" &&
+              first.startsWith("/api/budget/months/")
+            );
+          },
+        });
       },
     },
   });
