@@ -176,6 +176,54 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
       );
     }
   }
+  // (#432-followup) Heal stale snapshot identity: when
+  // `bank_snapshot_account_id` points at a real plaid_accounts row but
+  // the stored `bank_snapshot_mask` / `bank_snapshot_name` are out of
+  // sync (e.g. a synthetic ··0000 seed got linked to a real ··5526
+  // account but the legacy columns were never updated), reconcile them
+  // to the live plaid_account values. This is what makes the snapshot
+  // header read "Chase ··5526" instead of "Chase ··0000" after the user
+  // links the real bank, and stops the picker from emitting the stale
+  // identity as a phantom second row.
+  if (settings.bankSnapshotAccountId) {
+    try {
+      const [linked] = await db
+        .select({
+          name: plaidAccountsTable.name,
+          mask: plaidAccountsTable.mask,
+        })
+        .from(plaidAccountsTable)
+        .where(eq(plaidAccountsTable.id, settings.bankSnapshotAccountId));
+      if (
+        linked &&
+        ((linked.mask ?? null) !== (settings.bankSnapshotMask ?? null) ||
+          (linked.name ?? null) !== (settings.bankSnapshotName ?? null))
+      ) {
+        await db
+          .update(forecastSettingsTable)
+          .set({
+            bankSnapshotMask: linked.mask ?? null,
+            bankSnapshotName: linked.name ?? null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(forecastSettingsTable.userId, userId),
+              eq(
+                forecastSettingsTable.bankSnapshotAccountId,
+                settings.bankSnapshotAccountId,
+              ),
+            ),
+          );
+        settings = await ensureSettings(userId);
+      }
+    } catch (err) {
+      console.error(
+        "[forecast] bankSnapshot identity heal failed",
+        { userId, err: err instanceof Error ? err.message : String(err) },
+      );
+    }
+  }
   const days = Number(req.query.days) || settings.daysAhead || 90;
 
   const today = new Date();
