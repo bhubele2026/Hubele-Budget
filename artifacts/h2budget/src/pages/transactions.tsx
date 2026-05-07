@@ -82,6 +82,7 @@ import { computeBalanceAtEndOf } from "@/lib/accountBalance";
 import {
   chaseMonthTotals,
   dedupeTransactionsByIdentity,
+  isChaseFallbackSource,
 } from "@/lib/chaseScope";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import {
@@ -378,9 +379,17 @@ export default function TransactionsPage() {
   // Money in / Money out tiles or the rolling-balance net change.
   const chaseTransactions = useMemo(() => {
     const all = transactions ?? [];
+    // (#448) When no Plaid checking account is linked, the previous
+    // fallback `!t.plaidAccountId` swept in *every* non-Plaid row the
+    // user owned — including Amex and other debt rows — making the
+    // Chase page show transactions that don't belong to it. Tighten
+    // the fallback to only Chase-source + manual rows, mirroring the
+    // `AMEX_SOURCES` parity pattern on the Amex page.
     const scoped = chasePlaidAccountId
       ? all.filter((t) => t.plaidAccountId === chasePlaidAccountId)
-      : all.filter((t) => !t.plaidAccountId);
+      : all.filter(
+          (t) => !t.plaidAccountId && isChaseFallbackSource(t.source),
+        );
     return dedupeTransactionsByIdentity(scoped);
   }, [transactions, chasePlaidAccountId]);
 

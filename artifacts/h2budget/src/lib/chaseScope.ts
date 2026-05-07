@@ -5,6 +5,35 @@ import {
 } from "@/components/account-page";
 
 /**
+ * Source values that belong on the Chase Transactions page when no Plaid
+ * checking account is linked yet (or when the linked account's id hasn't
+ * been backfilled onto rows yet, e.g. immediately after a re-link).
+ *
+ * Mirrors the `AMEX_SOURCES = ["amex", "plaid:amex"]` pattern in
+ * `pages/amex.tsx`. We deliberately also accept `"manual"` here because
+ * the fallback is the same surface manual entries have always shown up
+ * on for users who never linked a bank.
+ */
+export const CHASE_FALLBACK_SOURCES = ["manual", "chase", "plaid:chase"] as const;
+
+/**
+ * True when a row should appear on the Chase page in the "no Plaid
+ * checking linked" fallback. Rows whose `plaidAccountId` is set are
+ * always considered to belong to a specific Plaid account and so are
+ * filtered by id elsewhere — this helper only governs the source-based
+ * fallback. We keep the predicate tolerant of unknown / empty source
+ * values so legacy manual rows (which sometimes have an empty source)
+ * still survive.
+ */
+export function isChaseFallbackSource(
+  source: string | null | undefined,
+): boolean {
+  if (!source) return true;
+  const s = source.toLowerCase();
+  return (CHASE_FALLBACK_SOURCES as readonly string[]).includes(s);
+}
+
+/**
  * Collapse a transaction list down to one row per logical transaction.
  *
  * The Chase page (#443) was double-counting May 2026 activity because the

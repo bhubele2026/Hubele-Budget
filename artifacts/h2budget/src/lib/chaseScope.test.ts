@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
+  CHASE_FALLBACK_SOURCES,
   chaseMonthTotals,
   dedupeTransactionsByIdentity,
+  isChaseFallbackSource,
 } from "./chaseScope";
 import { computeBalanceAtEndOf } from "./accountBalance";
 import { monthKeyFromISO, shiftMonth } from "@/components/account-page";
@@ -57,6 +59,52 @@ describe("chaseMonthTotals", () => {
     expect(totals.moneyIn).toBeCloseTo(200.5, 2);
     expect(totals.moneyOut).toBeCloseTo(50.25, 2);
     expect(totals.netChange).toBeCloseTo(150.25, 2);
+  });
+});
+
+describe("isChaseFallbackSource (#448)", () => {
+  it("includes Chase + manual sources", () => {
+    for (const s of CHASE_FALLBACK_SOURCES) {
+      expect(isChaseFallbackSource(s)).toBe(true);
+    }
+  });
+
+  it("excludes Amex sources so debt rows don't leak into the Chase page", () => {
+    expect(isChaseFallbackSource("amex")).toBe(false);
+    expect(isChaseFallbackSource("plaid:amex")).toBe(false);
+  });
+
+  it("excludes other Plaid institutions", () => {
+    expect(isChaseFallbackSource("plaid:capitalone")).toBe(false);
+    expect(isChaseFallbackSource("plaid:bank")).toBe(false);
+  });
+
+  it("treats null/empty source as a manual row (legacy entries survive)", () => {
+    expect(isChaseFallbackSource(null)).toBe(true);
+    expect(isChaseFallbackSource(undefined)).toBe(true);
+    expect(isChaseFallbackSource("")).toBe(true);
+  });
+
+  it("filters a mixed-source list down to Chase + manual rows in the no-Plaid fallback", () => {
+    type SourcedRow = {
+      id: string;
+      source: string | null;
+      plaidAccountId: string | null;
+    };
+    const all: SourcedRow[] = [
+      { id: "manual-1", source: "manual", plaidAccountId: null },
+      { id: "chase-plaid", source: "plaid:chase", plaidAccountId: null },
+      { id: "amex-manual", source: "amex", plaidAccountId: null },
+      { id: "amex-plaid", source: "plaid:amex", plaidAccountId: null },
+      { id: "other-debt", source: "plaid:capitalone", plaidAccountId: null },
+      // Rows with a plaidAccountId set are scoped by id, not source —
+      // they should not be considered by the fallback predicate.
+      { id: "linked-chase", source: "plaid:chase", plaidAccountId: "acct-1" },
+    ];
+    const fallback = all.filter(
+      (t) => !t.plaidAccountId && isChaseFallbackSource(t.source),
+    );
+    expect(fallback.map((r) => r.id)).toEqual(["manual-1", "chase-plaid"]);
   });
 });
 
