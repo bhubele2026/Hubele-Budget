@@ -2462,8 +2462,16 @@ export default function ForecastPage() {
             </Card>
 
             <Card>
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-3 flex-row items-center justify-between flex-wrap gap-2">
                 <CardTitle>Planned forecast items</CardTitle>
+                {bankReconcile.hasBank && !bankReconcile.isPriorMonth && (
+                  <span
+                    className="text-xs text-muted-foreground tabular-nums"
+                    data-testid="planned-projected-end"
+                  >
+                    Projected end {formatCurrency(bankReconcile.forecastEnd)}
+                  </span>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y divide-border">
