@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
 import {
   simulateWithSolvableFallback,
+  sortDebts,
   fmtMonth,
   type SimDebt,
   type Strategy,
@@ -62,6 +63,24 @@ export default function DebtsPage() {
     [simDebts, resolvedExtraAmount, strategy],
   );
   const sim = fallback.sim;
+  const effectiveDebts = fallback.effectiveDebts;
+
+  // Mirror the /avalanche planner: every debt the simulator pays extra to
+  // this month is a "current target." When month 0 has no extra to spill
+  // (e.g. $0 extra), fall back to the strategy's first solvable debt so
+  // the UI always highlights one card.
+  const planTargetIds = useMemo(() => {
+    const monthTargets = sim.months[0]?.targets ?? [];
+    if (monthTargets.length > 0) {
+      return new Set(monthTargets.map((t) => t.id));
+    }
+    const sortedSolvable = sortDebts(
+      effectiveDebts.filter((d) => d.balance > 0),
+      strategy,
+    );
+    const fallbackTarget = sortedSolvable[0] ?? null;
+    return new Set(fallbackTarget ? [fallbackTarget.id] : []);
+  }, [sim.months, effectiveDebts, strategy]);
 
   const killById = useMemo(() => {
     const m = new Map<string, Date>();
@@ -104,8 +123,8 @@ export default function DebtsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {sortedDebts.map((debt, index) => {
-          const isTarget = index === 0;
+        {sortedDebts.map((debt) => {
+          const isTarget = planTargetIds.has(debt.id);
           const { date: payoffDate, reason: payoffReason } = payoffFor(debt.id);
           const payoffLabel = payoffDate ? fmtMonth(payoffDate) : "—";
           return (
