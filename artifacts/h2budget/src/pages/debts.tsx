@@ -82,6 +82,14 @@ export default function DebtsPage() {
     return new Set(fallbackTarget ? [fallbackTarget.id] : []);
   }, [sim.months, effectiveDebts, strategy]);
 
+  const extraByTargetId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of sim.months[0]?.targets ?? []) {
+      m.set(t.id, t.extraPaid);
+    }
+    return m;
+  }, [sim.months]);
+
   const killById = useMemo(() => {
     const m = new Map<string, Date>();
     for (const k of sim.killedOrder) m.set(k.id, k.date);
@@ -127,6 +135,7 @@ export default function DebtsPage() {
           const isTarget = planTargetIds.has(debt.id);
           const { date: payoffDate, reason: payoffReason } = payoffFor(debt.id);
           const payoffLabel = payoffDate ? fmtMonth(payoffDate) : "—";
+          const targetExtra = extraByTargetId.get(debt.id) ?? 0;
           return (
             <Card key={debt.id} className={isTarget ? "border-primary" : ""}>
               <CardHeader className="pb-2">
@@ -181,6 +190,20 @@ export default function DebtsPage() {
                         }
                       >
                         {payoffLabel}
+                      </span>
+                    </div>
+                  )}
+                  {isTarget && targetExtra > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Extra this month</span>
+                      <span
+                        className="text-sm font-semibold tabular-nums text-primary"
+                        data-testid="debt-card-target-extra"
+                        data-debt-id={debt.id}
+                        title="Avalanche extra applied to this target this month"
+                        aria-label={`Extra this month ${formatCurrency(targetExtra)}`}
+                      >
+                        {formatCurrency(targetExtra)}
                       </span>
                     </div>
                   )}
