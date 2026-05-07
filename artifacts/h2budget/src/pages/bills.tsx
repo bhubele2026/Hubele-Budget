@@ -837,7 +837,11 @@ function BillGroupCard({
               // projection. The badge below still compares actual vs.
               // monthlyAmount so paid/partial status is unchanged.
               const perEvent = Number(item.amount) || 0;
-              const display = formatBillRowAmount(perEvent, item.frequency, sign);
+              // (#492) Use the API's calendar-expanded monthlyAmount for the
+              // hint so it always equals the Budget page's "Budgeted" column
+              // for the same line and same viewed month (e.g. a 3-paycheck
+              // biweekly month shows the 3× total, not the smoothed 26/12).
+              const display = formatBillRowAmount(perEvent, item.frequency, sign, amt);
               // (#70) Status of the actual vs. planned amount this month.
               // - "paid": actual covers ≥99% of planned (a small float fudge)
               // - "partial": some money has moved but not the full plan
