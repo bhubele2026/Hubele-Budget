@@ -16,9 +16,40 @@ export type DedupeReport = {
   debtsRepointed: number;
   snapshotRepointed: boolean;
   syntheticDropped: boolean;
+  // (#429) Number of `forecast_settings.accountSnapshots` keys that
+  // were repointed onto a survivor row during this run.
+  accountSnapshotsRepointed: number;
+  // (#429) Number of orphaned `forecast_settings.accountSnapshots`
+  // keys (no live `plaid_accounts.id` match) that the trailing
+  // backfill removed. Some of these may have been salvaged onto a
+  // surviving row first via (institutionName, mask) matching — those
+  // also bump `accountSnapshotsRepointed`.
+  accountSnapshotsPruned: number;
 };
 
 type AcctRow = typeof plaidAccountsTable.$inferSelect;
+type AcctSnapshotEntry = {
+  balance: string;
+  at: string;
+  source: "manual" | "plaid";
+  name: string | null;
+  mask: string | null;
+};
+type AcctSnapshotMap = Record<string, AcctSnapshotEntry>;
+
+// (#429) Pick the entry with the newer `at` timestamp; falls back to
+// `incoming` when timestamps are unparseable or equal so a fresher
+// loser entry wins over a stale survivor entry.
+function pickFresherSnapshot(
+  existing: AcctSnapshotEntry | undefined,
+  incoming: AcctSnapshotEntry,
+): AcctSnapshotEntry {
+  if (!existing) return incoming;
+  const ea = Date.parse(existing.at);
+  const ia = Date.parse(incoming.at);
+  if (Number.isFinite(ea) && Number.isFinite(ia) && ea > ia) return existing;
+  return incoming;
+}
 
 /**
  * (#410) Merge duplicate `plaid_accounts` rows for a single user.
@@ -46,6 +77,8 @@ export async function dedupePlaidAccountsForUser(
     debtsRepointed: 0,
     snapshotRepointed: false,
     syntheticDropped: false,
+    accountSnapshotsRepointed: 0,
+    accountSnapshotsPruned: 0,
   };
 
   return await db.transaction(async (tx) => {
@@ -54,6 +87,13 @@ export async function dedupePlaidAccountsForUser(
       .from(forecastSettingsTable)
       .where(eq(forecastSettingsTable.userId, userId));
     const snapshotAccountId = settings?.bankSnapshotAccountId ?? null;
+    // (#429) Track per-account snapshot map mutations across all
+    // merges in this transaction so we can persist a single update
+    // at the end. Starts as a shallow copy of the persisted map.
+    let acctSnapshots: AcctSnapshotMap = {
+      ...((settings?.accountSnapshots as AcctSnapshotMap | null) ?? {}),
+    };
+    let acctSnapshotsDirty = false;
 
     const rows = await tx
       .select({
@@ -126,6 +166,24 @@ export async function dedupePlaidAccountsForUser(
         await repointSnapshotTo(survivor.acct.id);
         report.snapshotRepointed = true;
       }
+      // (#429) Per-account snapshot JSON map: keyed by `plaid_accounts.id`.
+      // Move `acctSnapshots[loserId]` onto `acctSnapshots[survivorId]`
+      // (preferring the entry with the newer `at` timestamp when the
+      // survivor already owns one), then drop the loser key. Without
+      // this, a survivor whose id has no entry in the map renders the
+      // "Unavailable" placeholder on the Chase page even though
+      // Money in / Money out are correct.
+      const loserSnap = acctSnapshots[loser.acct.id];
+      if (loserSnap) {
+        const winning = pickFresherSnapshot(
+          acctSnapshots[survivor.acct.id],
+          loserSnap,
+        );
+        acctSnapshots[survivor.acct.id] = winning;
+        delete acctSnapshots[loser.acct.id];
+        acctSnapshotsDirty = true;
+        report.accountSnapshotsRepointed += 1;
+      }
       await tx
         .delete(plaidAccountsTable)
         .where(eq(plaidAccountsTable.id, loser.acct.id));
@@ -182,6 +240,70 @@ export async function dedupePlaidAccountsForUser(
           report.syntheticDropped = true;
         }
       }
+    }
+
+    // (#429) Trailing backfill: prune `accountSnapshots` keys that no
+    // longer correspond to a live `plaid_accounts.id` for this user.
+    // Before dropping an orphan key we try to salvage it onto the
+    // current survivor for the same (institutionName, mask) — this
+    // repairs already-broken users whose loser id was never moved
+    // because the dedupe that removed it predated this fix. Idempotent:
+    // a clean user is a no-op.
+    const liveRows = await tx
+      .select({
+        id: plaidAccountsTable.id,
+        mask: plaidAccountsTable.mask,
+        institutionName: plaidItemsTable.institutionName,
+      })
+      .from(plaidAccountsTable)
+      .leftJoin(
+        plaidItemsTable,
+        eq(plaidAccountsTable.itemId, plaidItemsTable.id),
+      )
+      .where(eq(plaidAccountsTable.userId, userId));
+    const liveIds = new Set(liveRows.map((r) => r.id));
+    for (const orphanId of Object.keys(acctSnapshots)) {
+      if (liveIds.has(orphanId)) continue;
+      const entry = acctSnapshots[orphanId]!;
+      // Try to find a surviving row with the same mask. We don't have
+      // institutionName on the entry itself, so prefer rows whose
+      // institutionName loosely matches the entry's `name` (e.g. an
+      // entry name of "Chase Total Checking" matches a row whose
+      // institutionName is "Chase"); when no name is available, mask
+      // alone is the matcher.
+      const entryMask = entry.mask?.toLowerCase() ?? null;
+      const entryName = (entry.name ?? "").toLowerCase();
+      let salvageId: string | null = null;
+      if (entryMask) {
+        const candidates = liveRows.filter(
+          (r) => (r.mask ?? "").toLowerCase() === entryMask,
+        );
+        const byInstitution = candidates.find((r) => {
+          const inst = (r.institutionName ?? "").toLowerCase();
+          return inst.length > 0 && entryName.includes(inst);
+        });
+        salvageId = (byInstitution ?? candidates[0])?.id ?? null;
+      }
+      if (salvageId) {
+        const winning = pickFresherSnapshot(acctSnapshots[salvageId], entry);
+        // Only count as a repoint when the salvage actually changed the
+        // survivor's entry (avoids inflating the count for an orphan
+        // whose survivor already has a fresher snapshot).
+        if (acctSnapshots[salvageId] !== winning) {
+          acctSnapshots[salvageId] = winning;
+          report.accountSnapshotsRepointed += 1;
+        }
+      }
+      delete acctSnapshots[orphanId];
+      acctSnapshotsDirty = true;
+      report.accountSnapshotsPruned += 1;
+    }
+
+    if (acctSnapshotsDirty) {
+      await tx
+        .update(forecastSettingsTable)
+        .set({ accountSnapshots: acctSnapshots, updatedAt: new Date() })
+        .where(eq(forecastSettingsTable.userId, userId));
     }
 
     return report;

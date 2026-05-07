@@ -361,6 +361,196 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
     }
   });
 
+  it("(#429) repoints accountSnapshots from loser to survivor and prunes orphan keys via (institutionName, mask) salvage", async () => {
+    const otherUser = `${TEST_USER}-acctsnap`;
+    try {
+      const suffix = randomUUID().slice(0, 8);
+      const [item] = await db
+        .insert(plaidItemsTable)
+        .values({
+          userId: otherUser,
+          itemId: `acctsnap-item-${suffix}`,
+          accessToken: "test-no-access",
+          institutionName: "Chase",
+          institutionSlug: "chase",
+        })
+        .returning();
+      // Survivor (snapshot pointer wins) + loser, plus an unrelated
+      // orphan-id entry that should be salvaged onto the survivor by
+      // (institutionName, mask).
+      const [survivor] = await db
+        .insert(plaidAccountsTable)
+        .values({
+          userId: otherUser,
+          itemId: item!.id,
+          accountId: `acctsnap-survivor-${suffix}`,
+          name: "Chase Total Checking",
+          mask: "5526",
+          type: "depository",
+          subtype: "checking",
+          createdAt: new Date(Date.now() - 30_000),
+        })
+        .returning();
+      const [loser] = await db
+        .insert(plaidAccountsTable)
+        .values({
+          userId: otherUser,
+          itemId: item!.id,
+          accountId: `acctsnap-loser-${suffix}`,
+          name: "Chase Checking",
+          mask: "5526",
+          type: "depository",
+          subtype: "checking",
+          createdAt: new Date(Date.now() - 10_000),
+        })
+        .returning();
+      // Orphan id: a plaid_accounts row that no longer exists. Its
+      // entry in accountSnapshots must be salvaged onto the survivor
+      // because it shares the same (institutionName, mask).
+      const orphanId = randomUUID();
+
+      await db.insert(forecastSettingsTable).values({
+        userId: otherUser,
+        bankSnapshotBalance: "1000.00",
+        bankSnapshotAt: new Date(),
+        bankSnapshotSource: "manual",
+        bankSnapshotAccountId: survivor!.id,
+        accountSnapshots: {
+          // Loser entry is the freshest — must win the merge onto the
+          // survivor key.
+          [loser!.id]: {
+            balance: "555.55",
+            at: "2026-05-02T12:00:00.000Z",
+            source: "plaid",
+            name: "Chase Checking",
+            mask: "5526",
+          },
+          // Survivor already has an older entry — loser entry should
+          // overwrite because it is newer.
+          [survivor!.id]: {
+            balance: "111.11",
+            at: "2026-05-01T00:00:00.000Z",
+            source: "plaid",
+            name: "Chase Total Checking",
+            mask: "5526",
+          },
+          // Orphan entry that no live row owns — salvage candidate.
+          // Its (institutionName via name fuzzy + mask) matches the
+          // survivor, but the survivor's entry is fresher after the
+          // loser merge above so the orphan is just pruned.
+          [orphanId]: {
+            balance: "999.99",
+            at: "2026-04-01T00:00:00.000Z",
+            source: "manual",
+            name: "Chase Total Checking",
+            mask: "5526",
+          },
+        },
+      });
+
+      const report = await dedupePlaidAccountsForUser(otherUser);
+      expect(report.duplicatesRemoved).toBe(1);
+      // 1 from the loser→survivor merge step. The orphan-id entry
+      // was salvaged onto the survivor key but the survivor already
+      // had a fresher snapshot after the merge, so no new repoint
+      // was counted.
+      expect(report.accountSnapshotsRepointed).toBe(1);
+      expect(report.accountSnapshotsPruned).toBe(1);
+
+      const [settings] = await db
+        .select()
+        .from(forecastSettingsTable)
+        .where(eq(forecastSettingsTable.userId, otherUser));
+      const map =
+        (settings!.accountSnapshots as Record<
+          string,
+          { balance: string; at: string }
+        > | null) ?? {};
+      // Loser key gone, orphan key gone, survivor inherits the
+      // freshest entry (the loser's).
+      expect(Object.keys(map).sort()).toEqual([survivor!.id].sort());
+      expect(map[survivor!.id]!.balance).toBe("555.55");
+      expect(map[survivor!.id]!.at).toBe("2026-05-02T12:00:00.000Z");
+    } finally {
+      await db
+        .delete(transactionsTable)
+        .where(eq(transactionsTable.userId, otherUser));
+      await db
+        .delete(forecastSettingsTable)
+        .where(eq(forecastSettingsTable.userId, otherUser));
+      await db
+        .delete(plaidAccountsTable)
+        .where(eq(plaidAccountsTable.userId, otherUser));
+      await db
+        .delete(plaidItemsTable)
+        .where(eq(plaidItemsTable.userId, otherUser));
+    }
+  });
+
+  it("(#429) backfill is idempotent — a second run after orphan-only state is a clean no-op", async () => {
+    const otherUser = `${TEST_USER}-idem`;
+    try {
+      const suffix = randomUUID().slice(0, 8);
+      const [item] = await db
+        .insert(plaidItemsTable)
+        .values({
+          userId: otherUser,
+          itemId: `idem-item-${suffix}`,
+          accessToken: "test-no-access",
+          institutionName: "Chase",
+          institutionSlug: "chase",
+        })
+        .returning();
+      const [acct] = await db
+        .insert(plaidAccountsTable)
+        .values({
+          userId: otherUser,
+          itemId: item!.id,
+          accountId: `idem-acct-${suffix}`,
+          name: "Chase Total Checking",
+          mask: "5526",
+          type: "depository",
+          subtype: "checking",
+        })
+        .returning();
+      await db.insert(forecastSettingsTable).values({
+        userId: otherUser,
+        accountSnapshots: {
+          [acct!.id]: {
+            balance: "100.00",
+            at: "2026-05-01T00:00:00.000Z",
+            source: "plaid",
+            name: "Chase Total Checking",
+            mask: "5526",
+          },
+        },
+      });
+      const r1 = await dedupePlaidAccountsForUser(otherUser);
+      expect(r1.accountSnapshotsPruned).toBe(0);
+      expect(r1.accountSnapshotsRepointed).toBe(0);
+      const r2 = await dedupePlaidAccountsForUser(otherUser);
+      expect(r2.accountSnapshotsPruned).toBe(0);
+      expect(r2.accountSnapshotsRepointed).toBe(0);
+      const [settings] = await db
+        .select()
+        .from(forecastSettingsTable)
+        .where(eq(forecastSettingsTable.userId, otherUser));
+      const map =
+        (settings!.accountSnapshots as Record<string, unknown> | null) ?? {};
+      expect(Object.keys(map)).toEqual([acct!.id]);
+    } finally {
+      await db
+        .delete(forecastSettingsTable)
+        .where(eq(forecastSettingsTable.userId, otherUser));
+      await db
+        .delete(plaidAccountsTable)
+        .where(eq(plaidAccountsTable.userId, otherUser));
+      await db
+        .delete(plaidItemsTable)
+        .where(eq(plaidItemsTable.userId, otherUser));
+    }
+  });
+
   it("is a no-op when there are no duplicates", async () => {
     const otherUser = `${TEST_USER}-clean`;
     try {

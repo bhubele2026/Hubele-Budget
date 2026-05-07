@@ -149,7 +149,33 @@ export async function listCheckingAccounts(userId: string) {
 router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   await archiveExpiredOneTime(userId);
-  const settings = await ensureSettings(userId);
+  let settings = await ensureSettings(userId);
+  // (#429) Auto-repair pass: if the user's accountSnapshots map has any
+  // orphan keys (left over from #410's plaid_accounts dedupe) salvage
+  // them onto the surviving (institutionName, mask) row and prune the
+  // dead keys. The dedupe routine is idempotent and a no-op on a clean
+  // account, so this is safe to call on every /forecast read. We
+  // best-effort it — never let a backfill failure block the page.
+  const snapshotMap = settings.accountSnapshots ?? {};
+  if (Object.keys(snapshotMap).length > 0) {
+    try {
+      const report = await dedupePlaidAccountsForUser(userId);
+      if (
+        report.accountSnapshotsRepointed > 0 ||
+        report.accountSnapshotsPruned > 0 ||
+        report.duplicatesRemoved > 0
+      ) {
+        // Re-read settings so the response below reflects the repaired
+        // accountSnapshots map instead of the stale pre-dedupe copy.
+        settings = await ensureSettings(userId);
+      }
+    } catch (err) {
+      console.error(
+        "[forecast] accountSnapshots auto-repair failed",
+        { userId, err: err instanceof Error ? err.message : String(err) },
+      );
+    }
+  }
   const days = Number(req.query.days) || settings.daysAhead || 90;
 
   const today = new Date();

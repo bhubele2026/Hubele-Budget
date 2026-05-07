@@ -79,6 +79,7 @@ import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { BucketBubbles, type BucketFlags, type BucketKey } from "@/components/bucket-bubbles";
 import { computeBalanceAtEndOf } from "@/lib/accountBalance";
+import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import {
   compareNewestFirst,
   computeRunningBalances,
@@ -289,25 +290,22 @@ export default function TransactionsPage() {
     name: string | null;
     mask: string | null;
   } | null>(() => {
-    if (usingSnapshotAccount && bankSnapshot) {
-      return {
-        balance: bankSnapshot.balance,
-        at: bankSnapshot.at,
-        source: bankSnapshot.source,
-        name: bankSnapshot.name ?? null,
-        mask: bankSnapshot.mask ?? null,
-      };
-    }
-    if (effectiveAccountInternalId) {
-      const snap = accountSnapshots[effectiveAccountInternalId];
-      if (snap) return snap;
-    }
-    return null;
+    // (#429) Includes a post-dedupe fallback: when a survivor row is
+    // briefly missing from `accountSnapshots` but matches the primary
+    // bankSnapshot by (institutionName, mask), reuse the primary so
+    // the Starting / Ending balance tiles stay populated instead of
+    // dropping to the "Unavailable" placeholder.
+    return deriveEffectiveSnapshot({
+      bankSnapshot,
+      accountSnapshots,
+      selectedAccountInternalId: effectiveAccountInternalId,
+      plaidCheckingAccounts: forecastData?.plaidCheckingAccounts ?? [],
+    });
   }, [
-    usingSnapshotAccount,
     bankSnapshot,
     effectiveAccountInternalId,
     accountSnapshots,
+    forecastData?.plaidCheckingAccounts,
   ]);
   const chasePlaidAccountId = useMemo(() => {
     if (!effectiveAccountInternalId) return null;
