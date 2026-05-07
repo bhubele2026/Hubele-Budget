@@ -1381,7 +1381,7 @@ export default function TransactionsPage() {
           Manual entries · No bank balance is tracked for hand-entered rows.
         </div>
       )}
-      {(forecastData?.plaidCheckingAccounts?.length ?? 0) > 0 && (
+      {(forecastData?.plaidCheckingAccounts?.length ?? 0) > 1 && (
         <div className="flex items-center gap-2" data-testid="chase-account-picker">
           <span className="text-xs text-muted-foreground">View account:</span>
           <Select

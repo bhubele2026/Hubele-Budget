@@ -25,6 +25,7 @@ import {
 } from "../lib/debtMinSchedule";
 import { plaid } from "../lib/plaid";
 import { archiveExpiredOneTime } from "./bills";
+import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
 
 const router: IRouter = Router();
 
@@ -67,7 +68,15 @@ function presentSnapshot(row: typeof forecastSettingsTable.$inferSelect) {
   };
 }
 
-async function listCheckingAccounts(userId: string) {
+export async function listCheckingAccounts(userId: string) {
+  // (#410) Read the bank-snapshot pointer first so dedupe can prefer the
+  // snapshot row when collapsing duplicates by (institutionName, mask).
+  const [settingsRow] = await db
+    .select({ bankSnapshotAccountId: forecastSettingsTable.bankSnapshotAccountId })
+    .from(forecastSettingsTable)
+    .where(eq(forecastSettingsTable.userId, userId));
+  const snapshotAccountId = settingsRow?.bankSnapshotAccountId ?? null;
+
   const rows = await db
     .select({
       id: plaidAccountsTable.id,
@@ -76,26 +85,63 @@ async function listCheckingAccounts(userId: string) {
       mask: plaidAccountsTable.mask,
       subtype: plaidAccountsTable.subtype,
       type: plaidAccountsTable.type,
+      createdAt: plaidAccountsTable.createdAt,
       institutionName: plaidItemsTable.institutionName,
     })
     .from(plaidAccountsTable)
     .leftJoin(plaidItemsTable, eq(plaidAccountsTable.itemId, plaidItemsTable.id))
     .where(eq(plaidAccountsTable.userId, userId));
-  return rows
-    .filter(
-      (a) =>
-        a.subtype === "checking" ||
-        a.type === "depository" ||
-        a.subtype === "savings",
-    )
-    .map((a) => ({
-      id: a.id,
-      accountId: a.accountId,
-      name: a.name,
-      mask: a.mask,
-      subtype: a.subtype,
-      institutionName: a.institutionName,
-    }));
+  const checking = rows.filter(
+    (a) =>
+      a.subtype === "checking" ||
+      a.type === "depository" ||
+      a.subtype === "savings",
+  );
+
+  // (#410) Collapse duplicate `plaid_accounts` rows that point at the
+  // same physical bank account. Picker / DB cleanup may lag behind, so
+  // we de-dupe in the API response keyed by (institutionName, mask)
+  // (case-insensitive). Survivor preference: snapshot pointer first,
+  // then most recently created. Rows with no mask cannot be safely
+  // collapsed (we can't tell them apart) and pass through unchanged.
+  type Row = (typeof checking)[number];
+  const groups = new Map<string, Row[]>();
+  const passthrough: Row[] = [];
+  for (const r of checking) {
+    if (!r.mask) {
+      passthrough.push(r);
+      continue;
+    }
+    const key = `${(r.institutionName ?? "").toLowerCase()}|${r.mask.toLowerCase()}`;
+    const arr = groups.get(key);
+    if (arr) arr.push(r);
+    else groups.set(key, [r]);
+  }
+  const survivors: Row[] = [...passthrough];
+  for (const arr of groups.values()) {
+    if (arr.length === 1) {
+      survivors.push(arr[0]);
+      continue;
+    }
+    arr.sort((a, b) => {
+      const aSnap = a.id === snapshotAccountId ? 0 : 1;
+      const bSnap = b.id === snapshotAccountId ? 0 : 1;
+      if (aSnap !== bSnap) return aSnap - bSnap;
+      const at = a.createdAt?.getTime() ?? 0;
+      const bt = b.createdAt?.getTime() ?? 0;
+      return bt - at;
+    });
+    survivors.push(arr[0]);
+  }
+
+  return survivors.map((a) => ({
+    id: a.id,
+    accountId: a.accountId,
+    name: a.name,
+    mask: a.mask,
+    subtype: a.subtype,
+    institutionName: a.institutionName,
+  }));
 }
 
 router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
@@ -500,6 +546,19 @@ router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<voi
     res.status(502).json({ error: msg });
   }
 });
+
+// (#410) Maintenance endpoint: collapse duplicate `plaid_accounts`
+// rows for the calling user. User-scoped so the affected user can hit
+// it without admin tooling. Idempotent — running it on a clean account
+// reports zero changes.
+router.post(
+  "/forecast/dedupe-plaid-accounts",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const report = await dedupePlaidAccountsForUser(req.userId!);
+    res.json(report);
+  },
+);
 
 router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;

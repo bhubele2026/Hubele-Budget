@@ -683,6 +683,60 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     try {
       const acctResp = await plaid().accountsGet({ access_token: accessToken });
       for (const a of acctResp.data.accounts) {
+        // (#410) Dupe guard: if the same physical account already exists
+        // for this user with the same `mask` — under either the new item
+        // (Plaid rotated `account_id` on a refresh) or under a *previous*
+        // item for the same institution (the user disconnected and
+        // re-linked, minting a brand-new `item_id`) — reuse the existing
+        // row instead of inserting a sibling. This is the primary
+        // real-world path that creates the duplicate Chase rows we saw.
+        if (a.mask) {
+          const candidates = await db
+            .select({
+              id: plaidAccountsTable.id,
+              accountId: plaidAccountsTable.accountId,
+              itemId: plaidAccountsTable.itemId,
+              institutionName: plaidItemsTable.institutionName,
+            })
+            .from(plaidAccountsTable)
+            .leftJoin(
+              plaidItemsTable,
+              eq(plaidAccountsTable.itemId, plaidItemsTable.id),
+            )
+            .where(
+              and(
+                eq(plaidAccountsTable.userId, req.userId!),
+                eq(plaidAccountsTable.mask, a.mask),
+              ),
+            );
+          // Prefer same-item match; otherwise match by institutionName so
+          // we collapse a re-link under a fresh item onto the existing row.
+          const targetInstitution = (
+            item!.institutionName ?? ""
+          ).toLowerCase();
+          const sameItem = candidates.find((c) => c.itemId === item!.id);
+          const crossItem = candidates.find(
+            (c) =>
+              c.itemId !== item!.id &&
+              (c.institutionName ?? "").toLowerCase() === targetInstitution &&
+              targetInstitution !== "",
+          );
+          const existing = sameItem ?? crossItem ?? null;
+          if (existing) {
+            await db
+              .update(plaidAccountsTable)
+              .set({
+                itemId: item!.id,
+                accountId: a.account_id,
+                name: a.name ?? null,
+                officialName: a.official_name ?? null,
+                type: a.type ?? null,
+                subtype: a.subtype ?? null,
+              })
+              .where(eq(plaidAccountsTable.id, existing.id));
+            continue;
+          }
+        }
         await db
           .insert(plaidAccountsTable)
           .values({

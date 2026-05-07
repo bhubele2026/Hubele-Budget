@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { categorize, loadUserRules } from "./autoCategorize";
 import { SYNTHETIC_PLAID_ACCESS_TOKEN_SENTINEL } from "./plaid";
+import { dedupePlaidAccountsForUser } from "./dedupePlaidAccounts";
 
 type SeedRow = {
   idx: number;
@@ -139,8 +140,8 @@ const APRIL_2026_ENDING_BALANCE_HISTORICAL: readonly number[] = [5554.45];
 const APRIL_2026_SNAPSHOT_AT_ISO = "2026-04-30";
 
 const SOURCE = "plaid:chase";
-const SYNTHETIC_ITEM_ID = "seed-april-2026-chase";
-const SYNTHETIC_ACCOUNT_ID = "seed-april-2026-chase-checking";
+export const SYNTHETIC_ITEM_ID = "seed-april-2026-chase";
+export const SYNTHETIC_ACCOUNT_ID = "seed-april-2026-chase-checking";
 
 // New mapping rules to add (only if not already present). Each entry has a
 // fixed pattern plus an ordered list of candidate target category names —
@@ -242,6 +243,18 @@ async function ensureChaseAccount(userId: string): Promise<{
   isSynthetic: boolean;
   snapshotRepaired: boolean;
 }> {
+  // (#410) Run the dedupe routine first so any leftover duplicate Chase
+  // rows (or a stale synthetic ··0000 sitting next to a real Chase) get
+  // collapsed before we decide which account to seed against. This keeps
+  // the seed/repair flow from picking a row that's about to be merged
+  // away, and prevents us from re-creating the synthetic alongside a
+  // real Chase row. Idempotent — no-op when the user is already clean.
+  try {
+    await dedupePlaidAccountsForUser(userId);
+  } catch {
+    // Best-effort: never block the seed on dedupe failures.
+  }
+
   // Prefer the account the user has already linked as their bank snapshot
   // (the Chase checking they connected on the Forecast page). If none, fall
   // back to any depository/checking account on file. If still none, create a
