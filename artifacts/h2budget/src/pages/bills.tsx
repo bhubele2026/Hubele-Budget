@@ -433,7 +433,16 @@ export default function BillsPage() {
             <DebtMinimumsCard
               rows={debtMinRows}
               total={debtMin}
-              onOpen={(debtId) => setLocation(`/avalanche?focus=${debtId}`)}
+              onOpen={(debtId) =>
+                // The synthetic "Avalanche extra payment" row uses a
+                // sentinel id (not a real debt) — deep-link to the
+                // Avalanche page with no focus param.
+                setLocation(
+                  debtId === "avalanche-extra"
+                    ? "/avalanche"
+                    : `/avalanche?focus=${debtId}`,
+                )
+              }
             />
           ) : null}
           {archivedDebtsList.length > 0 && (

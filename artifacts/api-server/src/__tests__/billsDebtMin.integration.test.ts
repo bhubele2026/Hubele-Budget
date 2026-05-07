@@ -20,6 +20,7 @@ import {
   forecastSettingsTable,
   forecastResolutionsTable,
   transactionsTable,
+  avalancheSettingsTable,
 } from "@workspace/db";
 import billsRouter from "../routes/bills";
 import forecastRouter from "../routes/forecast";
@@ -46,6 +47,19 @@ async function cleanup(): Promise<void> {
   await db
     .delete(forecastSettingsTable)
     .where(eq(forecastSettingsTable.userId, TEST_USER));
+  await db
+    .delete(avalancheSettingsTable)
+    .where(eq(avalancheSettingsTable.userId, TEST_USER));
+}
+
+async function setManualExtra(amount: string): Promise<void> {
+  await db
+    .insert(avalancheSettingsTable)
+    .values({ userId: TEST_USER, manualExtra: amount })
+    .onConflictDoUpdate({
+      target: avalancheSettingsTable.userId,
+      set: { manualExtra: amount },
+    });
 }
 
 beforeAll(async () => {
@@ -449,5 +463,78 @@ describe("bills/summary debt minimums", () => {
       (e) => e.itemId === `debt:${d2.id}`,
     );
     expect(linkedSynthetic).toHaveLength(0);
+  });
+
+  it("surfaces avalanche extra as a locked end-of-month bill row when manualExtra > 0", async () => {
+    await insertDebt({ name: "MasterCard", minPayment: "120", balance: "5000" });
+    await setManualExtra("200");
+    const summary = await getBills();
+    const extra = summary.debtMins.find((r) => r.debtId === "avalanche-extra");
+    expect(extra).toBeDefined();
+    expect(extra?.locked).toBe(true);
+    expect(extra?.source).toBe("manual");
+    expect(extra?.linkedRecurringId).toBeNull();
+    expect(extra?.amount).toBe("-200.00");
+    expect(extra?.minPayment).toBe("200.00");
+    expect(extra?.debtName).toBe("Avalanche extra payment");
+    // Pinned to the last day of the current month
+    const today = new Date();
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const dd = String(monthEnd.getDate()).padStart(2, "0");
+    expect(extra?.nextOccurrence).toMatch(new RegExp(`-${dd}$`));
+    // Total includes the extra: 120 min + 200 extra = 320
+    expect(summary.monthly.debtMin).toBe("320.00");
+  });
+
+  it("hides avalanche extra row when manualExtra is 0", async () => {
+    await insertDebt({ name: "MasterCard", minPayment: "120" });
+    await setManualExtra("0");
+    const summary = await getBills();
+    expect(summary.debtMins.find((r) => r.debtId === "avalanche-extra")).toBeUndefined();
+    expect(summary.monthly.debtMin).toBe("120.00");
+  });
+
+  it("hides avalanche extra row when there are no active debts", async () => {
+    await setManualExtra("200");
+    const summary = await getBills();
+    expect(summary.debtMins.find((r) => r.debtId === "avalanche-extra")).toBeUndefined();
+  });
+
+  it("forecast events include avalanche extra at month-end and stop at the simulated payoff", async () => {
+    // Tiny debt + chunky extra → avalanche pays off within a month or two.
+    await insertDebt({
+      name: "Small CC",
+      balance: "100",
+      apr: "0.0",
+      minPayment: "25",
+    });
+    await setManualExtra("500");
+    const r = await fetch(`${baseUrl}/forecast?days=365`);
+    expect(r.status).toBe(200);
+    const f = (await r.json()) as {
+      events: Array<{ itemId: string; date: string; amount: number; label: string }>;
+    };
+    const extras = f.events.filter((e) => e.itemId === "avalanche:extra");
+    // At least one (this month) but capped at payoff (no full year of them).
+    expect(extras.length).toBeGreaterThan(0);
+    expect(extras.length).toBeLessThan(6);
+    expect(extras[0].amount).toBe(-500);
+    expect(extras[0].label).toBe("Avalanche extra payment");
+    // Each event sits on the last day of its month
+    for (const e of extras) {
+      const [y, m, d] = e.date.split("-").map(Number);
+      const lastDay = new Date(y, m, 0).getDate();
+      expect(d).toBe(lastDay);
+    }
+  });
+
+  it("forecast emits no avalanche-extra events when manualExtra is 0", async () => {
+    await insertDebt({ name: "MasterCard", minPayment: "120", balance: "5000" });
+    await setManualExtra("0");
+    const r = await fetch(`${baseUrl}/forecast?days=120`);
+    const f = (await r.json()) as {
+      events: Array<{ itemId: string }>;
+    };
+    expect(f.events.filter((e) => e.itemId === "avalanche:extra")).toHaveLength(0);
   });
 });

@@ -10,6 +10,7 @@ import {
   forecastSettingsTable,
   plaidItemsTable,
   plaidAccountsTable,
+  avalancheSettingsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -22,6 +23,7 @@ import {
 import {
   buildDebtMinSchedule,
   expandDebtMin,
+  expandAvalancheExtra,
 } from "../lib/debtMinSchedule";
 import { plaid } from "../lib/plaid";
 import { archiveExpiredOneTime } from "./bills";
@@ -183,6 +185,15 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
       ...expandDebtMin(d, linkedRecurringByDebt.get(d.id) ?? null, from, to),
     );
   }
+  // Inject the synthetic "Avalanche extra payment" events alongside the
+  // debt-min series so the Forecast register shows the slider amount as a
+  // committed end-of-month outflow until the avalanche pays everything off.
+  const [avaSettingsRow] = await db
+    .select()
+    .from(avalancheSettingsTable)
+    .where(eq(avalancheSettingsTable.userId, userId));
+  const manualExtra = Number(avaSettingsRow?.manualExtra ?? 0) || 0;
+  events.push(...expandAvalancheExtra(debtsList, manualExtra, from, to, today));
   events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   // Forecast is Chase-checking-only. Resolve the configured checking

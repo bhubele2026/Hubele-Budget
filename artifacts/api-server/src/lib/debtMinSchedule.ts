@@ -1,6 +1,17 @@
 import { debtsTable, recurringItemsTable } from "@workspace/db";
 import type { CashEvent } from "./cashSignal";
 import { fmtISO, expandItem } from "./cashSignal";
+import {
+  activeSimDebts,
+  monthsUntilAvalanchePayoff,
+} from "./avalancheSim";
+
+// Sentinel id used for the synthetic "Avalanche extra payment" row that
+// the Bills page renders below the debt minimums and the Forecast/cash-
+// signal projections render at the end of each month. Not a real debt.
+export const AVALANCHE_EXTRA_DEBT_ID = "avalanche-extra";
+export const AVALANCHE_EXTRA_LABEL = "Avalanche extra payment";
+export const AVALANCHE_EXTRA_EVENT_ITEM_ID = "avalanche:extra";
 
 type DebtRow = typeof debtsTable.$inferSelect;
 type RecurringRow = typeof recurringItemsTable.$inferSelect;
@@ -162,6 +173,102 @@ export function expandDebtMin(
         date: fmtISO(dt),
         itemId: `debt:${debt.id}`,
         label: `${debt.name} minimum`,
+        kind: "expense",
+        amount: amt,
+      });
+    }
+    m += 1;
+    if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * Build the synthetic "Avalanche extra payment" locked bill row for the
+ * current calendar month. Returns null when there's no extra to schedule
+ * (slider at $0) or no active debts left for the avalanche to attack.
+ *
+ * The row is shaped like a regular DebtMinRow so the Bills page can
+ * render it through the same locked-row treatment without a schema bump:
+ * sentinel `debtId = AVALANCHE_EXTRA_DEBT_ID` (not a real debt id) and
+ * `linkedRecurringId = null`. `nextOccurrence` is pinned to the last day
+ * of the current month — the slider commits at the very end of the
+ * cycle, after every minimum has cleared.
+ */
+export function buildAvalancheExtraRow(
+  debts: DebtRow[],
+  manualExtra: number,
+  today: Date,
+): DebtMinRow | null {
+  if (!Number.isFinite(manualExtra) || manualExtra <= 0.005) return null;
+  const hasActive = debts.some((d) => activeDebt(d));
+  if (!hasActive) return null;
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const amt = Math.round(manualExtra * 100) / 100;
+  return {
+    debtId: AVALANCHE_EXTRA_DEBT_ID,
+    debtName: AVALANCHE_EXTRA_LABEL,
+    amount: (-amt).toFixed(2),
+    minPayment: amt.toFixed(2),
+    nextOccurrence: fmtISO(monthEnd),
+    source: "manual",
+    locked: true,
+    linkedRecurringId: null,
+    dueDay: null,
+    endsThisCycle: false,
+  };
+}
+
+/**
+ * Expand the avalanche extra payment into one CashEvent per month at
+ * end-of-month, capped by the avalanche payoff horizon (so the projection
+ * stops emitting the extra once all debts are predicted paid off — same
+ * cutoff rule that already governs the synthetic debt-min events).
+ *
+ * Emits nothing when manualExtra is 0 or there are no active debts.
+ */
+export function expandAvalancheExtra(
+  debts: DebtRow[],
+  manualExtra: number,
+  from: Date,
+  to: Date,
+  today: Date,
+): CashEvent[] {
+  if (!Number.isFinite(manualExtra) || manualExtra <= 0.005) return [];
+  const sim = activeSimDebts(debts);
+  if (sim.length === 0) return [];
+  const months = monthsUntilAvalanchePayoff(sim, manualExtra);
+  // months === null → never converges within MAX_MONTHS (e.g. underwater
+  // debts). Treat as "alive for the whole window" so the extra payment
+  // keeps surfacing in the projection.
+  const cutoff = months == null
+    ? new Date(today.getFullYear() + 100, 0, 1)
+    : (() => {
+        // months counts payoff months starting from the current calendar
+        // month (m=1 == this month). The last month with debts alive is
+        // therefore the (months-1)-th calendar month from today.
+        const last = new Date(
+          today.getFullYear(),
+          today.getMonth() + Math.max(0, months - 1),
+          1,
+        );
+        return new Date(last.getFullYear(), last.getMonth() + 1, 0);
+      })();
+  const amt = -Math.abs(Math.round(manualExtra * 100) / 100);
+  const out: CashEvent[] = [];
+  let y = from.getFullYear();
+  let m = from.getMonth();
+  while (true) {
+    const monthEnd = new Date(y, m + 1, 0);
+    if (monthEnd > to) break;
+    if (monthEnd >= from && monthEnd <= cutoff) {
+      out.push({
+        date: fmtISO(monthEnd),
+        itemId: AVALANCHE_EXTRA_EVENT_ITEM_ID,
+        label: AVALANCHE_EXTRA_LABEL,
         kind: "expense",
         amount: amt,
       });

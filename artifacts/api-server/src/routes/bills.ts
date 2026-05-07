@@ -6,10 +6,14 @@ import {
   debtsTable,
   forecastResolutionsTable,
   transactionsTable,
+  avalancheSettingsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { expandItem, fmtISO } from "../lib/cashSignal";
-import { buildDebtMinSchedule } from "../lib/debtMinSchedule";
+import {
+  buildDebtMinSchedule,
+  buildAvalancheExtraRow,
+} from "../lib/debtMinSchedule";
 
 const router: IRouter = Router();
 
@@ -145,6 +149,18 @@ router.get("/bills/summary", requireAuth, async (req, res): Promise<void> => {
     items,
     today,
   );
+
+  // Synthetic "Avalanche extra payment" locked row — surfaces the slider
+  // amount as an end-of-month bill so the Bills page totals reflect what
+  // the user is committing on Avalanche. Hidden when manualExtra=0 or
+  // there are no active debts to attack.
+  const [avaSettings] = await db
+    .select()
+    .from(avalancheSettingsTable)
+    .where(eq(avalancheSettingsTable.userId, userId));
+  const manualExtra = Number(avaSettings?.manualExtra ?? 0) || 0;
+  const avalancheExtraRow = buildAvalancheExtraRow(debts, manualExtra, today);
+  if (avalancheExtraRow) debtMinRows.push(avalancheExtraRow);
 
   const incomeRows: unknown[] = [];
   const billRows: unknown[] = [];

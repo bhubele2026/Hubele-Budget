@@ -7,6 +7,7 @@ import {
   forecastResolutionsTable,
   forecastSettingsTable,
   plaidAccountsTable,
+  avalancheSettingsTable,
 } from "@workspace/db";
 
 type Cadence =
@@ -262,7 +263,7 @@ export async function computeCashSignal(
   // recurring item — same series the Bills page renders for "Debt
   // minimums", so the projection never double-counts and never misses an
   // obligation that was synced via Plaid liabilities.
-  const { expandDebtMin } = await import("./debtMinSchedule");
+  const { expandDebtMin, expandAvalancheExtra } = await import("./debtMinSchedule");
   for (const d of debtsList) {
     events.push(
       ...expandDebtMin(
@@ -273,6 +274,18 @@ export async function computeCashSignal(
       ),
     );
   }
+  // Inject the synthetic "Avalanche extra payment" events so the cash-
+  // signal projection accounts for the same end-of-month outflow that
+  // the Forecast register shows. Capped server-side at the avalanche
+  // payoff horizon so the projection stops once all debts are paid.
+  const [avaSettingsRow] = await db
+    .select()
+    .from(avalancheSettingsTable)
+    .where(eq(avalancheSettingsTable.userId, userId));
+  const manualExtra = Number(avaSettingsRow?.manualExtra ?? 0) || 0;
+  events.push(
+    ...expandAvalancheExtra(debtsList, manualExtra, expandStart, to, todayDateOnly),
+  );
 
   // Resolve the configured Chase checking account's external Plaid
   // account_id (if any). Forecast is bank-only and scoped to this single

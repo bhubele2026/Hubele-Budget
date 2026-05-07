@@ -16,6 +16,8 @@ import {
   getListDebtsQueryKey,
   getGetAvalancheSettingsQueryKey,
   getGetAvalancheExtraQueryKey,
+  getGetBillsSummaryQueryKey,
+  getGetForecastQueryKey,
 } from "@workspace/api-client-react";
 import type { Debt } from "@workspace/api-client-react";
 import { Slider } from "@/components/ui/slider";
@@ -183,6 +185,11 @@ export default function AvalanchePage() {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getGetAvalancheSettingsQueryKey() });
         qc.invalidateQueries({ queryKey: getGetAvalancheExtraQueryKey() });
+        // The slider amount also drives the synthetic "Avalanche extra
+        // payment" row on Bills + Forecast — invalidate those so the
+        // UI stays in sync the moment the slider commits.
+        qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
       },
     },
   });
