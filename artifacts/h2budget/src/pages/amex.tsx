@@ -45,7 +45,7 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { CreditCard, RefreshCw } from "lucide-react";
+import { Check, CreditCard, RefreshCw } from "lucide-react";
 import { CategoryPicker } from "@/components/category-picker";
 import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -113,6 +113,53 @@ function currentBucket(t: Pick<Transaction, "weeklyAllowance" | "monthlyAllowanc
   if (t.monthlyAllowance) return "monthly";
   if (t.unplannedAllowance) return "unplanned";
   return "";
+}
+
+// Standalone "Reviewed" bubble that visually matches the WK/MO/UN/RE
+// BucketBubbles next to it. Lives in amex.tsx (not BucketBubbles)
+// because the Reviewed flag is Amex-page-only — extending the shared
+// BucketFlags type would force the Transactions page to wire up state
+// it doesn't use.
+function ReviewedBubble({
+  on,
+  onClick,
+  disabled,
+  testId,
+}: {
+  on: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  testId?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!disabled) onClick();
+      }}
+      title={on ? "Reviewed — click to unmark" : "Mark as reviewed"}
+      aria-pressed={on}
+      aria-label="Reviewed"
+      disabled={disabled}
+      data-testid={testId}
+      className="flex flex-col items-center gap-0.5 group disabled:opacity-50"
+    >
+      <span
+        className={cn(
+          "h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors",
+          on
+            ? "bg-emerald-600 border-emerald-600 text-white"
+            : "border-muted-foreground/40 text-transparent group-hover:border-foreground",
+        )}
+      >
+        <Check className="h-3 w-3" strokeWidth={3} />
+      </span>
+      <span className="text-[9px] uppercase tracking-widest text-muted-foreground font-medium">
+        RV
+      </span>
+    </button>
+  );
 }
 
 export default function AmexPage() {
@@ -1003,6 +1050,28 @@ export default function AmexPage() {
     });
   };
 
+  const setRowReviewed = async (t: Transaction, next: boolean) => {
+    const patch: Partial<Transaction> = { reviewed: next };
+    await qc.cancelQueries({ queryKey: [`/api/transactions`] });
+    const prev = patchTransactionInCache(t.id, patch);
+    queueBubbleMutation(t.id, async () => {
+      try {
+        const updated = await updateTx.mutateAsync({
+          id: t.id,
+          data: { reviewed: next },
+        });
+        patchTransactionIfMatching(t.id, patch, { reviewed: updated.reviewed });
+      } catch (e) {
+        if (prev) patchTransactionIfMatching(t.id, patch, prev);
+        toast({
+          title: "Couldn't update reviewed",
+          description: (e as Error).message,
+          variant: "destructive",
+        });
+      }
+    });
+  };
+
   const onBubbleToggle = (t: Transaction, bucket: BucketKey, next: boolean) => {
     if (bucket === "reimbursable") {
       setRowReimbursable(t, next);
@@ -1166,6 +1235,43 @@ export default function AmexPage() {
     const label = next === null ? "Cleared owed by on" : `Set owed by to ${next} on`;
     if (failed.length === 0) {
       toast({ title: `${label} ${okCount} transaction${okCount === 1 ? "" : "s"}` });
+    } else {
+      toast({
+        title: `${okCount} updated, ${failed.length} failed`,
+        description: failed[0].err,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const bulkSetReviewed = async (next: boolean) => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const CONCURRENCY = 6;
+    const results: { id: string; ok: boolean; err?: string }[] = [];
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < ids.length) {
+        const i = cursor++;
+        const id = ids[i];
+        try {
+          await updateTx.mutateAsync({ id, data: { reviewed: next } });
+          results.push({ id, ok: true });
+        } catch (e) {
+          results.push({ id, ok: false, err: (e as Error).message });
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker),
+    );
+    invalidateTxns();
+    const okCount = results.filter((r) => r.ok).length;
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length === 0) {
+      toast({
+        title: `${next ? "Marked" : "Unmarked"} ${okCount} as reviewed`,
+      });
     } else {
       toast({
         title: `${okCount} updated, ${failed.length} failed`,
@@ -1619,6 +1725,27 @@ export default function AmexPage() {
             </Button>
           </div>
           <div className="flex items-center gap-1">
+            <span className="text-xs text-blue-900 mr-1">Reviewed:</span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              data-testid="button-bulk-mark-reviewed"
+              onClick={() => bulkSetReviewed(true)}
+            >
+              Mark
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              data-testid="button-bulk-unmark-reviewed"
+              onClick={() => bulkSetReviewed(false)}
+            >
+              Unmark
+            </Button>
+          </div>
+          <div className="flex items-center gap-1">
             <span className="text-xs text-blue-900 mr-1">Owed by:</span>
             <Input
               placeholder="Owed by…"
@@ -1684,7 +1811,11 @@ export default function AmexPage() {
                 {items.map((t) => (
                   <div
                     key={t.id}
-                    className="p-3 flex flex-col gap-2 hover:bg-muted/30 transition-colors"
+                    className={cn(
+                      "p-3 flex flex-col gap-2 hover:bg-muted/30 transition-colors",
+                      t.reviewed && "opacity-50",
+                    )}
+                    data-reviewed={t.reviewed ? "true" : "false"}
                     data-testid={`row-amex-mobile-${t.id}`}
                   >
                     <div className="flex items-start gap-3">
@@ -1755,6 +1886,11 @@ export default function AmexPage() {
                         }}
                         onToggle={(b, next) => onBubbleToggle(t, b, next)}
                       />
+                      <ReviewedBubble
+                        on={t.reviewed}
+                        onClick={() => setRowReviewed(t, !t.reviewed)}
+                        testId={`button-reviewed-mobile-${t.id}`}
+                      />
                       {t.weeklyAllowance && (
                         <Select
                           value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}
@@ -1797,7 +1933,15 @@ export default function AmexPage() {
                 <table className="w-full text-sm min-w-[720px]">
                   <tbody>
                     {items.map((t) => (
-                      <tr key={t.id} className="border-t hover:bg-muted/30 transition-colors">
+                      <tr
+                        key={t.id}
+                        className={cn(
+                          "border-t hover:bg-muted/30 transition-colors",
+                          t.reviewed && "opacity-50",
+                        )}
+                        data-reviewed={t.reviewed ? "true" : "false"}
+                        data-testid={`row-amex-${t.id}`}
+                      >
                         <td className="px-3 py-2 w-8">
                           <Checkbox
                             checked={selected.has(t.id)}
@@ -1875,6 +2019,11 @@ export default function AmexPage() {
                                 reimbursable: t.reimbursable,
                               }}
                               onToggle={(b, next) => onBubbleToggle(t, b, next)}
+                            />
+                            <ReviewedBubble
+                              on={t.reviewed}
+                              onClick={() => setRowReviewed(t, !t.reviewed)}
+                              testId={`button-reviewed-${t.id}`}
                             />
                             {t.weeklyAllowance && (
                               <Select

@@ -26,6 +26,7 @@ export interface TransactionInput {
   unplannedAllowance?: boolean;
   reimbursable?: boolean;
   reimbursed?: boolean;
+  reviewed?: boolean;
   isTransfer?: boolean;
   /** @nullable */
   notes?: string | null;

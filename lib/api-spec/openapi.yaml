@@ -1482,7 +1482,7 @@ components:
 
     Transaction:
       type: object
-      required: [id, occurredOn, description, amount, forecastFlag, weeklyAllowance, monthlyAllowance, unplannedAllowance, reimbursable, reimbursed, isTransfer, source]
+      required: [id, occurredOn, description, amount, forecastFlag, weeklyAllowance, monthlyAllowance, unplannedAllowance, reimbursable, reimbursed, reviewed, isTransfer, source]
       properties:
         id: { type: string }
         occurredOn: { type: string }
@@ -1498,6 +1498,14 @@ components:
         unplannedAllowance: { type: boolean }
         reimbursable: { type: boolean }
         reimbursed: { type: boolean }
+        reviewed:
+          type: boolean
+          description: |
+            Whether the user has marked this transaction as done on the
+            Amex page. Reviewed rows render greyed out so the eye skips
+            over them and focuses on what's left to handle. Defaults to
+            false; toggled explicitly by the user (never auto-set on
+            categorize).
         isTransfer: { type: boolean }
         notes: { type: ["string", "null"] }
         source: { type: string }
@@ -1533,6 +1541,7 @@ components:
         unplannedAllowance: { type: boolean }
         reimbursable: { type: boolean }
         reimbursed: { type: boolean }
+        reviewed: { type: boolean }
         isTransfer: { type: boolean }
         notes: { type: ["string", "null"] }
         source: { type: string }
@@ -1555,6 +1564,7 @@ components:
         unplannedAllowance: { type: boolean }
         reimbursable: { type: boolean }
         reimbursed: { type: boolean }
+        reviewed: { type: boolean }
         isTransfer: { type: boolean }
         notes: { type: ["string", "null"] }
         source: { type: string }

@@ -44,6 +44,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         unplannedAllowance: zod.ZodBoolean;
         reimbursable: zod.ZodBoolean;
         reimbursed: zod.ZodBoolean;
+        reviewed: zod.ZodBoolean;
         isTransfer: zod.ZodBoolean;
         notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         source: zod.ZodString;
@@ -64,6 +65,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         unplannedAllowance: boolean;
         reimbursable: boolean;
         reimbursed: boolean;
+        reviewed: boolean;
         isTransfer: boolean;
         source: string;
         occurredAt?: string | null | undefined;
@@ -88,6 +90,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         unplannedAllowance: boolean;
         reimbursable: boolean;
         reimbursed: boolean;
+        reviewed: boolean;
         isTransfer: boolean;
         source: string;
         occurredAt?: string | null | undefined;
@@ -167,6 +170,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         unplannedAllowance: boolean;
         reimbursable: boolean;
         reimbursed: boolean;
+        reviewed: boolean;
         isTransfer: boolean;
         source: string;
         occurredAt?: string | null | undefined;
@@ -218,6 +222,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         unplannedAllowance: boolean;
         reimbursable: boolean;
         reimbursed: boolean;
+        reviewed: boolean;
         isTransfer: boolean;
         source: string;
         occurredAt?: string | null | undefined;
@@ -301,6 +306,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     unplannedAllowance: zod.ZodBoolean;
     reimbursable: zod.ZodBoolean;
     reimbursed: zod.ZodBoolean;
+    reviewed: zod.ZodBoolean;
     isTransfer: zod.ZodBoolean;
     notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     source: zod.ZodString;
@@ -321,6 +327,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     unplannedAllowance: boolean;
     reimbursable: boolean;
     reimbursed: boolean;
+    reviewed: boolean;
     isTransfer: boolean;
     source: string;
     occurredAt?: string | null | undefined;
@@ -345,6 +352,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     unplannedAllowance: boolean;
     reimbursable: boolean;
     reimbursed: boolean;
+    reviewed: boolean;
     isTransfer: boolean;
     source: string;
     occurredAt?: string | null | undefined;
@@ -374,6 +382,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     unplannedAllowance: zod.ZodBoolean;
     reimbursable: zod.ZodBoolean;
     reimbursed: zod.ZodBoolean;
+    reviewed: zod.ZodBoolean;
     isTransfer: zod.ZodBoolean;
     notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     source: zod.ZodString;
@@ -394,6 +403,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     unplannedAllowance: boolean;
     reimbursable: boolean;
     reimbursed: boolean;
+    reviewed: boolean;
     isTransfer: boolean;
     source: string;
     occurredAt?: string | null | undefined;
@@ -418,6 +428,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     unplannedAllowance: boolean;
     reimbursable: boolean;
     reimbursed: boolean;
+    reviewed: boolean;
     isTransfer: boolean;
     source: string;
     occurredAt?: string | null | undefined;
@@ -446,6 +457,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     unplannedAllowance: zod.ZodOptional<zod.ZodBoolean>;
     reimbursable: zod.ZodOptional<zod.ZodBoolean>;
     reimbursed: zod.ZodOptional<zod.ZodBoolean>;
+    reviewed: zod.ZodOptional<zod.ZodBoolean>;
     isTransfer: zod.ZodOptional<zod.ZodBoolean>;
     notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     source: zod.ZodOptional<zod.ZodString>;
@@ -466,6 +478,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     unplannedAllowance?: boolean | undefined;
     reimbursable?: boolean | undefined;
     reimbursed?: boolean | undefined;
+    reviewed?: boolean | undefined;
     isTransfer?: boolean | undefined;
     notes?: string | null | undefined;
     source?: string | undefined;
@@ -486,6 +499,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     unplannedAllowance?: boolean | undefined;
     reimbursable?: boolean | undefined;
     reimbursed?: boolean | undefined;
+    reviewed?: boolean | undefined;
     isTransfer?: boolean | undefined;
     notes?: string | null | undefined;
     source?: string | undefined;
@@ -514,6 +528,7 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     unplannedAllowance: zod.ZodOptional<zod.ZodBoolean>;
     reimbursable: zod.ZodOptional<zod.ZodBoolean>;
     reimbursed: zod.ZodOptional<zod.ZodBoolean>;
+    reviewed: zod.ZodOptional<zod.ZodBoolean>;
     isTransfer: zod.ZodOptional<zod.ZodBoolean>;
     notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     source: zod.ZodOptional<zod.ZodString>;
@@ -535,6 +550,7 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     unplannedAllowance?: boolean | undefined;
     reimbursable?: boolean | undefined;
     reimbursed?: boolean | undefined;
+    reviewed?: boolean | undefined;
     isTransfer?: boolean | undefined;
     notes?: string | null | undefined;
     source?: string | undefined;
@@ -556,6 +572,7 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     unplannedAllowance?: boolean | undefined;
     reimbursable?: boolean | undefined;
     reimbursed?: boolean | undefined;
+    reviewed?: boolean | undefined;
     isTransfer?: boolean | undefined;
     notes?: string | null | undefined;
     source?: string | undefined;
@@ -579,6 +596,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     unplannedAllowance: zod.ZodBoolean;
     reimbursable: zod.ZodBoolean;
     reimbursed: zod.ZodBoolean;
+    reviewed: zod.ZodBoolean;
     isTransfer: zod.ZodBoolean;
     notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     source: zod.ZodString;
@@ -599,6 +617,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     unplannedAllowance: boolean;
     reimbursable: boolean;
     reimbursed: boolean;
+    reviewed: boolean;
     isTransfer: boolean;
     source: string;
     occurredAt?: string | null | undefined;
@@ -623,6 +642,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     unplannedAllowance: boolean;
     reimbursable: boolean;
     reimbursed: boolean;
+    reviewed: boolean;
     isTransfer: boolean;
     source: string;
     occurredAt?: string | null | undefined;
@@ -3798,6 +3818,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         unplannedAllowance: zod.ZodBoolean;
         reimbursable: zod.ZodBoolean;
         reimbursed: zod.ZodBoolean;
+        reviewed: zod.ZodBoolean;
         isTransfer: zod.ZodBoolean;
         notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         source: zod.ZodString;
@@ -3818,6 +3839,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         unplannedAllowance: boolean;
         reimbursable: boolean;
         reimbursed: boolean;
+        reviewed: boolean;
         isTransfer: boolean;
         source: string;
         occurredAt?: string | null | undefined;
@@ -3842,6 +3864,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         unplannedAllowance: boolean;
         reimbursable: boolean;
         reimbursed: boolean;
+        reviewed: boolean;
         isTransfer: boolean;
         source: string;
         occurredAt?: string | null | undefined;
@@ -4117,6 +4140,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         unplannedAllowance: boolean;
         reimbursable: boolean;
         reimbursed: boolean;
+        reviewed: boolean;
         isTransfer: boolean;
         source: string;
         occurredAt?: string | null | undefined;
@@ -4232,6 +4256,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         unplannedAllowance: boolean;
         reimbursable: boolean;
         reimbursed: boolean;
+        reviewed: boolean;
         isTransfer: boolean;
         source: string;
         occurredAt?: string | null | undefined;

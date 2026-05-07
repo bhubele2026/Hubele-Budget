@@ -51,6 +51,11 @@ export const GetDashboardResponse = zod.object({
       unplannedAllowance: zod.boolean(),
       reimbursable: zod.boolean(),
       reimbursed: zod.boolean(),
+      reviewed: zod
+        .boolean()
+        .describe(
+          "Whether the user has marked this transaction as done on the\nAmex page. Reviewed rows render greyed out so the eye skips\nover them and focuses on what's left to handle. Defaults to\nfalse; toggled explicitly by the user (never auto-set on\ncategorize).\n",
+        ),
       isTransfer: zod.boolean(),
       notes: zod.string().nullish(),
       source: zod.string(),
@@ -126,6 +131,11 @@ export const ListTransactionsResponseItem = zod.object({
   unplannedAllowance: zod.boolean(),
   reimbursable: zod.boolean(),
   reimbursed: zod.boolean(),
+  reviewed: zod
+    .boolean()
+    .describe(
+      "Whether the user has marked this transaction as done on the\nAmex page. Reviewed rows render greyed out so the eye skips\nover them and focuses on what's left to handle. Defaults to\nfalse; toggled explicitly by the user (never auto-set on\ncategorize).\n",
+    ),
   isTransfer: zod.boolean(),
   notes: zod.string().nullish(),
   source: zod.string(),
@@ -165,6 +175,7 @@ export const CreateTransactionBody = zod.object({
   unplannedAllowance: zod.boolean().optional(),
   reimbursable: zod.boolean().optional(),
   reimbursed: zod.boolean().optional(),
+  reviewed: zod.boolean().optional(),
   isTransfer: zod.boolean().optional(),
   notes: zod.string().nullish(),
   source: zod.string().optional(),
@@ -199,6 +210,7 @@ export const UpdateTransactionBody = zod.object({
   unplannedAllowance: zod.boolean().optional(),
   reimbursable: zod.boolean().optional(),
   reimbursed: zod.boolean().optional(),
+  reviewed: zod.boolean().optional(),
   isTransfer: zod.boolean().optional(),
   notes: zod.string().nullish(),
   source: zod.string().optional(),
@@ -237,6 +249,11 @@ export const UpdateTransactionResponse = zod
     unplannedAllowance: zod.boolean(),
     reimbursable: zod.boolean(),
     reimbursed: zod.boolean(),
+    reviewed: zod
+      .boolean()
+      .describe(
+        "Whether the user has marked this transaction as done on the\nAmex page. Reviewed rows render greyed out so the eye skips\nover them and focuses on what's left to handle. Defaults to\nfalse; toggled explicitly by the user (never auto-set on\ncategorize).\n",
+      ),
     isTransfer: zod.boolean(),
     notes: zod.string().nullish(),
     source: zod.string(),
@@ -1736,6 +1753,11 @@ export const GetForecastResponse = zod.object({
       unplannedAllowance: zod.boolean(),
       reimbursable: zod.boolean(),
       reimbursed: zod.boolean(),
+      reviewed: zod
+        .boolean()
+        .describe(
+          "Whether the user has marked this transaction as done on the\nAmex page. Reviewed rows render greyed out so the eye skips\nover them and focuses on what's left to handle. Defaults to\nfalse; toggled explicitly by the user (never auto-set on\ncategorize).\n",
+        ),
       isTransfer: zod.boolean(),
       notes: zod.string().nullish(),
       source: zod.string(),

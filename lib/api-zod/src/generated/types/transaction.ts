@@ -26,6 +26,13 @@ export interface Transaction {
   unplannedAllowance: boolean;
   reimbursable: boolean;
   reimbursed: boolean;
+  /** Whether the user has marked this transaction as done on the
+Amex page. Reviewed rows render greyed out so the eye skips
+over them and focuses on what's left to handle. Defaults to
+false; toggled explicitly by the user (never auto-set on
+categorize).
+ */
+  reviewed: boolean;
   isTransfer: boolean;
   /** @nullable */
   notes?: string | null;

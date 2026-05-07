@@ -1588,6 +1588,23 @@ export declare const transactionsTable: import("drizzle-orm/pg-core").PgTableWit
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        reviewed: import("drizzle-orm/pg-core").PgColumn<{
+            name: "reviewed";
+            tableName: "transactions";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         isTransfer: import("drizzle-orm/pg-core").PgColumn<{
             name: "is_transfer";
             tableName: "transactions";
@@ -3850,6 +3867,7 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
     unplannedAllowance: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     reimbursable: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     reimbursed: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
+    reviewed: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     isTransfer: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
     importBatchId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodUUID>>;
     source: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
