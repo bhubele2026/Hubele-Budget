@@ -365,6 +365,74 @@ describe("computeCashSignal — rescheduled resolutions", () => {
   });
 });
 
+describe("computeCashSignal — skipped resolutions", () => {
+  // (#480 / #490) A 'skipped' resolution must remove the occurrence
+  // from BOTH the projected balance and the per-day `events` markers.
+  // Pin both behaviors here so a future refactor of the projection
+  // can't quietly bring the skipped occurrence back.
+  it("drops a skipped occurrence from the projection AND from expenseEvents", async () => {
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-04-01T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    // Two events expected in the window: 04-15 and 05-15, $200 each.
+    const item = await addRecurring({ dayOfMonth: 15, amount: "200" });
+
+    await db.insert(forecastResolutionsTable).values({
+      userId: TEST_USER,
+      recurringItemId: item.id,
+      occurrenceDate: "2026-04-15",
+      status: "skipped",
+    });
+
+    const sig = await computeCashSignal(TEST_USER, {
+      fromDate: "2026-04-01",
+      horizonDays: 60, // covers both 04-15 and 05-15
+    });
+
+    // Only 05-15 hits: 1000 - 200 = 800. Skipped 04-15 must NOT
+    // contribute to projectedExpenses or drag the balance down.
+    expect(sig.endingBalance).toBe("800.00");
+    expect(sig.projectedExpenses).toBe("200.00");
+    expect(sig.lowestProjected).toBe("800.00");
+    expect(sig.lowestDate).toBe("2026-05-15");
+    // The chart's per-day events list must omit 04-15 entirely (no
+    // marker), while 05-15 is still present.
+    const eventDates = (sig.events ?? []).map((e) => e.date);
+    expect(eventDates).not.toContain("2026-04-15");
+    expect(eventDates).toContain("2026-05-15");
+  });
+
+  it("control: without the skipped resolution, the same 04-15 occurrence IS included", async () => {
+    // Same setup as the skip case, minus the resolution row. If the
+    // skip filter regresses, the previous test would still pass when
+    // the occurrence is silently kept — this control fails loudly to
+    // prove the only difference between included and excluded is the
+    // 'skipped' resolution row.
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-04-01T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await addRecurring({ dayOfMonth: 15, amount: "200" });
+
+    const sig = await computeCashSignal(TEST_USER, {
+      fromDate: "2026-04-01",
+      horizonDays: 60,
+    });
+
+    // Both 04-15 and 05-15 apply: 1000 - 200 - 200 = 600.
+    expect(sig.endingBalance).toBe("600.00");
+    expect(sig.projectedExpenses).toBe("400.00");
+    expect(sig.lowestProjected).toBe("600.00");
+    expect(sig.lowestDate).toBe("2026-05-15");
+    const eventDates = (sig.events ?? []).map((e) => e.date);
+    expect(eventDates).toContain("2026-04-15");
+    expect(eventDates).toContain("2026-05-15");
+  });
+});
+
 describe("computeCashSignal — matched-txn bank filtering", () => {
   async function addPlaidAccount(opts: {
     externalId: string;
