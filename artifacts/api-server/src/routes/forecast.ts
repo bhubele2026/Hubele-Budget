@@ -228,15 +228,25 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
       );
     }
   }
-  // (#475-followup) Heal cross-account transaction duplicates left behind
-  // by repeated re-links of the same bank: each re-link minted a fresh
-  // `plaid_accounts.account_id` and Plaid issued fresh
-  // `plaid_transaction_id`s, so neither the per-account dedupe nor the
-  // `transactions_plaid_txn_uq` index catches the resulting twins. This
-  // collapses rows by (bankFamily, occurredOn, amount, normalizedDesc)
-  // across all of a user's `plaid_account_id` partitions. Idempotent:
-  // a clean account is a no-op (the inner transaction reads, finds no
-  // duplicate groups, and returns).
+  // (#475-followup) Two-stage transaction dedupe heal:
+  //   1. Per-account dedupe (#452): collapses duplicate rows that
+  //      share (plaidAccountId, occurredOn, amount, normalizedDesc).
+  //      This is the dominant case once `dedupePlaidAccountsForUser`
+  //      has already collapsed duplicate plaid_accounts rows — every
+  //      twin is now stacked on the same surviving account_id.
+  //   2. Cross-account dedupe: collapses twins that still live under
+  //      different `plaid_account_id` strings (an orphan + a live
+  //      account from a relink that hasn't been collapsed yet).
+  // Both passes are idempotent — clean data is a no-op. We run them
+  // best-effort so the page never fails just because dedupe choked.
+  try {
+    await dedupeTransactionsForUser(userId);
+  } catch (err) {
+    console.error(
+      "[forecast] per-account transaction dedupe failed",
+      { userId, err: err instanceof Error ? err.message : String(err) },
+    );
+  }
   try {
     await dedupeTransactionsAcrossAccountsForUser(userId);
   } catch (err) {
