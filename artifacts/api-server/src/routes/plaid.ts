@@ -16,6 +16,7 @@ import {
   getPlaidEnv,
   isPlaidConfigured,
   isValidPlaidAccessToken,
+  isSyntheticPlaidItem,
   MALFORMED_PLAID_TOKEN_MESSAGE,
 } from "../lib/plaid";
 
@@ -1011,10 +1012,16 @@ router.patch(
 );
 
 router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
-  const items = await db
+  const allItems = await db
     .select()
     .from(plaidItemsTable)
     .where(eq(plaidItemsTable.userId, req.userId!));
+  // (#398) Hide synthetic seed rows (April-2026 Chase placeholder)
+  // from Linked Banks / reauth banner / sync-button chip — they were
+  // never real Plaid connections and should never surface a "needs
+  // reconnecting" CTA. The bank-snapshot tile reads forecast_settings
+  // directly, so filtering here doesn't break the dashboard.
+  const items = allItems.filter((it) => !isSyntheticPlaidItem(it));
   const accts = await db
     .select()
     .from(plaidAccountsTable)

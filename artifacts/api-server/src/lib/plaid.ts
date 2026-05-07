@@ -59,6 +59,39 @@ export function isValidPlaidAccessToken(
 export const MALFORMED_PLAID_TOKEN_MESSAGE =
   "Stored Plaid credential is malformed — please reconnect this bank.";
 
+/**
+ * (#398) Sentinel access_token written by the April-2026 Chase seed
+ * (`aprilChaseSeed.ts`) to anchor the bank-snapshot tile when the user
+ * has not yet completed real Plaid OAuth. Synthetic seed rows are not
+ * real Plaid connections — they exist only as a foreign-key target
+ * for plaid_accounts so the dashboard snapshot has a stable home.
+ *
+ * Combined with `isSyntheticPlaidItem` below, every code path that
+ * would otherwise try to call Plaid with this value (sync sweep,
+ * /transactions/sync, consent /item/get, daily malformed-token
+ * scan) silently skips these rows. They never appear in /plaid/items
+ * either, so the reauth banner / "needs reconnecting" chip cannot
+ * fire on a row that was never a real connection in the first place.
+ */
+export const SYNTHETIC_PLAID_ACCESS_TOKEN_SENTINEL = "synthetic-no-access";
+
+/**
+ * Identifies a synthetic seed row (Chase placeholder created by
+ * aprilChaseSeed.ts before the user has completed real Plaid OAuth).
+ * Two independent signals so cleanup of either column alone still
+ * classifies the row correctly:
+ *   - `itemId` text starts with `seed-` (matches SYNTHETIC_ITEM_ID
+ *     constants in seed scripts), OR
+ *   - `accessToken` equals SYNTHETIC_PLAID_ACCESS_TOKEN_SENTINEL.
+ */
+export function isSyntheticPlaidItem(
+  item: { itemId: string | null | undefined; accessToken: string | null | undefined },
+): boolean {
+  const id = item.itemId ?? "";
+  const tok = item.accessToken ?? "";
+  return id.startsWith("seed-") || tok === SYNTHETIC_PLAID_ACCESS_TOKEN_SENTINEL;
+}
+
 export function getPlaidEnv(): PlaidEnv {
   const raw = process.env.PLAID_ENV;
   if (!raw) {

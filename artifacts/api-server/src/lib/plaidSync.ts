@@ -13,6 +13,7 @@ import {
   plaid,
   institutionSlug,
   isValidPlaidAccessToken,
+  isSyntheticPlaidItem,
   MALFORMED_PLAID_TOKEN_MESSAGE,
   type PlaidTxn,
 } from "./plaid";
@@ -325,6 +326,26 @@ export async function syncPlaidItem(
     };
   }
 
+  // (#398) Synthetic seed rows (April-2026 Chase placeholder) are not
+  // real Plaid connections — they exist only to anchor the bank
+  // snapshot tile before the user completes OAuth. Silently no-op
+  // before the malformed-token guard fires so we never write a bogus
+  // ITEM_LOGIN_REQUIRED chip / sync_attempt row against them. Returns
+  // a benign zero-row SyncResult; callers treat it the same as "no
+  // changes since last sync".
+  if (isSyntheticPlaidItem(item)) {
+    return {
+      itemId: item.itemId,
+      plaidItemRowId: item.id,
+      institutionName: item.institutionName,
+      added: 0,
+      modified: 0,
+      removed: 0,
+      autoCategorized: 0,
+      ruleAttributions: [],
+      error: null,
+    };
+  }
   // (#366) Centralized malformed-access-token guard. A bad value in
   // `plaid_items.access_token` (legacy env-mismatch row, truncated
   // string, etc.) would otherwise cascade into an opaque Plaid 400 on
@@ -1285,6 +1306,19 @@ export async function refreshConsentExpirationForItem(
       error: "Item not found",
     };
   }
+  // (#398) Synthetic seed rows have no upstream Plaid item — skip the
+  // /item/get call (and the malformed-token flagging) entirely.
+  if (isSyntheticPlaidItem(item)) {
+    return {
+      itemRowId: item.id,
+      itemId: item.itemId,
+      institutionName: item.institutionName,
+      consentExpirationAt: null,
+      consentExpirationLastRefreshedAt: null,
+      changed: false,
+      error: null,
+    };
+  }
   // (#366) Same malformed-token guard as syncPlaidItem — never invoke
   // /item/get with a value that can't possibly be a valid Plaid token.
   // Marks the item as needing reconnect so the daily cron's failure
@@ -1444,6 +1478,12 @@ export async function flagMalformedAccessTokens(): Promise<{
   let flagged = 0;
   const flaggedItems: FlaggedMalformedItem[] = [];
   for (const it of items) {
+    // (#398) Don't count synthetic seed rows as malformed — they're a
+    // known placeholder for the bank-snapshot tile, not a real Plaid
+    // connection. Treating them as "flagged" inflates the daily
+    // health-check spike alert (#371) and re-poisons /plaid/items
+    // every cron tick.
+    if (isSyntheticPlaidItem(it)) continue;
     if (isValidPlaidAccessToken(it.accessToken)) continue;
     flagged++;
     flaggedItems.push({

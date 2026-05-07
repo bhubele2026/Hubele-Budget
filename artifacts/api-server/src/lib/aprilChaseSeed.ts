@@ -9,6 +9,7 @@ import {
   forecastSettingsTable,
 } from "@workspace/db";
 import { categorize, loadUserRules } from "./autoCategorize";
+import { SYNTHETIC_PLAID_ACCESS_TOKEN_SENTINEL } from "./plaid";
 
 type SeedRow = {
   idx: number;
@@ -343,7 +344,13 @@ async function ensureChaseAccount(userId: string): Promise<{
       .values({
         userId,
         itemId: SYNTHETIC_ITEM_ID,
-        accessToken: "synthetic-no-access",
+        // (#398) Sentinel value classified as a synthetic seed by
+        // isSyntheticPlaidItem(). Sync, the daily malformed-token
+        // sweep, the consent-refresh job, and /plaid/items all
+        // skip rows carrying this token, so we never light up a
+        // bogus "Chase needs reconnecting" banner against a row
+        // that was never a real Plaid connection.
+        accessToken: SYNTHETIC_PLAID_ACCESS_TOKEN_SENTINEL,
         institutionId: null,
         institutionName: "Chase",
         institutionSlug: "chase",
