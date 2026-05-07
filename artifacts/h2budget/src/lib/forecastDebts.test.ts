@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { filterEventsByPayoff, type PayoffInfo } from "./forecastDebts";
+import {
+  filterEventsByPayoff,
+  linkRecurringToDebts,
+  type PayoffInfo,
+} from "./forecastDebts";
 import type { CashEvent } from "./forecast";
 
 function ev(itemId: string, date: string, amount: number): CashEvent {
@@ -59,5 +63,59 @@ describe("filterEventsByPayoff", () => {
     const events = [ev("rentItem", "2026-09-01", -2000)];
     const out = filterEventsByPayoff(events, new Map(), payoffs);
     expect(out).toEqual(events);
+  });
+});
+
+describe("linkRecurringToDebts", () => {
+  it("regression: does NOT link a non-debt bill to a debt just because the dollar amount matches", () => {
+    // State Farm Insurance is a recurring premium, not a debt payment.
+    // Its monthly amount happened to equal the Synchrony / Ashley
+    // Furniture minimum payment within $0.50, which previously caused
+    // it to inherit the Avalanche payoff badge ("ends Jun 2026").
+    const debts = [
+      { id: "synchrony", name: "Ashley Furniture / Synchrony", minPayment: "125.00" },
+    ];
+    const recurring = [
+      {
+        id: "rec-statefarm",
+        name: "State Farm Insurance",
+        amount: "125.00",
+        kind: "expense",
+        active: true,
+      },
+    ];
+    const out = linkRecurringToDebts(debts, recurring);
+    expect(out.has("rec-statefarm")).toBe(false);
+  });
+
+  it("links by explicit debtId on the recurring item", () => {
+    const debts = [{ id: "d1", name: "Loan", minPayment: "50" }];
+    const recurring = [
+      {
+        id: "r1",
+        name: "Misc",
+        amount: "75",
+        kind: "expense",
+        active: true,
+        debtId: "d1",
+      },
+    ];
+    const out = linkRecurringToDebts(debts, recurring);
+    expect(out.get("r1")).toBe("d1");
+  });
+
+  it("links when the recurring name overlaps the debt name", () => {
+    const debts = [{ id: "disco", name: "Discover", minPayment: "40" }];
+    const recurring = [
+      {
+        id: "r-disco",
+        name: "Discover Card Payment",
+        amount: "40",
+        kind: "expense",
+        active: true,
+      },
+    ];
+    const out = linkRecurringToDebts(debts, recurring);
+    expect(out.get("r-disco")).toBe("disco");
   });
 });

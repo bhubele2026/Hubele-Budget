@@ -38,10 +38,27 @@ function ymOf(d: Date): string {
 }
 
 /**
- * Heuristic match: each recurring item -> debt id (or none).
- * Prefer name match (normalized substring either direction, length >= 3).
- * Fallback to amount match where recurring amount == debt minPayment within $0.50,
- * but only if the debt has no name-matched recurring item already.
+ * Match each recurring item to a debt id (or none) so the Avalanche
+ * "ends Mon YYYY" payoff badge / Bills payoff filter can stop the row
+ * once the linked debt is killed by the simulation.
+ *
+ * Two passes only — both require evidence that the recurring item is
+ * actually a debt payment:
+ *   Pass 0 — explicit `debtId` on the recurring item wins (manual link
+ *            from the Bills / Debts UI).
+ *   Pass 1 — name overlap (normalized substring either direction,
+ *            length >= 3). Catches the common case where the user
+ *            named the bill after the debt ("Discover" recurring →
+ *            "Discover" debt).
+ *
+ * An earlier pass that linked any unmatched recurring item to any
+ * unlinked debt whose minimum payment was within $0.50 of the
+ * recurring amount was removed: that misfired on bills like "State
+ * Farm Insurance" whose monthly premium happens to equal a credit
+ * card's minimum payment and inherited the wrong "ends Mon YYYY"
+ * payoff badge. Coincidental dollar amounts are not a safe signal —
+ * if a recurring item really is a debt payment and the names don't
+ * match, the user should set the explicit `debtId` link.
  */
 export function linkRecurringToDebts(
   debts: DebtLite[],
@@ -56,21 +73,18 @@ export function linkRecurringToDebts(
   const debtNorms = activeDebts.map((d) => ({
     debt: d,
     norm: normalize(d.name),
-    min: Math.abs(Number(d.minPayment) || 0),
   }));
 
-  const matchedDebtIds = new Set<string>();
   const activeDebtIds = new Set(activeDebts.map((d) => d.id));
 
   // Pass 0: explicit debtId on the recurring item wins.
   for (const r of activeRecur) {
     if (r.debtId && activeDebtIds.has(r.debtId)) {
       out.set(r.id, r.debtId);
-      matchedDebtIds.add(r.debtId);
     }
   }
 
-  // Pass 1: name match
+  // Pass 1: name overlap (longest debt name wins on ties).
   for (const r of activeRecur) {
     if (out.has(r.id)) continue;
     const rn = normalize(r.name);
@@ -84,21 +98,6 @@ export function linkRecurringToDebts(
     }
     if (best) {
       out.set(r.id, best.debt.id);
-      matchedDebtIds.add(best.debt.id);
-    }
-  }
-
-  // Pass 2: amount match for debts not yet linked
-  for (const r of activeRecur) {
-    if (out.has(r.id)) continue;
-    const ramt = Math.abs(Number(r.amount) || 0);
-    if (ramt <= 0) continue;
-    const candidates = debtNorms.filter(
-      (d) => !matchedDebtIds.has(d.debt.id) && Math.abs(d.min - ramt) <= 0.5,
-    );
-    if (candidates.length === 1) {
-      out.set(r.id, candidates[0].debt.id);
-      matchedDebtIds.add(candidates[0].debt.id);
     }
   }
 
