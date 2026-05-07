@@ -360,6 +360,7 @@ function MonthlyLikeSection({
   viewMonth,
   today,
   selectedSources,
+  resolvedUnplannedTxnIds,
 }: {
   title: string;
   bucket: "monthly" | "unplanned";
@@ -367,6 +368,7 @@ function MonthlyLikeSection({
   viewMonth: Date;
   today: Date;
   selectedSources: ReadonlySet<string>;
+  resolvedUnplannedTxnIds?: ReadonlySet<string>;
 }) {
   const monthKey = useMemo(
     () => `${viewMonth.getFullYear()}-${String(viewMonth.getMonth() + 1).padStart(2, "0")}`,
@@ -383,14 +385,18 @@ function MonthlyLikeSection({
   const { total, recent } = useMemo(() => {
     const filtered = transactions.filter((t) => {
       if (!selectedSources.has(dashboardSourceLabel(t.source))) return false;
-      const matches = bucket === "monthly" ? t.monthlyAllowance : t.unplannedAllowance;
+      const matches =
+        bucket === "monthly"
+          ? t.monthlyAllowance
+          : t.unplannedAllowance ||
+            !!resolvedUnplannedTxnIds?.has(t.id);
       if (!matches) return false;
       return t.occurredOn >= monthStartISO && t.occurredOn <= monthEndISO;
     });
     const sum = filtered.reduce((s, t) => s + expenseAmount(t), 0);
     const sorted = [...filtered].sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
     return { total: sum, recent: sorted };
-  }, [transactions, bucket, monthStartISO, monthEndISO, selectedSources]);
+  }, [transactions, bucket, monthStartISO, monthEndISO, selectedSources, resolvedUnplannedTxnIds]);
 
   const cap = editor.saved;
   const overspent = cap > 0 && total > cap;
@@ -1448,10 +1454,19 @@ export function detectChipSources(
   transactions: Transaction[],
   monthStartISO: string,
   monthEndISO: string,
+  resolvedUnplannedTxnIds?: ReadonlySet<string>,
 ): string[] {
   const set = new Set<string>();
   for (const t of transactions) {
-    const tagged = t.weeklyAllowance || t.monthlyAllowance || t.unplannedAllowance;
+    // (#482) A txn marked Unplanned in the forecast inbox is "tagged"
+    // for chip purposes too — otherwise the only Chase txn the user
+    // marked unplanned this month would not surface a Chase chip and
+    // they could not toggle it on to see the roll-up.
+    const tagged =
+      t.weeklyAllowance ||
+      t.monthlyAllowance ||
+      t.unplannedAllowance ||
+      !!resolvedUnplannedTxnIds?.has(t.id);
     if (!tagged) continue;
     if (t.occurredOn < monthStartISO || t.occurredOn > monthEndISO) continue;
     set.add(dashboardSourceLabel(t.source));
@@ -1522,9 +1537,11 @@ function SourceChip({
 export function DashboardMonthlyBuckets({
   today,
   transactions,
+  resolvedUnplannedTxnIds,
 }: {
   today: Date;
   transactions: Transaction[];
+  resolvedUnplannedTxnIds?: ReadonlySet<string>;
 }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const viewMonth = useMemo(
@@ -1569,8 +1586,14 @@ export function DashboardMonthlyBuckets({
   }, [selectedSources]);
 
   const detectedSources = useMemo(
-    () => detectChipSources(transactions, monthStartISO, monthEndISO),
-    [transactions, monthStartISO, monthEndISO],
+    () =>
+      detectChipSources(
+        transactions,
+        monthStartISO,
+        monthEndISO,
+        resolvedUnplannedTxnIds,
+      ),
+    [transactions, monthStartISO, monthEndISO, resolvedUnplannedTxnIds],
   );
 
   // One-shot migration from the legacy single-toggle key (#28): once we've
@@ -1671,6 +1694,7 @@ export function DashboardMonthlyBuckets({
         viewMonth={viewMonth}
         today={today}
         selectedSources={selectedSources}
+        resolvedUnplannedTxnIds={resolvedUnplannedTxnIds}
       />
     </>
   );
@@ -1752,6 +1776,23 @@ export default function DashboardPage() {
   const monthlyTagged = useMemo(() => monthTxns ?? [], [monthTxns]);
   const reimbursementsAll = useMemo(() => reimbTxns ?? [], [reimbTxns]);
 
+  // (#482) Roll forecast-inbox "Mark Unplanned" actions into the dashboard's
+  // Unplanned spending bucket. The forecast write path stamps a resolution
+  // of `ignored_unforecasted` (legacy `unplanned`) against the bank txn's
+  // id; surface that set so MonthlyLikeSection can include those txns
+  // alongside the manually-tagged `unplannedAllowance` rows.
+  const resolvedUnplannedTxnIds = useMemo(() => {
+    const ids = new Set<string>();
+    const rs = forecastData?.resolutions ?? [];
+    for (const r of rs) {
+      if (!r.matchedTxnId) continue;
+      if (r.status === "ignored_unforecasted" || r.status === "unplanned") {
+        ids.add(r.matchedTxnId);
+      }
+    }
+    return ids;
+  }, [forecastData?.resolutions]);
+
   if (isLoading || !data) {
     return (
       <div className="space-y-6">
@@ -1781,6 +1822,7 @@ export default function DashboardPage() {
       <DashboardMonthlyBuckets
         today={today}
         transactions={monthlyTagged}
+        resolvedUnplannedTxnIds={resolvedUnplannedTxnIds}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
