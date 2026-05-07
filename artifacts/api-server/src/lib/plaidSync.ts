@@ -305,6 +305,12 @@ export async function syncPlaidItem(
         eq(plaidItemsTable.userId, userId),
       ),
     );
+  // (#408) Capture pre-call health so a sync that successfully heals an
+  // error→healthy transition can chase it with a one-shot
+  // /transactions/get gap-backfill against the window that elapsed
+  // while the item was broken — the cursor sync alone won't surface
+  // anything Plaid advanced past during the outage.
+  const wasUnhealthy = !!item?.lastSyncErrorCode;
   if (!item) {
     return {
       itemId: itemRowId,
@@ -962,11 +968,40 @@ export async function syncPlaidItem(
         lastOccurredOn = t.date;
       }
     }
+    // (#408) Heal-driven gap backfill. When this sync transitioned the
+    // item from error → healthy (chip set on entry, cleared above by
+    // the cursor-sync write), chase with a /transactions/get window
+    // pull per account so any rows Plaid advanced past while the
+    // access_token was malformed land now instead of waiting for the
+    // user to notice an empty May. The cursor alone can skip that
+    // window because Plaid moved it forward during the outage. Result
+    // counts roll into the SyncResult so the post-link panel reports
+    // the full added total.
+    let backfillAdded = 0;
+    let backfillRange: { min: string; max: string } | null = null;
+    if (wasUnhealthy) {
+      try {
+        const bf = await runGapBackfillForItem(userId, itemRowId);
+        backfillAdded = bf.added;
+        backfillRange = bf.importedDateRange;
+      } catch (e) {
+        logger.warn(
+          { userId, itemRowId, err: e },
+          "[plaid-sync] gap backfill after heal failed (non-fatal)",
+        );
+      }
+    }
+    let mergedMin: string | null = insertedMinDate as string | null;
+    let mergedMax: string | null = insertedMaxDate as string | null;
+    if (backfillRange) {
+      if (mergedMin === null || backfillRange.min < mergedMin) mergedMin = backfillRange.min;
+      if (mergedMax === null || backfillRange.max > mergedMax) mergedMax = backfillRange.max;
+    }
     return {
       itemId: item.itemId,
       plaidItemRowId: itemRowId,
       institutionName: item.institutionName,
-      added: added.length,
+      added: added.length + backfillAdded,
       modified: modified.length,
       removed: removed.length,
       autoCategorized,
@@ -974,8 +1009,8 @@ export async function syncPlaidItem(
       // (#403) Min/max date among the rows we actually wrote — null
       // when nothing was inserted.
       importedDateRange:
-        insertedMinDate && insertedMaxDate
-          ? { min: insertedMinDate, max: insertedMaxDate }
+        mergedMin && mergedMax
+          ? { min: mergedMin, max: mergedMax }
           : null,
       error: balanceRefreshError,
       lastOccurredOn,
@@ -1430,6 +1465,329 @@ export async function flagMalformedAccessTokens(): Promise<{
     );
   }
   return { scanned: items.length, flagged, flaggedItems };
+}
+
+/**
+ * (#408) One-shot date-window backfill via Plaid's /transactions/get
+ * for an item that just transitioned from a malformed-token / re-auth
+ * error state back to healthy. The cursor-based /transactions/sync
+ * loop in {@link syncPlaidItem} alone does NOT recover transactions
+ * Plaid advanced past while the access_token was unusable: the cursor
+ * was server-stamped at the last successful sync, and Plaid's sync
+ * stream only replays from there forward — anything that *was already
+ * past* the cursor when sync next ran is gone.
+ *
+ * For each account on the item we compute `lastBankTxOn` (the newest
+ * Plaid-sourced occurredOn on file for that account), then ask
+ * /transactions/get for `(lastBankTxOn, today]`. Returned rows are
+ * upserted with `onConflictDoUpdate` keyed on plaid_transaction_id so
+ * a row already pulled by the cursor sync becomes a no-op write
+ * (idempotent — running this multiple times is safe). The same
+ * ±7-day merge against unattached manual rows that the first-sync
+ * gate uses runs here too so a manual entry the user added during
+ * the outage is adopted in place instead of duplicated.
+ *
+ * Best-effort: any per-account or per-page failure is logged and the
+ * scan continues — backfill must never poison the wrapping sync.
+ */
+export async function runGapBackfillForItem(
+  userId: string,
+  itemRowId: string,
+  opts: { today?: Date } = {},
+): Promise<{
+  added: number;
+  importedDateRange: { min: string; max: string } | null;
+  perAccount: Array<{
+    externalAcctId: string;
+    start: string;
+    end: string;
+    added: number;
+  }>;
+}> {
+  const [item] = await db
+    .select()
+    .from(plaidItemsTable)
+    .where(
+      and(
+        eq(plaidItemsTable.id, itemRowId),
+        eq(plaidItemsTable.userId, userId),
+      ),
+    );
+  if (!item) {
+    return { added: 0, importedDateRange: null, perAccount: [] };
+  }
+  if (!isValidPlaidAccessToken(item.accessToken)) {
+    return { added: 0, importedDateRange: null, perAccount: [] };
+  }
+  const slug = item.institutionSlug || institutionSlug(item.institutionName);
+  const source = `plaid:${slug}`;
+  const rules = await loadUserRules(userId);
+
+  const accounts = await db
+    .select()
+    .from(plaidAccountsTable)
+    .where(
+      and(
+        eq(plaidAccountsTable.itemId, itemRowId),
+        eq(plaidAccountsTable.userId, userId),
+      ),
+    );
+  if (accounts.length === 0) {
+    return { added: 0, importedDateRange: null, perAccount: [] };
+  }
+
+  const linkedDebts = await db
+    .select({
+      debtId: debtsTable.id,
+      plaidAccountRowId: debtsTable.plaidAccountId,
+    })
+    .from(debtsTable)
+    .where(eq(debtsTable.userId, userId));
+  const debtIdByExternal = new Map<string, string>();
+  const debtIdsByAcctRowId = new Map<string, string[]>();
+  for (const d of linkedDebts) {
+    if (!d.plaidAccountRowId) continue;
+    const acct = accounts.find((a) => a.id === d.plaidAccountRowId);
+    if (acct) {
+      debtIdByExternal.set(acct.accountId, d.debtId);
+      const arr = debtIdsByAcctRowId.get(acct.id) ?? [];
+      arr.push(d.debtId);
+      debtIdsByAcctRowId.set(acct.id, arr);
+    }
+  }
+  // (#408) Mirror first-sync merge scope handling — without this, a
+  // checking-account backfill would not adopt unattached manual rows
+  // the user added during the outage and could insert duplicate
+  // Plaid rows at the same date/amount.
+  const [forecastSettings] = await db
+    .select()
+    .from(forecastSettingsTable)
+    .where(eq(forecastSettingsTable.userId, userId));
+  const checkingAcctRowId = forecastSettings?.bankSnapshotAccountId ?? null;
+
+  const today = opts.today ?? new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+
+  const addDay = (ymd: string): string => {
+    const d = parseISO(ymd);
+    return fmtISO(addDays(d, 1));
+  };
+
+  let totalAdded = 0;
+  let minDate: string | null = null;
+  let maxDate: string | null = null;
+  const perAccount: Array<{
+    externalAcctId: string;
+    start: string;
+    end: string;
+    added: number;
+  }> = [];
+
+  for (const acct of accounts) {
+    const externalAcctId = acct.accountId;
+    // Newest Plaid-sourced row for this account on file. Source is
+    // matched via the plaid_account_id column rather than `source`
+    // since rows merged in from manual entries also carry that fk.
+    const [latest] = await db
+      .select({ occurredOn: transactionsTable.occurredOn })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.userId, userId),
+          eq(transactionsTable.plaidAccountId, externalAcctId),
+        ),
+      )
+      .orderBy(sql`${transactionsTable.occurredOn} desc`)
+      .limit(1);
+    const lastBankTxOn = latest?.occurredOn ?? null;
+    let startStr: string | null = null;
+    if (lastBankTxOn) {
+      startStr = addDay(lastBankTxOn);
+    } else if (acct.importCutoffDate) {
+      startStr = addDay(acct.importCutoffDate);
+    }
+    if (!startStr || startStr > todayStr) {
+      perAccount.push({
+        externalAcctId,
+        start: startStr ?? "",
+        end: todayStr,
+        added: 0,
+      });
+      continue;
+    }
+
+    let acctAdded = 0;
+    try {
+      const all: PlaidTxn[] = [];
+      let offset = 0;
+      const pageSize = 500;
+      // Hard cap on pages to bound a runaway loop in case of a
+      // malformed Plaid response.
+      for (let page = 0; page < 20; page++) {
+        const resp = await plaid().transactionsGet({
+          access_token: item.accessToken,
+          start_date: startStr,
+          end_date: todayStr,
+          options: {
+            account_ids: [externalAcctId],
+            count: pageSize,
+            offset,
+          },
+        });
+        const batch = (resp.data.transactions ?? []) as PlaidTxn[];
+        all.push(...batch);
+        const total = (resp.data as { total_transactions?: number })
+          .total_transactions;
+        if (
+          batch.length < pageSize ||
+          (typeof total === "number" && all.length >= total)
+        ) {
+          break;
+        }
+        offset += batch.length;
+      }
+
+      for (const t of all) {
+        const description = t.merchant_name || t.name || "(no description)";
+        const pfc = (t as unknown as {
+          personal_finance_category?: { primary?: string; detailed?: string } | null;
+        }).personal_finance_category;
+        const cat = categorize(
+          {
+            description,
+            pfcPrimary: pfc?.primary ?? null,
+            pfcDetailed: pfc?.detailed ?? null,
+          },
+          rules,
+        );
+        const signedAmount = plaidAmountToSigned(t);
+        const linkedDebtId = debtIdByExternal.get(t.account_id) ?? null;
+        const debtId =
+          linkedDebtId && Number(signedAmount) > 0 ? linkedDebtId : null;
+
+        // ±7-day merge with an unattached manual row (same
+        // userId+amount+date+source-scope, plaidTransactionId NULL).
+        // Mirrors the first-sync merge scope handling: credit/loan-
+        // linked accounts merge against manual|amex rows attributed
+        // to the same debt; the user's chosen checking account
+        // merges against manual|bank rows with no debt link.
+        const debtScope = debtIdsByAcctRowId.get(acct.id) ?? [];
+        const isCheckingScope =
+          checkingAcctRowId !== null && checkingAcctRowId === acct.id;
+        let mergeWhere = null as ReturnType<typeof and> | null;
+        if (debtScope.length > 0) {
+          mergeWhere = and(
+            eq(transactionsTable.userId, userId),
+            eq(transactionsTable.occurredOn, t.date),
+            eq(transactionsTable.amount, signedAmount),
+            sql`${transactionsTable.plaidTransactionId} is null`,
+            inArray(transactionsTable.debtId, debtScope),
+            inArray(transactionsTable.source, ["manual", "amex"]),
+          );
+        } else if (isCheckingScope) {
+          mergeWhere = and(
+            eq(transactionsTable.userId, userId),
+            eq(transactionsTable.occurredOn, t.date),
+            eq(transactionsTable.amount, signedAmount),
+            sql`${transactionsTable.plaidTransactionId} is null`,
+            sql`${transactionsTable.debtId} is null`,
+            inArray(transactionsTable.source, ["manual", "bank"]),
+          );
+        }
+        if (mergeWhere) {
+          const [match] = await db
+            .select({ id: transactionsTable.id })
+            .from(transactionsTable)
+            .where(mergeWhere)
+            .limit(1);
+          if (match) {
+            await db
+              .update(transactionsTable)
+              .set({
+                plaidTransactionId: t.transaction_id,
+                plaidAccountId: t.account_id,
+              })
+              .where(eq(transactionsTable.id, match.id));
+            continue;
+          }
+        }
+
+        const values = {
+          userId,
+          occurredOn: t.date,
+          occurredAt: null,
+          description,
+          amount: signedAmount,
+          categoryId: cat.categoryId,
+          isTransfer: cat.isTransfer,
+          source,
+          plaidTransactionId: t.transaction_id,
+          plaidAccountId: t.account_id,
+          debtId,
+          notes: t.pending ? "[pending]" : null,
+          forecastFlag: false,
+        };
+        // Idempotent insert — if cursor sync already pulled this
+        // exact transaction_id, this becomes a no-op refresh of the
+        // mutable fields and is NOT counted as a new add.
+        const before = await db
+          .select({ id: transactionsTable.id })
+          .from(transactionsTable)
+          .where(
+            and(
+              eq(transactionsTable.userId, userId),
+              eq(transactionsTable.plaidTransactionId, t.transaction_id),
+            ),
+          )
+          .limit(1);
+        await db
+          .insert(transactionsTable)
+          .values(values)
+          .onConflictDoUpdate({
+            target: transactionsTable.plaidTransactionId,
+            set: {
+              occurredOn: values.occurredOn,
+              description: values.description,
+              amount: values.amount,
+              notes: values.notes,
+              isTransfer: values.isTransfer,
+              ...(debtId ? { debtId } : {}),
+            },
+          });
+        if (before.length === 0) {
+          acctAdded++;
+          if (minDate === null || t.date < minDate) minDate = t.date;
+          if (maxDate === null || t.date > maxDate) maxDate = t.date;
+        }
+      }
+    } catch (e) {
+      logger.warn(
+        {
+          userId,
+          itemRowId,
+          externalAcctId,
+          start: startStr,
+          end: todayStr,
+          ...plaidLogContext(e, "/transactions/get (gap backfill)"),
+        },
+        "[plaid-sync] gap-backfill /transactions/get failed for account",
+      );
+    }
+    totalAdded += acctAdded;
+    perAccount.push({
+      externalAcctId,
+      start: startStr,
+      end: todayStr,
+      added: acctAdded,
+    });
+  }
+
+  return {
+    added: totalAdded,
+    importedDateRange:
+      minDate && maxDate ? { min: minDate, max: maxDate } : null,
+    perAccount,
+  };
 }
 
 export async function refreshConsentExpirationForAllItems(): Promise<{

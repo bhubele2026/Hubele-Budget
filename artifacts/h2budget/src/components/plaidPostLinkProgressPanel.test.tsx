@@ -131,6 +131,77 @@ describe("(#403) PostLinkProgressPanel — imported date range caption", () => {
     expect(detail.textContent).not.toContain("Still importing recent activity");
   });
 
+  it("(#408) suppresses the green Ready pill when the linked item still has lastSyncErrorCode set", () => {
+    render(
+      <PostLinkProgressPanel
+        status={makeStatus({
+          phase: "ready",
+          added: 12,
+          itemErrorCode: "ITEM_LOGIN_REQUIRED",
+        })}
+        onDismiss={() => {}}
+      />,
+    );
+    const title = screen.getByTestId("text-post-link-title");
+    expect(title.textContent).toContain("Chase still needs reconnecting");
+    expect(title.textContent).not.toContain("Ready");
+    // Deep-link to imported transactions must be hidden when the
+    // user is being told to reconnect — clicking it would lie about
+    // the state of the import.
+    expect(
+      screen.queryByTestId("link-post-link-view-transactions"),
+    ).toBeNull();
+  });
+
+  it("(#408) suppresses the green Ready pill when itemErrorKind is 'reauth' even with no code", () => {
+    render(
+      <PostLinkProgressPanel
+        status={makeStatus({
+          phase: "ready",
+          added: 5,
+          itemErrorKind: "reauth",
+        })}
+        onDismiss={() => {}}
+      />,
+    );
+    expect(
+      screen.getByTestId("text-post-link-title").textContent,
+    ).toContain("still needs reconnecting");
+  });
+
+  it("(#408) renders 'No new transactions since <date>' when added=0/modified=0 with a known lastBankTxOn", () => {
+    render(
+      <PostLinkProgressPanel
+        status={makeStatus({
+          phase: "ready",
+          added: 0,
+          modified: 0,
+          lastBankTxOn: "2026-05-04",
+        })}
+        onDismiss={() => {}}
+      />,
+    );
+    expect(
+      screen.getByTestId("text-post-link-title").textContent,
+    ).toContain("No new transactions since May 4");
+  });
+
+  it("(#408) falls back to 'No new transactions yet' when nothing added and no lastBankTxOn is known", () => {
+    render(
+      <PostLinkProgressPanel
+        status={makeStatus({
+          phase: "ready",
+          added: 0,
+          modified: 0,
+        })}
+        onDismiss={() => {}}
+      />,
+    );
+    expect(
+      screen.getByTestId("text-post-link-title").textContent,
+    ).toContain("No new transactions yet");
+  });
+
   it("does NOT show the 'still importing' hint on non-ready phases (preparing / polling)", () => {
     // The hint is only meaningful as a qualifier on a successful
     // import — during polling the user already sees the spinner.

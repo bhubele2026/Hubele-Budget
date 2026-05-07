@@ -49,6 +49,19 @@ let nextSyncResponse: {
   modified: AddedTxn[];
   removed: { transaction_id: string }[];
 } = { added: [], modified: [], removed: [] };
+// (#408) /transactions/get response used by the heal-driven gap
+// backfill that fires after a successful relink. Captured per call
+// so tests can assert the (start, end] window the backfill computes
+// off lastBankTxOn.
+let nextGetResponse: { transactions: AddedTxn[]; total_transactions: number } = {
+  transactions: [],
+  total_transactions: 0,
+};
+let lastGetCall: {
+  start_date: string;
+  end_date: string;
+  account_ids: string[];
+} | null = null;
 
 vi.mock("../lib/plaid", async () => {
   const actual =
@@ -84,6 +97,19 @@ vi.mock("../lib/plaid", async () => {
           has_more: false,
         },
       }),
+      transactionsGet: async (req: {
+        access_token: string;
+        start_date: string;
+        end_date: string;
+        options?: { account_ids?: string[]; count?: number; offset?: number };
+      }) => {
+        lastGetCall = {
+          start_date: req.start_date,
+          end_date: req.end_date,
+          account_ids: req.options?.account_ids ?? [],
+        };
+        return { data: nextGetResponse };
+      },
       accountsBalanceGet: async () => ({ data: { accounts: [] } }),
       liabilitiesGet: async () => ({ data: { liabilities: {}, accounts: [] } }),
     }),
@@ -144,6 +170,8 @@ beforeEach(async () => {
   await cleanup();
   nextAccounts = [];
   nextSyncResponse = { added: [], modified: [], removed: [] };
+  nextGetResponse = { transactions: [], total_transactions: 0 };
+  lastGetCall = null;
 });
 
 describe("(#367) /plaid/exchange relink self-heal", () => {
@@ -456,6 +484,141 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
       .from(plaidAccountsTable)
       .where(eq(plaidAccountsTable.accountId, oldExternalAcctId));
     expect(orphanAccts).toHaveLength(0);
+  });
+
+  // (#408) End-to-end heal proof: a chip-flagged item with a stale
+  // access_token gets re-exchanged through /plaid/exchange. The
+  // handler must (a) clear the chip on the existing row in place, (b)
+  // run the gap backfill against the fresh token using lastBankTxOn
+  // as the start anchor, and (c) leave a manual outage row already on
+  // file unduplicated by adopting it through the ±7-day merge.
+  it("relink heals chip, runs gap backfill from lastBankTxOn, and merges manual outage rows without duplicates", async () => {
+    const externalItemId = `item-heal-${randomUUID()}`;
+    const externalAcctId = `acct-heal-${randomUUID()}`;
+    nextExchangeItemId = externalItemId;
+    nextExchangeAccessToken = `access-sandbox-fresh-${randomUUID()}`;
+    nextAccounts = [
+      {
+        account_id: externalAcctId,
+        name: "Chase Sapphire",
+        type: "credit",
+        subtype: "credit card",
+        mask: "1234",
+      },
+    ];
+
+    const [item] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId: TEST_USER,
+        itemId: externalItemId,
+        accessToken: "",
+        institutionId: "ins_56",
+        institutionName: "Chase",
+        institutionSlug: "chase",
+        lastSyncError:
+          "Stored Plaid credential is malformed — please reconnect this bank.",
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+      })
+      .returning();
+    const [acct] = await db
+      .insert(plaidAccountsTable)
+      .values({
+        userId: TEST_USER,
+        itemId: item!.id,
+        accountId: externalAcctId,
+        name: "Chase Sapphire",
+        type: "credit",
+        subtype: "credit card",
+        mask: "1234",
+        importCutoffDate: "2026-04-01",
+      })
+      .returning();
+    const [debt] = await db
+      .insert(debtsTable)
+      .values({
+        userId: TEST_USER,
+        name: "Chase Sapphire",
+        balance: "1500",
+        plaidAccountId: acct!.id,
+      })
+      .returning();
+    // Newest pre-outage Plaid row — backfill must start the day AFTER.
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER,
+      occurredOn: "2026-04-25",
+      description: "older plaid row",
+      amount: "-10.00",
+      source: "plaid:chase",
+      plaidAccountId: externalAcctId,
+      plaidTransactionId: `pre-${randomUUID()}`,
+    });
+    // Manual row entered by the user during the outage — same date and
+    // amount as the row Plaid is about to re-surface. Must be adopted,
+    // not duplicated.
+    const [manual] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: "2026-05-02",
+        description: "manual outage entry",
+        amount: "-42.00",
+        source: "manual",
+        debtId: debt!.id,
+      })
+      .returning();
+
+    nextSyncResponse = { added: [], modified: [], removed: [] };
+    nextGetResponse = {
+      transactions: [
+        {
+          transaction_id: "plaid-may-2-heal",
+          account_id: externalAcctId,
+          date: "2026-05-02",
+          amount: 42.0,
+          name: "Plaid surfaced version",
+        },
+      ],
+      total_transactions: 1,
+    };
+
+    const r = await fetch(`${baseUrl}/plaid/exchange`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ publicToken: "public-sandbox-heal" }),
+    });
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as {
+      relinked: boolean;
+      lastSyncErrorCode: string | null;
+    };
+    expect(body.relinked).toBe(true);
+    expect(body.lastSyncErrorCode).toBeNull();
+
+    // Chip cleared in the DB row.
+    const [healed] = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.itemId, externalItemId));
+    expect(healed.lastSyncErrorCode).toBeNull();
+    expect(healed.accessToken).toBe(nextExchangeAccessToken);
+
+    // Backfill called /transactions/get with start = day after
+    // lastBankTxOn (2026-04-25 → 2026-04-26), scoped to this account.
+    expect(lastGetCall).not.toBeNull();
+    expect(lastGetCall!.start_date).toBe("2026-04-26");
+    expect(lastGetCall!.account_ids).toEqual([externalAcctId]);
+
+    // No duplicates: the manual row was adopted, not re-inserted.
+    const all = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    const mayRows = all.filter((t) => t.occurredOn === "2026-05-02");
+    expect(mayRows).toHaveLength(1);
+    expect(mayRows[0].id).toBe(manual!.id);
+    expect(mayRows[0].plaidTransactionId).toBe("plaid-may-2-heal");
+    expect(mayRows[0].source).toBe("manual");
   });
 
   // (#401) Healthy duplicate logins for the same institution must be

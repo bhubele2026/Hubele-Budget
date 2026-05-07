@@ -3129,6 +3129,17 @@ components:
         # item entering the window re-shows the alert. Null until the
         # user dismisses the banner for the first time.
         consentWarningDismissedForCutoff: { type: ["string", "null"] }
+        # (#408) Categorical bucket derived from `lastSyncErrorCode` — one
+        # of: reauth | rate_limit | institution_down | transient | unknown.
+        # Null when sync is healthy. Lets clients render reconnect copy
+        # without re-deriving the kind from the raw code.
+        errorKind: { type: ["string", "null"] }
+        # (#408) Newest occurredOn (YYYY-MM-DD) for any Plaid-sourced
+        # row (or merged manual row carrying a plaid_account_id) on
+        # any account belonging to this item. Drives the post-link
+        # "No new transactions since <date>" copy after a relink heal
+        # that backfills zero rows. Null when no rows exist yet.
+        lastBankTxOn: { type: ["string", "null"] }
         accounts:
           type: array
           items: { $ref: "#/components/schemas/PlaidAccount" }

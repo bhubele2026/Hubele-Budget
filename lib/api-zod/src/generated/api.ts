@@ -2038,6 +2038,8 @@ export const ExchangePlaidPublicTokenResponse = zod.object({
   consentExpirationLastRefreshError: zod.string().nullish(),
   consentExpirationLastRefreshErrorCode: zod.string().nullish(),
   consentWarningDismissedForCutoff: zod.string().nullish(),
+  errorKind: zod.string().nullish(),
+  lastBankTxOn: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),
@@ -2074,6 +2076,8 @@ export const ListPlaidItemsResponseItem = zod.object({
   consentExpirationLastRefreshError: zod.string().nullish(),
   consentExpirationLastRefreshErrorCode: zod.string().nullish(),
   consentWarningDismissedForCutoff: zod.string().nullish(),
+  errorKind: zod.string().nullish(),
+  lastBankTxOn: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),
@@ -2191,6 +2195,8 @@ export const DismissPlaidExpirationWarningResponse = zod.object({
   consentExpirationLastRefreshError: zod.string().nullish(),
   consentExpirationLastRefreshErrorCode: zod.string().nullish(),
   consentWarningDismissedForCutoff: zod.string().nullish(),
+  errorKind: zod.string().nullish(),
+  lastBankTxOn: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),

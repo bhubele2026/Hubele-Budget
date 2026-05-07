@@ -8,6 +8,7 @@ import {
   getListTransactionsQueryKey,
   getListPlaidLiabilityAccountsQueryKey,
   listPlaidLiabilityAccounts,
+  listPlaidItems,
   type PlaidLiabilityAccount,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -67,6 +68,19 @@ export type PostLinkStatus = {
   // by this sync) is bucketed into a month key. Null on non-ready
   // phases.
   mostRecentMonth: string | null;
+  // (#408) When set, the linked item still carries an actionable
+  // re-auth / malformed-token state on the server. The Ready panel
+  // suppresses the green "Ready — N added" pill in this case so a
+  // stale poll result can't override the yellow reconnect banner the
+  // user is actively reading.
+  itemErrorCode?: string | null;
+  itemErrorKind?: string | null;
+  // (#408) Newest occurredOn for any Plaid-sourced row on the linked
+  // item before the just-finished sync. When the post-heal sync
+  // returns zero added rows, the panel uses this date to render
+  // "No new transactions since <date>" instead of the misleading
+  // "Ready — 0 added".
+  lastBankTxOn?: string | null;
 };
 
 export function PlaidLinkButton({
@@ -146,6 +160,45 @@ export function PlaidLinkButton({
   // backend and only becomes available a few seconds later (normally
   // signaled by an INITIAL_UPDATE webhook). Poll a few times with a live
   // progress indicator so the user can see the import is healthy.
+  // (#408) Look up the just-linked item from /plaid/items so the
+  // post-link panel can suppress a stale green "Ready" pill when the
+  // item still carries an actionable reauth state on the server, and
+  // can render "No new transactions since <date>" when a heal-driven
+  // backfill landed zero rows. Best-effort — any failure leaves the
+  // fields null and the panel falls back to its existing copy.
+  const fetchJustLinkedItemMeta = useCallback(
+    async (
+      justLinkedItemId: string | undefined,
+    ): Promise<{
+      itemErrorCode: string | null;
+      itemErrorKind: string | null;
+      lastBankTxOn: string | null;
+    }> => {
+      if (!justLinkedItemId) {
+        return { itemErrorCode: null, itemErrorKind: null, lastBankTxOn: null };
+      }
+      try {
+        const items = await listPlaidItems();
+        const found = items.find((it) => it.id === justLinkedItemId);
+        if (!found) {
+          return {
+            itemErrorCode: null,
+            itemErrorKind: null,
+            lastBankTxOn: null,
+          };
+        }
+        return {
+          itemErrorCode: found.lastSyncErrorCode ?? null,
+          itemErrorKind: found.errorKind ?? null,
+          lastBankTxOn: found.lastBankTxOn ?? null,
+        };
+      } catch {
+        return { itemErrorCode: null, itemErrorKind: null, lastBankTxOn: null };
+      }
+    },
+    [],
+  );
+
   const pollAfterLink = useCallback(
     async (justLinkedItemId: string | undefined, institutionName: string | null) => {
       let totalAdded = 0;
@@ -214,6 +267,12 @@ export function PlaidLinkButton({
             occurredOn && occurredOn.length >= 7
               ? `${occurredOn.slice(0, 7)}-01`
               : `${new Date().toISOString().slice(0, 7)}-01`;
+          // (#408) Fetch live item state so the panel can suppress a
+          // stale Ready pill when the item still needs reconnecting,
+          // and so a zero-row heal can render "No new transactions
+          // since <date>" instead of an empty "Ready — 0 added".
+          const meta = await fetchJustLinkedItemMeta(justLinkedItemId);
+          if (cancelledRef.current) return;
           setPostLinkStatus({
             phase: "ready",
             attempt: attemptNumber,
@@ -224,6 +283,9 @@ export function PlaidLinkButton({
             errorMessage: null,
             importedDateRange,
             mostRecentMonth,
+            itemErrorCode: meta.itemErrorCode,
+            itemErrorKind: meta.itemErrorKind,
+            lastBankTxOn: meta.lastBankTxOn,
           });
           // (#400) Tell the host page (e.g. Chase /transactions) that
           // the freshly-linked import has landed, so it can jump the
@@ -507,7 +569,12 @@ export function PostLinkProgressPanel({
     const parts: string[] = [];
     if (added > 0) parts.push(`${added} added`);
     if (modified > 0) parts.push(`${modified} updated`);
-    title = `Ready — ${parts.join(", ")}`;
+    title =
+      added === 0 && modified === 0
+        ? status.lastBankTxOn
+          ? `No new transactions since ${formatYmdShort(status.lastBankTxOn)}`
+          : `No new transactions yet`
+        : `Ready — ${parts.join(", ")}`;
     // (#403) Replace the generic "Imported from <bank>" copy with the
     // actual date span the rows cover, so users can immediately tell
     // whether the window includes their current-month activity. When
@@ -531,9 +598,22 @@ export function PostLinkProgressPanel({
     detail = errorMessage ?? `Couldn't pull from ${bank}.`;
   }
 
+  // (#408) When the linked item still carries an actionable
+  // re-auth / malformed-token error on the server, the green "Ready"
+  // pill is misleading — the user is reading a yellow reconnect
+  // banner that says the opposite. Suppress the green styling and
+  // override the title/detail to a neutral warning so the panel
+  // can't override the active reconnect CTA.
+  const itemNeedsReconnect =
+    phase === "ready" &&
+    (!!status.itemErrorCode || status.itemErrorKind === "reauth");
+  if (itemNeedsReconnect) {
+    title = `${bank} still needs reconnecting`;
+    detail = `Sign in again to finish syncing ${bank}.`;
+  }
   const variant =
-    phase === "error"
-      ? "border-destructive/40 bg-destructive/5"
+    phase === "error" || itemNeedsReconnect
+      ? "border-amber-500/40 bg-amber-500/5"
       : phase === "ready"
         ? "border-emerald-500/40 bg-emerald-500/5"
         : "border-border bg-muted/30";
@@ -550,7 +630,7 @@ export function PostLinkProgressPanel({
         <div className="mt-0.5 shrink-0">
           {phase === "preparing" || phase === "polling" ? (
             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-          ) : phase === "ready" ? (
+          ) : phase === "ready" && !itemNeedsReconnect ? (
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           ) : (
             <AlertTriangle
@@ -578,7 +658,7 @@ export function PostLinkProgressPanel({
               data-testid="progress-post-link"
             />
           )}
-          {phase === "ready" && mostRecentMonth && (
+          {phase === "ready" && !itemNeedsReconnect && mostRecentMonth && (
             <div className="mt-2">
               <Link
                 href={`${viewTransactionsPath}?month=${mostRecentMonth}`}

@@ -4,6 +4,7 @@ import {
   db,
   plaidItemsTable,
   plaidAccountsTable,
+  transactionsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -36,6 +37,8 @@ import {
   refreshConsentExpirationForUser,
   syncPlaidItem,
   syncAllForUser,
+  runGapBackfillForItem,
+  derivePlaidErrorKind,
 } from "../lib/plaidSync";
 import {
   autoDetectCutoffsForItem,
@@ -752,6 +755,30 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     // Initial sync (last 90 days come via /transactions/sync naturally)
     await syncPlaidItem(req.userId!, item!.id);
 
+    // (#408) Heal-driven gap backfill on relink. The /exchange upsert
+    // above proactively cleared any prior `lastSyncErrorCode` chip on
+    // the row, so the wasUnhealthy detection inside syncPlaidItem
+    // can't see the prior error here. Trigger backfill explicitly so
+    // a Chase relink that healed a malformed-token item still chases
+    // the (lastBankTxOn, today] window per account that the cursor
+    // sync alone won't replay.
+    if (relinked) {
+      try {
+        await runGapBackfillForItem(req.userId!, item!.id);
+      } catch (e) {
+        req.log.warn(
+          {
+            err: e,
+            userId: req.userId,
+            plaidItemRowId: item!.id,
+            plaidItemIdExternal: item!.itemId,
+            institutionName: item!.institutionName,
+          },
+          "[plaid-exchange] gap backfill after relink failed (non-fatal)",
+        );
+      }
+    }
+
     // (#44) Pull liabilities best-effort so the post-Link "Add as debts"
     // dialog the client opens after exchange has cached balance/APR/min
     // payment to show — without auto-creating any debts. The user
@@ -831,6 +858,7 @@ type PlaidItemRow = typeof plaidItemsTable.$inferSelect;
 function serializePlaidItemDetail(
   it: PlaidItemRow,
   accounts: PlaidAccountRow[],
+  lastBankTxOn: string | null = null,
 ) {
   return {
     id: it.id,
@@ -880,6 +908,15 @@ function serializePlaidItemDetail(
     // this stored value, so dismissals persist across reloads but a
     // re-consent or a brand-new item entering the window naturally
     // re-surfaces the alert.
+    // (#408) Categorical bucket the client uses to decide between
+    // Reconnect / wait / retry copy without re-importing the helper.
+    errorKind: it.lastSyncErrorCode
+      ? derivePlaidErrorKind(it.lastSyncErrorCode, null)
+      : null,
+    // (#408) Powers the post-link "No new transactions since <date>"
+    // copy after a relink heal that backfilled zero rows. Computed by
+    // the caller (max occurredOn across this item's accounts).
+    lastBankTxOn,
     consentWarningDismissedForCutoff: it.consentWarningDismissedForCutoff
       ? it.consentWarningDismissedForCutoff.toISOString()
       : null,
@@ -988,7 +1025,45 @@ router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
     arr.push(a);
     byItem.set(a.itemId, arr);
   }
-  res.json(items.map((it) => serializePlaidItemDetail(it, byItem.get(it.id) ?? [])));
+  // (#408) Compute newest occurredOn across every Plaid-attached
+  // (account-mapped) row per item so the post-link panel can render
+  // "No new transactions since <date>" after a relink heal that
+  // backfilled zero rows. One grouped query is cheap; we fan it out
+  // by external account_id and roll back up by item.
+  const externalIds = accts.map((a) => a.accountId);
+  const lastByItem = new Map<string, string>();
+  if (externalIds.length > 0) {
+    const rows = await db
+      .select({
+        plaidAccountId: transactionsTable.plaidAccountId,
+        maxDate: sql<string>`max(${transactionsTable.occurredOn})::text`,
+      })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.userId, req.userId!),
+          inArray(transactionsTable.plaidAccountId, externalIds),
+        ),
+      )
+      .groupBy(transactionsTable.plaidAccountId);
+    const itemByExternal = new Map(accts.map((a) => [a.accountId, a.itemId]));
+    for (const r of rows) {
+      if (!r.plaidAccountId || !r.maxDate) continue;
+      const itemRowId = itemByExternal.get(r.plaidAccountId);
+      if (!itemRowId) continue;
+      const prev = lastByItem.get(itemRowId);
+      if (!prev || r.maxDate > prev) lastByItem.set(itemRowId, r.maxDate);
+    }
+  }
+  res.json(
+    items.map((it) =>
+      serializePlaidItemDetail(
+        it,
+        byItem.get(it.id) ?? [],
+        lastByItem.get(it.id) ?? null,
+      ),
+    ),
+  );
 });
 
 // (#274) Persist the user's dismissal of the dashboard "bank consent

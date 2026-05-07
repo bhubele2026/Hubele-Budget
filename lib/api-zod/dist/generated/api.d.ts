@@ -4790,6 +4790,8 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     consentExpirationLastRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentExpirationLastRefreshErrorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentWarningDismissedForCutoff: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -4848,6 +4850,8 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     consentExpirationLastRefreshError?: string | null | undefined;
     consentExpirationLastRefreshErrorCode?: string | null | undefined;
     consentWarningDismissedForCutoff?: string | null | undefined;
+    errorKind?: string | null | undefined;
+    lastBankTxOn?: string | null | undefined;
 }, {
     id: string;
     itemId: string;
@@ -4875,6 +4879,8 @@ export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     consentExpirationLastRefreshError?: string | null | undefined;
     consentExpirationLastRefreshErrorCode?: string | null | undefined;
     consentWarningDismissedForCutoff?: string | null | undefined;
+    errorKind?: string | null | undefined;
+    lastBankTxOn?: string | null | undefined;
 }>;
 export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     id: zod.ZodString;
@@ -4892,6 +4898,8 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     consentExpirationLastRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentExpirationLastRefreshErrorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentWarningDismissedForCutoff: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -4950,6 +4958,8 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     consentExpirationLastRefreshError?: string | null | undefined;
     consentExpirationLastRefreshErrorCode?: string | null | undefined;
     consentWarningDismissedForCutoff?: string | null | undefined;
+    errorKind?: string | null | undefined;
+    lastBankTxOn?: string | null | undefined;
 }, {
     id: string;
     itemId: string;
@@ -4977,6 +4987,8 @@ export declare const ListPlaidItemsResponseItem: zod.ZodObject<{
     consentExpirationLastRefreshError?: string | null | undefined;
     consentExpirationLastRefreshErrorCode?: string | null | undefined;
     consentWarningDismissedForCutoff?: string | null | undefined;
+    errorKind?: string | null | undefined;
+    lastBankTxOn?: string | null | undefined;
 }>;
 export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -4994,6 +5006,8 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     consentExpirationLastRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentExpirationLastRefreshErrorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentWarningDismissedForCutoff: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -5052,6 +5066,8 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     consentExpirationLastRefreshError?: string | null | undefined;
     consentExpirationLastRefreshErrorCode?: string | null | undefined;
     consentWarningDismissedForCutoff?: string | null | undefined;
+    errorKind?: string | null | undefined;
+    lastBankTxOn?: string | null | undefined;
 }, {
     id: string;
     itemId: string;
@@ -5079,6 +5095,8 @@ export declare const ListPlaidItemsResponse: zod.ZodArray<zod.ZodObject<{
     consentExpirationLastRefreshError?: string | null | undefined;
     consentExpirationLastRefreshErrorCode?: string | null | undefined;
     consentWarningDismissedForCutoff?: string | null | undefined;
+    errorKind?: string | null | undefined;
+    lastBankTxOn?: string | null | undefined;
 }>, "many">;
 export declare const DeletePlaidItemParams: zod.ZodObject<{
     id: zod.ZodString;
@@ -5120,23 +5138,23 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         kind: "balance" | "transactions" | "liabilities";
         attemptedAt: string;
         success: boolean;
+        errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         errorCode?: string | null | undefined;
         errorMessage?: string | null | undefined;
         plaidDisplayMessage?: string | null | undefined;
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
-        errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
     }, {
         id: string;
         kind: "balance" | "transactions" | "liabilities";
         attemptedAt: string;
         success: boolean;
+        errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         errorCode?: string | null | undefined;
         errorMessage?: string | null | undefined;
         plaidDisplayMessage?: string | null | undefined;
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
-        errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     attempts: {
@@ -5144,12 +5162,12 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         kind: "balance" | "transactions" | "liabilities";
         attemptedAt: string;
         success: boolean;
+        errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         errorCode?: string | null | undefined;
         errorMessage?: string | null | undefined;
         plaidDisplayMessage?: string | null | undefined;
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
-        errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
     }[];
 }, {
     attempts: {
@@ -5157,12 +5175,12 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         kind: "balance" | "transactions" | "liabilities";
         attemptedAt: string;
         success: boolean;
+        errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
         errorCode?: string | null | undefined;
         errorMessage?: string | null | undefined;
         plaidDisplayMessage?: string | null | undefined;
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
-        errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
     }[];
 }>;
 /**
@@ -5234,6 +5252,8 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
     consentExpirationLastRefreshError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentExpirationLastRefreshErrorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     consentWarningDismissedForCutoff: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lastBankTxOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     accounts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         accountId: zod.ZodString;
@@ -5292,6 +5312,8 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
     consentExpirationLastRefreshError?: string | null | undefined;
     consentExpirationLastRefreshErrorCode?: string | null | undefined;
     consentWarningDismissedForCutoff?: string | null | undefined;
+    errorKind?: string | null | undefined;
+    lastBankTxOn?: string | null | undefined;
 }, {
     id: string;
     itemId: string;
@@ -5319,6 +5341,8 @@ export declare const DismissPlaidExpirationWarningResponse: zod.ZodObject<{
     consentExpirationLastRefreshError?: string | null | undefined;
     consentExpirationLastRefreshErrorCode?: string | null | undefined;
     consentWarningDismissedForCutoff?: string | null | undefined;
+    errorKind?: string | null | undefined;
+    lastBankTxOn?: string | null | undefined;
 }>;
 export declare const SyncPlaidTransactionsBody: zod.ZodObject<{
     itemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;

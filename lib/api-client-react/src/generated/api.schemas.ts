@@ -1873,6 +1873,10 @@ sync chip.
   consentExpirationLastRefreshErrorCode?: string | null;
   /** @nullable */
   consentWarningDismissedForCutoff?: string | null;
+  /** @nullable */
+  errorKind?: string | null;
+  /** @nullable */
+  lastBankTxOn?: string | null;
   accounts: PlaidAccount[];
 }
 
