@@ -379,4 +379,119 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
     expect(mayPlaidInserts[0].occurredOn).toBe("2026-05-15");
     expect(mayPlaidInserts[0].plaidTransactionId).toBe("plaid-may-15");
   });
+
+  // (#401) When the user re-links Chase from scratch (instead of going
+  // through update mode), Plaid sometimes mints a brand-new internal
+  // item_id, leaving the old row in the database with a malformed
+  // access_token. The new row works, but the old broken row keeps
+  // generating noise on Settings, the dashboard reauth banner, and the
+  // daily health-check cron. The exchange handler must auto-archive
+  // any sibling row for the same institution whose stored token fails
+  // the malformed-token guard, while leaving healthy duplicates alone.
+  it("auto-archives a malformed-token sibling row on a fresh re-link of the same institution", async () => {
+    const oldExternalItemId = `item-broken-${randomUUID()}`;
+    const oldExternalAcctId = `acct-broken-${randomUUID()}`;
+
+    // Seed the broken twin: same institution, different external
+    // item_id, malformed access_token (empty string fails the guard).
+    const [oldItem] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId: TEST_USER,
+        itemId: oldExternalItemId,
+        accessToken: "",
+        institutionId: "ins_56",
+        institutionName: "Chase",
+        institutionSlug: "chase",
+        lastSyncError:
+          "Stored Plaid credential is malformed — please reconnect this bank.",
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+      })
+      .returning();
+    await db.insert(plaidAccountsTable).values({
+      userId: TEST_USER,
+      itemId: oldItem!.id,
+      accountId: oldExternalAcctId,
+      name: "Chase Sapphire (broken)",
+      type: "credit",
+      subtype: "credit card",
+      mask: "9999",
+    });
+
+    // Now drive a fresh exchange that produces a brand-new internal
+    // item_id for the same institution.
+    nextExchangeItemId = `item-fresh-${randomUUID()}`;
+    nextExchangeAccessToken = `access-sandbox-${randomUUID()}`;
+    nextAccounts = [
+      {
+        account_id: `acct-fresh-${randomUUID()}`,
+        name: "Chase Sapphire",
+        type: "credit",
+        subtype: "credit card",
+        mask: "1234",
+      },
+    ];
+
+    const r = await fetch(`${baseUrl}/plaid/exchange`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ publicToken: "public-sandbox-relink-fresh" }),
+    });
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { relinked: boolean; itemId: string };
+    expect(body.relinked).toBe(false);
+    expect(body.itemId).toBe(nextExchangeItemId);
+
+    // The broken sibling row (and its accounts) is gone — Settings →
+    // Linked banks will no longer show the duplicate Chase entry.
+    const remainingItems = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.userId, TEST_USER));
+    expect(remainingItems).toHaveLength(1);
+    expect(remainingItems[0].itemId).toBe(nextExchangeItemId);
+
+    const orphanAccts = await db
+      .select()
+      .from(plaidAccountsTable)
+      .where(eq(plaidAccountsTable.accountId, oldExternalAcctId));
+    expect(orphanAccts).toHaveLength(0);
+  });
+
+  // (#401) Healthy duplicate logins for the same institution must be
+  // left alone — the cleanup only targets rows whose stored token
+  // genuinely fails the malformed-token guard. A user with two valid
+  // Chase logins (e.g. personal + business) must keep both.
+  it("leaves a healthy duplicate sibling row alone on a fresh link of the same institution", async () => {
+    const healthyExternalItemId = `item-healthy-${randomUUID()}`;
+    await db.insert(plaidItemsTable).values({
+      userId: TEST_USER,
+      itemId: healthyExternalItemId,
+      accessToken: `access-sandbox-${randomUUID()}`,
+      institutionId: "ins_56",
+      institutionName: "Chase",
+      institutionSlug: "chase",
+    });
+
+    nextExchangeItemId = `item-second-${randomUUID()}`;
+    nextExchangeAccessToken = `access-sandbox-${randomUUID()}`;
+    nextAccounts = [];
+
+    const r = await fetch(`${baseUrl}/plaid/exchange`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ publicToken: "public-sandbox-second" }),
+    });
+    expect(r.status).toBe(200);
+
+    const remainingItems = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.userId, TEST_USER));
+    expect(remainingItems).toHaveLength(2);
+    const externalIds = remainingItems.map((i) => i.itemId).sort();
+    expect(externalIds).toEqual(
+      [healthyExternalItemId, nextExchangeItemId].sort(),
+    );
+  });
 });

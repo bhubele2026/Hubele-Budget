@@ -578,6 +578,103 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       })
       .returning();
 
+    // (#401) Auto-clean up any *other* row for the same user + same
+    // institution that is stuck in the malformed-token state. When
+    // Plaid mints a fresh internal item_id on a re-link from scratch
+    // (instead of going through update mode), the original broken row
+    // would otherwise sit forever with a "Stored Plaid credential is
+    // malformed" chip and re-surface stale "needs reconnecting"
+    // banners on other pages and in the daily health-check cron.
+    //
+    // We only touch rows where the stored access_token genuinely
+    // fails the malformed-token guard — never a healthy duplicate
+    // sibling — so a user with two legitimate Chase logins is left
+    // alone. Local cleanup only (debt source flags reset, accounts +
+    // item deleted); skipping the upstream itemRemove is safe because
+    // the token was malformed and Plaid would 400 on it anyway.
+    try {
+      const sameInstitutionRows = await db
+        .select()
+        .from(plaidItemsTable)
+        .where(
+          and(
+            eq(plaidItemsTable.userId, req.userId!),
+            resolvedInstId
+              ? eq(plaidItemsTable.institutionId, resolvedInstId)
+              : eq(plaidItemsTable.institutionSlug, slug),
+          ),
+        );
+      for (const stale of sameInstitutionRows) {
+        if (stale.id === item!.id) continue;
+        if (isValidPlaidAccessToken(stale.accessToken)) continue;
+        const staleAccts = await db
+          .select({ id: plaidAccountsTable.id })
+          .from(plaidAccountsTable)
+          .where(
+            and(
+              eq(plaidAccountsTable.itemId, stale.id),
+              eq(plaidAccountsTable.userId, req.userId!),
+            ),
+          );
+        const staleAcctIds = staleAccts.map((a) => a.id);
+        if (staleAcctIds.length > 0) {
+          await db
+            .update(debtsTable)
+            .set({
+              balanceSource: "manual",
+              aprSource: "manual",
+              minPaymentSource: "manual",
+              plaidLastSyncedAt: null,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(debtsTable.userId, req.userId!),
+                inArray(debtsTable.plaidAccountId, staleAcctIds),
+              ),
+            );
+        }
+        await db
+          .delete(plaidAccountsTable)
+          .where(
+            and(
+              eq(plaidAccountsTable.itemId, stale.id),
+              eq(plaidAccountsTable.userId, req.userId!),
+            ),
+          );
+        await db
+          .delete(plaidItemsTable)
+          .where(
+            and(
+              eq(plaidItemsTable.id, stale.id),
+              eq(plaidItemsTable.userId, req.userId!),
+            ),
+          );
+        req.log.info(
+          {
+            userId: req.userId,
+            replacedByItemRowId: item!.id,
+            replacedByPlaidItemIdExternal: item!.itemId,
+            cleanedItemRowId: stale.id,
+            cleanedPlaidItemIdExternal: stale.itemId,
+            institutionName: stale.institutionName,
+          },
+          "[plaid-exchange] auto-archived stale malformed-token row replaced by fresh re-link",
+        );
+      }
+    } catch (e) {
+      req.log.warn(
+        {
+          err: e,
+          userId: req.userId,
+          plaidItemRowId: item!.id,
+          plaidItemIdExternal: item!.itemId,
+          institutionName: item!.institutionName,
+        },
+        "[plaid-exchange] cleanup of stale malformed-token sibling rows failed — duplicate may remain in Settings",
+      );
+    }
+
     // Pull and persist accounts
     try {
       const acctResp = await plaid().accountsGet({ access_token: accessToken });
