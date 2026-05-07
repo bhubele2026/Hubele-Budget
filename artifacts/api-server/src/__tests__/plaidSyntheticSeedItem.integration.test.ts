@@ -112,8 +112,15 @@ describe("(#398) synthetic seed plaid_items rows are inert", () => {
   });
 
   it("syncPlaidItem also no-ops for an item whose itemId starts with 'seed-' even if the token has been mutated", async () => {
+    // (#398) The classifier keys off the `seed-` PREFIX, not the exact
+    // SYNTHETIC_ITEM_ID literal. plaid_items.item_id has a global
+    // UNIQUE constraint, so a literal "seed-april-2026-chase" here
+    // collides with the real aprilChaseSeed row whenever any sibling
+    // suite (or a prior failed run) has already inserted it. Use a
+    // unique seed-* itemId so the assertion still exercises the
+    // prefix-only branch without depending on cross-suite cleanup.
     const { itemRowId } = await seedSyntheticItem({
-      itemId: "seed-april-2026-chase",
+      itemId: `seed-april-2026-chase-${randomUUID()}`,
       accessToken: "garbage-after-manual-edit",
     });
 

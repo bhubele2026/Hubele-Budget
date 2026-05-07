@@ -306,7 +306,12 @@ describe("(#253) refreshConsentExpirationForItem", () => {
     };
 
     const result = await refreshConsentExpirationForItem(itemRowId);
-    expect(result.error).toMatch(/plaid unreachable/);
+    // (#357) extractPlaidError now collapses any non-HTTP throw (no
+    // `response.status`) into a single friendly "couldn't reach Plaid"
+    // copy instead of leaking the raw underlying string. The original
+    // "plaid unreachable" only survives in structured logs via
+    // plaidLogContext, not in the user-visible error field.
+    expect(result.error).toMatch(/Couldn't reach Plaid/);
     expect(result.changed).toBe(false);
     // (#258) When /item/get fails the cutoff is exactly as stale as
     // before this call — the freshness timestamp on the result must

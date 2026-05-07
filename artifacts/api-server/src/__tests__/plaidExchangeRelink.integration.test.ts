@@ -363,26 +363,47 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
     const body = (await r.json()) as { relinked: boolean };
     expect(body.relinked).toBe(true);
 
-    // 1. Cutoff preserved (NOT overwritten by autoDetectCutoffsForItem)
+    // 1. Cutoff is recomputed from the user's actual manual history at
+    //    relink time (#403): when `firstSyncCompletedAt` is still null
+    //    autoDetectCutoffsForItem always rewrites the cutoff so a
+    //    previously over-shooting value can't keep silently blocking
+    //    recent rows. The recomputed value lands on the latest manual
+    //    row's date (2026-04-28), which is *earlier* than the seeded
+    //    PRE_EXISTING_CUTOFF (2026-04-30) but still gates every April
+    //    Plaid row in the sync response below — so the no-duplicate
+    //    invariant in step 3 still holds.
     const [acctAfter] = await db
       .select()
       .from(plaidAccountsTable)
       .where(eq(plaidAccountsTable.id, acct!.id));
-    expect(acctAfter.importCutoffDate).toBe(PRE_EXISTING_CUTOFF);
+    expect(acctAfter.importCutoffDate).toBe("2026-04-28");
+    // PRE_EXISTING_CUTOFF was the seeded value before relink; the
+    // relink-time recompute is allowed to move it earlier (never
+    // forward into the user's real Plaid window).
+    expect(acctAfter.importCutoffDate! <= PRE_EXISTING_CUTOFF).toBe(true);
 
-    // 2. Pre-May manual rows untouched (count + same descriptions)
+    // 2. Pre-May manual rows preserved by description, not by source.
+    //    The ±7-day first-sync merge from #361 may rewrite an adopted
+    //    manual row's `source` to the Plaid scope ("plaid:chase") in
+    //    place — that's a desired in-place adoption (it attaches the
+    //    plaid_transaction_id), NOT a duplicate. The invariant the
+    //    user actually cares about is that no original manual row was
+    //    deleted or its description rewritten. Step 3 below still
+    //    enforces no brand-new April Plaid INSERT rows.
     const allRows = await db
       .select()
       .from(transactionsTable)
       .where(eq(transactionsTable.userId, TEST_USER));
-    const manualSurvivors = allRows.filter((r) => r.source === "manual");
-    expect(manualSurvivors).toHaveLength(3);
-    const manualDescs = manualSurvivors.map((r) => r.description).sort();
-    expect(manualDescs).toEqual([
+    const originalManualDescs = [
       "manual apr 12",
       "manual apr 20",
       "manual apr 28",
-    ]);
+    ];
+    const survivorsByDesc = allRows
+      .filter((r) => originalManualDescs.includes(r.description ?? ""))
+      .map((r) => r.description)
+      .sort();
+    expect(survivorsByDesc).toEqual(originalManualDescs);
 
     // 3. No *new* (insert-path) Plaid rows for April dates the manual
     //    history already covered. The ±7-day merge from #361 may have
@@ -392,8 +413,17 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
     //    with "plaid" (e.g. "plaid:chase") whose date is on/before cutoff.
     const isPlaidSourced = (s: string | null) =>
       typeof s === "string" && s.startsWith("plaid");
+    // Adopted manual rows now carry a Plaid source after the in-place
+    // merge — they are NOT brand-new inserts, just the original
+    // manual rows with `plaid_transaction_id` attached. Exclude them
+    // by description so this assertion still catches the regression
+    // it was written for: a duplicate "Plaid duplicate apr ..." INSERT
+    // landing alongside the manual row on a date already covered.
     const aprilPlaidInserts = allRows.filter(
-      (r) => isPlaidSourced(r.source) && r.occurredOn < "2026-05-01",
+      (r) =>
+        isPlaidSourced(r.source) &&
+        r.occurredOn < "2026-05-01" &&
+        !originalManualDescs.includes(r.description ?? ""),
     );
     expect(aprilPlaidInserts).toHaveLength(0);
 

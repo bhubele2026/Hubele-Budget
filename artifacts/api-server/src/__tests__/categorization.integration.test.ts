@@ -6,7 +6,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import * as XLSX from "xlsx";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
-const PLAID_ACCESS_TOKEN = "test-access-token";
+const PLAID_ACCESS_TOKEN = "access-sandbox-test-access-token";
 
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (
@@ -1449,7 +1449,7 @@ describe("categorization pipeline (integration)", () => {
     expect(rules[0]!.categoryId).toBe(shoppingCat!.id);
   });
 
-  it("PATCH /transactions/:id does not create a rule for an internal transfer", async () => {
+  it("PATCH /transactions/:id on a transfer-flagged row creates a rule and clears the transfer flag (Task #479)", async () => {
     const [cat] = await db
       .insert(budgetCategoriesTable)
       .values({
@@ -1478,14 +1478,19 @@ describe("categorization pipeline (integration)", () => {
       categoryId: cat!.id,
     });
     expect(patch.status).toBe(200);
-    // Task #185 — transfers skip the auto-learn flow entirely, so
-    // ruleAction is "none" and the client suppresses the rule-status
-    // toast description.
+    // Task #479 supersedes the original #185 behavior: explicitly
+    // picking a real category on a transfer-flagged row is now treated
+    // as the user disagreeing with the auto-Transfer heuristic. The
+    // route flips `isTransfer` to false (so the row stops being
+    // excluded from budget actuals) AND lets the auto-learn flow run
+    // so future similar charges land in the same category. The result
+    // is a freshly created mapping rule keyed off this row's
+    // description.
     const patchBody = patch.json as {
       ruleAction: { kind: string; pattern: string | null };
     };
-    expect(patchBody.ruleAction.kind).toBe("none");
-    expect(patchBody.ruleAction.pattern).toBeNull();
+    expect(patchBody.ruleAction.kind).toBe("created");
+    expect(patchBody.ruleAction.pattern).toBe(uniqueDesc.slice(0, 60));
 
     const rules = await db
       .select()
@@ -1496,7 +1501,7 @@ describe("categorization pipeline (integration)", () => {
           eq(mappingRulesTable.categoryId, cat!.id),
         ),
       );
-    expect(rules.length).toBe(0);
+    expect(rules.length).toBe(1);
   });
 
   it("POST /transactions auto-categorizes hand-entered rows via the existing rules", async () => {
