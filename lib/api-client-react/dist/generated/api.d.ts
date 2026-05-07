@@ -135,6 +135,42 @@ export declare const useDeleteTransaction: <TError = ErrorType<unknown>, TContex
     id: string;
 }, TContext>;
 /**
+ * @summary Clear the `isTransferUserOverridden` flag on a single transaction so
+that the next Plaid sync (or XLSX import / aprilChaseSeed pass) can
+re-apply the description+PFC auto-Transfer heuristic to it. Used by
+the "Reset to auto" affordance surfaced in the row's Edit dialog
+when the user has previously toggled the Transfer flag manually.
+
+ */
+export declare const getClearTransferOverrideUrl: (id: string) => string;
+export declare const clearTransferOverride: (id: string, options?: RequestInit) => Promise<Transaction>;
+export declare const getClearTransferOverrideMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof clearTransferOverride>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof clearTransferOverride>>, TError, {
+    id: string;
+}, TContext>;
+export type ClearTransferOverrideMutationResult = NonNullable<Awaited<ReturnType<typeof clearTransferOverride>>>;
+export type ClearTransferOverrideMutationError = ErrorType<void>;
+/**
+ * @summary Clear the `isTransferUserOverridden` flag on a single transaction so
+that the next Plaid sync (or XLSX import / aprilChaseSeed pass) can
+re-apply the description+PFC auto-Transfer heuristic to it. Used by
+the "Reset to auto" affordance surfaced in the row's Edit dialog
+when the user has previously toggled the Transfer flag manually.
+
+ */
+export declare const useClearTransferOverride: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof clearTransferOverride>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof clearTransferOverride>>, TError, {
+    id: string;
+}, TContext>;
+/**
  * @summary Bulk re-categorize past transactions whose description matches a
 mapping rule's pattern and that currently sit in the rule's old
 category. Used by the "apply this rule to past transactions too"

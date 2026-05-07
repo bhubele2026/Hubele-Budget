@@ -1069,6 +1069,40 @@ router.post(
   },
 );
 
+// (#493) "Reset to auto" — clear the user-overridden flag on a single
+// transaction so the next Plaid sync / XLSX import / aprilChaseSeed pass
+// can re-apply the description+PFC auto-Transfer heuristic. Surfaced from
+// the Edit dialog when a row's transfer status was previously toggled
+// manually (and from the mobile transaction detail screen). Does not
+// touch `isTransfer` itself — the user's most recent value stays in
+// place until the next sync recomputes it.
+router.post(
+  "/transactions/:id/clear-transfer-override",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const params = UpdateTransactionParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [row] = await db
+      .update(transactionsTable)
+      .set({ isTransferUserOverridden: false })
+      .where(
+        and(
+          eq(transactionsTable.id, params.data.id),
+          eq(transactionsTable.userId, req.userId!),
+        ),
+      )
+      .returning();
+    if (!row) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    res.json(row);
+  },
+);
+
 router.delete(
   "/transactions/:id",
   requireAuth,

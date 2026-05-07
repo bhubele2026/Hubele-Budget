@@ -244,6 +244,41 @@ describe("isTransfer user override (#479)", () => {
     expect(after.isTransferUserOverridden).toBe(true);
   });
 
+  it("POST /transactions/:id/clear-transfer-override clears the override flag", async () => {
+    const [row] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: "2026-05-06",
+        description: "ONLINE TRANSFER TO SAVINGS XXXX5555",
+        amount: "-50.00",
+        isTransfer: false,
+        isTransferUserOverridden: true,
+        source: "manual",
+      })
+      .returning();
+    expect(row!.isTransferUserOverridden).toBe(true);
+
+    const r = await api(
+      "POST",
+      `/transactions/${row!.id}/clear-transfer-override`,
+    );
+    expect(r.status).toBe(200);
+
+    const after = await readRow(row!.id);
+    // isTransfer is left untouched — only the override flag is cleared.
+    expect(after.isTransfer).toBe(false);
+    expect(after.isTransferUserOverridden).toBe(false);
+  });
+
+  it("POST /transactions/:id/clear-transfer-override returns 404 for unknown ids", async () => {
+    const r = await api(
+      "POST",
+      `/transactions/${randomUUID()}/clear-transfer-override`,
+    );
+    expect(r.status).toBe(404);
+  });
+
   it("Without the override flag, Plaid sync still re-applies the auto-Transfer heuristic", async () => {
     // Sanity check that the CASE expression's ELSE branch is wired up — a
     // row whose user-overridden flag is *false* keeps getting re-flagged

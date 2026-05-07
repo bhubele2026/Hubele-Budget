@@ -303,9 +303,14 @@ export default function TransactionsScreen() {
                     </Text>
                     {t.isTransfer ? (
                       <Pressable
-                        accessibilityLabel="Clear transfer flag"
+                        accessibilityLabel={
+                          t.isTransferUserOverridden
+                            ? "Clear transfer flag (manually set)"
+                            : "Clear transfer flag"
+                        }
                         hitSlop={8}
                         onPress={() => clearTransfer(t.id)}
+                        testID={`pill-transfer-${t.id}`}
                         style={({ pressed }) => [
                           styles.transferPill,
                           {
@@ -322,7 +327,9 @@ export default function TransactionsScreen() {
                             { color: colors.mutedForeground },
                           ]}
                         >
-                          transfer
+                          {t.isTransferUserOverridden
+                            ? "transfer*"
+                            : "transfer"}
                         </Text>
                         <Feather
                           name="x"
@@ -330,6 +337,24 @@ export default function TransactionsScreen() {
                           color={colors.mutedForeground}
                         />
                       </Pressable>
+                    ) : t.isTransferUserOverridden ? (
+                      <View
+                        testID={`chip-transfer-overridden-cleared-${t.id}`}
+                        accessibilityLabel="Transfer flag manually cleared"
+                        style={[
+                          styles.transferPill,
+                          { borderColor: colors.border },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.transferPillText,
+                            { color: colors.mutedForeground },
+                          ]}
+                        >
+                          manually set
+                        </Text>
+                      </View>
                     ) : null}
                   </View>
                 </View>

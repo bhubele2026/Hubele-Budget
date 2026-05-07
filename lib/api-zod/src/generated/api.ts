@@ -394,6 +394,67 @@ export const DeleteTransactionParams = zod.object({
 });
 
 /**
+ * @summary Clear the `isTransferUserOverridden` flag on a single transaction so
+that the next Plaid sync (or XLSX import / aprilChaseSeed pass) can
+re-apply the description+PFC auto-Transfer heuristic to it. Used by
+the "Reset to auto" affordance surfaced in the row's Edit dialog
+when the user has previously toggled the Transfer flag manually.
+
+ */
+export const ClearTransferOverrideParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ClearTransferOverrideResponse = zod.object({
+  id: zod.string(),
+  occurredOn: zod.string(),
+  occurredAt: zod.string().nullish(),
+  description: zod.string(),
+  amount: zod.string(),
+  account: zod.string().nullish(),
+  categoryId: zod.string().nullish(),
+  forecastFlag: zod.boolean(),
+  weeklyAllowance: zod.boolean(),
+  weeklyBucket: zod
+    .union([
+      zod.literal("groceries"),
+      zod.literal("dining"),
+      zod.literal("entertainment"),
+      zod.literal("misc"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  monthlyAllowance: zod.boolean(),
+  unplannedAllowance: zod.boolean(),
+  reimbursable: zod.boolean(),
+  reimbursed: zod.boolean(),
+  reviewed: zod
+    .boolean()
+    .describe(
+      "Whether the user has marked this transaction as done on the\nAmex page. Reviewed rows render greyed out so the eye skips\nover them and focuses on what's left to handle. Defaults to\nfalse; toggled explicitly by the user (never auto-set on\ncategorize).\n",
+    ),
+  isTransfer: zod.boolean(),
+  isTransferUserOverridden: zod
+    .boolean()
+    .describe(
+      "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import \/ aprilChaseSeed\nre-categorize paths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+    ),
+  notes: zod.string().nullish(),
+  source: zod.string(),
+  member: zod.string().nullish(),
+  owedBy: zod.string().nullish(),
+  plaidTransactionId: zod.string().nullish(),
+  plaidAccountId: zod.string().nullish(),
+  debtId: zod.string().nullish(),
+  matchedRuleId: zod
+    .string()
+    .nullish()
+    .describe(
+      'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+    ),
+});
+
+/**
  * @summary Bulk re-categorize past transactions whose description matches a
 mapping rule's pattern and that currently sit in the rule's old
 category. Used by the "apply this rule to past transactions too"

@@ -606,6 +606,100 @@ export const useDeleteTransaction = <
 };
 
 /**
+ * @summary Clear the `isTransferUserOverridden` flag on a single transaction so
+that the next Plaid sync (or XLSX import / aprilChaseSeed pass) can
+re-apply the description+PFC auto-Transfer heuristic to it. Used by
+the "Reset to auto" affordance surfaced in the row's Edit dialog
+when the user has previously toggled the Transfer flag manually.
+
+ */
+export const getClearTransferOverrideUrl = (id: string) => {
+  return `/api/transactions/${id}/clear-transfer-override`;
+};
+
+export const clearTransferOverride = async (
+  id: string,
+  options?: RequestInit,
+): Promise<Transaction> => {
+  return customFetch<Transaction>(getClearTransferOverrideUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getClearTransferOverrideMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clearTransferOverride>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof clearTransferOverride>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["clearTransferOverride"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof clearTransferOverride>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return clearTransferOverride(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ClearTransferOverrideMutationResult = NonNullable<
+  Awaited<ReturnType<typeof clearTransferOverride>>
+>;
+
+export type ClearTransferOverrideMutationError = ErrorType<void>;
+
+/**
+ * @summary Clear the `isTransferUserOverridden` flag on a single transaction so
+that the next Plaid sync (or XLSX import / aprilChaseSeed pass) can
+re-apply the description+PFC auto-Transfer heuristic to it. Used by
+the "Reset to auto" affordance surfaced in the row's Edit dialog
+when the user has previously toggled the Transfer flag manually.
+
+ */
+export const useClearTransferOverride = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clearTransferOverride>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof clearTransferOverride>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getClearTransferOverrideMutationOptions(options));
+};
+
+/**
  * @summary Bulk re-categorize past transactions whose description matches a
 mapping rule's pattern and that currently sit in the rule's old
 category. Used by the "apply this rule to past transactions too"

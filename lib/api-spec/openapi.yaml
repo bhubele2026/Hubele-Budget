@@ -137,6 +137,30 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /transactions/{id}/clear-transfer-override:
+    post:
+      operationId: clearTransferOverride
+      tags: [transactions]
+      summary: |
+        Clear the `isTransferUserOverridden` flag on a single transaction so
+        that the next Plaid sync (or XLSX import / aprilChaseSeed pass) can
+        re-apply the description+PFC auto-Transfer heuristic to it. Used by
+        the "Reset to auto" affordance surfaced in the row's Edit dialog
+        when the user has previously toggled the Transfer flag manually.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "404":
+          description: Not found
+
   /transactions/recategorize-by-pattern:
     post:
       operationId: recategorizeTransactionsByPattern

@@ -1992,14 +1992,37 @@ export default function AmexPage() {
                           </SelectContent>
                         </Select>
                       )}
+                      {!t.isTransfer && t.isTransferUserOverridden && (
+                        <Badge
+                          variant="outline"
+                          className="inline-flex items-center text-[10px] font-normal border-slate-200 text-slate-500 bg-slate-50/60"
+                          title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
+                          data-testid={`badge-transfer-overridden-cleared-mobile-${t.id}`}
+                        >
+                          Manually set
+                        </Badge>
+                      )}
                       {t.isTransfer && (
                         <Badge
                           variant="outline"
                           className="inline-flex items-center gap-1 text-[10px] border-slate-300 text-slate-700 bg-slate-50"
-                          title="Excluded from budget actuals"
+                          title={
+                            t.isTransferUserOverridden
+                              ? "Manually set — won't be re-flagged on the next sync"
+                              : "Excluded from budget actuals"
+                          }
                           data-testid={`badge-transfer-mobile-${t.id}`}
                         >
                           Transfer
+                          {t.isTransferUserOverridden && (
+                            <span
+                              aria-hidden="true"
+                              data-testid={`badge-transfer-overridden-mobile-${t.id}`}
+                              className="text-slate-500 -ml-0.5"
+                            >
+                              *
+                            </span>
+                          )}
                           <button
                             type="button"
                             aria-label="Clear Transfer flag"
@@ -2087,14 +2110,37 @@ export default function AmexPage() {
                               setRowCategory(t.id, id, remember)
                             }
                           />
+                          {!t.isTransfer && t.isTransferUserOverridden && (
+                            <Badge
+                              variant="outline"
+                              className="mt-1 inline-flex items-center text-[10px] font-normal border-slate-200 text-slate-500 bg-slate-50/60"
+                              title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
+                              data-testid={`badge-transfer-overridden-cleared-${t.id}`}
+                            >
+                              Manually set
+                            </Badge>
+                          )}
                           {t.isTransfer && (
                             <Badge
                               variant="outline"
                               className="mt-1 inline-flex items-center gap-1 text-[10px] border-slate-300 text-slate-700 bg-slate-50"
-                              title="Excluded from budget actuals"
+                              title={
+                                t.isTransferUserOverridden
+                                  ? "Manually set — won't be re-flagged on the next sync"
+                                  : "Excluded from budget actuals"
+                              }
                               data-testid={`badge-transfer-${t.id}`}
                             >
                               Transfer
+                              {t.isTransferUserOverridden && (
+                                <span
+                                  aria-hidden="true"
+                                  data-testid={`badge-transfer-overridden-${t.id}`}
+                                  className="text-slate-500 -ml-0.5"
+                                >
+                                  *
+                                </span>
+                              )}
                               <button
                                 type="button"
                                 aria-label="Clear Transfer flag"

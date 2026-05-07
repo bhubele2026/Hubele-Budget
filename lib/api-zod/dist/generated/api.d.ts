@@ -815,6 +815,100 @@ export declare const DeleteTransactionParams: zod.ZodObject<{
     id: string;
 }>;
 /**
+ * @summary Clear the `isTransferUserOverridden` flag on a single transaction so
+that the next Plaid sync (or XLSX import / aprilChaseSeed pass) can
+re-apply the description+PFC auto-Transfer heuristic to it. Used by
+the "Reset to auto" affordance surfaced in the row's Edit dialog
+when the user has previously toggled the Transfer flag manually.
+
+ */
+export declare const ClearTransferOverrideParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const ClearTransferOverrideResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    occurredOn: zod.ZodString;
+    occurredAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    description: zod.ZodString;
+    amount: zod.ZodString;
+    account: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    forecastFlag: zod.ZodBoolean;
+    weeklyAllowance: zod.ZodBoolean;
+    weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
+    monthlyAllowance: zod.ZodBoolean;
+    unplannedAllowance: zod.ZodBoolean;
+    reimbursable: zod.ZodBoolean;
+    reimbursed: zod.ZodBoolean;
+    reviewed: zod.ZodBoolean;
+    isTransfer: zod.ZodBoolean;
+    isTransferUserOverridden: zod.ZodBoolean;
+    notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    source: zod.ZodString;
+    member: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    owedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    occurredOn: string;
+    description: string;
+    amount: string;
+    forecastFlag: boolean;
+    weeklyAllowance: boolean;
+    monthlyAllowance: boolean;
+    unplannedAllowance: boolean;
+    reimbursable: boolean;
+    reimbursed: boolean;
+    reviewed: boolean;
+    isTransfer: boolean;
+    isTransferUserOverridden: boolean;
+    source: string;
+    occurredAt?: string | null | undefined;
+    account?: string | null | undefined;
+    categoryId?: string | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    notes?: string | null | undefined;
+    member?: string | null | undefined;
+    owedBy?: string | null | undefined;
+    plaidTransactionId?: string | null | undefined;
+    plaidAccountId?: string | null | undefined;
+    debtId?: string | null | undefined;
+    matchedRuleId?: string | null | undefined;
+}, {
+    id: string;
+    occurredOn: string;
+    description: string;
+    amount: string;
+    forecastFlag: boolean;
+    weeklyAllowance: boolean;
+    monthlyAllowance: boolean;
+    unplannedAllowance: boolean;
+    reimbursable: boolean;
+    reimbursed: boolean;
+    reviewed: boolean;
+    isTransfer: boolean;
+    isTransferUserOverridden: boolean;
+    source: string;
+    occurredAt?: string | null | undefined;
+    account?: string | null | undefined;
+    categoryId?: string | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    notes?: string | null | undefined;
+    member?: string | null | undefined;
+    owedBy?: string | null | undefined;
+    plaidTransactionId?: string | null | undefined;
+    plaidAccountId?: string | null | undefined;
+    debtId?: string | null | undefined;
+    matchedRuleId?: string | null | undefined;
+}>;
+/**
  * @summary Bulk re-categorize past transactions whose description matches a
 mapping rule's pattern and that currently sit in the rule's old
 category. Used by the "apply this rule to past transactions too"

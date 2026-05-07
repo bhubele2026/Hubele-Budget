@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import {
   getListTransactionsQueryKey,
   type Transaction,
+  useClearTransferOverride,
   useListTransactions,
   useUpdateTransaction,
 } from "@workspace/api-client-react";
@@ -105,6 +106,7 @@ export default function TransactionDetailScreen() {
   const colors = useColors();
   const qc = useQueryClient();
   const updateTx = useUpdateTransaction();
+  const clearTransferOverride = useClearTransferOverride();
 
   // Use cached transactions list to look up by id; falls back to refetch
   // when the cache is empty (deep-link).
@@ -208,7 +210,7 @@ export default function TransactionDetailScreen() {
         <Flag active={t.reimbursed} label="Reimbursed" />
         <Flag
           active={t.isTransfer}
-          label="Transfer"
+          label={t.isTransferUserOverridden ? "Transfer*" : "Transfer"}
           testID="flag-transfer"
           onPress={() => {
             updateTx.mutate(
@@ -224,6 +226,56 @@ export default function TransactionDetailScreen() {
           }}
         />
       </View>
+      {t.isTransferUserOverridden && (
+        <View
+          style={[
+            styles.overrideHint,
+            { backgroundColor: colors.muted, borderColor: colors.border },
+          ]}
+          testID="transfer-override-hint"
+        >
+          <View style={{ flex: 1 }}>
+            <Text
+              style={[styles.overrideTitle, { color: colors.foreground }]}
+            >
+              Transfer status manually set
+            </Text>
+            <Text
+              style={[styles.overrideBody, { color: colors.mutedForeground }]}
+            >
+              Future bank syncs won't re-flag this row. Reset to let
+              auto-detection take over again.
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            testID="button-reset-transfer-override"
+            disabled={clearTransferOverride.isPending}
+            onPress={() => {
+              clearTransferOverride.mutate(
+                { id: t.id },
+                {
+                  onSuccess: () => {
+                    qc.invalidateQueries({
+                      queryKey: getListTransactionsQueryKey({ limit: 200 }),
+                    });
+                  },
+                },
+              );
+            }}
+            style={[
+              styles.overrideButton,
+              { borderColor: colors.border, backgroundColor: colors.background },
+            ]}
+          >
+            <Text
+              style={[styles.overrideButtonText, { color: colors.foreground }]}
+            >
+              Reset to auto
+            </Text>
+          </Pressable>
+        </View>
+      )}
 
       <View style={styles.rows}>
         <Row icon="hash" label="ID" value={t.id} />
@@ -321,5 +373,33 @@ const styles = StyleSheet.create({
     textAlign: "right",
     fontFamily: "Inter_500Medium",
     fontSize: 14,
+  },
+  overrideHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  overrideTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+  },
+  overrideBody: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  overrideButton: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  overrideButtonText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
   },
 });

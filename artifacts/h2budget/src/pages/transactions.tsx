@@ -4,6 +4,7 @@ import {
   useListTransactions,
   useCreateTransaction,
   useUpdateTransaction,
+  useClearTransferOverride,
   useDeleteTransaction,
   useListCategories,
   useListMappingRules,
@@ -618,6 +619,7 @@ export default function TransactionsPage() {
   // ---- Mutations & dialog ----
   const createTx = useCreateTransaction();
   const updateTx = useUpdateTransaction();
+  const clearTransferOverride = useClearTransferOverride();
   const deleteTx = useDeleteTransaction();
   const bulkSetForecastFlag = useBulkSetForecastFlag();
   const buildRuleUndoAction = useRuleActionUndo();
@@ -1749,6 +1751,51 @@ export default function TransactionsPage() {
                   </FormItem>
                 )} />
               </div>
+              {editingTx?.isTransferUserOverridden && (
+                <div
+                  className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"
+                  data-testid="transfer-override-hint"
+                >
+                  <div>
+                    <div className="font-medium text-slate-700">
+                      Transfer status manually set
+                    </div>
+                    <div className="mt-0.5 text-slate-500">
+                      Future bank syncs won't re-flag this row from the description
+                      heuristic. Reset to let auto-detection take over again.
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    data-testid="button-reset-transfer-override"
+                    disabled={clearTransferOverride.isPending}
+                    onClick={() => {
+                      const id = editingTx.id;
+                      clearTransferOverride.mutate(
+                        { id },
+                        {
+                          onSuccess: () => {
+                            queryClient.invalidateQueries({
+                              queryKey: getListTransactionsQueryKey(),
+                            });
+                            setEditingTx((prev) =>
+                              prev && prev.id === id
+                                ? { ...prev, isTransferUserOverridden: false }
+                                : prev,
+                            );
+                            toast({ title: "Reset to auto" });
+                          },
+                        },
+                      );
+                    }}
+                  >
+                    Reset to auto
+                  </Button>
+                </div>
+              )}
               <div className="flex justify-end pt-4">
                 <Button type="submit" disabled={createTx.isPending || updateTx.isPending}>Save</Button>
               </div>
@@ -1884,13 +1931,37 @@ export default function TransactionsPage() {
                             onPick={(catId) => handleQuickCategorize(tx, catId)}
                           />
                         )}
+                        {!tx.isTransfer && tx.isTransferUserOverridden && (
+                          <Badge
+                            variant="outline"
+                            className="inline-flex items-center text-[11px] font-normal border-slate-200 text-slate-500 bg-slate-50/60"
+                            data-testid={`badge-transfer-overridden-cleared-${tx.id}`}
+                            title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
+                          >
+                            Manually set
+                          </Badge>
+                        )}
                         {tx.isTransfer && (
                           <Badge
                             variant="outline"
                             className="inline-flex items-center gap-1 text-xs border-slate-300 text-slate-700 bg-slate-50"
                             data-testid={`badge-transfer-${tx.id}`}
+                            title={
+                              tx.isTransferUserOverridden
+                                ? "Manually set — won't be re-flagged on the next sync"
+                                : undefined
+                            }
                           >
                             Transfer
+                            {tx.isTransferUserOverridden && (
+                              <span
+                                aria-hidden="true"
+                                data-testid={`badge-transfer-overridden-${tx.id}`}
+                                className="text-slate-500 -ml-0.5"
+                              >
+                                *
+                              </span>
+                            )}
                             <button
                               type="button"
                               aria-label="Clear Transfer flag"
