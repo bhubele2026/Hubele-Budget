@@ -1236,14 +1236,17 @@ export default function ForecastPage({
   // forecastEnd = bank snapshot balance + Σ planned items in (snapshot.at, end-of-month].
   //   Bank movements that already happened (matched / unplanned / pending bank
   //   rows) are NOT added — the bank snapshot already includes everything that
-  //   actually cleared, and pending bank rows represent activity the forecast
-  //   hasn't yet absorbed (that's the gap).
+  //   actually cleared. This is purely an end-of-period TARGET balance; it is
+  //   *expected* to differ from today's bank balance by the planned future
+  //   net flow and must NOT be used as the reconciliation gap.
   //
   // bankEnd = bank snapshot balance — the actual current/known bank balance.
   //   For prior closed months we don't surface a gap (we don't store a
   //   per-month historical snapshot), only counts.
   //
-  // gap = forecastEnd − bankEnd. Reconciled when |gap| < $0.01 AND no pending.
+  // gap = like-for-like comparison of the forecast's projected balance AS OF
+  //   the bank snapshot date vs the bank snapshot balance itself (NOT
+  //   forecastEnd − bankEnd). Reconciled when |gap| < $0.01 AND no pending.
   const bankReconcile = useMemo(() => {
     const empty = {
       pending: 0,
@@ -1297,7 +1300,50 @@ export default function ForecastPage({
     const bankEnd = data.bankSnapshot
       ? Number(data.bankSnapshot.balance) || 0
       : forecastEnd;
-    const gap = Math.round((forecastEnd - bankEnd) * 100) / 100;
+
+    // Reconciliation gap = like-for-like comparison of the forecast's
+    // projected balance AS OF the bank snapshot date vs the bank snapshot
+    // balance itself. We deliberately project from the user's configured
+    // starting balance forward to the snapshot date — NOT from the
+    // snapshot balance itself — because the whole point of this check is
+    // to surface a real disagreement between what the forecast expected
+    // and what the bank actually shows (e.g. wrong starting balance, a
+    // matched plan item whose amount differs from its bank txn, or
+    // unforecasted bank activity the user hasn't acknowledged).
+    //
+    // Items included in the projection up to the snapshot date:
+    //  - Plan items in [fromDate, snapshot] with status != "missed"
+    //    (matched/pending/future are all things the forecast expected to
+    //    flow through the bank). "Missed" items were explicitly
+    //    acknowledged as not happening.
+    //  - Bank txns in [fromDate, snapshot] that the user marked as
+    //    `ignored_unforecasted` (Unplanned). Those are real bank
+    //    activity the user has already triaged as outside the forecast,
+    //    so counting their amount in the expected projection prevents
+    //    the gap from re-flagging them.
+    // Pending bank rows are NOT included — they live in the inbox and the
+    // amber badge only fires when the inbox is clear.
+    const settingsStart = Number(data.settings.startingBalance) || 0;
+    const fromISO = data.fromDate;
+    let forecastAtSnapshot = settingsStart;
+    if (snapshotAtISO) {
+      for (const p of register.allPlan) {
+        if (p.date < fromISO || p.date > snapshotAtISO) continue;
+        if (p.status === "missed") continue;
+        forecastAtSnapshot += p.amount;
+      }
+      for (const b of register.allBank) {
+        if (b.date < fromISO || b.date > snapshotAtISO) continue;
+        if (b.status === "ignored_unforecasted") {
+          forecastAtSnapshot += b.amount;
+        }
+      }
+      forecastAtSnapshot = Math.round(forecastAtSnapshot * 100) / 100;
+    }
+    const bankAtSnapshot = data.bankSnapshot
+      ? Number(data.bankSnapshot.balance) || 0
+      : forecastAtSnapshot;
+    const gap = Math.round((forecastAtSnapshot - bankAtSnapshot) * 100) / 100;
 
     return {
       pending,
@@ -2215,9 +2261,9 @@ export default function ForecastPage({
                     data-testid="badge-balance-mismatch"
                   >
                     <AlertCircle className="w-3.5 h-3.5 mr-1 flex-none" />
-                    Inbox clear, but forecast end balance is off by{" "}
-                    {formatCurrency(bankReconcile.gap)} from the bank — match
-                    the rest or mark them unplanned.
+                    Inbox clear, but the forecast and the bank disagree by{" "}
+                    {formatCurrency(bankReconcile.gap)} as of the latest bank
+                    snapshot — check the starting balance or matched amounts.
                   </Badge>
                 )}
             </div>
@@ -2686,8 +2732,7 @@ export default function ForecastPage({
                   {bankReconcile.hasBank && !bankReconcile.isPriorMonth && (
                     <span className="text-xs text-muted-foreground tabular-nums">
                       Forecast end {formatCurrency(bankReconcile.forecastEnd)} ·
-                      Bank {formatCurrency(bankReconcile.bankEnd)} ·
-                      Gap {formatCurrency(bankReconcile.gap)}
+                      Bank now {formatCurrency(bankReconcile.bankEnd)}
                     </span>
                   )}
                   {bankReconcile.isPriorMonth && (
