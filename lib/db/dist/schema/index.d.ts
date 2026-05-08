@@ -3831,6 +3831,23 @@ export declare const forecastSettingsTable: import("drizzle-orm/pg-core").PgTabl
                 mask: string | null;
             }>;
         }>;
+        autoDedupeRanAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "auto_dedupe_ran_at";
+            tableName: "forecast_settings";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         updatedAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "updated_at";
             tableName: "forecast_settings";

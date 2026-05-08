@@ -617,6 +617,12 @@ export const forecastSettingsTable = pgTable("forecast_settings", {
       }
     >
   >(),
+  // (#411) Set the first time we auto-run `dedupePlaidAccountsForUser`
+  // on a user's behalf (Chase/transactions hit, post-link, or sign-in).
+  // Used as the gate that prevents the auto-dedupe from re-running on
+  // every request — once it's set, the routine only fires again when
+  // explicitly invoked (Plaid (re)link, the maintenance endpoint).
+  autoDedupeRanAt: timestamp("auto_dedupe_ran_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

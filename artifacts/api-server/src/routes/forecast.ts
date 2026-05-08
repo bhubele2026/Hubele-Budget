@@ -27,7 +27,10 @@ import {
 } from "../lib/debtMinSchedule";
 import { plaid } from "../lib/plaid";
 import { archiveExpiredOneTime } from "./bills";
-import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
+import {
+  dedupePlaidAccountsForUser,
+  runAutoDedupeIfNeeded,
+} from "../lib/dedupePlaidAccounts";
 import {
   dedupeTransactionsForUser,
   dedupeTransactionsAcrossAccountsForUser,
@@ -75,6 +78,15 @@ function presentSnapshot(row: typeof forecastSettingsTable.$inferSelect) {
 }
 
 export async function listCheckingAccounts(userId: string) {
+  // (#411) First time this user lands on the Chase / transactions page,
+  // collapse any leftover duplicate `plaid_accounts` rows so the picker
+  // and balances render against a single survivor row. Gated by
+  // `forecast_settings.auto_dedupe_ran_at` so it runs at most once per
+  // user; explicit hooks (Plaid (re)link, the maintenance endpoint)
+  // bypass the gate. Best-effort — failures are logged but never block
+  // the page load.
+  await runAutoDedupeIfNeeded(userId, "listCheckingAccounts");
+
   // (#410) Read the bank-snapshot pointer first so dedupe can prefer the
   // snapshot row when collapsing duplicates by (institutionName, mask).
   const [settingsRow] = await db
@@ -154,31 +166,21 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   await archiveExpiredOneTime(userId);
   let settings = await ensureSettings(userId);
-  // (#429) Auto-repair pass: if the user's accountSnapshots map has any
-  // orphan keys (left over from #410's plaid_accounts dedupe) salvage
-  // them onto the surviving (institutionName, mask) row and prune the
-  // dead keys. The dedupe routine is idempotent and a no-op on a clean
-  // account, so this is safe to call on every /forecast read. We
-  // best-effort it — never let a backfill failure block the page.
-  const snapshotMap = settings.accountSnapshots ?? {};
-  if (Object.keys(snapshotMap).length > 0) {
-    try {
-      const report = await dedupePlaidAccountsForUser(userId);
-      if (
-        report.accountSnapshotsRepointed > 0 ||
-        report.accountSnapshotsPruned > 0 ||
-        report.duplicatesRemoved > 0
-      ) {
-        // Re-read settings so the response below reflects the repaired
-        // accountSnapshots map instead of the stale pre-dedupe copy.
-        settings = await ensureSettings(userId);
-      }
-    } catch (err) {
-      console.error(
-        "[forecast] accountSnapshots auto-repair failed",
-        { userId, err: err instanceof Error ? err.message : String(err) },
-      );
-    }
+  // (#411) Auto-dedupe / accountSnapshots auto-repair pass. Gated by
+  // `forecast_settings.auto_dedupe_ran_at` so it runs at most once per
+  // user from this code path instead of re-firing on every /forecast
+  // request. Idempotent and best-effort — failures are logged but never
+  // block the page load.
+  const autoReport = await runAutoDedupeIfNeeded(userId, "/forecast");
+  if (
+    autoReport &&
+    (autoReport.accountSnapshotsRepointed > 0 ||
+      autoReport.accountSnapshotsPruned > 0 ||
+      autoReport.duplicatesRemoved > 0)
+  ) {
+    // Re-read settings so the response below reflects the repaired
+    // accountSnapshots map instead of the stale pre-dedupe copy.
+    settings = await ensureSettings(userId);
   }
   // (#432-followup) Heal stale snapshot identity: when
   // `bank_snapshot_account_id` points at a real plaid_accounts row but

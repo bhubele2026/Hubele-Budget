@@ -60,7 +60,10 @@ import {
   listRecentSyncAttempts,
   PLAID_SYNC_ATTEMPT_LIST_LIMIT,
 } from "../lib/plaidSyncAttempts";
-import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
+import {
+  dedupePlaidAccountsForUser,
+  markAutoDedupeRan,
+} from "../lib/dedupePlaidAccounts";
 import { cleanupMalformedTokenSiblings } from "../lib/plaidMalformedSiblingCleanup";
 import { debtsTable } from "@workspace/db";
 
@@ -819,6 +822,15 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     // pre-date the guard, mirroring the heal hook on /amex/anchor.
     try {
       const healed = await dedupePlaidAccountsForUser(req.userId!);
+      // (#411) One-line summary so we can see how many users were
+      // affected by the auto-heal across all hooks.
+      console.info(
+        `[auto-dedupe] userId=${req.userId} trigger=plaid-exchange groupsScanned=${healed.groupsScanned} duplicatesRemoved=${healed.duplicatesRemoved} transactionsRepointed=${healed.transactionsRepointed} debtsRepointed=${healed.debtsRepointed} snapshotRepointed=${healed.snapshotRepointed} syntheticDropped=${healed.syntheticDropped} accountSnapshotsRepointed=${healed.accountSnapshotsRepointed} accountSnapshotsPruned=${healed.accountSnapshotsPruned} transactionsDeduped=${healed.transactionsDeduped ?? 0}`,
+      );
+      // (#411) We just ran the heal — flip the per-user gate so the
+      // next listCheckingAccounts / /forecast hit doesn't re-run an
+      // identical no-op pass. No-op for users whose flag is already set.
+      await markAutoDedupeRan(req.userId!);
       if (
         healed &&
         (healed.duplicatesRemoved > 0 ||

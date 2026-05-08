@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import {
   budgetCategoriesTable,
   db,
@@ -465,4 +465,102 @@ export async function dedupePlaidAccountsForUser(
 
     return report;
   });
+}
+
+/**
+ * (#411) Auto-run the duplicate-account heal once per user.
+ *
+ * Wired into the natural Chase/transactions hook (`listCheckingAccounts`)
+ * and post-link in `routes/plaid.ts` so users with stale duplicate
+ * `plaid_accounts` rows get cleaned up without having to invoke the
+ * maintenance endpoint manually. Gated by `forecast_settings.auto_dedupe_ran_at`
+ * so it runs at most once per user from this code path — explicit invocations
+ * (Plaid (re)link, the maintenance endpoint, the seed flow) bypass the gate.
+ *
+ * Best-effort: any failure is logged and swallowed so the caller never
+ * fails a user-facing request because of a healing pass.
+ */
+export async function runAutoDedupeIfNeeded(
+  userId: string,
+  trigger: string,
+  // Injection seam for tests: swap in a stub that throws to assert
+  // the failure-path gate-reset behavior. Production callers use the
+  // default which runs the real dedupe routine.
+  runner: (u: string) => Promise<DedupeReport> = dedupePlaidAccountsForUser,
+): Promise<DedupeReport | null> {
+  // Atomically claim the gate: only one concurrent caller will see
+  // a row returned, the rest no-op. The stamp is provisional — if
+  // the dedupe pass below throws, we reset the gate back to NULL so
+  // the next eligible request can retry. Without that reset, a single
+  // transient failure would permanently suppress healing for that user
+  // and defeat the whole "auto-clean so users don't have to ask" goal.
+  let claimed: Array<{ userId: string }> = [];
+  try {
+    claimed = await db
+      .update(forecastSettingsTable)
+      .set({ autoDedupeRanAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(forecastSettingsTable.userId, userId),
+          isNull(forecastSettingsTable.autoDedupeRanAt),
+        ),
+      )
+      .returning({ userId: forecastSettingsTable.userId });
+  } catch (err) {
+    console.error(
+      `[auto-dedupe] gate-claim failed userId=${userId} trigger=${trigger} err=${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
+  if (claimed.length === 0) return null;
+  try {
+    const report = await runner(userId);
+    // One-line summary so we can see how many users were affected.
+    console.info(
+      `[auto-dedupe] userId=${userId} trigger=${trigger} groupsScanned=${report.groupsScanned} duplicatesRemoved=${report.duplicatesRemoved} transactionsRepointed=${report.transactionsRepointed} debtsRepointed=${report.debtsRepointed} snapshotRepointed=${report.snapshotRepointed} syntheticDropped=${report.syntheticDropped} accountSnapshotsRepointed=${report.accountSnapshotsRepointed} accountSnapshotsPruned=${report.accountSnapshotsPruned} transactionsDeduped=${report.transactionsDeduped ?? 0}`,
+    );
+    return report;
+  } catch (err) {
+    console.error(
+      `[auto-dedupe] failed userId=${userId} trigger=${trigger} err=${err instanceof Error ? err.message : String(err)} — clearing gate so the next eligible request can retry`,
+    );
+    // Reset the gate so a future request retries instead of being
+    // permanently skipped. Best-effort: if this clear itself fails the
+    // worst case is the user stays in the pre-#411 state (the explicit
+    // /forecast/dedupe-plaid-accounts endpoint still works).
+    try {
+      await db
+        .update(forecastSettingsTable)
+        .set({ autoDedupeRanAt: null, updatedAt: new Date() })
+        .where(eq(forecastSettingsTable.userId, userId));
+    } catch (clearErr) {
+      console.error(
+        `[auto-dedupe] gate-clear failed userId=${userId} trigger=${trigger} err=${clearErr instanceof Error ? clearErr.message : String(clearErr)}`,
+      );
+    }
+    return null;
+  }
+}
+
+/**
+ * (#411) Mark the auto-dedupe gate as already-run for a user without
+ * actually running the routine — used by callers that just performed
+ * an equivalent dedupe pass themselves (e.g. the post-link hook in
+ * `routes/plaid.ts`) so we don't immediately re-run on the next
+ * `listCheckingAccounts` hit. Idempotent.
+ */
+export async function markAutoDedupeRan(userId: string): Promise<void> {
+  try {
+    await db
+      .update(forecastSettingsTable)
+      .set({ autoDedupeRanAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(forecastSettingsTable.userId, userId),
+          isNull(forecastSettingsTable.autoDedupeRanAt),
+        ),
+      );
+  } catch {
+    // Best-effort.
+  }
 }
