@@ -220,22 +220,26 @@ const RECURRING_BILLS_GROUP = "Recurring Bills";
 const RECURRING_INCOME_GROUP = "Income";
 const RECURRING_AUTO_BASE_SORT = 9000;
 
-// Ensure every active recurring item that isn't linked to a budget category
-// has one created for it as `auto_bills`, so the recurring bill is reflected
-// as a budget line for monthly budgeting. Bills/income that already point at
-// a curated category (e.g. "Utilities" rolling up several bills) are left
-// alone — their planned amount stays user-controlled. Idempotent: re-runs
-// only act on items still missing a valid `category_id`.
+// Ensure every active recurring INCOME item is linked to an `auto_bills`
+// budget category so paychecks/other income flow into the Budget page
+// automatically. Expense bills are intentionally NOT auto-categorized —
+// the user assigns each expense bill to one of the curated manual
+// categories (Utilities, Insurance, Car Payments, etc.) on the Bills page,
+// and the Budget page rolls those amounts up into the linked category.
+// This avoids the duplicate-row problem where every bill spawned its own
+// "Recurring Bills" entry alongside the user's existing envelopes.
 async function syncAutoBillsFromRecurring(userId: string): Promise<void> {
-  const items = await db
-    .select()
-    .from(recurringItemsTable)
-    .where(
-      and(
-        eq(recurringItemsTable.userId, userId),
-        eq(recurringItemsTable.active, "true"),
-      ),
-    );
+  const items = (
+    await db
+      .select()
+      .from(recurringItemsTable)
+      .where(
+        and(
+          eq(recurringItemsTable.userId, userId),
+          eq(recurringItemsTable.active, "true"),
+        ),
+      )
+  ).filter((i) => i.kind === "income");
   if (items.length === 0) return;
 
   // A recurring item needs an auto category when it has no categoryId, OR
@@ -1277,44 +1281,45 @@ router.get(
     const monthFromDate = parseISO(monthStart);
     const monthToDate = addDays(parseISO(monthEndStr0), -1);
 
-    const autoBillsCats = cats.filter((c) => c.sourceKind === "auto_bills");
-    const autoBillsCatIds = autoBillsCats.map((c) => c.id);
-    const autoBillsCatByName = new Map(autoBillsCats.map((c) => [c.name, c]));
     const autoDebtCats = cats.filter((c) => c.sourceKind === "auto_debts");
 
     const autoPlannedByCat = new Map<string, string>();
+    const billBackedCatIds = new Set<string>();
 
-    if (autoBillsCatIds.length > 0) {
-      // Pull every recurring item the user has so we can match by either
-      // categoryId (preferred) or by exact category name (fallback for
-      // legacy items created before categoryId linkage existed).
+    // Roll every active recurring item (bills + income + one-off) into the
+    // category it points at, regardless of that category's source_kind.
+    // Manual categories with linked bills become "bill-backed": their
+    // planned amount is the sum of expanded events for the viewed month
+    // instead of the manually-entered budget_lines value. This is what
+    // lets a user assign State Farm + TruStage to "Insurance" and see the
+    // sum on the Budget page automatically.
+    {
+      const catIdSet = new Set(cats.map((c) => c.id));
       const recurring = await db
         .select()
         .from(recurringItemsTable)
         .where(eq(recurringItemsTable.userId, req.userId!));
       const sums = new Map<string, number>();
-      const expandFor = (item: typeof recurring[number], catId: string) => {
-        const events = expandItem(item, monthFromDate, monthToDate);
-        let total = 0;
-        for (const ev of events) total += Math.abs(ev.amount);
-        sums.set(catId, (sums.get(catId) ?? 0) + total);
-      };
       for (const r of recurring) {
         if (r.active === "false") continue;
-        if (r.categoryId && autoBillsCatIds.includes(r.categoryId)) {
-          expandFor(r, r.categoryId);
-          continue;
+        if (!r.categoryId || !catIdSet.has(r.categoryId)) continue;
+        const events = expandItem(r, monthFromDate, monthToDate);
+        let total = 0;
+        for (const ev of events) total += Math.abs(ev.amount);
+        if (events.length > 0) {
+          sums.set(r.categoryId, (sums.get(r.categoryId) ?? 0) + total);
+          billBackedCatIds.add(r.categoryId);
+        } else {
+          // Item is linked to this category but produces no events this
+          // month (e.g. one-time bill in a different month, biweekly with
+          // 0 hits). The category still counts as bill-backed so the line
+          // shows $0.00 from bills rather than the carried-forward amount.
+          billBackedCatIds.add(r.categoryId);
+          if (!sums.has(r.categoryId)) sums.set(r.categoryId, 0);
         }
-        // Fallback: match by exact category name when categoryId is not set
-        // or points elsewhere.
-        const cat = autoBillsCatByName.get(r.name);
-        if (cat) expandFor(r, cat.id);
       }
-      // Ensure every auto_bills category gets a value (deactivated/missing
-      // recurring items leave the budget line at $0 for the month, per
-      // task #35 acceptance criteria).
-      for (const c of autoBillsCats) {
-        autoPlannedByCat.set(c.id, (sums.get(c.id) ?? 0).toFixed(2));
+      for (const [catId, total] of sums) {
+        autoPlannedByCat.set(catId, total.toFixed(2));
       }
     }
 
@@ -1407,7 +1412,12 @@ router.get(
       // a monthly amount (e.g. one paycheck of $4,499.99) instead of the
       // 2–3 biweekly events that the recurring-item expansion would yield
       // for some months. Manual categories are unaffected. (task #115)
-      const isAuto = c.sourceKind !== "manual";
+      // A category is "auto-derived" when it's an auto_bills/auto_debts row
+      // (paychecks, debt mins) OR it's a manual category that has at least
+      // one recurring item linked to it (bill-backed envelope, e.g.
+      // Insurance = State Farm + TruStage). Pinning still wins so the user
+      // can lock a snapshot value in either case.
+      const isAuto = c.sourceKind !== "manual" || billBackedCatIds.has(c.id);
       const linePinned = line?.pinned === true;
       const usePinnedLine =
         isAuto && line !== undefined && (monthPinned || linePinned);
@@ -1628,13 +1638,13 @@ async function snapshotAutoLinesForMonth(
   const monthFromDate = parseISO(monthStart);
   const monthToDate = addDays(parseISO(monthEndStr0), -1);
 
-  const autoBillsCats = cats.filter((c) => c.sourceKind === "auto_bills");
-  const autoBillsCatIds = autoBillsCats.map((c) => c.id);
-  const autoBillsCatByName = new Map(autoBillsCats.map((c) => [c.name, c]));
   const autoDebtCats = cats.filter((c) => c.sourceKind === "auto_debts");
   const autoPlannedByCat = new Map<string, string>();
 
-  if (autoBillsCatIds.length > 0) {
+  // Mirror the GET-handler model: roll every active recurring item into
+  // its linked categoryId regardless of the category's source_kind.
+  {
+    const catIdSet = new Set(cats.map((c) => c.id));
     const recurring = await db
       .select()
       .from(recurringItemsTable)
@@ -1642,21 +1652,14 @@ async function snapshotAutoLinesForMonth(
     const sums = new Map<string, number>();
     for (const r of recurring) {
       if (r.active === "false") continue;
-      const expandFor = (catId: string) => {
-        const events = expandItem(r, monthFromDate, monthToDate);
-        let total = 0;
-        for (const ev of events) total += Math.abs(ev.amount);
-        sums.set(catId, (sums.get(catId) ?? 0) + total);
-      };
-      if (r.categoryId && autoBillsCatIds.includes(r.categoryId)) {
-        expandFor(r.categoryId);
-        continue;
-      }
-      const cat = autoBillsCatByName.get(r.name);
-      if (cat) expandFor(cat.id);
+      if (!r.categoryId || !catIdSet.has(r.categoryId)) continue;
+      const events = expandItem(r, monthFromDate, monthToDate);
+      let total = 0;
+      for (const ev of events) total += Math.abs(ev.amount);
+      sums.set(r.categoryId, (sums.get(r.categoryId) ?? 0) + total);
     }
-    for (const c of autoBillsCats) {
-      autoPlannedByCat.set(c.id, (sums.get(c.id) ?? 0).toFixed(2));
+    for (const [catId, total] of sums) {
+      autoPlannedByCat.set(catId, total.toFixed(2));
     }
   }
 
