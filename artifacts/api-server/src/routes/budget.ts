@@ -228,6 +228,133 @@ const RECURRING_AUTO_BASE_SORT = 9000;
 // and the Budget page rolls those amounts up into the linked category.
 // This avoids the duplicate-row problem where every bill spawned its own
 // "Recurring Bills" entry alongside the user's existing envelopes.
+// One-time, idempotent data heal for users whose recurring expense bills
+// were previously linked to per-bill `auto_bills` expense categories
+// (the old "Recurring Bills" group). Re-points each known bill name to
+// the appropriate manual category, then deletes any auto_bills EXPENSE
+// category that no longer has an active recurring item linked to it.
+// Safe to run on every request: each step short-circuits when there is
+// nothing to do.
+const BILL_NAME_TO_MANUAL_CATEGORY: Readonly<Record<string, string>> = {
+  "Water/Sewer": "Utilities",
+  "MGE Electric & Gas": "Utilities",
+  "Verizon Wireless": "Utilities",
+  "State Farm Insurance": "Insurance",
+  "State Farm": "Insurance",
+  "TruStage / Ethos": "Insurance",
+  "Toyota Lease": "Car Payments",
+  "Hannah's Car (UW Credit Union)": "Car Payments",
+  "Kwik Trip / gas": "Gas, Maintenance & Parking",
+  "PlayStation Network": "Subscriptions",
+  "Dog Waste Removal": "Pets",
+};
+
+async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
+  // Step 1: relink known bill names to their manual category if such a
+  // category exists for this user. No-op if the recurring item is already
+  // linked to the right category.
+  const billNames = Object.keys(BILL_NAME_TO_MANUAL_CATEGORY);
+  const targetNames = Array.from(
+    new Set(Object.values(BILL_NAME_TO_MANUAL_CATEGORY)),
+  );
+
+  const cats = await db
+    .select({
+      id: budgetCategoriesTable.id,
+      name: budgetCategoriesTable.name,
+      sourceKind: budgetCategoriesTable.sourceKind,
+      kind: budgetCategoriesTable.kind,
+    })
+    .from(budgetCategoriesTable)
+    .where(eq(budgetCategoriesTable.userId, userId));
+  const manualByName = new Map<string, string>();
+  for (const c of cats) {
+    if (c.sourceKind === "manual" && targetNames.includes(c.name)) {
+      manualByName.set(c.name, c.id);
+    }
+  }
+
+  const items = await db
+    .select()
+    .from(recurringItemsTable)
+    .where(eq(recurringItemsTable.userId, userId));
+  for (const item of items) {
+    if (!billNames.includes(item.name)) continue;
+    const targetCatName = BILL_NAME_TO_MANUAL_CATEGORY[item.name]!;
+    const targetCatId = manualByName.get(targetCatName);
+    if (!targetCatId) continue;
+    if (item.categoryId === targetCatId) continue;
+    await db
+      .update(recurringItemsTable)
+      .set({ categoryId: targetCatId })
+      .where(
+        and(
+          eq(recurringItemsTable.id, item.id),
+          eq(recurringItemsTable.userId, userId),
+        ),
+      );
+  }
+
+  // Step 2: cascade-delete any auto_bills EXPENSE category for this user
+  // that has no active recurring item still linked to it. Income auto_bills
+  // categories (paychecks) are preserved.
+  const autoExpenseCats = cats.filter(
+    (c) => c.sourceKind === "auto_bills" && c.kind === "expense",
+  );
+  if (autoExpenseCats.length === 0) return;
+
+  const stillLinked = new Set<string>();
+  const refreshedItems = await db
+    .select({
+      categoryId: recurringItemsTable.categoryId,
+      active: recurringItemsTable.active,
+    })
+    .from(recurringItemsTable)
+    .where(eq(recurringItemsTable.userId, userId));
+  for (const r of refreshedItems) {
+    if (r.active === "true" && r.categoryId) stillLinked.add(r.categoryId);
+  }
+
+  const orphans = autoExpenseCats
+    .filter((c) => !stillLinked.has(c.id))
+    .map((c) => c.id);
+  if (orphans.length === 0) return;
+
+  await db
+    .delete(budgetLinesTable)
+    .where(
+      and(
+        eq(budgetLinesTable.userId, userId),
+        inArray(budgetLinesTable.categoryId, orphans),
+      ),
+    );
+  await db
+    .update(transactionsTable)
+    .set({ categoryId: null })
+    .where(
+      and(
+        eq(transactionsTable.userId, userId),
+        inArray(transactionsTable.categoryId, orphans),
+      ),
+    );
+  await db
+    .delete(mappingRulesTable)
+    .where(
+      and(
+        eq(mappingRulesTable.userId, userId),
+        inArray(mappingRulesTable.categoryId, orphans),
+      ),
+    );
+  await db
+    .delete(budgetCategoriesTable)
+    .where(
+      and(
+        eq(budgetCategoriesTable.userId, userId),
+        inArray(budgetCategoriesTable.id, orphans),
+      ),
+    );
+}
+
 async function syncAutoBillsFromRecurring(userId: string): Promise<void> {
   const items = (
     await db
@@ -1126,6 +1253,7 @@ router.get(
     // budget category linked to it, so the bill appears as a budget line
     // for monthly budgeting. No-op for items already linked to a curated
     // category (e.g. "Utilities" rolling up several bills).
+    await healLegacyRecurringBillLinks(req.userId!);
     await syncAutoBillsFromRecurring(req.userId!);
 
     // Ensure the system-managed "Avalanche payment" line is present and
