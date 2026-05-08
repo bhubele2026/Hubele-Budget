@@ -1,0 +1,1 @@
+{"version":3,"file":"createMappingRuleResponse.d.ts","sourceRoot":"","sources":["../../../src/generated/types/createMappingRuleResponse.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,eAAe,CAAC;AACjD,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,cAAc,CAAC;AAE/C,MAAM,MAAM,yBAAyB,GAAG,WAAW,GAAG;IACpD;;;;;;;;;;;;KAYC;IACD,UAAU,EAAE,UAAU,CAAC;CACxB,CAAC"}
