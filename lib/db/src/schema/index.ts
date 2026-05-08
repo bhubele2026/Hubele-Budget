@@ -348,6 +348,54 @@ export const plaidConsentRemindersSentTable = pgTable(
   }),
 );
 
+// (#396) De-dup state for the daily malformed-token operator alert
+// (#371). The sweep fires every morning the flagged count crosses the
+// threshold, but a config-level breakage that takes a few days to
+// fully clean up (rolling reconnects, manual DB fixes) would otherwise
+// re-page operators with the same alert every morning until `flagged`
+// drops back below the threshold — exactly the channel-noise the
+// original ticket warned against.
+//
+// Each row is the fingerprint of an alert that actually went out:
+//
+//   * `digest` — sha256 of the sorted flagged `item_row_id` list. Two
+//     consecutive sweeps with the same flagged set produce the same
+//     digest, so the next morning's sweep can short-circuit before
+//     paging anyone.
+//   * `flagged_item_row_ids` — the same list as JSON so the suppress
+//     check can compare set membership and detect "any new items?"
+//     even if the count happens to stay flat (one user reconnected,
+//     another broke).
+//   * `flagged` / `scanned` / `threshold` — the raw numbers at the
+//     time of the alert so the suppress check can decide whether the
+//     spike grew enough day-over-day to re-arm.
+//
+// Append-only — never updated. The suppress check reads the most
+// recent row by `sent_at`. Persisting in Postgres (rather than an
+// in-memory cache) is the explicit "survives process restarts"
+// requirement from the task.
+export const plaidMalformedTokenAlertsSentTable = pgTable(
+  "plaid_malformed_token_alerts_sent",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sentAt: timestamp("sent_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    flagged: integer("flagged").notNull(),
+    scanned: integer("scanned").notNull(),
+    threshold: integer("threshold").notNull(),
+    digest: text("digest").notNull(),
+    flaggedItemRowIds: jsonb("flagged_item_row_ids").notNull(),
+    channel: text("channel").notNull(),
+    recipient: text("recipient"),
+  },
+  (t) => ({
+    sentAtIdx: index("plaid_malformed_token_alerts_sent_sent_at_idx").on(
+      t.sentAt,
+    ),
+  }),
+);
+
 // (#279) Append-only audit log of every Plaid sync attempt — one row
 // per (item, kind) outcome. Surfaces the full recent-history (e.g.
 // "this bank failed 4 of the last 10 syncs") in Settings → Linked

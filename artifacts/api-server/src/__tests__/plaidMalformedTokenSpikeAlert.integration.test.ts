@@ -5,15 +5,24 @@ import {
   db,
   plaidAccountsTable,
   plaidItemsTable,
+  plaidMalformedTokenAlertsSentTable,
   transactionsTable,
 } from "@workspace/db";
 import { flagMalformedAccessTokens } from "../lib/plaidSync";
 import {
+  computeAlertDigest,
   DEFAULT_ALERT_THRESHOLD,
+  DEFAULT_GROWTH_ABSOLUTE,
+  DEFAULT_GROWTH_PERCENT,
   getAlertThreshold,
+  getGrowthAbsolute,
+  getGrowthPercent,
   maybeAlertOnMalformedTokenSpike,
   renderMalformedTokenAlert,
   resolveOperatorRecipient,
+  shouldSuppressDuplicateAlert,
+  type LoadLastAlertFn,
+  type RecordAlertFn,
   type SendOperatorAlertFn,
 } from "../lib/plaidMalformedTokenAlert";
 
@@ -49,7 +58,16 @@ async function seedItem(
 
 beforeEach(async () => {
   await cleanup();
+  // (#396) Wipe the de-dup table so the read-most-recent suppress
+  // check starts each test from a known-empty state regardless of
+  // what the prior integration test wrote. Other tests in this file
+  // still pass `loadLastAlert: null` to opt out, but we belt-and-
+  // suspenders this so a lingering row from a parallel suite can't
+  // silently mute an assertion.
+  await db.delete(plaidMalformedTokenAlertsSentTable);
   delete process.env.MALFORMED_TOKEN_ALERT_THRESHOLD;
+  delete process.env.MALFORMED_TOKEN_ALERT_GROWTH_ABSOLUTE;
+  delete process.env.MALFORMED_TOKEN_ALERT_GROWTH_PERCENT;
   delete process.env.OPS_ALERT_EMAIL;
   delete process.env.OWNER_EMAIL;
 });
@@ -210,6 +228,278 @@ describe("(#371) operator alert on daily malformed-token sweep spike", () => {
     );
     expect(result.channel).toBe("email");
     expect(result.error).toBe("SendGrid 500");
+  });
+
+  describe("(#396) day-over-day de-dup", () => {
+    it("getGrowthAbsolute / getGrowthPercent honor env overrides", () => {
+      expect(getGrowthAbsolute()).toBe(DEFAULT_GROWTH_ABSOLUTE);
+      expect(getGrowthPercent()).toBe(DEFAULT_GROWTH_PERCENT);
+      process.env.MALFORMED_TOKEN_ALERT_GROWTH_ABSOLUTE = "5";
+      process.env.MALFORMED_TOKEN_ALERT_GROWTH_PERCENT = "50";
+      expect(getGrowthAbsolute()).toBe(5);
+      expect(getGrowthPercent()).toBe(50);
+      process.env.MALFORMED_TOKEN_ALERT_GROWTH_ABSOLUTE = "garbage";
+      process.env.MALFORMED_TOKEN_ALERT_GROWTH_PERCENT = "0";
+      expect(getGrowthAbsolute()).toBe(DEFAULT_GROWTH_ABSOLUTE);
+      expect(getGrowthPercent()).toBe(DEFAULT_GROWTH_PERCENT);
+    });
+
+    it("computeAlertDigest is order-independent and changes with set membership", () => {
+      const a = computeAlertDigest([
+        { itemRowId: "r1", itemId: "ext-1", institutionName: "A" },
+        { itemRowId: "r2", itemId: "ext-2", institutionName: "B" },
+      ]);
+      const b = computeAlertDigest([
+        { itemRowId: "r2", itemId: "ext-2", institutionName: "B" },
+        { itemRowId: "r1", itemId: "ext-1", institutionName: "A" },
+      ]);
+      expect(a).toBe(b);
+      const c = computeAlertDigest([
+        { itemRowId: "r1", itemId: "ext-1", institutionName: "A" },
+        { itemRowId: "r3", itemId: "ext-3", institutionName: "C" },
+      ]);
+      expect(c).not.toBe(a);
+    });
+
+    it("shouldSuppressDuplicateAlert: identical digest is suppressed", () => {
+      const reason = shouldSuppressDuplicateAlert({
+        current: { digest: "d", flaggedItemRowIds: ["r1", "r2"], flagged: 2 },
+        last: {
+          digest: "d",
+          flaggedItemRowIds: ["r1", "r2"],
+          flagged: 2,
+          sentAt: new Date(),
+        },
+        growthAbsolute: 2,
+        growthPercent: 25,
+      });
+      expect(reason).toBe("duplicate-of-prior-alert");
+    });
+
+    it("shouldSuppressDuplicateAlert: any new flagged item re-arms even if count is flat", () => {
+      const reason = shouldSuppressDuplicateAlert({
+        current: { digest: "x", flaggedItemRowIds: ["r1", "r3"], flagged: 2 },
+        last: {
+          digest: "y",
+          flaggedItemRowIds: ["r1", "r2"],
+          flagged: 2,
+          sentAt: new Date(),
+        },
+        growthAbsolute: 2,
+        growthPercent: 25,
+      });
+      expect(reason).toBeNull();
+    });
+
+    it("shouldSuppressDuplicateAlert: subset growth below thresholds stays suppressed", () => {
+      const reason = shouldSuppressDuplicateAlert({
+        current: {
+          digest: "x",
+          flaggedItemRowIds: ["r1", "r2"],
+          flagged: 2,
+        },
+        last: {
+          digest: "y",
+          flaggedItemRowIds: ["r1", "r2", "r3"],
+          flagged: 3,
+          sentAt: new Date(),
+        },
+        growthAbsolute: 2,
+        growthPercent: 25,
+      });
+      // Cleanup is happening (3 → 2, no new items) — definitely don't re-page.
+      expect(reason).toBe("duplicate-of-prior-alert");
+    });
+
+    it("shouldSuppressDuplicateAlert: absolute-growth threshold re-arms", () => {
+      const reason = shouldSuppressDuplicateAlert({
+        current: {
+          digest: "x",
+          flaggedItemRowIds: ["r1", "r2", "r3", "r4", "r5"],
+          flagged: 5,
+        },
+        last: {
+          digest: "y",
+          flaggedItemRowIds: ["r1", "r2", "r3"],
+          flagged: 3,
+          sentAt: new Date(),
+        },
+        growthAbsolute: 2,
+        growthPercent: 99,
+      });
+      expect(reason).toBeNull();
+    });
+
+    it("shouldSuppressDuplicateAlert: percent-growth threshold re-arms even if absolute is below", () => {
+      const reason = shouldSuppressDuplicateAlert({
+        current: {
+          digest: "x",
+          flaggedItemRowIds: Array.from({ length: 26 }, (_, i) => `r${i}`),
+          flagged: 26,
+        },
+        last: {
+          digest: "y",
+          flaggedItemRowIds: Array.from({ length: 20 }, (_, i) => `r${i}`),
+          flagged: 20,
+          sentAt: new Date(),
+        },
+        growthAbsolute: 100, // intentionally unreachable so percent rule is the trigger
+        growthPercent: 25,
+      });
+      expect(reason).toBeNull();
+    });
+
+    it("end-to-end with in-memory hooks: second identical day is suppressed, third with new item re-fires", async () => {
+      const itemsDay1: import("../lib/plaidSync").FlaggedMalformedItem[] = [
+        { itemRowId: "r1", itemId: "ext-1", institutionName: "Chase" },
+        { itemRowId: "r2", itemId: "ext-2", institutionName: "Amex" },
+        { itemRowId: "r3", itemId: "ext-3", institutionName: "Capital One" },
+      ];
+
+      let lastAlert: import("../lib/plaidMalformedTokenAlert").LastAlertSnapshot | null =
+        null;
+      const loadLastAlert: LoadLastAlertFn = async () => lastAlert;
+      const recordAlert: RecordAlertFn = async (rec) => {
+        lastAlert = {
+          digest: rec.digest,
+          flaggedItemRowIds: rec.flaggedItemRowIds,
+          flagged: rec.flagged,
+          sentAt: new Date(),
+        };
+      };
+      const send = vi.fn<SendOperatorAlertFn>(async () => ({
+        ok: true,
+        channel: "email",
+        error: null,
+      }));
+
+      const day1 = await maybeAlertOnMalformedTokenSpike(
+        { scanned: 10, flagged: 3, flaggedItems: itemsDay1 },
+        {
+          send,
+          threshold: 3,
+          recipient: "ops@example.com",
+          loadLastAlert,
+          recordAlert,
+          growthAbsolute: 2,
+          growthPercent: 25,
+        },
+      );
+      expect(day1.channel).toBe("email");
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(lastAlert).not.toBeNull();
+
+      // Day 2: same exact set — must be silent.
+      const day2 = await maybeAlertOnMalformedTokenSpike(
+        { scanned: 10, flagged: 3, flaggedItems: itemsDay1 },
+        {
+          send,
+          threshold: 3,
+          recipient: "ops@example.com",
+          loadLastAlert,
+          recordAlert,
+          growthAbsolute: 2,
+          growthPercent: 25,
+        },
+      );
+      expect(day2.channel).toBe("skipped");
+      expect(day2.reason).toBe("duplicate-of-prior-alert");
+      expect(day2.recipient).toBe("ops@example.com");
+      expect(send).toHaveBeenCalledTimes(1);
+
+      // Day 3: a new bank broke (r4) — must re-fire even though
+      // count grew by only +1 (below the absolute threshold).
+      const itemsDay3 = [
+        ...itemsDay1,
+        { itemRowId: "r4", itemId: "ext-4", institutionName: "Citi" },
+      ];
+      const day3 = await maybeAlertOnMalformedTokenSpike(
+        { scanned: 10, flagged: 4, flaggedItems: itemsDay3 },
+        {
+          send,
+          threshold: 3,
+          recipient: "ops@example.com",
+          loadLastAlert,
+          recordAlert,
+          growthAbsolute: 2,
+          growthPercent: 25,
+        },
+      );
+      expect(day3.channel).toBe("email");
+      expect(send).toHaveBeenCalledTimes(2);
+    });
+
+    it("DB-backed default: two consecutive sweeps with the same flagged set page operators only once", async () => {
+      const items: import("../lib/plaidSync").FlaggedMalformedItem[] = [
+        { itemRowId: "r1", itemId: "ext-1", institutionName: "Chase" },
+        { itemRowId: "r2", itemId: "ext-2", institutionName: "Amex" },
+        { itemRowId: "r3", itemId: "ext-3", institutionName: "Capital One" },
+      ];
+      const send = vi.fn<SendOperatorAlertFn>(async () => ({
+        ok: true,
+        channel: "email",
+        error: null,
+      }));
+      // First call: DB is empty (beforeEach truncated), so the alert
+      // fires and a row is written via the default `recordAlertToDb`.
+      const first = await maybeAlertOnMalformedTokenSpike(
+        { scanned: 10, flagged: 3, flaggedItems: items },
+        { send, threshold: 3, recipient: "ops@example.com" },
+      );
+      expect(first.channel).toBe("email");
+
+      const persisted = await db
+        .select()
+        .from(plaidMalformedTokenAlertsSentTable);
+      expect(persisted).toHaveLength(1);
+      expect(persisted[0]!.flagged).toBe(3);
+      expect(persisted[0]!.digest).toBe(computeAlertDigest(items));
+
+      // Second call with the same items: dedup row exists in DB now,
+      // so this must be suppressed without invoking the transport again.
+      const second = await maybeAlertOnMalformedTokenSpike(
+        { scanned: 10, flagged: 3, flaggedItems: items },
+        { send, threshold: 3, recipient: "ops@example.com" },
+      );
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(second.channel).toBe("skipped");
+      expect(second.reason).toBe("duplicate-of-prior-alert");
+    });
+
+    it("a failed send does NOT persist the de-dup row, so the next sweep retries", async () => {
+      const items: import("../lib/plaidSync").FlaggedMalformedItem[] = [
+        { itemRowId: "r1", itemId: "ext-1", institutionName: "Chase" },
+        { itemRowId: "r2", itemId: "ext-2", institutionName: "Amex" },
+        { itemRowId: "r3", itemId: "ext-3", institutionName: "Capital One" },
+      ];
+      const failingSend = vi.fn<SendOperatorAlertFn>(async () => ({
+        ok: false,
+        channel: "email",
+        error: "SendGrid 500",
+      }));
+      const failed = await maybeAlertOnMalformedTokenSpike(
+        { scanned: 10, flagged: 3, flaggedItems: items },
+        { send: failingSend, threshold: 3, recipient: "ops@example.com" },
+      );
+      expect(failed.error).toBe("SendGrid 500");
+
+      const persisted = await db
+        .select()
+        .from(plaidMalformedTokenAlertsSentTable);
+      expect(persisted).toHaveLength(0);
+
+      const okSend = vi.fn<SendOperatorAlertFn>(async () => ({
+        ok: true,
+        channel: "email",
+        error: null,
+      }));
+      const retried = await maybeAlertOnMalformedTokenSpike(
+        { scanned: 10, flagged: 3, flaggedItems: items },
+        { send: okSend, threshold: 3, recipient: "ops@example.com" },
+      );
+      expect(okSend).toHaveBeenCalledTimes(1);
+      expect(retried.channel).toBe("email");
+    });
   });
 
   it("end-to-end: a sweep that flags many items produces an alert with the real institution sample", async () => {

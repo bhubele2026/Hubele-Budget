@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { desc } from "drizzle-orm";
+import { db, plaidMalformedTokenAlertsSentTable } from "@workspace/db";
 import { logger } from "./logger";
 import type { FlaggedMalformedItem } from "./plaidSync";
 
@@ -224,11 +227,166 @@ export function resolveOperatorRecipient(): string | null {
   );
 }
 
+/**
+ * (#396) Default growth thresholds that re-arm the alert after a
+ * suppressed day-over-day repeat.
+ *
+ * If the same set of items keeps showing up, we stay silent — but the
+ * moment the spike *grows* meaningfully (an additional N rows OR an
+ * X% increase day-over-day) we want operators paged again because
+ * "the cleanup isn't keeping up" or "a second wave just hit" is a
+ * different signal from "we already know about this batch".
+ *
+ * Defaults:
+ *   * +2 absolute — one extra flagged user can be noise (their token
+ *     happened to break today). Two extras is a trend.
+ *   * +25% — at small counts (4 → 5) the absolute rule fires first;
+ *     this kicks in at larger ones (20 → 26).
+ *
+ * Both are env-overridable so on-call can dial the noise up or down
+ * without a redeploy.
+ */
+export const DEFAULT_GROWTH_ABSOLUTE = 2;
+export const DEFAULT_GROWTH_PERCENT = 25;
+
+export function getGrowthAbsolute(): number {
+  const raw = process.env.MALFORMED_TOKEN_ALERT_GROWTH_ABSOLUTE?.trim();
+  if (!raw) return DEFAULT_GROWTH_ABSOLUTE;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_GROWTH_ABSOLUTE;
+  return Math.floor(n);
+}
+
+export function getGrowthPercent(): number {
+  const raw = process.env.MALFORMED_TOKEN_ALERT_GROWTH_PERCENT?.trim();
+  if (!raw) return DEFAULT_GROWTH_PERCENT;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_GROWTH_PERCENT;
+  return n;
+}
+
+/**
+ * Hash the flagged item set into a stable digest. Sorted so the order
+ * of `flaggedItems` (which mirrors the DB scan order and isn't
+ * guaranteed stable across runs) doesn't accidentally re-fire the
+ * alert. We hash `itemRowId` (DB primary key) rather than the Plaid
+ * `itemId` so a re-link that creates a fresh row is correctly seen
+ * as a new flagged entry.
+ */
+export function computeAlertDigest(items: FlaggedMalformedItem[]): string {
+  const sorted = items.map((it) => it.itemRowId).sort();
+  return createHash("sha256").update(sorted.join("\n")).digest("hex");
+}
+
+export type LastAlertSnapshot = {
+  digest: string;
+  flaggedItemRowIds: string[];
+  flagged: number;
+  sentAt: Date;
+};
+
+export type LoadLastAlertFn = () => Promise<LastAlertSnapshot | null>;
+
+export type RecordAlertFn = (record: {
+  digest: string;
+  flaggedItemRowIds: string[];
+  flagged: number;
+  scanned: number;
+  threshold: number;
+  channel: "email" | "log";
+  recipient: string | null;
+}) => Promise<void>;
+
+/**
+ * Default DB-backed loader for the last alert digest. Best-effort:
+ * if the read fails we let the alert through rather than silently
+ * suppressing it (a duplicate alert is recoverable; a missed alert
+ * during a real spike is the bug we're trying to prevent).
+ */
+export const loadLastAlertFromDb: LoadLastAlertFn = async () => {
+  const [row] = await db
+    .select()
+    .from(plaidMalformedTokenAlertsSentTable)
+    .orderBy(desc(plaidMalformedTokenAlertsSentTable.sentAt))
+    .limit(1);
+  if (!row) return null;
+  const ids = Array.isArray(row.flaggedItemRowIds)
+    ? (row.flaggedItemRowIds as unknown[]).filter(
+        (v): v is string => typeof v === "string",
+      )
+    : [];
+  return {
+    digest: row.digest,
+    flaggedItemRowIds: ids,
+    flagged: row.flagged,
+    sentAt: row.sentAt,
+  };
+};
+
+export const recordAlertToDb: RecordAlertFn = async (rec) => {
+  await db.insert(plaidMalformedTokenAlertsSentTable).values({
+    digest: rec.digest,
+    flaggedItemRowIds: rec.flaggedItemRowIds,
+    flagged: rec.flagged,
+    scanned: rec.scanned,
+    threshold: rec.threshold,
+    channel: rec.channel,
+    recipient: rec.recipient,
+  });
+};
+
+/**
+ * Decide whether the current spike is a duplicate of the last one we
+ * already paged operators about. Returns `null` (do not suppress) when
+ * the alert should fire, or a string reason when it should be muted.
+ *
+ * Re-arms when:
+ *   * any flagged itemRowId is new (a different bank broke since the
+ *     last alert — operators need to know the failure mode is still
+ *     spreading, not just lingering),
+ *   * the count grew by `>= growthAbsolute`, OR
+ *   * the count grew by `>= growthPercent` percent over the prior
+ *     alert's count.
+ */
+export function shouldSuppressDuplicateAlert(args: {
+  current: { digest: string; flaggedItemRowIds: string[]; flagged: number };
+  last: LastAlertSnapshot;
+  growthAbsolute: number;
+  growthPercent: number;
+}): string | null {
+  const { current, last, growthAbsolute, growthPercent } = args;
+  if (current.digest === last.digest) {
+    return "duplicate-of-prior-alert";
+  }
+  const lastSet = new Set(last.flaggedItemRowIds);
+  const hasNewItem = current.flaggedItemRowIds.some((id) => !lastSet.has(id));
+  if (hasNewItem) return null;
+  // Subset (or equal) of the prior set — only re-fire if the count
+  // grew enough to represent a genuine escalation.
+  const delta = current.flagged - last.flagged;
+  if (delta >= growthAbsolute) return null;
+  if (last.flagged > 0 && (delta / last.flagged) * 100 >= growthPercent) {
+    return null;
+  }
+  return "duplicate-of-prior-alert";
+}
+
 export type MaybeAlertOptions = {
   send?: SendOperatorAlertFn;
   now?: Date;
   threshold?: number;
   recipient?: string | null;
+  /**
+   * (#396) De-dup hooks. Default to a Postgres-backed implementation
+   * (`loadLastAlertFromDb` / `recordAlertToDb`) so the cron path
+   * gets repeat-suppression for free; tests can swap them in-memory.
+   * Pass `null` to disable suppression entirely (e.g. an integration
+   * test that wants to assert the unsuppressed render path).
+   */
+  loadLastAlert?: LoadLastAlertFn | null;
+  recordAlert?: RecordAlertFn | null;
+  growthAbsolute?: number;
+  growthPercent?: number;
 };
 
 /**
@@ -272,6 +430,60 @@ export async function maybeAlertOnMalformedTokenSpike(
       error: null,
     };
   }
+  // (#396) Suppress repeats of the same spike day-over-day. Done after
+  // the threshold + recipient gates so a misconfig still surfaces, and
+  // before the render/send work so a duplicate day is genuinely silent
+  // (no SendGrid call, no log spam) instead of "rendered then dropped".
+  const loadLastAlert =
+    options.loadLastAlert === undefined ? loadLastAlertFromDb : options.loadLastAlert;
+  const recordAlert =
+    options.recordAlert === undefined ? recordAlertToDb : options.recordAlert;
+  const growthAbsolute = options.growthAbsolute ?? getGrowthAbsolute();
+  const growthPercent = options.growthPercent ?? getGrowthPercent();
+  const digest = computeAlertDigest(summary.flaggedItems);
+  const flaggedItemRowIds = summary.flaggedItems.map((it) => it.itemRowId);
+  if (loadLastAlert) {
+    let lastAlert: LastAlertSnapshot | null = null;
+    try {
+      lastAlert = await loadLastAlert();
+    } catch (err) {
+      // Best-effort: a read failure must not silently suppress the
+      // alert — let it through and log so we notice the de-dup table
+      // is unreachable. Better a duplicate page than a missed real
+      // spike during an outage.
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        "Plaid malformed-token alert: failed to load last-alert digest, sending without de-dup",
+      );
+    }
+    if (lastAlert) {
+      const suppressReason = shouldSuppressDuplicateAlert({
+        current: { digest, flaggedItemRowIds, flagged: summary.flagged },
+        last: lastAlert,
+        growthAbsolute,
+        growthPercent,
+      });
+      if (suppressReason) {
+        logger.info(
+          {
+            flagged: summary.flagged,
+            scanned: summary.scanned,
+            threshold,
+            lastFlagged: lastAlert.flagged,
+            lastSentAt: lastAlert.sentAt.toISOString(),
+            digest,
+          },
+          "Plaid malformed-token spike alert suppressed (duplicate of prior alert)",
+        );
+        return {
+          channel: "skipped",
+          reason: suppressReason,
+          recipient,
+          error: null,
+        };
+      }
+    }
+  }
   const rendered = renderMalformedTokenAlert({
     scanned: summary.scanned,
     flagged: summary.flagged,
@@ -297,6 +509,27 @@ export async function maybeAlertOnMalformedTokenSpike(
         },
         "Plaid malformed-token operator alert send failed",
       );
+    } else if (recordAlert) {
+      // (#396) Only persist on a successful send so a transient
+      // SendGrid outage doesn't tombstone the spike and silence the
+      // *next* day's retry — same idempotency logic the disconnect
+      // reminder (#262) uses.
+      try {
+        await recordAlert({
+          digest,
+          flaggedItemRowIds,
+          flagged: summary.flagged,
+          scanned: summary.scanned,
+          threshold,
+          channel: result.channel,
+          recipient,
+        });
+      } catch (err) {
+        logger.warn(
+          { err: err instanceof Error ? err.message : String(err) },
+          "Plaid malformed-token alert: failed to persist de-dup digest (alert was sent)",
+        );
+      }
     }
     return {
       channel: result.channel,
