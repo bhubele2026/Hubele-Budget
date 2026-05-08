@@ -87,12 +87,12 @@ test.describe("Forecast inbox bulk mark-unplanned (#276)", () => {
       provisionedUserIds,
     );
 
-    await signInAndOpen(page, email, password, "/forecast");
+    await signInAndOpen(page, email, password, "/review");
 
     // Wait for the page shell to render before driving any API calls — the
     // helper has cookies set by the time signInAndOpen returns, but landing
     // on /forecast first guarantees the SPA has bootstrapped Clerk.
-    await expect(page.getByTestId("card-bank-snapshot")).toBeVisible({
+    await expect(page.getByTestId("card-from-bank")).toBeVisible({
       timeout: 15_000,
     });
 
@@ -121,8 +121,8 @@ test.describe("Forecast inbox bulk mark-unplanned (#276)", () => {
     });
 
     // Reload so the freshly-seeded rows show up in the bank inbox.
-    await page.goto("/forecast");
-    await expect(page.getByTestId("card-bank-snapshot")).toBeVisible({
+    await page.goto("/review");
+    await expect(page.getByTestId("card-from-bank")).toBeVisible({
       timeout: 15_000,
     });
 

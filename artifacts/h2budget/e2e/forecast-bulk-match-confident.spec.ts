@@ -148,9 +148,9 @@ test.describe("Forecast inbox bulk match-confident (#323)", () => {
       provisionedUserIds,
     );
 
-    await signInAndOpen(page, email, password, "/forecast");
+    await signInAndOpen(page, email, password, "/review");
 
-    await expect(page.getByTestId("card-bank-snapshot")).toBeVisible({
+    await expect(page.getByTestId("card-from-bank")).toBeVisible({
       timeout: 15_000,
     });
 
@@ -218,8 +218,8 @@ test.describe("Forecast inbox bulk match-confident (#323)", () => {
     });
 
     // Reload so the freshly-seeded plan + bank rows show up.
-    await page.goto("/forecast");
-    await expect(page.getByTestId("card-bank-snapshot")).toBeVisible({
+    await page.goto("/review");
+    await expect(page.getByTestId("card-from-bank")).toBeVisible({
       timeout: 15_000,
     });
 

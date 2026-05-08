@@ -686,7 +686,9 @@ function shortDate(iso: string): string {
   return `${m}-${d}`;
 }
 
-export default function ForecastPage() {
+export default function ForecastPage({
+  mode = "overall",
+}: { mode?: "review" | "overall" } = {}) {
   const [horizonDays, setHorizonDays] = useState<number>(() => {
     try {
       const v = sessionStorage.getItem(FORECAST_HORIZON_KEY);
@@ -2016,7 +2018,8 @@ export default function ForecastPage() {
         })}
       </div>
 
-      {/* Hero: Current Forecast Balance */}
+      {mode === "overall" && (
+      /* Hero: Current Forecast Balance */
       <Card data-testid="card-forecast-hero" className="border-2">
         <CardContent className="p-3">
           <div className="flex justify-between items-center gap-4 flex-wrap">
@@ -2106,8 +2109,10 @@ export default function ForecastPage() {
           </div>
         </CardContent>
       </Card>
+      )}
       </div>
 
+      {mode === "overall" && (<>
       {/* KPI tiles */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card data-testid="kpi-lowest-point">
@@ -2492,32 +2497,62 @@ export default function ForecastPage() {
         </Card>
         <AvalancheReadyCard />
       </div>
+      </>)}
 
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => {
-          setActiveTab(v);
-          if (typeof window !== "undefined") {
-            const hash = v === "bucket" ? "#bucket" : "";
-            const next = `${window.location.pathname}${window.location.search}${hash}`;
-            window.history.replaceState(null, "", next);
-          }
-        }}
-        className="w-full"
+      {mode === "review" && bankInbox.length === 0 && (
+        <Card
+          className="border-primary/30 bg-primary/5"
+          data-testid="review-empty-state"
+        >
+          <CardContent className="p-6 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="w-4 h-4 text-primary" />
+              <span className="font-medium">All caught up — Review is empty.</span>
+              <span className="text-muted-foreground">
+                Send a Chase transaction to Forecast to start reviewing.
+              </span>
+            </div>
+            <Button asChild size="sm" variant="outline" className="h-8">
+              <Link href="/forecast" data-testid="link-back-to-forecast">
+                Back to Cash Forecast →
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {mode === "overall" && bankInbox.length > 0 && (
+        <Card
+          className="border-amber-200 bg-amber-50/60 dark:bg-amber-950/30"
+          data-testid="banner-review-waiting"
+        >
+          <CardContent className="p-3 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-sm min-w-0">
+              <InboxIcon className="w-4 h-4 text-amber-700 dark:text-amber-300 flex-none" />
+              <span className="font-medium text-amber-900 dark:text-amber-100">
+                {bankInbox.length} waiting in Review
+              </span>
+              <span className="text-xs text-amber-800/80 dark:text-amber-200/80 truncate">
+                Match Chase activity against your planned items.
+              </span>
+            </div>
+            <Button asChild size="sm" variant="outline" className="h-8">
+              <Link href="/review" data-testid="link-go-to-review">
+                Go to Review →
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <DndContext
+        sensors={sensors}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => setActiveDragId(null)}
       >
-        <TabsList>
-          <TabsTrigger value="register">Active Register</TabsTrigger>
-          <TabsTrigger value="bucket">Review Bucket</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="register" className="mt-4 space-y-4">
-          <DndContext
-            sensors={sensors}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-            onDragCancel={() => setActiveDragId(null)}
-          >
-            <Card data-testid="card-from-bank">
+        {mode === "review" && (
+          <Card data-testid="card-from-bank">
               <CardHeader className="pb-3 flex-row items-center justify-between flex-wrap gap-2">
                 <CardTitle className="flex items-center gap-2 flex-wrap">
                   <Landmark className="w-4 h-4" />
@@ -2708,8 +2743,9 @@ export default function ForecastPage() {
                 )}
               </CardContent>
             </Card>
+        )}
 
-            {bankInbox.length > 0 && (() => {
+        {mode === "review" && bankInbox.length > 0 && (() => {
               // (#517) Pinned active inbox row: pager + InboxCardView +
               // SuggestionStrip stay visible just below the page sticky
               // header while the planned-items list scrolls underneath.
@@ -3076,10 +3112,10 @@ export default function ForecastPage() {
                 />
               )}
             </DragOverlay>
-          </DndContext>
-        </TabsContent>
+      </DndContext>
 
-        <TabsContent value="bucket" className="mt-4 space-y-4">
+      {mode === "overall" && (
+        <div className="space-y-4 mt-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               <Label className="text-sm">Month</Label>
@@ -3282,8 +3318,8 @@ export default function ForecastPage() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
 
       {/* Settings dialog */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>

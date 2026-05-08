@@ -105,7 +105,12 @@ function ProtectedShell() {
         <AppLayout>
           <Switch>
             <Route path="/dashboard" component={DashboardPage} />
-            <Route path="/forecast" component={ForecastPage} />
+            <Route path="/forecast">
+              <ForecastPage mode="overall" />
+            </Route>
+            <Route path="/review">
+              <ForecastPage mode="review" />
+            </Route>
             <Route path="/reports" component={ReportsPage} />
             <Route path="/transactions" component={TransactionsPage} />
             <Route path="/amex" component={AmexPage} />
@@ -116,9 +121,6 @@ function ProtectedShell() {
               <Redirect to="/bills" />
             </Route>
             <Route path="/budget" component={BudgetPage} />
-            <Route path="/review">
-              <Redirect to="/transactions" />
-            </Route>
             <Route path="/mapping-rules" component={MappingRulesPage} />
             <Route path="/settings" component={SettingsPage} />
             <Route path="/plaid-oauth" component={PlaidOAuthPage} />

@@ -99,8 +99,8 @@ test.describe("Forecast inbox one-at-a-time pager (#481)", () => {
       provisionedUserIds,
     );
 
-    await signInAndOpen(page, email, password, "/forecast");
-    await expect(page.getByTestId("card-bank-snapshot")).toBeVisible({
+    await signInAndOpen(page, email, password, "/review");
+    await expect(page.getByTestId("card-from-bank")).toBeVisible({
       timeout: 15_000,
     });
 
@@ -158,8 +158,8 @@ test.describe("Forecast inbox one-at-a-time pager (#481)", () => {
       },
     );
 
-    await page.goto("/forecast");
-    await expect(page.getByTestId("card-bank-snapshot")).toBeVisible({
+    await page.goto("/review");
+    await expect(page.getByTestId("card-from-bank")).toBeVisible({
       timeout: 15_000,
     });
 

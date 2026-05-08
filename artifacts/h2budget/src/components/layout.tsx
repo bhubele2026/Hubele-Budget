@@ -13,15 +13,19 @@ import {
   BarChart3,
   Flame,
   Menu,
+  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { H2Logo } from "@/components/h2-logo";
+import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Forecast", href: "/forecast", icon: TrendingUp },
+  { name: "Review", href: "/review", icon: Inbox },
   { name: "Chase", href: "/transactions", icon: Receipt },
   { name: "American Express", href: "/amex", icon: CreditCard },
   { name: "Debts", href: "/debts", icon: CreditCard },
@@ -40,6 +44,7 @@ function SidebarContents({
   location: string;
   onNavigate?: () => void;
 }) {
+  const reviewCount = useReviewInboxCount();
   return (
     <>
       <div className="px-5 py-4 border-b border-sidebar-border flex items-center gap-2.5">
@@ -56,6 +61,7 @@ function SidebarContents({
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = location.startsWith(item.href);
+          const showBadge = item.href === "/review" && reviewCount > 0;
           return (
             <Link key={item.href} href={item.href}>
               <span
@@ -69,6 +75,15 @@ function SidebarContents({
               >
                 <item.icon className={cn("w-4 h-4", isActive && "text-sidebar-primary")} />
                 <span className="flex-1">{item.name}</span>
+                {showBadge && (
+                  <Badge
+                    variant="outline"
+                    className="bg-amber-100 text-amber-900 border-amber-300 text-[10px] px-1.5 py-0 h-5 tabular-nums"
+                    data-testid="badge-review-count"
+                  >
+                    {reviewCount}
+                  </Badge>
+                )}
               </span>
             </Link>
           );
