@@ -135,8 +135,10 @@ import {
   AlertCircle,
   History,
   CalendarDays,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
 } from "lucide-react";
 import {
   Tooltip,
@@ -919,6 +921,34 @@ export default function ForecastPage({
   // Register, show one pending row at a time so the forecast underneath stays
   // visible. The index is clamped to the current `bankInbox` length below.
   const [activeInboxIndex, setActiveInboxIndex] = useState(0);
+  // (#519) Allow users to collapse the pinned inbox card down to a compact
+  // one-line strip on shorter viewports. Persisted in localStorage so the
+  // choice survives navigation/reloads.
+  const [pinnedInboxCollapsed, setPinnedInboxCollapsed] = useState<boolean>(
+    () => {
+      try {
+        return (
+          localStorage.getItem("h2budget:pinnedInboxCollapsed") === "1"
+        );
+      } catch {
+        return false;
+      }
+    },
+  );
+  const togglePinnedInboxCollapsed = () => {
+    setPinnedInboxCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(
+          "h2budget:pinnedInboxCollapsed",
+          next ? "1" : "0",
+        );
+      } catch {
+        /* no-op */
+      }
+      return next;
+    });
+  };
   // (#335) Active highlight for a plan row that the user just deep-linked to
   // by clicking a big-bill marker (or a bill inside its tooltip). Cleared
   // automatically after a short pulse so the row settles back to normal.
@@ -2939,6 +2969,7 @@ export default function ForecastPage({
                   style={stickyStyle}
                   data-testid="pinned-inbox-area"
                   data-pinned={canPinInbox ? "true" : "false"}
+                  data-collapsed={pinnedInboxCollapsed ? "true" : "false"}
                 >
                   <div className="rounded-md border bg-card p-2 space-y-2">
                     <div
@@ -2965,23 +2996,95 @@ export default function ForecastPage({
                       >
                         {safeIndex + 1} of {bankInbox.length}
                       </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() =>
-                          setActiveInboxIndex((i) =>
-                            Math.min(bankInbox.length - 1, i + 1),
-                          )
-                        }
-                        disabled={safeIndex >= bankInbox.length - 1}
-                        data-testid="bank-inbox-pager-next"
-                        aria-label="Next pending inbox row"
-                      >
-                        Next
-                        <ChevronRight className="w-3.5 h-3.5 ml-1" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() =>
+                            setActiveInboxIndex((i) =>
+                              Math.min(bankInbox.length - 1, i + 1),
+                            )
+                          }
+                          disabled={safeIndex >= bankInbox.length - 1}
+                          data-testid="bank-inbox-pager-next"
+                          aria-label="Next pending inbox row"
+                        >
+                          Next
+                          <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={togglePinnedInboxCollapsed}
+                          data-testid="pinned-inbox-collapse-toggle"
+                          aria-label={
+                            pinnedInboxCollapsed
+                              ? "Expand pinned inbox card"
+                              : "Collapse pinned inbox card"
+                          }
+                          aria-expanded={!pinnedInboxCollapsed}
+                          title={
+                            pinnedInboxCollapsed
+                              ? "Expand pinned inbox card"
+                              : "Collapse pinned inbox card"
+                          }
+                        >
+                          {pinnedInboxCollapsed ? (
+                            <ChevronDown className="w-4 h-4" />
+                          ) : (
+                            <ChevronUp className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </div>
                     </div>
+                    {pinnedInboxCollapsed ? (
+                      <div
+                        key={card.id}
+                        className="flex items-center gap-2 px-1 py-1"
+                        data-testid="pinned-inbox-collapsed-row"
+                      >
+                        <span
+                          className="flex-1 truncate text-sm"
+                          title={card.bank.txn.description}
+                        >
+                          {card.bank.txn.description}
+                        </span>
+                        <span className="text-sm tabular-nums text-muted-foreground">
+                          {formatCurrency(card.bank.amount)}
+                        </span>
+                        {(() => {
+                          const oneClick = oneClickByTxnId.get(
+                            card.bank.txn.id,
+                          );
+                          return (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              disabled={!oneClick}
+                              onClick={() => {
+                                if (oneClick) {
+                                  matchInboxToPlan(
+                                    card.bank.txn.id,
+                                    oneClick.plan,
+                                  );
+                                }
+                              }}
+                              data-testid="pinned-inbox-collapsed-match"
+                              title={
+                                oneClick
+                                  ? "Match to the suggested plan row"
+                                  : "Expand to match this row"
+                              }
+                            >
+                              Match
+                            </Button>
+                          );
+                        })()}
+                      </div>
+                    ) : (
                     <div key={card.id} className="space-y-1">
                       <div className="flex items-stretch gap-2">
                         <div className="flex items-start pt-3 pl-1">
@@ -3050,6 +3153,7 @@ export default function ForecastPage({
                         </Button>
                       </div>
                     </div>
+                    )}
                   </div>
                 </div>
               );
