@@ -2120,7 +2120,10 @@ export default function TransactionsPage() {
                         disabled={updateTx.isPending}
                       />
                       {runningBalanceMap.has(tx.id) && (
-                        <span className="text-[11px] tabular-nums text-muted-foreground">
+                        <span
+                          className="text-[11px] tabular-nums text-muted-foreground"
+                          data-testid={`text-running-balance-${tx.id}`}
+                        >
                           bal {formatCurrency(runningBalanceMap.get(tx.id)!)}
                         </span>
                       )}
