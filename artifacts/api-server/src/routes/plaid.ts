@@ -58,6 +58,7 @@ import {
   PLAID_SYNC_ATTEMPT_LIST_LIMIT,
 } from "../lib/plaidSyncAttempts";
 import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
+import { cleanupMalformedTokenSiblings } from "../lib/plaidMalformedSiblingCleanup";
 import { debtsTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -598,71 +599,22 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     // item deleted); skipping the upstream itemRemove is safe because
     // the token was malformed and Plaid would 400 on it anyway.
     try {
-      const sameInstitutionRows = await db
-        .select()
-        .from(plaidItemsTable)
-        .where(
-          and(
-            eq(plaidItemsTable.userId, req.userId!),
-            resolvedInstId
-              ? eq(plaidItemsTable.institutionId, resolvedInstId)
-              : eq(plaidItemsTable.institutionSlug, slug),
-          ),
-        );
-      for (const stale of sameInstitutionRows) {
-        if (stale.id === item!.id) continue;
-        if (isValidPlaidAccessToken(stale.accessToken)) continue;
-        const staleAccts = await db
-          .select({ id: plaidAccountsTable.id })
-          .from(plaidAccountsTable)
-          .where(
-            and(
-              eq(plaidAccountsTable.itemId, stale.id),
-              eq(plaidAccountsTable.userId, req.userId!),
-            ),
-          );
-        const staleAcctIds = staleAccts.map((a) => a.id);
-        if (staleAcctIds.length > 0) {
-          await db
-            .update(debtsTable)
-            .set({
-              balanceSource: "manual",
-              aprSource: "manual",
-              minPaymentSource: "manual",
-              plaidLastSyncedAt: null,
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(debtsTable.userId, req.userId!),
-                inArray(debtsTable.plaidAccountId, staleAcctIds),
-              ),
-            );
-        }
-        await db
-          .delete(plaidAccountsTable)
-          .where(
-            and(
-              eq(plaidAccountsTable.itemId, stale.id),
-              eq(plaidAccountsTable.userId, req.userId!),
-            ),
-          );
-        await db
-          .delete(plaidItemsTable)
-          .where(
-            and(
-              eq(plaidItemsTable.id, stale.id),
-              eq(plaidItemsTable.userId, req.userId!),
-            ),
-          );
+      const { cleaned } = await cleanupMalformedTokenSiblings({
+        userId: req.userId!,
+        survivorItemRowId: item!.id,
+        institutionId: resolvedInstId,
+        institutionSlug: slug,
+        log: req.log,
+      });
+      for (const c of cleaned) {
         req.log.info(
           {
             userId: req.userId,
             replacedByItemRowId: item!.id,
             replacedByPlaidItemIdExternal: item!.itemId,
-            cleanedItemRowId: stale.id,
-            cleanedPlaidItemIdExternal: stale.itemId,
-            institutionName: stale.institutionName,
+            cleanedItemRowId: c.itemRowId,
+            cleanedPlaidItemIdExternal: c.itemId,
+            institutionName: c.institutionName,
           },
           "[plaid-exchange] auto-archived stale malformed-token row replaced by fresh re-link",
         );

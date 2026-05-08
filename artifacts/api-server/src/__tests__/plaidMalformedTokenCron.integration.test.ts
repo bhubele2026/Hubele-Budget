@@ -86,6 +86,14 @@ vi.mock("../lib/plaidSyncAttempts", () => ({
   prunePlaidSyncAttempts: prunePlaidSyncAttemptsSpy,
 }));
 
+vi.mock("../lib/plaidMalformedSiblingCleanup", () => ({
+  backfillMalformedTokenSiblings: vi.fn(async () => ({
+    scannedMalformed: 0,
+    cleanedSiblings: 0,
+    skippedNoHealthySibling: 0,
+  })),
+}));
+
 const ORIGINAL_ENV = { ...process.env };
 
 beforeAll(async () => {

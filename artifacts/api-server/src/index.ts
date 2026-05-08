@@ -8,6 +8,7 @@ import {
 } from "./lib/plaidSync";
 import { sendExpirationRemindersForAllUsers } from "./lib/plaidExpirationReminder";
 import { maybeAlertOnMalformedTokenSpike } from "./lib/plaidMalformedTokenAlert";
+import { backfillMalformedTokenSiblings } from "./lib/plaidMalformedSiblingCleanup";
 import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
 
@@ -120,6 +121,30 @@ app.listen(port, (err) => {
       })
       .catch((err) => {
         logger.error({ err }, "Plaid malformed access_token boot scan failed");
+      });
+
+    // (#406) One-shot backfill: clean up duplicate "broken Chase"-style
+    // rows that pre-date the (#401) inline cleanup in the exchange
+    // handler. For each plaid_items row whose stored access_token fails
+    // the malformed-token guard AND has a healthy sibling for the same
+    // user + same institution, run the same local cleanup the exchange
+    // handler now does so existing users no longer have to re-link a
+    // third time to clear the stale row from Settings + the dashboard
+    // reauth banner. Idempotent — once the duplicates are gone the
+    // sweep is a no-op on subsequent boots. Best-effort: never crashes
+    // boot, never throws upstream.
+    backfillMalformedTokenSiblings()
+      .then((summary) => {
+        logger.info(
+          summary,
+          "Plaid malformed-token sibling backfill complete",
+        );
+      })
+      .catch((err) => {
+        logger.error(
+          { err },
+          "Plaid malformed-token sibling backfill failed",
+        );
       });
 
     cron.schedule("0 * * * *", () => {
