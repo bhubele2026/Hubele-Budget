@@ -27,6 +27,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { PlaidReauthBanner } from "@/components/PlaidReauthBanner";
 import { useColors } from "@/hooks/useColors";
 import { usePlaidSync } from "@/hooks/usePlaidSync";
 import { formatCurrency, formatDateTime } from "@/lib/format";
@@ -222,6 +223,8 @@ export default function DashboardScreen() {
         }
       >
         <Text style={[styles.h1, { color: colors.foreground }]}>Dashboard</Text>
+
+        <PlaidReauthBanner />
 
         {initialLoading ? (
           <View style={{ paddingTop: 60, alignItems: "center" }}>
