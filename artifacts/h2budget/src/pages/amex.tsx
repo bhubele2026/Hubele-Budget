@@ -1730,20 +1730,29 @@ export default function AmexPage() {
               }
             />
           )}
+          {/* (#464) Pass `loading={!monthTxns}` so these tiles render an
+              explicit "Loading…" affordance instead of a misleading $0.00
+              if the underlying month query hasn't resolved yet — matches
+              the hardened Ending balance tile from #455. */}
           <StatChip
             label="Charges"
-            value={monthTotals.charges}
+            value={monthTxns ? monthTotals.charges : null}
+            loading={!monthTxns}
             testId="stat-charges"
           />
           <StatChip
             label="Payments & credits"
-            value={Math.abs(monthTotals.paymentsAndCredits)}
+            value={
+              monthTxns ? Math.abs(monthTotals.paymentsAndCredits) : null
+            }
+            loading={!monthTxns}
             valueClassName="text-emerald-700"
             testId="stat-payments-credits"
           />
           <StatChip
             label="Net change"
-            value={monthTotals.netChange}
+            value={monthTxns ? monthTotals.netChange : null}
+            loading={!monthTxns}
             valueClassName={
               monthTotals.netChange > 0
                 ? "text-rose-700"

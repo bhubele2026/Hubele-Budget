@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -18,9 +19,11 @@ export function StatChip({
   footer,
   tooltip,
   action,
+  loading,
+  unavailableHint,
 }: {
   label: string;
-  value: number;
+  value: number | null | undefined;
   accent?: string;
   valueClassName?: string;
   signed?: boolean;
@@ -28,9 +31,21 @@ export function StatChip({
   footer?: string;
   tooltip?: string;
   action?: ReactNode;
+  loading?: boolean;
+  unavailableHint?: string;
 }) {
-  const display =
-    signed && value > 0 ? `+${formatCurrency(value)}` : formatCurrency(value);
+  // (#464) Defensive rendering: never silently show $0.00 when the
+  // upstream value is loading or unavailable. Mirrors the hardened
+  // Amex Ending balance tile from #455.
+  const isLoading = !!loading;
+  const isMissing = !isLoading && (value == null || !Number.isFinite(value));
+  const display = isLoading
+    ? "Loading…"
+    : isMissing
+      ? "Unavailable"
+      : signed && (value as number) > 0
+        ? `+${formatCurrency(value as number)}`
+        : formatCurrency(value as number);
   const body = (
     <div
       className={cn("rounded-md border px-3 py-2", accent ?? "bg-card")}
@@ -42,11 +57,28 @@ export function StatChip({
       <div
         className={cn(
           "font-mono tabular-nums font-semibold text-base",
-          valueClassName,
+          (isLoading || isMissing) && "text-muted-foreground",
+          !(isLoading || isMissing) && valueClassName,
         )}
+        data-testid={
+          testId
+            ? isLoading
+              ? `${testId}-loading`
+              : isMissing
+                ? `${testId}-unavailable`
+                : undefined
+            : undefined
+        }
       >
         {display}
       </div>
+      {isLoading ? (
+        <Skeleton className="h-3 w-16 mt-1" />
+      ) : isMissing && unavailableHint ? (
+        <div className="text-[10px] leading-tight mt-0.5 text-muted-foreground">
+          {unavailableHint}
+        </div>
+      ) : null}
       {footer ? (
         <div
           className="text-[10px] leading-tight mt-0.5 opacity-80"

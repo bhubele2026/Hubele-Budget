@@ -1530,7 +1530,9 @@ export default function TransactionsPage() {
           {hasLinkedChecking ? (
             <StatChip
               label="Starting balance"
-              value={startingBalance ?? 0}
+              value={startingBalance}
+              loading={!transactions}
+              unavailableHint="No snapshot for this month yet."
               testId="stat-starting-balance"
             />
           ) : (
@@ -1540,22 +1542,31 @@ export default function TransactionsPage() {
               testId="stat-starting-balance"
             />
           )}
+          {/* (#464) Pass `loading={!transactions}` so these tiles render
+              an explicit "Loading…" affordance instead of a misleading
+              $0.00 if the underlying transactions query hasn't resolved
+              yet — matches the hardened Amex Ending balance tile from
+              #455. */}
           <StatChip
             label="Money in"
-            value={monthTotals.moneyIn}
+            value={transactions ? monthTotals.moneyIn : null}
+            loading={!transactions}
             valueClassName="text-[hsl(var(--positive))]"
             testId="stat-money-in"
           />
           <StatChip
             label="Money out"
-            value={monthTotals.moneyOut}
+            value={transactions ? monthTotals.moneyOut : null}
+            loading={!transactions}
             valueClassName="text-[hsl(var(--negative))]"
             testId="stat-money-out"
           />
           {hasLinkedChecking ? (
             <StatChip
               label="Ending balance"
-              value={endingBalance ?? 0}
+              value={endingBalance}
+              loading={!transactions}
+              unavailableHint="No snapshot for this month yet."
               accent="bg-emerald-50 text-emerald-900 border-emerald-200"
               testId="stat-ending-balance"
             />
@@ -1568,7 +1579,8 @@ export default function TransactionsPage() {
           )}
           <StatChip
             label="Net change"
-            value={monthTotals.netChange}
+            value={transactions ? monthTotals.netChange : null}
+            loading={!transactions}
             valueClassName={moneyColorClass(monthTotals.netChange)}
             signed
             testId="stat-net-change"
