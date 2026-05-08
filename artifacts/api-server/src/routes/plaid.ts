@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
@@ -7,6 +7,8 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
+import { requireOwner } from "../middlewares/requireOwner";
+import { maybeAlertOnMalformedTokenSpike } from "../lib/plaidMalformedTokenAlert";
 import {
   plaid,
   PLAID_PRODUCTS,
@@ -32,6 +34,7 @@ export function tokenEnv(token: string | null | undefined): string | null {
 }
 import {
   extractPlaidError,
+  flagMalformedAccessTokens,
   markItemMalformedToken,
   plaidLogContext,
   refreshConsentExpirationForItem,
@@ -1961,6 +1964,60 @@ router.post(
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Reminder sweep failed";
       req.log.error({ err: e }, "Plaid disconnect reminder sweep failed");
+      res.status(500).json({ error: msg });
+    }
+  },
+);
+
+// (#397) Owner-gated manual trigger for the daily malformed-token
+// sweep (#369) + spike alert (#371). Same code path runs unattended
+// at 03:02 UTC (see index.ts); this endpoint exists so an operator
+// who just investigated an alert can re-run the sweep immediately to
+// confirm the fix worked instead of waiting until tomorrow morning.
+// Returns the same `{ scanned, flagged, flaggedItems }` summary the
+// cron logs and additionally re-evaluates the spike alert so the
+// caller can observe a confirmation alert (or "all clear" /
+// below-threshold skip) inline. Best-effort by design: an alert
+// dispatch failure is reported via the response body but never fails
+// the request — the underlying sweep already ran.
+router.post(
+  "/plaid/run-malformed-token-sweep",
+  requireOwner,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const summary = await flagMalformedAccessTokens();
+      req.log.info(
+        { scanned: summary.scanned, flagged: summary.flagged },
+        "Manual Plaid malformed access_token sweep complete",
+      );
+      let alert: Awaited<ReturnType<typeof maybeAlertOnMalformedTokenSpike>> | null = null;
+      try {
+        alert = await maybeAlertOnMalformedTokenSpike(summary);
+        if (alert.channel !== "skipped") {
+          req.log.info(
+            {
+              channel: alert.channel,
+              recipient: alert.recipient,
+              flagged: summary.flagged,
+            },
+            "Plaid malformed-token spike alert dispatched (manual trigger)",
+          );
+        }
+      } catch (err) {
+        req.log.warn(
+          { err },
+          "Plaid malformed-token spike alert threw unexpectedly (manual trigger)",
+        );
+      }
+      res.json({
+        scanned: summary.scanned,
+        flagged: summary.flagged,
+        flaggedItems: summary.flaggedItems,
+        alert,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Sweep failed";
+      req.log.error({ err: e }, "Manual Plaid malformed access_token sweep failed");
       res.status(500).json({ error: msg });
     }
   },
