@@ -2354,10 +2354,16 @@ function VirtualizedDayGroups<G>({
 
   const virtualItems = virtualizer.getVirtualItems();
   const totalSize = virtualizer.getTotalSize();
-  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+  // With useWindowVirtualizer + scrollMargin, virtualItems[i].start is an
+  // absolute offset against the document scroll position, not the parent
+  // container. We must subtract scrollMargin so the paddingTop spacer
+  // sits flush under the previous element instead of reserving a
+  // ~scrollMargin-sized empty gap above the first rendered day.
+  const paddingTop =
+    virtualItems.length > 0 ? virtualItems[0].start - scrollMargin : 0;
   const paddingBottom =
     virtualItems.length > 0
-      ? totalSize - virtualItems[virtualItems.length - 1].end
+      ? totalSize - (virtualItems[virtualItems.length - 1].end - scrollMargin)
       : 0;
 
   // Collect indices to render: the virtual window plus today (so the
