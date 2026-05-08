@@ -172,7 +172,7 @@ const RECONCILED_STORAGE_KEY = "h2budget:forecastReconciled";
 
 function readReconciledMap(): Record<string, boolean> {
   try {
-    const raw = localStorage.getItem(RECONCILED_STORAGE_KEY);
+    const raw = sessionStorage.getItem(RECONCILED_STORAGE_KEY);
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -181,7 +181,7 @@ function readReconciledMap(): Record<string, boolean> {
 
 function writeReconciledMap(map: Record<string, boolean>) {
   try {
-    localStorage.setItem(RECONCILED_STORAGE_KEY, JSON.stringify(map));
+    sessionStorage.setItem(RECONCILED_STORAGE_KEY, JSON.stringify(map));
   } catch {
     /* no-op */
   }
@@ -1195,7 +1195,7 @@ export default function ForecastPage({
     bankReconcile.hasBank &&
     !bankReconcile.isPriorMonth &&
     bankReconcile.pending === 0 &&
-    Math.abs(bankReconcile.gap) < 0.01;
+    Math.abs(bankReconcile.gap) < 0.5;
 
   // Plan rows used as drop targets (active register, plan-only)
   const planRows: PlanLine[] = useMemo(() => {
@@ -1276,8 +1276,12 @@ export default function ForecastPage({
     return m;
   }, [bankInbox, register, today]);
 
-  // Window key for confetti persistence: from→to
-  const windowKey = data ? `${data.fromDate}_${data.toDate}` : null;
+  // Window key for confetti persistence: YYYY-MM (current calendar month).
+  // One-shot per session per month per task spec.
+  const windowKey = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  })();
   const inboxCount = inbox.length;
   const cleared = shouldCelebrateClear({ inboxCount, isReconciledToBank });
   const prevClearedRef = useRef<boolean | null>(null);
@@ -1301,9 +1305,10 @@ export default function ForecastPage({
     }
     const map = readReconciledMap();
     if (!prev && cleared) {
-      // transitioned to fully cleared — celebrate (only if not already celebrated)
+      // transitioned to fully cleared — celebrate (only if not already celebrated).
+      // Confetti only fires on the overall forecast view per task spec.
       if (!map[windowKey]) {
-        fireConfetti();
+        if (mode === "overall") fireConfetti();
         map[windowKey] = true;
         writeReconciledMap(map);
       }

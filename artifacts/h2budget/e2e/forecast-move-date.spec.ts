@@ -196,14 +196,12 @@ test.describe("Forecast Move-to date picker (#107)", () => {
     // later. monthFilter is component-level state that persists across tab
     // switches, so we can flip it once and switch back to the register.
     if (dates.needSwitchMonth) {
-      await page.getByRole("tab", { name: /Review Bucket/i }).click();
       const monthCombobox = page.getByRole("combobox").first();
       await expect(monthCombobox).toBeVisible({ timeout: 5_000 });
       await monthCombobox.click();
       await page
         .getByRole("option", { name: dates.monthKey, exact: true })
         .click();
-      await page.getByRole("tab", { name: /Active Register/i }).click();
     }
 
     const moveButton = page.getByTestId(
@@ -475,14 +473,12 @@ test.describe("Forecast Move-to date picker (#107)", () => {
     ).toBeVisible({ timeout: 15_000 });
 
     if (needSwitchMonth) {
-      await page.getByRole("tab", { name: /Review Bucket/i }).click();
       const monthCombobox = page.getByRole("combobox").first();
       await expect(monthCombobox).toBeVisible({ timeout: 5_000 });
       await monthCombobox.click();
       await page
         .getByRole("option", { name: monthKey, exact: true })
         .click();
-      await page.getByRole("tab", { name: /Active Register/i }).click();
     }
 
     const moveButton = page.getByTestId(`move-plan-${item.id}-${anchorISO}`);
@@ -653,14 +649,12 @@ test.describe("Forecast Move-to date picker (#107)", () => {
     // monthFilter is the current calendar month, so we only need to flip
     // it when the anchor was pushed into next month.
     if (needSwitchMonth) {
-      await page.getByRole("tab", { name: /Review Bucket/i }).click();
       const monthCombobox = page.getByRole("combobox").first();
       await expect(monthCombobox).toBeVisible({ timeout: 5_000 });
       await monthCombobox.click();
       await page
         .getByRole("option", { name: anchorMonthKey, exact: true })
         .click();
-      await page.getByRole("tab", { name: /Active Register/i }).click();
     }
     expect(anchorMonthKey).not.toBe(`${newD.getFullYear()}-${pad(newD.getMonth() + 1)}`);
     // currentMonthKey is captured for log readability if this test ever
