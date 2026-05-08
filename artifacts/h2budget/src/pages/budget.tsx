@@ -259,17 +259,26 @@ export default function BudgetPage() {
   };
 
   const changeMonth = (offset: number) => {
-    const d = new Date(currentMonth);
-    d.setMonth(d.getMonth() + offset);
-    const raw = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    // Anchor the date to the 1st at noon UTC so DST/offset edge cases never
+    // bump us into the previous month. Using `new Date("YYYY-MM-01")` then
+    // `setMonth` parses as UTC midnight and can drift to the prior day in
+    // negative-offset timezones, which silently breaks "next month".
+    const [yStr, mStr] = currentMonth.split("-");
+    const y = Number(yStr);
+    const m0 = Number(mStr) - 1; // 0-indexed
+    const targetY = y + Math.floor((m0 + offset) / 12);
+    const targetM = ((m0 + offset) % 12 + 12) % 12;
+    const raw = `${targetY}-${String(targetM + 1).padStart(2, "0")}-01`;
     const next = raw < MIN_MONTH ? MIN_MONTH : raw;
+    if (next === currentMonth) return;
     setCurrentMonth(next);
     // Keep the ?month= URL param in sync so the URL→state useEffect above
     // doesn't snap currentMonth back to the previous URL value on the next
-    // re-render. Without this the chevrons appear to do nothing.
+    // re-render. Pass the full pathname (not just `?…`) — wouter's navigate
+    // treats a query-only string as a path, which would drop `/budget`.
     const params = new URLSearchParams(search);
     params.set("month", next);
-    navigateRoot(`?${params.toString()}`, { replace: true });
+    navigateRoot(`/budget?${params.toString()}`, { replace: true });
   };
 
   const atFloor = currentMonth <= MIN_MONTH;
