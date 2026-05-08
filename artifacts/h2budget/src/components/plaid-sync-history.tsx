@@ -10,8 +10,51 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, ArrowUp, ArrowDown, Link2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowUp, ArrowDown, Link2, Copy, Check } from "lucide-react";
 import { dispatchPlaidReconnect } from "@/components/plaid-reconnect-listener";
+import { useToast } from "@/hooks/use-toast";
+
+function CopyRequestIdButton({
+  attemptId,
+  requestId,
+}: {
+  attemptId: string;
+  requestId: string;
+}) {
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(requestId);
+      setCopied(true);
+      toast({ title: "Request id copied" });
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast({ title: "Couldn't copy request id", variant: "destructive" });
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="inline-flex items-center gap-0.5 ml-1 px-1 py-0.5 rounded hover:bg-muted text-muted-foreground/80 hover:text-foreground"
+      data-testid={`sync-attempt-copy-request-id-${attemptId}`}
+      aria-label="Copy request id"
+      title="Copy request id"
+    >
+      {copied ? (
+        <>
+          <Check className="w-3 h-3" />
+          <span className="text-[10px]">Copied</span>
+        </>
+      ) : (
+        <Copy className="w-3 h-3" />
+      )}
+    </button>
+  );
+}
 
 type SortKey = "attemptedAt" | "kind" | "success";
 type SortDir = "asc" | "desc";
@@ -232,7 +275,17 @@ export function PlaidSyncHistory({
                               a.requestId
                                 ? " · "
                                 : ""}
-                              {a.requestId ? `Request id: ${a.requestId}` : ""}
+                              {a.requestId ? (
+                                <>
+                                  {`Request id: ${a.requestId}`}
+                                  <CopyRequestIdButton
+                                    attemptId={a.id}
+                                    requestId={a.requestId}
+                                  />
+                                </>
+                              ) : (
+                                ""
+                              )}
                             </span>
                           )}
                           {a.errorKind === "reauth" && (
