@@ -1295,15 +1295,25 @@ export default function ForecastPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [windowKey]);
 
-  // Watch transitions
+  // Watch transitions. We treat "first observation while cleared" the same as
+  // a fresh transition into cleared, so a user who finishes triage on /review
+  // and lands on /forecast still sees confetti once per session per month.
   useEffect(() => {
     if (!windowKey) return;
     const prev = prevClearedRef.current;
+    const map = readReconciledMap();
     if (prev === null) {
+      if (cleared && mode === "overall" && !map[windowKey]) {
+        fireConfetti();
+        map[windowKey] = true;
+        writeReconciledMap(map);
+        setReconciledNow(true);
+      } else {
+        setReconciledNow(cleared && !!map[windowKey]);
+      }
       prevClearedRef.current = cleared;
       return;
     }
-    const map = readReconciledMap();
     if (!prev && cleared) {
       // Transitioned to fully cleared. Confetti is one-shot per session per
       // month (YYYY-MM key) and ONLY fires on the overall forecast view —
