@@ -1288,6 +1288,18 @@ export default function ForecastPage({
       bankEnd: 0,
       hasBank: false,
       isPriorMonth: false,
+      matchedAmountDelta: 0,
+      startingBalanceDelta: 0,
+      contributors: [] as Array<{
+        kind: "matched" | "starting";
+        label: string;
+        delta: number;
+      }>,
+      largestContributor: null as null | {
+        kind: "matched" | "starting";
+        label: string;
+        delta: number;
+      },
     };
     if (!register || !data) return empty;
     let pending = 0;
@@ -1373,7 +1385,70 @@ export default function ForecastPage({
     const bankAtSnapshot = data.bankSnapshot
       ? Number(data.bankSnapshot.balance) || 0
       : forecastAtSnapshot;
-    const gap = Math.round((forecastAtSnapshot - bankAtSnapshot) * 100) / 100;
+    const rawGap =
+      Math.round((forecastAtSnapshot - bankAtSnapshot) * 100) / 100;
+
+    // Decompose the gap into nameable contributors so the badge tooltip
+    // can point the user at the row(s) actually disagreeing. Two
+    // categories drive a real (non-zero-by-construction) gap:
+    //   1. matched pairs whose plan amount differs from the bank txn's
+    //      signed amount, and
+    //   2. a settings.startingBalance that disagrees with what the bank
+    //      snapshot implies once resolved flows are accounted for —
+    //      i.e. the residual after pulling out matched-amount drift.
+    type Contributor = {
+      kind: "matched" | "starting";
+      label: string;
+      delta: number;
+    };
+    const contributors: Contributor[] = [];
+    let matchedAmountDelta = 0;
+    if (snapshotAtISO) {
+      const bankByTxnId = new Map<string, BankLine>();
+      for (const b of register.allBank) bankByTxnId.set(b.txn.id, b);
+      for (const p of register.allPlan) {
+        if (p.status !== "matched" || !p.matchedTxnId) continue;
+        if (p.date < fromISO || p.date > snapshotAtISO) continue;
+        const bank = bankByTxnId.get(p.matchedTxnId);
+        if (!bank) continue;
+        const delta = Math.round((p.amount - bank.amount) * 100) / 100;
+        if (Math.abs(delta) >= 0.01) {
+          matchedAmountDelta += delta;
+          contributors.push({
+            kind: "matched",
+            label: `${p.label} on ${p.date} (plan ${p.amount.toFixed(2)} vs bank ${bank.amount.toFixed(2)})`,
+            delta,
+          });
+        }
+      }
+      matchedAmountDelta = Math.round(matchedAmountDelta * 100) / 100;
+    }
+    const startingBalanceDelta =
+      Math.round((rawGap - matchedAmountDelta) * 100) / 100;
+    if (data.bankSnapshot && Math.abs(startingBalanceDelta) >= 0.01) {
+      contributors.push({
+        kind: "starting",
+        label: `Starting balance vs bank snapshot (off by ${startingBalanceDelta.toFixed(2)})`,
+        delta: startingBalanceDelta,
+      });
+    }
+    contributors.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+    const largestContributor = contributors[0] ?? null;
+
+    // The canonical `gap` is a NON-CANCELING magnitude — Σ |delta|
+    // across contributors. Summing signed deltas would let an
+    // overcharge on one matched pair offset an undercharge on another
+    // and silently suppress the badge / falsify the close-month
+    // historical record, defeating the whole point of the detector.
+    // Every reconciliation surface (badge, isReconciledToBank,
+    // close-month payload, reconcile-history row) reads from this same
+    // value so they cannot disagree. Per-contributor signed deltas
+    // remain available in `contributors` for the badge tooltip when
+    // direction matters for diagnosis.
+    const gap =
+      Math.round(
+        contributors.reduce((sum, c) => sum + Math.abs(c.delta), 0) * 100,
+      ) / 100;
 
     return {
       pending,
@@ -1385,14 +1460,23 @@ export default function ForecastPage({
       bankEnd,
       hasBank: !!data.bankSnapshot,
       isPriorMonth,
+      matchedAmountDelta,
+      startingBalanceDelta,
+      contributors,
+      largestContributor,
     };
   }, [register, data, monthFilter, checkingPlaidAccountIds]);
 
+  // A clean reconciliation means no pending bank rows AND no
+  // contributor of $0.01 or more. We deliberately use a strict 1¢
+  // threshold (matching the badge gate) instead of the historical
+  // $0.50 tolerance — float noise is now excluded by construction
+  // because `gap` only sums *named* contributors.
   const isReconciledToBank =
     bankReconcile.hasBank &&
     !bankReconcile.isPriorMonth &&
     bankReconcile.pending === 0 &&
-    Math.abs(bankReconcile.gap) < 0.5;
+    bankReconcile.gap < 0.01;
 
   // Plan rows used as drop targets (active register, plan-only)
   const planRows: PlanLine[] = useMemo(() => {
@@ -2284,17 +2368,66 @@ export default function ForecastPage({
                 !reconciledNow &&
                 bankReconcile.hasBank &&
                 !bankReconcile.isPriorMonth &&
-                Math.abs(bankReconcile.gap) >= 0.01 && (
-                  <Badge
-                    variant="outline"
-                    className="bg-amber-50 text-amber-900 border-amber-200 max-w-[260px] whitespace-normal text-right"
-                    data-testid="badge-balance-mismatch"
-                  >
-                    <AlertCircle className="w-3.5 h-3.5 mr-1 flex-none" />
-                    Inbox clear, but the forecast and the bank disagree by{" "}
-                    {formatCurrency(bankReconcile.gap)} as of the latest bank
-                    snapshot — check the starting balance or matched amounts.
-                  </Badge>
+                bankReconcile.gap >= 0.01 && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant="outline"
+                          className="bg-amber-50 text-amber-900 border-amber-200 max-w-[260px] whitespace-normal text-right cursor-help"
+                          data-testid="badge-balance-mismatch"
+                        >
+                          <AlertCircle className="w-3.5 h-3.5 mr-1 flex-none" />
+                          Inbox clear, but the forecast and the bank disagree
+                          by {formatCurrency(bankReconcile.gap)} as of the
+                          latest bank snapshot
+                          {bankReconcile.largestContributor ? (
+                            <>
+                              {" "}
+                              — biggest:{" "}
+                              <span data-testid="badge-balance-mismatch-hint">
+                                {bankReconcile.largestContributor.kind ===
+                                "matched"
+                                  ? "matched amount differs"
+                                  : "starting balance off"}
+                              </span>
+                              .
+                            </>
+                          ) : (
+                            <> — check the starting balance or matched amounts.</>
+                          )}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="bottom"
+                        className="max-w-xs text-left"
+                        data-testid="tooltip-balance-mismatch"
+                      >
+                        <div className="font-medium mb-1">
+                          What's driving the gap
+                        </div>
+                        {bankReconcile.contributors.length === 0 ? (
+                          <div className="text-xs">
+                            No single contributor identified — review the
+                            starting balance and matched amounts.
+                          </div>
+                        ) : (
+                          <ul className="text-xs space-y-1">
+                            {bankReconcile.contributors
+                              .slice(0, 4)
+                              .map((c, i) => (
+                                <li key={i} className="tabular-nums">
+                                  <span className="font-medium">
+                                    {formatCurrency(c.delta)}
+                                  </span>{" "}
+                                  · {c.label}
+                                </li>
+                              ))}
+                          </ul>
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
             </div>
           </div>
