@@ -802,108 +802,130 @@ export default function BudgetPage() {
   );
 }
 
-// "Where did this come from?" cell for the Budgeted column. For
-// bill-backed and pinned/derived rows, renders the read-only amount
-// next to a small info button that opens a popover listing the
-// contributing recurring items (or explains the pin/debt link). For
-// plain manual envelopes, renders the editable input as before — no
-// popover, since the amount IS just whatever the user typed.
+// Editable Budgeted cell with a "where did this come from?" info popover.
+// Every row stays editable — typing in a bill-backed row (Insurance,
+// Utilities, Misc/Buffer, …) writes a manual override AND auto-pins the
+// line so the override sticks instead of getting overwritten by the next
+// bill-rollup recompute. The Avalanche payment row is the one exception
+// (managed by the Avalanche page); income/expense pinning works the same
+// way for both kinds. The info icon shows the contributing bills (or the
+// pin/debt note) so you always know what the displayed number was before
+// you overrode it.
 function PlannedAmountCell({
   line,
   planned,
-  isReadOnly,
+  isAvalanchePayment,
   onUpdatePlanned,
+  onPinLine,
 }: {
   line: BudgetLineWithActual;
   planned: number;
-  isReadOnly: boolean;
+  isAvalanchePayment: boolean;
   onUpdatePlanned: (categoryId: string, amount: string) => void;
+  onPinLine: (categoryId: string, currentlyPinned: boolean) => void;
 }) {
   const source = line.plannedSource;
-  const kind = source?.kind ?? (isReadOnly ? "derived" : "manual");
-  const showPopover = kind !== "manual";
+  const kind = source?.kind ?? "manual";
+  const hasSourceInfo = kind !== "manual";
 
-  const amount = (
-    <span className="font-mono text-sm tabular-nums">
-      {formatCurrency(line.plannedAmount)}
-    </span>
-  );
+  const handleBlur = (rawValue: string) => {
+    if (rawValue === planned.toString()) return;
+    onUpdatePlanned(line.categoryId, rawValue);
+    // For bill-backed / derived rows, auto-pin so the manual override
+    // survives the next recompute. Skip if already pinned.
+    if (
+      (kind === "bills" || kind === "derived") &&
+      !line.pinned &&
+      !isAvalanchePayment
+    ) {
+      onPinLine(line.categoryId, false);
+    }
+  };
 
-  if (!showPopover) {
-    // Plain editable envelope (Groceries, Dining, Pets-without-bills, …).
+  if (isAvalanchePayment) {
+    // Read-only: this row is managed by the Avalanche page slider.
     return (
-      <Input
-        type="number"
-        step="1"
-        className="h-7 text-right bg-transparent border-transparent hover:border-input focus:bg-background font-mono"
-        defaultValue={planned.toString()}
-        onBlur={(e) => {
-          if (e.target.value !== planned.toString()) {
-            onUpdatePlanned(line.categoryId, e.target.value);
-          }
-        }}
-        data-testid={`input-planned-${line.categoryId}`}
-      />
+      <div className="font-mono text-sm py-1 pr-3 text-right">
+        {formatCurrency(line.plannedAmount)}
+      </div>
     );
   }
 
+  const input = (
+    <Input
+      type="number"
+      step="1"
+      className="h-7 text-right bg-transparent border-transparent hover:border-input focus:bg-background font-mono"
+      defaultValue={planned.toString()}
+      key={`${line.categoryId}-${line.plannedAmount}`}
+      onBlur={(e) => handleBlur(e.target.value)}
+      data-testid={`input-planned-${line.categoryId}`}
+    />
+  );
+
+  if (!hasSourceInfo) return input;
+
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex items-center justify-end gap-1.5 py-1 pr-3 text-right hover:underline decoration-dotted underline-offset-2 cursor-pointer w-full"
-          title="Where did this amount come from?"
-          data-testid={`button-planned-source-${line.categoryId}`}
-        >
-          {amount}
-          <Info className="h-3 w-3 text-muted-foreground" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80 p-3" align="end">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-xs font-medium">{line.categoryName}</div>
-          <div className="text-[10px] text-muted-foreground">
-            {formatCurrency(line.plannedAmount)}
+    <div className="flex items-center justify-end gap-1">
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground p-1"
+            title="Where did this amount come from?"
+            data-testid={`button-planned-source-${line.categoryId}`}
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 p-3" align="end">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs font-medium">{line.categoryName}</div>
+            <div className="text-[10px] text-muted-foreground">
+              {formatCurrency(line.plannedAmount)}
+            </div>
           </div>
-        </div>
-        {kind === "pinned" && (
-          <div className="text-xs text-muted-foreground space-y-2">
-            <p>
-              This amount is <span className="font-medium">pinned</span> — it
-              stays at the locked value instead of tracking the live
-              Bills/Debts derivation.
-            </p>
-            {(source?.bills ?? []).length > 0 && (
+          {kind === "pinned" && (
+            <div className="text-xs text-muted-foreground space-y-2">
+              <p>
+                This amount is <span className="font-medium">pinned</span> —
+                it holds at this value instead of tracking the live
+                Bills/Debts derivation.
+              </p>
+              {(source?.bills ?? []).length > 0 && (
+                <BillList bills={source!.bills} />
+              )}
+              <p className="text-[10px]">
+                Use the pin icon next to the row name to unpin and let it
+                track again.
+              </p>
+            </div>
+          )}
+          {kind === "derived" && (
+            <div className="text-xs text-muted-foreground">
+              <p>
+                Pulled from the linked debt's current minimum payment. Edit
+                this row to override; it will be auto-pinned so the override
+                sticks.
+              </p>
+            </div>
+          )}
+          {kind === "bills" && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Sum of {(source?.bills ?? []).length} bill
+                {(source?.bills ?? []).length === 1 ? "" : "s"} linked to
+                this category. Edit this row to override; it will be
+                auto-pinned so the override sticks. Reassign a bill on the
+                Bills page to change where it lands.
+              </p>
               <BillList bills={source!.bills} />
-            )}
-            <p className="text-[10px]">
-              Use the pin icon next to the row name to unpin and let it track
-              again.
-            </p>
-          </div>
-        )}
-        {kind === "derived" && (
-          <div className="text-xs text-muted-foreground">
-            <p>
-              Pulled from the linked debt's current minimum payment. Edit the
-              debt on the Debts page to change this amount.
-            </p>
-          </div>
-        )}
-        {kind === "bills" && (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Sum of {(source?.bills ?? []).length} bill
-              {(source?.bills ?? []).length === 1 ? "" : "s"} linked to this
-              category for this month. Reassign a bill on the Bills page to
-              change where it lands.
-            </p>
-            <BillList bills={source!.bills} />
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+      <div className="flex-1 max-w-[8rem]">{input}</div>
+    </div>
   );
 }
 
@@ -1385,8 +1407,9 @@ function BudgetLineRow({
         <PlannedAmountCell
           line={line}
           planned={planned}
-          isReadOnly={isReadOnly}
+          isAvalanchePayment={isAvalanchePayment}
           onUpdatePlanned={onUpdatePlanned}
+          onPinLine={onTogglePin}
         />
       </div>
       <div className="col-span-3 md:col-span-2 text-right font-mono text-sm">
