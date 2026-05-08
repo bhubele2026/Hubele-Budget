@@ -1161,40 +1161,68 @@ router.get(
         ),
       );
 
-    // Carry-forward: if no lines exist yet for this month, copy the most recent
-    // prior month's planned amounts and notes for manual categories. Auto-pulled
-    // categories are skipped since their amounts derive from Bills/Debts.
-    if (lines.length === 0) {
-      const [prior] = await db
-        .select({ monthStart: budgetLinesTable.monthStart })
-        .from(budgetLinesTable)
-        .where(
-          and(
-            eq(budgetLinesTable.userId, req.userId!),
-            lt(budgetLinesTable.monthStart, monthStart),
-          ),
-        )
-        .orderBy(desc(budgetLinesTable.monthStart))
-        .limit(1);
+    // Carry-forward: for every MANUAL category that doesn't yet have a line
+    // this month, copy the most recent prior month's planned amount + note
+    // from that same category. Auto-pulled categories (auto_bills/auto_debts)
+    // are skipped — their amounts derive from Bills/Debts on each request.
+    //
+    // We can't just gate on `lines.length === 0` here because
+    // syncAutoDebtCategories above may have already inserted auto_debts lines
+    // for this month, which would make every future-month carry-forward a
+    // no-op (the bug that left June+ showing $0 across the manual rows).
+    {
+      const manualCategoryIds = cats
+        .filter((c) => c.sourceKind === "manual")
+        .map((c) => c.id);
 
-      if (prior) {
-        const manualCategoryIds = cats
-          .filter((c) => c.sourceKind === "manual")
-          .map((c) => c.id);
+      if (manualCategoryIds.length > 0) {
+        const haveLineForCat = new Set(
+          lines
+            .filter((l) => manualCategoryIds.includes(l.categoryId))
+            .map((l) => l.categoryId),
+        );
+        const missingManualIds = manualCategoryIds.filter(
+          (id) => !haveLineForCat.has(id),
+        );
 
-        if (manualCategoryIds.length > 0) {
-          const priorLines = await db
-            .select()
-            .from(budgetLinesTable)
-            .where(
-              and(
-                eq(budgetLinesTable.userId, req.userId!),
-                eq(budgetLinesTable.monthStart, prior.monthStart),
-                inArray(budgetLinesTable.categoryId, manualCategoryIds),
-              ),
-            );
+        if (missingManualIds.length > 0) {
+          // For each missing manual category, find its most recent prior
+          // line (across all prior months) and clone its planned amount +
+          // note into this month. Done with a single SQL query using a
+          // window function so we get one row per category.
+          const priorLines = await db.execute<{
+            category_id: string;
+            planned_amount: string;
+            note: string | null;
+          }>(sql`
+            SELECT category_id, planned_amount, note
+            FROM (
+              SELECT
+                category_id,
+                planned_amount,
+                note,
+                ROW_NUMBER() OVER (
+                  PARTITION BY category_id
+                  ORDER BY month_start DESC
+                ) AS rn
+              FROM budget_lines
+              WHERE user_id = ${req.userId!}
+                AND month_start < ${monthStart}
+                AND category_id IN (${sql.join(
+                  missingManualIds.map((id) => sql`${id}`),
+                  sql`, `,
+                )})
+            ) t
+            WHERE rn = 1
+          `);
 
-          if (priorLines.length > 0) {
+          const carry = (priorLines as unknown as Array<{
+            category_id: string;
+            planned_amount: string;
+            note: string | null;
+          }>);
+
+          if (carry.length > 0) {
             await db
               .insert(budgetMonthsTable)
               .values({ userId: req.userId!, monthStart })
@@ -1203,11 +1231,11 @@ router.get(
             await db
               .insert(budgetLinesTable)
               .values(
-                priorLines.map((l) => ({
+                carry.map((l) => ({
                   userId: req.userId!,
                   monthStart,
-                  categoryId: l.categoryId,
-                  plannedAmount: l.plannedAmount,
+                  categoryId: l.category_id,
+                  plannedAmount: l.planned_amount,
                   note: l.note,
                 })),
               )
