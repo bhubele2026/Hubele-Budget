@@ -35,9 +35,41 @@ const AVALANCHE_PAYMENT_LEGACY_NAME = "Avalanche extra";
 export async function syncAvalanchePaymentCategory(
   userId: string,
   monthStart: string,
-): Promise<{ categoryId: string }> {
+): Promise<{ categoryId: string | null }> {
   const settings = await ensureSettings(userId);
   const manualExtra = settings.manualExtra ?? "0";
+
+  // (#duplication-cleanup) When the avalanche extra is sourced from an
+  // existing budget category (the user picked a real category like
+  // Misc/Buffer that already contains the money via its linked recurring
+  // bills), there should be NO standalone "Avalanche payment" line — the
+  // linked category IS the avalanche payment. Drop any orphan row from a
+  // previous "manual" run so the same dollars stop being counted twice.
+  if ((settings.extraSource ?? "manual") !== "manual") {
+    const orphans = await db
+      .select()
+      .from(budgetCategoriesTable)
+      .where(
+        and(
+          eq(budgetCategoriesTable.userId, userId),
+          eq(budgetCategoriesTable.name, AVALANCHE_PAYMENT_NAME),
+        ),
+      );
+    for (const o of orphans) {
+      await db
+        .delete(budgetLinesTable)
+        .where(
+          and(
+            eq(budgetLinesTable.userId, userId),
+            eq(budgetLinesTable.categoryId, o.id),
+          ),
+        );
+      await db
+        .delete(budgetCategoriesTable)
+        .where(eq(budgetCategoriesTable.id, o.id));
+    }
+    return { categoryId: null };
+  }
 
   // 1. Rename legacy "Avalanche extra" → "Avalanche payment" if present and
   //    the new name doesn't already exist (otherwise we'll merge below).
@@ -170,6 +202,84 @@ export async function syncAvalanchePaymentCategory(
     });
 
   return { categoryId: catId };
+}
+
+// (#duplication-cleanup) One-time per-user migration. If the user is
+// still in extra_source="manual" mode AND there's an active recurring
+// item rolled up into a manual budget category whose monthly contribution
+// matches manualExtra (within $1), assume the user is *already* paying
+// the avalanche extra via that bill and switch them to budget_line mode
+// pointing at that category. The standalone "Avalanche payment" row will
+// be cleaned up by the next syncAvalanchePaymentCategory() call (now a
+// no-op for non-manual sources). Idempotent: re-running on a user already
+// in budget_line mode is a no-op.
+//
+// Imports are inlined to avoid a circular dependency with budget.ts (which
+// imports this module). expandItem comes from forecast.ts which is already
+// imported elsewhere in the budget GET path; we re-import lazily.
+export async function healAvalancheDuplication(
+  userId: string,
+  monthStart: string,
+): Promise<{ migrated: boolean; toCategoryId?: string; toCategoryName?: string }> {
+  const settings = await ensureSettings(userId);
+  if ((settings.extraSource ?? "manual") !== "manual") {
+    return { migrated: false };
+  }
+  const manualExtra = parseFloat(settings.manualExtra ?? "0");
+  if (manualExtra <= 0) return { migrated: false };
+
+  // Compute monthly contribution of every active recurring item linked to
+  // a manual category for this month, then look for one that matches.
+  const { recurringItemsTable, budgetCategoriesTable: bc } = await import(
+    "@workspace/db"
+  );
+  const { expandItem } = await import("../lib/cashSignal");
+  const monthEnd = new Date(monthStart);
+  monthEnd.setMonth(monthEnd.getMonth() + 1);
+  const monthFrom = new Date(monthStart);
+
+  const items = await db
+    .select()
+    .from(recurringItemsTable)
+    .where(eq(recurringItemsTable.userId, userId));
+  const cats = await db
+    .select()
+    .from(bc)
+    .where(eq(bc.userId, userId));
+  const manualCatById = new Map(
+    cats.filter((c) => c.sourceKind === "manual").map((c) => [c.id, c]),
+  );
+  let best: { catId: string; catName: string; total: number } | null = null;
+  for (const it of items) {
+    if (it.active === "false") continue;
+    if (!it.categoryId || !manualCatById.has(it.categoryId)) continue;
+    const events = expandItem(it, monthFrom, monthEnd);
+    let total = 0;
+    for (const ev of events) total += Math.abs(ev.amount);
+    if (Math.abs(total - manualExtra) <= 1) {
+      const cat = manualCatById.get(it.categoryId)!;
+      best = { catId: it.categoryId, catName: cat.name, total };
+      break;
+    }
+  }
+  if (!best) return { migrated: false };
+
+  await db
+    .update(avalancheSettingsTable)
+    .set({
+      extraSource: "budget_line",
+      extraBudgetCategoryId: best.catId,
+      updatedAt: new Date(),
+    })
+    .where(eq(avalancheSettingsTable.userId, userId));
+  // syncAvalanchePaymentCategory will now drop any orphan "Avalanche
+  // payment" category for this user on its next call (the GET handler
+  // calls it right after this heal).
+  return {
+    migrated: true,
+    toCategoryId: best.catId,
+    toCategoryName: best.catName,
+  };
 }
 
 // Returns whether the given budget category is the system-managed
@@ -417,10 +527,17 @@ export async function resolveExtraForUser(userId: string) {
 // represents "everything else is already accounted for, here's how much room
 // you have to throw at debt" rather than fighting itself.
 async function computeBudgetHeadroom(userId: string, monthStart: string) {
+  const settings = await ensureSettings(userId);
+  const linkedExtraCatId =
+    (settings.extraSource ?? "manual") === "budget_line"
+      ? settings.extraBudgetCategoryId
+      : null;
+
   const rows = await db
     .select({
       kind: budgetCategoriesTable.kind,
       name: budgetCategoriesTable.name,
+      categoryId: budgetCategoriesTable.id,
       planned: sql<string>`coalesce(sum(${budgetLinesTable.plannedAmount})::text, '0')`,
     })
     .from(budgetLinesTable)
@@ -434,7 +551,11 @@ async function computeBudgetHeadroom(userId: string, monthStart: string) {
         eq(budgetLinesTable.monthStart, monthStart),
       ),
     )
-    .groupBy(budgetCategoriesTable.kind, budgetCategoriesTable.name);
+    .groupBy(
+      budgetCategoriesTable.kind,
+      budgetCategoriesTable.name,
+      budgetCategoriesTable.id,
+    );
 
   let plannedIncome = 0;
   let plannedExpenses = 0;
@@ -442,6 +563,16 @@ async function computeBudgetHeadroom(userId: string, monthStart: string) {
   for (const r of rows) {
     const v = Number(r.planned) || 0;
     if (r.kind === "income") plannedIncome += v;
+    // (#duplication-cleanup) When the avalanche extra IS the user's linked
+    // budget category (budget_line mode), treat that category's planned
+    // amount as the avalanche payment so headroom math doesn't double-
+    // count it against itself. Same effect as the standalone Avalanche
+    // payment row in manual mode.
+    else if (r.categoryId === linkedExtraCatId) {
+      plannedExpenses += v;
+      plannedAvalanchePayment = v;
+      continue;
+    }
     else plannedExpenses += v;
     if (r.name === AVALANCHE_PAYMENT_NAME) plannedAvalanchePayment = v;
   }
