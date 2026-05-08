@@ -1170,6 +1170,46 @@ export default function TransactionsPage() {
     }
   };
 
+  // Task #471 — Inline expense ↔ income flip. Mirrors `handleQuickAmount`
+  // (same `updateTx` PATCH path, same invalidations) but instead of
+  // changing the magnitude it re-runs `normalizeAmount` against the
+  // *opposite* kind so the persisted amount and the visible color/sign
+  // update together. Closes the last common quick-edit gap left by
+  // #454 (which intentionally preserved the row's existing sign).
+  const handleQuickFlipKind = async (tx: Transaction) => {
+    const currentKind: "expense" | "income" =
+      parseSigned(tx.amount) >= 0 ? "income" : "expense";
+    const nextKind: "expense" | "income" =
+      currentKind === "income" ? "expense" : "income";
+    const absStr = Math.abs(parseSigned(tx.amount)).toFixed(2);
+    const next = normalizeAmount(absStr, nextKind);
+    if (next === tx.amount) return true;
+    try {
+      const updated = await updateTx.mutateAsync({
+        id: tx.id,
+        data: { amount: next },
+      });
+      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+      queryClient.invalidateQueries({
+        queryKey: getGetBudgetMonthQueryKey(
+          `${updated.occurredOn.slice(0, 7)}-01`,
+        ),
+      });
+      toast({
+        title: nextKind === "income" ? "Marked as income" : "Marked as expense",
+      });
+      return true;
+    } catch (e) {
+      toast({
+        title: "Couldn't flip",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   const handleRefreshBank = () => {
     refreshBank.mutate({ data: { plaidAccountId: effectiveAccountInternalId ?? null } }, {
       onSuccess: () => {
@@ -2064,6 +2104,7 @@ export default function TransactionsPage() {
                       <InlineAmountEditor
                         tx={tx}
                         onSave={(raw) => handleQuickAmount(tx, raw)}
+                        onFlipKind={() => handleQuickFlipKind(tx)}
                         disabled={updateTx.isPending}
                       />
                       {runningBalanceMap.has(tx.id) && (
@@ -2279,10 +2320,12 @@ function InlineCategoryPicker({
 function InlineAmountEditor({
   tx,
   onSave,
+  onFlipKind,
   disabled,
 }: {
   tx: Transaction;
   onSave: (raw: string) => Promise<boolean>;
+  onFlipKind?: () => Promise<boolean>;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -2293,6 +2336,12 @@ function InlineAmountEditor({
   }, [open, tx.amount]);
   const submit = async () => {
     const ok = await onSave(draft);
+    if (ok) setOpen(false);
+  };
+  const isCurrentlyIncome = parseSigned(tx.amount) >= 0;
+  const flip = async () => {
+    if (!onFlipKind) return;
+    const ok = await onFlipKind();
     if (ok) setOpen(false);
   };
   return (
@@ -2359,10 +2408,30 @@ function InlineAmountEditor({
             </Button>
           </div>
           <div className="text-[11px] text-muted-foreground">
-            {parseSigned(tx.amount) >= 0
+            {isCurrentlyIncome
               ? "Positive (income) — sign preserved."
               : "Negative (expense) — sign preserved."}
           </div>
+          {onFlipKind && (
+            <div className="border-t pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => void flip()}
+                disabled={disabled}
+                data-testid={`button-flip-kind-${tx.id}`}
+                title={
+                  isCurrentlyIncome
+                    ? "Flip to expense"
+                    : "Flip to income"
+                }
+              >
+                {isCurrentlyIncome ? "Mark as expense" : "Mark as income"}
+              </Button>
+            </div>
+          )}
         </div>
       </PopoverContent>
     </Popover>
