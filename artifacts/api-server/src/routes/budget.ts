@@ -1216,11 +1216,17 @@ router.get(
             WHERE rn = 1
           `);
 
-          const carry = (priorLines as unknown as Array<{
+          // node-postgres returns a QueryResult with `.rows`; older drizzle
+          // typings sometimes hint an array directly. Handle both shapes.
+          const carry = (
+            Array.isArray(priorLines)
+              ? priorLines
+              : ((priorLines as unknown as { rows?: unknown[] }).rows ?? [])
+          ) as Array<{
             category_id: string;
             planned_amount: string;
             note: string | null;
-          }>);
+          }>;
 
           if (carry.length > 0) {
             await db
