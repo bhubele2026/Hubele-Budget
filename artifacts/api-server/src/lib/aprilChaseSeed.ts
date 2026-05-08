@@ -9,8 +9,23 @@ import {
   forecastSettingsTable,
 } from "@workspace/db";
 import { categorize, loadUserRules } from "./autoCategorize";
-import { SYNTHETIC_PLAID_ACCESS_TOKEN_SENTINEL } from "./plaid";
 import { dedupePlaidAccountsForUser } from "./dedupePlaidAccounts";
+import { isValidPlaidAccessToken } from "./plaid";
+
+// (#398) Placeholder access_token for the synthetic Chase seed row.
+// MUST pass `isValidPlaidAccessToken` (see
+// `artifacts/api-server/src/lib/plaid.ts:30-50`) so the boot-time
+// malformed-token sweep (`flagMalformedAccessTokens` in plaidSync.ts)
+// never has to "rescue" this row. The previous value
+// (`"synthetic-no-access"`, length 19, no `access-<env>-` prefix)
+// failed the validator regex `^access-(sandbox|development|production)-[!-~]+$`
+// and lit up the dashboard yellow "needs reconnect" banner plus the
+// Chase header chip every time the API rebooted (#395 was the manual
+// hand-clean). Synthetic-row classification still works downstream
+// because `isSyntheticPlaidItem` keys off the `seed-` itemId prefix —
+// no Plaid call is ever made against this token.
+export const SYNTHETIC_CHASE_SEED_ACCESS_TOKEN =
+  "access-sandbox-seed-april-2026-chase-placeholder";
 
 type SeedRow = {
   idx: number;
@@ -357,13 +372,13 @@ async function ensureChaseAccount(userId: string): Promise<{
       .values({
         userId,
         itemId: SYNTHETIC_ITEM_ID,
-        // (#398) Sentinel value classified as a synthetic seed by
-        // isSyntheticPlaidItem(). Sync, the daily malformed-token
-        // sweep, the consent-refresh job, and /plaid/items all
-        // skip rows carrying this token, so we never light up a
-        // bogus "Chase needs reconnecting" banner against a row
-        // that was never a real Plaid connection.
-        accessToken: SYNTHETIC_PLAID_ACCESS_TOKEN_SENTINEL,
+        // (#398) Well-formed placeholder token (see comment on
+        // SYNTHETIC_CHASE_SEED_ACCESS_TOKEN above). Passes
+        // isValidPlaidAccessToken so the boot-time malformed-token
+        // sweep doesn't flag this row, AND the `seed-` itemId prefix
+        // makes isSyntheticPlaidItem treat it as a placeholder so
+        // sync/consent/items routes never call Plaid against it.
+        accessToken: SYNTHETIC_CHASE_SEED_ACCESS_TOKEN,
         institutionId: null,
         institutionName: "Chase",
         institutionSlug: "chase",
@@ -378,6 +393,32 @@ async function ensureChaseAccount(userId: string): Promise<{
     }
   }
   if (!item) throw new Error("Failed to materialize synthetic Chase plaid_item");
+
+  // (#398) Repair legacy synthetic rows that were inserted by an
+  // earlier seed run with the old `"synthetic-no-access"` token. That
+  // shape failed `isValidPlaidAccessToken` and lit up the dashboard
+  // "needs reconnect" banner on every API boot (#395 was the manual
+  // hand-clean). Rewriting in place keeps the row classified synthetic
+  // (the `seed-` itemId prefix is unchanged) and clears any stale
+  // ITEM_LOGIN_REQUIRED chip the boot sweep had stamped on it before
+  // we changed the seed shape. Idempotent — only runs when the stored
+  // token still fails the validator.
+  if (!isValidPlaidAccessToken(item.accessToken)) {
+    await db
+      .update(plaidItemsTable)
+      .set({
+        accessToken: SYNTHETIC_CHASE_SEED_ACCESS_TOKEN,
+        lastSyncError: null,
+        lastSyncErrorCode: null,
+      })
+      .where(eq(plaidItemsTable.id, item.id));
+    item = {
+      ...item,
+      accessToken: SYNTHETIC_CHASE_SEED_ACCESS_TOKEN,
+      lastSyncError: null,
+      lastSyncErrorCode: null,
+    };
+  }
 
   let [acct] = await db
     .select()
