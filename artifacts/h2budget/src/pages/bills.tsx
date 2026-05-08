@@ -907,7 +907,10 @@ function BillGroupCard({
               </div>
             </div>
           </div>
-          <div className={`text-base font-serif font-semibold tabular-nums ${tint}`}>
+          <div
+            className={`text-base font-serif font-semibold tabular-nums ${tint}`}
+            data-testid={`text-group-total-${tone}`}
+          >
             {sign}
             {formatCurrency(total)}
           </div>
