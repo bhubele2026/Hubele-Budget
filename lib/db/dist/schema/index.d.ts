@@ -3253,7 +3253,7 @@ export declare const forecastResolutionsTable: import("drizzle-orm/pg-core").PgT
             name: "recurring_item_id";
             tableName: "forecast_resolutions";
             dataType: "string";
-            columnType: "PgUUID";
+            columnType: "PgText";
             data: string;
             driverParam: string;
             notNull: false;
@@ -3261,7 +3261,7 @@ export declare const forecastResolutionsTable: import("drizzle-orm/pg-core").PgT
             isPrimaryKey: false;
             isAutoincrement: false;
             hasRuntimeDefault: false;
-            enumValues: undefined;
+            enumValues: [string, ...string[]];
             baseColumn: never;
             identity: undefined;
             generated: undefined;
