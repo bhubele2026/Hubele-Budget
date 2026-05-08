@@ -501,7 +501,7 @@ export const forecastResolutionsTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
-    recurringItemId: uuid("recurring_item_id"),
+    recurringItemId: text("recurring_item_id"),
     occurrenceDate: date("occurrence_date"),
     status: text("status").notNull(),
     matchedTxnId: uuid("matched_txn_id"),
