@@ -1343,11 +1343,31 @@ function BudgetLineRow({
                       );
                     });
                   })()}
-                  {contributingTxns.length > 25 && (
-                    <div className="text-[10px] text-muted-foreground text-center pt-1">
-                      Showing 25 of {contributingTxns.length}
-                    </div>
-                  )}
+                  {contributingTxns.length > 25 && (() => {
+                    const hidden = contributingTxns.slice(25);
+                    const hiddenSum = hidden.reduce((s, t) => s + Number(t.amount), 0);
+                    return (
+                      <div
+                        className="flex items-start justify-between gap-2 px-2 py-1.5 rounded bg-muted/30 border-t mt-1"
+                        data-testid={`actuals-hidden-tail-${line.categoryId}`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[11px] font-medium text-muted-foreground">
+                            + {hidden.length} earlier transaction{hidden.length === 1 ? "" : "s"}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            Included in the running total above
+                          </div>
+                        </div>
+                        <div
+                          className="text-xs font-mono tabular-nums text-muted-foreground"
+                          data-testid={`actuals-hidden-tail-sum-${line.categoryId}`}
+                        >
+                          {formatCurrency(hiddenSum)}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="border-t mt-2 pt-2">
                   <button
