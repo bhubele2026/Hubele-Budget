@@ -211,6 +211,129 @@ async function syncAutoDebtCategories(
   }
 }
 
+// Group name used for auto-pulled budget lines that are created on the fly
+// from recurring bills/income that the user added (e.g. via Forecast Review's
+// "Add as bill" flow) without picking an existing budget category. These
+// lines auto-track the recurring item's monthly total — editing the bill
+// updates the budget line.
+const RECURRING_BILLS_GROUP = "Recurring Bills";
+const RECURRING_INCOME_GROUP = "Income";
+const RECURRING_AUTO_BASE_SORT = 9000;
+
+// Ensure every active recurring item that isn't linked to a budget category
+// has one created for it as `auto_bills`, so the recurring bill is reflected
+// as a budget line for monthly budgeting. Bills/income that already point at
+// a curated category (e.g. "Utilities" rolling up several bills) are left
+// alone — their planned amount stays user-controlled. Idempotent: re-runs
+// only act on items still missing a valid `category_id`.
+async function syncAutoBillsFromRecurring(userId: string): Promise<void> {
+  const items = await db
+    .select()
+    .from(recurringItemsTable)
+    .where(
+      and(
+        eq(recurringItemsTable.userId, userId),
+        eq(recurringItemsTable.active, "true"),
+      ),
+    );
+  if (items.length === 0) return;
+
+  // A recurring item needs an auto category when it has no categoryId, OR
+  // its categoryId points to a category that no longer exists (orphaned).
+  const linkedIds = Array.from(
+    new Set(
+      items
+        .map((i) => i.categoryId)
+        .filter((id): id is string => typeof id === "string"),
+    ),
+  );
+  const validIds = new Set<string>();
+  if (linkedIds.length > 0) {
+    const found = await db
+      .select({ id: budgetCategoriesTable.id })
+      .from(budgetCategoriesTable)
+      .where(
+        and(
+          eq(budgetCategoriesTable.userId, userId),
+          inArray(budgetCategoriesTable.id, linkedIds),
+        ),
+      );
+    for (const r of found) validIds.add(r.id);
+  }
+  const needsCategory = items.filter(
+    (i) => !i.categoryId || !validIds.has(i.categoryId),
+  );
+  if (needsCategory.length === 0) return;
+
+  // Existing categories indexed by name so we can reuse one if a category
+  // with the same name already exists (avoids unique-constraint conflicts
+  // when a user re-adds a bill they previously linked manually).
+  const existingByName = new Map<string, { id: string; sourceKind: string }>();
+  {
+    const all = await db
+      .select({
+        id: budgetCategoriesTable.id,
+        name: budgetCategoriesTable.name,
+        sourceKind: budgetCategoriesTable.sourceKind,
+      })
+      .from(budgetCategoriesTable)
+      .where(eq(budgetCategoriesTable.userId, userId));
+    for (const c of all) existingByName.set(c.name, c);
+  }
+
+  let nextSort = RECURRING_AUTO_BASE_SORT;
+  for (const item of needsCategory) {
+    const existing = existingByName.get(item.name);
+    let categoryId: string;
+    if (existing) {
+      categoryId = existing.id;
+    } else {
+      const isIncome = item.kind === "income";
+      const [row] = await db
+        .insert(budgetCategoriesTable)
+        .values({
+          userId,
+          name: item.name,
+          kind: isIncome ? "income" : "expense",
+          groupName: isIncome ? RECURRING_INCOME_GROUP : RECURRING_BILLS_GROUP,
+          sourceKind: "auto_bills",
+          sortOrder: nextSort++,
+        })
+        .onConflictDoNothing({
+          target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+        })
+        .returning({ id: budgetCategoriesTable.id });
+      if (row) {
+        categoryId = row.id;
+      } else {
+        // Concurrent insert raced us — re-read.
+        const [reread] = await db
+          .select({ id: budgetCategoriesTable.id })
+          .from(budgetCategoriesTable)
+          .where(
+            and(
+              eq(budgetCategoriesTable.userId, userId),
+              eq(budgetCategoriesTable.name, item.name),
+            ),
+          );
+        if (!reread) continue;
+        categoryId = reread.id;
+      }
+      existingByName.set(item.name, { id: categoryId, sourceKind: "auto_bills" });
+    }
+
+    await db
+      .update(recurringItemsTable)
+      .set({ categoryId })
+      .where(
+        and(
+          eq(recurringItemsTable.id, item.id),
+          eq(recurringItemsTable.userId, userId),
+        ),
+      );
+  }
+}
+
 // One-time per-user consolidation of the legacy ~45-category budget seed
 // into the new ~22-category list (task #65). Idempotent: gated by a flag in
 // `settings.preferences.budgetCategoriesV2`. Re-runs are safe — the mapping
@@ -993,6 +1116,13 @@ router.get(
     // month before reading anything back. Each call ensures the budget rows
     // match the current Debts state (adds, removes, renames, min changes).
     await syncAutoDebtCategories(req.userId!, monthStart);
+
+    // Ensure every active recurring bill/income (including ones added on the
+    // fly via Forecast Review's "Add as bill" flow) has an `auto_bills`
+    // budget category linked to it, so the bill appears as a budget line
+    // for monthly budgeting. No-op for items already linked to a curated
+    // category (e.g. "Utilities" rolling up several bills).
+    await syncAutoBillsFromRecurring(req.userId!);
 
     // Ensure the system-managed "Avalanche payment" line is present and
     // mirrors avalancheSettings.manualExtra for this month.
