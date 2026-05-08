@@ -2686,12 +2686,16 @@ export default function ForecastPage({
                 )}
                 {bankResolvedThisMonth.length > 0 && (
                   <div
-                    className="mt-3 pt-3 border-t space-y-1"
+                    className="mt-3 pt-3 border-t"
                     data-testid="bank-resolved-list"
                   >
                     <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
                       Resolved this month — undo if needed
                     </div>
+                    <div
+                      className="space-y-1 max-h-[7.5rem] overflow-y-auto pr-1"
+                      data-testid="bank-resolved-list-scroll"
+                    >
                     {bankResolvedThisMonth.map((r) => (
                       <div
                         key={r.resolutionId}
@@ -2733,6 +2737,7 @@ export default function ForecastPage({
                         </Button>
                       </div>
                     ))}
+                    </div>
                   </div>
                 )}
               </CardContent>
