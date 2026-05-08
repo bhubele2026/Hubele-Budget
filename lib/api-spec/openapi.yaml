@@ -2532,6 +2532,44 @@ components:
               source: { type: string, enum: [Bank, Amex, Other] }
               count: { type: integer }
               amount: { type: string }
+        plannedSource:
+          type: object
+          required: [kind, bills]
+          description: |
+            Provenance of the Budgeted amount on this row. Drives the
+            "where did this come from?" popover on the Budget page.
+            `kind` is one of:
+              - `bills`   — sum of one or more recurring items linked to
+                            this category (income or expense). `bills`
+                            lists each contributing item with its
+                            per-month amount for the viewed month.
+              - `pinned`  — a snapshot value the user pinned (line- or
+                            month-level) that overrides the live
+                            derivation.
+              - `derived` — auto_debts category whose amount is the
+                            current minimum-payment from the linked debt.
+              - `manual`  — plain envelope: the value comes from the
+                            persisted budget_lines.planned_amount that
+                            the user edits inline.
+          properties:
+            kind:
+              type: string
+              enum: [bills, pinned, derived, manual]
+            bills:
+              type: array
+              description: |
+                Recurring items linked to this category and their
+                expanded contribution to the viewed month. Always
+                present (empty for non-bill kinds).
+              items:
+                type: object
+                required: [id, name, amount, frequency, eventCount]
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+                  amount: { type: string }
+                  frequency: { type: string }
+                  eventCount: { type: integer }
     BudgetGroup:
       type: object
       required: [groupName, plannedTotal, actualTotal, lines]

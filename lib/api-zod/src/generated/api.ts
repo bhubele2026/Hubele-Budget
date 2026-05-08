@@ -1401,6 +1401,27 @@ export const GetBudgetMonthResponse = zod.object({
         .describe(
           "Per-source breakdown of the actuals that contribute to this\nbudget line. Used to render Bank\/Amex badges with counts on the\nbudget page so the user can see at a glance where the spend came\nfrom. Transfers are excluded from these counts.\n",
         ),
+      plannedSource: zod
+        .object({
+          kind: zod.enum(["bills", "pinned", "derived", "manual"]),
+          bills: zod
+            .array(
+              zod.object({
+                id: zod.string(),
+                name: zod.string(),
+                amount: zod.string(),
+                frequency: zod.string(),
+                eventCount: zod.number(),
+              }),
+            )
+            .describe(
+              "Recurring items linked to this category and their\nexpanded contribution to the viewed month. Always\npresent (empty for non-bill kinds).\n",
+            ),
+        })
+        .optional()
+        .describe(
+          'Provenance of the Budgeted amount on this row. Drives the\n\"where did this come from?\" popover on the Budget page.\n`kind` is one of:\n  - `bills`   — sum of one or more recurring items linked to\n                this category (income or expense). `bills`\n                lists each contributing item with its\n                per-month amount for the viewed month.\n  - `pinned`  — a snapshot value the user pinned (line- or\n                month-level) that overrides the live\n                derivation.\n  - `derived` — auto_debts category whose amount is the\n                current minimum-payment from the linked debt.\n  - `manual`  — plain envelope: the value comes from the\n                persisted budget_lines.planned_amount that\n                the user edits inline.\n',
+        ),
     }),
   ),
   groups: zod.array(
@@ -1436,6 +1457,27 @@ export const GetBudgetMonthResponse = zod.object({
             .optional()
             .describe(
               "Per-source breakdown of the actuals that contribute to this\nbudget line. Used to render Bank\/Amex badges with counts on the\nbudget page so the user can see at a glance where the spend came\nfrom. Transfers are excluded from these counts.\n",
+            ),
+          plannedSource: zod
+            .object({
+              kind: zod.enum(["bills", "pinned", "derived", "manual"]),
+              bills: zod
+                .array(
+                  zod.object({
+                    id: zod.string(),
+                    name: zod.string(),
+                    amount: zod.string(),
+                    frequency: zod.string(),
+                    eventCount: zod.number(),
+                  }),
+                )
+                .describe(
+                  "Recurring items linked to this category and their\nexpanded contribution to the viewed month. Always\npresent (empty for non-bill kinds).\n",
+                ),
+            })
+            .optional()
+            .describe(
+              'Provenance of the Budgeted amount on this row. Drives the\n\"where did this come from?\" popover on the Budget page.\n`kind` is one of:\n  - `bills`   — sum of one or more recurring items linked to\n                this category (income or expense). `bills`\n                lists each contributing item with its\n                per-month amount for the viewed month.\n  - `pinned`  — a snapshot value the user pinned (line- or\n                month-level) that overrides the live\n                derivation.\n  - `derived` — auto_debts category whose amount is the\n                current minimum-payment from the linked debt.\n  - `manual`  — plain envelope: the value comes from the\n                persisted budget_lines.planned_amount that\n                the user edits inline.\n',
             ),
         }),
       ),

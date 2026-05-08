@@ -48,6 +48,17 @@ export function pickCategoryDrillDownHref(
   const base = amexCount > bankCount ? "/amex" : "/transactions";
   return `${base}?category=${encodeURIComponent(categoryName)}&month=${monthStart}`;
 }
+type LinkedBillEntry = {
+  id: string;
+  name: string;
+  amount: string;
+  frequency: string;
+  eventCount: number;
+};
+type PlannedSource = {
+  kind: "bills" | "pinned" | "derived" | "manual";
+  bills: LinkedBillEntry[];
+};
 type BudgetLineWithActual = {
   id?: string | null;
   categoryId: string;
@@ -61,6 +72,7 @@ type BudgetLineWithActual = {
   kind: string;
   pinned: boolean;
   sourceBreakdown?: SourceBreakdownEntry[] | null;
+  plannedSource?: PlannedSource | null;
 };
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,6 +94,7 @@ import {
   Landmark,
   MoreHorizontal,
   Check,
+  Info,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -789,6 +802,150 @@ export default function BudgetPage() {
   );
 }
 
+// "Where did this come from?" cell for the Budgeted column. For
+// bill-backed and pinned/derived rows, renders the read-only amount
+// next to a small info button that opens a popover listing the
+// contributing recurring items (or explains the pin/debt link). For
+// plain manual envelopes, renders the editable input as before — no
+// popover, since the amount IS just whatever the user typed.
+function PlannedAmountCell({
+  line,
+  planned,
+  isReadOnly,
+  onUpdatePlanned,
+}: {
+  line: BudgetLineWithActual;
+  planned: number;
+  isReadOnly: boolean;
+  onUpdatePlanned: (categoryId: string, amount: string) => void;
+}) {
+  const source = line.plannedSource;
+  const kind = source?.kind ?? (isReadOnly ? "derived" : "manual");
+  const showPopover = kind !== "manual";
+
+  const amount = (
+    <span className="font-mono text-sm tabular-nums">
+      {formatCurrency(line.plannedAmount)}
+    </span>
+  );
+
+  if (!showPopover) {
+    // Plain editable envelope (Groceries, Dining, Pets-without-bills, …).
+    return (
+      <Input
+        type="number"
+        step="1"
+        className="h-7 text-right bg-transparent border-transparent hover:border-input focus:bg-background font-mono"
+        defaultValue={planned.toString()}
+        onBlur={(e) => {
+          if (e.target.value !== planned.toString()) {
+            onUpdatePlanned(line.categoryId, e.target.value);
+          }
+        }}
+        data-testid={`input-planned-${line.categoryId}`}
+      />
+    );
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center justify-end gap-1.5 py-1 pr-3 text-right hover:underline decoration-dotted underline-offset-2 cursor-pointer w-full"
+          title="Where did this amount come from?"
+          data-testid={`button-planned-source-${line.categoryId}`}
+        >
+          {amount}
+          <Info className="h-3 w-3 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-3" align="end">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs font-medium">{line.categoryName}</div>
+          <div className="text-[10px] text-muted-foreground">
+            {formatCurrency(line.plannedAmount)}
+          </div>
+        </div>
+        {kind === "pinned" && (
+          <div className="text-xs text-muted-foreground space-y-2">
+            <p>
+              This amount is <span className="font-medium">pinned</span> — it
+              stays at the locked value instead of tracking the live
+              Bills/Debts derivation.
+            </p>
+            {(source?.bills ?? []).length > 0 && (
+              <BillList bills={source!.bills} />
+            )}
+            <p className="text-[10px]">
+              Use the pin icon next to the row name to unpin and let it track
+              again.
+            </p>
+          </div>
+        )}
+        {kind === "derived" && (
+          <div className="text-xs text-muted-foreground">
+            <p>
+              Pulled from the linked debt's current minimum payment. Edit the
+              debt on the Debts page to change this amount.
+            </p>
+          </div>
+        )}
+        {kind === "bills" && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Sum of {(source?.bills ?? []).length} bill
+              {(source?.bills ?? []).length === 1 ? "" : "s"} linked to this
+              category for this month. Reassign a bill on the Bills page to
+              change where it lands.
+            </p>
+            <BillList bills={source!.bills} />
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function BillList({ bills }: { bills: LinkedBillEntry[] }) {
+  if (bills.length === 0) {
+    return (
+      <div className="text-xs text-muted-foreground py-1">
+        No linked bills hit this month.
+      </div>
+    );
+  }
+  return (
+    <div
+      className="space-y-0.5 max-h-64 overflow-y-auto pr-1"
+      data-testid="planned-source-bill-list"
+    >
+      {bills.map((b) => (
+        <div
+          key={b.id}
+          className="flex items-start justify-between gap-2 px-2 py-1.5 rounded hover:bg-muted/40"
+          data-testid={`planned-source-bill-${b.id}`}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-medium truncate">{b.name}</div>
+            <div className="text-[10px] text-muted-foreground">
+              {b.frequency}
+              {b.eventCount === 0
+                ? " · no events this month"
+                : b.eventCount > 1
+                  ? ` · ${b.eventCount} events this month`
+                  : ""}
+            </div>
+          </div>
+          <div className="text-xs font-mono tabular-nums whitespace-nowrap">
+            {formatCurrency(b.amount)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Single uncategorized-transaction row inside the inline-categorize popover.
 // `highlight` adds a subtle violet tint when the row is in the "Suggested"
 // section (matched a rule or category-name substring).
@@ -1225,24 +1382,12 @@ function BudgetLineRow({
         </div>
       </div>
       <div className="col-span-3 md:col-span-2 text-right">
-        {isReadOnly ? (
-          <div className="font-mono text-sm py-1 pr-3">
-            {formatCurrency(line.plannedAmount)}
-          </div>
-        ) : (
-          <Input
-            type="number"
-            step="1"
-            className="h-7 text-right bg-transparent border-transparent hover:border-input focus:bg-background font-mono"
-            defaultValue={planned.toString()}
-            onBlur={(e) => {
-              if (e.target.value !== planned.toString()) {
-                onUpdatePlanned(line.categoryId, e.target.value);
-              }
-            }}
-            data-testid={`input-planned-${line.categoryId}`}
-          />
-        )}
+        <PlannedAmountCell
+          line={line}
+          planned={planned}
+          isReadOnly={isReadOnly}
+          onUpdatePlanned={onUpdatePlanned}
+        />
       </div>
       <div className="col-span-3 md:col-span-2 text-right font-mono text-sm">
         <Popover>

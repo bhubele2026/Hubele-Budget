@@ -1413,6 +1413,14 @@ router.get(
 
     const autoPlannedByCat = new Map<string, string>();
     const billBackedCatIds = new Set<string>();
+    type LinkedBill = {
+      id: string;
+      name: string;
+      amount: string;
+      frequency: string;
+      eventCount: number;
+    };
+    const linkedBillsByCat = new Map<string, LinkedBill[]>();
 
     // Roll every active recurring item (bills + income + one-off) into the
     // category it points at, regardless of that category's source_kind.
@@ -1436,15 +1444,23 @@ router.get(
         for (const ev of events) total += Math.abs(ev.amount);
         if (events.length > 0) {
           sums.set(r.categoryId, (sums.get(r.categoryId) ?? 0) + total);
-          billBackedCatIds.add(r.categoryId);
-        } else {
+        } else if (!sums.has(r.categoryId)) {
           // Item is linked to this category but produces no events this
           // month (e.g. one-time bill in a different month, biweekly with
           // 0 hits). The category still counts as bill-backed so the line
           // shows $0.00 from bills rather than the carried-forward amount.
-          billBackedCatIds.add(r.categoryId);
-          if (!sums.has(r.categoryId)) sums.set(r.categoryId, 0);
+          sums.set(r.categoryId, 0);
         }
+        billBackedCatIds.add(r.categoryId);
+        const arr = linkedBillsByCat.get(r.categoryId) ?? [];
+        arr.push({
+          id: r.id,
+          name: r.name,
+          amount: total.toFixed(2),
+          frequency: r.frequency ?? "monthly",
+          eventCount: events.length,
+        });
+        linkedBillsByCat.set(r.categoryId, arr);
       }
       for (const [catId, total] of sums) {
         autoPlannedByCat.set(catId, total.toFixed(2));
@@ -1580,6 +1596,23 @@ router.get(
           amount: v.amount.toFixed(2),
         }),
       );
+      // Provenance for the Budgeted amount, surfaced in the UI as a
+      // "where did this come from?" popover. Order matters: pinned wins
+      // over bills which wins over derived (auto_debts) which wins over
+      // plain manual.
+      const linkedBills = linkedBillsByCat.get(c.id) ?? [];
+      const plannedSourceKind: "pinned" | "bills" | "derived" | "manual" =
+        usePinnedLine
+          ? "pinned"
+          : linkedBills.length > 0
+            ? "bills"
+            : c.sourceKind === "auto_debts" && derived !== undefined
+              ? "derived"
+              : "manual";
+      const plannedSource = {
+        kind: plannedSourceKind,
+        bills: linkedBills,
+      };
       return {
         id: line?.id ?? null,
         categoryId: c.id,
@@ -1593,6 +1626,7 @@ router.get(
         kind: c.kind,
         pinned: usePinnedLine,
         sourceBreakdown,
+        plannedSource,
       };
     });
 

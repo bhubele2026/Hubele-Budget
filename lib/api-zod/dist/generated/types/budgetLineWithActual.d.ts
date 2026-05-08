@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { BudgetLineWithActualPlannedSource } from "./budgetLineWithActualPlannedSource";
 import type { BudgetLineWithActualSourceBreakdownItem } from "./budgetLineWithActualSourceBreakdownItem";
 import type { BudgetLineWithActualSourceKind } from "./budgetLineWithActualSourceKind";
 export interface BudgetLineWithActual {
@@ -31,5 +32,22 @@ export interface BudgetLineWithActual {
   from. Transfers are excluded from these counts.
    */
     sourceBreakdown?: BudgetLineWithActualSourceBreakdownItem[];
+    /** Provenance of the Budgeted amount on this row. Drives the
+  "where did this come from?" popover on the Budget page.
+  `kind` is one of:
+    - `bills`   — sum of one or more recurring items linked to
+                  this category (income or expense). `bills`
+                  lists each contributing item with its
+                  per-month amount for the viewed month.
+    - `pinned`  — a snapshot value the user pinned (line- or
+                  month-level) that overrides the live
+                  derivation.
+    - `derived` — auto_debts category whose amount is the
+                  current minimum-payment from the linked debt.
+    - `manual`  — plain envelope: the value comes from the
+                  persisted budget_lines.planned_amount that
+                  the user edits inline.
+   */
+    plannedSource?: BudgetLineWithActualPlannedSource;
 }
 //# sourceMappingURL=budgetLineWithActual.d.ts.map

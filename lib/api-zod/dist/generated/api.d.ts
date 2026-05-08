@@ -2871,6 +2871,46 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             source: "Bank" | "Amex" | "Other";
             count: number;
         }>, "many">>;
+        plannedSource: zod.ZodOptional<zod.ZodObject<{
+            kind: zod.ZodEnum<["bills", "pinned", "derived", "manual"]>;
+            bills: zod.ZodArray<zod.ZodObject<{
+                id: zod.ZodString;
+                name: zod.ZodString;
+                amount: zod.ZodString;
+                frequency: zod.ZodString;
+                eventCount: zod.ZodNumber;
+            }, "strip", zod.ZodTypeAny, {
+                id: string;
+                amount: string;
+                name: string;
+                frequency: string;
+                eventCount: number;
+            }, {
+                id: string;
+                amount: string;
+                name: string;
+                frequency: string;
+                eventCount: number;
+            }>, "many">;
+        }, "strip", zod.ZodTypeAny, {
+            kind: "manual" | "pinned" | "bills" | "derived";
+            bills: {
+                id: string;
+                amount: string;
+                name: string;
+                frequency: string;
+                eventCount: number;
+            }[];
+        }, {
+            kind: "manual" | "pinned" | "bills" | "derived";
+            bills: {
+                id: string;
+                amount: string;
+                name: string;
+                frequency: string;
+                eventCount: number;
+            }[];
+        }>>;
     }, "strip", zod.ZodTypeAny, {
         categoryId: string;
         categoryName: string;
@@ -2888,6 +2928,16 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             source: "Bank" | "Amex" | "Other";
             count: number;
         }[] | undefined;
+        plannedSource?: {
+            kind: "manual" | "pinned" | "bills" | "derived";
+            bills: {
+                id: string;
+                amount: string;
+                name: string;
+                frequency: string;
+                eventCount: number;
+            }[];
+        } | undefined;
     }, {
         categoryId: string;
         categoryName: string;
@@ -2905,6 +2955,16 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             source: "Bank" | "Amex" | "Other";
             count: number;
         }[] | undefined;
+        plannedSource?: {
+            kind: "manual" | "pinned" | "bills" | "derived";
+            bills: {
+                id: string;
+                amount: string;
+                name: string;
+                frequency: string;
+                eventCount: number;
+            }[];
+        } | undefined;
     }>, "many">;
     groups: zod.ZodArray<zod.ZodObject<{
         groupName: zod.ZodString;
@@ -2935,6 +2995,46 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 source: "Bank" | "Amex" | "Other";
                 count: number;
             }>, "many">>;
+            plannedSource: zod.ZodOptional<zod.ZodObject<{
+                kind: zod.ZodEnum<["bills", "pinned", "derived", "manual"]>;
+                bills: zod.ZodArray<zod.ZodObject<{
+                    id: zod.ZodString;
+                    name: zod.ZodString;
+                    amount: zod.ZodString;
+                    frequency: zod.ZodString;
+                    eventCount: zod.ZodNumber;
+                }, "strip", zod.ZodTypeAny, {
+                    id: string;
+                    amount: string;
+                    name: string;
+                    frequency: string;
+                    eventCount: number;
+                }, {
+                    id: string;
+                    amount: string;
+                    name: string;
+                    frequency: string;
+                    eventCount: number;
+                }>, "many">;
+            }, "strip", zod.ZodTypeAny, {
+                kind: "manual" | "pinned" | "bills" | "derived";
+                bills: {
+                    id: string;
+                    amount: string;
+                    name: string;
+                    frequency: string;
+                    eventCount: number;
+                }[];
+            }, {
+                kind: "manual" | "pinned" | "bills" | "derived";
+                bills: {
+                    id: string;
+                    amount: string;
+                    name: string;
+                    frequency: string;
+                    eventCount: number;
+                }[];
+            }>>;
         }, "strip", zod.ZodTypeAny, {
             categoryId: string;
             categoryName: string;
@@ -2952,6 +3052,16 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 source: "Bank" | "Amex" | "Other";
                 count: number;
             }[] | undefined;
+            plannedSource?: {
+                kind: "manual" | "pinned" | "bills" | "derived";
+                bills: {
+                    id: string;
+                    amount: string;
+                    name: string;
+                    frequency: string;
+                    eventCount: number;
+                }[];
+            } | undefined;
         }, {
             categoryId: string;
             categoryName: string;
@@ -2969,6 +3079,16 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 source: "Bank" | "Amex" | "Other";
                 count: number;
             }[] | undefined;
+            plannedSource?: {
+                kind: "manual" | "pinned" | "bills" | "derived";
+                bills: {
+                    id: string;
+                    amount: string;
+                    name: string;
+                    frequency: string;
+                    eventCount: number;
+                }[];
+            } | undefined;
         }>, "many">;
     }, "strip", zod.ZodTypeAny, {
         groupName: string;
@@ -2989,6 +3109,16 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 source: "Bank" | "Amex" | "Other";
                 count: number;
             }[] | undefined;
+            plannedSource?: {
+                kind: "manual" | "pinned" | "bills" | "derived";
+                bills: {
+                    id: string;
+                    amount: string;
+                    name: string;
+                    frequency: string;
+                    eventCount: number;
+                }[];
+            } | undefined;
         }[];
         plannedTotal: string;
         actualTotal: string;
@@ -3011,6 +3141,16 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 source: "Bank" | "Amex" | "Other";
                 count: number;
             }[] | undefined;
+            plannedSource?: {
+                kind: "manual" | "pinned" | "bills" | "derived";
+                bills: {
+                    id: string;
+                    amount: string;
+                    name: string;
+                    frequency: string;
+                    eventCount: number;
+                }[];
+            } | undefined;
         }[];
         plannedTotal: string;
         actualTotal: string;
@@ -3111,6 +3251,16 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             source: "Bank" | "Amex" | "Other";
             count: number;
         }[] | undefined;
+        plannedSource?: {
+            kind: "manual" | "pinned" | "bills" | "derived";
+            bills: {
+                id: string;
+                amount: string;
+                name: string;
+                frequency: string;
+                eventCount: number;
+            }[];
+        } | undefined;
     }[];
     groups: {
         groupName: string;
@@ -3131,6 +3281,16 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 source: "Bank" | "Amex" | "Other";
                 count: number;
             }[] | undefined;
+            plannedSource?: {
+                kind: "manual" | "pinned" | "bills" | "derived";
+                bills: {
+                    id: string;
+                    amount: string;
+                    name: string;
+                    frequency: string;
+                    eventCount: number;
+                }[];
+            } | undefined;
         }[];
         plannedTotal: string;
         actualTotal: string;
@@ -3174,6 +3334,16 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
             source: "Bank" | "Amex" | "Other";
             count: number;
         }[] | undefined;
+        plannedSource?: {
+            kind: "manual" | "pinned" | "bills" | "derived";
+            bills: {
+                id: string;
+                amount: string;
+                name: string;
+                frequency: string;
+                eventCount: number;
+            }[];
+        } | undefined;
     }[];
     groups: {
         groupName: string;
@@ -3194,6 +3364,16 @@ export declare const GetBudgetMonthResponse: zod.ZodObject<{
                 source: "Bank" | "Amex" | "Other";
                 count: number;
             }[] | undefined;
+            plannedSource?: {
+                kind: "manual" | "pinned" | "bills" | "derived";
+                bills: {
+                    id: string;
+                    amount: string;
+                    name: string;
+                    frequency: string;
+                    eventCount: number;
+                }[];
+            } | undefined;
         }[];
         plannedTotal: string;
         actualTotal: string;
@@ -6173,8 +6353,8 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         active: number;
         monthStart: string;
         income: string;
-        net: string;
         bills: string;
+        net: string;
         debtMin: string;
         totalOutflow: string;
         monthEnd: string;
@@ -6182,8 +6362,8 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         active: number;
         monthStart: string;
         income: string;
-        net: string;
         bills: string;
+        net: string;
         debtMin: string;
         totalOutflow: string;
         monthEnd: string;
@@ -6239,8 +6419,8 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         active: number;
         monthStart: string;
         income: string;
-        net: string;
         bills: string;
+        net: string;
         debtMin: string;
         totalOutflow: string;
         monthEnd: string;
@@ -6296,8 +6476,8 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         active: number;
         monthStart: string;
         income: string;
-        net: string;
         bills: string;
+        net: string;
         debtMin: string;
         totalOutflow: string;
         monthEnd: string;
