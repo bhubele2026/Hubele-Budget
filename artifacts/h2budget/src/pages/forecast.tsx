@@ -809,6 +809,33 @@ export default function ForecastPage() {
     },
     [],
   );
+  // (#517) Pin the unmatched inbox area so the planned-items list scrolls
+  // underneath it. We measure the existing page sticky header so the pinned
+  // region's `top` lands flush below it even as the header height changes.
+  const pageStickyHeaderRef = useRef<HTMLDivElement>(null);
+  const [pageStickyHeaderHeight, setPageStickyHeaderHeight] = useState(0);
+  useEffect(() => {
+    const el = pageStickyHeaderRef.current;
+    if (!el) return;
+    const update = () =>
+      setPageStickyHeaderHeight(Math.ceil(el.getBoundingClientRect().height));
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // (#517) On short or narrow viewports, pinning would eat most of the screen
+  // and leave no room to scroll the planned list, so we fall back to the
+  // existing non-pinned behavior there.
+  const [canPinInbox, setCanPinInbox] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(min-height: 720px) and (min-width: 768px)");
+    const update = () => setCanPinInbox(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
   const jumpToPlan = (itemId: string, date: string) => {
     const key = `${itemId}|${date}`;
     setHighlightedPlanKey(key);
@@ -1935,7 +1962,7 @@ export default function ForecastPage() {
   return (
     <div className="space-y-6">
       <PlaidReauthBanner />
-      <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-2 md:pt-3 pb-2 bg-background border-b shadow-sm space-y-2">
+      <div ref={pageStickyHeaderRef} className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-2 md:pt-3 pb-2 bg-background border-b shadow-sm space-y-2">
       <div className="flex justify-between items-center gap-3 flex-wrap">
         <div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium leading-none">
@@ -2617,7 +2644,7 @@ export default function ForecastPage() {
                     </Button>
                   </div>
                 )}
-                {bankInbox.length === 0 ? (
+                {bankInbox.length === 0 && (
                   <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
                     {isReconciledToBank ? (
                       <span className="inline-flex items-center gap-2 text-primary">
@@ -2627,135 +2654,6 @@ export default function ForecastPage() {
                       <>Send a bank transaction from the Transactions page to start reconciling.</>
                     )}
                   </div>
-                ) : (
-                  (() => {
-                    // (#478) Show one pending row at a time so the forecast
-                    // underneath stays visible. The pager lets users skip
-                    // around manually; resolving the visible row naturally
-                    // advances because the next pending row takes its slot.
-                    const safeIndex = Math.min(
-                      Math.max(activeInboxIndex, 0),
-                      bankInbox.length - 1,
-                    );
-                    const card = bankInbox[safeIndex];
-                    const sugs = bankSuggestions.get(card.bank.txn.id) ?? [];
-                    const txnId = card.bank.txn.id;
-                    const isSelected = selectedBankIds.has(txnId);
-                    return (
-                      <>
-                        <div
-                          className="flex items-center justify-between gap-2 px-1"
-                          data-testid="bank-inbox-pager"
-                        >
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() =>
-                              setActiveInboxIndex((i) =>
-                                Math.max(0, i - 1),
-                              )
-                            }
-                            disabled={safeIndex === 0}
-                            data-testid="bank-inbox-pager-prev"
-                            aria-label="Previous pending inbox row"
-                          >
-                            <ChevronLeft className="w-3.5 h-3.5 mr-1" />
-                            Prev
-                          </Button>
-                          <span
-                            className="text-xs text-muted-foreground tabular-nums"
-                            data-testid="bank-inbox-pager-indicator"
-                          >
-                            {safeIndex + 1} of {bankInbox.length}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() =>
-                              setActiveInboxIndex((i) =>
-                                Math.min(bankInbox.length - 1, i + 1),
-                              )
-                            }
-                            disabled={safeIndex >= bankInbox.length - 1}
-                            data-testid="bank-inbox-pager-next"
-                            aria-label="Next pending inbox row"
-                          >
-                            Next
-                            <ChevronRight className="w-3.5 h-3.5 ml-1" />
-                          </Button>
-                        </div>
-                      <div key={card.id} className="space-y-1">
-                        <div className="flex items-stretch gap-2">
-                          <div className="flex items-start pt-3 pl-1">
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => toggleBankSelected(txnId)}
-                              aria-label={
-                                isSelected
-                                  ? `Unselect ${card.bank.txn.description}`
-                                  : `Select ${card.bank.txn.description}`
-                              }
-                              data-testid={`select-bank-${txnId}`}
-                            />
-                          </div>
-                          <div className="flex-1">
-                            <InboxCardView
-                              card={card}
-                              categoryName={
-                                card.bank.txn.categoryId
-                                  ? categoryById.get(card.bank.txn.categoryId) ??
-                                    null
-                                  : null
-                              }
-                              onUnplanned={() =>
-                                onMarkUnplannedTxn(card.bank.txn.id)
-                              }
-                              onMatchPick={(p) =>
-                                matchInboxToPlan(card.bank.txn.id, p)
-                              }
-                              onHoverChange={(hovered) =>
-                                setHoveredCardId((cur) =>
-                                  hovered ? card.id : cur === card.id ? null : cur,
-                                )
-                              }
-                              planRows={
-                                sortedPlansByCard.get(card.bank.txn.id) ??
-                                planRows.filter(
-                                  (r) =>
-                                    r.status === "pending_plan" ||
-                                    r.status === "future",
-                                )
-                              }
-                              oneClickSuggestion={
-                                oneClickByTxnId.get(card.bank.txn.id)?.plan ??
-                                null
-                              }
-                            />
-                            <SuggestionStrip
-                              suggestions={sugs}
-                              txnId={card.bank.txn.id}
-                              onPick={(p) =>
-                                matchInboxToPlan(card.bank.txn.id, p)
-                              }
-                            />
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              onRemoveFromForecast(card.bank.txn.id)
-                            }
-                            title="Un-send back to Bank list"
-                          >
-                            <X className="w-4 h-4 text-muted-foreground" />
-                          </Button>
-                        </div>
-                      </div>
-                      </>
-                    );
-                  })()
                 )}
                 {bankResolvedThisMonth.length > 0 && (
                   <div
@@ -2810,6 +2708,150 @@ export default function ForecastPage() {
                 )}
               </CardContent>
             </Card>
+
+            {bankInbox.length > 0 && (() => {
+              // (#517) Pinned active inbox row: pager + InboxCardView +
+              // SuggestionStrip stay visible just below the page sticky
+              // header while the planned-items list scrolls underneath.
+              // (#478) Show one pending row at a time so the forecast
+              // underneath stays visible. The pager lets users skip
+              // around manually; resolving the visible row naturally
+              // advances because the next pending row takes its slot.
+              const safeIndex = Math.min(
+                Math.max(activeInboxIndex, 0),
+                bankInbox.length - 1,
+              );
+              const card = bankInbox[safeIndex];
+              const sugs = bankSuggestions.get(card.bank.txn.id) ?? [];
+              const txnId = card.bank.txn.id;
+              const isSelected = selectedBankIds.has(txnId);
+              const stickyStyle = canPinInbox
+                ? { top: pageStickyHeaderHeight }
+                : undefined;
+              return (
+                <div
+                  className={
+                    canPinInbox
+                      ? "sticky z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-2 bg-background/95 supports-[backdrop-filter]:bg-background/80 backdrop-blur border-b shadow-sm"
+                      : ""
+                  }
+                  style={stickyStyle}
+                  data-testid="pinned-inbox-area"
+                  data-pinned={canPinInbox ? "true" : "false"}
+                >
+                  <div className="rounded-md border bg-card p-2 space-y-2">
+                    <div
+                      className="flex items-center justify-between gap-2 px-1"
+                      data-testid="bank-inbox-pager"
+                    >
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() =>
+                          setActiveInboxIndex((i) => Math.max(0, i - 1))
+                        }
+                        disabled={safeIndex === 0}
+                        data-testid="bank-inbox-pager-prev"
+                        aria-label="Previous pending inbox row"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                        Prev
+                      </Button>
+                      <span
+                        className="text-xs text-muted-foreground tabular-nums"
+                        data-testid="bank-inbox-pager-indicator"
+                      >
+                        {safeIndex + 1} of {bankInbox.length}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() =>
+                          setActiveInboxIndex((i) =>
+                            Math.min(bankInbox.length - 1, i + 1),
+                          )
+                        }
+                        disabled={safeIndex >= bankInbox.length - 1}
+                        data-testid="bank-inbox-pager-next"
+                        aria-label="Next pending inbox row"
+                      >
+                        Next
+                        <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                      </Button>
+                    </div>
+                    <div key={card.id} className="space-y-1">
+                      <div className="flex items-stretch gap-2">
+                        <div className="flex items-start pt-3 pl-1">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleBankSelected(txnId)}
+                            aria-label={
+                              isSelected
+                                ? `Unselect ${card.bank.txn.description}`
+                                : `Select ${card.bank.txn.description}`
+                            }
+                            data-testid={`select-bank-${txnId}`}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <InboxCardView
+                            card={card}
+                            categoryName={
+                              card.bank.txn.categoryId
+                                ? categoryById.get(card.bank.txn.categoryId) ??
+                                  null
+                                : null
+                            }
+                            onUnplanned={() =>
+                              onMarkUnplannedTxn(card.bank.txn.id)
+                            }
+                            onMatchPick={(p) =>
+                              matchInboxToPlan(card.bank.txn.id, p)
+                            }
+                            onHoverChange={(hovered) =>
+                              setHoveredCardId((cur) =>
+                                hovered ? card.id : cur === card.id ? null : cur,
+                              )
+                            }
+                            planRows={
+                              sortedPlansByCard.get(card.bank.txn.id) ??
+                              planRows.filter(
+                                (r) =>
+                                  r.status === "pending_plan" ||
+                                  r.status === "future",
+                              )
+                            }
+                            oneClickSuggestion={
+                              oneClickByTxnId.get(card.bank.txn.id)?.plan ??
+                              null
+                            }
+                          />
+                          <SuggestionStrip
+                            suggestions={sugs}
+                            txnId={card.bank.txn.id}
+                            onPick={(p) =>
+                              matchInboxToPlan(card.bank.txn.id, p)
+                            }
+                          />
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            onRemoveFromForecast(card.bank.txn.id)
+                          }
+                          title="Un-send back to Bank list"
+                        >
+                          <X className="w-4 h-4 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             <Card>
               <CardHeader className="pb-3 flex-row items-center justify-between flex-wrap gap-2">

@@ -242,8 +242,10 @@ test.describe("Forecast inbox one-at-a-time pager (#481)", () => {
 
     // --- Auto-advance after Mark unplanned. Click the visible row's
     // Unplanned button (scoped to the one rendered InboxCardView).
+    // (#517) The active row was lifted out of `card-from-bank` into the
+    // pinned inbox region so it stays visible while the planned list scrolls.
     const unplannedBtn = page
-      .getByTestId("card-from-bank")
+      .getByTestId("pinned-inbox-area")
       .getByRole("button", { name: /^unplanned$/i });
     await expect(unplannedBtn).toBeVisible();
     await unplannedBtn.click();
@@ -258,7 +260,7 @@ test.describe("Forecast inbox one-at-a-time pager (#481)", () => {
     // remove icon button sits next to the InboxCardView with the title
     // "Un-send back to Bank list".
     const removeBtn = page
-      .getByTestId("card-from-bank")
+      .getByTestId("pinned-inbox-area")
       .getByRole("button", { name: /un-send back to bank list/i });
     await expect(removeBtn).toBeVisible();
     await removeBtn.click();
