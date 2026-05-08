@@ -12,6 +12,7 @@ import {
   useListCategories,
   useListDebts,
   useListRecurringItems,
+  useCreateRecurringItem,
   useGetAvalancheSettings,
   useGetAvalancheExtra,
   useSetForecastBankSnapshot,
@@ -19,6 +20,10 @@ import {
   getGetForecastQueryKey,
   getGetForecastCashSignalQueryKey,
   getListTransactionsQueryKey,
+  getListRecurringItemsQueryKey,
+  getGetBillsSummaryQueryKey,
+  getGetDashboardQueryKey,
+  type RecurringItemInput,
 } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
@@ -59,6 +64,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   DndContext,
@@ -212,6 +218,7 @@ function InboxCardView({
   categoryName,
   onUnplanned,
   onMatchPick,
+  onAddAsBill,
   onHoverChange,
   planRows,
   oneClickSuggestion,
@@ -221,6 +228,9 @@ function InboxCardView({
   categoryName?: string | null;
   onUnplanned: () => void;
   onMatchPick: (planRow: PlanLine) => void;
+  /** When provided, renders an "Add as bill" button that lets the user
+   *  promote the bank txn into a recurring item without leaving Review. */
+  onAddAsBill?: () => void;
   onHoverChange?: (hovered: boolean) => void;
   planRows: PlanLine[];
   /** When set, the card has a single high-confidence top suggestion that
@@ -372,6 +382,18 @@ function InboxCardView({
               ))}
             </SelectContent>
           </Select>
+          {onAddAsBill && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={onAddAsBill}
+              data-testid={`inbox-add-as-bill-${card.bank.txn.id}`}
+              title="Promote this transaction into a recurring bill"
+            >
+              Add as bill
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={onUnplanned}>
             Unplanned
           </Button>
@@ -765,6 +787,105 @@ export default function ForecastPage({
   const updateTxn = useUpdateTransaction();
   const setBankSnapshot = useSetForecastBankSnapshot();
   const refreshBank = useRefreshForecastBank();
+  const createRecurring = useCreateRecurringItem();
+
+  // (#522) "Add as bill" flow: when the user wants to promote an inbox
+  // bank txn into a recurring item without leaving Review. We seed the
+  // dialog from the txn's description, amount, and date.
+  type AddBillSeed = {
+    txnId: string;
+    name: string;
+    amount: string;
+    kind: "bill" | "income";
+    frequency: "monthly" | "biweekly" | "weekly" | "semimonthly" | "onetime";
+    dayOfMonth: string;
+    anchorDate: string;
+  };
+  const [addBillSeed, setAddBillSeed] = useState<AddBillSeed | null>(null);
+
+  const openAddAsBill = (card: InboxCard) => {
+    const amt = card.bank.amount;
+    const isIncome = amt > 0;
+    const dateStr = card.bank.date;
+    const dom = dateStr ? Number(dateStr.slice(8, 10)) : NaN;
+    setAddBillSeed({
+      txnId: card.bank.txn.id,
+      name: (card.bank.txn.description ?? "").trim() || "Untitled",
+      amount: Math.abs(amt).toFixed(2),
+      kind: isIncome ? "income" : "bill",
+      frequency: "monthly",
+      dayOfMonth: Number.isFinite(dom) && dom >= 1 && dom <= 31 ? String(dom) : "1",
+      anchorDate: dateStr || "",
+    });
+  };
+
+  const submitAddAsBill = () => {
+    if (!addBillSeed) return;
+    const name = addBillSeed.name.trim();
+    if (!name) {
+      toast({ title: "Name is required", variant: "destructive" });
+      return;
+    }
+    const amt = parseFloat(addBillSeed.amount);
+    if (!Number.isFinite(amt) || amt < 0) {
+      toast({ title: "Amount must be a positive number", variant: "destructive" });
+      return;
+    }
+    if (addBillSeed.frequency === "onetime" && !addBillSeed.anchorDate) {
+      toast({
+        title: "Pick a date for the one-time item",
+        variant: "destructive",
+      });
+      return;
+    }
+    const payload: RecurringItemInput = {
+      name,
+      kind: addBillSeed.kind,
+      amount: amt.toFixed(2),
+      frequency: addBillSeed.frequency,
+      active: "true",
+      dayOfMonth: null,
+      anchorDate: null,
+    };
+    if (
+      addBillSeed.frequency === "monthly" ||
+      addBillSeed.frequency === "semimonthly"
+    ) {
+      const day = parseInt(addBillSeed.dayOfMonth, 10);
+      payload.dayOfMonth =
+        Number.isFinite(day) && day >= 1 && day <= 31 ? day : 1;
+      payload.anchorDate = addBillSeed.anchorDate || null;
+    } else if (addBillSeed.frequency === "onetime") {
+      payload.anchorDate = addBillSeed.anchorDate || null;
+    } else {
+      payload.anchorDate = addBillSeed.anchorDate || null;
+    }
+    createRecurring.mutate(
+      { data: payload },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetForecastCashSignalQueryKey() });
+          qc.invalidateQueries({ queryKey: getListRecurringItemsQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+          setAddBillSeed(null);
+          toast({
+            title: `Added "${name}" as a recurring ${addBillSeed.kind}`,
+            description:
+              "It now shows up in Planned forecast items so you can match this transaction to it.",
+          });
+        },
+        onError: (err) => {
+          toast({
+            title: "Couldn't add bill",
+            description: (err as Error).message,
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draftDays, setDraftDays] = useState("90");
@@ -2845,6 +2966,7 @@ export default function ForecastPage({
                             onMatchPick={(p) =>
                               matchInboxToPlan(card.bank.txn.id, p)
                             }
+                            onAddAsBill={() => openAddAsBill(card)}
                             onHoverChange={(hovered) =>
                               setHoveredCardId((cur) =>
                                 hovered ? card.id : cur === card.id ? null : cur,
@@ -3483,6 +3605,157 @@ export default function ForecastPage({
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={addBillSeed !== null}
+        onOpenChange={(o) => {
+          if (!o) setAddBillSeed(null);
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-md"
+          data-testid="dialog-add-as-bill"
+        >
+          <DialogHeader>
+            <DialogTitle>Add as recurring bill</DialogTitle>
+          </DialogHeader>
+          {addBillSeed && (
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs">Name</Label>
+                <Input
+                  value={addBillSeed.name}
+                  onChange={(e) =>
+                    setAddBillSeed({ ...addBillSeed, name: e.target.value })
+                  }
+                  data-testid="input-add-bill-name"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Amount</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={addBillSeed.amount}
+                    onChange={(e) =>
+                      setAddBillSeed({ ...addBillSeed, amount: e.target.value })
+                    }
+                    data-testid="input-add-bill-amount"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Type</Label>
+                  <Select
+                    value={addBillSeed.kind}
+                    onValueChange={(v) =>
+                      setAddBillSeed({
+                        ...addBillSeed,
+                        kind: v as "bill" | "income",
+                      })
+                    }
+                  >
+                    <SelectTrigger data-testid="select-add-bill-kind">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bill">Bill (expense)</SelectItem>
+                      <SelectItem value="income">Income</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Frequency</Label>
+                  <Select
+                    value={addBillSeed.frequency}
+                    onValueChange={(v) =>
+                      setAddBillSeed({
+                        ...addBillSeed,
+                        frequency: v as AddBillSeed["frequency"],
+                      })
+                    }
+                  >
+                    <SelectTrigger data-testid="select-add-bill-frequency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="semimonthly">Semi-monthly</SelectItem>
+                      <SelectItem value="biweekly">Biweekly</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="onetime">One-time</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {(addBillSeed.frequency === "monthly" ||
+                  addBillSeed.frequency === "semimonthly") && (
+                  <div>
+                    <Label className="text-xs">Day of month</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={addBillSeed.dayOfMonth}
+                      onChange={(e) =>
+                        setAddBillSeed({
+                          ...addBillSeed,
+                          dayOfMonth: e.target.value,
+                        })
+                      }
+                      data-testid="input-add-bill-day"
+                    />
+                  </div>
+                )}
+                {(addBillSeed.frequency === "biweekly" ||
+                  addBillSeed.frequency === "weekly" ||
+                  addBillSeed.frequency === "onetime") && (
+                  <div>
+                    <Label className="text-xs">
+                      {addBillSeed.frequency === "onetime"
+                        ? "Date"
+                        : "Anchor date"}
+                    </Label>
+                    <Input
+                      type="date"
+                      value={addBillSeed.anchorDate}
+                      onChange={(e) =>
+                        setAddBillSeed({
+                          ...addBillSeed,
+                          anchorDate: e.target.value,
+                        })
+                      }
+                      data-testid="input-add-bill-anchor"
+                    />
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                After adding, the new {addBillSeed.kind === "income" ? "income" : "bill"}{" "}
+                appears in Planned forecast items so you can match this transaction to it.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAddBillSeed(null)}
+              disabled={createRecurring.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={submitAddAsBill}
+              disabled={createRecurring.isPending}
+              data-testid="button-add-bill-save"
+            >
+              {createRecurring.isPending ? "Adding…" : "Add"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
