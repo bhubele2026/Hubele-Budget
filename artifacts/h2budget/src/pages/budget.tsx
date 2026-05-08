@@ -180,6 +180,7 @@ function thisMonthStart(): string {
 
 export default function BudgetPage() {
   const search = useSearch();
+  const [, navigateRoot] = useLocation();
   const [currentMonth, setCurrentMonth] = useState(() => {
     const params = new URLSearchParams(search);
     const m = params.get("month");
@@ -260,8 +261,15 @@ export default function BudgetPage() {
   const changeMonth = (offset: number) => {
     const d = new Date(currentMonth);
     d.setMonth(d.getMonth() + offset);
-    const next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-    setCurrentMonth(next < MIN_MONTH ? MIN_MONTH : next);
+    const raw = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    const next = raw < MIN_MONTH ? MIN_MONTH : raw;
+    setCurrentMonth(next);
+    // Keep the ?month= URL param in sync so the URL→state useEffect above
+    // doesn't snap currentMonth back to the previous URL value on the next
+    // re-render. Without this the chevrons appear to do nothing.
+    const params = new URLSearchParams(search);
+    params.set("month", next);
+    navigateRoot(`?${params.toString()}`, { replace: true });
   };
 
   const atFloor = currentMonth <= MIN_MONTH;
