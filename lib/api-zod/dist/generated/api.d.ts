@@ -5976,6 +5976,13 @@ export declare const CleanupNonProdPlaidItemsResponse: zod.ZodObject<{
 }, {
     removed: number;
 }>;
+export declare const GetBillsSummaryQueryParams: zod.ZodObject<{
+    month: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    month?: string | undefined;
+}, {
+    month?: string | undefined;
+}>;
 export declare const GetBillsSummaryResponse: zod.ZodObject<{
     income: zod.ZodArray<zod.ZodObject<{
         item: zod.ZodObject<{

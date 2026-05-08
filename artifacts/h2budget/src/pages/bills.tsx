@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetBillsSummary,
@@ -47,6 +47,8 @@ import {
   ArrowUpCircle,
   ArrowRight,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Pause,
   Pencil,
   Play,
@@ -177,14 +179,69 @@ function toFormState(item: RecurringItem): FormState {
   };
 }
 
+const MIN_BILLS_MONTH = "2026-04-01";
+
+function thisMonthStart(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
 export default function BillsPage() {
-  const { data: summary, isLoading } = useGetBillsSummary();
+  const search = useSearch();
+  const [, setLocation] = useLocation();
+
+  // (#500) Month picker state mirrors the Budget page: prev/next chevrons +
+  // ?month=YYYY-MM-01 URL param. Defaults to the current calendar month.
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const params = new URLSearchParams(search);
+    const m = params.get("month");
+    if (m && /^\d{4}-\d{2}-01$/.test(m)) {
+      return m < MIN_BILLS_MONTH ? MIN_BILLS_MONTH : m;
+    }
+    const tm = thisMonthStart();
+    return tm < MIN_BILLS_MONTH ? MIN_BILLS_MONTH : tm;
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const m = params.get("month");
+    if (m && /^\d{4}-\d{2}-01$/.test(m) && m !== currentMonth) {
+      setCurrentMonth(m);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  const changeMonth = (offset: number) => {
+    const [yStr, mStr] = currentMonth.split("-");
+    const y = Number(yStr);
+    const m0 = Number(mStr) - 1;
+    const targetY = y + Math.floor((m0 + offset) / 12);
+    const targetM = ((m0 + offset) % 12 + 12) % 12;
+    const raw = `${targetY}-${String(targetM + 1).padStart(2, "0")}-01`;
+    const next = raw < MIN_BILLS_MONTH ? MIN_BILLS_MONTH : raw;
+    if (next === currentMonth) return;
+    setCurrentMonth(next);
+    const params = new URLSearchParams(search);
+    params.set("month", next);
+    setLocation(`/bills?${params.toString()}`, { replace: true });
+  };
+
+  const atFloor = currentMonth <= MIN_BILLS_MONTH;
+
+  const monthName = useMemo(() => {
+    const d = new Date(currentMonth + "T00:00:00");
+    return new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      year: "numeric",
+    }).format(d);
+  }, [currentMonth]);
+
+  const { data: summary, isLoading } = useGetBillsSummary({ month: currentMonth });
   const { data: debts } = useListDebts();
   const { data: avaSettings } = useGetAvalancheSettings();
   const { data: resolvedExtra } = useGetAvalancheExtra();
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
 
   const createItem = useCreateRecurringItem();
   const updateItem = useUpdateRecurringItem();
@@ -196,7 +253,9 @@ export default function BillsPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const invalidateAll = () => {
-    qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
+    // Invalidate all keyed variants of the summary so a save reflects on
+    // every month a user has paged through, not just the current one.
+    qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey().slice(0, 1) });
     qc.invalidateQueries({ queryKey: getListRecurringItemsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
     qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
@@ -333,10 +392,10 @@ export default function BillsPage() {
   // here so the hook always runs before the loading-state early return
   // below — moving it after that return broke the rules of hooks.
   const actualThisMonth = useMemo(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth();
-    const monthStart = `${y}-${String(m + 1).padStart(2, "0")}-01`;
+    const [yStr, mStr] = currentMonth.split("-");
+    const y = Number(yStr);
+    const m = Number(mStr) - 1;
+    const monthStart = currentMonth;
     const next = new Date(y, m + 1, 1);
     const monthEnd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
     let income = 0;
@@ -350,7 +409,7 @@ export default function BillsPage() {
       else spend += -a;
     }
     return { income, spend, net: income - spend };
-  }, [allTxns]);
+  }, [allTxns, currentMonth]);
 
   const allDebtMinRows = summary?.debtMins ?? [];
   const debtMinRows = useMemo(
@@ -404,9 +463,38 @@ export default function BillsPage() {
             Every recurring dollar in and out. Edits here flow into the Forecast.
           </p>
         </div>
-        <Button onClick={openNew} data-testid="button-add-bill">
-          <Plus className="w-4 h-4 mr-2" /> Add income or bill
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-4 bg-card px-4 py-2 rounded-md shadow-sm border border-border">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => changeMonth(-1)}
+              disabled={atFloor}
+              aria-disabled={atFloor}
+              title={atFloor ? "April 2026 is the earliest month" : undefined}
+              data-testid="button-prev-month"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <span
+              className="font-medium text-lg w-32 text-center"
+              data-testid="text-current-month"
+            >
+              {monthName}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => changeMonth(1)}
+              data-testid="button-next-month"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </Button>
+          </div>
+          <Button onClick={openNew} data-testid="button-add-bill">
+            <Plus className="w-4 h-4 mr-2" /> Add income or bill
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -534,7 +622,11 @@ export default function BillsPage() {
                   Actual this month
                 </div>
                 <div className="text-[10px] text-muted-foreground">
-                  {new Date().toLocaleDateString("en-US", { month: "long" })} so far
+                  {new Date(currentMonth + "T00:00:00").toLocaleDateString(
+                    "en-US",
+                    { month: "long" },
+                  )}{" "}
+                  so far
                 </div>
               </div>
               <SummaryRow

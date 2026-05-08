@@ -81,8 +81,16 @@ router.get("/bills/summary", requireAuth, async (req, res): Promise<void> => {
     .where(eq(debtsTable.userId, userId));
 
   const today = todayDate();
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  // (#500) Optional ?month=YYYY-MM-01 picks which calendar month drives the
+  // calendar expansion (per-row /mo hint, group totals) and matched-
+  // resolution windowing (planned/actual badges). Defaults to today's
+  // month so callers without the param see the prior behavior.
+  const monthParam = typeof req.query.month === "string" ? req.query.month : "";
+  const monthMatch = /^(\d{4})-(\d{2})-01$/.exec(monthParam);
+  const viewYear = monthMatch ? Number(monthMatch[1]) : today.getFullYear();
+  const viewMonth0 = monthMatch ? Number(monthMatch[2]) - 1 : today.getMonth();
+  const monthStart = new Date(viewYear, viewMonth0, 1);
+  const monthEnd = new Date(viewYear, viewMonth0 + 1, 0);
   const monthStartISO = fmtISO(monthStart);
   const monthEndISO = fmtISO(monthEnd);
 

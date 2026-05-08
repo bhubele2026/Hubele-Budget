@@ -99,6 +99,7 @@ export * from "./forecastResolution";
 export * from "./forecastResolutionInput";
 export * from "./forecastSettings";
 export * from "./forecastSettingsInput";
+export * from "./getBillsSummaryParams";
 export * from "./getForecastCashSignalParams";
 export * from "./getForecastParams";
 export * from "./healthStatus";

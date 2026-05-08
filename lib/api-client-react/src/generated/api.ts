@@ -65,6 +65,7 @@ import type {
   ForecastResolutionInput,
   ForecastSettings,
   ForecastSettingsInput,
+  GetBillsSummaryParams,
   GetForecastCashSignalParams,
   GetForecastParams,
   HealthStatus,
@@ -6561,41 +6562,57 @@ export const useCleanupNonProdPlaidItems = <
   return useMutation(getCleanupNonProdPlaidItemsMutationOptions(options));
 };
 
-export const getGetBillsSummaryUrl = () => {
-  return `/api/bills/summary`;
+export const getGetBillsSummaryUrl = (params?: GetBillsSummaryParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/bills/summary?${stringifiedParams}`
+    : `/api/bills/summary`;
 };
 
 export const getBillsSummary = async (
+  params?: GetBillsSummaryParams,
   options?: RequestInit,
 ): Promise<BillsSummary> => {
-  return customFetch<BillsSummary>(getGetBillsSummaryUrl(), {
+  return customFetch<BillsSummary>(getGetBillsSummaryUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetBillsSummaryQueryKey = () => {
-  return [`/api/bills/summary`] as const;
+export const getGetBillsSummaryQueryKey = (params?: GetBillsSummaryParams) => {
+  return [`/api/bills/summary`, ...(params ? [params] : [])] as const;
 };
 
 export const getGetBillsSummaryQueryOptions = <
   TData = Awaited<ReturnType<typeof getBillsSummary>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getBillsSummary>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: GetBillsSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBillsSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetBillsSummaryQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getGetBillsSummaryQueryKey(params);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof getBillsSummary>>> = ({
     signal,
-  }) => getBillsSummary({ signal, ...requestOptions });
+  }) => getBillsSummary(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getBillsSummary>>,
@@ -6612,15 +6629,18 @@ export type GetBillsSummaryQueryError = ErrorType<unknown>;
 export function useGetBillsSummary<
   TData = Awaited<ReturnType<typeof getBillsSummary>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getBillsSummary>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetBillsSummaryQueryOptions(options);
+>(
+  params?: GetBillsSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBillsSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBillsSummaryQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

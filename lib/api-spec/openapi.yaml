@@ -1349,6 +1349,14 @@ paths:
     get:
       operationId: getBillsSummary
       tags: [bills]
+      parameters:
+        - in: query
+          name: month
+          description: |
+            Optional YYYY-MM-01 month-start. Defaults to the current calendar
+            month. Used to scope calendar expansion of recurring items and
+            matched-resolution windowing.
+          schema: { type: string }
       responses:
         "200":
           description: OK

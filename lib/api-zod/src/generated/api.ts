@@ -2573,6 +2573,15 @@ export const CleanupNonProdPlaidItemsResponse = zod.object({
   removed: zod.number(),
 });
 
+export const GetBillsSummaryQueryParams = zod.object({
+  month: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Optional YYYY-MM-01 month-start. Defaults to the current calendar\nmonth. Used to scope calendar expansion of recurring items and\nmatched-resolution windowing.\n",
+    ),
+});
+
 export const GetBillsSummaryResponse = zod.object({
   income: zod.array(
     zod.object({

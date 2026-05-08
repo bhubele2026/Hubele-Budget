@@ -2225,6 +2225,16 @@ export type CleanupNonProdPlaidItems200 = {
   removed: number;
 };
 
+export type GetBillsSummaryParams = {
+  /**
+ * Optional YYYY-MM-01 month-start. Defaults to the current calendar
+month. Used to scope calendar expansion of recurring items and
+matched-resolution windowing.
+
+ */
+  month?: string;
+};
+
 export type ImportWorkbookBody = {
   file: Blob;
 };
