@@ -1030,7 +1030,7 @@ export default function ForecastPage({
     if (!register) return [];
     return register.allBank
       .filter((b) => b.status === "pending_bank")
-      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
       .map((b) => ({ id: `inbox:${b.txn.id}`, bank: b }));
   }, [register]);
 
