@@ -1305,20 +1305,15 @@ export default function ForecastPage({
     }
     const map = readReconciledMap();
     if (!prev && cleared) {
-      // transitioned to fully cleared — celebrate (only if not already celebrated).
-      // Confetti only fires on the overall forecast view per task spec.
-      if (!map[windowKey]) {
-        if (mode === "overall") fireConfetti();
+      // Transitioned to fully cleared. Confetti is one-shot per session per
+      // month (YYYY-MM key) and ONLY fires on the overall forecast view —
+      // triage on /review must not consume the celebration.
+      if (mode === "overall" && !map[windowKey]) {
+        fireConfetti();
         map[windowKey] = true;
         writeReconciledMap(map);
       }
       setReconciledNow(true);
-    } else if (!cleared && map[windowKey]) {
-      // re-opened (inbox grew or balance fell out of sync): clear the
-      // celebrated flag for this window so the next clear celebrates again.
-      delete map[windowKey];
-      writeReconciledMap(map);
-      setReconciledNow(false);
     } else if (!cleared) {
       setReconciledNow(false);
     } else {
