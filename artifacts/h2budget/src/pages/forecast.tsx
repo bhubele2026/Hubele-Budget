@@ -1286,51 +1286,35 @@ export default function ForecastPage({
   const cleared = shouldCelebrateClear({ inboxCount, isReconciledToBank });
   const prevClearedRef = useRef<boolean | null>(null);
 
-  // Hydrate "reconciled" state from local storage when window changes
-  useEffect(() => {
-    if (!windowKey) return;
-    const map = readReconciledMap();
-    setReconciledNow(!!map[windowKey] && cleared);
-    prevClearedRef.current = cleared;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windowKey]);
-
-  // Watch transitions. We treat "first observation while cleared" the same as
-  // a fresh transition into cleared, so a user who finishes triage on /review
-  // and lands on /forecast still sees confetti once per session per month.
+  // Single effect handles both hydration and transition so ordering is
+  // deterministic regardless of cache timing. Confetti is one-shot per
+  // session per YYYY-MM (sessionStorage), only fires on overall mode, and
+  // is also fired on first overall observation of a cleared state — so a
+  // user who finishes triage on /review and lands on /forecast still sees
+  // it. Once the session key is set it is never cleared (true one-shot).
   useEffect(() => {
     if (!windowKey) return;
     const prev = prevClearedRef.current;
     const map = readReconciledMap();
-    if (prev === null) {
-      if (cleared && mode === "overall" && !map[windowKey]) {
-        fireConfetti();
-        map[windowKey] = true;
-        writeReconciledMap(map);
-        setReconciledNow(true);
-      } else {
-        setReconciledNow(cleared && !!map[windowKey]);
-      }
-      prevClearedRef.current = cleared;
-      return;
-    }
-    if (!prev && cleared) {
-      // Transitioned to fully cleared. Confetti is one-shot per session per
-      // month (YYYY-MM key) and ONLY fires on the overall forecast view —
-      // triage on /review must not consume the celebration.
-      if (mode === "overall" && !map[windowKey]) {
+    const alreadyFired = !!map[windowKey];
+    const firstObservation = prev === null;
+
+    if (cleared) {
+      const shouldFire =
+        mode === "overall" &&
+        !alreadyFired &&
+        (firstObservation || prev === false);
+      if (shouldFire) {
         fireConfetti();
         map[windowKey] = true;
         writeReconciledMap(map);
       }
       setReconciledNow(true);
-    } else if (!cleared) {
-      setReconciledNow(false);
     } else {
-      setReconciledNow(true);
+      setReconciledNow(false);
     }
     prevClearedRef.current = cleared;
-  }, [cleared, windowKey]);
+  }, [cleared, windowKey, mode]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
