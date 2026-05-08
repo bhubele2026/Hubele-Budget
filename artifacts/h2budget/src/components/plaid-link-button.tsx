@@ -19,6 +19,11 @@ import { Plus, Loader2, CheckCircle2, AlertTriangle, X, ArrowRight } from "lucid
 import { useToast } from "@/hooks/use-toast";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { PostLinkDebtDialog } from "@/components/post-link-debt-dialog";
+import {
+  setPostLinkProgress,
+  clearPostLinkProgress,
+  usePostLinkProgress,
+} from "@/components/post-link-progress";
 
 export const PLAID_LINK_TOKEN_STORAGE_KEY = "h2:plaid:link_token";
 export const PLAID_RETURN_TO_STORAGE_KEY = "h2:plaid:return_to";
@@ -88,6 +93,7 @@ export function PlaidLinkButton({
   onImportReady,
   label,
   viewTransactionsPath = "/transactions",
+  inlineProgress = true,
 }: {
   onLinked?: () => void;
   /**
@@ -107,17 +113,28 @@ export function PlaidLinkButton({
    * shows the new rows instead of the bank-only Transactions list.
    */
   viewTransactionsPath?: string;
+  /**
+   * (#379) Controls the inline progress panel rendered just below the
+   * button. Defaults to `true` (panel renders, preserving the original
+   * behavior). Pages that already render a shared
+   * `<PostLinkProgressBanner />` above their header should pass `false`
+   * so users see a single, prominent progress indicator instead of two
+   * stacked panels. Chase and Amex pass `false`; Settings keeps the
+   * default `true` for backward compatibility.
+   */
+  inlineProgress?: boolean;
 } = {}) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [postLinkAccounts, setPostLinkAccounts] = useState<
     PlaidLiabilityAccount[]
   >([]);
   const [postLinkOpen, setPostLinkOpen] = useState(false);
-  // (#368) Live status for the inline progress panel rendered below the
-  // button while the post-link poll loop runs. `null` = panel hidden.
-  const [postLinkStatus, setPostLinkStatus] = useState<PostLinkStatus | null>(
-    null,
-  );
+  // (#368/#379) Live status for the post-link progress panel. State
+  // lives in the shared store (see post-link-progress.tsx) so the Chase
+  // and Amex pages can render an above-the-header banner that subscribes
+  // to the same channel as this button's inline panel.
+  const { status: postLinkStatus } = usePostLinkProgress();
+  const setPostLinkStatus = setPostLinkProgress;
   const createLinkToken = useCreatePlaidLinkToken();
   const exchange = useExchangePlaidPublicToken();
   const { data: plaidEnv } = useGetPlaidEnvironment();
@@ -370,17 +387,27 @@ export function PlaidLinkButton({
             // (#368) Show an inline status panel instead of a one-shot
             // toast so the user can watch the import progress instead of
             // staring at a stale "Pulling your transactions" message.
-            setPostLinkStatus({
-              phase: "preparing",
-              attempt: 0,
-              totalAttempts: POST_LINK_TOTAL_ATTEMPTS,
-              institutionName,
-              added: 0,
-              modified: 0,
-              errorMessage: null,
-              importedDateRange: null,
-              mostRecentMonth: null,
-            });
+            // (#379) Also seed the shared store's retry context so the
+            // banner's Retry button knows which item to resync.
+            const justLinkedItemIdForRetry =
+              (exchangeRes as { id?: string }).id ?? null;
+            setPostLinkProgress(
+              {
+                phase: "preparing",
+                attempt: 0,
+                totalAttempts: POST_LINK_TOTAL_ATTEMPTS,
+                institutionName,
+                added: 0,
+                modified: 0,
+                errorMessage: null,
+                importedDateRange: null,
+                mostRecentMonth: null,
+              },
+              {
+                itemId: justLinkedItemIdForRetry,
+                institutionName,
+              },
+            );
             setLinkToken(null);
             clearStoredLinkToken();
             onLinked?.();
@@ -472,11 +499,11 @@ export function PlaidLinkButton({
         )}
         {label ?? "Link a Bank or Card"}
       </Button>
-      {postLinkStatus && (
+      {inlineProgress !== false && postLinkStatus && (
         <PostLinkProgressPanel
           status={postLinkStatus}
           viewTransactionsPath={viewTransactionsPath}
-          onDismiss={() => setPostLinkStatus(null)}
+          onDismiss={clearPostLinkProgress}
         />
       )}
       {postLinkOpen && postLinkAccounts.length > 0 && (

@@ -58,6 +58,7 @@ import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import { PostLinkProgressBanner } from "@/components/post-link-progress";
 import {
   PlaidReauthBannerView,
 } from "@/components/plaid-reauth-banner";
@@ -1445,6 +1446,11 @@ export default function AmexPage() {
       {scopedPlaidItems.length > 0 && (
         <PlaidReauthBannerView items={scopedPlaidItems} />
       )}
+      {/* (#379) Shared post-link import banner — same channel as the
+          Chase page, so a card link initiated from either surface
+          progresses visibly through "waiting on bank → syncing →
+          done — N imported" (or failed + Retry). */}
+      <PostLinkProgressBanner viewTransactionsPath="/amex" />
       <div
         ref={paneRef}
         className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-4"
@@ -1476,6 +1482,7 @@ export default function AmexPage() {
               <PlaidLinkButton
                 label="Connect a card"
                 viewTransactionsPath="/amex"
+                inlineProgress={false}
               />
             </>
           }

@@ -104,6 +104,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import { PostLinkProgressBanner } from "@/components/post-link-progress";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { SyncButton } from "@/components/sync-button";
 import {
@@ -1484,6 +1485,12 @@ export default function TransactionsPage() {
           data, so the banner is misleading noise here. The banner is
           still rendered on every other tab and on Settings. */}
       {!isManualAccount && <PlaidReauthBanner />}
+      {/* (#379) Shared post-link import banner — published from
+          PlaidLinkButton.pollAfterLink and rendered above the header so
+          users see "waiting on bank → syncing → done — N imported"
+          (or failed + Retry) instead of staring at silence after the
+          link toast. */}
+      <PostLinkProgressBanner viewTransactionsPath="/transactions" />
       <div
         ref={paneRef}
         className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-4"
@@ -1519,6 +1526,7 @@ export default function TransactionsPage() {
             <PlaidLinkButton
               label="Connect a bank"
               onImportReady={() => setPendingPostImportJump(true)}
+              inlineProgress={false}
             />
           </>
         }
