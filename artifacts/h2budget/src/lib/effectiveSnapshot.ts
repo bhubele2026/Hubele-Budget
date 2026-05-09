@@ -100,13 +100,45 @@ export function deriveEffectiveSnapshot(args: {
     };
   }
 
-  // Post-dedupe fallback: survivor row is briefly missing from
-  // accountSnapshots but matches the primary bank snapshot by
-  // (institutionName, mask). Keep the tiles populated.
-  if (!bankSnapshot || !bankSnapshot.accountId) return null;
+  // Post-dedupe fallback: the selected row is briefly missing from
+  // `accountSnapshots`. Try, in order:
+  //   a) (#462) A sibling `plaid_accounts` row that shares the same
+  //      (institutionName, mask) and DOES have an entry in
+  //      `accountSnapshots`. Same-physical-account collapse mirrors
+  //      the Amex `amexDebt` (institution, mask) collapse from #449
+  //      so a snapshot that briefly lands keyed by the duplicate row
+  //      id during a re-link still drives the selected account's
+  //      Ending Balance tile.
+  //   b) (#429) The primary `bankSnapshot` if its account matches
+  //      the selected account by (institutionName, mask). This is
+  //      the legacy survivor fallback that keeps the tiles populated
+  //      when only the primary snapshot is available.
   const selectedAcct = plaidCheckingAccounts.find(
     (a) => a.id === selectedAccountInternalId,
   );
+  if (selectedAcct) {
+    const selMask = (selectedAcct.mask ?? "").toLowerCase();
+    const selInst = (selectedAcct.institutionName ?? "").toLowerCase();
+    if (selMask && selInst) {
+      for (const a of plaidCheckingAccounts) {
+        if (a.id === selectedAcct.id) continue;
+        const sibInst = (a.institutionName ?? "").toLowerCase();
+        const sibMask = (a.mask ?? "").toLowerCase();
+        if (sibInst !== selInst || sibMask !== selMask) continue;
+        const sib = accountSnapshots[a.id];
+        if (!sib) continue;
+        return {
+          balance: sib.balance,
+          at: sib.at,
+          source: sib.source,
+          name: sib.name ?? null,
+          mask: sib.mask ?? null,
+        };
+      }
+    }
+  }
+
+  if (!bankSnapshot || !bankSnapshot.accountId) return null;
   const snapshotAcct = plaidCheckingAccounts.find(
     (a) => a.id === bankSnapshot.accountId,
   );

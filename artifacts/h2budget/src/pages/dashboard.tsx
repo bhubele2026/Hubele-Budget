@@ -1758,10 +1758,37 @@ export default function DashboardPage() {
     );
     return acct?.accountId ?? null;
   }, [bankSnapshot?.accountId, plaidCheckingAccounts]);
+  // (#462) Same (institutionName, mask) collapse the Chase page now
+  // applies, so the dashboard tile keeps counting transactions that
+  // briefly land on a duplicate `plaid_accounts` row's external
+  // account_id during a re-link window — matches the Chase page's
+  // Ending Balance tile in lock-step.
+  const chasePlaidAccountIds = useMemo<Set<string> | null>(() => {
+    if (!chasePlaidAccountId || !bankSnapshot?.accountId) return null;
+    const selected = plaidCheckingAccounts.find(
+      (a) => a.id === bankSnapshot.accountId,
+    );
+    const ids = new Set<string>();
+    ids.add(chasePlaidAccountId);
+    if (!selected) return ids;
+    const selInst = (selected.institutionName ?? "").toLowerCase();
+    const selMask = (selected.mask ?? "").toLowerCase();
+    if (!selInst || !selMask) return ids;
+    for (const a of plaidCheckingAccounts) {
+      if (a.id === selected.id) continue;
+      if (!a.accountId) continue;
+      const inst = (a.institutionName ?? "").toLowerCase();
+      const mask = (a.mask ?? "").toLowerCase();
+      if (inst === selInst && mask === selMask) {
+        ids.add(a.accountId);
+      }
+    }
+    return ids;
+  }, [chasePlaidAccountId, bankSnapshot?.accountId, plaidCheckingAccounts]);
 
   const chaseTransactions = useMemo(
-    () => scopeChaseTransactions(allTxns ?? [], chasePlaidAccountId),
-    [allTxns, chasePlaidAccountId],
+    () => scopeChaseTransactions(allTxns ?? [], chasePlaidAccountIds ?? null),
+    [allTxns, chasePlaidAccountIds],
   );
 
   const chaseEndingBalance = useMemo(() => {

@@ -149,6 +149,48 @@ describe("deriveEffectiveSnapshot (#429)", () => {
     expect(out?.source).toBe("manual");
   });
 
+  it("(#462) falls back to a sibling accountSnapshot when the selected id is missing but a same (institutionName, mask) sibling has one", () => {
+    // Mid-re-link variant: the duplicate row id (DUP) briefly carries
+    // the per-account snapshot entry rather than the survivor (A).
+    // The Chase page still drives the Ending Balance tile from the
+    // sibling snapshot so the user doesn't see "Unavailable" while
+    // dedupe is in flight.
+    const dupEntry: EffectiveSnapshotEntry = {
+      balance: "777.00",
+      at: "2026-05-03T00:00:00.000Z",
+      source: "plaid",
+      name: "Chase ··5526",
+      mask: "5526",
+    };
+    const out = deriveEffectiveSnapshot({
+      bankSnapshot: PRIMARY_BANK_SNAPSHOT,
+      accountSnapshots: { "DUP-id": dupEntry },
+      selectedAccountInternalId: PRIMARY_ID,
+      plaidCheckingAccounts: [
+        PRIMARY_ACCT,
+        { id: "DUP-id", mask: "5526", institutionName: "Chase" },
+      ],
+    });
+    // Path #1 wins first because PRIMARY_ID == bankSnapshot.accountId,
+    // so this test verifies the sibling fallback by NOT viewing the
+    // snapshot account: select a third row and have the duplicate
+    // sibling supply the snapshot.
+    expect(out?.balance).toBe("1234.56"); // bankSnapshot path #1
+
+    const selectingDup = deriveEffectiveSnapshot({
+      bankSnapshot: PRIMARY_BANK_SNAPSHOT,
+      accountSnapshots: { "DUP-id": dupEntry },
+      selectedAccountInternalId: "OTHER-id",
+      plaidCheckingAccounts: [
+        PRIMARY_ACCT,
+        { id: "DUP-id", mask: "5526", institutionName: "Chase" },
+        { id: "OTHER-id", mask: "5526", institutionName: "Chase" },
+      ],
+    });
+    expect(selectingDup?.balance).toBe("777.00");
+    expect(selectingDup?.mask).toBe("5526");
+  });
+
   it("prefers the per-account entry over the (institutionName, mask) fallback", () => {
     const entry: EffectiveSnapshotEntry = {
       balance: "42.00",

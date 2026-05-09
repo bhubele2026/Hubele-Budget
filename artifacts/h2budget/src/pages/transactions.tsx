@@ -349,6 +349,42 @@ export default function TransactionsPage() {
     );
     return acct?.accountId ?? null;
   }, [effectiveAccountInternalId, forecastData?.plaidCheckingAccounts]);
+  // (#462) Equivalent external Plaid account_ids for the selected
+  // account, collapsed by (institutionName, mask). During the brief
+  // mid-re-link window before `dedupePlaidAccountsForUser` collapses
+  // duplicate `plaid_accounts` rows, transactions can briefly land
+  // on the duplicate row's external account_id. Treating the duplicate
+  // as the same physical account keeps that activity counted under the
+  // real account so the Ending Balance tile doesn't lose rows the
+  // user will see again once dedupe lands. Mirrors the Amex page's
+  // `amexDebt` (institution, mask) collapse from #449.
+  const chasePlaidAccountIds = useMemo<Set<string> | null>(() => {
+    if (chasePlaidAccountId === null) return null;
+    const accounts = forecastData?.plaidCheckingAccounts ?? [];
+    const selected = accounts.find(
+      (a) => a.id === effectiveAccountInternalId,
+    );
+    const ids = new Set<string>();
+    ids.add(chasePlaidAccountId);
+    if (!selected) return ids;
+    const selInst = (selected.institutionName ?? "").toLowerCase();
+    const selMask = (selected.mask ?? "").toLowerCase();
+    if (!selInst || !selMask) return ids;
+    for (const a of accounts) {
+      if (a.id === selected.id) continue;
+      if (!a.accountId) continue;
+      const inst = (a.institutionName ?? "").toLowerCase();
+      const mask = (a.mask ?? "").toLowerCase();
+      if (inst === selInst && mask === selMask) {
+        ids.add(a.accountId);
+      }
+    }
+    return ids;
+  }, [
+    chasePlaidAccountId,
+    effectiveAccountInternalId,
+    forecastData?.plaidCheckingAccounts,
+  ]);
   // The currently selected account row (if it's a Plaid account) — used
   // by the meta line under the header so the user always sees the
   // institution / mask of the account they're viewing, not just the
@@ -414,8 +450,11 @@ export default function TransactionsPage() {
   // tightens the fallback to only Chase-source + manual rows so the
   // Chase page can't sweep in Amex / debt activity.
   const chaseTransactions = useMemo(() => {
-    return scopeChaseTransactions(transactions ?? [], chasePlaidAccountId);
-  }, [transactions, chasePlaidAccountId]);
+    return scopeChaseTransactions(
+      transactions ?? [],
+      chasePlaidAccountIds ?? null,
+    );
+  }, [transactions, chasePlaidAccountIds]);
 
   // ---- Filters & month navigation ----
   const currentMonth = useMemo<MonthKey>(() => monthKeyOf(new Date()), []);
@@ -961,10 +1000,13 @@ export default function TransactionsPage() {
   // Forecast is scoped to this single account, not to all depository
   // accounts the user might have linked.
   const checkingPlaidAccountIdSet = useMemo(() => {
+    if (chasePlaidAccountIds && chasePlaidAccountIds.size > 0) {
+      return new Set(chasePlaidAccountIds);
+    }
     const s = new Set<string>();
     if (chasePlaidAccountId) s.add(chasePlaidAccountId);
     return s;
-  }, [chasePlaidAccountId]);
+  }, [chasePlaidAccountId, chasePlaidAccountIds]);
 
   // Forecast is bank-only. The Send-to-Forecast affordance is hidden for
   // any non-checking (Amex / credit) row so we never flag credit-card

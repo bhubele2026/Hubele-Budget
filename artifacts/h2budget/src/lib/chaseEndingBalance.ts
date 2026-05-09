@@ -41,16 +41,38 @@ export type ChaseTxnInput = {
  * source-based predicate the Chase page uses (`isChaseFallbackSource`)
  * so the dashboard tile and the Chase page see the exact same set of
  * activity.
+ *
+ * (#462) `chasePlaidAccountId` accepts either a single id or a
+ * `ReadonlySet<string>` of equivalent ids. The set form lets the page
+ * collapse duplicate `plaid_accounts` rows for the same physical
+ * account by (institutionName, mask) before scoping — matches the
+ * Amex page's `amexDebt` collapse so a transaction that briefly
+ * lands on a duplicate row id during a re-link still counts toward
+ * the real account.
  */
 export function scopeChaseTransactions<T extends ChaseTxnInput>(
   txns: ReadonlyArray<T>,
-  chasePlaidAccountId: string | null,
+  chasePlaidAccountId: string | ReadonlySet<string> | null,
 ): T[] {
-  const scoped = chasePlaidAccountId
-    ? txns.filter((t) => t.plaidAccountId === chasePlaidAccountId)
-    : txns.filter(
+  let scoped: T[];
+  if (chasePlaidAccountId === null) {
+    scoped = txns.filter(
+      (t) => !t.plaidAccountId && isChaseFallbackSource(t.source ?? null),
+    );
+  } else if (typeof chasePlaidAccountId === "string") {
+    scoped = txns.filter((t) => t.plaidAccountId === chasePlaidAccountId);
+  } else {
+    const set = chasePlaidAccountId;
+    if (set.size === 0) {
+      scoped = txns.filter(
         (t) => !t.plaidAccountId && isChaseFallbackSource(t.source ?? null),
       );
+    } else {
+      scoped = txns.filter(
+        (t) => !!t.plaidAccountId && set.has(t.plaidAccountId),
+      );
+    }
+  }
   return dedupeTransactionsByIdentity(scoped);
 }
 

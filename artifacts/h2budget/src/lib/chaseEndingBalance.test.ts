@@ -182,6 +182,32 @@ describe("scopeChaseTransactions", () => {
     expect(out.map((t) => t.id)).toEqual(["a", "a-dup"]);
   });
 
+  it("(#462) accepts a Set of equivalent account ids and includes rows from any of them", () => {
+    // During the brief mid-re-link window, transactions can land
+    // referencing either the real or the duplicate `plaid_accounts`
+    // row's external account_id. Treating the duplicate as the same
+    // physical account keeps both sets of rows under one card.
+    const txns: ChaseTxnInput[] = [
+      { id: "real", occurredOn: "2026-05-01", amount: "10", plaidAccountId: "chase-real" },
+      { id: "dup", occurredOn: "2026-05-02", amount: "20", plaidAccountId: "chase-dup" },
+      { id: "other", occurredOn: "2026-05-03", amount: "30", plaidAccountId: "amex" },
+    ];
+    const out = scopeChaseTransactions(
+      txns,
+      new Set(["chase-real", "chase-dup"]),
+    );
+    expect(out.map((t) => t.id).sort()).toEqual(["dup", "real"]);
+  });
+
+  it("(#462) treats an empty equivalent-id set like the no-plaid-linked fallback", () => {
+    const txns: ChaseTxnInput[] = [
+      { id: "m", occurredOn: "2026-05-01", amount: "5", source: "manual" },
+      { id: "x", occurredOn: "2026-05-01", amount: "5", plaidAccountId: "chase" },
+    ];
+    const out = scopeChaseTransactions(txns, new Set<string>());
+    expect(out.map((t) => t.id)).toEqual(["m"]);
+  });
+
   it("falls back to chase + manual sources when no plaid checking is linked", () => {
     const txns: ChaseTxnInput[] = [
       { id: "m", occurredOn: "2026-05-01", amount: "5", source: "manual" },
