@@ -6,11 +6,16 @@ import { clerkClient } from "@clerk/express";
 const router: IRouter = Router();
 
 router.get("/me", requireAuth, async (req, res): Promise<void> => {
-  const userId = req.userId!;
+  // (#623) Identity in /me is the SIGNED-IN user, not the household
+  // owner. `req.userId` is remapped to the owner for invited members
+  // so every data route reads the shared household — but the profile
+  // shown in the UI (name, email, owner badge) must reflect who is
+  // actually using the app right now.
+  const actualUserId = req.actualUserId ?? req.userId!;
   let email: string | null = null;
   let displayName: string | null = null;
   try {
-    const user = await clerkClient.users.getUser(userId);
+    const user = await clerkClient.users.getUser(actualUserId);
     const primaryId = user.primaryEmailAddressId;
     const primary =
       user.emailAddresses.find((e) => e.id === primaryId) ??
@@ -21,10 +26,10 @@ router.get("/me", requireAuth, async (req, res): Promise<void> => {
       user.username ||
       null;
   } catch {
-    email = await loadUserEmail(userId);
+    email = await loadUserEmail(actualUserId);
   }
   res.json({
-    userId,
+    userId: actualUserId,
     email,
     displayName,
     isOwner: isOwnerEmail(email),

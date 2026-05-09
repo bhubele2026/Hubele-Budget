@@ -187,7 +187,9 @@ export function OwnerInvitationsSection() {
         <CardTitle>Members &amp; Invitations</CardTitle>
         <CardDescription>
           This app is invite-only. Invite trusted family members by email.
-          Each invited user gets their own private profile.
+          Everyone in the household shares the same budget, transactions,
+          debts and connected accounts — so anything you change here, they
+          see, and vice versa.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

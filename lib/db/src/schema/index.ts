@@ -20,6 +20,15 @@ export const profilesTable = pgTable("profiles", {
   id: text("id").primaryKey(),
   email: text("email"),
   displayName: text("display_name"),
+  // (#623) Shared-household data model. When set, every API request
+  // signed in as this Clerk user resolves `req.userId` to this value
+  // (the household owner's Clerk id) so all data queries — debts,
+  // budget, transactions, Plaid items, settings, etc. — read and
+  // write the owner's rows. The owner's own profile has this set to
+  // their own id (or null, which behaves identically). null on a
+  // non-owner profile means the household hasn't been resolved yet
+  // and `requireAuth` will resolve it on the next request.
+  householdOwnerId: text("household_owner_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

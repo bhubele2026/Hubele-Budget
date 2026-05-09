@@ -42,11 +42,16 @@ async function requireOwnerCore(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
-  if (!req.userId) {
+  // (#623) Owner gating must check the SIGNED-IN user's email, not
+  // the household-owner's email — `req.userId` is remapped to the
+  // owner for invited members, which would otherwise grant any
+  // household member full owner privileges.
+  const actualUserId = req.actualUserId ?? req.userId;
+  if (!actualUserId) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  const email = await loadUserEmail(req.userId);
+  const email = await loadUserEmail(actualUserId);
   req.userEmail = email;
   req.isOwner = isOwnerEmail(email);
   if (!req.isOwner) {
@@ -57,7 +62,7 @@ async function requireOwnerCore(
     await db
       .update(profilesTable)
       .set({ email })
-      .where(eq(profilesTable.id, req.userId));
+      .where(eq(profilesTable.id, actualUserId));
   }
   next();
 }

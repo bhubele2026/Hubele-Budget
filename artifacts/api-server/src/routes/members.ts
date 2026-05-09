@@ -3,6 +3,7 @@ import { clerkClient } from "@clerk/express";
 import { db, profilesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireOwner, isOwnerEmail, loadUserEmail } from "../middlewares/requireOwner";
+import { evictHouseholdCacheFor } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
@@ -47,7 +48,11 @@ router.delete(
       res.status(400).json({ error: "Missing member id" });
       return;
     }
-    if (req.userId && id === req.userId) {
+    // (#623) Self-check uses the SIGNED-IN user's id, not the
+    // household-remapped `req.userId` (which is the owner's id for
+    // every member and would block the owner from removing anyone).
+    const actorId = req.actualUserId ?? req.userId;
+    if (actorId && id === actorId) {
       res.status(400).json({ error: "You cannot remove yourself" });
       return;
     }
@@ -58,7 +63,15 @@ router.delete(
         return;
       }
       await clerkClient.users.deleteUser(id);
+      // (#623) Deleting the member's profile only removes their
+      // identity row — every shared household table keys on the
+      // owner's userId, so debts, transactions, budget, Plaid links
+      // and settings are preserved automatically.
       await db.delete(profilesTable).where(eq(profilesTable.id, id));
+      // (#623) Drop any in-process household mapping for the removed
+      // member so re-invitation in the same process lifetime
+      // re-resolves cleanly instead of reusing the stale entry.
+      evictHouseholdCacheFor(id);
       res.status(204).end();
     } catch (err: unknown) {
       const e = err as { status?: number; errors?: Array<{ message?: string }>; message?: string };
