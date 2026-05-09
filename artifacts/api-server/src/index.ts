@@ -11,6 +11,7 @@ import { maybeAlertOnMalformedTokenSpike } from "./lib/plaidMalformedTokenAlert"
 import { backfillMalformedTokenSiblings } from "./lib/plaidMalformedSiblingCleanup";
 import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
+import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,
@@ -104,6 +105,23 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // (#434) One-shot startup pass: walk every user with a non-empty
+  // `forecast_settings.accountSnapshots` map and run the dedupe routine
+  // so users whose auto-dedupe gate was already stamped before #429
+  // (which added the orphan-snapshot prune/salvage) get healed without
+  // having to click anything. Idempotent — a clean account is a no-op.
+  // Best-effort, fire-and-forget: never blocks boot, never crashes it.
+  runStartupAccountSnapshotsRepair()
+    .then((summary) => {
+      logger.info(
+        summary,
+        "Startup accountSnapshots repair sweep complete",
+      );
+    })
+    .catch((err) => {
+      logger.error({ err }, "Startup accountSnapshots repair sweep failed");
+    });
 
   if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
     // (#366) One-shot backfill: flag any pre-existing rows whose stored
