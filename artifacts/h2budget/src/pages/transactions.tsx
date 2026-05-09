@@ -859,7 +859,7 @@ export default function TransactionsPage() {
       // (POST handler) compute the flag from the description heuristic.
       if (isTransfer) payload.isTransfer = true;
       createTx.mutate(
-        { data: payload },
+        { data: payload as never },
         {
           onSuccess: (created) => {
             queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });

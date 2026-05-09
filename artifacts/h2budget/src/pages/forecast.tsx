@@ -2454,7 +2454,7 @@ export default function ForecastPage({
                   // Allow the user to click bill names inside the tooltip
                   // to deep-link into the register below (#335).
                   wrapperStyle={{ pointerEvents: "auto" }}
-                  content={({ active, payload }) => {
+                  content={({ active, payload }: { active?: boolean; payload?: any[] }) => {
                     if (!active || !payload || payload.length === 0) return null;
                     const p = payload[0]?.payload as
                       | { rawDate?: string; balance?: number }

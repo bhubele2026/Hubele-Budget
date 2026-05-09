@@ -1601,7 +1601,7 @@ export default function AvalanchePage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData}>
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                     <ReTooltip
                       formatter={(v: number) =>
                         v.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })

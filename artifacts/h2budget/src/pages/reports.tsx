@@ -755,7 +755,7 @@ function DebtSection({
             <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
             <YAxis
               tick={{ fontSize: 10 }}
-              tickFormatter={(v) => `$${Math.round(v / 1000)}k`}
+              tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
             />
             <Tooltip
               contentStyle={tooltipStyle}
@@ -810,7 +810,7 @@ function DebtSection({
             </defs>
             <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
             <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v / 1000)}k`} />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`} />
             <Tooltip
               contentStyle={tooltipStyle}
               formatter={(v: number) => tooltipMoney(v)}
@@ -842,7 +842,7 @@ function DebtSection({
             <BarChart data={waterfall} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
               <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={50} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v}`} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${v}`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="freed" fill={H2_PALETTE.amber} name="Freed this kill" radius={[6, 6, 0, 0]} />
@@ -861,7 +861,7 @@ function DebtSection({
             <BarChart data={ipBars} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
               <XAxis dataKey="month" tick={{ fontSize: 10 }} interval={2} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v}`} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${v}`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="principal" stackId="1" fill={H2_PALETTE.primary} name="Principal" />
@@ -1171,7 +1171,7 @@ function CashFlowSection({
           <LineChart data={seriesWithPrev} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
             <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-25} textAnchor="end" height={50} />
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Line type="monotone" dataKey="income" stroke={H2_PALETTE.primary} strokeWidth={2.5} dot={false} name="Income" />
@@ -1220,7 +1220,7 @@ function CashFlowSection({
           <ComposedChart data={seriesWithPrev} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
             <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-25} textAnchor="end" height={50} />
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <ReferenceLine y={0} stroke="hsl(var(--border))" />
@@ -1288,7 +1288,7 @@ function CashFlowSection({
               </defs>
               <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
               <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-25} textAnchor="end" height={50} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               <ReferenceLine y={0} stroke="hsl(var(--border))" />
               <Area
@@ -1314,7 +1314,7 @@ function CashFlowSection({
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={flowBars} margin={{ top: 10, right: 16, bottom: 24, left: 0 }} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" opacity={0.25} horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
+              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
               <YAxis dataKey="stage" type="category" tick={{ fontSize: 11 }} width={80} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               {flowKeys.map((k, i) => (
@@ -1346,7 +1346,7 @@ function CashFlowSection({
               </defs>
               <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
               <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" angle={-25} textAnchor="end" height={50} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               <Area type="monotone" dataKey="avg" stroke={H2_PALETTE.amber} strokeWidth={2} fill="url(#burn-gradient)" name="Avg daily spend" />
             </AreaChart>
@@ -1561,7 +1561,7 @@ function SpendingSection({
             <BarChart data={dow} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
               <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               <Bar dataKey="avg" radius={[6, 6, 0, 0]}>
                 {dow.map((d, i) => (
@@ -1581,7 +1581,7 @@ function SpendingSection({
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={merchants} layout="vertical" margin={{ top: 10, right: 16, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.25} horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
+              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
               <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={130} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
               <Bar dataKey="total" fill={H2_PALETTE.primary} radius={[0, 6, 6, 0]} />
@@ -1744,7 +1744,7 @@ function BudgetSection({
           <BarChart data={barData} margin={{ top: 10, right: 16, bottom: 60, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
             <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" interval={0} height={70} />
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Bar dataKey="Budgeted" fill={H2_PALETTE.primarySoft} radius={[4, 4, 0, 0]} />
@@ -1763,7 +1763,7 @@ function BudgetSection({
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={variance} layout="vertical" margin={{ top: 10, right: 24, bottom: 10, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.25} horizontal={false} />
-            <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
+            <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
             <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={130} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
             <ReferenceLine x={0} stroke="hsl(var(--foreground))" />
@@ -1786,7 +1786,7 @@ function BudgetSection({
           <LineChart data={burndown} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
             <XAxis dataKey="day" tick={{ fontSize: 10 }} />
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => tooltipMoney(v)} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Line type="monotone" dataKey="planned" stroke={H2_PALETTE.primarySoft} strokeWidth={2} strokeDasharray="6 4" dot={false} name="Planned (paced)" />
@@ -1816,7 +1816,7 @@ function BudgetSection({
               tick={{ fontSize: 10 }}
               allowDuplicatedCategory={false}
             />
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
             <Tooltip
               contentStyle={tooltipStyle}
               formatter={(v: number) => tooltipMoney(v)}
@@ -2085,7 +2085,7 @@ function BehaviorSection({
             <BarChart data={clock} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
               <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={1} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
               <Tooltip
                 contentStyle={tooltipStyle}
                 formatter={(v: number) => tooltipMoney(v)}
@@ -2108,7 +2108,7 @@ function BehaviorSection({
             <BarChart data={dayOfMonth} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
               <XAxis dataKey="label" tick={{ fontSize: 9 }} interval={2} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Math.round(v)}`} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
               <Tooltip
                 contentStyle={tooltipStyle}
                 formatter={(v: number) => tooltipMoney(v)}

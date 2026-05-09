@@ -46,7 +46,9 @@ function tx(over: Partial<Transaction>): Transaction {
     unplannedAllowance: false,
     reimbursable: true,
     reimbursed: false,
+    reviewed: false,
     isTransfer: false,
+    isTransferUserOverridden: false,
     source: "amex",
     ...over,
   };

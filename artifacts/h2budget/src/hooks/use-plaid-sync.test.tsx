@@ -332,12 +332,12 @@ describe("usePlaidSync — #357 institution-named error toast", () => {
     // Force the mutate to invoke onError instead of onSuccess so we
     // exercise the network-failure branch.
     mutateMock.mockImplementationOnce(
-      (
+      ((
         _vars: { data: { itemId?: string } },
         opts: { onError?: (e: Error) => void },
       ) => {
         opts.onError?.(new Error("Request failed with status code 400"));
-      },
+      }) as never,
     );
     renderHarness();
     fireEvent.click(screen.getByTestId("run-sync"));

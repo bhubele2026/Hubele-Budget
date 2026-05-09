@@ -28,7 +28,6 @@ import { PlaidSyncHistory } from "./plaid-sync-history";
 
 function makeAttempt(overrides: Partial<PlaidSyncAttempt> & { id: string }): PlaidSyncAttempt {
   return {
-    id: overrides.id,
     attemptedAt: "2026-05-01T12:00:00.000Z",
     kind: "transactions",
     success: false,

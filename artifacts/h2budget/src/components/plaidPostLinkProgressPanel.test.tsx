@@ -36,6 +36,7 @@ function makeStatus(overrides: Partial<PostLinkStatus>): PostLinkStatus {
     modified: 0,
     errorMessage: null,
     importedDateRange: null,
+    mostRecentMonth: null,
     ...overrides,
   };
 }
@@ -71,7 +72,7 @@ describe("(#403) PostLinkProgressPanel — imported date range caption", () => {
           added: 80,
           importedDateRange: { min: "2026-03-05", max: "2026-05-04" },
         })}
-        onDismiss={() => {}}
+        viewTransactionsPath="/transactions" onDismiss={() => {}}
       />,
     );
     const detail = screen.getByTestId("text-post-link-detail");
@@ -87,7 +88,7 @@ describe("(#403) PostLinkProgressPanel — imported date range caption", () => {
           added: 5,
           importedDateRange: null,
         })}
-        onDismiss={() => {}}
+        viewTransactionsPath="/transactions" onDismiss={() => {}}
       />,
     );
     expect(screen.getByTestId("text-post-link-detail").textContent).toContain(
@@ -106,7 +107,7 @@ describe("(#403) PostLinkProgressPanel — imported date range caption", () => {
           added: 95,
           importedDateRange: { min: "2026-04-01", max: "2026-04-30" },
         })}
-        onDismiss={() => {}}
+        viewTransactionsPath="/transactions" onDismiss={() => {}}
       />,
     );
     const detail = screen.getByTestId("text-post-link-detail");
@@ -123,7 +124,7 @@ describe("(#403) PostLinkProgressPanel — imported date range caption", () => {
           added: 100,
           importedDateRange: { min: "2026-04-01", max: "2026-05-06" },
         })}
-        onDismiss={() => {}}
+        viewTransactionsPath="/transactions" onDismiss={() => {}}
       />,
     );
     const detail = screen.getByTestId("text-post-link-detail");
@@ -139,7 +140,7 @@ describe("(#403) PostLinkProgressPanel — imported date range caption", () => {
           added: 12,
           itemErrorCode: "ITEM_LOGIN_REQUIRED",
         })}
-        onDismiss={() => {}}
+        viewTransactionsPath="/transactions" onDismiss={() => {}}
       />,
     );
     const title = screen.getByTestId("text-post-link-title");
@@ -161,7 +162,7 @@ describe("(#403) PostLinkProgressPanel — imported date range caption", () => {
           added: 5,
           itemErrorKind: "reauth",
         })}
-        onDismiss={() => {}}
+        viewTransactionsPath="/transactions" onDismiss={() => {}}
       />,
     );
     expect(
@@ -178,7 +179,7 @@ describe("(#403) PostLinkProgressPanel — imported date range caption", () => {
           modified: 0,
           lastBankTxOn: "2026-05-04",
         })}
-        onDismiss={() => {}}
+        viewTransactionsPath="/transactions" onDismiss={() => {}}
       />,
     );
     expect(
@@ -194,7 +195,7 @@ describe("(#403) PostLinkProgressPanel — imported date range caption", () => {
           added: 0,
           modified: 0,
         })}
-        onDismiss={() => {}}
+        viewTransactionsPath="/transactions" onDismiss={() => {}}
       />,
     );
     expect(
@@ -213,7 +214,7 @@ describe("(#403) PostLinkProgressPanel — imported date range caption", () => {
           added: 0,
           importedDateRange: { min: "2026-04-01", max: "2026-04-30" },
         })}
-        onDismiss={() => {}}
+        viewTransactionsPath="/transactions" onDismiss={() => {}}
       />,
     );
     const detail = screen.getByTestId("text-post-link-detail");

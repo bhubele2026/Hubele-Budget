@@ -73,7 +73,7 @@ export function BalanceTrendChart({
                   borderRadius: 6,
                   fontSize: 12,
                 }}
-                labelFormatter={(_label, payload) => {
+                labelFormatter={(_label: unknown, payload: any) => {
                   const p = payload?.[0]?.payload as
                     | { label?: string }
                     | undefined;
