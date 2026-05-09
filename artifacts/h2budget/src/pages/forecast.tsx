@@ -3289,6 +3289,7 @@ export default function ForecastPage({
             {(() => {
               const missed = bucket.filter((b) => b.status === "missed");
               if (missed.length === 0) return null;
+              const missedTotal = missed.reduce((s, b) => s + b.amount, 0);
               return (
                 <Card data-testid="missed-bucket-panel">
                   <CardHeader className="pb-3">
@@ -3298,10 +3299,21 @@ export default function ForecastPage({
                       <Badge variant="outline" className="ml-1 text-[10px]">
                         {missed.length}
                       </Badge>
+                      <span
+                        className={`ml-auto font-medium tabular-nums text-sm ${
+                          missedTotal < 0 ? "text-destructive" : "text-primary"
+                        }`}
+                        data-testid="missed-bucket-total"
+                      >
+                        {formatCurrency(missedTotal)}
+                      </span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-0">
-                    <div className="divide-y divide-border">
+                    <div
+                      className="divide-y divide-border max-h-[20rem] overflow-y-auto"
+                      data-testid="missed-bucket-scroll"
+                    >
                       {missed.map((b) => (
                         <div
                           key={b.id}
@@ -3372,6 +3384,7 @@ export default function ForecastPage({
             {(() => {
               const moved = bucket.filter((b) => b.status === "rescheduled");
               if (moved.length === 0) return null;
+              const movedTotal = moved.reduce((s, b) => s + b.amount, 0);
               return (
                 <Card data-testid="rescheduled-bucket-panel">
                   <CardHeader className="pb-3">
@@ -3381,10 +3394,21 @@ export default function ForecastPage({
                       <Badge variant="outline" className="ml-1 text-[10px]">
                         {moved.length}
                       </Badge>
+                      <span
+                        className={`ml-auto font-medium tabular-nums text-sm ${
+                          movedTotal < 0 ? "text-destructive" : "text-primary"
+                        }`}
+                        data-testid="rescheduled-bucket-total"
+                      >
+                        {formatCurrency(movedTotal)}
+                      </span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-0">
-                    <div className="divide-y divide-border">
+                    <div
+                      className="divide-y divide-border max-h-[20rem] overflow-y-auto"
+                      data-testid="rescheduled-bucket-scroll"
+                    >
                       {moved.map((b) => (
                         <div
                           key={b.id}
