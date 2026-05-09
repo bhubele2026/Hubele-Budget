@@ -1,1 +1,0 @@
-{"version":3,"file":"budgetSummary.d.ts","sourceRoot":"","sources":["../../../src/generated/types/budgetSummary.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,iBAAiB,EAAE,MAAM,qBAAqB,CAAC;AAE7D,MAAM,WAAW,aAAa;IAC5B,MAAM,EAAE,iBAAiB,CAAC;IAC1B,QAAQ,EAAE,iBAAiB,CAAC;IAC5B,GAAG,EAAE,iBAAiB,CAAC;IACvB,YAAY,EAAE,iBAAiB,CAAC;CACjC"}
