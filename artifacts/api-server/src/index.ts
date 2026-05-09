@@ -9,6 +9,7 @@ import {
 import { sendExpirationRemindersForAllUsers } from "./lib/plaidExpirationReminder";
 import { maybeAlertOnMalformedTokenSpike } from "./lib/plaidMalformedTokenAlert";
 import { backfillMalformedTokenSiblings } from "./lib/plaidMalformedSiblingCleanup";
+import { maybeAlertOnSiblingCleanup } from "./lib/plaidMalformedSiblingCleanupAlert";
 import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
@@ -177,11 +178,37 @@ app.listen(port, (err) => {
     // sweep is a no-op on subsequent boots. Best-effort: never crashes
     // boot, never throws upstream.
     backfillMalformedTokenSiblings()
-      .then((summary) => {
+      .then(async (summary) => {
         logger.info(
-          summary,
+          {
+            scannedMalformed: summary.scannedMalformed,
+            cleanedSiblings: summary.cleanedSiblings,
+            skippedNoHealthySibling: summary.skippedNoHealthySibling,
+          },
           "Plaid malformed-token sibling backfill complete",
         );
+        // (#551) Page operators when the boot sweep actually cleaned
+        // something so support can confirm "yes, we cleaned N rows
+        // after the deploy" without grepping rotated pino logs.
+        // Zero-cleanup boots stay silent inside the helper.
+        try {
+          const alert = await maybeAlertOnSiblingCleanup(summary);
+          if (alert.channel !== "skipped") {
+            logger.info(
+              {
+                channel: alert.channel,
+                recipient: alert.recipient,
+                cleanedSiblings: summary.cleanedSiblings,
+              },
+              "Plaid sibling-cleanup boot alert dispatched",
+            );
+          }
+        } catch (alertErr) {
+          logger.warn(
+            { err: alertErr },
+            "Plaid sibling-cleanup boot alert threw unexpectedly",
+          );
+        }
       })
       .catch((err) => {
         logger.error(

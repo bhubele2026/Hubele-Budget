@@ -141,10 +141,18 @@ export async function cleanupMalformedTokenSiblings(opts: {
  * per malformed row: a single per-row failure is logged and the sweep
  * continues so one stuck row never blocks recovery for the rest.
  */
+export type BackfillCleanedDetail = {
+  userId: string;
+  itemRowId: string;
+  itemId: string;
+  institutionName: string | null;
+};
+
 export async function backfillMalformedTokenSiblings(): Promise<{
   scannedMalformed: number;
   cleanedSiblings: number;
   skippedNoHealthySibling: number;
+  cleanedDetails: BackfillCleanedDetail[];
 }> {
   const items = await db.select().from(plaidItemsTable);
   // Group by user so we can find a healthy sibling without re-querying
@@ -159,6 +167,7 @@ export async function backfillMalformedTokenSiblings(): Promise<{
   let scannedMalformed = 0;
   let cleanedSiblings = 0;
   let skippedNoHealthySibling = 0;
+  const cleanedDetails: BackfillCleanedDetail[] = [];
   // Avoid running the helper twice for the same (user, institution)
   // when two stale rows share an institution — the first call will
   // already sweep both of them via the survivor-driven scan.
@@ -207,6 +216,14 @@ export async function backfillMalformedTokenSiblings(): Promise<{
           institutionSlug: healthy.institutionSlug,
         });
         cleanedSiblings += cleaned.length;
+        for (const c of cleaned) {
+          cleanedDetails.push({
+            userId,
+            itemRowId: c.itemRowId,
+            itemId: c.itemId,
+            institutionName: c.institutionName,
+          });
+        }
       } catch (err) {
         defaultLogger.warn(
           {
@@ -222,5 +239,10 @@ export async function backfillMalformedTokenSiblings(): Promise<{
     }
   }
 
-  return { scannedMalformed, cleanedSiblings, skippedNoHealthySibling };
+  return {
+    scannedMalformed,
+    cleanedSiblings,
+    skippedNoHealthySibling,
+    cleanedDetails,
+  };
 }
