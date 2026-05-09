@@ -156,26 +156,60 @@ export async function autoDetectCutoffsForItem(
         eq(plaidAccountsTable.userId, userId),
       ),
     );
+  // (#403) Anything in the *current* calendar month is, by definition,
+  // a stale over-shooting cutoff: clampCutoffBeforeCurrentMonth caps a
+  // freshly computed cutoff at the last day of the prior month, so a
+  // value that sits in the current month can only come from an old
+  // run before that clamp existed (or from the user manually entering
+  // one). Those values are exactly the ones #403 wanted to clear on
+  // re-link.
+  const today = new Date();
+  const y = today.getUTCFullYear();
+  const m = today.getUTCMonth();
+  const priorMonthEnd = new Date(Date.UTC(y, m, 0));
+  const yyyy = priorMonthEnd.getUTCFullYear();
+  const mm = String(priorMonthEnd.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(priorMonthEnd.getUTCDate()).padStart(2, "0");
+  const priorMonthEndStr = `${yyyy}-${mm}-${dd}`;
   for (const acct of accounts) {
     // (#403) Once first sync stamps `firstSyncCompletedAt` the gate is
-    // permanently off — never recompute. But while it's still null
-    // (e.g. a re-link of an item whose initial sync never finished, or
-    // whose stale cutoff sits in the future and is silently blocking
-    // recent rows) we DO recompute every time the user comes back
-    // through Plaid Link. That is what makes a re-link reliably
-    // refresh a stale cutoff without forcing the user to clear it by
-    // hand.
+    // permanently off — never recompute.
     if (acct.firstSyncCompletedAt) continue;
     const cutoff = await computeImportCutoffForAccount(
       userId,
       acct,
       institutionSlug,
     );
-    // Always write the freshly computed value (even when null) so a
-    // previously over-shooting cutoff is cleared on re-link.
+    const existing = acct.importCutoffDate;
+    // (#409) When an existing cutoff is already on file from a prior
+    // link, NEVER let a relink silently move it earlier — doing so
+    // would re-admit pre-cutoff Plaid rows the previous run had
+    // intentionally gated, which is exactly how chip-flagged relinks
+    // started duplicating the user's manual history. The only
+    // direction a relink may shift an already-set cutoff is forward
+    // (a strictly later date — i.e. tightening the gate so even
+    // *more* of the user's freshly typed history is protected).
+    //
+    // (#403 carve-out preserved) A cutoff that sits in the current
+    // calendar month is treated as stale (it can only come from a
+    // pre-clamp run or a hand-edit) and is allowed to be replaced
+    // with whatever the recompute returns — including null — so the
+    // current month's Plaid activity stops being silently blocked.
+    let next: string | null = existing;
+    if (existing == null) {
+      // First time we've ever computed for this account.
+      next = cutoff;
+    } else if (existing > priorMonthEndStr) {
+      // Stale: existing value reaches into the current/future month.
+      next = cutoff;
+    } else if (cutoff != null && cutoff > existing) {
+      // Forward (tighten) only — never move earlier.
+      next = cutoff;
+    }
+    if (next === existing) continue;
     await db
       .update(plaidAccountsTable)
-      .set({ importCutoffDate: cutoff })
+      .set({ importCutoffDate: next })
       .where(eq(plaidAccountsTable.id, acct.id));
   }
 }

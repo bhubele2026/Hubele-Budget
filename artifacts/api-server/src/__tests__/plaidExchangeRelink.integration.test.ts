@@ -363,24 +363,21 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
     const body = (await r.json()) as { relinked: boolean };
     expect(body.relinked).toBe(true);
 
-    // 1. Cutoff is recomputed from the user's actual manual history at
-    //    relink time (#403): when `firstSyncCompletedAt` is still null
-    //    autoDetectCutoffsForItem always rewrites the cutoff so a
-    //    previously over-shooting value can't keep silently blocking
-    //    recent rows. The recomputed value lands on the latest manual
-    //    row's date (2026-04-28), which is *earlier* than the seeded
-    //    PRE_EXISTING_CUTOFF (2026-04-30) but still gates every April
-    //    Plaid row in the sync response below — so the no-duplicate
-    //    invariant in step 3 still holds.
+    // 1. (#409) An existing pre-link cutoff that already sits in a
+    //    valid past month is PRESERVED across the relink — the relink
+    //    must never silently move the cutoff earlier (loosening the
+    //    gate would re-admit pre-cutoff Plaid rows the prior link had
+    //    intentionally blocked, which is exactly how chip-flagged
+    //    relinks started duplicating manual history). The (#403)
+    //    carve-out for stale current-month cutoffs still applies in
+    //    its own dedicated test; this scenario seeds Apr 30, which is
+    //    a perfectly valid prior-month cutoff and therefore must
+    //    survive the relink unchanged.
     const [acctAfter] = await db
       .select()
       .from(plaidAccountsTable)
       .where(eq(plaidAccountsTable.id, acct!.id));
-    expect(acctAfter.importCutoffDate).toBe("2026-04-28");
-    // PRE_EXISTING_CUTOFF was the seeded value before relink; the
-    // relink-time recompute is allowed to move it earlier (never
-    // forward into the user's real Plaid window).
-    expect(acctAfter.importCutoffDate! <= PRE_EXISTING_CUTOFF).toBe(true);
+    expect(acctAfter.importCutoffDate).toBe(PRE_EXISTING_CUTOFF);
 
     // 2. Pre-May manual rows preserved by description, not by source.
     //    The ±7-day first-sync merge from #361 may rewrite an adopted
