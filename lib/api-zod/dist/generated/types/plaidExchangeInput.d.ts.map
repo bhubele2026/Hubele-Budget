@@ -1,1 +1,0 @@
-{"version":3,"file":"plaidExchangeInput.d.ts","sourceRoot":"","sources":["../../../src/generated/types/plaidExchangeInput.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,kBAAkB;IACjC,WAAW,EAAE,MAAM,CAAC;IACpB,gBAAgB;IAChB,aAAa,CAAC,EAAE,MAAM,GAAG,IAAI,CAAC;IAC9B,gBAAgB;IAChB,eAAe,CAAC,EAAE,MAAM,GAAG,IAAI,CAAC;CACjC"}
