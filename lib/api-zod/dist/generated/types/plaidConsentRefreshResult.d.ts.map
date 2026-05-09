@@ -1,1 +1,0 @@
-{"version":3,"file":"plaidConsentRefreshResult.d.ts","sourceRoot":"","sources":["../../../src/generated/types/plaidConsentRefreshResult.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,uBAAuB,EAAE,MAAM,2BAA2B,CAAC;AAEzE,MAAM,WAAW,yBAAyB;IACxC,OAAO,EAAE,MAAM,CAAC;IAChB,OAAO,EAAE,MAAM,CAAC;IAChB,MAAM,EAAE,MAAM,CAAC;IACf,KAAK,EAAE,uBAAuB,EAAE,CAAC;CAClC"}
