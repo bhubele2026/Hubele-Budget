@@ -1544,7 +1544,10 @@ export default function TransactionsPage() {
     return () => ro.disconnect();
   }, [isLoading]);
 
-  if (isLoading) {
+  // Gate on data only — global keepPreviousData keeps the previous
+  // transactions list visible during refetches so we never flash a
+  // skeleton after the first load.
+  if (!transactions) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-48" />

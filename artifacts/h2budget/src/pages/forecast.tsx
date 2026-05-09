@@ -2001,7 +2001,10 @@ export default function ForecastPage({
     });
   };
 
-  if (isLoading || !data || !register) {
+  // Gate on data only — global keepPreviousData keeps the previous
+  // month's forecast visible during refetches so we never flash a
+  // skeleton after the first load.
+  if (!data || !register) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-48" />

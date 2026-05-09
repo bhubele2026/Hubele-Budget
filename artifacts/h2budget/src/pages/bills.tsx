@@ -427,7 +427,10 @@ export default function BillsPage() {
     [allDebtMinRows, payoffsByDebt],
   );
 
-  if (isLoading || !summary) {
+  // Gate on data only — global keepPreviousData keeps the previous
+  // month's summary visible during refetches so we never flash a
+  // skeleton after the first load.
+  if (!summary) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-48" />

@@ -1945,7 +1945,10 @@ export default function DashboardPage() {
     return ids;
   }, [forecastData?.resolutions]);
 
-  if (isLoading || !data) {
+  // Gate on data only — global keepPreviousData keeps the previous
+  // dashboard visible during refetches so we never flash a skeleton
+  // after the first load.
+  if (!data) {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-serif font-bold text-foreground">Dashboard</h1>

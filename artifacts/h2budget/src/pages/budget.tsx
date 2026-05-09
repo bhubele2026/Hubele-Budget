@@ -19,7 +19,7 @@ import {
   type MappingRule,
   type Transaction,
 } from "@workspace/api-client-react";
-import { useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 
 type SourceBreakdownEntry = {
   source: "Bank" | "Amex" | "Other";
@@ -214,19 +214,11 @@ export default function BudgetPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  const { data: budgetData, isLoading: isLoadingBudget } = useGetBudgetMonth(
-    currentMonth,
-    {
-      // Keep the previous month's data on screen while the new month
-      // fetches in the background. Without this, every prev/next click
-      // tore the grid down to a skeleton for the full server roundtrip
-      // (~300ms+) and felt clunky.
-      query: {
-        queryKey: getGetBudgetMonthQueryKey(currentMonth),
-        placeholderData: keepPreviousData,
-      },
-    },
-  );
+  // The "previous month stays on screen during refetch" behavior comes
+  // from the global `placeholderData: keepPreviousData` default set on
+  // the QueryClient in App.tsx — no per-call override needed here.
+  const { data: budgetData, isLoading: isLoadingBudget } =
+    useGetBudgetMonth(currentMonth);
   const { data: categories, isLoading: isLoadingCategories } =
     useListCategories();
 

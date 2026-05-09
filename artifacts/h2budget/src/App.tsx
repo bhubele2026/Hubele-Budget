@@ -6,7 +6,12 @@ import {
   Redirect,
   useLocation,
 } from "wouter";
-import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  keepPreviousData,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { ClerkProvider, Show, useClerk } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
@@ -45,6 +50,14 @@ const queryClient = new QueryClient({
       // to the window.
       refetchOnWindowFocus: false,
       retry: 1,
+      // Global "keep previous data on screen during a refetch" — without
+      // this, every page that paginates by month (Budget, Bills,
+      // Forecast) would skeleton-flash on each prev/next click. With it,
+      // the previous month's content stays visible while the new month
+      // streams in. Page-level loaders should gate on `!data`, not
+      // `isLoading`, so the skeleton only ever shows on the very first
+      // visit (when no cached data exists yet).
+      placeholderData: keepPreviousData,
     },
   },
 });
