@@ -16,7 +16,6 @@ import { requireAuth } from "../middlewares/requireAuth";
 import {
   syncAvalanchePaymentCategory,
   isAvalanchePaymentCategory,
-  healAvalancheDuplication,
   AVALANCHE_PAYMENT_NAME,
 } from "./avalanche";
 import {
@@ -1257,19 +1256,8 @@ router.get(
     await healLegacyRecurringBillLinks(req.userId!);
     await syncAutoBillsFromRecurring(req.userId!);
 
-    // (#duplication-cleanup) If the user is still on extra_source="manual"
-    // and we can find a recurring bill that already represents the
-    // avalanche extra (e.g. Weekly Spend $450/wk == manualExtra $2,250),
-    // migrate them to budget_line mode pointing at that category. The
-    // syncAvalanchePaymentCategory call below will then drop the orphan
-    // standalone "Avalanche payment" line so the same dollars stop being
-    // counted twice in expenses. No-op for users already in budget_line
-    // mode or without a matching bill.
-    await healAvalancheDuplication(req.userId!, monthStart);
-
     // Ensure the system-managed "Avalanche payment" line is present and
-    // mirrors avalancheSettings.manualExtra for this month — only when
-    // extra_source="manual"; otherwise this call cleans up any orphan row.
+    // mirrors avalancheSettings.manualExtra for this month.
     await syncAvalanchePaymentCategory(req.userId!, monthStart);
 
     const [month] = await db

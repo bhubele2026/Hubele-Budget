@@ -924,7 +924,7 @@ function PlannedAmountCell({
           )}
         </PopoverContent>
       </Popover>
-      <div className="flex-1 min-w-0">{input}</div>
+      <div className="flex-1 max-w-[8rem]">{input}</div>
     </div>
   );
 }

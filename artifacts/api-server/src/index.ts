@@ -12,6 +12,7 @@ import { backfillMalformedTokenSiblings } from "./lib/plaidMalformedSiblingClean
 import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
+import { runStartupAvalancheHealRevert } from "./lib/startupAvalancheHealRevert";
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,
@@ -121,6 +122,18 @@ app.listen(port, (err) => {
     })
     .catch((err) => {
       logger.error({ err }, "Startup accountSnapshots repair sweep failed");
+    });
+
+  // One-shot revert: undo the bad `healAvalancheDuplication` auto-migration
+  // that ran during the ed23a30..revert window. Restores extra_source='manual'
+  // for any user it incorrectly flipped to 'budget_line' so the slider on
+  // /avalanche reappears and the Avalanche group on /budget refills.
+  runStartupAvalancheHealRevert()
+    .then((summary) => {
+      logger.info(summary, "Startup avalanche-heal revert complete");
+    })
+    .catch((err) => {
+      logger.error({ err }, "Startup avalanche-heal revert failed");
     });
 
   if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
