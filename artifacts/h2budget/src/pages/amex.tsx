@@ -1018,12 +1018,20 @@ export default function AmexPage() {
   };
 
   const setRowReimbursable = async (t: Transaction, next: boolean) => {
-    // (#615) Turning RE on counts as reviewing the row; turning it
-    // off doesn't unreview, because WK/MO/UN may still be active and
-    // those carry the reviewed signal independently.
+    // (#615/#616) Picking RE counts as reviewing the row, just like
+    // WK/MO/UN. Turning RE off only unreviews when no other bucket is
+    // active — if WK/MO/UN is on, those carry the reviewed signal
+    // independently and we leave `reviewed` alone.
+    const hasOtherBucket = currentBucket(t) !== "";
+    const reviewedPatch: Partial<Transaction> = next
+      ? { reviewed: true }
+      : hasOtherBucket
+        ? {}
+        : { reviewed: false };
     const patch: Partial<Transaction> = {
       reimbursable: next,
-      ...(next ? { reviewed: true } : { reimbursed: false }),
+      ...(next ? {} : { reimbursed: false }),
+      ...reviewedPatch,
     };
     await qc.cancelQueries({ queryKey: [`/api/transactions`] });
     const prev = patchTransactionInCache(t.id, patch);
@@ -1033,13 +1041,14 @@ export default function AmexPage() {
           id: t.id,
           data: {
             reimbursable: next,
-            ...(next ? { reviewed: true } : { reimbursed: false }),
+            ...(next ? {} : { reimbursed: false }),
+            ...reviewedPatch,
           },
         });
         patchTransactionIfMatching(t.id, patch, {
           reimbursable: updated.reimbursable,
           reimbursed: updated.reimbursed,
-          ...(next ? { reviewed: updated.reviewed } : {}),
+          ...("reviewed" in reviewedPatch ? { reviewed: updated.reviewed } : {}),
         });
       } catch (e) {
         if (prev) patchTransactionIfMatching(t.id, patch, prev);

@@ -239,7 +239,7 @@ describe("Amex bucket bubble auto-reviews the row (#615)", () => {
     });
   });
 
-  it("clicking RE on marks the row reviewed; clicking RE off does NOT unreview", async () => {
+  it("clicking RE on PATCHes reimbursable=true AND reviewed=true in one call (#616)", async () => {
     state.monthTxns = [makeTxn()];
     renderPage();
     await waitFor(() => {
@@ -253,11 +253,9 @@ describe("Amex bucket bubble auto-reviews the row (#615)", () => {
       reimbursable: true,
       reviewed: true,
     });
+  });
 
-    // Re-render with reimbursable already on; clicking again should
-    // turn it off without touching `reviewed`.
-    cleanup();
-    state.updateCalls = [];
+  it("clicking RE off when no other bucket is on PATCHes reviewed=false in the same call (#616)", async () => {
     state.monthTxns = [makeTxn({ reimbursable: true, reviewed: true })];
     renderPage();
     await waitFor(() => {
@@ -268,7 +266,33 @@ describe("Amex bucket bubble auto-reviews the row (#615)", () => {
       expect(state.updateCalls.length).toBeGreaterThan(0);
     });
     const call = state.updateCalls[0];
+    expect(call.data).toMatchObject({
+      reimbursable: false,
+      reimbursed: false,
+      reviewed: false,
+    });
+  });
+
+  it("clicking RE off when WK is still on leaves reviewed=true (#616)", async () => {
+    state.monthTxns = [
+      makeTxn({
+        reimbursable: true,
+        weeklyAllowance: true,
+        weeklyBucket: "misc",
+        reviewed: true,
+      }),
+    ];
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getAllByTestId("bucket-reimbursable").length).toBeGreaterThan(0);
+    });
+    fireEvent.click(screen.getAllByTestId("bucket-reimbursable")[0]);
+    await waitFor(() => {
+      expect(state.updateCalls.length).toBeGreaterThan(0);
+    });
+    const call = state.updateCalls[0];
     expect(call.data.reimbursable).toBe(false);
+    expect(call.data.reimbursed).toBe(false);
     expect("reviewed" in call.data).toBe(false);
   });
 });
