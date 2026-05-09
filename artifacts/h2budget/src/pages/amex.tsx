@@ -67,7 +67,7 @@ import { useListPlaidItems } from "@workspace/api-client-react";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { cn } from "@/lib/utils";
 import { relevantAmexPlaidItemIds } from "@/pages/amexPlaidScope";
-import { makeAmexBalanceAtEndOf } from "@/lib/amexEndingBalance";
+import { makeAmexBalanceAtEndOf, resolveAmexDebt } from "@/lib/amexEndingBalance";
 import {
   compareNewestFirst,
   computeRunningBalances,
@@ -590,85 +590,18 @@ export default function AmexPage() {
   // the balances and adopt the most recent updatedAt as the anchor's
   // asOf so the Ending Balance tile reflects the combined liability
   // across every card on this page rather than just the first match.
-  const amexDebt = useMemo(() => {
-    if (!debts) return null;
-    let matches: typeof debts = [];
-    if (amexPlaidAccountIds.size > 0) {
-      matches = debts.filter(
-        (d) => d.plaidAccountId && amexPlaidAccountIds.has(d.plaidAccountId),
-      );
-    }
-    if (matches.length === 0) {
-      matches = debts.filter((d) => /amex|american\s*express/i.test(d.name));
-    }
-    if (matches.length === 0) return null;
-    // (#449) Collapse debts that share the same physical card
-    // (institution + mask) before summing. Defends against the harder
-    // mid-re-link variant of #442: if a sync briefly fires before
-    // `dedupePlaidAccountsForUser` collapses (institution, mask)
-    // groups, transactions can land referencing both the real and
-    // the duplicate `plaid_accounts` row id — so both ids end up in
-    // `amexPlaidAccountIds`, both linked debts pass the filter, and
-    // `amexDebt` would otherwise sum ~2x the real liability. We map
-    // each debt's `plaidAccountId` (row uuid) to its (institution,
-    // mask) via the live Plaid items payload, dedupe per group by
-    // keeping the most recently updated debt, and then aggregate.
-    if (matches.length > 1) {
-      const accountMeta = new Map<
-        string,
-        { institution: string; mask: string }
-      >();
-      for (const item of plaidItemsForScope ?? []) {
-        const inst = (item.institutionName ?? "").toLowerCase();
-        for (const acct of item.accounts ?? []) {
-          if (acct.mask) {
-            accountMeta.set(acct.id, {
-              institution: inst,
-              mask: acct.mask.toLowerCase(),
-            });
-          }
-        }
-      }
-      const byPhysicalCard = new Map<string, (typeof debts)[number]>();
-      const ungrouped: (typeof debts)[number][] = [];
-      for (const d of matches) {
-        const meta = d.plaidAccountId
-          ? accountMeta.get(d.plaidAccountId)
-          : undefined;
-        if (!meta) {
-          ungrouped.push(d);
-          continue;
-        }
-        const key = `${meta.institution}|${meta.mask}`;
-        const existing = byPhysicalCard.get(key);
-        if (!existing) {
-          byPhysicalCard.set(key, d);
-        } else {
-          const a =
-            existing.lastBalanceUpdate ?? existing.plaidLastSyncedAt ?? "";
-          const b = d.lastBalanceUpdate ?? d.plaidLastSyncedAt ?? "";
-          if (b > a) byPhysicalCard.set(key, d);
-        }
-      }
-      matches = [...byPhysicalCard.values(), ...ungrouped];
-    }
-    if (matches.length === 1) return matches[0];
-    const totalBalance = matches.reduce(
-      (acc, d) => acc + parseSigned(d.balance),
-      0,
-    );
-    const latestUpdate = matches.reduce<string | null>((acc, d) => {
-      const cand = d.lastBalanceUpdate ?? d.plaidLastSyncedAt ?? null;
-      if (!cand) return acc;
-      if (!acc) return cand;
-      return cand > acc ? cand : acc;
-    }, null);
-    return {
-      ...matches[0],
-      balance: String(totalBalance),
-      lastBalanceUpdate: latestUpdate,
-    };
-  }, [debts, amexPlaidAccountIds, plaidItemsForScope]);
+  // (#574) Anchor-debt resolution lives in `@/lib/amexEndingBalance` so
+  // the dashboard's "Amex ending balance" tile uses the exact same logic
+  // and the two surfaces can never drift on which debt(s) feed the anchor.
+  const amexDebt = useMemo(
+    () =>
+      resolveAmexDebt({
+        debts,
+        amexPlaidAccountIds,
+        plaidItemsForScope,
+      }),
+    [debts, amexPlaidAccountIds, plaidItemsForScope],
+  );
 
   // Resolve the anchor (balance + as-of timestamp) from either the linked
   // Amex debt or the server-side anchor fallback.

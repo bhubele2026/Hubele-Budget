@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
+  customFetch,
   useGetDashboard,
   useGetBudgetMonth,
   useGetForecast,
@@ -9,6 +10,7 @@ import {
   useListMappingRules,
   useListDashboardBudgets,
   useListDebts,
+  useListPlaidItems,
   useUpsertDashboardBudget,
   useDeleteDashboardBudget,
   useUpdateTransaction,
@@ -22,6 +24,12 @@ import {
   computeChaseEndOfMonthBalance,
   scopeChaseTransactions,
 } from "@/lib/chaseEndingBalance";
+import {
+  computeAmexEndOfMonthBalance,
+  resolveAmexAnchor,
+  resolveAmexDebt,
+} from "@/lib/amexEndingBalance";
+import { monthKeyOf } from "@/components/account-page";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
@@ -1127,12 +1135,14 @@ function MonthlySnapshotTiles({
   totalDebt,
   activeDebtCount,
   chaseEndingBalance,
+  amexEndingBalance,
   bankSnapshot,
 }: {
   state: MonthlySnapshotState;
   totalDebt: string;
   activeDebtCount: number;
   chaseEndingBalance: (monthStart: string) => number | null;
+  amexEndingBalance: (monthStart: string) => number | null;
   bankSnapshot: { source: "manual" | "plaid"; at: string } | null;
 }) {
   const { monthStart, monthLabel, shortMonth, canPrev, canNext, stepMonth } =
@@ -1174,7 +1184,7 @@ function MonthlySnapshotTiles({
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card data-testid="tile-total-owed">
           <CardContent className="p-5">
             <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
@@ -1236,6 +1246,50 @@ function MonthlySnapshotTiles({
                       />
                     </div>
                   )}
+                </>
+              );
+            })()}
+          </CardContent>
+        </Card>
+        <Card data-testid="tile-amex-ending-balance">
+          <CardContent className="p-5">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+              Amex ending balance
+            </div>
+            {(() => {
+              const bal = amexEndingBalance(monthStart);
+              if (bal === null) {
+                return (
+                  <>
+                    <div
+                      className="text-3xl font-serif font-bold tabular-nums mt-1 text-muted-foreground"
+                      data-testid="text-amex-ending-balance-empty"
+                    >
+                      —
+                    </div>
+                    <div
+                      className="text-xs text-muted-foreground mt-1"
+                      data-testid="text-amex-ending-balance-empty-hint"
+                    >
+                      Link Amex or set a balance to see this
+                    </div>
+                  </>
+                );
+              }
+              return (
+                <>
+                  <div
+                    className={cn(
+                      "text-3xl font-serif font-bold tabular-nums mt-1",
+                      bal < 0 && "text-destructive",
+                    )}
+                    data-testid="text-amex-ending-balance"
+                  >
+                    {formatCurrency(bal)}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    end of {shortMonth}
+                  </div>
                 </>
               );
             })()}
@@ -1426,12 +1480,14 @@ function DashboardSnapshotSection({
   totalDebt,
   activeDebtCount,
   chaseEndingBalance,
+  amexEndingBalance,
   bankSnapshot,
 }: {
   today: Date;
   totalDebt: string;
   activeDebtCount: number;
   chaseEndingBalance: (monthStart: string) => number | null;
+  amexEndingBalance: (monthStart: string) => number | null;
   bankSnapshot: { source: "manual" | "plaid"; at: string } | null;
 }) {
   const state = useMonthlySnapshotState(today);
@@ -1443,6 +1499,7 @@ function DashboardSnapshotSection({
         totalDebt={totalDebt}
         activeDebtCount={activeDebtCount}
         chaseEndingBalance={chaseEndingBalance}
+        amexEndingBalance={amexEndingBalance}
         bankSnapshot={bankSnapshot}
       />
       <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 pt-4 md:pt-6 pb-4 bg-background border-b shadow-sm">
@@ -1799,6 +1856,65 @@ export default function DashboardPage() {
         chaseTransactions,
       });
   }, [chaseEffectiveSnapshot, chaseTransactions]);
+
+  // (#574) Amex ending balance tile — mirrors the Amex page's
+  // `resolvedAnchor` (linked Amex debt, else `/api/amex/anchor`) and
+  // routes through `computeAmexEndOfMonthBalance` so the dashboard tile
+  // and the Amex page header agree for any selected month.
+  const { data: amexAnchorResp } = useQuery<{
+    amexEndingBalance: number | null;
+    asOf: string;
+    source: "debt" | "anchor" | "computed" | "plaid" | "missing";
+  }>({
+    queryKey: ["/api/amex/anchor"],
+    queryFn: () => customFetch("/api/amex/anchor", { method: "GET" }),
+    staleTime: 60_000,
+  });
+  const amexTransactions = useMemo(() => {
+    const out: Transaction[] = [];
+    for (const t of allTxns ?? []) {
+      const s = (t.source ?? "").toLowerCase();
+      if (s === "amex" || s === "plaid:amex") out.push(t);
+    }
+    return out;
+  }, [allTxns]);
+  // (#574) Mirror the Amex page: derive Plaid account ids from the
+  // page's amex transactions and feed them — together with the live
+  // Plaid items — into the shared `resolveAmexDebt` helper so multi-
+  // card / Plaid-linked households get the same anchor here as on the
+  // Amex page (linked-debt preference, multi-card aggregation, and
+  // institution+mask dedupe all included).
+  const amexPlaidAccountIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of amexTransactions) {
+      if (t.plaidAccountId) s.add(t.plaidAccountId);
+    }
+    return s;
+  }, [amexTransactions]);
+  const { data: amexPlaidItemsForScope } = useListPlaidItems();
+  const amexDebt = useMemo(
+    () =>
+      resolveAmexDebt({
+        debts,
+        amexPlaidAccountIds,
+        plaidItemsForScope: amexPlaidItemsForScope,
+      }),
+    [debts, amexPlaidAccountIds, amexPlaidItemsForScope],
+  );
+  const amexResolvedAnchor = useMemo(
+    () => resolveAmexAnchor({ amexDebt, amexAnchorResp }),
+    [amexDebt, amexAnchorResp],
+  );
+  const amexFallbackMonth = useMemo(() => monthKeyOf(today), [today]);
+  const amexEndingBalance = useMemo(() => {
+    return (monthStart: string): number | null =>
+      computeAmexEndOfMonthBalance({
+        monthStart,
+        anchor: amexResolvedAnchor,
+        amexTransactions,
+        fallbackMonth: amexFallbackMonth,
+      });
+  }, [amexResolvedAnchor, amexTransactions, amexFallbackMonth]);
   // All-time reimbursables — no date window, server filters by reimbursable=true.
   const { data: reimbTxns, isLoading: reimbLoading } = useListTransactions({
     reimbursable: true,
@@ -1848,6 +1964,7 @@ export default function DashboardPage() {
         totalDebt={data.totalDebt}
         activeDebtCount={data.activeDebtCount}
         chaseEndingBalance={chaseEndingBalance}
+        amexEndingBalance={amexEndingBalance}
         bankSnapshot={
           bankSnapshot
             ? { source: bankSnapshot.source, at: bankSnapshot.at }
