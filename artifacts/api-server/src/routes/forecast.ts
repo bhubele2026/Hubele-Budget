@@ -602,7 +602,15 @@ router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<voi
     const a = resp.data.accounts.find((x) => x.account_id === acct.accountId);
     const live = a?.balances.available ?? a?.balances.current;
     if (live == null) {
-      res.status(502).json({ error: "Plaid did not return a balance" });
+      // Task #385 — distinguish the "this Plaid account doesn't expose
+      // a refreshable balance" case (e.g. brokerage sub-accounts) from
+      // a generic Plaid outage so the client can show an account-aware
+      // toast naming the row that failed and offering a manual fallback.
+      res.status(502).json({
+        error: "Plaid did not return a balance",
+        code: "no_balance",
+        account: { name: acct.name ?? null, mask: acct.mask ?? null },
+      });
       return;
     }
     const at = new Date();

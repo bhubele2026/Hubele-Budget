@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   useListTransactions,
   useCreateTransaction,
@@ -235,6 +235,7 @@ export default function TransactionsPage() {
   const seedAprilChase = useSeedAprilChase();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
   // One-shot seed of the user's April 2026 Chase activity. Idempotent on the
   // server (skips rows whose plaid_transaction_id already exists), so it's
@@ -1220,8 +1221,52 @@ export default function TransactionsPage() {
         toast({ title: "Refreshed from Plaid" });
       },
       onError: (e) => {
+        // Task #385 — the server returns a structured `code: "no_balance"`
+        // body (with the account name + mask) when Plaid succeeds but the
+        // account itself doesn't expose a current/available balance — e.g.
+        // a brokerage sub-account silently linked under the same item.
+        // Surface that as an account-aware toast that names the row that
+        // failed and points the user at the manual-balance fallback,
+        // instead of the dead-end "Plaid did not return a balance" string.
+        const data = (e as { data?: unknown }).data as
+          | {
+              code?: string;
+              error?: string;
+              account?: { name?: string | null; mask?: string | null };
+            }
+          | undefined;
+        const fallbackAccount = selectedPlaidAccount
+          ? {
+              name: selectedPlaidAccount.name ?? null,
+              mask: selectedPlaidAccount.mask ?? null,
+            }
+          : null;
+        const acct = data?.account ?? fallbackAccount;
+        const acctLabel = acct
+          ? [acct.name ?? "this account", acct.mask ? `••${acct.mask}` : null]
+              .filter(Boolean)
+              .join(" ")
+          : "this account";
+        if (data?.code === "no_balance") {
+          toast({
+            title: `${acctLabel} doesn't have a refreshable balance`,
+            description:
+              "Plaid didn't return a current balance for this account (often the case with brokerage or sub-accounts). Set the balance manually on the Forecast page, or relink the bank.",
+            variant: "destructive",
+            action: (
+              <ToastAction
+                altText="Set bank balance manually"
+                data-testid="action-refresh-bank-set-manual"
+                onClick={() => navigate("/forecast")}
+              >
+                Set manually
+              </ToastAction>
+            ),
+          });
+          return;
+        }
         toast({
-          title: "Couldn't refresh",
+          title: `Couldn't refresh ${acctLabel}`,
           description: (e as Error).message,
           variant: "destructive",
         });
