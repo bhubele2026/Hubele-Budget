@@ -19,6 +19,7 @@ import {
   type Transaction,
   type RepointedRule,
   type MappingRule,
+  type CreateTransactionInput,
 } from "@workspace/api-client-react";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import {
@@ -850,7 +851,7 @@ export default function TransactionsPage() {
       // what auto-categorize would have chosen) bypasses that fallback
       // and keeps `autoCategorizedRuleId` null in the response, which
       // suppresses the redundant "Categorized by rule X" toast.
-      const payload: Record<string, unknown> = {
+      const payload: CreateTransactionInput = {
         ...basePayload,
         categoryId: categoryId ?? null,
       };
