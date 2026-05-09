@@ -1219,6 +1219,66 @@ export default function AmexPage() {
     done: 0,
     total: 0,
   });
+  // (#508) After a partial-failure bulk action, surface *which* rows
+  // failed (and why) so users can see and retry just those — instead
+  // of a single toast leaking only the first error message.
+  const [bulkFailures, setBulkFailures] = useState<{
+    label: string;
+    failures: { id: string; description: string; error: string }[];
+    retry: (() => Promise<void>) | null;
+    retrying: boolean;
+  } | null>(null);
+  const reportBulkOutcome = (
+    results: { id: string; ok: boolean; err?: string }[],
+    opts: {
+      successTitle: (okCount: number) => string;
+      failureTitle: (okCount: number, failCount: number) => string;
+      retry?: (failedIds: string[]) => Promise<void>;
+    },
+  ) => {
+    const okCount = results.filter((r) => r.ok).length;
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length === 0) {
+      setBulkFailures(null);
+      toast({ title: opts.successTitle(okCount) });
+      return;
+    }
+    const lookupDesc = (id: string) =>
+      monthScoped.find((t) => t.id === id)?.description ??
+      wideAll.find((t) => t.id === id)?.description ??
+      id;
+    const failures = failed.map((r) => ({
+      id: r.id,
+      description: lookupDesc(r.id),
+      error: r.err ?? "Unknown error",
+    }));
+    const title = opts.failureTitle(okCount, failed.length);
+    setBulkFailures({
+      label: title,
+      failures,
+      retry: opts.retry
+        ? () => opts.retry!(failed.map((r) => r.id))
+        : null,
+      retrying: false,
+    });
+    toast({
+      title,
+      description: `See the failed list below to review or retry.`,
+      variant: "destructive",
+    });
+  };
+  const dismissBulkFailures = () => setBulkFailures(null);
+  const runBulkRetry = async () => {
+    if (!bulkFailures?.retry) return;
+    setBulkFailures((prev) => (prev ? { ...prev, retrying: true } : prev));
+    try {
+      await bulkFailures.retry();
+    } finally {
+      setBulkFailures((prev) =>
+        prev ? { ...prev, retrying: false } : prev,
+      );
+    }
+  };
   // (#502) Generic bulk runner shared by every bulk action below.
   // Replaces the old per-row PATCH /transactions/{id} fan-out with a
   // single POST /transactions/bulk-update per *unique patch*, so a
@@ -1295,10 +1355,13 @@ export default function AmexPage() {
   const bulkSetBucket = async (
     bucket: "" | "weekly" | "monthly" | "unplanned",
     weeklyBucket?: typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket],
+    idsOverride?: string[],
   ) => {
-    const ids = Array.from(selected);
+    const ids = idsOverride ?? Array.from(selected);
     if (!ids.length) return;
-    const byId = new Map(filtered.map((t) => [t.id, t] as const));
+    const byId = new Map(
+      [...filtered, ...wideAll].map((t) => [t.id, t] as const),
+    );
     const results = await runBulkPatch(ids, (id) => {
       const t = byId.get(id);
       if (!t) return null;
@@ -1319,26 +1382,22 @@ export default function AmexPage() {
       };
     });
     invalidateTxns();
-    const okCount = results.filter((r) => r.ok).length;
-    const failed = results.filter((r) => !r.ok);
-    if (failed.length === 0) {
-      toast({ title: `Tagged ${okCount} transaction${okCount === 1 ? "" : "s"}` });
-    } else {
-      toast({
-        title: `Tagged ${okCount}, ${failed.length} failed`,
-        description: failed[0].err,
-        variant: "destructive",
-      });
-    }
+    reportBulkOutcome(results, {
+      successTitle: (n) => `Tagged ${n} transaction${n === 1 ? "" : "s"}`,
+      failureTitle: (ok, fail) => `Tagged ${ok}, ${fail} failed`,
+      retry: (failedIds) => bulkSetBucket(bucket, weeklyBucket, failedIds),
+    });
   };
 
-  const bulkSetCategory = async (categoryId: string | null) => {
-    const ids = Array.from(selected);
+  const bulkSetCategory = async (
+    categoryId: string | null,
+    idsOverride?: string[],
+  ) => {
+    const ids = idsOverride ?? Array.from(selected);
     if (!ids.length) return;
     const byId = new Map(wideAll.map((t) => [t.id, t] as const));
     const results = await runBulkPatch(ids, () => ({ categoryId }));
     const okIds = new Set(results.filter((r) => r.ok).map((r) => r.id));
-    const failed = results.filter((r) => !r.ok);
     invalidateTxns();
     invalidateBudgetMonths(
       Array.from(okIds)
@@ -1351,78 +1410,52 @@ export default function AmexPage() {
       for (const id of prev) if (!okIds.has(id)) next.add(id);
       return next;
     });
-    if (failed.length === 0) {
-      toast({
-        title: `Updated ${okIds.size} transaction${okIds.size === 1 ? "" : "s"}`,
-      });
-    } else {
-      toast({
-        title: `Updated ${okIds.size}, ${failed.length} failed`,
-        description: failed[0].err,
-        variant: "destructive",
-      });
-    }
+    reportBulkOutcome(results, {
+      successTitle: (n) => `Updated ${n} transaction${n === 1 ? "" : "s"}`,
+      failureTitle: (ok, fail) => `Updated ${ok}, ${fail} failed`,
+      retry: (failedIds) => bulkSetCategory(categoryId, failedIds),
+    });
   };
 
-  const bulkSetOwedBy = async (raw: string) => {
-    const ids = Array.from(selected);
+  const bulkSetOwedBy = async (raw: string, idsOverride?: string[]) => {
+    const ids = idsOverride ?? Array.from(selected);
     if (!ids.length) return;
     const trimmed = raw.trim();
     const next: string | null = trimmed.length === 0 ? null : trimmed;
     const results = await runBulkPatch(ids, () => ({ owedBy: next }));
     invalidateTxns();
-    const okCount = results.filter((r) => r.ok).length;
-    const failed = results.filter((r) => !r.ok);
     const label = next === null ? "Cleared owed by on" : `Set owed by to ${next} on`;
-    if (failed.length === 0) {
-      toast({ title: `${label} ${okCount} transaction${okCount === 1 ? "" : "s"}` });
-    } else {
-      toast({
-        title: `${okCount} updated, ${failed.length} failed`,
-        description: failed[0].err,
-        variant: "destructive",
-      });
-    }
+    reportBulkOutcome(results, {
+      successTitle: (n) => `${label} ${n} transaction${n === 1 ? "" : "s"}`,
+      failureTitle: (ok, fail) => `${ok} updated, ${fail} failed`,
+      retry: (failedIds) => bulkSetOwedBy(raw, failedIds),
+    });
   };
 
-  const bulkSetReviewed = async (next: boolean) => {
-    const ids = Array.from(selected);
+  const bulkSetReviewed = async (next: boolean, idsOverride?: string[]) => {
+    const ids = idsOverride ?? Array.from(selected);
     if (!ids.length) return;
     // (#502) Was a bespoke 6-way concurrent fan-out — now one server-
     // side bulk-update call, same as the other bulk actions.
     const results = await runBulkPatch(ids, () => ({ reviewed: next }));
     invalidateTxns();
-    const okCount = results.filter((r) => r.ok).length;
-    const failed = results.filter((r) => !r.ok);
-    if (failed.length === 0) {
-      toast({
-        title: `${next ? "Marked" : "Unmarked"} ${okCount} as reviewed`,
-      });
-    } else {
-      toast({
-        title: `${okCount} updated, ${failed.length} failed`,
-        description: failed[0].err,
-        variant: "destructive",
-      });
-    }
+    reportBulkOutcome(results, {
+      successTitle: (n) => `${next ? "Marked" : "Unmarked"} ${n} as reviewed`,
+      failureTitle: (ok, fail) => `${ok} updated, ${fail} failed`,
+      retry: (failedIds) => bulkSetReviewed(next, failedIds),
+    });
   };
 
-  const bulkSetReimbursable = async (next: boolean) => {
-    const ids = Array.from(selected);
+  const bulkSetReimbursable = async (next: boolean, idsOverride?: string[]) => {
+    const ids = idsOverride ?? Array.from(selected);
     if (!ids.length) return;
     const results = await runBulkPatch(ids, () => ({ reimbursable: next }));
     invalidateTxns();
-    const okCount = results.filter((r) => r.ok).length;
-    const failed = results.filter((r) => !r.ok);
-    if (failed.length === 0) {
-      toast({ title: `${next ? "Marked" : "Unmarked"} ${okCount} as reimbursable` });
-    } else {
-      toast({
-        title: `${okCount} updated, ${failed.length} failed`,
-        description: failed[0].err,
-        variant: "destructive",
-      });
-    }
+    reportBulkOutcome(results, {
+      successTitle: (n) => `${next ? "Marked" : "Unmarked"} ${n} as reimbursable`,
+      failureTitle: (ok, fail) => `${ok} updated, ${fail} failed`,
+      retry: (failedIds) => bulkSetReimbursable(next, failedIds),
+    });
   };
 
   // Smooth scroll to today on first load.
@@ -1974,6 +2007,66 @@ export default function AmexPage() {
           <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
             Clear
           </Button>
+        </div>
+      )}
+      {/* (#508) Failed-rows panel — shows after a partial-failure
+          bulk action so users can see which transactions failed
+          and retry just those, instead of guessing from a toast. */}
+      {bulkFailures && (
+        <div
+          className="rounded-md border border-red-300 bg-red-50 p-3 space-y-2"
+          data-testid="panel-bulk-failures"
+          role="alert"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-red-900">
+              {bulkFailures.label}
+            </span>
+            <div className="ml-auto flex items-center gap-1">
+              {bulkFailures.retry && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs border-red-400 text-red-900 bg-white hover:bg-red-100"
+                  onClick={() => void runBulkRetry()}
+                  disabled={bulkFailures.retrying}
+                  data-testid="button-bulk-retry-failed"
+                >
+                  {bulkFailures.retrying
+                    ? "Retrying…"
+                    : `Retry ${bulkFailures.failures.length} failed`}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs text-red-900 hover:bg-red-100"
+                onClick={dismissBulkFailures}
+                data-testid="button-bulk-dismiss-failures"
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+          <ul
+            className="max-h-40 overflow-auto text-xs text-red-900 space-y-1"
+            data-testid="list-bulk-failures"
+          >
+            {bulkFailures.failures.map((f) => (
+              <li
+                key={f.id}
+                className="flex items-baseline gap-2 border-t border-red-200 pt-1 first:border-t-0 first:pt-0"
+                data-testid={`row-bulk-failure-${f.id}`}
+              >
+                <span className="font-medium truncate max-w-[40%]" title={f.description}>
+                  {f.description}
+                </span>
+                <span className="text-red-700/80 truncate" title={f.error}>
+                  {f.error}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       {/* Day groups */}
