@@ -13,6 +13,7 @@ import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
 import { runStartupAvalancheHealRevert } from "./lib/startupAvalancheHealRevert";
+import { runStartupGroceriesRename } from "./lib/startupGroceriesRename";
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,
@@ -134,6 +135,17 @@ app.listen(port, (err) => {
     })
     .catch((err) => {
       logger.error({ err }, "Startup avalanche-heal revert failed");
+    });
+
+  // One-shot per-user fix: confirmed in chat that the user's "Weekly Spend"
+  // $450/wk bill is actually their groceries + dining budget, not a
+  // generic catch-all. Rename it and link it to the Groceries category.
+  runStartupGroceriesRename()
+    .then((result) => {
+      logger.info(result, "Startup groceries rename complete");
+    })
+    .catch((err) => {
+      logger.error({ err }, "Startup groceries rename failed");
     });
 
   if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
