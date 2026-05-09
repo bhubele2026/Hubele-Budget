@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PlaidItemDetail } from "@workspace/api-client-react";
 
-import { derivePlaidReauthBannerProps } from "./plaidReauth";
+import { buildReconnectUrl, derivePlaidReauthBannerProps } from "./plaidReauth";
 
 function makeItem(
   overrides: Partial<PlaidItemDetail> & { id: string },
@@ -117,5 +117,67 @@ describe("(#387) derivePlaidReauthBannerProps — consent-refresh subline", () =
     ]);
     expect(props.worstId).toBe("i-amex");
     expect(props.consentRefreshError).toBe("ITEM_LOGIN_REQUIRED");
+  });
+});
+
+describe("(#547) buildReconnectUrl — mobile reauth banner deep-link", () => {
+  // The mobile app does not host Plaid Link's update flow, so the
+  // banner's Reconnect button has to bounce the user out to the web
+  // Settings page. If this URL silently breaks, a stuck mobile user
+  // taps Reconnect and nothing happens — exactly the regression #547
+  // is meant to pin.
+
+  it("appends /settings to a bare host", () => {
+    expect(buildReconnectUrl("h2budget.example.com")).toBe(
+      "https://h2budget.example.com/settings",
+    );
+  });
+
+  it("preserves an explicit https:// scheme", () => {
+    expect(buildReconnectUrl("https://h2budget.example.com")).toBe(
+      "https://h2budget.example.com/settings",
+    );
+  });
+
+  it("preserves an explicit http:// scheme (local dev)", () => {
+    expect(buildReconnectUrl("http://localhost:5000")).toBe(
+      "http://localhost:5000/settings",
+    );
+  });
+
+  it("strips a trailing slash from the domain so we don't build a //settings URL", () => {
+    expect(buildReconnectUrl("https://h2budget.example.com/")).toBe(
+      "https://h2budget.example.com/settings",
+    );
+    expect(buildReconnectUrl("https://h2budget.example.com///")).toBe(
+      "https://h2budget.example.com/settings",
+    );
+  });
+
+  it("returns null when EXPO_PUBLIC_DOMAIN is undefined so the banner falls back to the Alert", () => {
+    expect(buildReconnectUrl(undefined)).toBeNull();
+  });
+
+  it("returns null when EXPO_PUBLIC_DOMAIN is an empty / whitespace string", () => {
+    expect(buildReconnectUrl("")).toBeNull();
+    expect(buildReconnectUrl("   ")).toBeNull();
+  });
+
+  it("reads process.env.EXPO_PUBLIC_DOMAIN by default", () => {
+    const prev = process.env.EXPO_PUBLIC_DOMAIN;
+    try {
+      process.env.EXPO_PUBLIC_DOMAIN = "h2budget.example.com";
+      expect(buildReconnectUrl()).toBe(
+        "https://h2budget.example.com/settings",
+      );
+      delete process.env.EXPO_PUBLIC_DOMAIN;
+      expect(buildReconnectUrl()).toBeNull();
+    } finally {
+      if (prev === undefined) {
+        delete process.env.EXPO_PUBLIC_DOMAIN;
+      } else {
+        process.env.EXPO_PUBLIC_DOMAIN = prev;
+      }
+    }
   });
 });

@@ -110,6 +110,25 @@ export function formatPlaidErrorForDisplay(msg: string): string {
 }
 
 /**
+ * (#387 / #547) The mobile app does not host Plaid Link's update flow,
+ * so the banner's Reconnect button deep-links to the web app's Settings
+ * page (where the per-item Reconnect buttons live). Lifted out of the
+ * component so vitest can pin both the happy-path URL shape AND the
+ * missing-env fallback (where the component falls back to an Alert).
+ *
+ * Returns `null` when `EXPO_PUBLIC_DOMAIN` is unset/blank — callers
+ * must surface an Alert in that case rather than silently no-op'ing.
+ */
+export function buildReconnectUrl(
+  domain: string | null | undefined = process.env.EXPO_PUBLIC_DOMAIN,
+): string | null {
+  if (!domain || !domain.trim()) return null;
+  const trimmed = domain.trim();
+  const base = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+  return `${base.replace(/\/+$/, "")}/settings`;
+}
+
+/**
  * (#387) Pure derivation of the props the mobile <PlaidReauthBanner>
  * actually needs to render. Lifted out of the component so vitest can
  * pin both the dated subline copy AND the consentExpirationLastRefreshError

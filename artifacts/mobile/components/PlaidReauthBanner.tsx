@@ -14,6 +14,7 @@ import {
 
 import { useColors } from "@/hooks/useColors";
 import {
+  buildReconnectUrl,
   derivePlaidReauthBannerProps,
   formatPlaidErrorForDisplay,
 } from "@/lib/plaidReauth";
@@ -34,13 +35,6 @@ import {
  * per-item Reconnect buttons live) — same fallback as usePlaidSync's
  * Alert "Reconnect" action.
  */
-
-function buildReconnectUrl(): string | null {
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  if (!domain) return null;
-  const base = domain.startsWith("http") ? domain : `https://${domain}`;
-  return `${base.replace(/\/+$/, "")}/settings`;
-}
 
 export function PlaidReauthBannerView({
   items,
