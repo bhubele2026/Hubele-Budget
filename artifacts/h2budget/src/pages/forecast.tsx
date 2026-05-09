@@ -106,6 +106,7 @@ import {
   type PlanSuggestion,
 } from "@/lib/forecastMatch";
 import type { CashEvent } from "@/lib/forecast";
+import { computeBankReconcile, EMPTY_RECONCILE } from "@/lib/forecastReconcile";
 import {
   linkRecurringToDebts,
   computePayoffsByDebt,
@@ -1278,197 +1279,16 @@ export default function ForecastPage({
   //   the bank snapshot date vs the bank snapshot balance itself (NOT
   //   forecastEnd − bankEnd). Reconciled when |gap| < $0.01 AND no pending.
   const bankReconcile = useMemo(() => {
-    const empty = {
-      pending: 0,
-      matched: 0,
-      unplanned: 0,
-      gap: 0,
-      total: 0,
-      forecastEnd: 0,
-      bankEnd: 0,
-      hasBank: false,
-      isPriorMonth: false,
-      matchedAmountDelta: 0,
-      startingBalanceDelta: 0,
-      contributors: [] as Array<{
-        kind: "matched" | "starting";
-        label: string;
-        delta: number;
-        planKey?: string;
-      }>,
-      largestContributor: null as null | {
-        kind: "matched" | "starting";
-        label: string;
-        delta: number;
-        planKey?: string;
-      },
-    };
-    if (!register || !data) return empty;
-    let pending = 0;
-    let matched = 0;
-    let unplanned = 0;
-    for (const b of register.allBank) {
-      if (!isBankTxn(b.txn, checkingPlaidAccountIds)) continue;
-      if (monthKey(b.date) !== monthFilter) continue;
-      if (b.status === "pending_bank") pending += 1;
-      else if (b.status === "matched") matched += 1;
-      else if (b.status === "ignored_unforecasted") unplanned += 1;
-    }
-
-    const snapshotAtISO = data.bankSnapshot?.at
-      ? data.bankSnapshot.at.slice(0, 10)
-      : null;
-    const startBal = data.bankSnapshot
-      ? Number(data.bankSnapshot.balance) || 0
-      : Number(data.settings.startingBalance) || 0;
-
-    // End-of-month ISO (use month string + day 31; ISO comparison handles
-    // shorter months because lex order is fine here).
-    const endOfMonthISO = `${monthFilter}-31`;
-    const isPriorMonth = !!snapshotAtISO && endOfMonthISO < snapshotAtISO;
-
-    let forecastEnd = startBal;
-    if (!isPriorMonth) {
-      // Add planned items between snapshot date (exclusive) and end of month
-      // that haven't been resolved (matched/missed) — those are what the
-      // forecast still expects to flow through the bank.
-      for (const p of register.allPlan) {
-        if (snapshotAtISO && p.date <= snapshotAtISO) continue;
-        if (p.date > endOfMonthISO) continue;
-        if (p.status === "matched" || p.status === "missed") continue;
-        forecastEnd += p.amount;
-      }
-      forecastEnd = Math.round(forecastEnd * 100) / 100;
-    }
-
-    const bankEnd = data.bankSnapshot
-      ? Number(data.bankSnapshot.balance) || 0
-      : forecastEnd;
-
-    // Reconciliation gap = like-for-like comparison of the forecast's
-    // projected balance AS OF the bank snapshot date vs the bank snapshot
-    // balance itself. We deliberately project from the user's configured
-    // starting balance forward to the snapshot date — NOT from the
-    // snapshot balance itself — because the whole point of this check is
-    // to surface a real disagreement between what the forecast expected
-    // and what the bank actually shows (e.g. wrong starting balance, a
-    // matched plan item whose amount differs from its bank txn, or
-    // unforecasted bank activity the user hasn't acknowledged).
-    //
-    // Items included in the projection up to the snapshot date:
-    //  - Plan items in [fromDate, snapshot] with status != "missed"
-    //    (matched/pending/future are all things the forecast expected to
-    //    flow through the bank). "Missed" items were explicitly
-    //    acknowledged as not happening.
-    //  - Bank txns in [fromDate, snapshot] that the user marked as
-    //    `ignored_unforecasted` (Unplanned). Those are real bank
-    //    activity the user has already triaged as outside the forecast,
-    //    so counting their amount in the expected projection prevents
-    //    the gap from re-flagging them.
-    // Pending bank rows are NOT included — they live in the inbox and the
-    // amber badge only fires when the inbox is clear.
-    const settingsStart = Number(data.settings.startingBalance) || 0;
-    const fromISO = data.fromDate;
-    let forecastAtSnapshot = settingsStart;
-    if (snapshotAtISO) {
-      for (const p of register.allPlan) {
-        if (p.date < fromISO || p.date > snapshotAtISO) continue;
-        if (p.status === "missed") continue;
-        forecastAtSnapshot += p.amount;
-      }
-      for (const b of register.allBank) {
-        if (b.date < fromISO || b.date > snapshotAtISO) continue;
-        if (b.status === "ignored_unforecasted") {
-          forecastAtSnapshot += b.amount;
-        }
-      }
-      forecastAtSnapshot = Math.round(forecastAtSnapshot * 100) / 100;
-    }
-    const bankAtSnapshot = data.bankSnapshot
-      ? Number(data.bankSnapshot.balance) || 0
-      : forecastAtSnapshot;
-    const rawGap =
-      Math.round((forecastAtSnapshot - bankAtSnapshot) * 100) / 100;
-
-    // Decompose the gap into nameable contributors so the badge tooltip
-    // can point the user at the row(s) actually disagreeing. Two
-    // categories drive a real (non-zero-by-construction) gap:
-    //   1. matched pairs whose plan amount differs from the bank txn's
-    //      signed amount, and
-    //   2. a settings.startingBalance that disagrees with what the bank
-    //      snapshot implies once resolved flows are accounted for —
-    //      i.e. the residual after pulling out matched-amount drift.
-    type Contributor = {
-      kind: "matched" | "starting";
-      label: string;
-      delta: number;
-      planKey?: string;
-    };
-    const contributors: Contributor[] = [];
-    let matchedAmountDelta = 0;
-    if (snapshotAtISO) {
-      const bankByTxnId = new Map<string, BankLine>();
-      for (const b of register.allBank) bankByTxnId.set(b.txn.id, b);
-      for (const p of register.allPlan) {
-        if (p.status !== "matched" || !p.matchedTxnId) continue;
-        if (p.date < fromISO || p.date > snapshotAtISO) continue;
-        const bank = bankByTxnId.get(p.matchedTxnId);
-        if (!bank) continue;
-        const delta = Math.round((p.amount - bank.amount) * 100) / 100;
-        if (Math.abs(delta) >= 0.01) {
-          matchedAmountDelta += delta;
-          contributors.push({
-            kind: "matched",
-            label: `${p.label} on ${p.date} (plan ${p.amount.toFixed(2)} vs bank ${bank.amount.toFixed(2)})`,
-            delta,
-            planKey: `${p.itemId}|${p.date}`,
-          });
-        }
-      }
-      matchedAmountDelta = Math.round(matchedAmountDelta * 100) / 100;
-    }
-    const startingBalanceDelta =
-      Math.round((rawGap - matchedAmountDelta) * 100) / 100;
-    if (data.bankSnapshot && Math.abs(startingBalanceDelta) >= 0.01) {
-      contributors.push({
-        kind: "starting",
-        label: `Starting balance vs bank snapshot (off by ${startingBalanceDelta.toFixed(2)})`,
-        delta: startingBalanceDelta,
-      });
-    }
-    contributors.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-    const largestContributor = contributors[0] ?? null;
-
-    // The canonical `gap` is a NON-CANCELING magnitude — Σ |delta|
-    // across contributors. Summing signed deltas would let an
-    // overcharge on one matched pair offset an undercharge on another
-    // and silently suppress the badge / falsify the close-month
-    // historical record, defeating the whole point of the detector.
-    // Every reconciliation surface (badge, isReconciledToBank,
-    // close-month payload, reconcile-history row) reads from this same
-    // value so they cannot disagree. Per-contributor signed deltas
-    // remain available in `contributors` for the badge tooltip when
-    // direction matters for diagnosis.
-    const gap =
-      Math.round(
-        contributors.reduce((sum, c) => sum + Math.abs(c.delta), 0) * 100,
-      ) / 100;
-
-    return {
-      pending,
-      matched,
-      unplanned,
-      gap,
-      total: pending + matched + unplanned,
-      forecastEnd,
-      bankEnd,
-      hasBank: !!data.bankSnapshot,
-      isPriorMonth,
-      matchedAmountDelta,
-      startingBalanceDelta,
-      contributors,
-      largestContributor,
-    };
+    if (!register || !data) return EMPTY_RECONCILE;
+    return computeBankReconcile({
+      allBank: register.allBank,
+      allPlan: register.allPlan,
+      bankSnapshot: data.bankSnapshot ?? null,
+      settingsStartingBalance: data.settings.startingBalance,
+      fromDate: data.fromDate,
+      monthFilter,
+      checkingPlaidAccountIds,
+    });
   }, [register, data, monthFilter, checkingPlaidAccountIds]);
 
   // A clean reconciliation means no pending bank rows AND no
