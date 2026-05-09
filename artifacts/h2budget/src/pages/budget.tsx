@@ -246,7 +246,15 @@ export default function BudgetPage() {
   useEffect(() => {
     if (seededRef.current) return;
     if (isLoadingCategories) return;
-    if ((categories?.length ?? 0) > 0) return;
+    // (#594) The GET /budget/categories endpoint always lazy-inserts the
+    // system-managed "Uncategorized" row (excludeFromBudget=true) before
+    // returning, so a brand-new user's first response is `[Uncategorized]`
+    // — length 1 but with zero real budget categories. Counting only the
+    // real (non-excluded) rows ensures seedDefaults still fires for new
+    // users and the e2e suite gets the full ~22-category seed.
+    const realCount =
+      categories?.filter((c) => !c.excludeFromBudget).length ?? 0;
+    if (realCount > 0) return;
     seededRef.current = true;
     seedDefaults.mutate(undefined, {
       onSuccess: (res) => {
