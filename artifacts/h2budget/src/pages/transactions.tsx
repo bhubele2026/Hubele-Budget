@@ -82,6 +82,7 @@ import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { BucketBubbles, type BucketFlags, type BucketKey } from "@/components/bucket-bubbles";
 import { chaseMonthTotals } from "@/lib/chaseScope";
+import { shouldShowManualPickerOption } from "@/lib/chasePickerOptions";
 import {
   makeChaseBalanceAtEndOf,
   scopeChaseTransactions,
@@ -1688,12 +1689,22 @@ export default function TransactionsPage() {
                   </SelectItem>
                 );
               })}
-              <SelectItem
-                value="manual"
-                data-testid="option-chase-account-manual"
-              >
-                Manual entries
-              </SelectItem>
+              {/* (#412) Only render the "Manual entries" pseudo-account
+                  when the user actually has manual rows (no plaidAccountId)
+                  — otherwise it's pure clutter next to the real Chase row.
+                  Always keep it visible if it's the current selection so
+                  the trigger never goes blank. */}
+              {shouldShowManualPickerOption({
+                transactions: transactions ?? [],
+                currentlySelected: isManualAccount,
+              }) && (
+                <SelectItem
+                  value="manual"
+                  data-testid="option-chase-account-manual"
+                >
+                  Manual entries
+                </SelectItem>
+              )}
             </SelectContent>
           </Select>
         </div>
