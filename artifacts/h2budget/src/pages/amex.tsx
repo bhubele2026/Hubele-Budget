@@ -179,6 +179,22 @@ export default function AmexPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [memberFilter, setMemberFilter] = useState<string>("all");
   const [cardFilter, setCardFilter] = useState<string>("all");
+  // (#495) "Hide reviewed" filter — once a row is marked reviewed via the
+  // RV bubble it's just clutter, so let users collapse the list down to
+  // what's still pending. Persisted to localStorage so it survives a
+  // refresh / tab return mid-cleanup session.
+  const [hideReviewed, setHideReviewed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("amex.hideReviewed") === "1";
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (hideReviewed) {
+      window.localStorage.setItem("amex.hideReviewed", "1");
+    } else {
+      window.localStorage.removeItem("amex.hideReviewed");
+    }
+  }, [hideReviewed]);
 
   const currentMonth = useMemo<MonthKey>(() => monthKeyOf(new Date()), []);
   // Task #168 — Budget page deep-links into the Amex page when a row's
@@ -416,6 +432,7 @@ export default function AmexPage() {
         return false;
       if (cardFilter !== "all" && (t.plaidAccountId ?? "") !== cardFilter)
         return false;
+      if (hideReviewed && t.reviewed) return false;
       if (categoryFilter !== "all") {
         if (categoryFilter === "uncategorized") {
           if (t.categoryId) return false;
@@ -427,7 +444,7 @@ export default function AmexPage() {
       }
       return true;
     });
-  }, [monthScoped, search, memberFilter, cardFilter, categoryFilter, categoryById, from, to]);
+  }, [monthScoped, search, memberFilter, cardFilter, categoryFilter, categoryById, from, to, hideReviewed]);
 
   // Group by day (descending). Within each day, sort newest-first via
   // the canonical comparator so the per-row "bal $X" running statement
@@ -1859,29 +1876,54 @@ export default function AmexPage() {
           memberFilter={memberFilter}
           onMemberFilterChange={setMemberFilter}
           extraFilters={
-            cardFilterOptions.length > 0 ? (
+            <>
+              {cardFilterOptions.length > 0 && (
+                <div>
+                  <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+                    Card
+                  </label>
+                  <Select value={cardFilter} onValueChange={setCardFilter}>
+                    <SelectTrigger
+                      className="h-9 w-48"
+                      data-testid="select-card"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All cards</SelectItem>
+                      {cardFilterOptions.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div>
                 <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
-                  Card
+                  Reviewed
                 </label>
-                <Select value={cardFilter} onValueChange={setCardFilter}>
-                  <SelectTrigger
-                    className="h-9 w-48"
-                    data-testid="select-card"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All cards</SelectItem>
-                    {cardFilterOptions.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Button
+                  type="button"
+                  variant={hideReviewed ? "default" : "outline"}
+                  size="sm"
+                  className="h-9"
+                  onClick={() => setHideReviewed((v) => !v)}
+                  aria-pressed={hideReviewed}
+                  data-testid="button-hide-reviewed"
+                >
+                  <Check
+                    className={cn(
+                      "h-3.5 w-3.5 mr-1.5",
+                      hideReviewed ? "opacity-100" : "opacity-40",
+                    )}
+                    strokeWidth={3}
+                  />
+                  Hide reviewed
+                </Button>
               </div>
-            ) : undefined
+            </>
           }
           rightSlot={
             <div className="text-xs ml-auto flex flex-col items-end" data-testid="text-row-count">
