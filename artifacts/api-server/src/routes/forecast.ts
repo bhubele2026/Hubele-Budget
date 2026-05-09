@@ -510,7 +510,16 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
       const a = resp.data.accounts.find((x) => x.account_id === acct.accountId);
       const live = a?.balances.available ?? a?.balances.current;
       if (live == null) {
-        res.status(502).json({ error: "Plaid did not return a balance" });
+        // Task #546 — mirror the structured `no_balance` body that
+        // /forecast/refresh-bank returns (Task #385) so the Forecast
+        // page's link-checking / manual-set flows can surface the
+        // same account-aware "doesn't have a refreshable balance"
+        // toast instead of the dead-end raw error string.
+        res.status(502).json({
+          error: "Plaid did not return a balance",
+          code: "no_balance",
+          account: { name: acct.name ?? null, mask: acct.mask ?? null },
+        });
         return;
       }
       snapshotBalance = Number(live).toFixed(2);

@@ -1928,6 +1928,53 @@ export default function ForecastPage({
       },
     );
   };
+  // Task #546 — share the same account-aware "doesn't have a refreshable
+  // balance" toast that the Chase / Transactions page uses (Task #385) so
+  // users hitting Plaid-no-balance from the Forecast refresh or
+  // link-checking flow see the friendly next step (set the balance
+  // manually) instead of the raw "Plaid did not return a balance" string.
+  const showNoBalanceOrGenericToast = (
+    e: unknown,
+    fallbackTitle: string,
+  ): boolean => {
+    const data = (e as { data?: unknown }).data as
+      | {
+          code?: string;
+          error?: string;
+          account?: { name?: string | null; mask?: string | null };
+        }
+      | undefined;
+    const acct = data?.account ?? null;
+    const acctLabel = acct
+      ? [acct.name ?? "this account", acct.mask ? `••${acct.mask}` : null]
+          .filter(Boolean)
+          .join(" ")
+      : "this account";
+    if (data?.code === "no_balance") {
+      toast({
+        title: `${acctLabel} doesn't have a refreshable balance`,
+        description:
+          "Plaid didn't return a current balance for this account (often the case with brokerage or sub-accounts). Set the balance manually below, or relink the bank.",
+        variant: "destructive",
+        action: (
+          <ToastAction
+            altText="Set bank balance manually"
+            data-testid="action-forecast-refresh-bank-set-manual"
+            onClick={openSnapshot}
+          >
+            Set manually
+          </ToastAction>
+        ),
+      });
+      return true;
+    }
+    toast({
+      title: fallbackTitle,
+      description: (e as Error).message,
+      variant: "destructive",
+    });
+    return false;
+  };
   const onLinkChecking = (plaidAccountId: string) => {
     setBankSnapshot.mutate(
       { data: { plaidAccountId } },
@@ -1936,12 +1983,9 @@ export default function ForecastPage({
           invalidate();
           toast({ title: "Linked checking account · pulled live balance" });
         },
-        onError: (e) =>
-          toast({
-            title: "Couldn't link account",
-            description: (e as Error).message,
-            variant: "destructive",
-          }),
+        onError: (e) => {
+          showNoBalanceOrGenericToast(e, "Couldn't link account");
+        },
       },
     );
   };
@@ -1951,12 +1995,9 @@ export default function ForecastPage({
         invalidate();
         toast({ title: "Bank balance refreshed" });
       },
-      onError: (e) =>
-        toast({
-          title: "Refresh failed",
-          description: (e as Error).message,
-          variant: "destructive",
-        }),
+      onError: (e) => {
+        showNoBalanceOrGenericToast(e, "Refresh failed");
+      },
     });
   };
 
