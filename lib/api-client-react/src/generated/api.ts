@@ -93,6 +93,7 @@ import type {
   PlaidItemDetail,
   PlaidLiabilityAccount,
   PlaidLinkToken,
+  PlaidMalformedTokenSweepResult,
   PlaidSyncAttemptsResult,
   PlaidSyncInput,
   PlaidSyncResult,
@@ -6556,6 +6557,104 @@ export const useRefreshPlaidConsentExpirations = <
   TContext
 > => {
   return useMutation(getRefreshPlaidConsentExpirationsMutationOptions(options));
+};
+
+/**
+ * @summary (#397, #550) Owner-only manual trigger for the daily Plaid
+malformed-access-token health check. Same code path the 03:02
+UTC cron runs unattended; exposed so an operator who just
+investigated a spike alert can re-run the sweep from the app
+and see the refreshed `{ scanned, flagged, flaggedItems }`
+summary plus the re-evaluated alert outcome inline, instead of
+waiting for tomorrow morning's cron tick.
+
+ */
+export const getRunPlaidMalformedTokenSweepUrl = () => {
+  return `/api/plaid/run-malformed-token-sweep`;
+};
+
+export const runPlaidMalformedTokenSweep = async (
+  options?: RequestInit,
+): Promise<PlaidMalformedTokenSweepResult> => {
+  return customFetch<PlaidMalformedTokenSweepResult>(
+    getRunPlaidMalformedTokenSweepUrl(),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getRunPlaidMalformedTokenSweepMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runPlaidMalformedTokenSweep>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runPlaidMalformedTokenSweep>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["runPlaidMalformedTokenSweep"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runPlaidMalformedTokenSweep>>,
+    void
+  > = () => {
+    return runPlaidMalformedTokenSweep(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunPlaidMalformedTokenSweepMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runPlaidMalformedTokenSweep>>
+>;
+
+export type RunPlaidMalformedTokenSweepMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (#397, #550) Owner-only manual trigger for the daily Plaid
+malformed-access-token health check. Same code path the 03:02
+UTC cron runs unattended; exposed so an operator who just
+investigated a spike alert can re-run the sweep from the app
+and see the refreshed `{ scanned, flagged, flaggedItems }`
+summary plus the re-evaluated alert outcome inline, instead of
+waiting for tomorrow morning's cron tick.
+
+ */
+export const useRunPlaidMalformedTokenSweep = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runPlaidMalformedTokenSweep>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runPlaidMalformedTokenSweep>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getRunPlaidMalformedTokenSweepMutationOptions(options));
 };
 
 export const getCleanupNonProdPlaidItemsUrl = () => {

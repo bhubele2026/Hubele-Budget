@@ -1905,6 +1905,33 @@ export interface PlaidConsentRefreshResult {
     failed: number;
     items: PlaidConsentRefreshItem[];
 }
+export interface FlaggedMalformedItem {
+    itemRowId: string;
+    itemId: string;
+    /** @nullable */
+    institutionName: string | null;
+}
+export type PlaidMalformedTokenSweepAlertChannel = (typeof PlaidMalformedTokenSweepAlertChannel)[keyof typeof PlaidMalformedTokenSweepAlertChannel];
+export declare const PlaidMalformedTokenSweepAlertChannel: {
+    readonly email: "email";
+    readonly log: "log";
+    readonly skipped: "skipped";
+};
+export interface PlaidMalformedTokenSweepAlert {
+    channel: PlaidMalformedTokenSweepAlertChannel;
+    /** @nullable */
+    reason: string | null;
+    /** @nullable */
+    recipient: string | null;
+    /** @nullable */
+    error: string | null;
+}
+export interface PlaidMalformedTokenSweepResult {
+    scanned: number;
+    flagged: number;
+    flaggedItems: FlaggedMalformedItem[];
+    alert: PlaidMalformedTokenSweepAlert | null;
+}
 export type PlaidSyncAttemptKind = (typeof PlaidSyncAttemptKind)[keyof typeof PlaidSyncAttemptKind];
 export declare const PlaidSyncAttemptKind: {
     readonly transactions: "transactions";

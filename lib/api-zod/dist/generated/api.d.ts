@@ -6156,6 +6156,77 @@ export declare const RefreshPlaidConsentExpirationsResponse: zod.ZodObject<{
     scanned: number;
     failed: number;
 }>;
+/**
+ * @summary (#397, #550) Owner-only manual trigger for the daily Plaid
+malformed-access-token health check. Same code path the 03:02
+UTC cron runs unattended; exposed so an operator who just
+investigated a spike alert can re-run the sweep from the app
+and see the refreshed `{ scanned, flagged, flaggedItems }`
+summary plus the re-evaluated alert outcome inline, instead of
+waiting for tomorrow morning's cron tick.
+
+ */
+export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
+    scanned: zod.ZodNumber;
+    flagged: zod.ZodNumber;
+    flaggedItems: zod.ZodArray<zod.ZodObject<{
+        itemRowId: zod.ZodString;
+        itemId: zod.ZodString;
+        institutionName: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        itemId: string;
+        institutionName: string | null;
+        itemRowId: string;
+    }, {
+        itemId: string;
+        institutionName: string | null;
+        itemRowId: string;
+    }>, "many">;
+    alert: zod.ZodUnion<[zod.ZodObject<{
+        channel: zod.ZodEnum<["email", "log", "skipped"]>;
+        reason: zod.ZodNullable<zod.ZodString>;
+        recipient: zod.ZodNullable<zod.ZodString>;
+        error: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        error: string | null;
+        channel: "email" | "log" | "skipped";
+        reason: string | null;
+        recipient: string | null;
+    }, {
+        error: string | null;
+        channel: "email" | "log" | "skipped";
+        reason: string | null;
+        recipient: string | null;
+    }>, zod.ZodNull]>;
+}, "strip", zod.ZodTypeAny, {
+    scanned: number;
+    flagged: number;
+    flaggedItems: {
+        itemId: string;
+        institutionName: string | null;
+        itemRowId: string;
+    }[];
+    alert: {
+        error: string | null;
+        channel: "email" | "log" | "skipped";
+        reason: string | null;
+        recipient: string | null;
+    } | null;
+}, {
+    scanned: number;
+    flagged: number;
+    flaggedItems: {
+        itemId: string;
+        institutionName: string | null;
+        itemRowId: string;
+    }[];
+    alert: {
+        error: string | null;
+        channel: "email" | "log" | "skipped";
+        reason: string | null;
+        recipient: string | null;
+    } | null;
+}>;
 export declare const CleanupNonProdPlaidItemsResponse: zod.ZodObject<{
     removed: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
@@ -6758,8 +6829,8 @@ export declare const SeedAprilChaseResponse: zod.ZodObject<{
     accountId: string;
     alreadySeeded: boolean;
     endingBalance: string;
-    inserted: number;
     skipped: number;
+    inserted: number;
     categorized: number;
     transfers: number;
     rulesAdded: number;
@@ -6769,8 +6840,8 @@ export declare const SeedAprilChaseResponse: zod.ZodObject<{
     accountId: string;
     alreadySeeded: boolean;
     endingBalance: string;
-    inserted: number;
     skipped: number;
+    inserted: number;
     categorized: number;
     transfers: number;
     rulesAdded: number;

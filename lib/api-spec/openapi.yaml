@@ -1340,6 +1340,24 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PlaidConsentRefreshResult" }
+  /plaid/run-malformed-token-sweep:
+    post:
+      operationId: runPlaidMalformedTokenSweep
+      tags: [plaid]
+      summary: |
+        (#397, #550) Owner-only manual trigger for the daily Plaid
+        malformed-access-token health check. Same code path the 03:02
+        UTC cron runs unattended; exposed so an operator who just
+        investigated a spike alert can re-run the sweep from the app
+        and see the refreshed `{ scanned, flagged, flaggedItems }`
+        summary plus the re-evaluated alert outcome inline, instead of
+        waiting for tomorrow morning's cron tick.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlaidMalformedTokenSweepResult" }
   /plaid/cleanup-non-prod:
     post:
       operationId: cleanupNonProdPlaidItems
@@ -3517,6 +3535,54 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/PlaidConsentRefreshItem" }
+    FlaggedMalformedItem:
+      type: object
+      required: [itemRowId, itemId, institutionName]
+      properties:
+        # Internal `plaid_items.id` of the flagged row — useful for
+        # cross-referencing the per-item activity expander.
+        itemRowId: { type: string }
+        # External Plaid `item_id` Plaid uses across products / webhooks.
+        itemId: { type: string }
+        # Human-friendly bank name; null when Plaid never returned one.
+        institutionName: { type: ["string", "null"] }
+    PlaidMalformedTokenSweepAlert:
+      type: object
+      required: [channel, reason, recipient, error]
+      properties:
+        # `email` when an alert was actually dispatched, `log` for the
+        # dev/log fallback, `skipped` when the spike threshold or dedup
+        # window suppressed it.
+        channel:
+          type: string
+          enum: [email, log, skipped]
+        # Human-readable reason when channel === "skipped"; null when
+        # an alert was actually dispatched.
+        reason: { type: ["string", "null"] }
+        # Resolved operator email when known; null when not configured
+        # or when the dispatcher could not determine a recipient.
+        recipient: { type: ["string", "null"] }
+        # Set when a transport error happened on dispatch; the sweep
+        # itself still ran successfully.
+        error: { type: ["string", "null"] }
+    PlaidMalformedTokenSweepResult:
+      type: object
+      required: [scanned, flagged, flaggedItems, alert]
+      properties:
+        # How many Plaid item rows the sweep examined.
+        scanned: { type: integer }
+        # How many of the scanned rows had a malformed access_token.
+        flagged: { type: integer }
+        flaggedItems:
+          type: array
+          items: { $ref: "#/components/schemas/FlaggedMalformedItem" }
+        # Outcome of the spike-alert re-evaluation. Null when the
+        # evaluator threw — the sweep still ran successfully and the
+        # counts above are authoritative.
+        alert:
+          oneOf:
+            - { $ref: "#/components/schemas/PlaidMalformedTokenSweepAlert" }
+            - type: "null"
     PlaidSyncAttempt:
       type: object
       required: [id, attemptedAt, kind, success]

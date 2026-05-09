@@ -2135,6 +2135,39 @@ export interface PlaidConsentRefreshResult {
   items: PlaidConsentRefreshItem[];
 }
 
+export interface FlaggedMalformedItem {
+  itemRowId: string;
+  itemId: string;
+  /** @nullable */
+  institutionName: string | null;
+}
+
+export type PlaidMalformedTokenSweepAlertChannel =
+  (typeof PlaidMalformedTokenSweepAlertChannel)[keyof typeof PlaidMalformedTokenSweepAlertChannel];
+
+export const PlaidMalformedTokenSweepAlertChannel = {
+  email: "email",
+  log: "log",
+  skipped: "skipped",
+} as const;
+
+export interface PlaidMalformedTokenSweepAlert {
+  channel: PlaidMalformedTokenSweepAlertChannel;
+  /** @nullable */
+  reason: string | null;
+  /** @nullable */
+  recipient: string | null;
+  /** @nullable */
+  error: string | null;
+}
+
+export interface PlaidMalformedTokenSweepResult {
+  scanned: number;
+  flagged: number;
+  flaggedItems: FlaggedMalformedItem[];
+  alert: PlaidMalformedTokenSweepAlert | null;
+}
+
 export type PlaidSyncAttemptKind =
   (typeof PlaidSyncAttemptKind)[keyof typeof PlaidSyncAttemptKind];
 

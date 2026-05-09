@@ -49,6 +49,7 @@ import {
   plaidReauthReason,
 } from "@/components/plaid-reconnect-button";
 import { OwnerInvitationsSection } from "@/components/owner-invitations";
+import { OwnerBankHealthSweepSection } from "@/components/owner-bank-health-sweep";
 import { PlaidSyncHistory } from "@/components/plaid-sync-history";
 import {
   DEFAULT_DAYS_SINCE_TRACKERS,
@@ -443,6 +444,8 @@ export default function SettingsPage() {
       </div>
 
       <OwnerInvitationsSection />
+
+      <OwnerBankHealthSweepSection />
 
       <Card>
         <CardHeader>

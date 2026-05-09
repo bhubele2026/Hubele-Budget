@@ -2615,6 +2615,37 @@ export const RefreshPlaidConsentExpirationsResponse = zod.object({
   ),
 });
 
+/**
+ * @summary (#397, #550) Owner-only manual trigger for the daily Plaid
+malformed-access-token health check. Same code path the 03:02
+UTC cron runs unattended; exposed so an operator who just
+investigated a spike alert can re-run the sweep from the app
+and see the refreshed `{ scanned, flagged, flaggedItems }`
+summary plus the re-evaluated alert outcome inline, instead of
+waiting for tomorrow morning's cron tick.
+
+ */
+export const RunPlaidMalformedTokenSweepResponse = zod.object({
+  scanned: zod.number(),
+  flagged: zod.number(),
+  flaggedItems: zod.array(
+    zod.object({
+      itemRowId: zod.string(),
+      itemId: zod.string(),
+      institutionName: zod.string().nullable(),
+    }),
+  ),
+  alert: zod.union([
+    zod.object({
+      channel: zod.enum(["email", "log", "skipped"]),
+      reason: zod.string().nullable(),
+      recipient: zod.string().nullable(),
+      error: zod.string().nullable(),
+    }),
+    zod.null(),
+  ]),
+});
+
 export const CleanupNonProdPlaidItemsResponse = zod.object({
   removed: zod.number(),
 });
