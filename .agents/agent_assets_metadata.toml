@@ -17,3 +17,8 @@ id = "l68mkUO7fYytUp6cUU-JL"
 uri = "file://artifacts/h2budget/test-results/mapping-rules-drag-to-cate-cdcd8-s-its-categoryId-and-toasts/test-failed-1.png"
 type = "image"
 title = "drag failure screenshot"
+
+[[outputs]]
+id = "RlhjetWSdgeeBw-lrSn0z"
+uri = "file://artifacts/h2budget/test-results/transactions-chase-account-fa079-able-on-a-non-matching-mask/test-failed-1.png"
+type = "image"
