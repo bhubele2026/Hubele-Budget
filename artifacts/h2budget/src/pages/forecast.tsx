@@ -3619,9 +3619,40 @@ export default function ForecastPage({
             </CardContent>
           </Card>
 
-          <Card>
+          <Card data-testid="review-bucket-panel">
+            {(() => {
+              const bucketTotal = bucket.reduce((s, b) => s + b.amount, 0);
+              return (
+                <div
+                  className="flex items-center justify-between gap-3 px-4 py-3 border-b"
+                  data-testid="review-bucket-header"
+                >
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <span>Review Bucket</span>
+                    <Badge
+                      variant="outline"
+                      className="text-[10px]"
+                      data-testid="review-bucket-count"
+                    >
+                      {bucket.length}
+                    </Badge>
+                  </div>
+                  <span
+                    className={`font-medium tabular-nums ${
+                      bucketTotal < 0 ? "text-destructive" : "text-primary"
+                    }`}
+                    data-testid="review-bucket-total"
+                  >
+                    {formatCurrency(bucketTotal)}
+                  </span>
+                </div>
+              );
+            })()}
             <CardContent className="p-0">
-              <div className="divide-y divide-border">
+              <div
+                className="divide-y divide-border max-h-[360px] overflow-y-auto"
+                data-testid="review-bucket-list"
+              >
                 {bucket.length === 0 && (
                   <div className="p-12 text-center text-muted-foreground">
                     {isClosed ? "Month is closed — bucket hidden." : "Nothing triaged for this month yet."}
