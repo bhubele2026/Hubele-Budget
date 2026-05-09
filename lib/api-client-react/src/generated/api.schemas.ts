@@ -1912,6 +1912,10 @@ export interface DedupeTransactionsReport {
   accountsScanned: number;
 }
 
+export interface DuplicateTransactionCount {
+  duplicateCount: number;
+}
+
 export type AmexAnchorSource =
   (typeof AmexAnchorSource)[keyof typeof AmexAnchorSource];
 

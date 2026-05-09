@@ -93,6 +93,7 @@ export * from "./debtPlaidAccount";
 export * from "./dedupeTransactionsReport";
 export * from "./deleteAmexAnchor200";
 export * from "./deleteDashboardBudgetParams";
+export * from "./duplicateTransactionCount";
 export * from "./forecastBundle";
 export * from "./forecastBundleAccountSnapshots";
 export * from "./forecastBundleMonthSnapshots";

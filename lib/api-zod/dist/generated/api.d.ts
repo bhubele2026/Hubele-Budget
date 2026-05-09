@@ -4960,6 +4960,13 @@ export declare const DedupeTransactionsResponse: zod.ZodObject<{
     resolutionsRepointed: number;
     accountsScanned: number;
 }>;
+export declare const GetDuplicateTransactionCountResponse: zod.ZodObject<{
+    duplicateCount: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    duplicateCount: number;
+}, {
+    duplicateCount: number;
+}>;
 export declare const RefreshForecastBankBody: zod.ZodObject<{
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {

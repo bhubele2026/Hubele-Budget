@@ -32,6 +32,7 @@ import {
   runAutoDedupeIfNeeded,
 } from "../lib/dedupePlaidAccounts";
 import {
+  countDuplicateTransactionsForUser,
   dedupeTransactionsForUser,
   dedupeTransactionsAcrossAccountsForUser,
 } from "../lib/dedupeTransactions";
@@ -697,6 +698,20 @@ router.post(
   async (req, res): Promise<void> => {
     const report = await dedupeTransactionsForUser(req.userId!);
     res.json(report);
+  },
+);
+
+// (#470) Read-only twin of the dedupe-transactions endpoint: returns
+// how many duplicate rows the cleanup would remove if it ran right
+// now, without mutating anything. Used by the Settings badge so the
+// "Clean up duplicate transactions" row can show "12 duplicates
+// found" / hide the button when there's nothing to clean.
+router.get(
+  "/forecast/duplicate-transaction-count",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const result = await countDuplicateTransactionsForUser(req.userId!);
+    res.json(result);
   },
 );
 

@@ -15,6 +15,8 @@ import {
   useRefreshPlaidConsentExpirations,
   useUpdatePlaidImportCutoffDate,
   useDedupeTransactions,
+  useGetDuplicateTransactionCount,
+  getGetDuplicateTransactionCountQueryKey,
   getListTransactionsQueryKey,
   getGetForecastQueryKey,
 } from "@workspace/api-client-react";
@@ -103,6 +105,12 @@ export default function SettingsPage() {
   const deletePlaidItem = useDeletePlaidItem();
   const refreshConsentExpirations = useRefreshPlaidConsentExpirations();
   const dedupeTransactions = useDedupeTransactions();
+  // (#470) Read-only count powering the "N duplicates found" badge
+  // and the disabled/hidden state of the cleanup button. Shares the
+  // same group key the cleanup uses, so a clean ledger reports 0 and
+  // the badge collapses entirely.
+  const { data: duplicateCountData } = useGetDuplicateTransactionCount();
+  const duplicateCount = duplicateCountData?.duplicateCount ?? 0;
   const { runSync, isPending: isSyncPending } = usePlaidSync();
   // Track which row's per-item Sync button was just clicked so only THAT
   // row's spinner spins (the underlying mutation is global, so without this
@@ -186,6 +194,12 @@ export default function SettingsPage() {
       onSuccess: (res) => {
         queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+        // (#470) Refresh the badge so it drops to "No duplicates"
+        // immediately after a successful cleanup instead of waiting
+        // for the next page load.
+        queryClient.invalidateQueries({
+          queryKey: getGetDuplicateTransactionCountQueryKey(),
+        });
         const removed = res.duplicatesRemoved;
         const accounts = res.accountsScanned;
         toast({
@@ -599,12 +613,16 @@ export default function SettingsPage() {
               </Button>
             </div>
           )}
-          {(plaidItems ?? []).length > 0 && (
+          {(plaidItems ?? []).length > 0 && duplicateCount > 0 && (
             // (#458) Surfaces the /forecast/dedupe-transactions cleanup
             // so users with pre-fix duplicate Chase/Plaid rows can fix
             // their own ledger without contacting support. Sits next to
             // the consent-refresh row so all "maintenance" actions on
             // linked accounts are co-located.
+            // (#470) Hidden entirely when the read-only count returns
+            // zero so a clean ledger doesn't show a perpetual "Clean
+            // up" nudge — the badge next to the button shows the
+            // exact count when there is something to clean.
             <div
               className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-muted/10 p-3"
               data-testid="row-dedupe-transactions"
@@ -613,20 +631,29 @@ export default function SettingsPage() {
                 Find and merge duplicate transactions across your linked
                 accounts. Safe to run any time.
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDedupeTransactions}
-                disabled={dedupeTransactions.isPending}
-                data-testid="button-dedupe-transactions"
-              >
-                <RefreshCw
-                  className={`w-3.5 h-3.5 mr-1.5 ${
-                    dedupeTransactions.isPending ? "animate-spin" : ""
-                  }`}
-                />
-                Clean up duplicate transactions
-              </Button>
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-700 dark:text-amber-400"
+                  data-testid="badge-duplicate-transaction-count"
+                  title="Approximate number of rows the cleanup would merge into their twins."
+                >
+                  {duplicateCount} duplicate{duplicateCount === 1 ? "" : "s"} found
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDedupeTransactions}
+                  disabled={dedupeTransactions.isPending}
+                  data-testid="button-dedupe-transactions"
+                >
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 mr-1.5 ${
+                      dedupeTransactions.isPending ? "animate-spin" : ""
+                    }`}
+                  />
+                  Clean up duplicate transactions
+                </Button>
+              </div>
             </div>
           )}
           {(plaidItems ?? []).map((item) => {

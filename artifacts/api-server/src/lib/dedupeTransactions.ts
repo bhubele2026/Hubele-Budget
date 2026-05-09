@@ -518,6 +518,47 @@ export async function dedupeTransactionsAcrossAccountsForUser(
   });
 }
 
+/**
+ * (#470) Read-only sibling of `dedupeTransactionsForUser`: returns
+ * how many rows the per-account dedupe pass would delete if it ran
+ * right now, without mutating anything. Used by the Settings badge
+ * so the "Clean up duplicate transactions" row can show "12
+ * duplicates found" / hide the button entirely when there are zero.
+ *
+ * Same group key as the per-account heal:
+ *   (userId, plaidAccountId, occurredOn, amount, normalizedDescription)
+ *
+ * Sums `(count - 1)` over each duplicate group so the number matches
+ * `duplicatesRemoved` from a follow-up cleanup on otherwise-clean data.
+ * Cross-account relink residue (the rarer signature handled by
+ * `dedupeTransactionsAcrossAccountsForUser`) is intentionally NOT
+ * included — its eligibility filter requires per-row data the badge
+ * doesn't need to surface, and the per-account count is the dominant
+ * signal users care about.
+ */
+export async function countDuplicateTransactionsForUser(
+  userId: string,
+): Promise<{ duplicateCount: number }> {
+  const probe = await db.execute<{ extras: number }>(sql`
+    select coalesce(sum(c - 1), 0)::int as extras from (
+      select count(*)::int as c
+      from ${transactionsTable}
+      where ${transactionsTable.userId} = ${userId}
+        and ${transactionsTable.plaidAccountId} is not null
+      group by
+        ${transactionsTable.plaidAccountId},
+        ${transactionsTable.occurredOn},
+        ${transactionsTable.amount},
+        btrim(lower(regexp_replace(coalesce(${transactionsTable.description}, ''), '\s+', ' ', 'g')))
+      having count(*) > 1
+    ) as g
+  `);
+  const rows = (probe as { rows?: Array<{ extras: number }> }).rows
+    ?? (probe as unknown as Array<{ extras: number }>);
+  const duplicateCount = Number(rows?.[0]?.extras ?? 0);
+  return { duplicateCount };
+}
+
 export async function dedupeTransactionsForUser(
   userId: string,
 ): Promise<DedupeTxnReport & { accountsScanned: number }> {

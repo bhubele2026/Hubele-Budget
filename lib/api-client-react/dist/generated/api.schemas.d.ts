@@ -1706,6 +1706,9 @@ export interface DedupeTransactionsReport {
     resolutionsRepointed: number;
     accountsScanned: number;
 }
+export interface DuplicateTransactionCount {
+    duplicateCount: number;
+}
 export type AmexAnchorSource = (typeof AmexAnchorSource)[keyof typeof AmexAnchorSource];
 export declare const AmexAnchorSource: {
     readonly debt: "debt";

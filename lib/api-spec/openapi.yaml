@@ -981,6 +981,16 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DedupeTransactionsReport" }
+  /forecast/duplicate-transaction-count:
+    get:
+      operationId: getDuplicateTransactionCount
+      tags: [forecast]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DuplicateTransactionCount" }
   /forecast/refresh-bank:
     post:
       operationId: refreshForecastBank
@@ -3151,6 +3161,11 @@ components:
         duplicatesRemoved: { type: integer }
         resolutionsRepointed: { type: integer }
         accountsScanned: { type: integer }
+    DuplicateTransactionCount:
+      type: object
+      required: [duplicateCount]
+      properties:
+        duplicateCount: { type: integer }
     AccountSnapshot:
       type: object
       required: [balance, at, source]

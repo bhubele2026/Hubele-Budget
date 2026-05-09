@@ -59,6 +59,7 @@ import type {
   DedupeTransactionsReport,
   DeleteAmexAnchor200,
   DeleteDashboardBudgetParams,
+  DuplicateTransactionCount,
   ForecastBundle,
   ForecastClosedMonth,
   ForecastResolution,
@@ -4727,6 +4728,79 @@ export const useDedupeTransactions = <
 > => {
   return useMutation(getDedupeTransactionsMutationOptions(options));
 };
+
+export const getGetDuplicateTransactionCountUrl = () => {
+  return `/api/forecast/duplicate-transaction-count`;
+};
+
+export const getDuplicateTransactionCount = async (
+  options?: RequestInit,
+): Promise<DuplicateTransactionCount> => {
+  return customFetch<DuplicateTransactionCount>(
+    getGetDuplicateTransactionCountUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetDuplicateTransactionCountQueryKey = () => {
+  return [`/api/forecast/duplicate-transaction-count`] as const;
+};
+
+export const getGetDuplicateTransactionCountQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDuplicateTransactionCount>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDuplicateTransactionCount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetDuplicateTransactionCountQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDuplicateTransactionCount>>
+  > = ({ signal }) =>
+    getDuplicateTransactionCount({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDuplicateTransactionCount>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDuplicateTransactionCountQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDuplicateTransactionCount>>
+>;
+export type GetDuplicateTransactionCountQueryError = ErrorType<unknown>;
+
+export function useGetDuplicateTransactionCount<
+  TData = Awaited<ReturnType<typeof getDuplicateTransactionCount>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDuplicateTransactionCount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDuplicateTransactionCountQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 export const getRefreshForecastBankUrl = () => {
   return `/api/forecast/refresh-bank`;

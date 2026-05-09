@@ -2161,6 +2161,10 @@ export const DedupeTransactionsResponse = zod.object({
   accountsScanned: zod.number(),
 });
 
+export const GetDuplicateTransactionCountResponse = zod.object({
+  duplicateCount: zod.number(),
+});
+
 export const RefreshForecastBankBody = zod.object({
   plaidAccountId: zod.string().nullish(),
 });
