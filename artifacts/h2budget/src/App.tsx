@@ -30,7 +30,24 @@ import SettingsPage from "./pages/settings";
 import PlaidOAuthPage from "./pages/plaid-oauth";
 import NotFound from "./pages/not-found";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Cached responses stay "fresh" for 30s, so revisiting a page
+      // (or a previously-loaded budget month) renders from cache
+      // instantly instead of triggering a full refetch + skeleton.
+      staleTime: 30_000,
+      // Keep evicted entries around for 10 min so back-and-forth
+      // navigation between months hits the cache.
+      gcTime: 10 * 60_000,
+      // The aggressive default refetch-on-focus was causing the
+      // budget grid to re-skeleton every time the user tabbed back
+      // to the window.
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,

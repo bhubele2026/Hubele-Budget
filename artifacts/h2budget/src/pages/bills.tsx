@@ -259,6 +259,16 @@ export default function BillsPage() {
     qc.invalidateQueries({ queryKey: getListRecurringItemsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
     qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+    // Bill edits feed Budget auto-pulled lines (bills/debts → planned
+    // amounts on /budget). With the global 30s staleTime we now use,
+    // returning to /budget within that window would otherwise show
+    // stale cached month data; invalidate every cached budget month.
+    qc.invalidateQueries({
+      predicate: (q) => {
+        const k = q.queryKey?.[0];
+        return typeof k === "string" && k.startsWith("/api/budget/months/");
+      },
+    });
   };
 
   const openNew = () => {
@@ -427,7 +437,18 @@ export default function BillsPage() {
   }
 
   const incomeRows = summary.income;
-  const billRows = summary.bills;
+  // Sort Bills & Expenses by next-occurrence date so the list reads
+  // chronologically (earliest upcoming first) instead of alphabetically.
+  // Rows without a nextOccurrence (e.g. paused items) sort to the end,
+  // tiebreaking by name to keep the order stable.
+  const billRows = [...summary.bills].sort((a, b) => {
+    const ad = a.nextOccurrence ?? "";
+    const bd = b.nextOccurrence ?? "";
+    if (ad && bd) return ad < bd ? -1 : ad > bd ? 1 : a.item.name.localeCompare(b.item.name);
+    if (ad) return -1;
+    if (bd) return 1;
+    return a.item.name.localeCompare(b.item.name);
+  });
   const incomeMonthly = Number(summary.monthly.income) || 0;
   const billsMonthly = Number(summary.monthly.bills) || 0;
   const activeCount = summary.monthly.active;

@@ -12,13 +12,14 @@ import {
   useListTransactions,
   useListMappingRules,
   useUpdateTransaction,
+  getBudgetMonth,
   getGetBudgetMonthQueryKey,
   getListCategoriesQueryKey,
   getListTransactionsQueryKey,
   type MappingRule,
   type Transaction,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, keepPreviousData } from "@tanstack/react-query";
 
 type SourceBreakdownEntry = {
   source: "Bank" | "Amex" | "Other";
@@ -213,10 +214,46 @@ export default function BudgetPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  const { data: budgetData, isLoading: isLoadingBudget } =
-    useGetBudgetMonth(currentMonth);
+  const { data: budgetData, isLoading: isLoadingBudget } = useGetBudgetMonth(
+    currentMonth,
+    {
+      // Keep the previous month's data on screen while the new month
+      // fetches in the background. Without this, every prev/next click
+      // tore the grid down to a skeleton for the full server roundtrip
+      // (~300ms+) and felt clunky.
+      query: {
+        queryKey: getGetBudgetMonthQueryKey(currentMonth),
+        placeholderData: keepPreviousData,
+      },
+    },
+  );
   const { data: categories, isLoading: isLoadingCategories } =
     useListCategories();
+
+  // Prefetch the adjacent months in the background so prev/next clicks
+  // hit the cache and feel instant. Honors the MIN_MONTH floor used by
+  // changeMonth() and skips when the response is already cached fresh.
+  // Wait for the current month's first load to land before warming
+  // neighbors, so any server-side healing/seeding on the active month
+  // settles before its results would influence neighboring caches.
+  const queryClientForPrefetch = useQueryClient();
+  useEffect(() => {
+    if (!budgetData) return;
+    const [yStr, mStr] = currentMonth.split("-");
+    const year = Number(yStr);
+    const month = Number(mStr);
+    if (!Number.isFinite(year) || !Number.isFinite(month)) return;
+    const offsets = [-1, 1];
+    for (const offset of offsets) {
+      const d = new Date(Date.UTC(year, month - 1 + offset, 1));
+      const next = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
+      if (offset < 0 && next < MIN_MONTH) continue;
+      queryClientForPrefetch.prefetchQuery({
+        queryKey: getGetBudgetMonthQueryKey(next),
+        queryFn: ({ signal }) => getBudgetMonth(next, { signal }),
+      });
+    }
+  }, [currentMonth, queryClientForPrefetch, !!budgetData]);
 
   const upsertLine = useUpsertBudgetLine();
   const createCat = useCreateCategory();
@@ -259,9 +296,7 @@ export default function BudgetPage() {
     seedDefaults.mutate(undefined, {
       onSuccess: (res) => {
         queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
-        queryClient.invalidateQueries({
-          queryKey: getGetBudgetMonthQueryKey(currentMonth),
-        });
+        invalidate();
         if (!res.alreadySeeded) {
           toast({ title: "Loaded default budget" });
         }
@@ -305,8 +340,16 @@ export default function BudgetPage() {
   const atFloor = currentMonth <= MIN_MONTH;
 
   const invalidate = () => {
+    // Invalidate every cached budget-month response, not just the
+    // current month. With adjacent-month prefetch + a 30s default
+    // staleTime, narrow per-month invalidation would leave neighbor
+    // caches "fresh but outdated" after category/seed/line edits and
+    // surface stale numbers when paging months.
     queryClient.invalidateQueries({
-      queryKey: getGetBudgetMonthQueryKey(currentMonth),
+      predicate: (q) => {
+        const k = q.queryKey?.[0];
+        return typeof k === "string" && k.startsWith("/api/budget/months/");
+      },
     });
   };
 
@@ -543,7 +586,11 @@ export default function BudgetPage() {
     }).format(d);
   }, [currentMonth]);
 
-  if (isLoadingBudget || isLoadingCategories) {
+  // Only show the full-page skeleton on the very first load (before any
+  // budget data exists). Once we have data for any month, keepPreviousData
+  // keeps the previous month visible while the new one fetches — showing
+  // a skeleton there would defeat the whole point of the smoother swap.
+  if ((isLoadingBudget && !budgetData) || (isLoadingCategories && !categories)) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-48" />
