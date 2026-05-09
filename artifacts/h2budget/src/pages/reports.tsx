@@ -42,27 +42,56 @@ import {
 import {
   ResponsiveContainer,
   LineChart,
-  Line,
+  Line as LineRaw,
   AreaChart,
-  Area,
+  Area as AreaRaw,
   BarChart,
-  Bar,
+  Bar as BarRaw,
   ComposedChart,
-  XAxis,
-  YAxis,
+  XAxis as XAxisRaw,
+  YAxis as YAxisRaw,
   CartesianGrid,
-  Tooltip,
-  Legend,
+  Tooltip as TooltipRaw,
+  Legend as LegendRaw,
   PieChart,
-  Pie,
+  Pie as PieRaw,
   Cell,
-  PolarAngleAxis,
+  PolarAngleAxis as PolarAngleAxisRaw,
   PolarGrid,
-  PolarRadiusAxis,
-  Radar,
+  PolarRadiusAxis as PolarRadiusAxisRaw,
+  Radar as RadarRaw,
   RadarChart,
-  ReferenceLine,
+  ReferenceLine as ReferenceLineRaw,
+  type AreaProps,
+  type BarProps,
+  type LegendProps,
+  type LineProps,
+  type PieProps,
+  type PolarAngleAxisProps,
+  type PolarRadiusAxisProps,
+  type RadarProps,
+  type ReferenceLineProps,
+  type TooltipProps,
+  type XAxisProps,
+  type YAxisProps,
 } from "recharts";
+
+// Recharts ships these as class components, which TypeScript + React 19's
+// @types/react can no longer accept as JSX element constructors. Re-bind each
+// to a function-component shape that preserves the component's own prop type.
+type FCFromProps<P> = (props: P) => React.ReactElement | null;
+const Line = LineRaw as unknown as FCFromProps<LineProps>;
+const Area = AreaRaw as unknown as FCFromProps<AreaProps>;
+const Bar = BarRaw as unknown as FCFromProps<BarProps>;
+const XAxis = XAxisRaw as unknown as FCFromProps<XAxisProps>;
+const YAxis = YAxisRaw as unknown as FCFromProps<YAxisProps>;
+const Tooltip = TooltipRaw as unknown as FCFromProps<TooltipProps<number, string>>;
+const Legend = LegendRaw as unknown as FCFromProps<LegendProps>;
+const Pie = PieRaw as unknown as FCFromProps<PieProps>;
+const PolarAngleAxis = PolarAngleAxisRaw as unknown as FCFromProps<PolarAngleAxisProps>;
+const PolarRadiusAxis = PolarRadiusAxisRaw as unknown as FCFromProps<PolarRadiusAxisProps>;
+const Radar = RadarRaw as unknown as FCFromProps<RadarProps>;
+const ReferenceLine = ReferenceLineRaw as unknown as FCFromProps<ReferenceLineProps>;
 import confetti from "canvas-confetti";
 import {
   Trophy,
