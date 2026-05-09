@@ -879,6 +879,7 @@ async function ensureUncategorizedCategory(userId: string): Promise<void> {
 }
 
 router.get("/budget/categories", requireAuth, async (req, res): Promise<void> => {
+  await ensureSeededDefaults(req.userId!);
   await ensureUncategorizedCategory(req.userId!);
   const rows = await db
     .select()
@@ -942,12 +943,30 @@ router.delete(
   },
 );
 
-router.post(
-  "/budget/seed-defaults",
-  requireAuth,
-  async (req, res): Promise<void> => {
-    const userId = req.userId!;
-    const result = await db.transaction(async (tx) => {
+// Per-user gates for the lazy seed-defaults heal triggered from
+// GET /budget/categories. The transaction body itself is fully
+// idempotent, but on a fresh user it does ~50 inserts, so we only
+// want to pay for it on the first /budget/categories hit per process.
+//
+// Three pieces of state cooperate:
+//   - DONE: terminal "this user already has the seed". Skips all work.
+//   - INFLIGHT: shared Promise for the currently-running seed attempt
+//     so two concurrent first GETs from the same user share one pass
+//     instead of double-seeding (which a Set-only gate would allow).
+//   - FAILED_AT: cooldown timestamp so a persistent seed failure
+//     doesn't hot-loop on every poll.
+const ENSURE_SEEDED_DEFAULTS_DONE = new Set<string>();
+const ENSURE_SEEDED_DEFAULTS_INFLIGHT = new Map<string, Promise<void>>();
+const ENSURE_SEEDED_DEFAULTS_FAILED_AT = new Map<string, number>();
+const ENSURE_SEEDED_DEFAULTS_FAILURE_COOLDOWN_MS = 60_000;
+
+async function seedDefaultsForUser(userId: string): Promise<{
+  categoriesInserted: number;
+  linesInserted: number;
+  mappingRulesInserted: number;
+  alreadySeeded: boolean;
+}> {
+  return db.transaction(async (tx) => {
       const existing = await tx
         .select()
         .from(budgetCategoriesTable)
@@ -1116,6 +1135,74 @@ router.post(
           mappingRulesInserted === 0,
       };
     });
+}
+
+// (#594-followup) Lazy-trigger the seed on the first read, so e2e
+// specs that just call GET /budget/categories (and poll for length>0)
+// see the full default seed without depending on the frontend
+// useEffect that fires on /budget mount. Per-process gated.
+async function ensureSeededDefaults(userId: string): Promise<void> {
+  if (ENSURE_SEEDED_DEFAULTS_DONE.has(userId)) return;
+  const existingInflight = ENSURE_SEEDED_DEFAULTS_INFLIGHT.get(userId);
+  if (existingInflight) {
+    // Concurrent first-hit: piggy-back on the in-flight attempt instead of
+    // running a second seed transaction in parallel (which would duplicate
+    // ~50 inserts and risk unique-constraint races on the seed rows).
+    await existingInflight;
+    return;
+  }
+  const failedAt = ENSURE_SEEDED_DEFAULTS_FAILED_AT.get(userId);
+  if (
+    failedAt !== undefined &&
+    Date.now() - failedAt < ENSURE_SEEDED_DEFAULTS_FAILURE_COOLDOWN_MS
+  ) {
+    // Recent failure: don't hot-loop on every poll. The cooldown still
+    // expires on its own so a transient DB blip eventually self-heals
+    // on the next /budget/categories hit.
+    return;
+  }
+  const attempt = (async () => {
+    const existing = await db
+      .select({ id: budgetCategoriesTable.id })
+      .from(budgetCategoriesTable)
+      .where(
+        and(
+          eq(budgetCategoriesTable.userId, userId),
+          eq(budgetCategoriesTable.excludeFromBudget, false),
+        ),
+      )
+      .limit(1);
+    if (existing.length > 0) {
+      ENSURE_SEEDED_DEFAULTS_DONE.add(userId);
+      ENSURE_SEEDED_DEFAULTS_FAILED_AT.delete(userId);
+      return;
+    }
+    try {
+      await seedDefaultsForUser(userId);
+      ENSURE_SEEDED_DEFAULTS_DONE.add(userId);
+      ENSURE_SEEDED_DEFAULTS_FAILED_AT.delete(userId);
+    } catch (err) {
+      ENSURE_SEEDED_DEFAULTS_FAILED_AT.set(userId, Date.now());
+      console.error("[budget] ensureSeededDefaults failed", {
+        userId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  })();
+  ENSURE_SEEDED_DEFAULTS_INFLIGHT.set(userId, attempt);
+  try {
+    await attempt;
+  } finally {
+    ENSURE_SEEDED_DEFAULTS_INFLIGHT.delete(userId);
+  }
+}
+
+router.post(
+  "/budget/seed-defaults",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const result = await seedDefaultsForUser(req.userId!);
+    ENSURE_SEEDED_DEFAULTS_DONE.add(req.userId!);
     res.json(result);
   },
 );
