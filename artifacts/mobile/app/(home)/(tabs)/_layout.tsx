@@ -1,13 +1,24 @@
 import { Feather } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
+import { BlurView as BlurViewClass, type BlurViewProps } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
+import {
+  Icon,
+  Label,
+  NativeTabs as NativeTabsClass,
+} from "expo-router/unstable-native-tabs";
+import type { ComponentProps, PropsWithChildren } from "react";
 import { SymbolView } from "expo-symbols";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
+
+const BlurView = BlurViewClass as unknown as React.ComponentType<BlurViewProps>;
+const NativeTabs = NativeTabsClass as unknown as React.ComponentType<
+  PropsWithChildren<ComponentProps<typeof NativeTabsClass>>
+> &
+  Pick<typeof NativeTabsClass, "Trigger">;
 
 function NativeTabLayout() {
   return (
