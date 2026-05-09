@@ -279,6 +279,82 @@ describe("isTransfer user override (#479)", () => {
     expect(r.status).toBe(404);
   });
 
+  it("(#607) PATCH categoryId=Transfer flips isTransfer=true, sets override, clears allowance flags", async () => {
+    // Seed the system-managed Transfer category the same way the budget
+    // route's lazy-seed path would (excludeFromBudget=true, name="Transfer").
+    const [transferCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: "Transfer",
+        excludeFromBudget: true,
+      })
+      .returning();
+    const [row] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        occurredOn: "2026-05-07",
+        description: "ZELLE PAYMENT TO MOM",
+        amount: "-200.00",
+        isTransfer: false,
+        weeklyAllowance: true,
+        monthlyAllowance: true,
+        unplannedAllowance: true,
+        source: "manual",
+      })
+      .returning();
+
+    const r = await api("PATCH", `/transactions/${row!.id}`, {
+      categoryId: transferCat!.id,
+    });
+    expect(r.status).toBe(200);
+
+    const after = await readRow(row!.id);
+    expect(after.categoryId).toBe(transferCat!.id);
+    expect(after.isTransfer).toBe(true);
+    expect(after.isTransferUserOverridden).toBe(true);
+    expect(after.weeklyAllowance).toBe(false);
+    expect(after.monthlyAllowance).toBe(false);
+    expect(after.unplannedAllowance).toBe(false);
+  });
+
+  it("(#607) POST /transactions with categoryId=Transfer sets isTransfer=true + override and clears allowance flags", async () => {
+    const [transferCat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        name: "Transfer",
+        excludeFromBudget: true,
+      })
+      .onConflictDoUpdate({
+        target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+        set: { excludeFromBudget: true },
+      })
+      .returning();
+
+    const r = await api("POST", `/transactions`, {
+      occurredOn: "2026-05-08",
+      description: "INTERNAL TRANSFER NEW ROW",
+      amount: "-75.00",
+      categoryId: transferCat!.id,
+      // Client mistakenly sends allowance flags; server must overrule.
+      weeklyAllowance: true,
+      monthlyAllowance: true,
+      unplannedAllowance: true,
+    });
+    expect(r.status).toBe(201);
+    const created = r.json as { id: string };
+
+    const after = await readRow(created.id);
+    expect(after.categoryId).toBe(transferCat!.id);
+    expect(after.isTransfer).toBe(true);
+    expect(after.isTransferUserOverridden).toBe(true);
+    expect(after.weeklyAllowance).toBe(false);
+    expect(after.monthlyAllowance).toBe(false);
+    expect(after.unplannedAllowance).toBe(false);
+  });
+
   it("Without the override flag, Plaid sync still re-applies the auto-Transfer heuristic", async () => {
     // Sanity check that the CASE expression's ELSE branch is wired up — a
     // row whose user-overridden flag is *false* keeps getting re-flagged

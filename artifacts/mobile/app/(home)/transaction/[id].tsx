@@ -203,9 +203,16 @@ export default function TransactionDetailScreen() {
 
       <View style={styles.flagRow}>
         <Flag active={t.forecastFlag} label="Forecast" />
-        <Flag active={t.weeklyAllowance} label="Weekly" />
-        <Flag active={t.monthlyAllowance} label="Monthly" />
-        <Flag active={t.unplannedAllowance} label="Unplanned" />
+        {/* (#607) Hide Weekly/Monthly/Unplanned allowance flags on
+            transfer rows: they're excluded from budget actuals so
+            those buckets are meaningless and would only confuse. */}
+        {!t.isTransfer && (
+          <>
+            <Flag active={t.weeklyAllowance} label="Weekly" />
+            <Flag active={t.monthlyAllowance} label="Monthly" />
+            <Flag active={t.unplannedAllowance} label="Unplanned" />
+          </>
+        )}
         <Flag active={t.reimbursable} label="Reimbursable" />
         <Flag active={t.reimbursed} label="Reimbursed" />
         <Flag

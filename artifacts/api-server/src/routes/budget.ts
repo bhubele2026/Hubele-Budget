@@ -33,6 +33,7 @@ import {
   SEED_GROUP_ORDER,
   SEED_MONTH,
   SEED_RECURRING_ITEMS,
+  TRANSFER_CATEGORY_NAME,
   UNCATEGORIZED_CATEGORY_NAME,
 } from "../lib/budgetSeed";
 import {
@@ -256,6 +257,7 @@ const BILL_NAME_TO_MANUAL_CATEGORY: Readonly<Record<string, string>> = {
 // DB churn to a hot path that the dashboard hits twice per page load.
 const HEAL_BILL_LINKS_DONE = new Set<string>();
 const ENSURE_UNCATEGORIZED_DONE = new Set<string>();
+const ENSURE_TRANSFER_DONE = new Set<string>();
 
 async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
   if (HEAL_BILL_LINKS_DONE.has(userId)) return;
@@ -878,9 +880,40 @@ async function ensureUncategorizedCategory(userId: string): Promise<void> {
   ENSURE_UNCATEGORIZED_DONE.add(userId);
 }
 
+// (#607) Mirror of `ensureUncategorizedCategory` for the system-managed
+// "Transfer" category. Picked on a transaction's category picker to
+// classify the row as an internal transfer without contaminating budget
+// math. Stored with `exclude_from_budget=true` so the Budget page filters
+// it out of every roll-up. Idempotent via the (userId, name) unique
+// index; also self-heals legacy rows by flipping the flag on.
+async function ensureTransferCategory(userId: string): Promise<void> {
+  if (ENSURE_TRANSFER_DONE.has(userId)) return;
+  // Park it well after the canonical groups so any debug surface that
+  // ignores `exclude_from_budget` still renders it last (one slot after
+  // the Uncategorized row).
+  const sortOrder = (SEED_GROUP_ORDER.length + 11) * 100;
+  await db
+    .insert(budgetCategoriesTable)
+    .values({
+      userId,
+      name: TRANSFER_CATEGORY_NAME,
+      kind: "expense",
+      groupName: TRANSFER_CATEGORY_NAME,
+      sourceKind: "manual",
+      sortOrder,
+      excludeFromBudget: true,
+    })
+    .onConflictDoUpdate({
+      target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+      set: { excludeFromBudget: true },
+    });
+  ENSURE_TRANSFER_DONE.add(userId);
+}
+
 router.get("/budget/categories", requireAuth, async (req, res): Promise<void> => {
   await ensureSeededDefaults(req.userId!);
   await ensureUncategorizedCategory(req.userId!);
+  await ensureTransferCategory(req.userId!);
   const rows = await db
     .select()
     .from(budgetCategoriesTable)
@@ -1364,6 +1397,8 @@ router.get(
     // (#474) Ensure the system-managed Uncategorized category exists and
     // carries `exclude_from_budget=true`. Idempotent — safe on every GET.
     await ensureUncategorizedCategory(req.userId!);
+    // (#607) Same treatment for the system-managed Transfer category.
+    await ensureTransferCategory(req.userId!);
 
     // One-time reconciliation of May 2026 planned amounts to the user's
     // canonical source-of-truth values (task #106). Only runs when this

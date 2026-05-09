@@ -18,6 +18,16 @@ export type SeedCategory = {
 // transfers in actuals roll-ups). Mapping rules cannot target it.
 export const UNCATEGORIZED_CATEGORY_NAME = "Uncategorized";
 
+// (#607) Canonical name for the system-managed Transfer category. Picked on
+// a transaction's category picker to mark the row as an internal transfer
+// without polluting budget actuals. Mirrors the Uncategorized pattern:
+// `excludeFromBudget=true` filters it out of every Budget page roll-up,
+// and mapping rules are forbidden from targeting it. Picking it on a row
+// also flips `isTransfer=true` (with `isTransferUserOverridden=true`) so
+// the row is excluded from actuals via the existing transfer filter and
+// future Plaid syncs don't re-flip it from the description heuristic.
+export const TRANSFER_CATEGORY_NAME = "Transfer";
+
 export const SEED_MONTH = "2026-05-01";
 
 export const SEED_GROUP_ORDER = [
@@ -308,6 +318,24 @@ export const SEED_CATEGORIES: SeedCategory[] = [
     kind: "expense",
     sourceKind: "manual",
     name: UNCATEGORIZED_CATEGORY_NAME,
+    planned: "0",
+    note: null,
+    excludeFromBudget: true,
+  },
+
+  // (#607) System-managed Transfer category. Picked on a transaction to
+  // classify it as an internal transfer (savings move, credit-card payment
+  // between own accounts, etc.) without contaminating budget math. Same
+  // `excludeFromBudget` treatment as Uncategorized — never appears as a
+  // line, in a group, or in the month-summary totals. Picking it on a row
+  // also flips `isTransfer=true` so the row is excluded from actuals by
+  // the existing transfer filter, and `isTransferUserOverridden=true` so
+  // future Plaid syncs don't re-flip it. Mapping rules cannot target it.
+  {
+    groupName: TRANSFER_CATEGORY_NAME,
+    kind: "expense",
+    sourceKind: "manual",
+    name: TRANSFER_CATEGORY_NAME,
     planned: "0",
     note: null,
     excludeFromBudget: true,

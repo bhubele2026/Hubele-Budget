@@ -2118,15 +2118,21 @@ export default function AmexPage() {
                           <SelectItem value="import">import</SelectItem>
                         </SelectContent>
                       </Select>
-                      <BucketBubbles
-                        flags={{
-                          weekly: t.weeklyAllowance,
-                          monthly: t.monthlyAllowance,
-                          unplanned: t.unplannedAllowance,
-                          reimbursable: t.reimbursable,
-                        }}
-                        onToggle={(b, next) => onBubbleToggle(t, b, next)}
-                      />
+                      {/* (#607) Transfer rows are excluded from budget
+                          actuals, so weekly/monthly/unplanned bubbles
+                          would never affect any roll-up. Hide them on
+                          transfers to keep the row uncluttered. */}
+                      {!t.isTransfer && (
+                        <BucketBubbles
+                          flags={{
+                            weekly: t.weeklyAllowance,
+                            monthly: t.monthlyAllowance,
+                            unplanned: t.unplannedAllowance,
+                            reimbursable: t.reimbursable,
+                          }}
+                          onToggle={(b, next) => onBubbleToggle(t, b, next)}
+                        />
+                      )}
                       <ReviewedBubble
                         on={t.reviewed}
                         onClick={() => setRowReviewed(t, !t.reviewed)}
@@ -2350,15 +2356,19 @@ export default function AmexPage() {
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
-                            <BucketBubbles
-                              flags={{
-                                weekly: t.weeklyAllowance,
-                                monthly: t.monthlyAllowance,
-                                unplanned: t.unplannedAllowance,
-                                reimbursable: t.reimbursable,
-                              }}
-                              onToggle={(b, next) => onBubbleToggle(t, b, next)}
-                            />
+                            {/* (#607) Hide bucket bubbles on transfer
+                                rows — see mobile layout above. */}
+                            {!t.isTransfer && (
+                              <BucketBubbles
+                                flags={{
+                                  weekly: t.weeklyAllowance,
+                                  monthly: t.monthlyAllowance,
+                                  unplanned: t.unplannedAllowance,
+                                  reimbursable: t.reimbursable,
+                                }}
+                                onToggle={(b, next) => onBubbleToggle(t, b, next)}
+                              />
+                            )}
                             <ReviewedBubble
                               on={t.reviewed}
                               onClick={() => setRowReviewed(t, !t.reviewed)}

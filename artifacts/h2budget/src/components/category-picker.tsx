@@ -49,9 +49,17 @@ export function CategoryPicker({
   const uncategorizedCat = categories.find(
     (c) => c.name === "Uncategorized",
   );
-  const pickableCategories = uncategorizedCat
-    ? categories.filter((c) => c.id !== uncategorizedCat.id)
-    : categories;
+  // (#607) Same lazy-seed handling for the system-managed "Transfer" row.
+  // Picking it sets categoryId=transferCat.id, which the server uses to
+  // flip isTransfer=true and clear allowance toggles. We exclude it from
+  // the main list so it isn't shown twice. Disabled (and a no-op fallback)
+  // when the category hasn't been seeded for this user yet.
+  const transferCat = categories.find((c) => c.name === "Transfer");
+  const pickableCategories = categories.filter(
+    (c) =>
+      (!uncategorizedCat || c.id !== uncategorizedCat.id) &&
+      (!transferCat || c.id !== transferCat.id),
+  );
   const current = value
     ? categories.find((c) => c.id === value)?.name ?? "Unknown"
     : "Uncategorized";
@@ -99,6 +107,30 @@ export function CategoryPicker({
                   )}
                 />
                 Uncategorized
+              </CommandItem>
+              <CommandItem
+                disabled={!transferCat}
+                onSelect={() => {
+                  if (!transferCat) return;
+                  // (#607) Picking Transfer never learns a mapping rule
+                  // — server-side `isExcludedCategory` would reject it
+                  // anyway, but we also avoid surfacing the Remember
+                  // toggle's value here to make the intent obvious:
+                  // Transfer is a one-row classification, not a pattern.
+                  onChange(transferCat.id, null);
+                  setOpen(false);
+                }}
+                data-testid="option-transfer"
+              >
+                <Check
+                  className={cn(
+                    "mr-2 h-3 w-3",
+                    transferCat && value === transferCat.id
+                      ? "opacity-100"
+                      : "opacity-0",
+                  )}
+                />
+                Transfer
               </CommandItem>
               {pickableCategories.map((c) => (
                 <CommandItem

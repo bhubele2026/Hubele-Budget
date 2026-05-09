@@ -1896,35 +1896,55 @@ export default function TransactionsPage() {
                   <FormItem className="col-span-2"><FormLabel>Amount</FormLabel><FormControl><Input type="number" step="0.01" min="0" placeholder="42.50" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={form.control} name="reimbursable" render={({ field }) => (
-                  <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Reimbursable</FormLabel></FormItem>
-                )} />
-                <FormField control={form.control} name="reimbursed" render={({ field }) => (
-                  <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Reimbursed</FormLabel></FormItem>
-                )} />
-                <FormField control={form.control} name="weeklyAllowance" render={({ field }) => (
-                  <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Weekly Allow</FormLabel></FormItem>
-                )} />
-                <FormField control={form.control} name="monthlyAllowance" render={({ field }) => (
-                  <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Monthly Allow</FormLabel></FormItem>
-                )} />
-                <FormField control={form.control} name="unplannedAllowance" render={({ field }) => (
-                  <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Unplanned Allow</FormLabel></FormItem>
-                )} />
-                <FormField control={form.control} name="isTransfer" render={({ field }) => (
-                  <FormItem className="flex items-center gap-2 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        data-testid="checkbox-is-transfer"
-                      />
-                    </FormControl>
-                    <FormLabel>Transfer</FormLabel>
-                  </FormItem>
-                )} />
-              </div>
+              {(() => {
+                // (#607) When the picked category is the system-managed
+                // Transfer row, hide Weekly/Monthly/Unplanned/Transfer
+                // toggles — the server flips isTransfer=true and clears
+                // all three allowance flags on save, so showing them
+                // would be misleading. The Transfer toggle is also
+                // implied true in that case and would just be a no-op.
+                const watchedCategoryId = form.watch("categoryId");
+                const transferCat = (categories ?? []).find(
+                  (c) => c.name === "Transfer",
+                );
+                const isPickedTransfer =
+                  !!transferCat && watchedCategoryId === transferCat.id;
+                return (
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField control={form.control} name="reimbursable" render={({ field }) => (
+                      <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Reimbursable</FormLabel></FormItem>
+                    )} />
+                    <FormField control={form.control} name="reimbursed" render={({ field }) => (
+                      <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Reimbursed</FormLabel></FormItem>
+                    )} />
+                    {!isPickedTransfer && (
+                      <>
+                        <FormField control={form.control} name="weeklyAllowance" render={({ field }) => (
+                          <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Weekly Allow</FormLabel></FormItem>
+                        )} />
+                        <FormField control={form.control} name="monthlyAllowance" render={({ field }) => (
+                          <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Monthly Allow</FormLabel></FormItem>
+                        )} />
+                        <FormField control={form.control} name="unplannedAllowance" render={({ field }) => (
+                          <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Unplanned Allow</FormLabel></FormItem>
+                        )} />
+                        <FormField control={form.control} name="isTransfer" render={({ field }) => (
+                          <FormItem className="flex items-center gap-2 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                data-testid="checkbox-is-transfer"
+                              />
+                            </FormControl>
+                            <FormLabel>Transfer</FormLabel>
+                          </FormItem>
+                        )} />
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
               {editingTx?.isTransferUserOverridden && (
                 <div
                   className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"

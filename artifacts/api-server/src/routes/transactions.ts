@@ -19,6 +19,7 @@ import { selectPatternCandidates } from "../lib/patternCandidates";
 import {
   EXCLUDED_CATEGORY_RULE_ERROR,
   isExcludedCategory,
+  isTransferCategory,
 } from "../lib/excludedCategory";
 import {
   CreateTransactionBody,
@@ -206,6 +207,22 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       insertValues.isTransfer = result.isTransfer;
     }
   }
+  // (#607) If the client explicitly picked the system-managed Transfer
+  // category on creation, mirror the PATCH semantics: flip
+  // `isTransfer=true`, persist `isTransferUserOverridden=true`, and
+  // clear allowance toggles so the row is excluded from budget actuals
+  // and never appears in Weekly/Monthly/Unplanned roll-ups.
+  if (
+    bodyHasCategoryId &&
+    parsed.data.categoryId &&
+    (await isTransferCategory(req.userId!, parsed.data.categoryId))
+  ) {
+    insertValues.isTransfer = true;
+    insertValues.isTransferUserOverridden = true;
+    insertValues.weeklyAllowance = false;
+    insertValues.monthlyAllowance = false;
+    insertValues.unplannedAllowance = false;
+  }
   const [row] = await db
     .insert(transactionsTable)
     .values(insertValues as typeof transactionsTable.$inferInsert)
@@ -262,11 +279,24 @@ router.patch(
     );
     const pickingCategory =
       bodyHasCategoryId && patch.categoryId !== null && patch.categoryId !== undefined;
+    // (#607) Picking the system-managed Transfer category implicitly
+    // classifies the row as an internal transfer: flip `isTransfer=true`
+    // (and persist `isTransferUserOverridden=true` so future syncs
+    // respect it), and clear the allowance toggles since Transfer rows
+    // never participate in Weekly/Monthly/Unplanned roll-ups.
+    const pickingTransfer =
+      pickingCategory &&
+      (await isTransferCategory(req.userId!, patch.categoryId as string));
     const patchToApply: Record<string, unknown> = { ...patch };
     if (bodyHasIsTransfer || pickingCategory) {
       patchToApply.isTransferUserOverridden = true;
     }
-    if (pickingCategory && !bodyHasIsTransfer) {
+    if (pickingTransfer) {
+      patchToApply.isTransfer = true;
+      patchToApply.weeklyAllowance = false;
+      patchToApply.monthlyAllowance = false;
+      patchToApply.unplannedAllowance = false;
+    } else if (pickingCategory && !bodyHasIsTransfer) {
       patchToApply.isTransfer = false;
     }
     const [row] = await db
