@@ -587,6 +587,7 @@ export default function BillsPage() {
                 tone="income"
                 actual={incomeActual}
                 actualTestId="text-income-actual"
+                valueTestId="text-summary-income"
               />
               <SummaryRow
                 label="Bills"
@@ -594,6 +595,7 @@ export default function BillsPage() {
                 tone="bill"
                 actual={billsActual}
                 actualTestId="text-bills-actual"
+                valueTestId="text-summary-bills"
               />
               <SummaryRow label="Debt minimums" amount={-debtMin} tone="bill" />
               <div className="border-t pt-3 space-y-3">
@@ -621,7 +623,10 @@ export default function BillsPage() {
                 <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
                   Actual this month
                 </div>
-                <div className="text-[10px] text-muted-foreground">
+                <div
+                  className="text-[10px] text-muted-foreground"
+                  data-testid="text-actual-month-label"
+                >
                   {new Date(currentMonth + "T00:00:00").toLocaleDateString(
                     "en-US",
                     { month: "long" },
@@ -633,11 +638,13 @@ export default function BillsPage() {
                 label="Income"
                 amount={actualThisMonth.income}
                 tone="income"
+                valueTestId="text-actual-income"
               />
               <SummaryRow
                 label="Spend"
                 amount={-actualThisMonth.spend}
                 tone="bill"
+                valueTestId="text-actual-spend"
               />
               <div className="border-t pt-3 flex items-center justify-between">
                 <span className="text-sm font-semibold">Net</span>
@@ -836,12 +843,14 @@ function SummaryRow({
   tone,
   actual,
   actualTestId,
+  valueTestId,
 }: {
   label: string;
   amount: number;
   tone: "income" | "bill";
   actual?: number;
   actualTestId?: string;
+  valueTestId?: string;
 }) {
   const positive = amount >= 0;
   const colorClass = tone === "income" ? "text-emerald-700" : "text-destructive";
@@ -850,7 +859,10 @@ function SummaryRow({
     <div className="flex items-center justify-between text-sm gap-3">
       <span className="text-muted-foreground">{label}</span>
       <div className="flex items-baseline gap-2 min-w-0">
-        <span className={`tabular-nums font-medium ${colorClass}`}>
+        <span
+          className={`tabular-nums font-medium ${colorClass}`}
+          data-testid={valueTestId}
+        >
           {sign}
           {formatCurrency(amount)}
         </span>
