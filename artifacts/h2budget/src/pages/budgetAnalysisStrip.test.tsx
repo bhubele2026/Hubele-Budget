@@ -213,4 +213,145 @@ describe("Budget row analysis strip (#419 — covers strip added in #417)", () =
     const strip = screen.getByTestId("analysis-strip-cat-1");
     expect(within(strip).getByTestId("analysis-pace-cat-1")).toBe(pace);
   });
+
+  // Task #433 — covers the opposite branch from #419: when an expense line's
+  // actual exceeds planned, the strip should swap "remaining" wording for the
+  // alarm-y "over" wording and the percent-of-plan should read > 100%.
+  it("uses 'over' wording (not 'remaining') when an expense line is over budget", () => {
+    budgetMonth = {
+      monthPinned: false,
+      summary: {
+        income: { budget: "0", actual: "0" },
+        expenses: { budget: "100", actual: "150" },
+        net: { budget: "0", actual: "0" },
+        percentSpent: { budget: "0", actual: "0" },
+      },
+      groups: [
+        {
+          groupName: "Variable",
+          plannedTotal: "100",
+          actualTotal: "150",
+          lines: [
+            makeLine({
+              id: "line-1",
+              categoryId: "cat-1",
+              categoryName: "Groceries",
+              plannedAmount: "100",
+              actualAmount: "150",
+            }),
+          ],
+        },
+      ],
+    };
+    txns = [
+      {
+        id: "tx-1",
+        description: "TRADER JOES",
+        amount: "-150.00",
+        occurredOn: "2026-05-03",
+        categoryId: "cat-1",
+        isTransfer: false,
+        source: "plaid:chase",
+      },
+    ];
+
+    renderPage();
+
+    const strip = screen.getByTestId("analysis-strip-cat-1");
+    const text = strip.textContent ?? "";
+    expect(text).toMatch(/\$150\.00/);
+    expect(text).toMatch(/spent/);
+    expect(text).toMatch(/\$100\.00/);
+    expect(text).toMatch(/planned/);
+    // 150 / 100 = 150% — must be > 100%.
+    expect(text).toMatch(/150%/);
+    expect(text).toMatch(/of plan/);
+    // Over-budget wording is "$50.00 over" — never "remaining".
+    expect(text).toMatch(/\$50\.00 over\b/);
+    expect(text).not.toMatch(/remaining/);
+    // The diff span should carry the destructive (red) over-budget color.
+    const diffSpan = within(strip).getByText(/\$50\.00 over\b/);
+    expect(diffSpan.className).toMatch(/text-destructive/);
+  });
+
+  // Income variant: under-plan income reads "under plan", over-plan income
+  // reads "over plan" — never the expense-style "remaining" / "over" wording.
+  it("uses 'under plan' / 'over plan' wording for income lines (never 'remaining' / 'over')", () => {
+    categories = [
+      ...categories,
+      { id: "cat-inc-under", name: "Salary" },
+      { id: "cat-inc-over", name: "Bonus" },
+    ];
+    budgetMonth = {
+      monthPinned: false,
+      summary: {
+        income: { budget: "2000", actual: "1700" },
+        expenses: { budget: "0", actual: "0" },
+        net: { budget: "0", actual: "0" },
+        percentSpent: { budget: "0", actual: "0" },
+      },
+      groups: [
+        {
+          groupName: "Income",
+          plannedTotal: "2000",
+          actualTotal: "1700",
+          lines: [
+            makeLine({
+              id: "line-inc-under",
+              categoryId: "cat-inc-under",
+              categoryName: "Salary",
+              groupName: "Income",
+              kind: "income",
+              plannedAmount: "1000",
+              actualAmount: "800",
+            }),
+            makeLine({
+              id: "line-inc-over",
+              categoryId: "cat-inc-over",
+              categoryName: "Bonus",
+              groupName: "Income",
+              kind: "income",
+              plannedAmount: "1000",
+              actualAmount: "1200",
+            }),
+          ],
+        },
+      ],
+    };
+    txns = [
+      {
+        id: "tx-inc-1",
+        description: "PAYROLL",
+        amount: "800.00",
+        occurredOn: "2026-05-02",
+        categoryId: "cat-inc-under",
+        isTransfer: false,
+        source: "plaid:chase",
+      },
+      {
+        id: "tx-inc-2",
+        description: "BONUS",
+        amount: "1200.00",
+        occurredOn: "2026-05-02",
+        categoryId: "cat-inc-over",
+        isTransfer: false,
+        source: "plaid:chase",
+      },
+    ];
+
+    renderPage();
+
+    const underStrip = screen.getByTestId("analysis-strip-cat-inc-under");
+    const underText = underStrip.textContent ?? "";
+    expect(underText).toMatch(/\$200\.00 under plan\b/);
+    expect(underText).not.toMatch(/remaining/);
+    expect(underText).not.toMatch(/\bover\b/);
+
+    const overStrip = screen.getByTestId("analysis-strip-cat-inc-over");
+    const overText = overStrip.textContent ?? "";
+    expect(overText).toMatch(/\$200\.00 over plan\b/);
+    expect(overText).not.toMatch(/remaining/);
+    // Income lines never get the expense-only pace pill.
+    expect(within(overStrip).queryByTestId("analysis-pace-cat-inc-over")).toBeNull();
+  });
 });
