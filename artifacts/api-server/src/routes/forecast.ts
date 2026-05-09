@@ -163,6 +163,11 @@ export async function listCheckingAccounts(userId: string) {
   }));
 }
 
+// In-process per-user gate for the forecast safety-net dedupe passes.
+// Each /forecast hit was paying ~600-900ms re-running both passes; once
+// per process per user is sufficient (see commentary below).
+const FORECAST_DEDUPE_DONE = new Set<string>();
+
 router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   await archiveExpiredOneTime(userId);
@@ -242,21 +247,33 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   //      account from a relink that hasn't been collapsed yet).
   // Both passes are idempotent — clean data is a no-op. We run them
   // best-effort so the page never fails just because dedupe choked.
-  try {
-    await dedupeTransactionsForUser(userId);
-  } catch (err) {
-    console.error(
-      "[forecast] per-account transaction dedupe failed",
-      { userId, err: err instanceof Error ? err.message : String(err) },
-    );
-  }
-  try {
-    await dedupeTransactionsAcrossAccountsForUser(userId);
-  } catch (err) {
-    console.error(
-      "[forecast] cross-account transaction dedupe failed",
-      { userId, err: err instanceof Error ? err.message : String(err) },
-    );
+  //
+  // Perf: gate to once per process per user. These are safety-net heals,
+  // not a per-request responsibility — they re-scan every transaction for
+  // the user on every call and were costing ~600-900ms per /forecast hit
+  // (the page loads on every dashboard mount). The user-triggered cleanup
+  // path (POST /forecast/dedupe-transactions, route below) is unaffected
+  // and continues to run on demand. New duplicates introduced after the
+  // first run are still caught by the next process boot or by the explicit
+  // cleanup button on Settings.
+  if (!FORECAST_DEDUPE_DONE.has(userId)) {
+    try {
+      await dedupeTransactionsForUser(userId);
+    } catch (err) {
+      console.error(
+        "[forecast] per-account transaction dedupe failed",
+        { userId, err: err instanceof Error ? err.message : String(err) },
+      );
+    }
+    try {
+      await dedupeTransactionsAcrossAccountsForUser(userId);
+    } catch (err) {
+      console.error(
+        "[forecast] cross-account transaction dedupe failed",
+        { userId, err: err instanceof Error ? err.message : String(err) },
+      );
+    }
+    FORECAST_DEDUPE_DONE.add(userId);
   }
   const days = Number(req.query.days) || settings.daysAhead || 90;
 
