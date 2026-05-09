@@ -249,7 +249,16 @@ const BILL_NAME_TO_MANUAL_CATEGORY: Readonly<Record<string, string>> = {
   "Dog Waste Removal": "Pets",
 };
 
+// In-process per-user gates for the idempotent corrective passes below.
+// Each pass is a one-time backfill — running it once per process boot per
+// user is sufficient. Without this, every GET /api/budget/months/:m re-scanned
+// every category + recurring item for the user, adding ~1.5s of pointless
+// DB churn to a hot path that the dashboard hits twice per page load.
+const HEAL_BILL_LINKS_DONE = new Set<string>();
+const ENSURE_UNCATEGORIZED_DONE = new Set<string>();
+
 async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
+  if (HEAL_BILL_LINKS_DONE.has(userId)) return;
   // Step 1: relink known bill names to their manual category if such a
   // category exists for this user. No-op if the recurring item is already
   // linked to the right category.
@@ -301,7 +310,10 @@ async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
   const autoExpenseCats = cats.filter(
     (c) => c.sourceKind === "auto_bills" && c.kind === "expense",
   );
-  if (autoExpenseCats.length === 0) return;
+  if (autoExpenseCats.length === 0) {
+    HEAL_BILL_LINKS_DONE.add(userId);
+    return;
+  }
 
   const stillLinked = new Set<string>();
   const refreshedItems = await db
@@ -318,7 +330,10 @@ async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
   const orphans = autoExpenseCats
     .filter((c) => !stillLinked.has(c.id))
     .map((c) => c.id);
-  if (orphans.length === 0) return;
+  if (orphans.length === 0) {
+    HEAL_BILL_LINKS_DONE.add(userId);
+    return;
+  }
 
   await db
     .delete(budgetLinesTable)
@@ -353,6 +368,7 @@ async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
         inArray(budgetCategoriesTable.id, orphans),
       ),
     );
+  HEAL_BILL_LINKS_DONE.add(userId);
 }
 
 async function syncAutoBillsFromRecurring(userId: string): Promise<void> {
@@ -838,6 +854,7 @@ async function reconcileMay2026Amounts(userId: string): Promise<void> {
 // excluded from actuals. Idempotent via the (userId, name) unique index;
 // also self-heals legacy rows that pre-date the flag by flipping it on.
 async function ensureUncategorizedCategory(userId: string): Promise<void> {
+  if (ENSURE_UNCATEGORIZED_DONE.has(userId)) return;
   const sortOrderByGroup = new Map<string, number>();
   SEED_GROUP_ORDER.forEach((g, i) => sortOrderByGroup.set(g, i * 100));
   // Park it well after the canonical groups so any debug surface that
@@ -858,6 +875,7 @@ async function ensureUncategorizedCategory(userId: string): Promise<void> {
       target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
       set: { excludeFromBudget: true },
     });
+  ENSURE_UNCATEGORIZED_DONE.add(userId);
 }
 
 router.get("/budget/categories", requireAuth, async (req, res): Promise<void> => {
