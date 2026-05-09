@@ -16,9 +16,15 @@ vi.mock("wouter", async () => {
   };
 });
 
+// Tests render the SignUpPage in its signed-out state, so <Show
+// when="signed-in"> renders nothing and <Show when="signed-out">
+// renders its children. This keeps the existing assertions valid
+// while still exercising the latching behavior.
 vi.mock("@clerk/react", () => ({
   SignIn: () => <div data-testid="signin-form" />,
   SignUp: () => <div data-testid="signup-form" />,
+  Show: ({ when, children }: { when: string; children: React.ReactNode }) =>
+    when === "signed-out" ? <>{children}</> : null,
 }));
 
 import { SignUpPage } from "./auth";

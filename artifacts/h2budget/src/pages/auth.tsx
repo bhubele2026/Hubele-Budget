@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Redirect } from "wouter";
-import { SignIn, SignUp } from "@clerk/react";
+import { SignIn, SignUp, Show } from "@clerk/react";
 import { useCheckInvitation } from "@workspace/api-client-react";
 import { Mail } from "lucide-react";
 import { H2Logo } from "@/components/h2-logo";
@@ -160,13 +160,27 @@ export function SignUpPage() {
     return <Redirect to="/sign-in" />;
   }
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-5">
-      <AuthBrandHeader />
-      <SignUp
-        path={`${basePath}/sign-up`}
-        routing="path"
-        signInUrl={`${basePath}/sign-in`}
-      />
-    </div>
+    <>
+      {/* Once Clerk finishes accepting the invite ticket the user is
+          signed in, but the <SignUp> component has nothing left to
+          render and just sits on its "Just a moment" loader forever.
+          Forcing a redirect to /dashboard the moment the session
+          appears is what actually unblocks the invitation flow. */}
+      <Show when="signed-in">
+        <Redirect to="/dashboard" />
+      </Show>
+      <Show when="signed-out">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-5">
+          <AuthBrandHeader />
+          <SignUp
+            path={`${basePath}/sign-up`}
+            routing="path"
+            signInUrl={`${basePath}/sign-in`}
+            forceRedirectUrl={`${basePath}/dashboard`}
+            fallbackRedirectUrl={`${basePath}/dashboard`}
+          />
+        </div>
+      </Show>
+    </>
   );
 }
