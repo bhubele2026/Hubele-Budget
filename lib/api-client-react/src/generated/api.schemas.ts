@@ -12,15 +12,14 @@ export interface HealthStatus {
 /**
  * @nullable
  */
-export type TransactionWeeklyBucket =
-  | (typeof TransactionWeeklyBucket)[keyof typeof TransactionWeeklyBucket]
-  | null;
+export type TransactionWeeklyBucket = typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket] | null;
+
 
 export const TransactionWeeklyBucket = {
-  groceries: "groceries",
-  dining: "dining",
-  entertainment: "entertainment",
-  misc: "misc",
+  groceries: 'groceries',
+  dining: 'dining',
+  entertainment: 'entertainment',
+  misc: 'misc',
 } as const;
 
 export interface Transaction {
@@ -91,15 +90,14 @@ on the Transactions and Amex pages.
 /**
  * @nullable
  */
-export type CreateTransactionInputWeeklyBucket =
-  | (typeof CreateTransactionInputWeeklyBucket)[keyof typeof CreateTransactionInputWeeklyBucket]
-  | null;
+export type CreateTransactionInputWeeklyBucket = typeof CreateTransactionInputWeeklyBucket[keyof typeof CreateTransactionInputWeeklyBucket] | null;
+
 
 export const CreateTransactionInputWeeklyBucket = {
-  groceries: "groceries",
-  dining: "dining",
-  entertainment: "entertainment",
-  misc: "misc",
+  groceries: 'groceries',
+  dining: 'dining',
+  entertainment: 'entertainment',
+  misc: 'misc',
 } as const;
 
 export interface CreateTransactionInput {
@@ -137,15 +135,14 @@ export interface CreateTransactionInput {
 /**
  * @nullable
  */
-export type TransactionInputWeeklyBucket =
-  | (typeof TransactionInputWeeklyBucket)[keyof typeof TransactionInputWeeklyBucket]
-  | null;
+export type TransactionInputWeeklyBucket = typeof TransactionInputWeeklyBucket[keyof typeof TransactionInputWeeklyBucket] | null;
+
 
 export const TransactionInputWeeklyBucket = {
-  groceries: "groceries",
-  dining: "dining",
-  entertainment: "entertainment",
-  misc: "misc",
+  groceries: 'groceries',
+  dining: 'dining',
+  entertainment: 'entertainment',
+  misc: 'misc',
 } as const;
 
 export interface TransactionInput {
@@ -190,13 +187,13 @@ Transactions and Amex pages.
   rememberPattern?: string | null;
 }
 
-export type RepointedRuleMatchType =
-  (typeof RepointedRuleMatchType)[keyof typeof RepointedRuleMatchType];
+export type RepointedRuleMatchType = typeof RepointedRuleMatchType[keyof typeof RepointedRuleMatchType];
+
 
 export const RepointedRuleMatchType = {
-  contains: "contains",
-  exact: "exact",
-  starts_with: "starts_with",
+  contains: 'contains',
+  exact: 'exact',
+  starts_with: 'starts_with',
 } as const;
 
 export interface RepointedRuleSample {
@@ -261,15 +258,15 @@ sufficient for the toast's "Show matches" preview dialog.
   same-category no-op, or no derivable pattern).
 
  */
-export type RuleActionKind =
-  (typeof RuleActionKind)[keyof typeof RuleActionKind];
+export type RuleActionKind = typeof RuleActionKind[keyof typeof RuleActionKind];
+
 
 export const RuleActionKind = {
-  created: "created",
-  created_priority_bump: "created_priority_bump",
-  skipped_generic: "skipped_generic",
-  repointed: "repointed",
-  none: "none",
+  created: 'created',
+  created_priority_bump: 'created_priority_bump',
+  skipped_generic: 'skipped_generic',
+  repointed: 'repointed',
+  none: 'none',
 } as const;
 
 /**
@@ -280,14 +277,13 @@ user accepts the "apply to past charges?" prompt.
 
  * @nullable
  */
-export type RuleActionMatchType =
-  | (typeof RuleActionMatchType)[keyof typeof RuleActionMatchType]
-  | null;
+export type RuleActionMatchType = typeof RuleActionMatchType[keyof typeof RuleActionMatchType] | null;
+
 
 export const RuleActionMatchType = {
-  contains: "contains",
-  exact: "exact",
-  starts_with: "starts_with",
+  contains: 'contains',
+  exact: 'exact',
+  starts_with: 'starts_with',
 } as const;
 
 /**
@@ -400,7 +396,7 @@ transactions too" prompt.
   ruleAction: RuleAction;
 };
 
-export type CreateTransactionResponse = Transaction & {
+export type CreateTransactionResponse = Transaction & ({
   /**
    * Id of the mapping rule that auto-attributed this row's
 `categoryId` during POST /transactions. Set only when the
@@ -417,15 +413,15 @@ deleting the row itself).
    * @nullable
    */
   autoCategorizedRuleId: string | null;
-};
+});
 
-export type RecategorizeByPatternInputMatchType =
-  (typeof RecategorizeByPatternInputMatchType)[keyof typeof RecategorizeByPatternInputMatchType];
+export type RecategorizeByPatternInputMatchType = typeof RecategorizeByPatternInputMatchType[keyof typeof RecategorizeByPatternInputMatchType];
+
 
 export const RecategorizeByPatternInputMatchType = {
-  contains: "contains",
-  exact: "exact",
-  starts_with: "starts_with",
+  contains: 'contains',
+  exact: 'exact',
+  starts_with: 'starts_with',
 } as const;
 
 export interface RecategorizeByPatternInput {
@@ -610,27 +606,28 @@ new target.
   affectedIds: string[];
 }
 
-export type DebtBalanceSource =
-  (typeof DebtBalanceSource)[keyof typeof DebtBalanceSource];
+export type DebtBalanceSource = typeof DebtBalanceSource[keyof typeof DebtBalanceSource];
+
 
 export const DebtBalanceSource = {
-  plaid: "plaid",
-  manual: "manual",
+  plaid: 'plaid',
+  manual: 'manual',
 } as const;
 
-export type DebtAprSource = (typeof DebtAprSource)[keyof typeof DebtAprSource];
+export type DebtAprSource = typeof DebtAprSource[keyof typeof DebtAprSource];
+
 
 export const DebtAprSource = {
-  plaid: "plaid",
-  manual: "manual",
+  plaid: 'plaid',
+  manual: 'manual',
 } as const;
 
-export type DebtMinPaymentSource =
-  (typeof DebtMinPaymentSource)[keyof typeof DebtMinPaymentSource];
+export type DebtMinPaymentSource = typeof DebtMinPaymentSource[keyof typeof DebtMinPaymentSource];
+
 
 export const DebtMinPaymentSource = {
-  plaid: "plaid",
-  manual: "manual",
+  plaid: 'plaid',
+  manual: 'manual',
 } as const;
 
 export interface DebtPlaidAccount {
@@ -848,12 +845,12 @@ list to just the institution that was just linked.
   suggestedDebt?: PlaidSuggestedDebt | null;
 }
 
-export type CreateDebtFromPlaidResultAction =
-  (typeof CreateDebtFromPlaidResultAction)[keyof typeof CreateDebtFromPlaidResultAction];
+export type CreateDebtFromPlaidResultAction = typeof CreateDebtFromPlaidResultAction[keyof typeof CreateDebtFromPlaidResultAction];
+
 
 export const CreateDebtFromPlaidResultAction = {
-  created: "created",
-  "linked-existing": "linked-existing",
+  created: 'created',
+  'linked-existing': 'linked-existing',
 } as const;
 
 export interface CreateDebtFromPlaidResult {
@@ -871,16 +868,16 @@ export interface BulkCreateDebtsFromPlaidRequest {
   accounts: BulkCreateDebtsFromPlaidRequestAccountsItem[];
 }
 
-export type BulkCreateDebtFromPlaidResultStatus =
-  (typeof BulkCreateDebtFromPlaidResultStatus)[keyof typeof BulkCreateDebtFromPlaidResultStatus];
+export type BulkCreateDebtFromPlaidResultStatus = typeof BulkCreateDebtFromPlaidResultStatus[keyof typeof BulkCreateDebtFromPlaidResultStatus];
+
 
 export const BulkCreateDebtFromPlaidResultStatus = {
-  created: "created",
-  "linked-existing": "linked-existing",
-  "already-linked": "already-linked",
-  "not-debt-like": "not-debt-like",
-  "not-found": "not-found",
-  error: "error",
+  created: 'created',
+  'linked-existing': 'linked-existing',
+  'already-linked': 'already-linked',
+  'not-debt-like': 'not-debt-like',
+  'not-found': 'not-found',
+  error: 'error',
 } as const;
 
 export interface BulkCreateDebtFromPlaidResult {
@@ -898,29 +895,29 @@ export interface BulkCreateDebtsFromPlaidResponse {
   results: BulkCreateDebtFromPlaidResult[];
 }
 
-export type AvalancheSettingsStrategy =
-  (typeof AvalancheSettingsStrategy)[keyof typeof AvalancheSettingsStrategy];
+export type AvalancheSettingsStrategy = typeof AvalancheSettingsStrategy[keyof typeof AvalancheSettingsStrategy];
+
 
 export const AvalancheSettingsStrategy = {
-  avalanche: "avalanche",
-  snowball: "snowball",
+  avalanche: 'avalanche',
+  snowball: 'snowball',
 } as const;
 
-export type AvalancheSettingsExtraSource =
-  (typeof AvalancheSettingsExtraSource)[keyof typeof AvalancheSettingsExtraSource];
+export type AvalancheSettingsExtraSource = typeof AvalancheSettingsExtraSource[keyof typeof AvalancheSettingsExtraSource];
+
 
 export const AvalancheSettingsExtraSource = {
-  budget_net: "budget_net",
-  budget_line: "budget_line",
-  manual: "manual",
+  budget_net: 'budget_net',
+  budget_line: 'budget_line',
+  manual: 'manual',
 } as const;
 
-export type AvalancheSettingsBudgetMode =
-  (typeof AvalancheSettingsBudgetMode)[keyof typeof AvalancheSettingsBudgetMode];
+export type AvalancheSettingsBudgetMode = typeof AvalancheSettingsBudgetMode[keyof typeof AvalancheSettingsBudgetMode];
+
 
 export const AvalancheSettingsBudgetMode = {
-  budgeted: "budgeted",
-  actual: "actual",
+  budgeted: 'budgeted',
+  actual: 'actual',
 } as const;
 
 export interface AvalancheSettings {
@@ -932,29 +929,29 @@ export interface AvalancheSettings {
   budgetMode: AvalancheSettingsBudgetMode;
 }
 
-export type AvalancheSettingsInputStrategy =
-  (typeof AvalancheSettingsInputStrategy)[keyof typeof AvalancheSettingsInputStrategy];
+export type AvalancheSettingsInputStrategy = typeof AvalancheSettingsInputStrategy[keyof typeof AvalancheSettingsInputStrategy];
+
 
 export const AvalancheSettingsInputStrategy = {
-  avalanche: "avalanche",
-  snowball: "snowball",
+  avalanche: 'avalanche',
+  snowball: 'snowball',
 } as const;
 
-export type AvalancheSettingsInputExtraSource =
-  (typeof AvalancheSettingsInputExtraSource)[keyof typeof AvalancheSettingsInputExtraSource];
+export type AvalancheSettingsInputExtraSource = typeof AvalancheSettingsInputExtraSource[keyof typeof AvalancheSettingsInputExtraSource];
+
 
 export const AvalancheSettingsInputExtraSource = {
-  budget_net: "budget_net",
-  budget_line: "budget_line",
-  manual: "manual",
+  budget_net: 'budget_net',
+  budget_line: 'budget_line',
+  manual: 'manual',
 } as const;
 
-export type AvalancheSettingsInputBudgetMode =
-  (typeof AvalancheSettingsInputBudgetMode)[keyof typeof AvalancheSettingsInputBudgetMode];
+export type AvalancheSettingsInputBudgetMode = typeof AvalancheSettingsInputBudgetMode[keyof typeof AvalancheSettingsInputBudgetMode];
+
 
 export const AvalancheSettingsInputBudgetMode = {
-  budgeted: "budgeted",
-  actual: "actual",
+  budgeted: 'budgeted',
+  actual: 'actual',
 } as const;
 
 export interface AvalancheSettingsInput {
@@ -966,21 +963,21 @@ export interface AvalancheSettingsInput {
   budgetMode?: AvalancheSettingsInputBudgetMode;
 }
 
-export type AvalancheExtraSource =
-  (typeof AvalancheExtraSource)[keyof typeof AvalancheExtraSource];
+export type AvalancheExtraSource = typeof AvalancheExtraSource[keyof typeof AvalancheExtraSource];
+
 
 export const AvalancheExtraSource = {
-  budget_net: "budget_net",
-  budget_line: "budget_line",
-  manual: "manual",
+  budget_net: 'budget_net',
+  budget_line: 'budget_line',
+  manual: 'manual',
 } as const;
 
-export type AvalancheExtraMode =
-  (typeof AvalancheExtraMode)[keyof typeof AvalancheExtraMode];
+export type AvalancheExtraMode = typeof AvalancheExtraMode[keyof typeof AvalancheExtraMode];
+
 
 export const AvalancheExtraMode = {
-  budgeted: "budgeted",
-  actual: "actual",
+  budgeted: 'budgeted',
+  actual: 'actual',
 } as const;
 
 export type AvalancheExtraBreakdown = {
@@ -1086,12 +1083,12 @@ export interface BillsSummaryMonthly {
   monthEnd: string;
 }
 
-export type BillsDebtMinRowSource =
-  (typeof BillsDebtMinRowSource)[keyof typeof BillsDebtMinRowSource];
+export type BillsDebtMinRowSource = typeof BillsDebtMinRowSource[keyof typeof BillsDebtMinRowSource];
+
 
 export const BillsDebtMinRowSource = {
-  plaid: "plaid",
-  manual: "manual",
+  plaid: 'plaid',
+  manual: 'manual',
 } as const;
 
 export interface BillsDebtMinRow {
@@ -1117,13 +1114,13 @@ export interface BillsSummary {
   monthly: BillsSummaryMonthly;
 }
 
-export type CategorySourceKind =
-  (typeof CategorySourceKind)[keyof typeof CategorySourceKind];
+export type CategorySourceKind = typeof CategorySourceKind[keyof typeof CategorySourceKind];
+
 
 export const CategorySourceKind = {
-  manual: "manual",
-  auto_bills: "auto_bills",
-  auto_debts: "auto_debts",
+  manual: 'manual',
+  auto_bills: 'auto_bills',
+  auto_debts: 'auto_debts',
 } as const;
 
 export interface Category {
@@ -1145,13 +1142,13 @@ API also rejects rules that target it).
   excludeFromBudget?: boolean;
 }
 
-export type CategoryInputSourceKind =
-  (typeof CategoryInputSourceKind)[keyof typeof CategoryInputSourceKind];
+export type CategoryInputSourceKind = typeof CategoryInputSourceKind[keyof typeof CategoryInputSourceKind];
+
 
 export const CategoryInputSourceKind = {
-  manual: "manual",
-  auto_bills: "auto_bills",
-  auto_debts: "auto_debts",
+  manual: 'manual',
+  auto_bills: 'auto_bills',
+  auto_debts: 'auto_debts',
 } as const;
 
 export interface CategoryInput {
@@ -1195,32 +1192,32 @@ export interface PinResult {
   linesPinned: number;
 }
 
-export type BudgetLineWithActualSourceKind =
-  (typeof BudgetLineWithActualSourceKind)[keyof typeof BudgetLineWithActualSourceKind];
+export type BudgetLineWithActualSourceKind = typeof BudgetLineWithActualSourceKind[keyof typeof BudgetLineWithActualSourceKind];
+
 
 export const BudgetLineWithActualSourceKind = {
-  manual: "manual",
-  auto_bills: "auto_bills",
-  auto_debts: "auto_debts",
+  manual: 'manual',
+  auto_bills: 'auto_bills',
+  auto_debts: 'auto_debts',
 } as const;
 
-export type BudgetLineWithActualSourceBreakdownItemSource =
-  (typeof BudgetLineWithActualSourceBreakdownItemSource)[keyof typeof BudgetLineWithActualSourceBreakdownItemSource];
+export type BudgetLineWithActualSourceBreakdownItemSource = typeof BudgetLineWithActualSourceBreakdownItemSource[keyof typeof BudgetLineWithActualSourceBreakdownItemSource];
+
 
 export const BudgetLineWithActualSourceBreakdownItemSource = {
-  Bank: "Bank",
-  Amex: "Amex",
-  Other: "Other",
+  Bank: 'Bank',
+  Amex: 'Amex',
+  Other: 'Other',
 } as const;
 
-export type BudgetLineWithActualPlannedSourceKind =
-  (typeof BudgetLineWithActualPlannedSourceKind)[keyof typeof BudgetLineWithActualPlannedSourceKind];
+export type BudgetLineWithActualPlannedSourceKind = typeof BudgetLineWithActualPlannedSourceKind[keyof typeof BudgetLineWithActualPlannedSourceKind];
+
 
 export const BudgetLineWithActualPlannedSourceKind = {
-  bills: "bills",
-  pinned: "pinned",
-  derived: "derived",
-  manual: "manual",
+  bills: 'bills',
+  pinned: 'pinned',
+  derived: 'derived',
+  manual: 'manual',
 } as const;
 
 export type BudgetLineWithActualSourceBreakdownItem = {
@@ -1427,13 +1424,13 @@ response reports `candidateCount: 0`.
   toCategoryId: string;
 }
 
-export type MappingRuleRecategorizePreviewMatchType =
-  (typeof MappingRuleRecategorizePreviewMatchType)[keyof typeof MappingRuleRecategorizePreviewMatchType];
+export type MappingRuleRecategorizePreviewMatchType = typeof MappingRuleRecategorizePreviewMatchType[keyof typeof MappingRuleRecategorizePreviewMatchType];
+
 
 export const MappingRuleRecategorizePreviewMatchType = {
-  contains: "contains",
-  exact: "exact",
-  starts_with: "starts_with",
+  contains: 'contains',
+  exact: 'exact',
+  starts_with: 'starts_with',
 } as const;
 
 /**
@@ -1471,13 +1468,13 @@ thin slice (id, description, occurredOn, amount) used by
   sampleTransactions: RepointedRuleSample[];
 }
 
-export type MappingRulePatternRecategorizePreviewInputMatchType =
-  (typeof MappingRulePatternRecategorizePreviewInputMatchType)[keyof typeof MappingRulePatternRecategorizePreviewInputMatchType];
+export type MappingRulePatternRecategorizePreviewInputMatchType = typeof MappingRulePatternRecategorizePreviewInputMatchType[keyof typeof MappingRulePatternRecategorizePreviewInputMatchType];
+
 
 export const MappingRulePatternRecategorizePreviewInputMatchType = {
-  contains: "contains",
-  exact: "exact",
-  starts_with: "starts_with",
+  contains: 'contains',
+  exact: 'exact',
+  starts_with: 'starts_with',
 } as const;
 
 /**
@@ -1508,13 +1505,13 @@ currently-picked category, but doesn't affect the count.
   toCategoryId?: string;
 }
 
-export type MappingRulePatternRecategorizePreviewMatchType =
-  (typeof MappingRulePatternRecategorizePreviewMatchType)[keyof typeof MappingRulePatternRecategorizePreviewMatchType];
+export type MappingRulePatternRecategorizePreviewMatchType = typeof MappingRulePatternRecategorizePreviewMatchType[keyof typeof MappingRulePatternRecategorizePreviewMatchType];
+
 
 export const MappingRulePatternRecategorizePreviewMatchType = {
-  contains: "contains",
-  exact: "exact",
-  starts_with: "starts_with",
+  contains: 'contains',
+  exact: 'exact',
+  starts_with: 'starts_with',
 } as const;
 
 /**
@@ -1583,12 +1580,12 @@ export interface WeeklyBucketLabels {
   misc?: string;
 }
 
-export type DaysSinceTrackerMatchType =
-  (typeof DaysSinceTrackerMatchType)[keyof typeof DaysSinceTrackerMatchType];
+export type DaysSinceTrackerMatchType = typeof DaysSinceTrackerMatchType[keyof typeof DaysSinceTrackerMatchType];
+
 
 export const DaysSinceTrackerMatchType = {
-  category: "category",
-  keyword: "keyword",
+  category: 'category',
+  keyword: 'keyword',
 } as const;
 
 export interface DaysSinceTracker {
@@ -1630,14 +1627,14 @@ export interface MeResponse {
   isOwner: boolean;
 }
 
-export type InvitationStatus =
-  (typeof InvitationStatus)[keyof typeof InvitationStatus];
+export type InvitationStatus = typeof InvitationStatus[keyof typeof InvitationStatus];
+
 
 export const InvitationStatus = {
-  pending: "pending",
-  accepted: "accepted",
-  revoked: "revoked",
-  expired: "expired",
+  pending: 'pending',
+  accepted: 'accepted',
+  revoked: 'revoked',
+  expired: 'expired',
 } as const;
 
 export interface Invitation {
@@ -1758,12 +1755,12 @@ export interface ForecastSettingsInput {
   cashBuffer?: string;
 }
 
-export type BankSnapshotSource =
-  (typeof BankSnapshotSource)[keyof typeof BankSnapshotSource];
+export type BankSnapshotSource = typeof BankSnapshotSource[keyof typeof BankSnapshotSource];
+
 
 export const BankSnapshotSource = {
-  manual: "manual",
-  plaid: "plaid",
+  manual: 'manual',
+  plaid: 'plaid',
 } as const;
 
 export interface BankSnapshot {
@@ -1791,14 +1788,14 @@ export interface PlaidCheckingAccount {
   institutionName?: string | null;
 }
 
-export type CashSignalStatus =
-  (typeof CashSignalStatus)[keyof typeof CashSignalStatus];
+export type CashSignalStatus = typeof CashSignalStatus[keyof typeof CashSignalStatus];
+
 
 export const CashSignalStatus = {
-  ready: "ready",
-  tight: "tight",
-  not_yet: "not_yet",
-  no_data: "no_data",
+  ready: 'ready',
+  tight: 'tight',
+  not_yet: 'not_yet',
+  no_data: 'no_data',
 } as const;
 
 export type CashSignalDailyItem = {
@@ -1856,14 +1853,14 @@ export interface MonthSnapshot {
   closedAt?: string | null;
 }
 
-export type ForecastBundleMonthSnapshots = { [key: string]: MonthSnapshot };
+export type ForecastBundleMonthSnapshots = {[key: string]: MonthSnapshot};
 
-export type AccountSnapshotSource =
-  (typeof AccountSnapshotSource)[keyof typeof AccountSnapshotSource];
+export type AccountSnapshotSource = typeof AccountSnapshotSource[keyof typeof AccountSnapshotSource];
+
 
 export const AccountSnapshotSource = {
-  manual: "manual",
-  plaid: "plaid",
+  manual: 'manual',
+  plaid: 'plaid',
 } as const;
 
 export interface AccountSnapshot {
@@ -1876,7 +1873,7 @@ export interface AccountSnapshot {
   mask?: string | null;
 }
 
-export type ForecastBundleAccountSnapshots = { [key: string]: AccountSnapshot };
+export type ForecastBundleAccountSnapshots = {[key: string]: AccountSnapshot};
 
 export interface ForecastBundle {
   fromDate: string;
@@ -1916,14 +1913,14 @@ export interface DuplicateTransactionCount {
   duplicateCount: number;
 }
 
-export type AmexAnchorSource =
-  (typeof AmexAnchorSource)[keyof typeof AmexAnchorSource];
+export type AmexAnchorSource = typeof AmexAnchorSource[keyof typeof AmexAnchorSource];
+
 
 export const AmexAnchorSource = {
-  debt: "debt",
-  anchor: "anchor",
-  computed: "computed",
-  missing: "missing",
+  debt: 'debt',
+  anchor: 'anchor',
+  computed: 'computed',
+  missing: 'missing',
 } as const;
 
 export interface AmexAnchor {
@@ -1953,7 +1950,7 @@ export interface DashboardBudgetInput {
   amount: string;
 }
 
-export type ImportSummaryCounts = { [key: string]: number };
+export type ImportSummaryCounts = {[key: string]: number};
 
 export interface RuleAttribution {
   ruleId: string;
@@ -2066,16 +2063,15 @@ export type PlaidSyncResultItemsItemImportedDateRange = {
 /**
  * @nullable
  */
-export type PlaidSyncResultItemsItemKind =
-  | (typeof PlaidSyncResultItemsItemKind)[keyof typeof PlaidSyncResultItemsItemKind]
-  | null;
+export type PlaidSyncResultItemsItemKind = typeof PlaidSyncResultItemsItemKind[keyof typeof PlaidSyncResultItemsItemKind] | null;
+
 
 export const PlaidSyncResultItemsItemKind = {
-  reauth: "reauth",
-  rate_limit: "rate_limit",
-  institution_down: "institution_down",
-  transient: "transient",
-  unknown: "unknown",
+  reauth: 'reauth',
+  rate_limit: 'rate_limit',
+  institution_down: 'institution_down',
+  transient: 'transient',
+  unknown: 'unknown',
 } as const;
 
 export type PlaidSyncResultItemsItem = {
@@ -2135,28 +2131,27 @@ export interface PlaidConsentRefreshResult {
   items: PlaidConsentRefreshItem[];
 }
 
-export type PlaidSyncAttemptKind =
-  (typeof PlaidSyncAttemptKind)[keyof typeof PlaidSyncAttemptKind];
+export type PlaidSyncAttemptKind = typeof PlaidSyncAttemptKind[keyof typeof PlaidSyncAttemptKind];
+
 
 export const PlaidSyncAttemptKind = {
-  transactions: "transactions",
-  balance: "balance",
-  liabilities: "liabilities",
+  transactions: 'transactions',
+  balance: 'balance',
+  liabilities: 'liabilities',
 } as const;
 
 /**
  * @nullable
  */
-export type PlaidSyncAttemptErrorKind =
-  | (typeof PlaidSyncAttemptErrorKind)[keyof typeof PlaidSyncAttemptErrorKind]
-  | null;
+export type PlaidSyncAttemptErrorKind = typeof PlaidSyncAttemptErrorKind[keyof typeof PlaidSyncAttemptErrorKind] | null;
+
 
 export const PlaidSyncAttemptErrorKind = {
-  reauth: "reauth",
-  rate_limit: "rate_limit",
-  institution_down: "institution_down",
-  transient: "transient",
-  unknown: "unknown",
+  reauth: 'reauth',
+  rate_limit: 'rate_limit',
+  institution_down: 'institution_down',
+  transient: 'transient',
+  unknown: 'unknown',
 } as const;
 
 export interface PlaidSyncAttempt {
@@ -2185,14 +2180,13 @@ export interface PlaidSyncAttemptsResult {
 /**
  * @nullable
  */
-export type PlaidEnvironmentInfoEnv =
-  | (typeof PlaidEnvironmentInfoEnv)[keyof typeof PlaidEnvironmentInfoEnv]
-  | null;
+export type PlaidEnvironmentInfoEnv = typeof PlaidEnvironmentInfoEnv[keyof typeof PlaidEnvironmentInfoEnv] | null;
+
 
 export const PlaidEnvironmentInfoEnv = {
-  sandbox: "sandbox",
-  development: "development",
-  production: "production",
+  sandbox: 'sandbox',
+  development: 'development',
+  production: 'production',
 } as const;
 
 export type PlaidEnvironmentInfoNonProdItemsItem = {
@@ -2214,21 +2208,21 @@ export interface PlaidEnvironmentInfo {
 }
 
 export type ListTransactionsParams = {
-  from?: string;
-  to?: string;
-  limit?: number;
-  source?: string;
-  uncategorized?: boolean;
-  excludeTransfers?: boolean;
-  reimbursable?: boolean;
-  search?: string;
-  minAmount?: string;
-  maxAmount?: string;
-  categoryId?: string;
+from?: string;
+to?: string;
+limit?: number;
+source?: string;
+uncategorized?: boolean;
+excludeTransfers?: boolean;
+reimbursable?: boolean;
+search?: string;
+minAmount?: string;
+maxAmount?: string;
+categoryId?: string;
 };
 
 export type ListPlaidLiabilityAccountsParams = {
-  refresh?: boolean;
+refresh?: boolean;
 };
 
 export type CreateDebtFromPlaidAccount409 = {
@@ -2238,12 +2232,12 @@ export type CreateDebtFromPlaidAccount409 = {
 };
 
 export type GetForecastParams = {
-  days?: number;
+days?: number;
 };
 
 export type GetForecastCashSignalParams = {
-  horizonDays?: number;
-  fromDate?: string;
+horizonDays?: number;
+fromDate?: string;
 };
 
 export type CloseForecastMonthBody = {
@@ -2265,13 +2259,13 @@ export type DeleteAmexAnchor200 = {
 };
 
 export type ListDashboardBudgetsParams = {
-  bucket?: string;
-  periodKey?: string;
+bucket?: string;
+periodKey?: string;
 };
 
 export type DeleteDashboardBudgetParams = {
-  bucket: string;
-  periodKey: string;
+bucket: string;
+periodKey: string;
 };
 
 export type UpdatePlaidImportCutoffDateBody = {
@@ -2292,15 +2286,16 @@ export type CleanupNonProdPlaidItems200 = {
 };
 
 export type GetBillsSummaryParams = {
-  /**
+/**
  * Optional YYYY-MM-01 month-start. Defaults to the current calendar
 month. Used to scope calendar expansion of recurring items and
 matched-resolution windowing.
 
  */
-  month?: string;
+month?: string;
 };
 
 export type ImportWorkbookBody = {
   file: Blob;
 };
+
