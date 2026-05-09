@@ -500,12 +500,7 @@ export default function AvalanchePage() {
   );
 
   if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
+    return null;
   }
 
   const handleSave = async (id: string, patch: Partial<Debt>) => {

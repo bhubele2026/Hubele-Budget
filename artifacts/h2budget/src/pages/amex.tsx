@@ -1362,13 +1362,7 @@ export default function AmexPage() {
   }, [isLoading]);
 
   if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
+    return null;
   }
 
   const todayKey = ymd(new Date());

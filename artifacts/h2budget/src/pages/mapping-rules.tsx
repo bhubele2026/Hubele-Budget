@@ -1923,12 +1923,7 @@ export default function MappingRulesPage() {
   }, [testRules.data]);
 
   if (rulesLoading || catsLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
+    return null;
   }
 
   // Drag-and-drop reorders the full sorted list, so we must disable it

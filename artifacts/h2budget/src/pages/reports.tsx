@@ -386,12 +386,7 @@ export default function ReportsPage() {
   );
 
   if (txnsLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
+    return null;
   }
 
   return (
