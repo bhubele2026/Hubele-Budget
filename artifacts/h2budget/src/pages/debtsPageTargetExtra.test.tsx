@@ -57,6 +57,7 @@ let extraAmount = "2000";
 vi.mock("@workspace/api-client-react", () => {
   return {
     useListDebts: () => ({ data: SEEDED_DEBTS, isLoading: false }),
+    useListDebtBalanceHistory: () => ({ data: [], isLoading: false }),
     useGetAvalancheSettings: () => ({
       data: {
         strategy: "avalanche",

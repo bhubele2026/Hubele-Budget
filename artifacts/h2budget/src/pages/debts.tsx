@@ -3,8 +3,9 @@ import {
   useListDebts,
   useGetAvalancheSettings,
   useGetAvalancheExtra,
+  useListDebtBalanceHistory,
 } from "@workspace/api-client-react";
-import type { Debt } from "@workspace/api-client-react";
+import type { Debt, DebtBalanceHistoryEntry } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,6 +19,62 @@ import {
 } from "@/lib/avalanche";
 
 const MANUAL_EXTRA_CAP = 5000;
+
+// Treat anything within half a cent as paid off so floating-point dust
+// from rate or rounding never keeps a card stuck in the "active" layout.
+const PAID_OFF_EPSILON = 0.005;
+
+function isPaidOff(balance: number): boolean {
+  return Number.isFinite(balance) && Math.abs(balance) < PAID_OFF_EPSILON;
+}
+
+// Parse a YYYY-MM-DD snapshot date in the local calendar so the rendered
+// month never shifts due to UTC offsets.
+function parseRecordedOn(s: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (!y || !mo || !d) return null;
+  return new Date(y, mo - 1, d);
+}
+
+// The "kill month" is the earliest snapshot date on/after which the
+// balance is $0 AND stays $0 through the end of recorded history,
+// provided we have at least one earlier snapshot showing a positive
+// balance (so we can prove a transition). If the debt was already $0
+// the very first time we recorded it, return null and let the UI fall
+// back to "Paid off" with no month.
+export function killMonthForHistory(
+  history: DebtBalanceHistoryEntry[],
+): Date | null {
+  if (history.length === 0) return null;
+  const sorted = [...history].sort((a, b) =>
+    a.recordedOn < b.recordedOn ? -1 : a.recordedOn > b.recordedOn ? 1 : 0,
+  );
+  let firstZeroIdx = -1;
+  for (let i = 0; i < sorted.length; i++) {
+    if (!isPaidOff(Number(sorted[i].balance))) continue;
+    let allZeroAfter = true;
+    for (let j = i + 1; j < sorted.length; j++) {
+      if (!isPaidOff(Number(sorted[j].balance))) {
+        allZeroAfter = false;
+        break;
+      }
+    }
+    if (allZeroAfter) {
+      firstZeroIdx = i;
+      break;
+    }
+  }
+  if (firstZeroIdx <= 0) return null;
+  const hadPositive = sorted
+    .slice(0, firstZeroIdx)
+    .some((h) => Number(h.balance) > PAID_OFF_EPSILON);
+  if (!hadPositive) return null;
+  return parseRecordedOn(sorted[firstZeroIdx].recordedOn);
+}
 
 function debtToSim(d: Debt): SimDebt {
   return {
@@ -34,6 +91,21 @@ export default function DebtsPage() {
   const { data: debts, isLoading } = useListDebts();
   const { data: settings } = useGetAvalancheSettings();
   const { data: resolvedExtra } = useGetAvalancheExtra();
+  const { data: balanceHistory } = useListDebtBalanceHistory();
+
+  const killMonthByDebtId = useMemo(() => {
+    const m = new Map<string, Date | null>();
+    const byDebt = new Map<string, DebtBalanceHistoryEntry[]>();
+    for (const h of balanceHistory ?? []) {
+      const arr = byDebt.get(h.debtId) ?? [];
+      arr.push(h);
+      byDebt.set(h.debtId, arr);
+    }
+    for (const [id, arr] of byDebt) {
+      m.set(id, killMonthForHistory(arr));
+    }
+    return m;
+  }, [balanceHistory]);
 
   const strategy: Strategy = (settings?.strategy as Strategy) ?? "avalanche";
   const clampManual = (n: number) =>
@@ -132,10 +204,58 @@ export default function DebtsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {sortedDebts.map((debt) => {
-          const isTarget = planTargetIds.has(debt.id);
+          const balanceNum = Number(debt.balance);
+          const paidOff = isPaidOff(balanceNum);
+          const isTarget = !paidOff && planTargetIds.has(debt.id);
           const { date: payoffDate, reason: payoffReason } = payoffFor(debt.id);
           const payoffLabel = payoffDate ? fmtMonth(payoffDate) : "—";
           const targetExtra = extraByTargetId.get(debt.id) ?? 0;
+          if (paidOff) {
+            const killDate = killMonthByDebtId.get(debt.id) ?? null;
+            const killLabel = killDate ? fmtMonth(killDate) : null;
+            return (
+              <Card
+                key={debt.id}
+                className="border-emerald-500/60 bg-emerald-50/40 dark:bg-emerald-950/20"
+                data-testid="debt-card-paid-off"
+                data-debt-id={debt.id}
+              >
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start">
+                    <CardTitle className="text-lg">{debt.name}</CardTitle>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{debt.type || "General"}</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col items-center justify-center text-center py-4 gap-1">
+                    <div
+                      className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400"
+                      data-testid="debt-card-paid-off-headline"
+                    >
+                      <span aria-hidden="true">🎉</span> Paid off!
+                    </div>
+                    {killLabel ? (
+                      <div
+                        className="text-sm text-emerald-700 dark:text-emerald-300 tabular-nums"
+                        data-testid="debt-card-paid-off-month"
+                        data-debt-id={debt.id}
+                      >
+                        Paid off {killLabel}
+                      </div>
+                    ) : (
+                      <div
+                        className="text-sm text-muted-foreground"
+                        data-testid="debt-card-paid-off-month"
+                        data-debt-id={debt.id}
+                      >
+                        Paid off
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          }
           return (
             <Card key={debt.id} className={isTarget ? "border-primary" : ""}>
               <CardHeader className="pb-2">
