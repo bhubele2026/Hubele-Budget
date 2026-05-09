@@ -27,6 +27,7 @@ export function AccountFilterBar({
   members,
   memberFilter,
   onMemberFilterChange,
+  extraFilters,
   rightSlot,
 }: {
   search: string;
@@ -44,6 +45,7 @@ export function AccountFilterBar({
   members: string[];
   memberFilter: string;
   onMemberFilterChange: (v: string) => void;
+  extraFilters?: React.ReactNode;
   rightSlot?: React.ReactNode;
 }) {
   return (
@@ -139,6 +141,7 @@ export function AccountFilterBar({
             </Select>
           </div>
         )}
+        {extraFilters}
         {rightSlot}
       </CardContent>
     </Card>

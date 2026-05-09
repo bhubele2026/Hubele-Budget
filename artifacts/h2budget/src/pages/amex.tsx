@@ -178,6 +178,7 @@ export default function AmexPage() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [memberFilter, setMemberFilter] = useState<string>("all");
+  const [cardFilter, setCardFilter] = useState<string>("all");
 
   const currentMonth = useMemo<MonthKey>(() => monthKeyOf(new Date()), []);
   // Task #168 — Budget page deep-links into the Amex page when a row's
@@ -413,6 +414,8 @@ export default function AmexPage() {
       if (to && k > to) return false;
       if (memberFilter !== "all" && (t.member ?? "") !== memberFilter)
         return false;
+      if (cardFilter !== "all" && (t.plaidAccountId ?? "") !== cardFilter)
+        return false;
       if (categoryFilter !== "all") {
         if (categoryFilter === "uncategorized") {
           if (t.categoryId) return false;
@@ -424,7 +427,7 @@ export default function AmexPage() {
       }
       return true;
     });
-  }, [monthScoped, search, memberFilter, categoryFilter, categoryById, from, to]);
+  }, [monthScoped, search, memberFilter, cardFilter, categoryFilter, categoryById, from, to]);
 
   // Group by day (descending). Within each day, sort newest-first via
   // the canonical comparator so the per-row "bal $X" running statement
@@ -536,6 +539,33 @@ export default function AmexPage() {
     }
     return m;
   }, [plaidItemsForScope]);
+  // Card filter options — every Plaid Amex card currently feeding the
+  // page, derived from the same `cardLabelByPlaidAccountId` map the
+  // per-row card labels use, scoped to the cards that actually appear
+  // in the visible (source-filtered) transactions.
+  const cardFilterOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [];
+    const seen = new Set<string>();
+    for (const id of amexPlaidAccountIds) {
+      if (seen.has(id)) continue;
+      const label = cardLabelByPlaidAccountId.get(id);
+      if (!label) continue;
+      seen.add(id);
+      opts.push({ value: id, label });
+    }
+    opts.sort((a, b) => a.label.localeCompare(b.label));
+    return opts;
+  }, [amexPlaidAccountIds, cardLabelByPlaidAccountId]);
+
+  // If the selected card disappears (e.g. user changes source filter to
+  // CSV-only), fall back to "All cards" so the page doesn't render empty.
+  useEffect(() => {
+    if (cardFilter === "all") return;
+    if (!cardFilterOptions.some((o) => o.value === cardFilter)) {
+      setCardFilter("all");
+    }
+  }, [cardFilter, cardFilterOptions]);
+
   const { runSync, isPending: isAmexSyncing } = usePlaidSync();
   const handleRefreshAmex = () => {
     if (relevantPlaidItemIds.length === 0) return;
@@ -1795,6 +1825,31 @@ export default function AmexPage() {
           members={members}
           memberFilter={memberFilter}
           onMemberFilterChange={setMemberFilter}
+          extraFilters={
+            cardFilterOptions.length > 0 ? (
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+                  Card
+                </label>
+                <Select value={cardFilter} onValueChange={setCardFilter}>
+                  <SelectTrigger
+                    className="h-9 w-48"
+                    data-testid="select-card"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All cards</SelectItem>
+                    {cardFilterOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : undefined
+          }
           rightSlot={
             <div className="text-xs ml-auto flex flex-col items-end" data-testid="text-row-count">
               <span className="text-muted-foreground">
