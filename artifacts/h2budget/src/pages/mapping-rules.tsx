@@ -2508,7 +2508,7 @@ export default function MappingRulesPage() {
                                     >
                                       <SelectValue />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="max-h-[280px]">
                                       {categories?.map((cat) => (
                                         <SelectItem
                                           key={cat.id}

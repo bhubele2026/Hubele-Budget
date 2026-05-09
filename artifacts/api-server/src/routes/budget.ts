@@ -983,6 +983,12 @@ async function seedDefaultsForUser(userId: string): Promise<{
         const sortOrder = groupBase + i;
         const cur = byName.get(seed.name);
         if (!cur) {
+          // onConflictDoUpdate keeps the seed transaction safe when
+          // another code path (e.g. ensureUncategorizedCategory called
+          // from POST /transactions) has already inserted a row with
+          // the same (userId, name) before this lazy seed fires. The
+          // update is a no-op shape-wise; we just need a returning row
+          // to populate byName for downstream budget_lines linking.
           const [row] = await tx
             .insert(budgetCategoriesTable)
             .values({
@@ -993,6 +999,16 @@ async function seedDefaultsForUser(userId: string): Promise<{
               sourceKind: seed.sourceKind,
               sortOrder,
               excludeFromBudget: seed.excludeFromBudget ?? false,
+            })
+            .onConflictDoUpdate({
+              target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+              set: {
+                groupName: seed.groupName,
+                sourceKind: seed.sourceKind,
+                kind: seed.kind,
+                excludeFromBudget: seed.excludeFromBudget ?? false,
+                sortOrder,
+              },
             })
             .returning();
           if (row) byName.set(row.name, row);
@@ -1162,17 +1178,25 @@ async function ensureSeededDefaults(userId: string): Promise<void> {
     return;
   }
   const attempt = (async () => {
+    // Skip the seed only when every canonical SEED_CATEGORIES name is
+    // already present for this user. The previous "any non-excluded
+    // category exists -> skip" check produced an intermittent partial-
+    // seed bug: if any other code path (or a prior failed seed) had
+    // inserted even one non-excluded category before this lazy seed
+    // first fired, the full seed would be skipped and downstream
+    // expectations like "Dining & Coffee exists" would silently fail.
+    // The seed transaction is idempotent (onConflictDoUpdate on the
+    // (userId, name) unique index) so re-running it on a partially-
+    // seeded user is safe and just fills the gaps.
     const existing = await db
-      .select({ id: budgetCategoriesTable.id })
+      .select({ name: budgetCategoriesTable.name })
       .from(budgetCategoriesTable)
-      .where(
-        and(
-          eq(budgetCategoriesTable.userId, userId),
-          eq(budgetCategoriesTable.excludeFromBudget, false),
-        ),
-      )
-      .limit(1);
-    if (existing.length > 0) {
+      .where(eq(budgetCategoriesTable.userId, userId));
+    const existingNames = new Set(existing.map((r) => r.name));
+    const allSeedPresent = SEED_CATEGORIES.every((c) =>
+      existingNames.has(c.name),
+    );
+    if (allSeedPresent) {
       ENSURE_SEEDED_DEFAULTS_DONE.add(userId);
       ENSURE_SEEDED_DEFAULTS_FAILED_AT.delete(userId);
       return;

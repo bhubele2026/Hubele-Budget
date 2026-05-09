@@ -1750,7 +1750,22 @@ export default function TransactionsPage() {
           </span>
         )}
       </div>
-      {(forecastData?.plaidCheckingAccounts?.length ?? 0) > 1 && (
+      {(() => {
+        // (#360) Show the picker whenever there are 2+ effective views —
+        // either multiple Plaid checking accounts, or one Plaid checking
+        // account paired with a manual-entries pseudo-account. Without
+        // counting the manual option here, a single-Plaid-account user
+        // with manual rows could never switch to the Manual view.
+        const plaidCount = forecastData?.plaidCheckingAccounts?.length ?? 0;
+        const showsManual =
+          plaidCount >= 1 &&
+          shouldShowManualPickerOption({
+            transactions: transactions ?? [],
+            currentlySelected: isManualAccount,
+          });
+        const totalOptions = plaidCount + (showsManual ? 1 : 0);
+        return totalOptions > 1;
+      })() && (
         <div className="flex items-center gap-2" data-testid="chase-account-picker">
           <span className="text-xs text-muted-foreground">View account:</span>
           <Select

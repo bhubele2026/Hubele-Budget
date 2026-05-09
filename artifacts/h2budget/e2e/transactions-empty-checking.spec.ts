@@ -34,6 +34,22 @@ test.describe("Transactions page — empty checking missing-state tiles", () => 
       provisionedUserIds,
     );
 
+    // The /transactions page auto-fires the April Chase seed on mount,
+    // which would otherwise plant the $3,565.09 ending balance on this
+    // fresh user and break the missing-state contract this spec locks.
+    await page.route("**/api/seed/april-chase", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          inserted: 0,
+          rulesAdded: 0,
+          endingBalance: 0,
+          snapshotRepaired: false,
+        }),
+      });
+    });
+
     await signInAndOpen(page, email, password, "/transactions");
 
     const startingTile = page.getByTestId("stat-starting-balance");
