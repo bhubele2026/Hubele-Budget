@@ -119,53 +119,6 @@ function currentBucket(t: Pick<Transaction, "weeklyAllowance" | "monthlyAllowanc
   return "";
 }
 
-// Standalone "Reviewed" bubble that visually matches the WK/MO/UN/RE
-// BucketBubbles next to it. Lives in amex.tsx (not BucketBubbles)
-// because the Reviewed flag is Amex-page-only — extending the shared
-// BucketFlags type would force the Transactions page to wire up state
-// it doesn't use.
-function ReviewedBubble({
-  on,
-  onClick,
-  disabled,
-  testId,
-}: {
-  on: boolean;
-  onClick: () => void;
-  disabled?: boolean;
-  testId?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        if (!disabled) onClick();
-      }}
-      title={on ? "Reviewed — click to unmark" : "Mark as reviewed"}
-      aria-pressed={on}
-      aria-label="Reviewed"
-      disabled={disabled}
-      data-testid={testId}
-      className="flex flex-col items-center gap-0.5 group disabled:opacity-50"
-    >
-      <span
-        className={cn(
-          "h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors",
-          on
-            ? "bg-emerald-600 border-emerald-600 text-white"
-            : "border-muted-foreground/40 text-transparent group-hover:border-foreground",
-        )}
-      >
-        <Check className="h-3 w-3" strokeWidth={3} />
-      </span>
-      <span className="text-[9px] uppercase tracking-widest text-muted-foreground font-medium">
-        RV
-      </span>
-    </button>
-  );
-}
-
 export default function AmexPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -1011,11 +964,17 @@ export default function AmexPage() {
         t.weeklyBucket ??
         defaultWeeklyBucketFor(categoryById.get(t.categoryId ?? "") ?? "");
     }
+    // (#615) Picking a bucket is itself the act of reviewing the row,
+    // so fold `reviewed` into the same patch — choosing any bucket
+    // marks reviewed=true; clearing the bucket back to none unmarks
+    // it. One PATCH, atomic optimistic update.
+    const reviewed = bucket !== "";
     const patch: Partial<Transaction> = {
       weeklyAllowance: bucket === "weekly",
       monthlyAllowance: bucket === "monthly",
       unplannedAllowance: bucket === "unplanned",
       weeklyBucket: wb ?? null,
+      reviewed,
     };
     // Stop any in-flight transactions refetch from racing the optimistic
     // write — otherwise a stale server payload could overwrite it.
@@ -1030,6 +989,7 @@ export default function AmexPage() {
             monthlyAllowance: patch.monthlyAllowance,
             unplannedAllowance: patch.unplannedAllowance,
             weeklyBucket: wb,
+            reviewed,
           },
         });
         // Reconcile to the server's confirmed values, but only for
@@ -1040,6 +1000,7 @@ export default function AmexPage() {
           monthlyAllowance: updated.monthlyAllowance,
           unplannedAllowance: updated.unplannedAllowance,
           weeklyBucket: updated.weeklyBucket,
+          reviewed: updated.reviewed,
         });
       } catch (e) {
         // Field-level revert: only restore fields whose cache value is
@@ -1057,9 +1018,12 @@ export default function AmexPage() {
   };
 
   const setRowReimbursable = async (t: Transaction, next: boolean) => {
+    // (#615) Turning RE on counts as reviewing the row; turning it
+    // off doesn't unreview, because WK/MO/UN may still be active and
+    // those carry the reviewed signal independently.
     const patch: Partial<Transaction> = {
       reimbursable: next,
-      ...(next ? {} : { reimbursed: false }),
+      ...(next ? { reviewed: true } : { reimbursed: false }),
     };
     await qc.cancelQueries({ queryKey: [`/api/transactions`] });
     const prev = patchTransactionInCache(t.id, patch);
@@ -1067,38 +1031,20 @@ export default function AmexPage() {
       try {
         const updated = await updateTx.mutateAsync({
           id: t.id,
-          data: { reimbursable: next, ...(next ? {} : { reimbursed: false }) },
+          data: {
+            reimbursable: next,
+            ...(next ? { reviewed: true } : { reimbursed: false }),
+          },
         });
         patchTransactionIfMatching(t.id, patch, {
           reimbursable: updated.reimbursable,
           reimbursed: updated.reimbursed,
+          ...(next ? { reviewed: updated.reviewed } : {}),
         });
       } catch (e) {
         if (prev) patchTransactionIfMatching(t.id, patch, prev);
         toast({
           title: "Couldn't update reimbursable",
-          description: (e as Error).message,
-          variant: "destructive",
-        });
-      }
-    });
-  };
-
-  const setRowReviewed = async (t: Transaction, next: boolean) => {
-    const patch: Partial<Transaction> = { reviewed: next };
-    await qc.cancelQueries({ queryKey: [`/api/transactions`] });
-    const prev = patchTransactionInCache(t.id, patch);
-    queueBubbleMutation(t.id, async () => {
-      try {
-        const updated = await updateTx.mutateAsync({
-          id: t.id,
-          data: { reviewed: next },
-        });
-        patchTransactionIfMatching(t.id, patch, { reviewed: updated.reviewed });
-      } catch (e) {
-        if (prev) patchTransactionIfMatching(t.id, patch, prev);
-        toast({
-          title: "Couldn't update reviewed",
           description: (e as Error).message,
           variant: "destructive",
         });
@@ -2133,11 +2079,6 @@ export default function AmexPage() {
                           onToggle={(b, next) => onBubbleToggle(t, b, next)}
                         />
                       )}
-                      <ReviewedBubble
-                        on={t.reviewed}
-                        onClick={() => setRowReviewed(t, !t.reviewed)}
-                        testId={`button-reviewed-mobile-${t.id}`}
-                      />
                       {t.weeklyAllowance && (
                         <Select
                           value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}
@@ -2369,11 +2310,6 @@ export default function AmexPage() {
                                 onToggle={(b, next) => onBubbleToggle(t, b, next)}
                               />
                             )}
-                            <ReviewedBubble
-                              on={t.reviewed}
-                              onClick={() => setRowReviewed(t, !t.reviewed)}
-                              testId={`button-reviewed-${t.id}`}
-                            />
                             {t.weeklyAllowance && (
                               <Select
                                 value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}
