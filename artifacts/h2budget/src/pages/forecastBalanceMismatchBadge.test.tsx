@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { act, fireEvent, render, screen, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -131,13 +131,27 @@ type ForecastFixture = {
     label: string;
     amount: number;
   }>;
-  transactions: unknown[];
-  resolutions: unknown[];
+  transactions: Array<{
+    id: string;
+    occurredOn: string;
+    description: string;
+    amount: string;
+    forecastFlag: boolean;
+    source?: string;
+    plaidAccountId?: string | null;
+  }>;
+  resolutions: Array<{
+    id: string;
+    recurringItemId: string | null;
+    occurrenceDate: string | null;
+    status: string;
+    matchedTxnId: string | null;
+  }>;
   closedMonths: string[];
   monthSnapshots: Record<string, unknown>;
   bankSnapshot: { at: string; balance: string; source: string } | null;
   plaidCheckingAccounts: unknown[];
-  settings: { startingBalance: string; cashBuffer: string };
+  settings: { startingBalance: string; cashBuffer: string; daysAhead?: number };
 };
 
 // Mutable holder so each test can swap in a different bank snapshot
@@ -242,6 +256,128 @@ describe("Forecast — amber 'off from bank' badge gating (#524 / regression for
     expect(screen.queryByTestId("badge-balance-mismatch")).toBeNull();
     // The celebratory cleared state should be the one that surfaces.
     expect(screen.getByTestId("badge-inbox-cleared")).toBeTruthy();
+  });
+
+  it("clicking the badge with a starting-balance largest contributor opens Settings focused on the starting-balance input (#527)", () => {
+    currentForecast = makeForecast("4750");
+    renderPage();
+
+    const badge = screen.getByTestId("badge-balance-mismatch");
+    expect(badge.getAttribute("data-contributor-kind")).toBe("starting");
+    act(() => {
+      fireEvent.click(badge);
+    });
+
+    const balInput = screen.getByTestId(
+      "input-starting-balance",
+    ) as HTMLInputElement;
+    expect(balInput).toBeTruthy();
+    // autoFocus should land focus on the starting-balance input so the user
+    // can type the corrected number immediately.
+    expect(document.activeElement).toBe(balInput);
+  });
+
+  it("matched-pair contributor click scrolls/highlights the offending plan row (#527)", async () => {
+    // Build a fixture where the gap is driven by a matched plan/bank pair
+    // whose amounts disagree by $25 (plan -100, bank -125). The starting
+    // balance is contrived so the residual non-matched delta is $0.
+    const txn = {
+      id: "txn-amazon",
+      occurredOn: "2026-05-05",
+      description: "Amazon",
+      amount: "-125.00",
+      forecastFlag: true,
+      source: "manual",
+      plaidAccountId: null,
+    };
+    const event = {
+      itemId: "amazon",
+      date: "2026-05-05",
+      label: "Amazon",
+      amount: -100,
+    };
+    currentForecast = {
+      fromDate: "2026-05-01",
+      toDate: "2026-08-01",
+      events: [event],
+      transactions: [txn],
+      resolutions: [
+        {
+          id: "res-1",
+          recurringItemId: event.itemId,
+          occurrenceDate: event.date,
+          status: "matched",
+          matchedTxnId: txn.id,
+        },
+      ],
+      closedMonths: [],
+      monthSnapshots: {},
+      bankSnapshot: {
+        at: `${TODAY_ISO}T12:00:00.000Z`,
+        // settingsStart (5000) + plan(-100) + ignored(0) = 4900 forecast at
+        // snapshot. raw gap = 4900 - bankAtSnapshot. We want the only
+        // contributor to be the matched delta (+25 = -100 - -125) so set
+        // the snapshot to 4875 (raw gap = 25 = matchedDelta, residual = 0).
+        balance: "4875",
+        source: "manual",
+      },
+      plaidCheckingAccounts: [],
+      settings: { startingBalance: "5000", cashBuffer: "500" },
+    };
+
+    const scrollSpy = vi.fn();
+    const origScrollIntoView = (
+      Element.prototype as unknown as {
+        scrollIntoView?: (...args: unknown[]) => void;
+      }
+    ).scrollIntoView;
+    (
+      Element.prototype as unknown as {
+        scrollIntoView: (...args: unknown[]) => void;
+      }
+    ).scrollIntoView = scrollSpy;
+
+    try {
+      renderPage();
+
+      const badge = screen.getByTestId("badge-balance-mismatch");
+      expect(badge.textContent ?? "").toMatch(/\$25\.00/);
+      expect(badge.getAttribute("data-contributor-kind")).toBe("matched");
+
+      act(() => {
+        fireEvent.click(badge);
+      });
+      // jumpToPlan defers the scroll into a requestAnimationFrame; flush
+      // both a microtask and a macrotask so the RAF callback runs even
+      // when jsdom's RAF is shimmed onto setTimeout.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      // The plan row is rendered with data-plan-key="<itemId>|<date>" and
+      // also gets the highlighted styling via state. Verify both signals.
+      const planRow = document.querySelector(
+        `[data-plan-key="${event.itemId}|${event.date}"]`,
+      );
+      expect(planRow).toBeTruthy();
+      expect(scrollSpy).toHaveBeenCalled();
+      // The highlight ring class lands on the plan row when highlighted.
+      expect(planRow!.className).toMatch(/ring-sky-400/);
+    } finally {
+      if (origScrollIntoView) {
+        (
+          Element.prototype as unknown as {
+            scrollIntoView: (...args: unknown[]) => void;
+          }
+        ).scrollIntoView = origScrollIntoView;
+      } else {
+        delete (
+          Element.prototype as unknown as {
+            scrollIntoView?: (...args: unknown[]) => void;
+          }
+        ).scrollIntoView;
+      }
+    }
   });
 
   it("does render with the correct gap text when there is a real reconciliation mismatch", () => {

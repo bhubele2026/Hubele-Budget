@@ -1294,11 +1294,13 @@ export default function ForecastPage({
         kind: "matched" | "starting";
         label: string;
         delta: number;
+        planKey?: string;
       }>,
       largestContributor: null as null | {
         kind: "matched" | "starting";
         label: string;
         delta: number;
+        planKey?: string;
       },
     };
     if (!register || !data) return empty;
@@ -1400,6 +1402,7 @@ export default function ForecastPage({
       kind: "matched" | "starting";
       label: string;
       delta: number;
+      planKey?: string;
     };
     const contributors: Contributor[] = [];
     let matchedAmountDelta = 0;
@@ -1418,6 +1421,7 @@ export default function ForecastPage({
             kind: "matched",
             label: `${p.label} on ${p.date} (plan ${p.amount.toFixed(2)} vs bank ${bank.amount.toFixed(2)})`,
             delta,
+            planKey: `${p.itemId}|${p.date}`,
           });
         }
       }
@@ -2056,10 +2060,17 @@ export default function ForecastPage({
     );
   };
 
-  const openSettings = () => {
+  // (#527) When the user lands in Settings via the off-from-bank badge's
+  // "starting balance" contributor, we want the starting-balance input to
+  // get focus so the fix is one keystroke away. A normal Settings open
+  // shouldn't steal focus from anywhere else, so this is opt-in.
+  const [focusStartingBalance, setFocusStartingBalance] = useState(false);
+  const startingBalanceInputRef = useRef<HTMLInputElement>(null);
+  const openSettings = (opts?: { focusStartingBalance?: boolean }) => {
     setDraftDays(String(data?.settings.daysAhead ?? 90));
     setDraftBalance(String(data?.settings.startingBalance ?? "0"));
     setDraftBuffer(String(data?.settings.cashBuffer ?? "500"));
+    setFocusStartingBalance(!!opts?.focusStartingBalance);
     setSettingsOpen(true);
   };
   const saveSettings = () => {
@@ -2269,7 +2280,7 @@ export default function ForecastPage({
               Manage in Bills
             </Link>
           </Button>
-          <Button variant="outline" size="sm" onClick={openSettings} className="h-8">
+          <Button variant="outline" size="sm" onClick={() => openSettings()} className="h-8">
             <SettingsIcon className="w-3.5 h-3.5 mr-1.5" /> Settings
           </Button>
         </div>
@@ -2372,10 +2383,41 @@ export default function ForecastPage({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Badge
-                          variant="outline"
-                          className="bg-amber-50 text-amber-900 border-amber-200 max-w-[260px] whitespace-normal text-right cursor-help"
+                        {/* (#527) Badge is now a real button. Clicking it
+                          fires the same jump as the largest contributor
+                          (matched-pair → scroll+highlight the offending
+                          plan row; starting-balance → open Settings on
+                          the starting-balance field) so the user can go
+                          from "you're off by $X" to "fix it here" in one
+                          tap, without hunting through the register or
+                          remembering the contributor list lives behind a
+                          hover tooltip. */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const lc = bankReconcile.largestContributor;
+                            if (!lc) return;
+                            if (lc.kind === "matched" && lc.planKey) {
+                              const [itemId, date] = lc.planKey.split("|");
+                              if (itemId && date) jumpToPlan(itemId, date);
+                            } else if (lc.kind === "starting") {
+                              openSettings({ focusStartingBalance: true });
+                            }
+                          }}
+                          disabled={!bankReconcile.largestContributor}
+                          aria-label={
+                            bankReconcile.largestContributor?.kind === "matched"
+                              ? "Jump to the plan row driving this mismatch"
+                              : bankReconcile.largestContributor?.kind ===
+                                  "starting"
+                                ? "Open Settings to fix the starting balance"
+                                : "Off-from-bank details"
+                          }
+                          className="inline-flex items-center rounded-full border bg-amber-50 text-amber-900 border-amber-200 max-w-[260px] whitespace-normal text-right text-xs px-2.5 py-0.5 font-semibold cursor-pointer hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:cursor-help disabled:hover:bg-amber-50"
                           data-testid="badge-balance-mismatch"
+                          data-contributor-kind={
+                            bankReconcile.largestContributor?.kind ?? "none"
+                          }
                         >
                           <AlertCircle className="w-3.5 h-3.5 mr-1 flex-none" />
                           Inbox clear, but the forecast and the bank disagree
@@ -2396,7 +2438,7 @@ export default function ForecastPage({
                           ) : (
                             <> — check the starting balance or matched amounts.</>
                           )}
-                        </Badge>
+                        </button>
                       </TooltipTrigger>
                       <TooltipContent
                         side="bottom"
@@ -2415,14 +2457,39 @@ export default function ForecastPage({
                           <ul className="text-xs space-y-1">
                             {bankReconcile.contributors
                               .slice(0, 4)
-                              .map((c, i) => (
-                                <li key={i} className="tabular-nums">
-                                  <span className="font-medium">
-                                    {formatCurrency(c.delta)}
-                                  </span>{" "}
-                                  · {c.label}
-                                </li>
-                              ))}
+                              .map((c, i) => {
+                                // (#527) Make each contributor a one-click
+                                // jump to the row (or settings field) that's
+                                // actually disagreeing, so the user doesn't
+                                // have to scroll-hunt for it.
+                                const onClick = () => {
+                                  if (c.kind === "matched" && c.planKey) {
+                                    const [itemId, date] =
+                                      c.planKey.split("|");
+                                    if (itemId && date) jumpToPlan(itemId, date);
+                                  } else if (c.kind === "starting") {
+                                    openSettings({
+                                      focusStartingBalance: true,
+                                    });
+                                  }
+                                };
+                                return (
+                                  <li key={i} className="tabular-nums">
+                                    <button
+                                      type="button"
+                                      onClick={onClick}
+                                      className="text-left w-full hover:underline focus:underline focus:outline-none"
+                                      data-testid={`tooltip-balance-mismatch-contributor-${i}`}
+                                      data-contributor-kind={c.kind}
+                                    >
+                                      <span className="font-medium">
+                                        {formatCurrency(c.delta)}
+                                      </span>{" "}
+                                      · {c.label}
+                                    </button>
+                                  </li>
+                                );
+                              })}
                           </ul>
                         )}
                       </TooltipContent>
@@ -3699,8 +3766,31 @@ export default function ForecastPage({
                     {isClosed ? "Month is closed — bucket hidden." : "Nothing triaged for this month yet."}
                   </div>
                 )}
-                {bucket.map((b) => (
-                  <div key={b.id} className="p-4 flex items-center justify-between gap-3">
+                {bucket.map((b) => {
+                  // (#527) Bucket rows for resolved plan occurrences carry
+                  // the same `<itemId>|<date>` identity the off-from-bank
+                  // badge's contributor uses. Surfacing that as
+                  // `data-plan-key` lets the badge's matched-pair jump
+                  // scroll/highlight the bucket row that's actually wrong
+                  // — matched rows aren't in the visible plan register,
+                  // they live here in the bucket. Non-plan resolutions
+                  // (e.g. bank-only "Unplanned") don't get a key.
+                  const planKey =
+                    b.recurringItemId && b.occurrenceDate
+                      ? `${b.recurringItemId}|${b.occurrenceDate}`
+                      : undefined;
+                  const isHighlightedBucket =
+                    !!planKey && highlightedPlanKey === planKey;
+                  return (
+                  <div
+                    key={b.id}
+                    data-plan-key={planKey}
+                    className={`p-4 flex items-center justify-between gap-3 transition-colors ${
+                      isHighlightedBucket
+                        ? "bg-sky-50 ring-2 ring-sky-400 ring-inset dark:bg-sky-950/30"
+                        : ""
+                    }`}
+                  >
                     <div className="flex items-center gap-3 min-w-0">
                       {statusBadge(b.status)}
                       <div className="min-w-0">
@@ -3717,7 +3807,8 @@ export default function ForecastPage({
                       </Button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -3744,10 +3835,13 @@ export default function ForecastPage({
               <Label htmlFor="bal">Starting balance (fallback when no bank snapshot)</Label>
               <Input
                 id="bal"
+                ref={startingBalanceInputRef}
                 type="number"
                 step="0.01"
                 value={draftBalance}
                 onChange={(e) => setDraftBalance(e.target.value)}
+                data-testid="input-starting-balance"
+                autoFocus={focusStartingBalance}
               />
             </div>
             <div>
