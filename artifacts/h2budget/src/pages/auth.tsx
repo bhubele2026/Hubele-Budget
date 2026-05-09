@@ -136,10 +136,26 @@ export function SignInPage() {
 }
 
 export function SignUpPage() {
-  const search = typeof window !== "undefined" ? window.location.search : "";
-  const params = new URLSearchParams(search);
-  const hasTicket =
-    params.has("__clerk_ticket") || params.has("__clerk_invitation_token");
+  // The invitation flow lands at `/sign-up?__clerk_ticket=…`, but Clerk's
+  // own internal navigation pushes the user through sub-paths like
+  // `/sign-up/verify-email-address` and `/sign-up/continue` *without*
+  // re-attaching the original query string. If we recompute `hasTicket`
+  // from `window.location.search` on every render, the redirect fires
+  // mid-flow and unmounts the <SignUp> component, leaving the user
+  // staring at Clerk's "Just a moment" loader forever. Latching the
+  // decision once on mount keeps the SignUp surface mounted for the
+  // whole invite hand-off.
+  const [hasTicket] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("__clerk_ticket") || params.has("__clerk_invitation_token")) {
+      return true;
+    }
+    // If the user lands on (or refreshes) a Clerk sub-path like
+    // `/sign-up/verify-email-address`, treat it as in-flow too — only
+    // the bare `/sign-up` URL with no ticket should bounce to sign-in.
+    return window.location.pathname.replace(/\/+$/, "") !== `${basePath}/sign-up`;
+  });
   if (!hasTicket) {
     return <Redirect to="/sign-in" />;
   }

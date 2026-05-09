@@ -52,4 +52,38 @@ describe("SignUpPage gate (invite-only)", () => {
     expect(redirectCalls).toEqual([]);
     expect(getByTestId("signup-form")).toBeTruthy();
   });
+
+  it("keeps the SignUp form mounted when Clerk navigates to a sub-path that drops the ticket query string", () => {
+    // Initial landing from the invite email URL.
+    window.history.replaceState({}, "", "/sign-up?__clerk_ticket=abc123");
+    const { getByTestId, rerender } = render(
+      <WouterRouter base="">
+        <SignUpPage />
+      </WouterRouter>,
+    );
+    expect(getByTestId("signup-form")).toBeTruthy();
+
+    // Clerk's internal flow pushes the user to /sign-up/verify-email-address
+    // *without* the original ?__clerk_ticket query string, then re-renders.
+    // We must NOT bounce to /sign-in or unmount the SignUp surface.
+    window.history.replaceState({}, "", "/sign-up/verify-email-address");
+    rerender(
+      <WouterRouter base="">
+        <SignUpPage />
+      </WouterRouter>,
+    );
+    expect(redirectCalls).toEqual([]);
+    expect(getByTestId("signup-form")).toBeTruthy();
+  });
+
+  it("recovers the SignUp form when the user lands directly on a Clerk sub-path (e.g. refresh mid-flow)", () => {
+    window.history.replaceState({}, "", "/sign-up/verify-email-address");
+    const { getByTestId } = render(
+      <WouterRouter base="">
+        <SignUpPage />
+      </WouterRouter>,
+    );
+    expect(redirectCalls).toEqual([]);
+    expect(getByTestId("signup-form")).toBeTruthy();
+  });
 });
