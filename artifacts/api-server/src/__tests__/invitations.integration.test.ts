@@ -8,6 +8,8 @@ const NON_OWNER_USER = `member-${process.pid}-${Date.now()}-${randomUUID().slice
 
 let currentUserId = OWNER_USER;
 process.env.OWNER_EMAIL = "owner@example.com";
+process.env.APP_URL = "https://h2budget.example.com";
+delete process.env.INVITATION_REDIRECT_URL;
 
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
@@ -290,5 +292,166 @@ describe("Owner-only invitation endpoints", () => {
     const other = body.find((m) => m.id === NON_OWNER_USER)!;
     expect(owner.isOwner).toBe(true);
     expect(other.isOwner).toBe(false);
+  });
+});
+
+import { resolveInvitationRedirectUrl } from "../routes/invitations";
+
+describe("resolveInvitationRedirectUrl", () => {
+  const ORIGINAL_APP_URL = process.env.APP_URL;
+  const ORIGINAL_INVITATION = process.env.INVITATION_REDIRECT_URL;
+
+  beforeEach(() => {
+    delete process.env.APP_URL;
+    delete process.env.INVITATION_REDIRECT_URL;
+  });
+
+  afterAll(() => {
+    if (ORIGINAL_APP_URL === undefined) delete process.env.APP_URL;
+    else process.env.APP_URL = ORIGINAL_APP_URL;
+    if (ORIGINAL_INVITATION === undefined) delete process.env.INVITATION_REDIRECT_URL;
+    else process.env.INVITATION_REDIRECT_URL = ORIGINAL_INVITATION;
+  });
+
+  it("prefers the explicit INVITATION_REDIRECT_URL env var", () => {
+    process.env.INVITATION_REDIRECT_URL = "https://invites.example.com/welcome";
+    process.env.APP_URL = "https://h2budget.example.com";
+    const url = resolveInvitationRedirectUrl({
+      headers: { host: "request.example.com", "x-forwarded-proto": "https" },
+    });
+    expect(url).toBe("https://invites.example.com/welcome");
+  });
+
+  it("falls back to APP_URL with /sign-up when INVITATION_REDIRECT_URL is unset", () => {
+    process.env.APP_URL = "https://h2budget.example.com";
+    const url = resolveInvitationRedirectUrl({
+      headers: { host: "anything.replit.dev" },
+    });
+    expect(url).toBe("https://h2budget.example.com/sign-up");
+  });
+
+  it("refuses a *.replit.dev request host with no env config", () => {
+    const url = resolveInvitationRedirectUrl({
+      headers: {
+        host: "abcd-1234.spock.replit.dev",
+        "x-forwarded-host": "abcd-1234.spock.replit.dev",
+        "x-forwarded-proto": "https",
+      },
+    });
+    expect(url).toBeNull();
+  });
+
+  it("refuses a *.repl.co request host with no env config", () => {
+    const url = resolveInvitationRedirectUrl({
+      headers: { host: "myapp.user.repl.co", "x-forwarded-proto": "https" },
+    });
+    expect(url).toBeNull();
+  });
+
+  it("refuses localhost with no env config", () => {
+    const url = resolveInvitationRedirectUrl({
+      headers: { host: "localhost:5000" },
+    });
+    expect(url).toBeNull();
+  });
+
+  it("refuses an unsafe host even when APP_URL is set to a dev host", () => {
+    process.env.APP_URL = "https://abcd-1234.spock.replit.dev";
+    const url = resolveInvitationRedirectUrl({
+      headers: { host: "real.example.com", "x-forwarded-proto": "https" },
+    });
+    expect(url).toBeNull();
+  });
+
+  it("accepts a normal public host in request headers and appends /sign-up", () => {
+    const url = resolveInvitationRedirectUrl({
+      headers: {
+        host: "h2budget.example.com",
+        "x-forwarded-host": "h2budget.example.com",
+        "x-forwarded-proto": "https",
+      },
+    });
+    expect(url).toBe("https://h2budget.example.com/sign-up");
+  });
+});
+
+describe("Invitation endpoints with no safe public URL", () => {
+  const ORIGINAL_APP_URL = process.env.APP_URL;
+
+  beforeEach(() => {
+    delete process.env.APP_URL;
+    delete process.env.INVITATION_REDIRECT_URL;
+    currentUserId = OWNER_USER;
+    createInvitationCalls.length = 0;
+    revokeInvitationCalls.length = 0;
+  });
+
+  afterAll(() => {
+    if (ORIGINAL_APP_URL === undefined) delete process.env.APP_URL;
+    else process.env.APP_URL = ORIGINAL_APP_URL;
+  });
+
+  it("POST /invitations refuses with 4xx and a clear message; Clerk is not called", async () => {
+    const res = await fetch(`${baseUrl}/invitations`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-host": "abcd-1234.spock.replit.dev",
+        "x-forwarded-proto": "https",
+      },
+      body: JSON.stringify({ email: "newby@example.com" }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/public app URL/i);
+    expect(createInvitationCalls).toEqual([]);
+  });
+
+  it("POST /invitations/:id/resend refuses with 4xx; no revoke or create is called", async () => {
+    listInvitationsResult = [
+      {
+        id: "inv-existing",
+        emailAddress: "wife@example.com",
+        status: "pending",
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ];
+    const res = await fetch(`${baseUrl}/invitations/inv-existing/resend`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-host": "abcd-1234.spock.replit.dev",
+        "x-forwarded-proto": "https",
+      },
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/public app URL/i);
+    expect(createInvitationCalls).toEqual([]);
+    expect(revokeInvitationCalls).toEqual([]);
+  });
+
+  it("Resend works once APP_URL is configured: produces a fresh invite with a working link", async () => {
+    process.env.APP_URL = "https://h2budget.example.com";
+    listInvitationsResult = [
+      {
+        id: "inv-existing",
+        emailAddress: "wife@example.com",
+        status: "pending",
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ];
+    const res = await fetch(`${baseUrl}/invitations/inv-existing/resend`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+    });
+    expect(res.status).toBe(201);
+    expect(revokeInvitationCalls).toEqual(["inv-existing"]);
+    expect(createInvitationCalls).toHaveLength(1);
+    expect(String(createInvitationCalls[0].redirectUrl)).toBe(
+      "https://h2budget.example.com/sign-up",
+    );
   });
 });

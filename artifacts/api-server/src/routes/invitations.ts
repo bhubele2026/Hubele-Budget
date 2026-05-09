@@ -66,17 +66,65 @@ async function fetchAllInvitations(
   return all;
 }
 
-function getInvitationRedirectUrl(req: {
+/**
+ * Hostnames that must never be baked into an outbound invite email
+ * link. The Replit workspace dev preview is gated, ephemeral and not
+ * meant for end users; `localhost` obviously won't work for the
+ * recipient. If the only thing we can resolve is one of these, we
+ * refuse to send rather than mailing out a dead link.
+ */
+function isUnsafeEmailHost(host: string): boolean {
+  const h = host.toLowerCase().split(":")[0];
+  if (!h) return true;
+  if (h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0" || h === "::1") return true;
+  if (h.endsWith(".replit.dev") || h === "replit.dev") return true;
+  if (h.endsWith(".repl.co") || h === "repl.co") return true;
+  return false;
+}
+
+/**
+ * Resolve the absolute URL we should hand to Clerk as the invite
+ * `redirectUrl`. Preference order:
+ *   1. `INVITATION_REDIRECT_URL` — explicit, complete URL.
+ *   2. `APP_URL` — the same public app URL used elsewhere on the
+ *      server (e.g. Plaid reconnect emails). `/sign-up` is appended.
+ *   3. The request's own forwarded host/proto headers.
+ *
+ * Returns `null` when the only thing we could resolve is a host that
+ * is unsafe to email (workspace dev hosts, localhost). Callers MUST
+ * treat `null` as "refuse to send" — never mail Clerk a link the
+ * recipient can't open.
+ */
+export function resolveInvitationRedirectUrl(req: {
   headers: { host?: string; "x-forwarded-host"?: unknown; "x-forwarded-proto"?: unknown };
   protocol?: string;
-}): string {
-  const explicit = process.env.INVITATION_REDIRECT_URL;
-  if (explicit) return explicit;
+}): string | null {
+  const explicit = process.env.INVITATION_REDIRECT_URL?.trim();
+  if (explicit) {
+    try {
+      const u = new URL(explicit);
+      if (isUnsafeEmailHost(u.host)) return null;
+      return explicit;
+    } catch {
+      // fall through to next source
+    }
+  }
+  const appUrl = process.env.APP_URL?.trim();
+  if (appUrl) {
+    try {
+      const u = new URL("/sign-up", appUrl);
+      if (isUnsafeEmailHost(u.host)) return null;
+      return u.toString();
+    } catch {
+      // fall through
+    }
+  }
   const xfh = req.headers["x-forwarded-host"];
   const host =
     (Array.isArray(xfh) ? xfh[0] : (xfh as string | undefined))?.split(",")[0]?.trim() ||
     req.headers.host ||
-    "localhost";
+    "";
+  if (!host || isUnsafeEmailHost(host)) return null;
   const xfp = req.headers["x-forwarded-proto"];
   const proto =
     (Array.isArray(xfp) ? xfp[0] : (xfp as string | undefined))?.split(",")[0]?.trim() ||
@@ -84,6 +132,9 @@ function getInvitationRedirectUrl(req: {
     "https";
   return `${proto}://${host}/sign-up`;
 }
+
+const NO_PUBLIC_URL_MESSAGE =
+  "This server isn't configured with a public app URL yet, so invite links wouldn't work for the recipient. Ask the app owner to set the public URL (APP_URL) and try again.";
 
 router.get("/invitations", requireOwner, async (_req: Request, res: Response): Promise<void> => {
   const result = await clerkClient.invitations.getInvitationList({
@@ -102,12 +153,17 @@ router.post("/invitations", requireOwner, async (req: Request, res: Response): P
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const redirectUrl = resolveInvitationRedirectUrl(req);
+  if (!redirectUrl) {
+    res.status(400).json({ error: NO_PUBLIC_URL_MESSAGE });
+    return;
+  }
   try {
     const inv = await clerkClient.invitations.createInvitation({
       emailAddress: parsed.data.email,
       ignoreExisting: false,
       notify: true,
-      redirectUrl: getInvitationRedirectUrl(req),
+      redirectUrl,
     });
     res.status(201).json(serializeInvitation(inv));
   } catch (err: unknown) {
@@ -134,6 +190,11 @@ router.delete("/invitations/:id", requireOwner, async (req: Request, res: Respon
 });
 
 router.post("/invitations/:id/resend", requireOwner, async (req: Request, res: Response): Promise<void> => {
+  const redirectUrl = resolveInvitationRedirectUrl(req);
+  if (!redirectUrl) {
+    res.status(400).json({ error: NO_PUBLIC_URL_MESSAGE });
+    return;
+  }
   try {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const pending = await fetchAllInvitations({ status: "pending" });
@@ -151,7 +212,7 @@ router.post("/invitations/:id/resend", requireOwner, async (req: Request, res: R
       emailAddress: existing.emailAddress,
       ignoreExisting: true,
       notify: true,
-      redirectUrl: getInvitationRedirectUrl(req),
+      redirectUrl,
     });
     res.status(201).json(serializeInvitation(fresh));
   } catch (err: unknown) {
