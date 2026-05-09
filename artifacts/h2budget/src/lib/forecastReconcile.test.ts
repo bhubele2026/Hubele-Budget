@@ -214,6 +214,35 @@ describe("computeBankReconcile", () => {
     expect(result.contributors).toHaveLength(2);
   });
 
+  it("ignores unfunded projected plan items: large pending/future plans in window do NOT create a starting-balance contributor", () => {
+    // Repro of the bug: inbox is clear (no matched-amount drift), the
+    // settings starting balance equals the bank snapshot exactly, and
+    // there are big projected plan items in the (fromDate, snapshotDate]
+    // window that haven't cleared the bank yet. The old code folded
+    // those plan amounts into the snapshot-side projection, then dumped
+    // the residual into "starting balance off". The corrected identity
+    // is purely bank-side, so projected plans must not move the gap.
+    const result = computeBankReconcile(
+      baseInput({
+        allPlan: [
+          // Big future plan dated in window — has not hit the bank.
+          planLine({ itemId: "p1", date: "2026-05-10", amount: -7518.54, status: "future" }),
+          // Pending plan in window — also not yet at the bank.
+          planLine({ itemId: "p2", date: "2026-05-12", amount: -250, status: "pending_plan" }),
+          // Plan after the snapshot — irrelevant either way.
+          planLine({ itemId: "p3", date: "2026-05-20", amount: -100, status: "future" }),
+        ],
+        settingsStartingBalance: 1000,
+        bankSnapshot: { at: "2026-05-15T00:00:00.000Z", balance: 1000 },
+      }),
+    );
+    expect(result.gap).toBe(0);
+    expect(result.contributors).toEqual([]);
+    expect(result.largestContributor).toBeNull();
+    expect(result.startingBalanceDelta).toBe(0);
+    expect(result.matchedAmountDelta).toBe(0);
+  });
+
   it("isPriorMonth shorts forecastEnd to the snapshot start balance", () => {
     const result = computeBankReconcile(
       baseInput({

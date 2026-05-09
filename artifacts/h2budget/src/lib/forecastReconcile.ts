@@ -111,25 +111,17 @@ export function computeBankReconcile(input: ReconcileInput): ReconcileResult {
     : forecastEnd;
 
   const settingsStart = Number(settingsStartingBalance) || 0;
-  let forecastAtSnapshot = settingsStart;
+  let expectedSnapshotFromStart = settingsStart;
   if (snapshotAtISO) {
-    for (const p of allPlan) {
-      if (p.date < fromDate || p.date > snapshotAtISO) continue;
-      if (p.status === "missed") continue;
-      forecastAtSnapshot += p.amount;
-    }
     for (const b of allBank) {
       if (b.date < fromDate || b.date > snapshotAtISO) continue;
-      if (b.status === "ignored_unforecasted") {
-        forecastAtSnapshot += b.amount;
-      }
+      expectedSnapshotFromStart += b.amount;
     }
-    forecastAtSnapshot = round2(forecastAtSnapshot);
+    expectedSnapshotFromStart = round2(expectedSnapshotFromStart);
   }
   const bankAtSnapshot = bankSnapshot
     ? Number(bankSnapshot.balance) || 0
-    : forecastAtSnapshot;
-  const rawGap = round2(forecastAtSnapshot - bankAtSnapshot);
+    : expectedSnapshotFromStart;
 
   const contributors: ReconcileContributor[] = [];
   let matchedAmountDelta = 0;
@@ -154,7 +146,9 @@ export function computeBankReconcile(input: ReconcileInput): ReconcileResult {
     }
     matchedAmountDelta = round2(matchedAmountDelta);
   }
-  const startingBalanceDelta = round2(rawGap - matchedAmountDelta);
+  const startingBalanceDelta = snapshotAtISO
+    ? round2(expectedSnapshotFromStart - bankAtSnapshot)
+    : 0;
   if (bankSnapshot && Math.abs(startingBalanceDelta) >= 0.01) {
     contributors.push({
       kind: "starting",
