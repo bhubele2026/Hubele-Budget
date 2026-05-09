@@ -67,7 +67,7 @@ import { useListPlaidItems } from "@workspace/api-client-react";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
 import { cn } from "@/lib/utils";
 import { relevantAmexPlaidItemIds } from "@/pages/amexPlaidScope";
-import { computeBalanceAtEndOf } from "@/lib/accountBalance";
+import { makeAmexBalanceAtEndOf } from "@/lib/amexEndingBalance";
 import {
   compareNewestFirst,
   computeRunningBalances,
@@ -476,19 +476,6 @@ export default function AmexPage() {
     return { charges, paymentsAndCredits, netChange };
   }, [filtered]);
 
-  // Net change per month for the entire visible (source-filtered) set —
-  // used to roll the latest known account balance backward/forward to give
-  // each month a consistent ending balance.
-  const netChangeByMonth = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const t of wideAll) {
-      const mk = monthKeyFromISO(t.occurredOn);
-      const k = `${mk.year}-${mk.month}`;
-      m.set(k, (m.get(k) ?? 0) + parseSigned(t.amount));
-    }
-    return m;
-  }, [wideAll]);
-
   // Distinct Plaid account IDs present on the Amex-source transactions.
   // These identify the actual Amex card account(s) feeding this page.
   const amexPlaidAccountIds = useMemo(() => {
@@ -706,20 +693,23 @@ export default function AmexPage() {
     return { anchor, resolvedSource, asOf };
   }, [amexDebt, amexAnchorResp]);
 
-  // The anchor month is the month containing the as-of timestamp (typically
-  // the Plaid sync date), NOT today's month. The anchor balance is a
-  // mid-month snapshot, so the helper reconstructs end-of-anchor-month
-  // using the post-anchor activity in that month.
-  const anchorMonth = useMemo<MonthKey>(() => {
-    if (resolvedAnchor.asOf) return monthKeyFromISO(resolvedAnchor.asOf);
-    return currentMonth;
-  }, [resolvedAnchor.asOf, currentMonth]);
-
-  const anchorMonthTxns = useMemo(() => {
-    return wideAll.filter(
-      (t) => compareMonth(monthKeyFromISO(t.occurredOn), anchorMonth) === 0,
-    );
-  }, [wideAll, anchorMonth]);
+  // (#476) Pre-build the shared end-of-month balance closure once per
+  // (anchor + transactions) change. Both the visible-month
+  // `endingBalance` tile and the 12-point `balanceTrend` chart call
+  // through this same closure so they always agree, and the same
+  // helper backs the (future) dashboard "Amex ending balance" tile.
+  const balanceAtEndOf = useMemo(
+    () =>
+      makeAmexBalanceAtEndOf({
+        anchor:
+          resolvedAnchor.anchor === null
+            ? null
+            : { balance: resolvedAnchor.anchor, asOf: resolvedAnchor.asOf },
+        amexTransactions: wideAll,
+        fallbackMonth: currentMonth,
+      }),
+    [resolvedAnchor.anchor, resolvedAnchor.asOf, wideAll, currentMonth],
+  );
 
   const endingBalance = useMemo(() => {
     if (resolvedAnchor.anchor === null) {
@@ -739,16 +729,8 @@ export default function AmexPage() {
         asOf: null as string | null,
       };
     }
-    const value = computeBalanceAtEndOf({
-      anchorBalance: resolvedAnchor.anchor,
-      anchorMonth,
-      netChangeByMonth,
-      target: selectedMonth,
-      anchorAt: resolvedAnchor.asOf,
-      anchorMonthTxns,
-    });
     return {
-      value,
+      value: balanceAtEndOf(selectedMonth),
       source: resolvedAnchor.resolvedSource,
       asOf: resolvedAnchor.asOf,
     };
@@ -758,10 +740,8 @@ export default function AmexPage() {
     amexAnchorLoading,
     amexAnchorFetchStatus,
     amexAnchorError,
-    netChangeByMonth,
+    balanceAtEndOf,
     selectedMonth,
-    anchorMonth,
-    anchorMonthTxns,
   ]);
 
   // Anchor every same-day balance assignment to the canonical
@@ -833,7 +813,7 @@ export default function AmexPage() {
 
   // Trailing 12-month ending-balance series, anchored at the snapshot
   // month's known Amex balance and rolled month-by-month using the same
-  // mid-month-aware helper as `endingBalance` above.
+  // shared helper that powers `endingBalance` above.
   const balanceTrend = useMemo<TrendPoint[]>(() => {
     if (resolvedAnchor.anchor === null) return [];
     const points: TrendPoint[] = [];
@@ -844,19 +824,12 @@ export default function AmexPage() {
         key: `${mk.year}-${mk.month}`,
         label: d.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
         shortLabel: d.toLocaleDateString("en-US", { month: "short" }),
-        balance: computeBalanceAtEndOf({
-          anchorBalance: resolvedAnchor.anchor,
-          anchorMonth,
-          netChangeByMonth,
-          target: mk,
-          anchorAt: resolvedAnchor.asOf,
-          anchorMonthTxns,
-        }),
+        balance: balanceAtEndOf(mk) ?? 0,
         isSelected: compareMonth(mk, selectedMonth) === 0,
       });
     }
     return points;
-  }, [resolvedAnchor, anchorMonth, anchorMonthTxns, netChangeByMonth, selectedMonth]);
+  }, [resolvedAnchor.anchor, balanceAtEndOf, selectedMonth]);
 
   const knownPayers = useMemo(() => {
     const set = new Set<string>();
