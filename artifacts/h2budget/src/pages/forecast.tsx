@@ -134,7 +134,6 @@ import {
   TrendingDown,
   CheckCircle2,
   AlertCircle,
-  History,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
@@ -3545,106 +3544,6 @@ export default function ForecastPage({
               </Button>
             )}
           </div>
-
-          <Card data-testid="reconcile-history">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-                <History className="w-4 h-4" /> Reconcile history
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y divide-border">
-                {(() => {
-                  const months = monthsAvailable
-                    .filter((m) => m <= currentMonth)
-                    .slice(-6)
-                    .reverse();
-                  if (months.length === 0) {
-                    return (
-                      <div className="p-4 text-sm text-muted-foreground text-center">
-                        No history yet.
-                      </div>
-                    );
-                  }
-                  return months.map((m) => {
-                    const isMClosed = closedMonths.has(m);
-                    const snap = monthSnapshotsMap[m];
-                    const isCurrent = m === currentMonth;
-                    // For an open current month, evaluate live; for closed
-                    // months use the frozen snapshot; otherwise show "—".
-                    let reconciled: boolean | null = null;
-                    let gap: number | null = null;
-                    if (isMClosed && snap) {
-                      reconciled = !!snap.reconciled;
-                      gap = snap.gap != null ? Number(snap.gap) : null;
-                    } else if (isCurrent && !isMClosed) {
-                      // Live: only meaningful when the user is currently
-                      // looking at this month (bankReconcile is scoped to
-                      // monthFilter). Approximate by showing live values
-                      // when monthFilter === currentMonth.
-                      if (monthFilter === currentMonth && bankReconcile.hasBank) {
-                        reconciled = isReconciledToBank;
-                        gap = bankReconcile.gap;
-                      }
-                    }
-                    return (
-                      <div
-                        key={m}
-                        className="p-3 flex items-center justify-between gap-3 text-sm"
-                        data-testid={`reconcile-history-row-${m}`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-medium tabular-nums">{m}</span>
-                          {isMClosed ? (
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] gap-1"
-                            >
-                              <Lock className="w-3 h-3" /> closed
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] bg-muted text-muted-foreground"
-                            >
-                              open
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {reconciled === true ? (
-                            <Badge className="bg-primary/15 text-primary border-primary/30 text-[10px] gap-1">
-                              <CheckCircle2 className="w-3 h-3" /> reconciled
-                            </Badge>
-                          ) : reconciled === false ? (
-                            <Badge
-                              variant="outline"
-                              className="bg-amber-50 text-amber-900 border-amber-200 text-[10px] gap-1"
-                            >
-                              <AlertCircle className="w-3 h-3" /> gap
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              —
-                            </span>
-                          )}
-                          <span
-                            className={`text-xs tabular-nums w-24 text-right ${
-                              gap != null && Math.abs(gap) >= 0.01
-                                ? "text-amber-700 dark:text-amber-400"
-                                : "text-muted-foreground"
-                            }`}
-                          >
-                            {gap != null ? formatCurrency(gap) : "—"}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-            </CardContent>
-          </Card>
 
           <Card data-testid="review-bucket-panel">
             {(() => {
