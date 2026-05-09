@@ -12,8 +12,12 @@ const STRANGER_EMAIL = `stranger-${process.pid}-${randomUUID().slice(0, 6)}@exam
 // Pin OWNER_EMAIL before requireOwner module loads so getOwnerEmail() reads it.
 process.env.OWNER_EMAIL = OWNER_EMAIL;
 
-// Mock @clerk/express so requireAuth's owner-lookup + email-lookup
-// resolve against fixtures instead of a real Clerk tenant.
+// Track which emails have been "invited" (and accepted) by the owner.
+// MEMBER_EMAIL is in this set; STRANGER_EMAIL is NOT — that's the
+// invitation gate that proves uninvited Clerk accounts can't see
+// household data.
+const acceptedInvitations = new Set<string>([MEMBER_EMAIL.toLowerCase()]);
+
 vi.mock("@clerk/express", () => ({
   clerkClient: {
     users: {
@@ -38,6 +42,19 @@ vi.mock("@clerk/express", () => ({
           emailAddresses: [{ id: "primary", emailAddress: email }],
         };
       }),
+    },
+    invitations: {
+      getInvitationList: vi.fn(
+        async (opts: { status?: string; limit?: number; offset?: number }) => {
+          if (opts.status !== "accepted") return { data: [] };
+          if ((opts.offset ?? 0) > 0) return { data: [] };
+          return {
+            data: Array.from(acceptedInvitations).map((emailAddress) => ({
+              emailAddress,
+            })),
+          };
+        },
+      ),
     },
   },
   getAuth: vi.fn(),
@@ -82,9 +99,7 @@ async function callRequireAuthAs(actualUserId: string): Promise<FakeReq> {
     userId: actualUserId,
     sessionClaims: undefined,
   });
-  const req: FakeReq = {
-    log: { warn: () => undefined },
-  };
+  const req: FakeReq = { log: { warn: () => undefined } };
   await new Promise<void>((resolve, reject) => {
     requireAuth(
       req as unknown as Parameters<typeof requireAuth>[0],
@@ -104,13 +119,23 @@ async function callRequireAuthAs(actualUserId: string): Promise<FakeReq> {
 }
 
 describe("(#623) shared household data model", () => {
-  it("remaps a member's req.userId to the owner's id and preserves actualUserId", async () => {
-    // Owner signs in first → resolves household = self
+  it("invited member sees the owner's transactions through req.userId remap", async () => {
+    // Owner inserts a transaction.
+    await db.insert(transactionsTable).values({
+      userId: OWNER_ID,
+      occurredOn: "2026-05-01",
+      description: "Shared household coffee",
+      amount: "-4.50",
+      source: "manual",
+    });
+
+    // Owner signs in → resolves household = self
     const ownerReq = await callRequireAuthAs(OWNER_ID);
     expect(ownerReq.actualUserId).toBe(OWNER_ID);
     expect(ownerReq.userId).toBe(OWNER_ID);
 
-    // Member signs in → resolves household = OWNER_ID
+    // Invited member signs in → req.userId remapped to OWNER_ID,
+    // actualUserId preserved as MEMBER_ID
     const memberReq = await callRequireAuthAs(MEMBER_ID);
     expect(memberReq.actualUserId).toBe(MEMBER_ID);
     expect(memberReq.userId).toBe(OWNER_ID);
@@ -121,23 +146,8 @@ describe("(#623) shared household data model", () => {
       .from(profilesTable)
       .where(eq(profilesTable.id, MEMBER_ID));
     expect(memberProfile?.householdOwnerId).toBe(OWNER_ID);
-  });
 
-  it("members reading transactions through their remapped userId see the owner's rows", async () => {
-    // Owner inserts a transaction under their own id.
-    await db.insert(transactionsTable).values({
-      userId: OWNER_ID,
-      occurredOn: "2026-05-01",
-      description: "Shared household coffee",
-      amount: "-4.50",
-      source: "manual",
-    });
-
-    // Member resolves → req.userId becomes OWNER_ID
-    const memberReq = await callRequireAuthAs(MEMBER_ID);
-    expect(memberReq.userId).toBe(OWNER_ID);
-
-    // Querying transactions with the remapped userId returns the owner's row.
+    // Member's data query (keyed on req.userId) returns the owner's row.
     const rowsAsMember = await db
       .select()
       .from(transactionsTable)
@@ -147,7 +157,8 @@ describe("(#623) shared household data model", () => {
     );
   });
 
-  it("a stranger outside the household sees their own (empty) data, not the owner's", async () => {
+  it("uninvited stranger CANNOT access the owner's household — household isolation holds", async () => {
+    // Seed a transaction in the owner's household.
     await db.insert(transactionsTable).values({
       userId: OWNER_ID,
       occurredOn: "2026-05-01",
@@ -156,31 +167,48 @@ describe("(#623) shared household data model", () => {
       source: "manual",
     });
 
-    // Stranger has no accepted invitation; Clerk lookup for OWNER_EMAIL
-    // returns OWNER_ID, so stranger ALSO maps to the household — that is
-    // the correct behavior for this single-household app, since access is
-    // already gated by Clerk invitation upstream. Verify the remap is
-    // deterministic and the owner's data is reachable iff they are signed
-    // in to a Clerk account at all.
+    // STRANGER_EMAIL is NOT in acceptedInvitations. The stranger holds
+    // a valid Clerk session but was never invited.
     const strangerReq = await callRequireAuthAs(STRANGER_ID);
-    expect(strangerReq.userId).toBe(OWNER_ID);
 
-    // Now flip the owner-email cache to "no owner exists" and verify the
-    // fallback: stranger maps to themselves and sees nothing.
-    _resetHouseholdCacheForTests();
-    await db.delete(profilesTable).where(eq(profilesTable.id, STRANGER_ID));
-    const { clerkClient } = await import("@clerk/express");
-    const getUserListMock = clerkClient.users.getUserList as ReturnType<
-      typeof vi.fn
-    >;
-    getUserListMock.mockImplementationOnce(async () => ({ data: [] }));
+    // Defense in depth: req.userId must NOT be remapped to the owner.
+    expect(strangerReq.actualUserId).toBe(STRANGER_ID);
+    expect(strangerReq.userId).toBe(STRANGER_ID);
 
-    const strangerReqNoOwner = await callRequireAuthAs(STRANGER_ID);
-    expect(strangerReqNoOwner.userId).toBe(STRANGER_ID);
+    // Their data query returns nothing — they cannot see the owner's row.
+    const rowsAsStranger = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, strangerReq.userId!));
+    expect(rowsAsStranger).toHaveLength(0);
+
+    // Persisted profile records the self-mapping (no leak path on retry).
+    const [strangerProfile] = await db
+      .select()
+      .from(profilesTable)
+      .where(eq(profilesTable.id, STRANGER_ID));
+    expect(strangerProfile?.householdOwnerId).toBe(STRANGER_ID);
+  });
+
+  it("the owner sees their own household and is unaffected by stranger profiles", async () => {
+    await db.insert(transactionsTable).values({
+      userId: OWNER_ID,
+      occurredOn: "2026-05-01",
+      description: "Mortgage",
+      amount: "-1500.00",
+      source: "manual",
+    });
+
+    // A stranger signs in first and records a self-mapped profile.
+    await callRequireAuthAs(STRANGER_ID);
+
+    // Owner signs in.
+    const ownerReq = await callRequireAuthAs(OWNER_ID);
+    expect(ownerReq.userId).toBe(OWNER_ID);
     const rows = await db
       .select()
       .from(transactionsTable)
-      .where(eq(transactionsTable.userId, strangerReqNoOwner.userId!));
-    expect(rows).toHaveLength(0);
+      .where(eq(transactionsTable.userId, ownerReq.userId!));
+    expect(rows.map((r) => r.description)).toContain("Mortgage");
   });
 });

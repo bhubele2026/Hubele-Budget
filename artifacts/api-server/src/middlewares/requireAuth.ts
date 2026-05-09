@@ -97,6 +97,45 @@ interface MinimalLogger {
   warn: (...args: unknown[]) => void;
 }
 
+/**
+ * Returns true iff this email has at least one Clerk invitation in
+ * `accepted` status. Acceptance is the upstream signal that an owner
+ * explicitly granted this person household access — without it we
+ * MUST NOT remap them to the owner's data. (#623)
+ */
+async function hasAcceptedInvitation(email: string): Promise<boolean> {
+  const target = email.toLowerCase().trim();
+  if (!target) return false;
+  try {
+    // Clerk's invitations API doesn't filter by email server-side, so
+    // we page through accepted invitations (typically a tiny set for
+    // a single-household app) and look for an exact match.
+    const pageSize = 100;
+    const max = 1000;
+    let offset = 0;
+    while (offset < max) {
+      const result = await clerkClient.invitations.getInvitationList({
+        status: "accepted",
+        orderBy: "-created_at",
+        limit: pageSize,
+        offset,
+      });
+      const page = Array.isArray(result)
+        ? result
+        : (result as { data: Array<{ emailAddress: string }> }).data;
+      if (!page || page.length === 0) return false;
+      for (const inv of page) {
+        if (inv.emailAddress?.toLowerCase().trim() === target) return true;
+      }
+      if (page.length < pageSize) return false;
+      offset += pageSize;
+    }
+  } catch {
+    // best-effort — fall through to "no" so we under-share on failure
+  }
+  return false;
+}
+
 async function resolveHouseholdOwnerId(
   actualUserId: string,
   log: MinimalLogger,
@@ -116,20 +155,24 @@ async function resolveHouseholdOwnerId(
   }
 
   if (!householdOwnerId) {
-    // First-time resolution. Decide via email:
-    //   - If the signed-in user IS the owner (email matches OWNER_EMAIL),
-    //     household = self.
-    //   - Otherwise resolve the single owner of this app via Clerk and
-    //     map to their Clerk id. If the owner can't be located (e.g.
-    //     transient Clerk failure), fall back to self so the user keeps
-    //     seeing only their own data — better to under-share than to
-    //     leak the owner's data to the wrong account.
+    // First-time resolution. Three branches, in strict order:
+    //   1. The signed-in user IS the owner (email matches OWNER_EMAIL).
+    //      → household = self.
+    //   2. The signed-in user has an accepted Clerk invitation
+    //      (granted by the owner). → household = owner's userId.
+    //   3. Anyone else (signed in to Clerk but never invited).
+    //      → household = self, so they see only their own (empty)
+    //      data and CANNOT read the owner's household. This is the
+    //      defense-in-depth gate against a public sign-up slipping
+    //      past Clerk's invitation-only enforcement upstream.
     const myEmail = (await loadEmail(actualUserId))?.toLowerCase().trim();
     if (myEmail && myEmail === getOwnerEmail()) {
       householdOwnerId = actualUserId;
-    } else {
+    } else if (myEmail && (await hasAcceptedInvitation(myEmail))) {
       const ownerId = await resolveOwnerUserId();
       householdOwnerId = ownerId ?? actualUserId;
+    } else {
+      householdOwnerId = actualUserId;
     }
     try {
       await db
