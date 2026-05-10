@@ -14,6 +14,7 @@ import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
 import { runStartupAvalancheHealRevert } from "./lib/startupAvalancheHealRevert";
+import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
 import { runStartupGroceriesRename } from "./lib/startupGroceriesRename";
 import { runStartupHouseholdBackfill } from "./lib/startupHouseholdBackfill";
 
@@ -158,6 +159,20 @@ app.listen(port, (err) => {
     })
     .catch((err) => {
       logger.error({ err }, "Startup avalanche-heal revert failed");
+    });
+
+  // (#632) One-shot per-startup sweep: clean up existing transactions
+  // that match the new card-payment heuristics but were tagged into
+  // Monthly/Weekly/Unplanned before the upstream classifier knew about
+  // them (e.g. the +$1,593.52 "ONLINE PAYMENT - THANK YOU" sitting in
+  // Monthly Budget). User-overridden rows are skipped. Idempotent —
+  // a clean DB is a no-op. Best-effort: never blocks boot.
+  runStartupCardPaymentReclassify()
+    .then((summary) => {
+      logger.info(summary, "Startup card-payment reclassify complete");
+    })
+    .catch((err) => {
+      logger.error({ err }, "Startup card-payment reclassify failed");
     });
 
   // One-shot per-user fix: confirmed in chat that the user's "Weekly Spend"

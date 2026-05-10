@@ -534,6 +534,8 @@ function MonthlyLikeSection({
   const { total, recent } = useMemo(() => {
     const filtered = transactions.filter((t) => {
       if (!selectedSources.has(dashboardSourceLabel(t.source))) return false;
+      // (#631 / #632) Bucket membership predicate also excludes
+      // transfer-classified rows; see `isTxnInBucket`.
       if (!isTxnInBucket(t, bucket, resolvedUnplannedTxnIds)) return false;
       return t.occurredOn >= monthStartISO && t.occurredOn <= monthEndISO;
     });
@@ -1652,20 +1654,27 @@ const SELECTED_SOURCES_KEY = "h2budget:dashboardSelectedSources";
 // roll-up. Extracted so MonthlyLikeSection's filter and the unit tests
 // share a single predicate.
 //
-// For "unplanned" we explicitly exclude transactions where `isTransfer`
-// is true UNLESS the user manually toggled `unplannedAllowance = true`
-// on that row — in which case the explicit user choice wins over the
-// transfer flag. Transfer rows that only land in the bucket via a
-// forecast-inbox `ignored_unforecasted` / `unplanned` resolution are
-// not real spend and must not inflate the Unplanned total / list.
+// (#632) Defensive guard: a transfer-classified row (e.g. a card
+// payment) is never real spend, so it must never roll into Monthly or
+// Unplanned regardless of which flag put it there. The startup
+// reclassify sweep clears stale allowance flags on boot, but this
+// keeps the dashboard honest in the meantime and for any future paths
+// that flip isTransfer without touching the allowance flags. The user
+// can still force a transfer row into a bucket by clearing isTransfer
+// (which sets isTransferUserOverridden=true).
+//
+// Transfer rows that only land in the bucket via a forecast-inbox
+// `ignored_unforecasted` / `unplanned` resolution are not real spend
+// either and are excluded by the same guard.
 export function isTxnInBucket(
   t: Transaction,
   bucket: "monthly" | "unplanned",
   resolvedUnplannedTxnIds?: ReadonlySet<string>,
 ): boolean {
+  if (t.isTransfer) return false;
   if (bucket === "monthly") return !!t.monthlyAllowance;
   if (t.unplannedAllowance) return true;
-  if (resolvedUnplannedTxnIds?.has(t.id) && !t.isTransfer) return true;
+  if (resolvedUnplannedTxnIds?.has(t.id)) return true;
   return false;
 }
 
@@ -1689,13 +1698,13 @@ export function detectChipSources(
       t.weeklyAllowance ||
       t.monthlyAllowance ||
       t.unplannedAllowance;
-    // (#631) A txn flagged as a transfer is not real spend; if its only
-    // claim to a chip is a forecast Unplanned resolution, ignore it so
-    // the chip row doesn't surface a source solely because the user
-    // marked an account-to-account move "Unplanned" in the inbox.
-    const taggedByForecast =
-      !!resolvedUnplannedTxnIds?.has(t.id) && !t.isTransfer;
+    const taggedByForecast = !!resolvedUnplannedTxnIds?.has(t.id);
     if (!taggedByUser && !taggedByForecast) continue;
+    // (#631 / #632) A transfer-classified row (e.g. a card payment) is
+    // not real spend; the bucket filter excludes it from totals, so a
+    // chip would be a dead-end. Drop it whether the tag came from the
+    // user (stale allowance flag) or the forecast inbox.
+    if (t.isTransfer) continue;
     if (t.occurredOn < monthStartISO || t.occurredOn > monthEndISO) continue;
     set.add(dashboardSourceLabel(t.source));
   }

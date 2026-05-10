@@ -788,6 +788,20 @@ export async function syncPlaidItem(
             // preserve its current value instead of letting the auto-
             // categorize transfer heuristic re-flip it on every sync.
             isTransfer: sql`CASE WHEN ${transactionsTable.isTransferUserOverridden} THEN ${transactionsTable.isTransfer} ELSE ${values.isTransfer} END`,
+            // (#632) When the classifier flips a row to a transfer
+            // (e.g. a card-payment row caught by the new LOAN_PAYMENTS
+            // PFC / "online payment" patterns), also clear the
+            // Weekly/Monthly/Unplanned allowance flags so the row
+            // disappears from every dashboard bucket — same shape the
+            // category picker already does for the manual Transfer pick.
+            // User overrides are respected via the same CASE guard.
+            ...(cat.isTransfer
+              ? {
+                  weeklyAllowance: sql`CASE WHEN ${transactionsTable.isTransferUserOverridden} THEN ${transactionsTable.weeklyAllowance} ELSE FALSE END`,
+                  monthlyAllowance: sql`CASE WHEN ${transactionsTable.isTransferUserOverridden} THEN ${transactionsTable.monthlyAllowance} ELSE FALSE END`,
+                  unplannedAllowance: sql`CASE WHEN ${transactionsTable.isTransferUserOverridden} THEN ${transactionsTable.unplannedAllowance} ELSE FALSE END`,
+                }
+              : {}),
             ...(debtId ? { debtId } : {}),
             ...(isChecking && !cat.isTransfer ? { forecastFlag: true } : {}),
           },
@@ -1909,6 +1923,18 @@ export async function runGapBackfillForItem(
               // path must honor the user's manual `isTransfer` override the
               // same way as the cursor sync path.
               isTransfer: sql`CASE WHEN ${transactionsTable.isTransferUserOverridden} THEN ${transactionsTable.isTransfer} ELSE ${values.isTransfer} END`,
+              // (#632) Twin of the cursor-sync allowance-clearing block:
+              // when the classifier flips this row to a transfer (e.g.
+              // newly-covered card-payment patterns), drop the dashboard
+              // bucket flags so it stops counting toward Monthly/Weekly/
+              // Unplanned. User overrides preserved via the same guard.
+              ...(cat.isTransfer
+                ? {
+                    weeklyAllowance: sql`CASE WHEN ${transactionsTable.isTransferUserOverridden} THEN ${transactionsTable.weeklyAllowance} ELSE FALSE END`,
+                    monthlyAllowance: sql`CASE WHEN ${transactionsTable.isTransferUserOverridden} THEN ${transactionsTable.monthlyAllowance} ELSE FALSE END`,
+                    unplannedAllowance: sql`CASE WHEN ${transactionsTable.isTransferUserOverridden} THEN ${transactionsTable.unplannedAllowance} ELSE FALSE END`,
+                  }
+                : {}),
               ...(debtId ? { debtId } : {}),
             },
           });

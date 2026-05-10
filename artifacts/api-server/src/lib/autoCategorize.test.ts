@@ -195,4 +195,68 @@ describe("categorize", () => {
     expect(out.categoryId).toBe("cat-amex-pmt");
     expect(out.isTransfer).toBe(true);
   });
+
+  // (#632) Card-payment classification: description patterns + LOAN_PAYMENTS
+  // PFC must mark the row as a transfer so it never lands in Monthly /
+  // Weekly / Unplanned buckets.
+  describe("(#632) card-payment heuristics", () => {
+    it("flags Amex 'ONLINE PAYMENT - THANK YOU' as a transfer", () => {
+      const out = categorize(
+        { description: "ONLINE PAYMENT - THANK YOU" },
+        [],
+      );
+      expect(out.isTransfer).toBe(true);
+    });
+
+    it("flags 'PAYMENT - THANK YOU' (no 'ONLINE' prefix) as a transfer", () => {
+      const out = categorize({ description: "PAYMENT - THANK YOU" }, []);
+      expect(out.isTransfer).toBe(true);
+    });
+
+    it("flags 'MOBILE PAYMENT - THANK YOU' as a transfer", () => {
+      const out = categorize(
+        { description: "MOBILE PAYMENT - THANK YOU" },
+        [],
+      );
+      expect(out.isTransfer).toBe(true);
+    });
+
+    it("flags 'AUTOPAY PAYMENT' (Chase autopay) as a transfer", () => {
+      const out = categorize(
+        { description: "AUTOPAY PAYMENT - THANK YOU" },
+        [],
+      );
+      expect(out.isTransfer).toBe(true);
+    });
+
+    it("flags 'PAYMENT RECEIVED' as a transfer", () => {
+      const out = categorize({ description: "PAYMENT RECEIVED 12345" }, []);
+      expect(out.isTransfer).toBe(true);
+    });
+
+    it("flags Plaid LOAN_PAYMENTS PFC primary as a transfer", () => {
+      const out = categorize(
+        { description: "Some bank-side card payment", pfcPrimary: "LOAN_PAYMENTS" },
+        [],
+      );
+      expect(out.isTransfer).toBe(true);
+    });
+
+    it("flags LOAN_PAYMENTS_CREDIT_CARD_PAYMENT detailed via its primary", () => {
+      const out = categorize(
+        {
+          description: "AMEX EPAYMENT ACH PMT",
+          pfcPrimary: "LOAN_PAYMENTS",
+          pfcDetailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
+        },
+        [],
+      );
+      expect(out.isTransfer).toBe(true);
+    });
+
+    it("does NOT flag a plain merchant charge that happens to contain 'pay'", () => {
+      const out = categorize({ description: "PAYLESS SHOES #4521" }, []);
+      expect(out.isTransfer).toBe(false);
+    });
+  });
 });
