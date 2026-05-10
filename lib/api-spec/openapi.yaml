@@ -18,6 +18,7 @@ tags:
   - name: import
   - name: forecast
   - name: dashboard-budgets
+  - name: weekly-settlements
   - name: auth
   - name: invitations
   - name: members
@@ -1145,6 +1146,47 @@ paths:
           schema: { type: string }
       responses:
         "204": { description: Deleted }
+
+  /weekly-settlements:
+    get:
+      operationId: listWeeklySettlements
+      tags: [weekly-settlements]
+      parameters:
+        - in: query
+          name: weekStart
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WeeklySettlement" }
+    put:
+      operationId: closeOutWeek
+      tags: [weekly-settlements]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WeeklySettlementInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklySettlement" }
+    delete:
+      operationId: reopenWeek
+      tags: [weekly-settlements]
+      parameters:
+        - in: query
+          name: weekStart
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Reopened }
 
   /plaid/link-token:
     post:
@@ -3224,6 +3266,20 @@ components:
         bucket: { type: string }
         periodKey: { type: string }
         amount: { type: string }
+
+    WeeklySettlement:
+      type: object
+      required: [id, weekStart, closedAt, closedBy]
+      properties:
+        id: { type: string }
+        weekStart: { type: string }
+        closedAt: { type: string }
+        closedBy: { type: string }
+    WeeklySettlementInput:
+      type: object
+      required: [weekStart]
+      properties:
+        weekStart: { type: string }
 
     ImportSummary:
       type: object

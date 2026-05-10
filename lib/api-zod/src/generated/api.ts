@@ -2295,6 +2295,35 @@ export const DeleteDashboardBudgetQueryParams = zod.object({
   periodKey: zod.coerce.string(),
 });
 
+export const ListWeeklySettlementsQueryParams = zod.object({
+  weekStart: zod.coerce.string().optional(),
+});
+
+export const ListWeeklySettlementsResponseItem = zod.object({
+  id: zod.string(),
+  weekStart: zod.string(),
+  closedAt: zod.string(),
+  closedBy: zod.string(),
+});
+export const ListWeeklySettlementsResponse = zod.array(
+  ListWeeklySettlementsResponseItem,
+);
+
+export const CloseOutWeekBody = zod.object({
+  weekStart: zod.string(),
+});
+
+export const CloseOutWeekResponse = zod.object({
+  id: zod.string(),
+  weekStart: zod.string(),
+  closedAt: zod.string(),
+  closedBy: zod.string(),
+});
+
+export const ReopenWeekQueryParams = zod.object({
+  weekStart: zod.coerce.string(),
+});
+
 export const CreatePlaidLinkTokenResponse = zod.object({
   linkToken: zod.string(),
   expiration: zod.string(),

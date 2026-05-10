@@ -727,3 +727,28 @@ export type ForecastResolution = typeof forecastResolutionsTable.$inferSelect;
 export type ForecastClosedMonth = typeof forecastClosedMonthsTable.$inferSelect;
 export type ForecastSettings = typeof forecastSettingsTable.$inferSelect;
 export type DashboardBudget = typeof dashboardBudgetsTable.$inferSelect;
+
+// (#629) "Close Out Week" — one row per (household, weekStart) marking the
+// Sun–Sat week as paid off. Existence of a row means closed; we keep it as
+// a row (rather than a boolean column) so we can audit closedAt/closedBy
+// without growing the dashboard_budgets table.
+export const weeklySettlementsTable = pgTable(
+  "weekly_settlements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    householdId: uuid("household_id")
+      .references(() => householdsTable.id, { onDelete: "cascade" })
+      .notNull(),
+    weekStart: text("week_start").notNull(),
+    closedAt: timestamp("closed_at", { withTimezone: true }).defaultNow().notNull(),
+    closedBy: text("closed_by").notNull(),
+  },
+  (t) => ({
+    householdWeekUq: uniqueIndex("weekly_settlements_household_week_uq").on(
+      t.householdId,
+      t.weekStart,
+    ),
+  }),
+);
+export type WeeklySettlement = typeof weeklySettlementsTable.$inferSelect;

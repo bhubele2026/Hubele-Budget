@@ -14,6 +14,10 @@ import {
   useUpsertDashboardBudget,
   useDeleteDashboardBudget,
   useUpdateTransaction,
+  useListWeeklySettlements,
+  useCloseOutWeek,
+  useReopenWeek,
+  getListWeeklySettlementsQueryKey,
   getListDashboardBudgetsQueryKey,
   getListTransactionsQueryKey,
   type Transaction,
@@ -229,6 +233,30 @@ function CapInline({
   );
 }
 
+// (#629) Sun-Sat week math. Returns Sunday of the week containing `d`
+// (local time). We use local time so "this week" matches what the user
+// sees on their wall clock — same convention as the rest of the app.
+function sundayOf(d: Date): Date {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - x.getDay());
+  return x;
+}
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() + n);
+  return x;
+}
+function formatWeekRange(sun: Date): string {
+  const sat = addDays(sun, 6);
+  const sameMonth = sun.getMonth() === sat.getMonth();
+  const sunStr = sun.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const satStr = sat.toLocaleDateString("en-US", {
+    month: sameMonth ? undefined : "short",
+    day: "numeric",
+  });
+  return `${sunStr} – ${satStr}`;
+}
+
 function WeeklyMonthlySection({
   transactions,
   viewMonth,
@@ -241,26 +269,33 @@ function WeeklyMonthlySection({
   selectedSources: ReadonlySet<string>;
 }) {
   const SUB_LABEL = useWeeklyBucketLabels();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  // (#629) Cap is still a per-month override (matches existing
+  // dashboardBudgets data model + Settings allowance), but the *spend
+  // total* is now scoped to the visible Sun–Sat week.
   const monthKey = useMemo(
     () => `${viewMonth.getFullYear()}-${String(viewMonth.getMonth() + 1).padStart(2, "0")}`,
     [viewMonth],
   );
-  const monthStartISO = useMemo(() => fmtISO(viewMonth), [viewMonth]);
-  const monthEndISO = useMemo(
-    () => fmtISO(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0)),
-    [viewMonth],
-  );
-
   const editor = useBudgetEditor("weekly", monthKey);
 
-  const { totals, total, monthTxns } = useMemo(() => {
+  const currentWeekStart = useMemo(() => sundayOf(today), [today]);
+  const [viewWeekStart, setViewWeekStart] = useState<Date>(currentWeekStart);
+  const weekStartISO = useMemo(() => fmtISO(viewWeekStart), [viewWeekStart]);
+  const weekEndISO = useMemo(() => fmtISO(addDays(viewWeekStart, 6)), [viewWeekStart]);
+  const isCurrentWeek = fmtISO(currentWeekStart) === weekStartISO;
+  const isFutureWeek = viewWeekStart > currentWeekStart;
+
+  const { totals, total, weekTxns } = useMemo(() => {
     const t: Record<SubBucket, number> = { groceries: 0, dining: 0, entertainment: 0, misc: 0 };
     let sum = 0;
     const list: Transaction[] = [];
     for (const tx of transactions) {
       if (!selectedSources.has(dashboardSourceLabel(tx.source))) continue;
       if (!tx.weeklyAllowance) continue;
-      if (tx.occurredOn < monthStartISO || tx.occurredOn > monthEndISO) continue;
+      if (tx.occurredOn < weekStartISO || tx.occurredOn > weekEndISO) continue;
       const amt = expenseAmount(tx);
       const bucket = (tx.weeklyBucket as SubBucket | null | undefined) ?? "misc";
       if (SUB_BUCKETS.includes(bucket)) t[bucket] += amt;
@@ -269,19 +304,55 @@ function WeeklyMonthlySection({
       list.push(tx);
     }
     list.sort((a, b) => (a.occurredOn < b.occurredOn ? 1 : -1));
-    return { totals: t, total: sum, monthTxns: list };
-  }, [transactions, monthStartISO, monthEndISO, selectedSources]);
+    return { totals: t, total: sum, weekTxns: list };
+  }, [transactions, weekStartISO, weekEndISO, selectedSources]);
 
   const cap = editor.saved;
   const remaining = Math.max(0, cap - total);
   const pct = cap > 0 ? Math.min(100, (total / cap) * 100) : 0;
   const overspent = cap > 0 && total > cap;
 
-  const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
-  const isCurrentMonth =
-    viewMonth.getFullYear() === today.getFullYear() &&
-    viewMonth.getMonth() === today.getMonth();
-  const dayOfMonth = isCurrentMonth ? today.getDate() : daysInMonth;
+  // (#629) Day X of 7 — only meaningful for the current week.
+  const dayOfWeek = isCurrentWeek
+    ? Math.min(7, Math.floor((today.getTime() - viewWeekStart.getTime()) / 86400000) + 1)
+    : 7;
+
+  // (#629) Settlement state for this household. We list-all (no weekStart
+  // filter) so the lookup is one cached request even as the user pages
+  // through prior weeks.
+  const { data: settlements } = useListWeeklySettlements({});
+  const settledSet = useMemo(
+    () => new Set((settlements ?? []).map((s) => s.weekStart)),
+    [settlements],
+  );
+  const isClosed = settledSet.has(weekStartISO);
+  const closeOut = useCloseOutWeek();
+  const reopen = useReopenWeek();
+  const invalidateSettlements = () =>
+    qc.invalidateQueries({ queryKey: getListWeeklySettlementsQueryKey({}) });
+
+  const handleCloseOut = () => {
+    closeOut.mutate(
+      { data: { weekStart: weekStartISO } },
+      {
+        onSuccess: () => {
+          invalidateSettlements();
+          toast({ title: "Week closed out", description: formatWeekRange(viewWeekStart) });
+        },
+      },
+    );
+  };
+  const handleReopen = () => {
+    reopen.mutate(
+      { params: { weekStart: weekStartISO } },
+      {
+        onSuccess: () => {
+          invalidateSettlements();
+          toast({ title: "Week reopened" });
+        },
+      },
+    );
+  };
 
   return (
     <section>
@@ -295,6 +366,40 @@ function WeeklyMonthlySection({
       </div>
       <Card>
         <CardContent className="p-6 space-y-4">
+          {/* (#629) Week navigator. Forward arrow disabled on the
+              current week so users can't peek into a future "week"
+              that's still empty by definition. */}
+          <div className="flex items-center justify-between gap-3">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setViewWeekStart((w) => addDays(w, -7))}
+              data-testid="button-week-prev"
+              aria-label="Previous week"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex flex-col items-center text-center">
+              <div className="text-sm font-medium tabular-nums">
+                {formatWeekRange(viewWeekStart)}
+              </div>
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                {isCurrentWeek ? "This week" : isFutureWeek ? "Future" : "Prior week"}
+                {isClosed && " · closed out"}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setViewWeekStart((w) => addDays(w, 7))}
+              disabled={isCurrentWeek}
+              data-testid="button-week-next"
+              aria-label="Next week"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <div className="flex items-baseline gap-2">
               <span className={`text-4xl md:text-5xl font-serif font-bold tabular-nums ${overspent ? "text-destructive" : "text-foreground"}`}>
@@ -303,10 +408,45 @@ function WeeklyMonthlySection({
               <CapInline {...editor} />
             </div>
             <div className="text-xs text-muted-foreground tabular-nums">
-              {formatCurrency(remaining)} left · day {dayOfMonth} of {daysInMonth}
+              {isCurrentWeek
+                ? `${formatCurrency(remaining)} left · day ${dayOfWeek} of 7`
+                : `${formatCurrency(remaining)} left`}
             </div>
           </div>
           <Progress value={pct} className={overspent ? "[&>div]:bg-destructive" : ""} />
+
+          {/* (#629) Close Out / Reopen — only for prior weeks. */}
+          {!isCurrentWeek && !isFutureWeek && (
+            <div className="flex items-center justify-end gap-2">
+              {isClosed ? (
+                <>
+                  <span className="text-[11px] uppercase tracking-widest text-emerald-700 font-medium">
+                    Closed out ✓
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleReopen}
+                    disabled={reopen.isPending}
+                    data-testid="button-week-reopen"
+                  >
+                    Reopen
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCloseOut}
+                  disabled={closeOut.isPending}
+                  data-testid="button-week-close-out"
+                >
+                  Close Out Week
+                </Button>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t">
             {SUB_BUCKETS.map((b) => (
               <div key={b}>
@@ -321,16 +461,17 @@ function WeeklyMonthlySection({
           </div>
           <div className="border-t pt-3">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-              This month ({monthTxns.length})
+              This week ({weekTxns.length})
             </div>
-            {monthTxns.length === 0 ? (
+            {weekTxns.length === 0 ? (
               <div className="text-xs text-muted-foreground py-2">
-                All clear — no weekly charges this month yet. Tag them on the{" "}
-                <Link href="/amex" className="text-amber-700 underline">Amex page</Link>.
+                {isCurrentWeek
+                  ? <>All clear — no weekly charges yet this week. Tag them on the <Link href="/amex" className="text-amber-700 underline">Amex page</Link>.</>
+                  : <>No weekly charges in this week.</>}
               </div>
             ) : (
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {monthTxns.map((t) => {
+                {weekTxns.map((t) => {
                   const amt = Number(t.amount) || 0;
                   const srcLabel = nonAmexSourceLabel(t.source);
                   return (

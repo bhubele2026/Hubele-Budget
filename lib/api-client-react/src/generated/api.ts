@@ -76,6 +76,7 @@ import type {
   ListDashboardBudgetsParams,
   ListPlaidLiabilityAccountsParams,
   ListTransactionsParams,
+  ListWeeklySettlementsParams,
   MappingRule,
   MappingRuleInput,
   MappingRulePatternRecategorizePreview,
@@ -103,6 +104,7 @@ import type {
   RecurringItem,
   RecurringItemInput,
   RefreshBankInput,
+  ReopenWeekParams,
   ReorderMappingRulesInput,
   SeedDefaultBudgetResult,
   SetBankSnapshotInput,
@@ -118,6 +120,8 @@ import type {
   UpdatePlaidImportCutoffDate200,
   UpdatePlaidImportCutoffDateBody,
   UpdateTransactionResponse,
+  WeeklySettlement,
+  WeeklySettlementInput,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -5620,6 +5624,269 @@ export const useDeleteDashboardBudget = <
   TContext
 > => {
   return useMutation(getDeleteDashboardBudgetMutationOptions(options));
+};
+
+export const getListWeeklySettlementsUrl = (
+  params?: ListWeeklySettlementsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/weekly-settlements?${stringifiedParams}`
+    : `/api/weekly-settlements`;
+};
+
+export const listWeeklySettlements = async (
+  params?: ListWeeklySettlementsParams,
+  options?: RequestInit,
+): Promise<WeeklySettlement[]> => {
+  return customFetch<WeeklySettlement[]>(getListWeeklySettlementsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListWeeklySettlementsQueryKey = (
+  params?: ListWeeklySettlementsParams,
+) => {
+  return [`/api/weekly-settlements`, ...(params ? [params] : [])] as const;
+};
+
+export const getListWeeklySettlementsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listWeeklySettlements>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListWeeklySettlementsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listWeeklySettlements>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListWeeklySettlementsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listWeeklySettlements>>
+  > = ({ signal }) =>
+    listWeeklySettlements(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listWeeklySettlements>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListWeeklySettlementsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listWeeklySettlements>>
+>;
+export type ListWeeklySettlementsQueryError = ErrorType<unknown>;
+
+export function useListWeeklySettlements<
+  TData = Awaited<ReturnType<typeof listWeeklySettlements>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListWeeklySettlementsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listWeeklySettlements>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListWeeklySettlementsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getCloseOutWeekUrl = () => {
+  return `/api/weekly-settlements`;
+};
+
+export const closeOutWeek = async (
+  weeklySettlementInput: WeeklySettlementInput,
+  options?: RequestInit,
+): Promise<WeeklySettlement> => {
+  return customFetch<WeeklySettlement>(getCloseOutWeekUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(weeklySettlementInput),
+  });
+};
+
+export const getCloseOutWeekMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof closeOutWeek>>,
+    TError,
+    { data: BodyType<WeeklySettlementInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof closeOutWeek>>,
+  TError,
+  { data: BodyType<WeeklySettlementInput> },
+  TContext
+> => {
+  const mutationKey = ["closeOutWeek"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof closeOutWeek>>,
+    { data: BodyType<WeeklySettlementInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return closeOutWeek(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CloseOutWeekMutationResult = NonNullable<
+  Awaited<ReturnType<typeof closeOutWeek>>
+>;
+export type CloseOutWeekMutationBody = BodyType<WeeklySettlementInput>;
+export type CloseOutWeekMutationError = ErrorType<unknown>;
+
+export const useCloseOutWeek = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof closeOutWeek>>,
+    TError,
+    { data: BodyType<WeeklySettlementInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof closeOutWeek>>,
+  TError,
+  { data: BodyType<WeeklySettlementInput> },
+  TContext
+> => {
+  return useMutation(getCloseOutWeekMutationOptions(options));
+};
+
+export const getReopenWeekUrl = (params: ReopenWeekParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/weekly-settlements?${stringifiedParams}`
+    : `/api/weekly-settlements`;
+};
+
+export const reopenWeek = async (
+  params: ReopenWeekParams,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getReopenWeekUrl(params), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getReopenWeekMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reopenWeek>>,
+    TError,
+    { params: ReopenWeekParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reopenWeek>>,
+  TError,
+  { params: ReopenWeekParams },
+  TContext
+> => {
+  const mutationKey = ["reopenWeek"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reopenWeek>>,
+    { params: ReopenWeekParams }
+  > = (props) => {
+    const { params } = props ?? {};
+
+    return reopenWeek(params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReopenWeekMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reopenWeek>>
+>;
+
+export type ReopenWeekMutationError = ErrorType<unknown>;
+
+export const useReopenWeek = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reopenWeek>>,
+    TError,
+    { params: ReopenWeekParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reopenWeek>>,
+  TError,
+  { params: ReopenWeekParams },
+  TContext
+> => {
+  return useMutation(getReopenWeekMutationOptions(options));
 };
 
 export const getCreatePlaidLinkTokenUrl = () => {

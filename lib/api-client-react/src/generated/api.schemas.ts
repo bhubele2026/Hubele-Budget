@@ -1953,6 +1953,17 @@ export interface DashboardBudgetInput {
   amount: string;
 }
 
+export interface WeeklySettlement {
+  id: string;
+  weekStart: string;
+  closedAt: string;
+  closedBy: string;
+}
+
+export interface WeeklySettlementInput {
+  weekStart: string;
+}
+
 export type ImportSummaryCounts = { [key: string]: number };
 
 export interface RuleAttribution {
@@ -2305,6 +2316,14 @@ export type ListDashboardBudgetsParams = {
 export type DeleteDashboardBudgetParams = {
   bucket: string;
   periodKey: string;
+};
+
+export type ListWeeklySettlementsParams = {
+  weekStart?: string;
+};
+
+export type ReopenWeekParams = {
+  weekStart: string;
 };
 
 export type UpdatePlaidImportCutoffDateBody = {

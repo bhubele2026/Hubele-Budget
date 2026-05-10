@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse } from "./api.schemas";
+import type { AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -1522,6 +1522,64 @@ export declare const useDeleteDashboardBudget: <TError = ErrorType<unknown>, TCo
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof deleteDashboardBudget>>, TError, {
     params: DeleteDashboardBudgetParams;
+}, TContext>;
+export declare const getListWeeklySettlementsUrl: (params?: ListWeeklySettlementsParams) => string;
+export declare const listWeeklySettlements: (params?: ListWeeklySettlementsParams, options?: RequestInit) => Promise<WeeklySettlement[]>;
+export declare const getListWeeklySettlementsQueryKey: (params?: ListWeeklySettlementsParams) => readonly ["/api/weekly-settlements", ...ListWeeklySettlementsParams[]];
+export declare const getListWeeklySettlementsQueryOptions: <TData = Awaited<ReturnType<typeof listWeeklySettlements>>, TError = ErrorType<unknown>>(params?: ListWeeklySettlementsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listWeeklySettlements>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof listWeeklySettlements>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type ListWeeklySettlementsQueryResult = NonNullable<Awaited<ReturnType<typeof listWeeklySettlements>>>;
+export type ListWeeklySettlementsQueryError = ErrorType<unknown>;
+export declare function useListWeeklySettlements<TData = Awaited<ReturnType<typeof listWeeklySettlements>>, TError = ErrorType<unknown>>(params?: ListWeeklySettlementsParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listWeeklySettlements>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+export declare const getCloseOutWeekUrl: () => string;
+export declare const closeOutWeek: (weeklySettlementInput: WeeklySettlementInput, options?: RequestInit) => Promise<WeeklySettlement>;
+export declare const getCloseOutWeekMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof closeOutWeek>>, TError, {
+        data: BodyType<WeeklySettlementInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof closeOutWeek>>, TError, {
+    data: BodyType<WeeklySettlementInput>;
+}, TContext>;
+export type CloseOutWeekMutationResult = NonNullable<Awaited<ReturnType<typeof closeOutWeek>>>;
+export type CloseOutWeekMutationBody = BodyType<WeeklySettlementInput>;
+export type CloseOutWeekMutationError = ErrorType<unknown>;
+export declare const useCloseOutWeek: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof closeOutWeek>>, TError, {
+        data: BodyType<WeeklySettlementInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof closeOutWeek>>, TError, {
+    data: BodyType<WeeklySettlementInput>;
+}, TContext>;
+export declare const getReopenWeekUrl: (params: ReopenWeekParams) => string;
+export declare const reopenWeek: (params: ReopenWeekParams, options?: RequestInit) => Promise<void>;
+export declare const getReopenWeekMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof reopenWeek>>, TError, {
+        params: ReopenWeekParams;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof reopenWeek>>, TError, {
+    params: ReopenWeekParams;
+}, TContext>;
+export type ReopenWeekMutationResult = NonNullable<Awaited<ReturnType<typeof reopenWeek>>>;
+export type ReopenWeekMutationError = ErrorType<unknown>;
+export declare const useReopenWeek: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof reopenWeek>>, TError, {
+        params: ReopenWeekParams;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof reopenWeek>>, TError, {
+    params: ReopenWeekParams;
 }, TContext>;
 export declare const getCreatePlaidLinkTokenUrl: () => string;
 export declare const createPlaidLinkToken: (options?: RequestInit) => Promise<PlaidLinkToken>;

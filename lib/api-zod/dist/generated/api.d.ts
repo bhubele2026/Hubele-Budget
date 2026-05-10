@@ -5279,6 +5279,75 @@ export declare const DeleteDashboardBudgetQueryParams: zod.ZodObject<{
     bucket: string;
     periodKey: string;
 }>;
+export declare const ListWeeklySettlementsQueryParams: zod.ZodObject<{
+    weekStart: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    weekStart?: string | undefined;
+}, {
+    weekStart?: string | undefined;
+}>;
+export declare const ListWeeklySettlementsResponseItem: zod.ZodObject<{
+    id: zod.ZodString;
+    weekStart: zod.ZodString;
+    closedAt: zod.ZodString;
+    closedBy: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    closedAt: string;
+    weekStart: string;
+    closedBy: string;
+}, {
+    id: string;
+    closedAt: string;
+    weekStart: string;
+    closedBy: string;
+}>;
+export declare const ListWeeklySettlementsResponse: zod.ZodArray<zod.ZodObject<{
+    id: zod.ZodString;
+    weekStart: zod.ZodString;
+    closedAt: zod.ZodString;
+    closedBy: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    closedAt: string;
+    weekStart: string;
+    closedBy: string;
+}, {
+    id: string;
+    closedAt: string;
+    weekStart: string;
+    closedBy: string;
+}>, "many">;
+export declare const CloseOutWeekBody: zod.ZodObject<{
+    weekStart: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    weekStart: string;
+}, {
+    weekStart: string;
+}>;
+export declare const CloseOutWeekResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    weekStart: zod.ZodString;
+    closedAt: zod.ZodString;
+    closedBy: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    closedAt: string;
+    weekStart: string;
+    closedBy: string;
+}, {
+    id: string;
+    closedAt: string;
+    weekStart: string;
+    closedBy: string;
+}>;
+export declare const ReopenWeekQueryParams: zod.ZodObject<{
+    weekStart: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    weekStart: string;
+}, {
+    weekStart: string;
+}>;
 export declare const CreatePlaidLinkTokenResponse: zod.ZodObject<{
     linkToken: zod.ZodString;
     expiration: zod.ZodString;
