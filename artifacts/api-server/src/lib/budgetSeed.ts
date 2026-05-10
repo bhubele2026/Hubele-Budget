@@ -28,6 +28,20 @@ export const UNCATEGORIZED_CATEGORY_NAME = "Uncategorized";
 // future Plaid syncs don't re-flip it from the description heuristic.
 export const TRANSFER_CATEGORY_NAME = "Transfer";
 
+// (#624) Canonical name for the system-managed Ignore category. Picked on
+// a transaction's category picker to drop the row from every budget /
+// reports roll-up while still letting it count toward the account's
+// running balance and ending-balance math (because those calcs sum by
+// amount/account scope only — see `accountBalance.ts`,
+// `chaseEndingBalance.ts`, `amexEndingBalance.ts` — and never filter by
+// category). Mirrors the Uncategorized/Transfer pattern: stored with
+// `excludeFromBudget=true` so the Budget page filters it out of every
+// roll-up, and mapping rules cannot target it. Unlike Transfer, picking
+// Ignore does NOT flip `isTransfer=true` — Reports + Budget exclusion
+// happens via the `excludeFromBudget` filter alone, so balance math is
+// untouched.
+export const IGNORE_CATEGORY_NAME = "Ignore";
+
 export const SEED_MONTH = "2026-05-01";
 
 export const SEED_GROUP_ORDER = [
@@ -336,6 +350,28 @@ export const SEED_CATEGORIES: SeedCategory[] = [
     kind: "expense",
     sourceKind: "manual",
     name: TRANSFER_CATEGORY_NAME,
+    planned: "0",
+    note: null,
+    excludeFromBudget: true,
+  },
+
+  // (#624) System-managed Ignore category. Picked on a transaction to
+  // drop the row from every budget/reports roll-up — Budget page
+  // actuals + month-summary totals + Reports category breakdown +
+  // Reports daily cash-flow — while still letting it count toward the
+  // account's running balance and ending-balance math. The balance
+  // helpers (accountBalance.ts, chaseEndingBalance.ts,
+  // amexEndingBalance.ts) sum by amount/account scope only and never
+  // filter by category, so Ignore rows naturally still hit balances.
+  // Same `excludeFromBudget` treatment as Uncategorized/Transfer:
+  // never appears as its own line, group, or row on the Budget or
+  // Reports page; mapping rules cannot target it; auto-categorize
+  // never picks it (manual-pick only).
+  {
+    groupName: IGNORE_CATEGORY_NAME,
+    kind: "expense",
+    sourceKind: "manual",
+    name: IGNORE_CATEGORY_NAME,
     planned: "0",
     note: null,
     excludeFromBudget: true,

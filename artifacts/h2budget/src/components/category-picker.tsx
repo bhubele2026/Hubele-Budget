@@ -55,10 +55,20 @@ export function CategoryPicker({
   // the main list so it isn't shown twice. Disabled (and a no-op fallback)
   // when the category hasn't been seeded for this user yet.
   const transferCat = categories.find((c) => c.name === "Transfer");
+  // (#624) Same lazy-seed handling for the system-managed "Ignore" row.
+  // Picking it stores `categoryId=ignoreCat.id` (a real category flagged
+  // `excludeFromBudget=true`) — the row stays in the account/balance
+  // ledger but disappears from every Budget/Reports roll-up. Unlike
+  // Transfer this does NOT flip `isTransfer` — Ignore filtering happens
+  // entirely via the `excludeFromBudget` flag downstream. We hide it
+  // from the main list so it isn't rendered twice, and disable the
+  // option (no-op fallback) when not yet seeded for this user.
+  const ignoreCat = categories.find((c) => c.name === "Ignore");
   const pickableCategories = categories.filter(
     (c) =>
       (!uncategorizedCat || c.id !== uncategorizedCat.id) &&
-      (!transferCat || c.id !== transferCat.id),
+      (!transferCat || c.id !== transferCat.id) &&
+      (!ignoreCat || c.id !== ignoreCat.id),
   );
   const current = value
     ? categories.find((c) => c.id === value)?.name ?? "Unknown"
@@ -131,6 +141,40 @@ export function CategoryPicker({
                   )}
                 />
                 Transfer
+              </CommandItem>
+              <CommandItem
+                disabled={!ignoreCat}
+                onSelect={() => {
+                  if (!ignoreCat) return;
+                  // (#624) Picking Ignore never learns a mapping rule —
+                  // server-side `isExcludedCategory` would reject it
+                  // anyway, and Ignore is a one-row classification (not
+                  // a recurring pattern). Stays in account balance math
+                  // but vanishes from Budget actuals + Reports totals
+                  // and the daily cash-flow chart.
+                  onChange(ignoreCat.id, null);
+                  setOpen(false);
+                }}
+                data-testid="option-ignore"
+                className="items-start"
+              >
+                <Check
+                  className={cn(
+                    "mr-2 h-3 w-3 mt-0.5",
+                    ignoreCat && value === ignoreCat.id
+                      ? "opacity-100"
+                      : "opacity-0",
+                  )}
+                />
+                <div className="flex flex-col gap-0.5">
+                  <span>Ignore</span>
+                  {/* (#624) Required helper copy — clarifies that Ignore
+                      is a Reports/Budget-only hide, not a balance edit. */}
+                  <span className="text-[10px] text-muted-foreground leading-snug">
+                    Keeps the transaction in your account balance but
+                    leaves it out of budgets and reports.
+                  </span>
+                </div>
               </CommandItem>
               {pickableCategories.map((c) => (
                 <CommandItem

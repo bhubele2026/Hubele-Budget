@@ -345,6 +345,21 @@ export default function ReportsPage() {
     return m;
   }, [categories]);
 
+  // (#624) IDs of system-managed `excludeFromBudget` categories
+  // (Uncategorized, Transfer, Ignore). Passed into the Reports
+  // analytics helpers so transactions tagged with one of these never
+  // contribute to the category breakdown or the daily cash-flow chart.
+  // Picking Ignore on a row is the new way for users to drop a
+  // transaction from every roll-up here while still letting it count
+  // toward account balances.
+  const excludedCategoryIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of categories ?? []) {
+      if (c.excludeFromBudget) s.add(c.id);
+    }
+    return s;
+  }, [categories]);
+
   // Range-filtered transactions for cash flow/spending tabs.
   const rangeTxns = useMemo(() => {
     if (!txns) return [];
@@ -466,6 +481,7 @@ export default function ReportsPage() {
             rangeDays={Number(rangeDays)}
             compareToPrev={compareToPrev}
             catNameById={catNameById}
+            excludedCategoryIds={excludedCategoryIds}
             recurringItems={recurringItems ?? []}
             forecast={forecast ?? null}
           />
@@ -477,6 +493,7 @@ export default function ReportsPage() {
             prevTxns={prevRangeTxns}
             yearTxns={txns ?? []}
             catNameById={catNameById}
+            excludedCategoryIds={excludedCategoryIds}
             today={today}
             compareToPrev={compareToPrev}
           />
@@ -992,6 +1009,7 @@ function CashFlowSection({
   rangeDays,
   compareToPrev,
   catNameById,
+  excludedCategoryIds,
   recurringItems,
   forecast,
 }: {
@@ -1000,20 +1018,24 @@ function CashFlowSection({
   rangeDays: number;
   compareToPrev: boolean;
   catNameById: Map<string, string>;
+  excludedCategoryIds: ReadonlySet<string>;
   recurringItems: RecurringItem[];
   forecast: ForecastBundle | null;
 }) {
   const period: "day" | "week" | "month" =
     rangeDays <= 60 ? "day" : rangeDays <= 180 ? "week" : "month";
 
-  const dailyCurr = useMemo(() => dailyCashFlow(txns), [txns]);
+  const dailyCurr = useMemo(
+    () => dailyCashFlow(txns, excludedCategoryIds),
+    [txns, excludedCategoryIds],
+  );
   const series = useMemo(
     () => withRunningNet(rollupByPeriod(dailyCurr, period)),
     [dailyCurr, period],
   );
   const prevSeries = useMemo(
-    () => rollupByPeriod(dailyCashFlow(prevTxns), period),
-    [prevTxns, period],
+    () => rollupByPeriod(dailyCashFlow(prevTxns, excludedCategoryIds), period),
+    [prevTxns, period, excludedCategoryIds],
   );
   // Merge previous-period series alongside current so charts can show overlay.
   const seriesWithPrev = useMemo(() => {
@@ -1078,8 +1100,8 @@ function CashFlowSection({
   const burn = useMemo(() => rolling30DayBurn(dailyCurr), [dailyCurr]);
   const kpis = useMemo(() => cashFlowKpis(dailyCurr), [dailyCurr]);
   const prevKpis = useMemo(
-    () => cashFlowKpis(dailyCashFlow(prevTxns)),
-    [prevTxns],
+    () => cashFlowKpis(dailyCashFlow(prevTxns, excludedCategoryIds)),
+    [prevTxns, excludedCategoryIds],
   );
   const pctDelta = (curr: number, prev: number) =>
     prev === 0 ? Number.NaN : ((curr - prev) / Math.abs(prev)) * 100;
@@ -1390,6 +1412,7 @@ function SpendingSection({
   prevTxns,
   yearTxns,
   catNameById,
+  excludedCategoryIds,
   today,
   compareToPrev,
 }: {
@@ -1397,13 +1420,17 @@ function SpendingSection({
   prevTxns: Transaction[];
   yearTxns: Transaction[];
   catNameById: Map<string, string>;
+  excludedCategoryIds: ReadonlySet<string>;
   today: Date;
   compareToPrev: boolean;
 }) {
-  const cats = useMemo(() => categoryTotals(txns, catNameById), [txns, catNameById]);
+  const cats = useMemo(
+    () => categoryTotals(txns, catNameById, excludedCategoryIds),
+    [txns, catNameById, excludedCategoryIds],
+  );
   const prevCats = useMemo(
-    () => categoryTotals(prevTxns, catNameById),
-    [prevTxns, catNameById],
+    () => categoryTotals(prevTxns, catNameById, excludedCategoryIds),
+    [prevTxns, catNameById, excludedCategoryIds],
   );
   const top8 = cats.slice(0, 8);
   const totalSpend = cats.reduce((s, c) => s + c.total, 0);

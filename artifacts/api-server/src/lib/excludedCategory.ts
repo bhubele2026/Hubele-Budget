@@ -2,14 +2,14 @@ import { and, eq } from "drizzle-orm";
 import { db, budgetCategoriesTable } from "@workspace/db";
 import { TRANSFER_CATEGORY_NAME } from "./budgetSeed";
 
-// (#474, #607) Shared guard: returns true when `categoryId` belongs to a
-// budget category flagged `exclude_from_budget` (today: the system-managed
-// "Uncategorized" and "Transfer" rows). Mapping rules must never target an
-// excluded category — auto-categorize would otherwise sweep rows into
-// Uncategorized/Transfer, both of which exist only as manual picks from
-// the row's category picker. Centralised so every rule-mutating endpoint
-// (mapping CRUD, transactions auto-learn, recategorize-by-pattern Undo
-// repoint) shares the same check.
+// (#474, #607, #624) Shared guard: returns true when `categoryId` belongs
+// to a budget category flagged `exclude_from_budget` (today: the
+// system-managed "Uncategorized", "Transfer", and "Ignore" rows). Mapping
+// rules must never target an excluded category — auto-categorize would
+// otherwise sweep rows into one of those system buckets, all of which
+// exist only as manual picks from the row's category picker. Centralised
+// so every rule-mutating endpoint (mapping CRUD, transactions auto-learn,
+// recategorize-by-pattern Undo repoint) shares the same check.
 export async function isExcludedCategory(
   userId: string,
   categoryId: string | null | undefined,
@@ -50,5 +50,10 @@ export async function isTransferCategory(
   return cat?.name === TRANSFER_CATEGORY_NAME;
 }
 
+// (#624) Generalised the wording from the original
+// "Uncategorized or Transfer" copy now that a third system category
+// ("Ignore") shares the same `exclude_from_budget` guard. The error is
+// surfaced verbatim by the Mapping Rules page when a save attempt would
+// point a rule at any of these manual-only buckets.
 export const EXCLUDED_CATEGORY_RULE_ERROR =
-  "Mapping rules cannot target the Uncategorized or Transfer category. Pick a real budget category.";
+  "Mapping rules cannot target a system category (Uncategorized, Transfer, or Ignore). Pick a real budget category.";

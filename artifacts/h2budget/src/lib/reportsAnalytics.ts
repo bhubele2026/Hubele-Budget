@@ -68,9 +68,24 @@ function income(t: Transaction): number {
 
 export type CashFlowDay = { date: string; income: number; expense: number; net: number };
 
-export function dailyCashFlow(txns: Transaction[]): CashFlowDay[] {
+export function dailyCashFlow(
+  txns: Transaction[],
+  excludedCategoryIds?: ReadonlySet<string>,
+): CashFlowDay[] {
   const map = new Map<string, CashFlowDay>();
   for (const t of txns) {
+    // (#624) Skip transactions whose category is flagged
+    // `excludeFromBudget` (system-managed Uncategorized / Transfer /
+    // Ignore) so they don't pollute the Reports daily cash-flow chart.
+    // Same intentional side-effect as `categoryTotals`: this also
+    // stops Transfer rows from leaking into Reports today.
+    if (
+      t.categoryId &&
+      excludedCategoryIds &&
+      excludedCategoryIds.has(t.categoryId)
+    ) {
+      continue;
+    }
     const slot = map.get(t.occurredOn) ?? { date: t.occurredOn, income: 0, expense: 0, net: 0 };
     slot.income += income(t);
     slot.expense += expense(t);
@@ -161,11 +176,25 @@ export type CategoryTotal = { id: string; name: string; total: number };
 export function categoryTotals(
   txns: Transaction[],
   catNameById: Map<string, string>,
+  excludedCategoryIds?: ReadonlySet<string>,
 ): CategoryTotal[] {
   const map = new Map<string, number>();
   for (const t of txns) {
     const e = expense(t);
     if (e <= 0) continue;
+    // (#624) Skip transactions whose category is flagged
+    // `excludeFromBudget` (system-managed Uncategorized / Transfer /
+    // Ignore). Previously only the hardcoded "uncategorized" sentinel
+    // was filtered, which let Transfer rows leak into the Reports
+    // category breakdown — fixed here as an intentional side-effect of
+    // generalising to the whole excluded set.
+    if (
+      t.categoryId &&
+      excludedCategoryIds &&
+      excludedCategoryIds.has(t.categoryId)
+    ) {
+      continue;
+    }
     const k = t.categoryId ?? "uncategorized";
     map.set(k, (map.get(k) ?? 0) + e);
   }

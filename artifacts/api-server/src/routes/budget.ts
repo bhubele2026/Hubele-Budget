@@ -33,6 +33,7 @@ import {
   SEED_GROUP_ORDER,
   SEED_MONTH,
   SEED_RECURRING_ITEMS,
+  IGNORE_CATEGORY_NAME,
   TRANSFER_CATEGORY_NAME,
   UNCATEGORIZED_CATEGORY_NAME,
 } from "../lib/budgetSeed";
@@ -261,6 +262,7 @@ const BILL_NAME_TO_MANUAL_CATEGORY: Readonly<Record<string, string>> = {
 const HEAL_BILL_LINKS_DONE = new Set<string>();
 const ENSURE_UNCATEGORIZED_DONE = new Set<string>();
 const ENSURE_TRANSFER_DONE = new Set<string>();
+const ENSURE_IGNORE_DONE = new Set<string>();
 
 async function healLegacyRecurringBillLinks(householdId: string): Promise<void> {
   if (HEAL_BILL_LINKS_DONE.has(householdId)) return;
@@ -936,12 +938,50 @@ async function ensureTransferCategory(
   ENSURE_TRANSFER_DONE.add(householdId);
 }
 
+// (#624) Mirror of `ensureUncategorizedCategory` / `ensureTransferCategory`
+// for the system-managed "Ignore" category. Picked on a transaction's
+// category picker to drop the row from every Budget/Reports roll-up while
+// leaving balance math untouched (balance helpers sum by amount/account
+// scope only and never filter by category). Stored with
+// `exclude_from_budget=true` so the same Budget filter that hides
+// Uncategorized/Transfer hides Ignore too. Idempotent via the
+// (userId, name) unique index; also self-heals legacy rows that pre-date
+// the flag by flipping it on.
+async function ensureIgnoreCategory(
+  householdId: string,
+  userId: string,
+): Promise<void> {
+  if (ENSURE_IGNORE_DONE.has(householdId)) return;
+  // Park it well after the canonical groups so any debug surface that
+  // ignores `exclude_from_budget` still renders it last (one slot after
+  // the Transfer row).
+  const sortOrder = (SEED_GROUP_ORDER.length + 12) * 100;
+  await db
+    .insert(budgetCategoriesTable)
+    .values({
+      userId,
+      householdId,
+      name: IGNORE_CATEGORY_NAME,
+      kind: "expense",
+      groupName: IGNORE_CATEGORY_NAME,
+      sourceKind: "manual",
+      sortOrder,
+      excludeFromBudget: true,
+    })
+    .onConflictDoUpdate({
+      target: [budgetCategoriesTable.householdId, budgetCategoriesTable.name],
+      set: { excludeFromBudget: true },
+    });
+  ENSURE_IGNORE_DONE.add(householdId);
+}
+
 router.get("/budget/categories", requireAuth, async (req, res): Promise<void> => {
   const householdId = req.householdId!;
   const userId = req.userId!;
   await ensureSeededDefaults(householdId, userId);
   await ensureUncategorizedCategory(householdId, userId);
   await ensureTransferCategory(householdId, userId);
+  await ensureIgnoreCategory(householdId, userId);
   const rows = await db
     .select()
     .from(budgetCategoriesTable)
@@ -1446,6 +1486,9 @@ router.get(
     await ensureUncategorizedCategory(householdId, userId);
     // (#607) Same treatment for the system-managed Transfer category.
     await ensureTransferCategory(householdId, userId);
+    // (#624) And the system-managed Ignore category — picked to drop
+    // a row from Budget/Reports roll-ups while still affecting balances.
+    await ensureIgnoreCategory(householdId, userId);
 
     // One-time reconciliation of May 2026 planned amounts to the household's
     // canonical source-of-truth values (task #106). Only runs when this
