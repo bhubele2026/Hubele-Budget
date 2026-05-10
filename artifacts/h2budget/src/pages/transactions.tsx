@@ -502,6 +502,16 @@ export default function TransactionsPage() {
     return m;
   }, [categories]);
 
+  // (#629) Resolve the system-managed "Ignore" category id once so we can
+  // dim rows whose categoryId points at it. Matches `category-picker.tsx`
+  // which also looks Ignore up by name (it's the single
+  // `excludeFromBudget` category users can pick — Uncategorized/Transfer
+  // also carry that flag but aren't user-selectable as "Ignore").
+  const ignoreCatId = useMemo(
+    () => (categories ?? []).find((c) => c.name === "Ignore")?.id ?? null,
+    [categories],
+  );
+
   const sourceOptions = useMemo(() => {
     const set = new Set<string>();
     for (const t of chaseTransactions) if (t.source) set.add(t.source);
@@ -2074,17 +2084,25 @@ export default function TransactionsPage() {
             totalNode={dayNetNode}
           >
             <div className="divide-y divide-border">
-              {items.map((tx) => (
+              {items.map((tx) => {
+                // (#629) Dim Ignore'd rows the same way forecast-sent rows
+                // are dimmed, so the bubble lights don't make a held-out
+                // line look "active". Purely visual — no pointer-events
+                // change, picker/bubbles/checkbox stay clickable.
+                const isIgnored =
+                  !!ignoreCatId && tx.categoryId === ignoreCatId;
+                return (
                 <div
                   key={tx.id}
                   className={cn(
                     "p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-muted/30 transition-colors",
-                    tx.forecastFlag && "opacity-60 bg-muted/20",
+                    (tx.forecastFlag || isIgnored) && "opacity-60 bg-muted/20",
                     focusTxId === tx.id &&
                       "ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/30",
                   )}
                   data-testid={`row-tx-${tx.id}`}
                   data-sent={tx.forecastFlag ? "true" : "false"}
+                  data-ignored={isIgnored ? "true" : "false"}
                 >
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <Checkbox
@@ -2329,7 +2347,8 @@ export default function TransactionsPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </DayGroup>
         );

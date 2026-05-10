@@ -322,6 +322,15 @@ export default function AmexPage() {
     return m;
   }, [categories]);
 
+  // (#629) Resolve the system-managed "Ignore" category id once so we can
+  // dim Ignore'd rows. Same lookup-by-name as `category-picker.tsx` —
+  // Uncategorized/Transfer also carry `excludeFromBudget` but aren't the
+  // user-pickable "Ignore" row this dimming targets.
+  const ignoreCatId = useMemo(
+    () => (categories ?? []).find((c) => c.name === "Ignore")?.id ?? null,
+    [categories],
+  );
+
   // Task #168 — once categories load, resolve `?category=<name>` from the
   // URL into the matching id and seed the filter dropdown with it. Guarded
   // so it only fires once; subsequent dropdown changes by the user stick.
@@ -1983,14 +1992,21 @@ export default function AmexPage() {
           >
               {/* Mobile: stacked card layout (below md) */}
               <div className="md:hidden divide-y divide-border">
-                {items.map((t) => (
+                {items.map((t) => {
+                  // (#629) Either reviewed OR Ignore'd dims the row — same
+                  // visual treatment, so the bubble lights don't make a
+                  // held-out line look "active". Purely cosmetic.
+                  const isIgnored =
+                    !!ignoreCatId && t.categoryId === ignoreCatId;
+                  return (
                   <div
                     key={t.id}
                     className={cn(
                       "p-3 flex flex-col gap-2 hover:bg-muted/30 transition-colors",
-                      t.reviewed && "opacity-50",
+                      (t.reviewed || isIgnored) && "opacity-50",
                     )}
                     data-reviewed={t.reviewed ? "true" : "false"}
+                    data-ignored={isIgnored ? "true" : "false"}
                     data-testid={`row-amex-mobile-${t.id}`}
                   >
                     <div className="flex items-start gap-3">
@@ -2124,20 +2140,26 @@ export default function AmexPage() {
                       />
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               {/* Desktop: table layout (md and up) */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm min-w-[720px]">
                   <tbody>
-                    {items.map((t) => (
+                    {items.map((t) => {
+                      // (#629) Either reviewed OR Ignore'd dims the row.
+                      const isIgnored =
+                        !!ignoreCatId && t.categoryId === ignoreCatId;
+                      return (
                       <tr
                         key={t.id}
                         className={cn(
                           "border-t hover:bg-muted/30 transition-colors",
-                          t.reviewed && "opacity-50",
+                          (t.reviewed || isIgnored) && "opacity-50",
                         )}
                         data-reviewed={t.reviewed ? "true" : "false"}
+                        data-ignored={isIgnored ? "true" : "false"}
                         data-testid={`row-amex-${t.id}`}
                       >
                         <td className="px-3 py-2 w-8">
@@ -2274,7 +2296,8 @@ export default function AmexPage() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
