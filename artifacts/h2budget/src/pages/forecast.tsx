@@ -1,5 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import {
   useGetForecast,
   useGetForecastCashSignal,
@@ -678,6 +686,229 @@ function PlanDropRow({
   );
 }
 
+/**
+ * (#618) Flat item descriptor for the virtualized "Planned forecast items"
+ * list. We pre-flatten plan rows + payoff transition banners once per
+ * register change so the virtualized renderer can look up by index in
+ * O(1) without re-walking the interleaving rules per scroll.
+ */
+type PlannedItem =
+  | { kind: "plan"; key: string; row: PlanLine }
+  | { kind: "banner"; key: string; transition: PayoffTransition };
+
+/**
+ * (#618) Virtualized renderer for the planned forecast items list. The
+ * old implementation mounted every row at once, which made switching to
+ * 1 YEAR (hundreds of DnD-enabled rows) hang the main thread for several
+ * hundred milliseconds. Using `useWindowVirtualizer` keeps the rendered
+ * row count bounded by the viewport regardless of horizon.
+ *
+ * Drag-and-drop (`PlanDropRow` registers via `useDroppable`) keeps
+ * working because:
+ *  - the user only ever drops on rows visible in the viewport, and
+ *  - dnd-kit auto-scrolls the window during a drag so newly-revealed
+ *    rows mount and register as droppable just-in-time.
+ */
+function PlannedItemsList({
+  items,
+  payoffsByItem,
+  bestSuggestionPlanKey,
+  highlightedPlanKey,
+  activeDragId,
+  onSelectPlan,
+  onMoveStart,
+  onMarkMissed,
+}: {
+  items: PlannedItem[];
+  payoffsByItem: Map<string, PayoffInfo>;
+  bestSuggestionPlanKey: string | null;
+  highlightedPlanKey: string | null;
+  activeDragId: string | null;
+  onSelectPlan: (row: PlanLine) => void;
+  onMoveStart: (row: PlanLine) => void;
+  onMarkMissed: (row: PlanLine) => void;
+}) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+  useEffect(() => {
+    const el = parentRef.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      setScrollMargin(rect.top + window.scrollY);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(document.body);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  // (#618) Only virtualize when the list is actually long enough that
+  // mounting every row hurts. Short horizons (default 90D usually has
+  // a few dozen plan rows) render the whole list in normal flow so
+  // every plan-row testid stays in the DOM — this matches the
+  // pre-virtualization behavior expected by the e2e suite and also
+  // avoids any virtualization overhead when it would be wasted work.
+  const VIRTUALIZE_THRESHOLD = 120;
+  const shouldVirtualize = items.length > VIRTUALIZE_THRESHOLD;
+
+  const virtualizer = useWindowVirtualizer({
+    count: items.length,
+    // Plan rows render ~73px; banner rows render a bit taller. The exact
+    // height is measured via `measureElement` once mounted, so this
+    // estimate only governs the initial scrollbar size.
+    estimateSize: (i) => (items[i].kind === "banner" ? 80 : 73),
+    overscan: 6,
+    scrollMargin,
+    getItemKey: (i) => items[i].key,
+  });
+
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+
+  // (#618) Locate the highlighted row's index so `jumpToPlan`'s
+  // `document.querySelector('[data-plan-key=...]')` finds it even when
+  // it would otherwise be virtualized away. We position it absolutely
+  // at its computed offset (rather than splicing it into the visible
+  // range), which keeps the rest of the layout's geometry correct.
+  let highlightedIndex = -1;
+  if (highlightedPlanKey) {
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.kind === "plan") {
+        const key = `${it.row.itemId}|${it.row.date}`;
+        if (key === highlightedPlanKey) {
+          highlightedIndex = i;
+          break;
+        }
+      }
+    }
+  }
+  const visibleIndexSet = new Set(virtualItems.map((vi) => vi.index));
+  const renderTargets: { index: number; start: number; size: number }[] =
+    virtualItems.map((vi) => ({
+      index: vi.index,
+      start: vi.start - scrollMargin,
+      size: vi.size,
+    }));
+  if (highlightedIndex >= 0 && !visibleIndexSet.has(highlightedIndex)) {
+    const offsetResult = virtualizer.getOffsetForIndex?.(
+      highlightedIndex,
+      "start",
+    );
+    const rawStart: number = Array.isArray(offsetResult)
+      ? (offsetResult[0] as number)
+      : typeof offsetResult === "number"
+        ? offsetResult
+        : 0;
+    const size =
+      items[highlightedIndex].kind === "banner" ? 80 : 73;
+    renderTargets.push({
+      index: highlightedIndex,
+      start: rawStart - scrollMargin,
+      size,
+    });
+  }
+
+  const renderItem = (target: { index: number; start: number; size: number }) => {
+    const { index, start, size } = target;
+    const it = items[index];
+    const commonStyle: CSSProperties = {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      width: "100%",
+      transform: `translateY(${start}px)`,
+    };
+    if (it.kind === "banner") {
+      return (
+        <div
+          key={it.key}
+          data-index={index}
+          ref={virtualizer.measureElement}
+          style={commonStyle}
+        >
+          <CashFreedBanner transition={it.transition} />
+        </div>
+      );
+    }
+    const row = it.row;
+    const planKey = `${row.itemId}|${row.date}`;
+    return (
+      <div
+        key={it.key}
+        data-index={index}
+        ref={virtualizer.measureElement}
+        style={{ ...commonStyle, minHeight: size }}
+        className="border-b border-border last:border-b-0"
+      >
+        <PlanDropRow
+          row={row}
+          onSelect={onSelectPlan}
+          onMove={onMoveStart}
+          onMarkMissed={onMarkMissed}
+          activeDragId={activeDragId}
+          payoff={payoffsByItem.get(row.itemId)}
+          isBestSuggestion={bestSuggestionPlanKey === planKey}
+          isHighlighted={highlightedPlanKey === planKey}
+        />
+      </div>
+    );
+  };
+
+  // Non-virtualized fallback for short lists: render every row in
+  // normal flow so e2e selectors that wait on plan-row testids near
+  // the bottom of the register continue to find them without needing
+  // to scroll. The expensive recompute paths upstream are already
+  // memoized, so the cost here is just JSX for ~tens of rows.
+  if (!shouldVirtualize) {
+    return (
+      <div ref={parentRef} className="divide-y divide-border">
+        {items.map((it) => {
+          if (it.kind === "banner") {
+            return (
+              <CashFreedBanner key={it.key} transition={it.transition} />
+            );
+          }
+          const row = it.row;
+          const planKey = `${row.itemId}|${row.date}`;
+          return (
+            <PlanDropRow
+              key={it.key}
+              row={row}
+              onSelect={onSelectPlan}
+              onMove={onMoveStart}
+              onMarkMissed={onMarkMissed}
+              activeDragId={activeDragId}
+              payoff={payoffsByItem.get(row.itemId)}
+              isBestSuggestion={bestSuggestionPlanKey === planKey}
+              isHighlighted={highlightedPlanKey === planKey}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={parentRef}>
+      <div
+        style={{
+          position: "relative",
+          height: totalSize > 0 ? totalSize - scrollMargin : 0,
+          width: "100%",
+        }}
+      >
+        {renderTargets.map(renderItem)}
+      </div>
+    </div>
+  );
+}
+
 type HorizonOpt = { label: string; days: number };
 const HORIZON_OPTS: HorizonOpt[] = [
   { label: "30 DAYS", days: 30 },
@@ -739,6 +970,14 @@ export default function ForecastPage({
       /* no-op */
     }
   }, [horizonDays]);
+  // (#618) Defer the horizon value used for the (expensive) data fetch
+  // and downstream recomputation so a tab click can flip the active button
+  // synchronously while React schedules the heavy re-render at lower
+  // priority. Combined with React Query's global `keepPreviousData`, this
+  // keeps the previous register on screen during the refetch instead of
+  // blanking the page or freezing the main thread on long horizons.
+  const deferredHorizonDays = useDeferredValue(horizonDays);
+  const horizonSwitchPending = deferredHorizonDays !== horizonDays;
   useEffect(() => {
     try {
       sessionStorage.setItem(FORECAST_FROM_KEY, forecastFromDate);
@@ -767,10 +1006,10 @@ export default function ForecastPage({
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
-  const { data, isLoading } = useGetForecast({ days: horizonDays });
+  const { data, isLoading } = useGetForecast({ days: deferredHorizonDays });
   const { data: cashProjection, isLoading: cashProjectionLoading } =
     useGetForecastCashSignal({
-      horizonDays,
+      horizonDays: deferredHorizonDays,
       fromDate: forecastFromDate,
     });
   const { data: categories } = useListCategories();
@@ -1306,6 +1545,38 @@ export default function ForecastPage({
     if (!register) return [];
     return register.rows.filter((r): r is PlanLine => r.kind === "plan");
   }, [register]);
+
+  // (#618) Pre-flatten plan rows + interleaved cash-freed banners once
+  // per register so the virtualized renderer doesn't have to re-walk the
+  // month-transition rules on every scroll. Recomputes only when its
+  // small set of inputs actually changes.
+  const plannedItems: PlannedItem[] = useMemo(() => {
+    const out: PlannedItem[] = [];
+    const shownTransitions = new Set<string>();
+    for (let i = 0; i < planRows.length; i++) {
+      const row = planRows[i];
+      out.push({
+        kind: "plan",
+        key: `plan:${row.itemId}-${row.date}-${i}`,
+        row,
+      });
+      const currentYM = row.date.slice(0, 7);
+      const nextYM = planRows[i + 1]?.date.slice(0, 7);
+      if (nextYM !== currentYM) {
+        const transitions = payoffTransitionsByMonth.get(currentYM) ?? [];
+        for (const t of transitions) {
+          if (shownTransitions.has(t.debtId)) continue;
+          shownTransitions.add(t.debtId);
+          out.push({
+            kind: "banner",
+            key: `freed-${t.debtId}`,
+            transition: t,
+          });
+        }
+      }
+    }
+    return out;
+  }, [planRows, payoffTransitionsByMonth]);
 
   // Per-bank-card top suggestions (uses pure scorer; never auto-applies).
   // Source from `register.allPlan` (not the visible `planRows`) so that bank
@@ -2152,6 +2423,11 @@ export default function ForecastPage({
       <div className="flex items-center gap-1.5 flex-wrap" data-testid="horizon-tabs">
         {HORIZON_OPTS.map((h) => {
           const active = horizonDays === h.days;
+          // (#618) The active button shows a subtle spinner while the new
+          // horizon's data + register are still being computed in the
+          // background — the previous register stays on screen meanwhile
+          // (global `keepPreviousData`), so the page never goes blank.
+          const showPending = active && horizonSwitchPending;
           return (
             <Button
               key={h.label}
@@ -2160,8 +2436,17 @@ export default function ForecastPage({
               onClick={() => setHorizonDays(h.days)}
               className="text-xs tracking-wider h-7 px-2.5"
               data-testid={`horizon-${h.days}`}
+              data-pending={showPending ? "true" : undefined}
+              aria-busy={showPending || undefined}
             >
               {h.label}
+              {showPending && (
+                <RefreshCw
+                  className="w-3 h-3 ml-1.5 animate-spin"
+                  data-testid={`horizon-${h.days}-pending`}
+                  aria-hidden="true"
+                />
+              )}
             </Button>
           );
         })}
@@ -3235,56 +3520,22 @@ export default function ForecastPage({
                 )}
               </CardHeader>
               <CardContent className="p-0">
-                <div className="divide-y divide-border">
-                  {planRows.length === 0 && (
-                    <div className="p-12 text-center text-muted-foreground">
-                      All clear — nothing planned in this window.
-                    </div>
-                  )}
-                  {(() => {
-                    const out: ReactNode[] = [];
-                    const shownTransitions = new Set<string>();
-                    for (let i = 0; i < planRows.length; i++) {
-                      const row = planRows[i];
-                      out.push(
-                        <PlanDropRow
-                          key={`${row.itemId}-${row.date}-${i}`}
-                          row={row}
-                          onSelect={onSelectPlan}
-                          onMove={onMoveStart}
-                          onMarkMissed={onMarkMissed}
-                          activeDragId={activeDragId}
-                          payoff={payoffsByItem.get(row.itemId)}
-                          isBestSuggestion={
-                            bestSuggestionPlanKey ===
-                            `${row.itemId}|${row.date}`
-                          }
-                          isHighlighted={
-                            highlightedPlanKey ===
-                            `${row.itemId}|${row.date}`
-                          }
-                        />,
-                      );
-                      const currentYM = row.date.slice(0, 7);
-                      const nextYM = planRows[i + 1]?.date.slice(0, 7);
-                      if (nextYM !== currentYM) {
-                        const transitions =
-                          payoffTransitionsByMonth.get(currentYM) ?? [];
-                        for (const t of transitions) {
-                          if (shownTransitions.has(t.debtId)) continue;
-                          shownTransitions.add(t.debtId);
-                          out.push(
-                            <CashFreedBanner
-                              key={`freed-${t.debtId}`}
-                              transition={t}
-                            />,
-                          );
-                        }
-                      }
-                    }
-                    return out;
-                  })()}
-                </div>
+                {planRows.length === 0 ? (
+                  <div className="p-12 text-center text-muted-foreground">
+                    All clear — nothing planned in this window.
+                  </div>
+                ) : (
+                  <PlannedItemsList
+                    items={plannedItems}
+                    payoffsByItem={payoffsByItem}
+                    bestSuggestionPlanKey={bestSuggestionPlanKey}
+                    highlightedPlanKey={highlightedPlanKey}
+                    activeDragId={activeDragId}
+                    onSelectPlan={onSelectPlan}
+                    onMoveStart={onMoveStart}
+                    onMarkMissed={onMarkMissed}
+                  />
+                )}
               </CardContent>
             </Card>
 
