@@ -978,6 +978,12 @@ export default function ForecastPage({
   // blanking the page or freezing the main thread on long horizons.
   const deferredHorizonDays = useDeferredValue(horizonDays);
   const horizonSwitchPending = deferredHorizonDays !== horizonDays;
+  // (#621) Same trick for the "Forecast from" date picker — typing/picking
+  // a new date should flip the input immediately, but the heavy register
+  // recompute (and the cash-signal refetch) stays at lower priority so the
+  // previous register stays on screen with a subtle pending spinner.
+  const deferredForecastFromDate = useDeferredValue(forecastFromDate);
+  const fromDateSwitchPending = deferredForecastFromDate !== forecastFromDate;
   useEffect(() => {
     try {
       sessionStorage.setItem(FORECAST_FROM_KEY, forecastFromDate);
@@ -1010,7 +1016,7 @@ export default function ForecastPage({
   const { data: cashProjection, isLoading: cashProjectionLoading } =
     useGetForecastCashSignal({
       horizonDays: deferredHorizonDays,
-      fromDate: forecastFromDate,
+      fromDate: deferredForecastFromDate,
     });
   const { data: categories } = useListCategories();
   const { data: debts } = useListDebts();
@@ -1273,6 +1279,14 @@ export default function ForecastPage({
     [today],
   );
   const [monthFilter, setMonthFilter] = useState(currentMonth);
+  // (#621) Defer the month-bucket filter the same way we defer the
+  // horizon and from-date — switching the active month should flip the
+  // picker immediately while the heavy bucket/inbox/reconcile recompute
+  // happens at lower priority. Combined with React Query's
+  // `keepPreviousData`, this keeps the prior bucket on screen with a
+  // subtle pending spinner instead of blocking the click.
+  const deferredMonthFilter = useDeferredValue(monthFilter);
+  const monthSwitchPending = deferredMonthFilter !== monthFilter;
 
   const closedMonths = useMemo(
     () => new Set(data?.closedMonths ?? []),
@@ -1380,9 +1394,9 @@ export default function ForecastPage({
       // the month-close + rescheduled-bucket flows (which read from
       // `register.allPlan`/`allBank`) keep working; we only narrow what
       // the user sees in the default view.
-      visibleFromISO: forecastFromDate,
+      visibleFromISO: deferredForecastFromDate,
     });
-  }, [data, closedMonths, today, debtLinks, payoffsByDebt, forecastFromDate]);
+  }, [data, closedMonths, today, debtLinks, payoffsByDebt, deferredForecastFromDate]);
 
   const bucket = useMemo(() => {
     if (!register || !data) return [];
@@ -1391,9 +1405,9 @@ export default function ForecastPage({
       allBank: register.allBank,
       resolutions: (data.resolutions ?? []) as Resolution[],
       closedMonths,
-      monthFilter,
+      monthFilter: deferredMonthFilter,
     });
-  }, [register, data, closedMonths, monthFilter]);
+  }, [register, data, closedMonths, deferredMonthFilter]);
 
   const monthsAvailable = useMemo(() => {
     const set = new Set<string>([currentMonth]);
@@ -1429,8 +1443,8 @@ export default function ForecastPage({
   // bank-checking — non-bank txns are filtered out at register build time.)
   const bankInbox = useMemo(
     () =>
-      inbox.filter((c) => monthKey(c.bank.date) === monthFilter),
-    [inbox, monthFilter],
+      inbox.filter((c) => monthKey(c.bank.date) === deferredMonthFilter),
+    [inbox, deferredMonthFilter],
   );
 
   // (#27) Keep `selectedBankIds` honest: drop any txn ids that are no
@@ -1485,7 +1499,7 @@ export default function ForecastPage({
     }> = [];
     for (const b of register.allBank) {
       if (!isBankTxn(b.txn, checkingPlaidAccountIds)) continue;
-      if (monthKey(b.date) !== monthFilter) continue;
+      if (monthKey(b.date) !== deferredMonthFilter) continue;
       if (b.status !== "matched" && b.status !== "ignored_unforecasted")
         continue;
       const res = byMatchedTxn.get(b.txn.id);
@@ -1498,7 +1512,7 @@ export default function ForecastPage({
     }
     out.sort((a, b) => (a.bank.date < b.bank.date ? 1 : -1));
     return out;
-  }, [register, data, monthFilter, checkingPlaidAccountIds]);
+  }, [register, data, deferredMonthFilter, checkingPlaidAccountIds]);
 
   // Bank reconciliation stats scoped to the selected month.
   //
@@ -1524,10 +1538,10 @@ export default function ForecastPage({
       bankSnapshot: data.bankSnapshot ?? null,
       settingsStartingBalance: data.settings.startingBalance,
       fromDate: data.fromDate,
-      monthFilter,
+      monthFilter: deferredMonthFilter,
       checkingPlaidAccountIds,
     });
-  }, [register, data, monthFilter, checkingPlaidAccountIds]);
+  }, [register, data, deferredMonthFilter, checkingPlaidAccountIds]);
 
   // A clean reconciliation means no pending bank rows AND no
   // contributor of $0.01 or more. We deliberately use a strict 1¢
@@ -2407,7 +2421,16 @@ export default function ForecastPage({
               onChange={(e) => setForecastFromDate(clampForecastFrom(e.target.value))}
               className="h-8 w-[150px] text-xs"
               data-testid="input-forecast-from"
+              data-pending={fromDateSwitchPending ? "true" : undefined}
+              aria-busy={fromDateSwitchPending || undefined}
             />
+            {fromDateSwitchPending && (
+              <RefreshCw
+                className="w-3 h-3 animate-spin text-muted-foreground"
+                data-testid="forecast-from-pending"
+                aria-hidden="true"
+              />
+            )}
           </div>
           <Button variant="outline" size="sm" asChild className="h-8">
             <Link href="/bills" data-testid="link-manage-bills">
@@ -3727,8 +3750,22 @@ export default function ForecastPage({
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               <Label className="text-sm">Month</Label>
+              {monthSwitchPending && (
+                <RefreshCw
+                  className="w-3 h-3 animate-spin text-muted-foreground"
+                  data-testid="month-filter-pending"
+                  aria-hidden="true"
+                />
+              )}
               <Select value={monthFilter} onValueChange={setMonthFilter}>
-                <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+                <SelectTrigger
+                  className="w-56"
+                  data-testid="select-month-filter"
+                  data-pending={monthSwitchPending ? "true" : undefined}
+                  aria-busy={monthSwitchPending || undefined}
+                >
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {monthsAvailable.map((m) => {
                     const snap = monthSnapshotsMap[m];
