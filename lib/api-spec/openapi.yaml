@@ -1612,7 +1612,7 @@ components:
 
     Transaction:
       type: object
-      required: [id, occurredOn, description, amount, forecastFlag, weeklyAllowance, monthlyAllowance, unplannedAllowance, reimbursable, reimbursed, reviewed, isTransfer, isTransferUserOverridden, source]
+      required: [id, occurredOn, description, amount, forecastFlag, weeklyAllowance, monthlyAllowance, unplannedAllowance, reimbursable, reimbursed, reviewed, isTransfer, isTransferUserOverridden, isExternalCardPayment, source]
       properties:
         id: { type: string }
         occurredOn: { type: string }
@@ -1649,6 +1649,15 @@ components:
             silently re-flag it as a transfer. Server-managed: writes to
             this field are not accepted via the input schema — toggling
             `isTransfer` in PATCH /transactions/:id sets it automatically.
+        isExternalCardPayment:
+          type: boolean
+          description: |
+            (#632 follow-up) User-set per-row flag marking a card payment
+            as going to a card that is NOT in our debt avalanche (e.g. a
+            spouse's external card). Excluded from avalanche actuals so
+            it never inflates "extra" debt-payoff capacity. Defaults to
+            false; toggled explicitly via the "Not in avalanche" chip on
+            the Amex page.
         notes: { type: ["string", "null"] }
         source: { type: string }
         member: { type: ["string", "null"] }
@@ -1685,6 +1694,7 @@ components:
         reimbursed: { type: boolean }
         reviewed: { type: boolean }
         isTransfer: { type: boolean }
+        isExternalCardPayment: { type: boolean }
         notes: { type: ["string", "null"] }
         source: { type: string }
         member: { type: ["string", "null"] }
@@ -1708,6 +1718,7 @@ components:
         reimbursed: { type: boolean }
         reviewed: { type: boolean }
         isTransfer: { type: boolean }
+        isExternalCardPayment: { type: boolean }
         notes: { type: ["string", "null"] }
         source: { type: string }
         member: { type: ["string", "null"] }

@@ -27,6 +27,7 @@ export interface TransactionInput {
     reimbursed?: boolean;
     reviewed?: boolean;
     isTransfer?: boolean;
+    isExternalCardPayment?: boolean;
     /** @nullable */
     notes?: string | null;
     source?: string;

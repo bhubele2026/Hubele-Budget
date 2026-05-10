@@ -316,6 +316,9 @@ export const transactionsTable = pgTable(
     isTransferUserOverridden: boolean("is_transfer_user_overridden")
       .notNull()
       .default(false),
+    isExternalCardPayment: boolean("is_external_card_payment")
+      .notNull()
+      .default(false),
     importBatchId: uuid("import_batch_id"),
     notes: text("notes"),
     source: text("source").notNull().default("manual"),

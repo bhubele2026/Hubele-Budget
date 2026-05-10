@@ -1672,6 +1672,11 @@ export function isTxnInBucket(
   resolvedUnplannedTxnIds?: ReadonlySet<string>,
 ): boolean {
   if (t.isTransfer) return false;
+  // (#632 follow-up) An "external card payment" is by definition a
+  // transfer to a card outside our avalanche — never real household
+  // spend. Defensively keep it out of every bucket regardless of
+  // allowance flags or forecast resolutions.
+  if (t.isExternalCardPayment) return false;
   if (bucket === "monthly") return !!t.monthlyAllowance;
   if (t.unplannedAllowance) return true;
   if (resolvedUnplannedTxnIds?.has(t.id)) return true;

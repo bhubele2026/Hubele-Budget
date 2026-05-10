@@ -20,6 +20,7 @@ function txn(over: Partial<Transaction>): Transaction {
     accountKey: null,
     isTransfer: false,
     isTransferUserOverridden: false,
+    isExternalCardPayment: false,
     weeklyAllowance: false,
     monthlyAllowance: false,
     unplannedAllowance: false,

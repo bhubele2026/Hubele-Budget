@@ -56,6 +56,14 @@ export interface Transaction {
   `isTransfer` in PATCH /transactions/:id sets it automatically.
    */
     isTransferUserOverridden: boolean;
+    /** (#632 follow-up) User-set per-row flag marking a card payment
+  as going to a card that is NOT in our debt avalanche (e.g. a
+  spouse's external card). Excluded from avalanche actuals so
+  it never inflates "extra" debt-payoff capacity. Defaults to
+  false; toggled explicitly via the "Not in avalanche" chip on
+  the Amex page.
+   */
+    isExternalCardPayment: boolean;
     /** @nullable */
     notes?: string | null;
     source: string;
@@ -113,6 +121,7 @@ export interface CreateTransactionInput {
     reimbursed?: boolean;
     reviewed?: boolean;
     isTransfer?: boolean;
+    isExternalCardPayment?: boolean;
     /** @nullable */
     notes?: string | null;
     source?: string;
@@ -154,6 +163,7 @@ export interface TransactionInput {
     reimbursed?: boolean;
     reviewed?: boolean;
     isTransfer?: boolean;
+    isExternalCardPayment?: boolean;
     /** @nullable */
     notes?: string | null;
     source?: string;

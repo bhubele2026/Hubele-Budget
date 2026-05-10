@@ -62,6 +62,11 @@ export const GetDashboardResponse = zod.object({
         .describe(
           "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import \/ aprilChaseSeed\nre-categorize paths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
         ),
+      isExternalCardPayment: zod
+        .boolean()
+        .describe(
+          '(#632 follow-up) User-set per-row flag marking a card payment\nas going to a card that is NOT in our debt avalanche (e.g. a\nspouse\'s external card). Excluded from avalanche actuals so\nit never inflates \"extra\" debt-payoff capacity. Defaults to\nfalse; toggled explicitly via the \"Not in avalanche\" chip on\nthe Amex page.\n',
+        ),
       notes: zod.string().nullish(),
       source: zod.string(),
       member: zod.string().nullish(),
@@ -147,6 +152,11 @@ export const ListTransactionsResponseItem = zod.object({
     .describe(
       "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import \/ aprilChaseSeed\nre-categorize paths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
     ),
+  isExternalCardPayment: zod
+    .boolean()
+    .describe(
+      '(#632 follow-up) User-set per-row flag marking a card payment\nas going to a card that is NOT in our debt avalanche (e.g. a\nspouse\'s external card). Excluded from avalanche actuals so\nit never inflates \"extra\" debt-payoff capacity. Defaults to\nfalse; toggled explicitly via the \"Not in avalanche\" chip on\nthe Amex page.\n',
+    ),
   notes: zod.string().nullish(),
   source: zod.string(),
   member: zod.string().nullish(),
@@ -187,6 +197,7 @@ export const CreateTransactionBody = zod.object({
   reimbursed: zod.boolean().optional(),
   reviewed: zod.boolean().optional(),
   isTransfer: zod.boolean().optional(),
+  isExternalCardPayment: zod.boolean().optional(),
   notes: zod.string().nullish(),
   source: zod.string().optional(),
   member: zod.string().nullish(),
@@ -222,6 +233,7 @@ export const UpdateTransactionBody = zod.object({
   reimbursed: zod.boolean().optional(),
   reviewed: zod.boolean().optional(),
   isTransfer: zod.boolean().optional(),
+  isExternalCardPayment: zod.boolean().optional(),
   notes: zod.string().nullish(),
   source: zod.string().optional(),
   member: zod.string().nullish(),
@@ -269,6 +281,11 @@ export const UpdateTransactionResponse = zod
       .boolean()
       .describe(
         "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import \/ aprilChaseSeed\nre-categorize paths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+      ),
+    isExternalCardPayment: zod
+      .boolean()
+      .describe(
+        '(#632 follow-up) User-set per-row flag marking a card payment\nas going to a card that is NOT in our debt avalanche (e.g. a\nspouse\'s external card). Excluded from avalanche actuals so\nit never inflates \"extra\" debt-payoff capacity. Defaults to\nfalse; toggled explicitly via the \"Not in avalanche\" chip on\nthe Amex page.\n',
       ),
     notes: zod.string().nullish(),
     source: zod.string(),
@@ -439,6 +456,11 @@ export const ClearTransferOverrideResponse = zod.object({
     .describe(
       "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import \/ aprilChaseSeed\nre-categorize paths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
     ),
+  isExternalCardPayment: zod
+    .boolean()
+    .describe(
+      '(#632 follow-up) User-set per-row flag marking a card payment\nas going to a card that is NOT in our debt avalanche (e.g. a\nspouse\'s external card). Excluded from avalanche actuals so\nit never inflates \"extra\" debt-payoff capacity. Defaults to\nfalse; toggled explicitly via the \"Not in avalanche\" chip on\nthe Amex page.\n',
+    ),
   notes: zod.string().nullish(),
   source: zod.string(),
   member: zod.string().nullish(),
@@ -599,6 +621,7 @@ export const BulkUpdateTransactionsBody = zod.object({
     reimbursed: zod.boolean().optional(),
     reviewed: zod.boolean().optional(),
     isTransfer: zod.boolean().optional(),
+    isExternalCardPayment: zod.boolean().optional(),
     notes: zod.string().nullish(),
     source: zod.string().optional(),
     member: zod.string().nullish(),
@@ -1967,6 +1990,11 @@ export const GetForecastResponse = zod.object({
         .boolean()
         .describe(
           "True when the user has explicitly toggled `isTransfer` on this\nrow (cleared the auto-flag from the row's \"Transfer\" pill, picked\na real category on a transfer row, or flipped the toggle in the\nEdit dialog). The Plaid sync \/ XLSX import \/ aprilChaseSeed\nre-categorize paths honor this and skip the description\/PFC\ntransfer heuristic so future syncs of the same row don't\nsilently re-flag it as a transfer. Server-managed: writes to\nthis field are not accepted via the input schema — toggling\n`isTransfer` in PATCH \/transactions\/:id sets it automatically.\n",
+        ),
+      isExternalCardPayment: zod
+        .boolean()
+        .describe(
+          '(#632 follow-up) User-set per-row flag marking a card payment\nas going to a card that is NOT in our debt avalanche (e.g. a\nspouse\'s external card). Excluded from avalanche actuals so\nit never inflates \"extra\" debt-payoff capacity. Defaults to\nfalse; toggled explicitly via the \"Not in avalanche\" chip on\nthe Amex page.\n',
         ),
       notes: zod.string().nullish(),
       source: zod.string(),

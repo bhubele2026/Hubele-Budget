@@ -319,6 +319,11 @@ export async function resolveExtraForUser(
           eq(transactionsTable.categoryId, catId),
           sql`${transactionsTable.occurredOn} >= ${monthStart}`,
           sql`${transactionsTable.occurredOn} < ${monthEnd}`,
+          // (#632 follow-up) External card payments — payments to a card
+          // that is NOT in the household's avalanche (e.g. a spouse's
+          // external card) — are excluded from avalanche actuals so
+          // they never inflate the "extra" available for debt payoff.
+          eq(transactionsTable.isExternalCardPayment, false),
         ),
       );
 
@@ -394,6 +399,8 @@ export async function resolveExtraForUser(
           eq(transactionsTable.householdId, householdId),
           sql`${transactionsTable.occurredOn} >= ${monthStart}`,
           sql`${transactionsTable.occurredOn} < ${monthEnd}`,
+          // (#632 follow-up) See per-category actual query above.
+          eq(transactionsTable.isExternalCardPayment, false),
         ),
       )
       .groupBy(budgetCategoriesTable.kind);

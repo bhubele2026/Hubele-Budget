@@ -60,6 +60,7 @@ function tx(over: Partial<Transaction>): Transaction {
     monthlyAllowance: false,
     unplannedAllowance: false,
     isTransfer: false,
+    isExternalCardPayment: false,
     ...over,
   } as Transaction;
 }
@@ -123,16 +124,42 @@ describe("isTxnInBucket — Unplanned excludes forecast-resolved transfers (#631
     expect(isTxnInBucket(t, "unplanned", new Set(["x"]))).toBe(false);
   });
 
-  it("respects an explicit unplannedAllowance toggle even when isTransfer is true", () => {
+  // (#632) Stricter than #631: a transfer-classified row is excluded
+  // from every bucket regardless of allowance flags. The user can
+  // still force the row into a bucket by clearing isTransfer first
+  // (which sets isTransferUserOverridden=true).
+  it("excludes a transfer from Unplanned even when unplannedAllowance is set", () => {
     const t = tx({ id: "x", isTransfer: true, unplannedAllowance: true });
-    expect(isTxnInBucket(t, "unplanned", new Set(["x"]))).toBe(true);
+    expect(isTxnInBucket(t, "unplanned", new Set(["x"]))).toBe(false);
   });
 
-  it("ignores resolution membership for the Monthly bucket", () => {
+  it("excludes a transfer from Monthly even when monthlyAllowance is set", () => {
     const t = tx({ id: "m", monthlyAllowance: true, isTransfer: true });
-    expect(isTxnInBucket(t, "monthly", new Set(["m"]))).toBe(true);
+    expect(isTxnInBucket(t, "monthly", new Set(["m"]))).toBe(false);
     const u = tx({ id: "u", isTransfer: false });
     expect(isTxnInBucket(u, "monthly", new Set(["u"]))).toBe(false);
+  });
+
+  // (#632 follow-up) The new per-row "Not in avalanche" toggle is a
+  // belt-and-suspenders second short-circuit so an external card
+  // payment is never real spend regardless of which flag put it in
+  // the bucket.
+  it("excludes a row marked isExternalCardPayment from Unplanned", () => {
+    const t = tx({
+      id: "e",
+      isExternalCardPayment: true,
+      unplannedAllowance: true,
+    });
+    expect(isTxnInBucket(t, "unplanned", new Set(["e"]))).toBe(false);
+  });
+
+  it("excludes a row marked isExternalCardPayment from Monthly", () => {
+    const t = tx({
+      id: "e",
+      isExternalCardPayment: true,
+      monthlyAllowance: true,
+    });
+    expect(isTxnInBucket(t, "monthly")).toBe(false);
   });
 });
 
@@ -170,7 +197,11 @@ describe("detectChipSources — transfers don't surface a chip via forecast reso
     expect(out).toEqual(["chase"]);
   });
 
-  it("still surfaces a chip when the user explicitly toggled unplannedAllowance on a transfer", () => {
+  // (#632) Stricter than #631: a transfer is dropped from chip sources
+  // regardless of how it got tagged — explicit unplannedAllowance no
+  // longer keeps it on the chip row, since the bucket filter would
+  // exclude it anyway and the chip would lead to an empty roll-up.
+  it("drops the chip when the only matching row is a transfer, even with explicit unplannedAllowance", () => {
     const out = detectChipSources(
       [
         tx({
@@ -184,6 +215,6 @@ describe("detectChipSources — transfers don't surface a chip via forecast reso
       end,
       new Set(["x"]),
     );
-    expect(out).toEqual(["chase"]);
+    expect(out).toEqual([]);
   });
 });

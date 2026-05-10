@@ -49,6 +49,7 @@ function tx(over: Partial<Transaction>): Transaction {
     reviewed: false,
     isTransfer: false,
     isTransferUserOverridden: false,
+    isExternalCardPayment: false,
     source: "amex",
     ...over,
   };

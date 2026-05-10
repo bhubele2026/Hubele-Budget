@@ -48,7 +48,7 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { Check, CreditCard, RefreshCw, X } from "lucide-react";
+import { Check, CreditCard, RefreshCw, X, ExternalLink } from "lucide-react";
 import { CategoryPicker } from "@/components/category-picker";
 import { TransactionWeeklyBucket } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -116,6 +116,68 @@ function currentBucket(t: Pick<Transaction, "weeklyAllowance" | "monthlyAllowanc
   if (t.monthlyAllowance) return "monthly";
   if (t.unplannedAllowance) return "unplanned";
   return "";
+}
+
+// (#632 follow-up) Per-row chip for marking a card payment as going to a
+// card OUTSIDE the household's debt avalanche (e.g. a spouse's external
+// card). When set, the row is excluded from avalanche actuals on the
+// server and from every dashboard bucket on the client. Surfaced on
+// every row (not just isTransfer rows) so the user can pre-empt the
+// classifier — but visually subtle until clicked.
+function ExternalCardChip({
+  t,
+  onToggle,
+  testIdSuffix,
+}: {
+  t: Transaction;
+  onToggle: (next: boolean) => void;
+  testIdSuffix: string;
+}) {
+  if (t.isExternalCardPayment) {
+    return (
+      <Badge
+        variant="outline"
+        className="inline-flex items-center gap-1 text-[10px] border-amber-300 text-amber-800 bg-amber-50"
+        title="Excluded from avalanche actuals and every dashboard bucket"
+        data-testid={`badge-external-card-${testIdSuffix}`}
+      >
+        <ExternalLink className="w-3 h-3" />
+        Not in avalanche
+        <button
+          type="button"
+          aria-label="Clear external card flag"
+          data-testid={`button-clear-external-card-${testIdSuffix}`}
+          className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-amber-200/60"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle(false);
+          }}
+        >
+          <X className="w-3 h-3" />
+        </button>
+      </Badge>
+    );
+  }
+  // Only offer the affordance on rows that look like card payments —
+  // i.e. already classified as a transfer. This keeps the noise down
+  // on regular charges while still making the toggle reachable for
+  // the rows that actually need it.
+  if (!t.isTransfer) return null;
+  return (
+    <button
+      type="button"
+      data-testid={`button-mark-external-card-${testIdSuffix}`}
+      title="Mark this payment as going to a card outside our avalanche"
+      className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-amber-700 hover:underline"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle(true);
+      }}
+    >
+      <ExternalLink className="w-3 h-3" />
+      Not in avalanche
+    </button>
+  );
 }
 
 export default function AmexPage() {
@@ -2131,6 +2193,27 @@ export default function AmexPage() {
                           </button>
                         </Badge>
                       )}
+                      <ExternalCardChip
+                        t={t}
+                        onToggle={(v) =>
+                          updateTx.mutate(
+                            { id: t.id, data: { isExternalCardPayment: v } },
+                            {
+                              onSuccess: () => {
+                                qc.invalidateQueries({
+                                  queryKey: getListTransactionsQueryKey(),
+                                });
+                                qc.invalidateQueries({
+                                  queryKey: getGetBudgetMonthQueryKey(
+                                    `${t.occurredOn.slice(0, 7)}-01`,
+                                  ),
+                                });
+                              },
+                            },
+                          )
+                        }
+                        testIdSuffix={`mobile-${t.id}`}
+                      />
                       <MatchedRuleChip
                         categoryId={t.categoryId}
                         matchedRuleId={t.matchedRuleId}
@@ -2255,6 +2338,32 @@ export default function AmexPage() {
                               </button>
                             </Badge>
                           )}
+                          <div className="mt-1">
+                            <ExternalCardChip
+                              t={t}
+                              onToggle={(v) =>
+                                updateTx.mutate(
+                                  {
+                                    id: t.id,
+                                    data: { isExternalCardPayment: v },
+                                  },
+                                  {
+                                    onSuccess: () => {
+                                      qc.invalidateQueries({
+                                        queryKey: getListTransactionsQueryKey(),
+                                      });
+                                      qc.invalidateQueries({
+                                        queryKey: getGetBudgetMonthQueryKey(
+                                          `${t.occurredOn.slice(0, 7)}-01`,
+                                        ),
+                                      });
+                                    },
+                                  },
+                                )
+                              }
+                              testIdSuffix={`${t.id}`}
+                            />
+                          </div>
                           <div className="mt-1">
                             <MatchedRuleChip
                               categoryId={t.categoryId}
