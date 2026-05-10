@@ -24,14 +24,14 @@ function todayDate(): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-async function archiveExpiredOneTime(userId: string): Promise<void> {
+async function archiveExpiredOneTime(householdId: string): Promise<void> {
   const todayISO = fmtISO(todayDate());
   await db
     .update(recurringItemsTable)
     .set({ active: "false" })
     .where(
       and(
-        eq(recurringItemsTable.userId, userId),
+        eq(recurringItemsTable.householdId, householdId),
         eq(recurringItemsTable.frequency, "onetime"),
         eq(recurringItemsTable.active, "true"),
         lt(recurringItemsTable.anchorDate, todayISO),
@@ -67,18 +67,18 @@ function fixed2(n: number): string {
 }
 
 router.get("/bills/summary", requireAuth, async (req, res): Promise<void> => {
-  const userId = req.userId!;
-  await archiveExpiredOneTime(userId);
+  const householdId = req.householdId!;
+  await archiveExpiredOneTime(householdId);
 
   const items = await db
     .select()
     .from(recurringItemsTable)
-    .where(eq(recurringItemsTable.userId, userId));
+    .where(eq(recurringItemsTable.householdId, householdId));
 
   const debts = await db
     .select()
     .from(debtsTable)
-    .where(eq(debtsTable.userId, userId));
+    .where(eq(debtsTable.householdId, householdId));
 
   const today = todayDate();
   // (#500) Optional ?month=YYYY-MM-01 picks which calendar month drives the
@@ -107,7 +107,7 @@ router.get("/bills/summary", requireAuth, async (req, res): Promise<void> => {
     .from(forecastResolutionsTable)
     .where(
       and(
-        eq(forecastResolutionsTable.userId, userId),
+        eq(forecastResolutionsTable.householdId, householdId),
         eq(forecastResolutionsTable.status, "matched"),
         gte(forecastResolutionsTable.occurrenceDate, monthStartISO),
         lte(forecastResolutionsTable.occurrenceDate, monthEndISO),
@@ -130,7 +130,7 @@ router.get("/bills/summary", requireAuth, async (req, res): Promise<void> => {
       .from(transactionsTable)
       .where(
         and(
-          eq(transactionsTable.userId, userId),
+          eq(transactionsTable.householdId, householdId),
           inArray(transactionsTable.id, txnIds),
         ),
       );
@@ -165,7 +165,7 @@ router.get("/bills/summary", requireAuth, async (req, res): Promise<void> => {
   const [avaSettings] = await db
     .select()
     .from(avalancheSettingsTable)
-    .where(eq(avalancheSettingsTable.userId, userId));
+    .where(eq(avalancheSettingsTable.userId, req.householdOwnerId!));
   const manualExtra = Number(avaSettings?.manualExtra ?? 0) || 0;
   const avalancheExtraRow = buildAvalancheExtraRow(debts, manualExtra, today);
   if (avalancheExtraRow) debtMinRows.push(avalancheExtraRow);

@@ -70,6 +70,9 @@ import {
   _flushPlaidSyncSchedulerForTests,
   _resetPlaidSyncSchedulerForTests,
 } from "../lib/plaidSyncScheduler";
+import { createTestHousehold } from "./_helpers/testHousehold";
+
+let TEST_HOUSEHOLD_ID: string;
 
 // Disable webhook signature verification for this suite — the verifier path
 // is exercised separately in plaidWebhookVerify.unit.test.ts.
@@ -117,6 +120,7 @@ async function seedItem(opts?: {
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: externalItemId,
       accessToken,
       institutionName: "Chase",
@@ -130,6 +134,8 @@ async function seedItem(opts?: {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));

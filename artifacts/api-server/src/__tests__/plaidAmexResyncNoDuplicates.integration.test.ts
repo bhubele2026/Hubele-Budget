@@ -12,10 +12,18 @@ import express from "express";
 import { eq } from "drizzle-orm";
 
 const TEST_USER = `amex-resync-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: { userId?: string; actualUserId?: string; householdId?: string; householdOwnerId?: string },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -71,6 +79,7 @@ import {
 import plaidRouter from "../routes/plaid";
 import { syncPlaidItem } from "../lib/plaidSync";
 import { autoDetectCutoffsForItem } from "../lib/plaidImportCutoff";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
 app.use(express.json());
@@ -100,6 +109,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
 });
 
@@ -122,6 +133,7 @@ async function seedAmexItem(): Promise<{
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `item-${randomUUID()}`,
       accessToken: `access-sandbox-${randomUUID()}`,
       institutionName: "American Express",
@@ -133,6 +145,7 @@ async function seedAmexItem(): Promise<{
     .insert(plaidAccountsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: externalAcctId,
       name: "Amex Gold",
@@ -144,6 +157,7 @@ async function seedAmexItem(): Promise<{
     .insert(debtsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       name: "Amex Gold",
       balance: "1000",
       plaidAccountId: acct!.id,
@@ -166,6 +180,7 @@ describe("(#373) Amex re-sync of an already-reconciled card adds zero duplicates
     // Plaid will report once the link succeeds.
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: "2026-04-28",
       description: "Coffee shop — manual",
       amount: "-42.00",
@@ -274,6 +289,7 @@ describe("(#373) Amex re-sync of an already-reconciled card adds zero duplicates
 
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: "2026-02-28",
       description: "Old reconciled charge",
       amount: "-99.00",

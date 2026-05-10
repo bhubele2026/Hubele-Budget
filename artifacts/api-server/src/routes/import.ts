@@ -28,10 +28,11 @@ router.post(
         .insert(importBatchesTable)
         .values({
           userId: req.userId!,
+          householdId: req.householdId!,
           filename: req.file.originalname ?? null,
         })
         .returning();
-      const result = await importWorkbook(req.userId!, wb, batch!.id);
+      const result = await importWorkbook(req.userId!, req.householdId!, wb, batch!.id);
       res.json({
         batchId: batch!.id,
         counts: result.counts,
@@ -50,7 +51,7 @@ router.post(
   requireAuth,
   async (req, res): Promise<void> => {
     try {
-      const result = await seedAprilChase(req.userId!);
+      const result = await seedAprilChase(req.householdOwnerId!, req.householdId!);
       res.json(result);
     } catch (e) {
       req.log.error({ err: e }, "April Chase seed failed");

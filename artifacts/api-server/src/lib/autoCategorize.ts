@@ -9,11 +9,15 @@ export type RuleRow = {
   priority: number;
 };
 
-export async function loadUserRules(userId: string): Promise<RuleRow[]> {
+/**
+ * (#623) Load mapping rules scoped by householdId so a member sees the
+ * shared household's rule set, not just rules they personally created.
+ */
+export async function loadUserRules(householdId: string): Promise<RuleRow[]> {
   const rows = await db
     .select()
     .from(mappingRulesTable)
-    .where(eq(mappingRulesTable.userId, userId));
+    .where(eq(mappingRulesTable.householdId, householdId));
   return [...rows].sort((a, b) => b.priority - a.priority);
 }
 

@@ -14,6 +14,7 @@ const router: IRouter = Router();
 
 router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
+  const householdId = req.householdId!;
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
     .toISOString()
@@ -30,7 +31,7 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
       activeBalance: sql<string>`coalesce(sum(case when ${debtsTable.status} = 'active' then ${debtsTable.balance} else 0 end)::text, '0')`,
     })
     .from(debtsTable)
-    .where(eq(debtsTable.userId, userId));
+    .where(eq(debtsTable.householdId, householdId));
 
   // A transaction counts toward debt-paid totals via two paths:
   //   (a) Canonical: `transactions.debt_id` is non-null. This is set by
@@ -57,7 +58,7 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     )
     and not exists (
       select 1 from ${transactionsTable} t2
-      where t2.user_id = ${transactionsTable.userId}
+      where t2.household_id = ${transactionsTable.householdId}
         and t2.debt_id is not null
         and t2.amount > 0
         and abs(t2.amount + ${transactionsTable.amount}) < 0.01
@@ -94,7 +95,7 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     )
     .where(
       and(
-        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.householdId, householdId),
         sql`(
           ${transactionsTable.debtId} is not null
           or ${budgetCategoriesTable.sourceKind} = 'auto_debts'
@@ -112,7 +113,7 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     .from(transactionsTable)
     .where(
       and(
-        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.householdId, householdId),
         sql`${transactionsTable.occurredOn} >= ${monthStart}`,
         sql`${transactionsTable.occurredOn} < ${monthEnd}`,
       ),
@@ -121,7 +122,7 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
   const recent = await db
     .select()
     .from(transactionsTable)
-    .where(eq(transactionsTable.userId, userId))
+    .where(eq(transactionsTable.householdId, householdId))
     .orderBy(desc(transactionsTable.occurredOn), desc(transactionsTable.createdAt))
     .limit(8);
 
@@ -132,7 +133,7 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
   // Transactions and Amex pages. Computed lazily per response rather
   // than persisted on the row so editing a rule's pattern reflects on
   // every existing transaction without a backfill.
-  const userRules = await loadUserRules(userId);
+  const userRules = await loadUserRules(householdId);
   const recentAnnotated = recent.map((r) => ({
     ...r,
     matchedRuleId: findMatchedRuleId(r.description, r.categoryId, userRules),
@@ -151,7 +152,7 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     )
     .where(
       and(
-        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.householdId, householdId),
         sql`${transactionsTable.occurredOn} >= ${monthStart}`,
         sql`${transactionsTable.occurredOn} < ${monthEnd}`,
         sql`${transactionsTable.amount} < 0`,
@@ -170,7 +171,7 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     .from(recurringItemsTable)
     .where(
       and(
-        eq(recurringItemsTable.userId, userId),
+        eq(recurringItemsTable.householdId, householdId),
         eq(recurringItemsTable.active, "true"),
       ),
     )

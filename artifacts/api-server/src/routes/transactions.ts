@@ -46,7 +46,7 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: q.error.message });
     return;
   }
-  const conds = [eq(transactionsTable.userId, req.userId!)];
+  const conds = [eq(transactionsTable.householdId, req.householdId!)];
   if (q.data.from) conds.push(gte(transactionsTable.occurredOn, q.data.from));
   if (q.data.to) conds.push(lte(transactionsTable.occurredOn, q.data.to));
   if (q.data.source) {
@@ -94,7 +94,7 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   // the Mapping Rules page. Computed lazily per-list rather than stored
   // on the txn so editing a rule's pattern instantly reflects on every
   // existing row without a backfill. Rules are loaded once for the list.
-  const userRules = await loadUserRules(req.userId!);
+  const userRules = await loadUserRules(req.householdId!);
   const annotated = rows.map((r) => ({
     ...r,
     matchedRuleId: findMatchedRuleId(r.description, r.categoryId, userRules),
@@ -133,11 +133,11 @@ function isPatternSpecific(pattern: string): boolean {
   return pattern.trim().split(/\s+/).filter(Boolean).length >= 2;
 }
 
-async function userOwnsDebt(userId: string, debtId: string): Promise<boolean> {
+async function userOwnsDebt(householdId: string, debtId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: debtsTable.id })
     .from(debtsTable)
-    .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)))
+    .where(and(eq(debtsTable.id, debtId), eq(debtsTable.householdId, householdId)))
     .limit(1);
   return !!row;
 }
@@ -148,7 +148,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  if (parsed.data.debtId && !(await userOwnsDebt(req.userId!, parsed.data.debtId))) {
+  if (parsed.data.debtId && !(await userOwnsDebt(req.householdId!, parsed.data.debtId))) {
     res.status(400).json({ error: "Invalid debtId" });
     return;
   }
@@ -166,6 +166,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   const insertValues: Record<string, unknown> = {
     ...parsed.data,
     userId: req.userId!,
+    householdId: req.householdId!,
   };
   const bodyHasCategoryId = Object.prototype.hasOwnProperty.call(
     req.body ?? {},
@@ -186,7 +187,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   // row without deleting the row itself.
   let autoCategorizedRuleId: string | null = null;
   if (!bodyHasCategoryId || !bodyHasIsTransfer) {
-    const rules = await loadUserRules(req.userId!);
+    const rules = await loadUserRules(req.householdId!);
     const result = categorize(
       {
         description: parsed.data.description,
@@ -250,7 +251,7 @@ router.patch(
     const { rememberPattern, ...patch } = parsed.data as typeof parsed.data & {
       rememberPattern?: string | null;
     };
-    if (patch.debtId && !(await userOwnsDebt(req.userId!, patch.debtId))) {
+    if (patch.debtId && !(await userOwnsDebt(req.householdId!, patch.debtId))) {
       res.status(400).json({ error: "Invalid debtId" });
       return;
     }
@@ -305,7 +306,7 @@ router.patch(
       .where(
         and(
           eq(transactionsTable.id, params.data.id),
-          eq(transactionsTable.userId, req.userId!),
+          eq(transactionsTable.householdId, req.householdId!),
         ),
       )
       .returning();
@@ -460,8 +461,9 @@ router.patch(
       patch.categoryId && (await isExcludedCategory(req.userId!, patch.categoryId));
     if (patch.categoryId && !row.isTransfer && !targetIsExcluded) {
       const userId = req.userId!;
+      const householdId = req.householdId!;
       const description = row.description ?? "";
-      const allRules = await loadUserRules(userId);
+      const allRules = await loadUserRules(householdId);
       const matching = findMatchingRules(description, allRules);
       const matchingSpecific = matching.filter((r) =>
         isPatternSpecific(r.pattern),
@@ -482,7 +484,7 @@ router.patch(
           .where(
             and(
               eq(mappingRulesTable.id, r.id),
-              eq(mappingRulesTable.userId, userId),
+              eq(mappingRulesTable.householdId, householdId),
             ),
           );
         // Count older transactions still sitting in the rule's old
@@ -495,7 +497,7 @@ router.patch(
         // are preserved.
         const fromCategoryId = r.categoryId as string;
         const candidates = await selectPatternCandidates(
-          userId,
+          householdId,
           r,
           fromCategoryId,
         );
@@ -504,7 +506,7 @@ router.patch(
         // the post-PATCH world the user will see in the preview dialog.
         // Cheap (handful of rows) and keeps the chip's semantics
         // consistent with GET /transactions.
-        const rulesAfterRepoint = await loadUserRules(userId);
+        const rulesAfterRepoint = await loadUserRules(householdId);
         const sampleTransactions: RepointedRuleSample[] = remaining
           .slice(0, 10)
           .map((c) => ({
@@ -557,6 +559,7 @@ router.patch(
           const previousCategoryId = existingForPattern?.categoryId ?? null;
           const upsertResult = await upsertMappingRule(db, {
             userId,
+            householdId,
             pattern,
             matchType: "contains",
             categoryId: patch.categoryId,
@@ -603,7 +606,7 @@ router.patch(
             // we only need to defensively exclude its id in case a
             // future change moves the categorize step.
             const candidates = await selectPatternCandidates(
-              userId,
+              householdId,
               { pattern, matchType: "contains" },
               null,
             );
@@ -677,7 +680,7 @@ router.patch(
         .delete(forecastResolutionsTable)
         .where(
           and(
-            eq(forecastResolutionsTable.userId, req.userId!),
+            eq(forecastResolutionsTable.householdId, req.householdId!),
             eq(forecastResolutionsTable.matchedTxnId, params.data.id),
           ),
         );
@@ -784,12 +787,12 @@ router.post(
         .where(
           and(
             eq(mappingRulesTable.id, ruleId),
-            eq(mappingRulesTable.userId, userId),
+            eq(mappingRulesTable.householdId, req.householdId!),
           ),
         );
     }
     let candidates = await selectPatternCandidates(
-      userId,
+      req.householdId!,
       { pattern, matchType },
       fromCategoryId,
     );
@@ -812,7 +815,7 @@ router.post(
       .set({ categoryId: toCategoryId })
       .where(
         and(
-          eq(transactionsTable.userId, userId),
+          eq(transactionsTable.householdId, req.householdId!),
           fromCategoryId === null
             ? isNull(transactionsTable.categoryId)
             : eq(transactionsTable.categoryId, fromCategoryId),
@@ -883,7 +886,6 @@ router.post(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    const userId = req.userId!;
     const { ids, patch } = parsed.data;
     if (ids.length === 0) {
       res.json({ updated: 0, results: [], affectedMonths: [] });
@@ -899,7 +901,7 @@ router.post(
     void _rememberPattern;
     if (
       drizzlePatch.debtId &&
-      !(await userOwnsDebt(userId, drizzlePatch.debtId))
+      !(await userOwnsDebt(req.householdId!, drizzlePatch.debtId))
     ) {
       res.status(400).json({ error: "Invalid debtId" });
       return;
@@ -916,7 +918,7 @@ router.post(
         .from(transactionsTable)
         .where(
           and(
-            eq(transactionsTable.userId, userId),
+            eq(transactionsTable.householdId, req.householdId!),
             inArray(transactionsTable.id, ids),
           ),
         );
@@ -939,7 +941,7 @@ router.post(
       .set(drizzlePatch)
       .where(
         and(
-          eq(transactionsTable.userId, userId),
+          eq(transactionsTable.householdId, req.householdId!),
           inArray(transactionsTable.id, ids),
         ),
       )
@@ -956,7 +958,7 @@ router.post(
         .delete(forecastResolutionsTable)
         .where(
           and(
-            eq(forecastResolutionsTable.userId, userId),
+            eq(forecastResolutionsTable.householdId, req.householdId!),
             inArray(
               forecastResolutionsTable.matchedTxnId,
               updated.map((r) => r.id),
@@ -1008,7 +1010,6 @@ router.post(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    const userId = req.userId!;
     const { ids, fromCategoryId } = parsed.data;
     // An explicitly empty list is a no-op so callers can pass through
     // a degenerate Undo payload (e.g. a bulk that flipped 0 rows)
@@ -1022,7 +1023,7 @@ router.post(
       .set({ categoryId: null })
       .where(
         and(
-          eq(transactionsTable.userId, userId),
+          eq(transactionsTable.householdId, req.householdId!),
           inArray(transactionsTable.id, ids),
           fromCategoryId === null
             ? isNull(transactionsTable.categoryId)
@@ -1067,7 +1068,6 @@ router.post(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    const userId = req.userId!;
     const { ids, forecastFlag } = parsed.data;
     if (ids.length === 0) {
       res.json({ updated: 0, affectedIds: [] });
@@ -1078,7 +1078,7 @@ router.post(
       .set({ forecastFlag })
       .where(
         and(
-          eq(transactionsTable.userId, userId),
+          eq(transactionsTable.householdId, req.householdId!),
           inArray(transactionsTable.id, ids),
           eq(transactionsTable.forecastFlag, !forecastFlag),
         ),
@@ -1090,7 +1090,7 @@ router.post(
         .delete(forecastResolutionsTable)
         .where(
           and(
-            eq(forecastResolutionsTable.userId, userId),
+            eq(forecastResolutionsTable.householdId, req.householdId!),
             inArray(forecastResolutionsTable.matchedTxnId, affectedIds),
           ),
         );
@@ -1121,7 +1121,7 @@ router.post(
       .where(
         and(
           eq(transactionsTable.id, params.data.id),
-          eq(transactionsTable.userId, req.userId!),
+          eq(transactionsTable.householdId, req.householdId!),
         ),
       )
       .returning();
@@ -1147,7 +1147,7 @@ router.delete(
       .where(
         and(
           eq(transactionsTable.id, params.data.id),
-          eq(transactionsTable.userId, req.userId!),
+          eq(transactionsTable.householdId, req.householdId!),
         ),
       );
     res.sendStatus(204);

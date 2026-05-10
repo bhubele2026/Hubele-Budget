@@ -50,12 +50,19 @@ import {
   syncPlaidItem,
 } from "../lib/plaidSync";
 import { SYNTHETIC_PLAID_ACCESS_TOKEN_SENTINEL } from "../lib/plaid";
+import { createTestHousehold } from "./_helpers/testHousehold";
+
+let TEST_HOUSEHOLD_ID: string;
 
 async function cleanup(): Promise<void> {
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
+  await cleanup();
+});
 afterAll(cleanup);
 beforeEach(async () => {
   await cleanup();
@@ -74,6 +81,7 @@ async function seedSyntheticItem(opts?: {
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: externalItemId,
       accessToken,
       institutionName: "Chase",

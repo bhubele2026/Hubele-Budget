@@ -10,7 +10,10 @@ import {
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 
+import { createTestHousehold } from "./_helpers/testHousehold";
+
 const TEST_USER = `liab-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 type AccountsGetFn = (args: {
   access_token: string;
@@ -55,6 +58,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
 });
 
@@ -79,6 +84,7 @@ async function insertItemAndAccount(): Promise<{
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `item-liab-${randomUUID()}`,
       accessToken: "access-sandbox-test-token",
       institutionName: "Test Bank",
@@ -90,6 +96,7 @@ async function insertItemAndAccount(): Promise<{
     .insert(plaidAccountsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: plaidAccountId,
       name: "Test Card",

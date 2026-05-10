@@ -14,10 +14,19 @@ import { eq } from "drizzle-orm";
 
 const TEST_USER = `consent-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 const OTHER_USER = `consent-other-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
+let OTHER_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: { userId?: string; actualUserId?: string; householdId?: string; householdOwnerId?: string },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -50,6 +59,7 @@ import {
   refreshConsentExpirationForAllItems,
   refreshConsentExpirationForItem,
 } from "../lib/plaidSync";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
 app.use(express.json());
@@ -68,6 +78,10 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h1 = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h1.householdId;
+  const _h2 = await createTestHousehold(OTHER_USER);
+  OTHER_HOUSEHOLD_ID = _h2.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -97,10 +111,13 @@ async function seedItem(opts?: {
 }): Promise<{ itemRowId: string; itemId: string; accessToken: string }> {
   const externalItemId = `item-${randomUUID()}`;
   const accessToken = opts?.accessToken ?? `access-sandbox-${randomUUID()}`;
+  const userId = opts?.userId ?? TEST_USER;
+  const householdId = userId === TEST_USER ? TEST_HOUSEHOLD_ID : OTHER_HOUSEHOLD_ID;
   const [item] = await db
     .insert(plaidItemsTable)
     .values({
-      userId: opts?.userId ?? TEST_USER,
+      userId,
+      householdId,
       itemId: externalItemId,
       accessToken,
       institutionName: opts?.institutionName ?? "Chase",

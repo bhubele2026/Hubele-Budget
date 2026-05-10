@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
+import { createTestHousehold } from "./_helpers/testHousehold";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 
@@ -16,6 +17,7 @@ import {
 import type { SendOperatorAlertFn } from "../lib/plaidMalformedTokenAlert";
 
 const TEST_USER = `mscup-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 async function cleanup(): Promise<void> {
   await db.delete(debtsTable).where(eq(debtsTable.userId, TEST_USER));
@@ -25,6 +27,10 @@ async function cleanup(): Promise<void> {
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
 }
 
+beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
+});
 beforeEach(async () => {
   await cleanup();
   delete process.env.OPS_ALERT_EMAIL;
@@ -174,6 +180,7 @@ describe("(#551) operator alert on boot-time duplicate-bank cleanup", () => {
   it("end-to-end: backfill that cleans a real row produces a non-skipped alert with that institution in the body", async () => {
     await db.insert(plaidItemsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `healthy-${randomUUID().slice(0, 8)}`,
       accessToken: `access-sandbox-${randomUUID()}`,
       institutionId: "ins_56",
@@ -184,6 +191,7 @@ describe("(#551) operator alert on boot-time duplicate-bank cleanup", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `stale-${randomUUID().slice(0, 8)}`,
         accessToken: "broken-token-no-prefix",
         institutionId: "ins_56",

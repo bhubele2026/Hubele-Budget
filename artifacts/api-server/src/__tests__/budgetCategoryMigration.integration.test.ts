@@ -6,16 +6,25 @@ import { and, eq, inArray } from "drizzle-orm";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
+let TEST_HOUSEHOLD_ID: string;
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (
-    req: { userId?: string },
-    _res: unknown,
-    next: () => void,
-  ) => {
-    req.userId = TEST_USER;
-    next();
-  },
-}));
+    requireAuth: (
+      req: {
+        userId?: string;
+        actualUserId?: string;
+        householdId?: string;
+        householdOwnerId?: string;
+      },
+      _res: unknown,
+      next: () => void,
+    ) => {
+      req.userId = TEST_USER;
+      req.actualUserId = TEST_USER;
+      req.householdId = TEST_HOUSEHOLD_ID;
+      req.householdOwnerId = TEST_USER;
+      next();
+    },
+  }));
 
 import {
   db,
@@ -29,6 +38,7 @@ import {
 } from "@workspace/db";
 import budgetRouter from "../routes/budget";
 
+import { createTestHousehold } from "./_helpers/testHousehold";
 const app = express();
 app.use(express.json({ limit: "20mb" }));
 app.use(budgetRouter);
@@ -38,6 +48,8 @@ let baseUrl: string;
 const MONTH = "2026-05-01";
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await new Promise<void>((resolve) => {
     server = createServer(app).listen(0, () => {
       const addr = server.address();
@@ -62,7 +74,7 @@ afterAll(async () => {
 async function insertCat(name: string, groupName: string, kind: "income" | "expense" = "expense") {
   const [row] = await db
     .insert(budgetCategoriesTable)
-    .values({ userId: TEST_USER, name, groupName, kind, sourceKind: "manual", sortOrder: 0 })
+    .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, name, groupName, kind, sourceKind: "manual", sortOrder: 0 })
     .returning();
   return row!;
 }
@@ -70,11 +82,11 @@ async function insertCat(name: string, groupName: string, kind: "income" | "expe
 async function insertLine(categoryId: string, planned: string, monthStart = MONTH) {
   await db
     .insert(budgetMonthsTable)
-    .values({ userId: TEST_USER, monthStart })
+    .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, monthStart })
     .onConflictDoNothing();
   await db
     .insert(budgetLinesTable)
-    .values({ userId: TEST_USER, monthStart, categoryId, plannedAmount: planned })
+    .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, monthStart, categoryId, plannedAmount: planned })
     .onConflictDoNothing();
 }
 
@@ -92,6 +104,7 @@ describe("budget category v2 migration", () => {
     // Amex sign convention (Task #93/#130): charges are stored POSITIVE.
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: "2026-05-10",
       amount: "150.00",
       description: "MGE Electric",
@@ -102,6 +115,7 @@ describe("budget category v2 migration", () => {
     // A user mapping rule pointing at the old water category.
     await db.insert(mappingRulesTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       pattern: "City of Madison",
       matchType: "contains",
       categoryId: water.id,

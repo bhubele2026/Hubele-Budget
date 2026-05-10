@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   debtsTable,
+  householdsTable,
   plaidItemsTable,
   plaidAccountsTable,
   transactionsTable,
@@ -294,6 +295,15 @@ function plaidAmountToSigned(t: PlaidTxn): string {
   return (-n).toFixed(2);
 }
 
+/**
+ * (#623) `userId` is the ACTOR (signed-in user, used for audit columns
+ * on inserts and `recordPlaidSyncAttempt`). Data scope is derived from
+ * the item itself: `householdId = item.householdId` for shared tables,
+ * `ownerUserId` (looked up from `households`) for settings tables that
+ * remain singletons-by-owner. The lookup intentionally does NOT scope
+ * by actor — a household member must be able to sync items linked by
+ * any other member of the same household.
+ */
 export async function syncPlaidItem(
   userId: string,
   itemRowId: string,
@@ -301,12 +311,7 @@ export async function syncPlaidItem(
   const [item] = await db
     .select()
     .from(plaidItemsTable)
-    .where(
-      and(
-        eq(plaidItemsTable.id, itemRowId),
-        eq(plaidItemsTable.userId, userId),
-      ),
-    );
+    .where(eq(plaidItemsTable.id, itemRowId));
   // (#408) Capture pre-call health so a sync that successfully heals an
   // error→healthy transition can chase it with a one-shot
   // /transactions/get gap-backfill against the window that elapsed
@@ -326,6 +331,18 @@ export async function syncPlaidItem(
       error: "Item not found",
     };
   }
+  // (#623) Every transaction / resolution insert below the household
+  // refactor must carry household_id. Derived once from the item the
+  // sync is operating on so member-driven syncs land in the owner's
+  // household, not the actor's self-isolated one. Settings tables
+  // (forecast_settings, avalanche_settings) remain singletons keyed by
+  // the household owner, so we also resolve `ownerUserId` here.
+  const householdId = item.householdId!;
+  const [householdRow] = await db
+    .select({ ownerUserId: householdsTable.ownerUserId })
+    .from(householdsTable)
+    .where(eq(householdsTable.id, householdId));
+  const ownerUserId = householdRow?.ownerUserId ?? userId;
 
   // (#398) Synthetic seed rows (April-2026 Chase placeholder) are not
   // real Plaid connections — they exist only to anchor the bank
@@ -383,7 +400,7 @@ export async function syncPlaidItem(
 
   const slug = item.institutionSlug || institutionSlug(item.institutionName);
   const source = `plaid:${slug}`;
-  const rules = await loadUserRules(userId);
+  const rules = await loadUserRules(householdId);
 
   // Identify the user's chosen "checking" Plaid account (if any) so we can
   // auto-flag its transactions for the cash forecast and try to auto-match
@@ -391,7 +408,7 @@ export async function syncPlaidItem(
   const [forecastSettings] = await db
     .select()
     .from(forecastSettingsTable)
-    .where(eq(forecastSettingsTable.userId, userId));
+    .where(eq(forecastSettingsTable.userId, ownerUserId));
   let checkingPlaidAccountId: string | null = null;
   // (#45) Track whether the bank-snapshot account actually belongs to the
   // item we're syncing right now. Without this, a user with multiple
@@ -421,7 +438,7 @@ export async function syncPlaidItem(
       plaidAccountRowId: debtsTable.plaidAccountId,
     })
     .from(debtsTable)
-    .where(eq(debtsTable.userId, userId));
+    .where(eq(debtsTable.householdId, householdId));
   const linkedAcctRowIds = linkedDebts
     .map((d) => d.plaidAccountRowId)
     .filter((v): v is string => !!v);
@@ -432,7 +449,7 @@ export async function syncPlaidItem(
           externalId: plaidAccountsTable.accountId,
         })
         .from(plaidAccountsTable)
-        .where(eq(plaidAccountsTable.userId, userId))
+        .where(eq(plaidAccountsTable.householdId, householdId))
     : [];
   const externalByRowId = new Map(
     debtAccountRows.map((r) => [r.rowId, r.externalId]),
@@ -459,7 +476,7 @@ export async function syncPlaidItem(
     .where(
       and(
         eq(plaidAccountsTable.itemId, itemRowId),
-        eq(plaidAccountsTable.userId, userId),
+        eq(plaidAccountsTable.householdId, householdId),
       ),
     );
   const acctByExternalId = new Map(
@@ -662,14 +679,14 @@ export async function syncPlaidItem(
           : ["manual", "bank"];
         const baseScope = debtScope.length > 0
           ? and(
-              eq(transactionsTable.userId, userId),
+              eq(transactionsTable.householdId, householdId),
               sql`${transactionsTable.plaidTransactionId} is null`,
               inArray(transactionsTable.debtId, debtScope),
               inArray(transactionsTable.source, sourceScope),
             )
           : isCheckingScope
             ? and(
-                eq(transactionsTable.userId, userId),
+                eq(transactionsTable.householdId, householdId),
                 sql`${transactionsTable.plaidTransactionId} is null`,
                 sql`${transactionsTable.debtId} is null`,
                 inArray(transactionsTable.source, sourceScope),
@@ -733,6 +750,7 @@ export async function syncPlaidItem(
 
       const values = {
         userId,
+        householdId,
         occurredOn: t.date,
         occurredAt,
         description,
@@ -814,7 +832,7 @@ export async function syncPlaidItem(
       const recurring = await db
         .select()
         .from(recurringItemsTable)
-        .where(eq(recurringItemsTable.userId, userId));
+        .where(eq(recurringItemsTable.householdId, householdId));
       const minDate = insertedCheckingTxns.reduce((a, b) => (a < b.date ? a : b.date), insertedCheckingTxns[0].date);
       const maxDate = insertedCheckingTxns.reduce((a, b) => (a > b.date ? a : b.date), insertedCheckingTxns[0].date);
       const from = addDays(parseISO(minDate), -7);
@@ -824,7 +842,7 @@ export async function syncPlaidItem(
       const existingResolutions = await db
         .select()
         .from(forecastResolutionsTable)
-        .where(eq(forecastResolutionsTable.userId, userId));
+        .where(eq(forecastResolutionsTable.householdId, householdId));
       const usedPlanKeys = new Set(
         existingResolutions
           .filter((r) => r.recurringItemId && r.occurrenceDate)
@@ -864,6 +882,7 @@ export async function syncPlaidItem(
         if (bestKey && bestItemId && bestDate) {
           await db.insert(forecastResolutionsTable).values({
             userId,
+            householdId,
             recurringItemId: bestItemId,
             occurrenceDate: bestDate,
             status: "matched",
@@ -882,7 +901,7 @@ export async function syncPlaidItem(
         .delete(transactionsTable)
         .where(
           and(
-            eq(transactionsTable.userId, userId),
+            eq(transactionsTable.householdId, householdId),
             eq(transactionsTable.plaidTransactionId, r.transaction_id),
           ),
         );
@@ -913,7 +932,7 @@ export async function syncPlaidItem(
       .where(
         and(
           eq(plaidAccountsTable.itemId, itemRowId),
-          eq(plaidAccountsTable.userId, userId),
+          eq(plaidAccountsTable.householdId, householdId),
           sql`${plaidAccountsTable.firstSyncCompletedAt} is null`,
         ),
       );
@@ -926,7 +945,11 @@ export async function syncPlaidItem(
     // the debts UI since the last auto-update).
     if (slug === "amex") {
       try {
-        await refreshAmexAnchor(userId, db, { adopt: false });
+        // (#623) Anchor settings live on the household owner, not
+        // the actor — pass `ownerUserId` so a member-driven sync
+        // still updates the same row the owner sees on the
+        // dashboard.
+        await refreshAmexAnchor(ownerUserId, db, { adopt: false });
       } catch {
         // Anchor refresh is best-effort; never break the sync result.
       }
@@ -962,7 +985,7 @@ export async function syncPlaidItem(
               bankSnapshotAt: new Date(),
               bankSnapshotSource: "plaid",
             })
-            .where(eq(forecastSettingsTable.userId, userId));
+            .where(eq(forecastSettingsTable.userId, ownerUserId));
         }
       } catch (e) {
         // Don't break the sync — but capture Plaid's real reason so the
@@ -1309,17 +1332,27 @@ export async function syncPlaidItem(
   }
 }
 
-export async function syncAllForUser(userId: string): Promise<SyncResult[]> {
+/**
+ * (#623) Scope is now per-household (every household member sees the
+ * same set of linked items), not per-actor. `actorUserId` is the
+ * signed-in user used for audit logging on each per-item sync.
+ */
+export async function syncAllForUser(
+  actorUserId: string,
+  householdId: string,
+): Promise<SyncResult[]> {
   const items = await db
     .select({ id: plaidItemsTable.id })
     .from(plaidItemsTable)
-    .where(eq(plaidItemsTable.userId, userId));
+    .where(eq(plaidItemsTable.householdId, householdId));
   const out: SyncResult[] = [];
-  for (const it of items) out.push(await syncPlaidItem(userId, it.id));
+  for (const it of items) out.push(await syncPlaidItem(actorUserId, it.id));
   return out;
 }
 
 export async function syncAllForAllUsers(): Promise<void> {
+  // Use the linker's userId as the actor for audit purposes; the
+  // sync itself derives household scope from item.householdId.
   const items = await db
     .select({ id: plaidItemsTable.id, userId: plaidItemsTable.userId })
     .from(plaidItemsTable);
@@ -1500,12 +1533,12 @@ export async function refreshConsentExpirationForItem(
  * returned record list but never thrown.
  */
 export async function refreshConsentExpirationForUser(
-  userId: string,
+  householdId: string,
 ): Promise<ConsentRefreshResult[]> {
   const items = await db
     .select({ id: plaidItemsTable.id })
     .from(plaidItemsTable)
-    .where(eq(plaidItemsTable.userId, userId));
+    .where(eq(plaidItemsTable.householdId, householdId));
   const out: ConsentRefreshResult[] = [];
   for (const it of items) {
     out.push(await refreshConsentExpirationForItem(it.id));
@@ -1624,21 +1657,25 @@ export async function runGapBackfillForItem(
   const [item] = await db
     .select()
     .from(plaidItemsTable)
-    .where(
-      and(
-        eq(plaidItemsTable.id, itemRowId),
-        eq(plaidItemsTable.userId, userId),
-      ),
-    );
+    .where(eq(plaidItemsTable.id, itemRowId));
   if (!item) {
     return { added: 0, importedDateRange: null, perAccount: [] };
   }
   if (!isValidPlaidAccessToken(item.accessToken)) {
     return { added: 0, importedDateRange: null, perAccount: [] };
   }
+  // (#623) See syncPlaidItem comment — actor is `userId`; data scope
+  // (`householdId`, `ownerUserId`) is derived from the item itself so a
+  // member can backfill any of the household's items.
+  const householdId = item.householdId!;
+  const [householdRow] = await db
+    .select({ ownerUserId: householdsTable.ownerUserId })
+    .from(householdsTable)
+    .where(eq(householdsTable.id, householdId));
+  const ownerUserId = householdRow?.ownerUserId ?? userId;
   const slug = item.institutionSlug || institutionSlug(item.institutionName);
   const source = `plaid:${slug}`;
-  const rules = await loadUserRules(userId);
+  const rules = await loadUserRules(householdId);
 
   const accounts = await db
     .select()
@@ -1646,7 +1683,7 @@ export async function runGapBackfillForItem(
     .where(
       and(
         eq(plaidAccountsTable.itemId, itemRowId),
-        eq(plaidAccountsTable.userId, userId),
+        eq(plaidAccountsTable.householdId, householdId),
       ),
     );
   if (accounts.length === 0) {
@@ -1659,7 +1696,7 @@ export async function runGapBackfillForItem(
       plaidAccountRowId: debtsTable.plaidAccountId,
     })
     .from(debtsTable)
-    .where(eq(debtsTable.userId, userId));
+    .where(eq(debtsTable.householdId, householdId));
   const debtIdByExternal = new Map<string, string>();
   const debtIdsByAcctRowId = new Map<string, string[]>();
   for (const d of linkedDebts) {
@@ -1679,7 +1716,7 @@ export async function runGapBackfillForItem(
   const [forecastSettings] = await db
     .select()
     .from(forecastSettingsTable)
-    .where(eq(forecastSettingsTable.userId, userId));
+    .where(eq(forecastSettingsTable.userId, ownerUserId));
   const checkingAcctRowId = forecastSettings?.bankSnapshotAccountId ?? null;
 
   const today = opts.today ?? new Date();
@@ -1710,7 +1747,7 @@ export async function runGapBackfillForItem(
       .from(transactionsTable)
       .where(
         and(
-          eq(transactionsTable.userId, userId),
+          eq(transactionsTable.householdId, householdId),
           eq(transactionsTable.plaidAccountId, externalAcctId),
         ),
       )
@@ -1794,7 +1831,7 @@ export async function runGapBackfillForItem(
         let mergeWhere = null as ReturnType<typeof and> | null;
         if (debtScope.length > 0) {
           mergeWhere = and(
-            eq(transactionsTable.userId, userId),
+            eq(transactionsTable.householdId, householdId),
             eq(transactionsTable.occurredOn, t.date),
             eq(transactionsTable.amount, signedAmount),
             sql`${transactionsTable.plaidTransactionId} is null`,
@@ -1803,7 +1840,7 @@ export async function runGapBackfillForItem(
           );
         } else if (isCheckingScope) {
           mergeWhere = and(
-            eq(transactionsTable.userId, userId),
+            eq(transactionsTable.householdId, householdId),
             eq(transactionsTable.occurredOn, t.date),
             eq(transactionsTable.amount, signedAmount),
             sql`${transactionsTable.plaidTransactionId} is null`,
@@ -1831,6 +1868,7 @@ export async function runGapBackfillForItem(
 
         const values = {
           userId,
+          householdId: item.householdId!,
           occurredOn: t.date,
           occurredAt: null,
           description,
@@ -1852,7 +1890,7 @@ export async function runGapBackfillForItem(
           .from(transactionsTable)
           .where(
             and(
-              eq(transactionsTable.userId, userId),
+              eq(transactionsTable.householdId, householdId),
               eq(transactionsTable.plaidTransactionId, t.transaction_id),
             ),
           )

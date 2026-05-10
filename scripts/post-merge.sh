@@ -6,6 +6,11 @@ pnpm install --frozen-lockfile
 # on a fresh checkout / CI environment.
 pnpm --filter @workspace/h2budget exec playwright install chromium
 pnpm --filter db push
+# Task #623 — backfill the households + household_members tables and
+# stamp household_id on every user-scoped row. Idempotent; no-op once
+# the data is converged.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f "$(dirname "$0")/backfill_households.sql"
 # Task #56 — keep generated API types fresh after every merge.
 # Step 1: nuke any stale build outputs / tsbuildinfo so `tsc --build`
 # can't incorrectly skip the rebuild. (Stale dist + new openapi.yaml

@@ -5,16 +5,30 @@ import express from "express";
 import { and, eq } from "drizzle-orm";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: {
+      userId?: string;
+      actualUserId?: string;
+      householdId?: string;
+      householdOwnerId?: string;
+    },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
 
 import { db, debtsTable, debtBalanceHistoryTable } from "@workspace/db";
 import debtsRouter from "../routes/debts";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
 app.use(express.json());
@@ -31,6 +45,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -104,6 +120,7 @@ describe("debts.originalBalance anchor for /avalanche progress", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Legacy Loan",
         balance: "2000",
         apr: "0.1",
@@ -115,6 +132,7 @@ describe("debts.originalBalance anchor for /avalanche progress", () => {
     // Pretend we have a higher historical snapshot from before the user paid down.
     await db.insert(debtBalanceHistoryTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       debtId: row.id,
       recordedOn: "2025-01-01",
       balance: "3000",

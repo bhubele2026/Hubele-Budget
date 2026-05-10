@@ -14,8 +14,10 @@ import {
   SYNTHETIC_ACCOUNT_ID,
   SYNTHETIC_ITEM_ID,
 } from "../lib/aprilChaseSeed";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const TEST_USER = `dedupe-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 async function cleanup(): Promise<void> {
   await db
@@ -31,7 +33,11 @@ async function cleanup(): Promise<void> {
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
+  await cleanup();
+});
 afterAll(cleanup);
 
 describe("dedupePlaidAccountsForUser (#410)", () => {
@@ -41,6 +47,7 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `dedupe-item-${suffix}`,
         accessToken: "test-no-access",
         institutionName: "Chase",
@@ -57,6 +64,7 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `chase-acct-survivor-${suffix}`,
         name: "Chase Total Checking",
@@ -70,6 +78,7 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `chase-acct-loserA-${suffix}`,
         name: "Chase Checking",
@@ -83,6 +92,7 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `chase-acct-loserB-${suffix}`,
         name: "Chase Checking",
@@ -95,6 +105,7 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
 
     await db.insert(forecastSettingsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       bankSnapshotBalance: "3565.09",
       bankSnapshotAt: new Date("2026-04-30T23:59:59Z"),
       bankSnapshotSource: "manual",
@@ -112,6 +123,7 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
         .insert(transactionsTable)
         .values({
           userId: TEST_USER,
+          householdId: TEST_HOUSEHOLD_ID,
           occurredOn: "2026-05-01",
           occurredAt: new Date("2026-05-01T12:00:00Z").toISOString(),
           description: `dedupe-${suffix}-${tag}`,
@@ -133,6 +145,7 @@ describe("dedupePlaidAccountsForUser (#410)", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `dedupe-debt-${suffix}`,
         balance: "100.00",
         apr: "0.1999",

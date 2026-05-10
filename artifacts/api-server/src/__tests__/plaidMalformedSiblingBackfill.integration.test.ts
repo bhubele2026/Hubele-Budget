@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import { createTestHousehold } from "./_helpers/testHousehold";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
@@ -12,6 +13,8 @@ import { backfillMalformedTokenSiblings } from "../lib/plaidMalformedSiblingClea
 
 const TEST_USER = `mfsib-bf-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 const OTHER_USER = `mfsib-bf-other-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
+let OTHER_HOUSEHOLD_ID: string;
 
 async function cleanup(): Promise<void> {
   for (const u of [TEST_USER, OTHER_USER]) {
@@ -23,6 +26,12 @@ async function cleanup(): Promise<void> {
   }
 }
 
+beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
+  const _o = await createTestHousehold(OTHER_USER);
+  OTHER_HOUSEHOLD_ID = _o.householdId;
+});
 beforeEach(async () => {
   await cleanup();
 });
@@ -36,6 +45,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `healthy-${randomUUID().slice(0, 8)}`,
         accessToken: `access-sandbox-${randomUUID()}`,
         institutionId: "ins_56",
@@ -47,6 +57,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `stale-${randomUUID().slice(0, 8)}`,
         accessToken: "broken-token-no-prefix",
         institutionId: "ins_56",
@@ -56,6 +67,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
       .returning();
     await db.insert(plaidAccountsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: stale.id,
       accountId: `acct-${randomUUID().slice(0, 8)}`,
       name: "Chase Total Checking",
@@ -86,6 +98,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `orphan-${randomUUID().slice(0, 8)}`,
         accessToken: "broken-token-no-prefix",
         institutionId: "ins_56",
@@ -114,6 +127,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `chase-a-${randomUUID().slice(0, 8)}`,
         accessToken: `access-sandbox-${randomUUID()}`,
         institutionId: "ins_56",
@@ -125,6 +139,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `chase-b-${randomUUID().slice(0, 8)}`,
         accessToken: `access-sandbox-${randomUUID()}`,
         institutionId: "ins_56",
@@ -148,6 +163,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
       .insert(plaidItemsTable)
       .values({
         userId: OTHER_USER,
+        householdId: OTHER_HOUSEHOLD_ID,
         itemId: `other-${randomUUID().slice(0, 8)}`,
         accessToken: `access-sandbox-${randomUUID()}`,
         institutionId: "ins_56",
@@ -159,6 +175,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `stale-${randomUUID().slice(0, 8)}`,
         accessToken: "broken-token-no-prefix",
         institutionId: "ins_56",
@@ -185,6 +202,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
   it("resets debt source flags on accounts owned by the cleaned malformed row", async () => {
     await db.insert(plaidItemsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `healthy-${randomUUID().slice(0, 8)}`,
       accessToken: `access-sandbox-${randomUUID()}`,
       institutionId: "ins_56",
@@ -195,6 +213,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `stale-${randomUUID().slice(0, 8)}`,
         accessToken: "broken-token-no-prefix",
         institutionId: "ins_56",
@@ -206,6 +225,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: stale.id,
         accountId: `acct-${randomUUID().slice(0, 8)}`,
         name: "Chase Sapphire",
@@ -218,6 +238,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Chase ••9999 ${randomUUID().slice(0, 6)}`,
         type: "credit_card",
         status: "active",
@@ -246,6 +267,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
   it("cleans a slug-only stale row when the healthy sibling has both id + slug", async () => {
     await db.insert(plaidItemsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `healthy-${randomUUID().slice(0, 8)}`,
       accessToken: `access-sandbox-${randomUUID()}`,
       institutionId: "ins_56",
@@ -256,6 +278,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `stale-${randomUUID().slice(0, 8)}`,
         accessToken: "broken-token-no-prefix",
         // institutionId intentionally null — older link metadata
@@ -278,6 +301,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
   it("is idempotent — a second run after cleanup is a no-op", async () => {
     await db.insert(plaidItemsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `healthy-${randomUUID().slice(0, 8)}`,
       accessToken: `access-sandbox-${randomUUID()}`,
       institutionId: "ins_56",
@@ -286,6 +310,7 @@ describe("(#406) backfillMalformedTokenSiblings", () => {
     });
     await db.insert(plaidItemsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `stale-${randomUUID().slice(0, 8)}`,
       accessToken: "broken-token-no-prefix",
       institutionId: "ins_56",

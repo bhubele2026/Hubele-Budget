@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
+import { createTestHousehold } from "./_helpers/testHousehold";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import {
@@ -27,6 +28,7 @@ import {
 } from "../lib/plaidMalformedTokenAlert";
 
 const TEST_USER = `mtsa-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 async function cleanup(): Promise<void> {
   await db
@@ -47,6 +49,7 @@ async function seedItem(
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: externalItemId,
       accessToken,
       institutionName: institutionName ?? undefined,
@@ -56,6 +59,10 @@ async function seedItem(
   return { itemRowId: row!.id, itemId: externalItemId };
 }
 
+beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
+});
 beforeEach(async () => {
   await cleanup();
   // (#396) Wipe the de-dup table so the read-most-recent suppress

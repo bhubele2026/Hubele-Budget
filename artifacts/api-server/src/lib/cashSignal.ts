@@ -212,13 +212,14 @@ function r2(n: number): string {
  *   - Skip checking transactions on/before the snapshot date (already counted).
  */
 export async function computeCashSignal(
-  userId: string,
+  householdId: string,
+  ownerUserId: string,
   opts: { horizonDays?: number; fromDate?: string } = {},
 ): Promise<CashSignal> {
   const [settings] = await db
     .select()
     .from(forecastSettingsTable)
-    .where(eq(forecastSettingsTable.userId, userId));
+    .where(eq(forecastSettingsTable.userId, ownerUserId));
   const cashBuffer = Number(settings?.cashBuffer ?? 500) || 0;
   const daysAhead = opts.horizonDays ?? settings?.daysAhead ?? 90;
 
@@ -246,11 +247,11 @@ export async function computeCashSignal(
   const recurring = await db
     .select()
     .from(recurringItemsTable)
-    .where(eq(recurringItemsTable.userId, userId));
+    .where(eq(recurringItemsTable.householdId, householdId));
   const debtsList = await db
     .select()
     .from(debtsTable)
-    .where(eq(debtsTable.userId, userId));
+    .where(eq(debtsTable.householdId, householdId));
   const linkedRecurringByDebt = new Map<string, RecurringRow>();
   for (const r of recurring) {
     if (r.debtId && r.active === "true" && !linkedRecurringByDebt.has(r.debtId)) {
@@ -281,7 +282,7 @@ export async function computeCashSignal(
   const [avaSettingsRow] = await db
     .select()
     .from(avalancheSettingsTable)
-    .where(eq(avalancheSettingsTable.userId, userId));
+    .where(eq(avalancheSettingsTable.userId, ownerUserId));
   const manualExtra = Number(avaSettingsRow?.manualExtra ?? 0) || 0;
   events.push(
     ...expandAvalancheExtra(debtsList, manualExtra, expandStart, to, todayDateOnly),
@@ -322,7 +323,7 @@ export async function computeCashSignal(
     .from(transactionsTable)
     .where(
       and(
-        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.householdId, householdId),
         eq(transactionsTable.forecastFlag, true),
         gte(transactionsTable.occurredOn, anchorISO),
         lte(transactionsTable.occurredOn, toISO),
@@ -341,7 +342,7 @@ export async function computeCashSignal(
   const resolutionsAll = await db
     .select()
     .from(forecastResolutionsTable)
-    .where(eq(forecastResolutionsTable.userId, userId));
+    .where(eq(forecastResolutionsTable.householdId, householdId));
   const matchedIds = Array.from(
     new Set(
       resolutionsAll
@@ -360,7 +361,7 @@ export async function computeCashSignal(
       .from(transactionsTable)
       .where(
         and(
-          eq(transactionsTable.userId, userId),
+          eq(transactionsTable.householdId, householdId),
           inArray(transactionsTable.id, matchedIds),
         ),
       );

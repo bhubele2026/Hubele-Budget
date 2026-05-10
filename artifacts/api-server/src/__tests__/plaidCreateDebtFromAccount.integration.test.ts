@@ -7,10 +7,19 @@ import { isUniqueViolation, PG_UNIQUE_VIOLATION } from "../routes/plaid";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 const OTHER_USER = `other-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
+let OTHER_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: { userId?: string; actualUserId?: string; householdId?: string; householdOwnerId?: string },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -33,6 +42,7 @@ import {
 } from "@workspace/db";
 import plaidRouter from "../routes/plaid";
 import amexRouter from "../routes/amex";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
 app.use(express.json());
@@ -64,6 +74,10 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h1 = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h1.householdId;
+  const _h2 = await createTestHousehold(OTHER_USER);
+  OTHER_HOUSEHOLD_ID = _h2.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -101,11 +115,13 @@ async function insertCreditAccount(opts: {
   accountId: string;
 }> {
   const userId = opts.userId ?? TEST_USER;
+  const householdId = userId === TEST_USER ? TEST_HOUSEHOLD_ID : OTHER_HOUSEHOLD_ID;
   const label = opts.institutionName ?? "Chase";
   const [item] = await db
     .insert(plaidItemsTable)
     .values({
       userId,
+      householdId,
       itemId: `item-${label}-${randomUUID()}`,
       accessToken: `access-sandbox-${randomUUID()}`,
       institutionName: label,
@@ -116,6 +132,7 @@ async function insertCreditAccount(opts: {
     .insert(plaidAccountsTable)
     .values({
       userId,
+      householdId,
       itemId: item!.id,
       accountId: `acct-${label}-${randomUUID()}`,
       name: opts.name ?? "Sapphire Preferred",
@@ -223,6 +240,7 @@ describe("POST /plaid/liability-accounts/:plaidAccountId/create-debt", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
         name: "Amex ••5678",
         balance: "100",
         apr: "0",
@@ -297,6 +315,7 @@ describe("POST /plaid/liability-accounts/:plaidAccountId/create-debt", () => {
     });
     await db.insert(debtsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       name: "Discover ••9999",
       balance: "500",
       apr: "0.15",
@@ -339,6 +358,7 @@ describe("POST /plaid/liability-accounts/:plaidAccountId/create-debt", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
         name: "Already Linked",
         balance: "0",
         apr: "0",
@@ -422,6 +442,7 @@ describe("POST /plaid/liability-accounts/:plaidAccountId/create-debt", () => {
     try {
       await db.insert(debtsTable).values({
         userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
         name: "Racer",
         balance: "0",
         apr: "0",
@@ -535,6 +556,7 @@ describe("POST /plaid/liability-accounts/create-debts (bulk)", () => {
     });
     await db.insert(debtsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       name: "Amex ••2222",
       balance: "0",
       apr: "0",
@@ -551,6 +573,7 @@ describe("POST /plaid/liability-accounts/create-debts (bulk)", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
         name: "Pre-existing",
         balance: "0",
         apr: "0",

@@ -12,21 +12,21 @@ import { archiveExpiredOneTime } from "./bills";
 
 const router: IRouter = Router();
 
-async function userOwnsDebt(userId: string, debtId: string): Promise<boolean> {
+async function householdOwnsDebt(householdId: string, debtId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: debtsTable.id })
     .from(debtsTable)
-    .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)))
+    .where(and(eq(debtsTable.id, debtId), eq(debtsTable.householdId, householdId)))
     .limit(1);
   return !!row;
 }
 
 router.get("/recurring-items", requireAuth, async (req, res): Promise<void> => {
-  await archiveExpiredOneTime(req.userId!);
+  await archiveExpiredOneTime(req.householdId!);
   const rows = await db
     .select()
     .from(recurringItemsTable)
-    .where(eq(recurringItemsTable.userId, req.userId!))
+    .where(eq(recurringItemsTable.householdId, req.householdId!))
     .orderBy(asc(recurringItemsTable.kind), asc(recurringItemsTable.name));
   res.json(rows);
 });
@@ -37,13 +37,13 @@ router.post("/recurring-items", requireAuth, async (req, res): Promise<void> => 
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  if (parsed.data.debtId && !(await userOwnsDebt(req.userId!, parsed.data.debtId))) {
+  if (parsed.data.debtId && !(await householdOwnsDebt(req.householdId!, parsed.data.debtId))) {
     res.status(400).json({ error: "Invalid debtId" });
     return;
   }
   const [row] = await db
     .insert(recurringItemsTable)
-    .values({ ...parsed.data, userId: req.userId! })
+    .values({ ...parsed.data, userId: req.userId!, householdId: req.householdId! })
     .returning();
   res.status(201).json(row);
 });
@@ -62,7 +62,7 @@ router.patch(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    if (parsed.data.debtId && !(await userOwnsDebt(req.userId!, parsed.data.debtId))) {
+    if (parsed.data.debtId && !(await householdOwnsDebt(req.householdId!, parsed.data.debtId))) {
       res.status(400).json({ error: "Invalid debtId" });
       return;
     }
@@ -72,7 +72,7 @@ router.patch(
       .where(
         and(
           eq(recurringItemsTable.id, params.data.id),
-          eq(recurringItemsTable.userId, req.userId!),
+          eq(recurringItemsTable.householdId, req.householdId!),
         ),
       )
       .returning();
@@ -98,7 +98,7 @@ router.delete(
       .where(
         and(
           eq(recurringItemsTable.id, params.data.id),
-          eq(recurringItemsTable.userId, req.userId!),
+          eq(recurringItemsTable.householdId, req.householdId!),
         ),
       );
     res.sendStatus(204);

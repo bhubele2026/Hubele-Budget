@@ -13,8 +13,10 @@ import {
   dedupeTransactionsForAccount,
   dedupeTransactionsForUser,
 } from "../lib/dedupeTransactions";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const TEST_USER = `dedupe-txn-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 async function cleanup(): Promise<void> {
   await db
@@ -29,7 +31,11 @@ async function cleanup(): Promise<void> {
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
+  await cleanup();
+});
 afterAll(cleanup);
 
 async function seedAccount(): Promise<string> {
@@ -38,6 +44,7 @@ async function seedAccount(): Promise<string> {
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `item-${suffix}`,
       accessToken: "test-no-access",
       institutionName: "Chase",
@@ -47,6 +54,7 @@ async function seedAccount(): Promise<string> {
   const externalAcctId = `chase-acct-${suffix}`;
   await db.insert(plaidAccountsTable).values({
     userId: TEST_USER,
+    householdId: TEST_HOUSEHOLD_ID,
     itemId: item!.id,
     accountId: externalAcctId,
     name: "Chase Checking",
@@ -70,6 +78,7 @@ async function insertTxn(
     .insert(transactionsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       source: "plaid:chase",
       ...values,
       ...(createdAt ? { createdAt } : {}),
@@ -169,6 +178,7 @@ describe("dedupeTransactionsForAccount (#452)", () => {
     // survivor before the loser is deleted.
     await db.insert(forecastResolutionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       status: "matched",
       matchedTxnId: loserId,
     });

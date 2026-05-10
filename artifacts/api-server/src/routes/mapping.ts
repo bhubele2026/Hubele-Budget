@@ -53,7 +53,7 @@ router.get("/mapping-rules", requireAuth, async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(mappingRulesTable)
-    .where(eq(mappingRulesTable.userId, req.userId!))
+    .where(eq(mappingRulesTable.householdId, req.householdId!))
     .orderBy(desc(mappingRulesTable.priority));
   res.json(rows);
 });
@@ -65,12 +65,13 @@ router.post("/mapping-rules", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const userId = req.userId!;
+  const householdId = req.householdId!;
   if (await rejectIfExcludedCategory(userId, parsed.data.categoryId, res)) {
     return;
   }
   const [row] = await db
     .insert(mappingRulesTable)
-    .values({ ...parsed.data, userId })
+    .values({ ...parsed.data, userId, householdId })
     .returning();
   // Mirror the auto-learn flow's `ruleAction` shape so the Mapping Rules
   // page can reuse the existing `useBulkRecategorizePrompt` helper. We
@@ -89,7 +90,7 @@ router.post("/mapping-rules", requireAuth, async (req, res): Promise<void> => {
   let candidateCount = 0;
   if (toCategoryId) {
     candidateCount = await countPatternCandidates(
-      userId,
+      req.householdId!,
       { pattern: row.pattern, matchType },
       null,
     );
@@ -132,9 +133,9 @@ router.post("/mapping-rules", requireAuth, async (req, res): Promise<void> => {
  * BASE = max(existing priorities of the omitted set) + STEP * (1 + ordered count)
  * so the explicit ordering always wins.
  *
- * IDs that don't belong to the calling user are silently ignored — important
- * because the client posts whatever was on screen and we don't want a hostile
- * user to bump someone else's rules.
+ * IDs that don't belong to the calling household are silently ignored —
+ * important because the client posts whatever was on screen and we don't
+ * want a hostile user to bump someone else's rules.
  */
 router.put(
   "/mapping-rules/reorder",
@@ -147,14 +148,14 @@ router.put(
     }
     const { orderedIds } = parsed.data;
 
-    const userId = req.userId!;
+    const householdId = req.householdId!;
     const owned = await db
       .select({
         id: mappingRulesTable.id,
         priority: mappingRulesTable.priority,
       })
       .from(mappingRulesTable)
-      .where(eq(mappingRulesTable.userId, userId));
+      .where(eq(mappingRulesTable.householdId, householdId));
     const ownedIds = new Set(owned.map((r) => r.id));
 
     const filtered: string[] = [];
@@ -169,7 +170,7 @@ router.put(
       const rows = await db
         .select()
         .from(mappingRulesTable)
-        .where(eq(mappingRulesTable.userId, userId))
+        .where(eq(mappingRulesTable.householdId, householdId))
         .orderBy(desc(mappingRulesTable.priority));
       res.json(rows);
       return;
@@ -192,7 +193,7 @@ router.put(
           .set({ priority: newPriority })
           .where(
             and(
-              eq(mappingRulesTable.userId, userId),
+              eq(mappingRulesTable.householdId, householdId),
               eq(mappingRulesTable.id, id),
             ),
           );
@@ -202,7 +203,7 @@ router.put(
     const rows = await db
       .select()
       .from(mappingRulesTable)
-      .where(eq(mappingRulesTable.userId, userId))
+      .where(eq(mappingRulesTable.householdId, householdId))
       .orderBy(desc(mappingRulesTable.priority));
     res.json(rows);
   },
@@ -217,11 +218,11 @@ router.post(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    const userId = req.userId!;
+    const householdId = req.householdId!;
     const rows = await db
       .select()
       .from(mappingRulesTable)
-      .where(eq(mappingRulesTable.userId, userId));
+      .where(eq(mappingRulesTable.householdId, householdId));
     const sorted: RuleRow[] = [...rows].sort(
       (a, b) => b.priority - a.priority,
     );
@@ -303,7 +304,7 @@ router.post(
       return;
     }
     const candidates = await selectPatternCandidates(
-      userId,
+      req.householdId!,
       { pattern, matchType },
       null,
     );
@@ -345,13 +346,14 @@ router.post(
       return;
     }
     const userId = req.userId!;
+    const householdId = req.householdId!;
     const [rule] = await db
       .select()
       .from(mappingRulesTable)
       .where(
         and(
           eq(mappingRulesTable.id, params.data.id),
-          eq(mappingRulesTable.userId, userId),
+          eq(mappingRulesTable.householdId, householdId),
         ),
       );
     if (!rule) {
@@ -379,7 +381,7 @@ router.post(
       return;
     }
     const candidates = await selectPatternCandidates(
-      userId,
+      householdId,
       { pattern: rule.pattern, matchType: rule.matchType },
       fromCategoryId,
     );
@@ -429,7 +431,7 @@ router.patch(
       .where(
         and(
           eq(mappingRulesTable.id, params.data.id),
-          eq(mappingRulesTable.userId, req.userId!),
+          eq(mappingRulesTable.householdId, req.householdId!),
         ),
       )
       .returning();
@@ -455,7 +457,7 @@ router.delete(
       .where(
         and(
           eq(mappingRulesTable.id, params.data.id),
-          eq(mappingRulesTable.userId, req.userId!),
+          eq(mappingRulesTable.householdId, req.householdId!),
         ),
       );
     res.sendStatus(204);

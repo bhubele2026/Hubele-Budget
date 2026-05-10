@@ -6,16 +6,25 @@ import { and, eq } from "drizzle-orm";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
+let TEST_HOUSEHOLD_ID: string;
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (
-    req: { userId?: string },
-    _res: unknown,
-    next: () => void,
-  ) => {
-    req.userId = TEST_USER;
-    next();
-  },
-}));
+    requireAuth: (
+      req: {
+        userId?: string;
+        actualUserId?: string;
+        householdId?: string;
+        householdOwnerId?: string;
+      },
+      _res: unknown,
+      next: () => void,
+    ) => {
+      req.userId = TEST_USER;
+      req.actualUserId = TEST_USER;
+      req.householdId = TEST_HOUSEHOLD_ID;
+      req.householdOwnerId = TEST_USER;
+      next();
+    },
+  }));
 
 import {
   db,
@@ -30,6 +39,7 @@ import {
 } from "@workspace/db";
 import budgetRouter from "../routes/budget";
 
+import { createTestHousehold } from "./_helpers/testHousehold";
 const app = express();
 app.use(express.json({ limit: "20mb" }));
 app.use(budgetRouter);
@@ -39,6 +49,8 @@ let baseUrl: string;
 const MONTH = "2026-06-01";
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await new Promise<void>((resolve) => {
     server = createServer(app).listen(0, () => {
       const addr = server.address();
@@ -57,6 +69,7 @@ beforeAll(async () => {
     .insert(settingsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       preferences: { budgetMay2026AmountsV1: true },
     })
     .onConflictDoUpdate({
@@ -120,6 +133,7 @@ describe("Budget pinning (task #115)", () => {
       .where(eq(recurringItemsTable.userId, TEST_USER));
     await db.insert(recurringItemsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       name: "Hannah's paycheck (Exact)",
       kind: "income",
       amount: "1000.00",

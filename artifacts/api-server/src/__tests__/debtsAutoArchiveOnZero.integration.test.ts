@@ -5,10 +5,23 @@ import express from "express";
 import { and, eq } from "drizzle-orm";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: {
+      userId?: string;
+      actualUserId?: string;
+      householdId?: string;
+      householdOwnerId?: string;
+    },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -25,6 +38,7 @@ import {
   plaidItemsTable,
 } from "@workspace/db";
 import debtsRouter from "../routes/debts";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
 app.use(express.json());
@@ -43,6 +57,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -140,6 +156,7 @@ describe("(#292) auto-archive paid-off debts so the Bills 'Stops at payoff' row 
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `item-${randomUUID()}`,
         accessToken: `access-sandbox-${randomUUID()}`,
         institutionName: "TestBank",
@@ -150,6 +167,7 @@ describe("(#292) auto-archive paid-off debts so the Bills 'Stops at payoff' row 
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `acct-${randomUUID()}`,
         name: "Visa Card",
@@ -165,6 +183,7 @@ describe("(#292) auto-archive paid-off debts so the Bills 'Stops at payoff' row 
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Plaid Card",
         balance: "1500",
         apr: "0.2",
@@ -193,6 +212,7 @@ describe("(#292) auto-archive paid-off debts so the Bills 'Stops at payoff' row 
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `item-${randomUUID()}`,
         accessToken: `access-sandbox-${randomUUID()}`,
         institutionName: "TestBank",
@@ -203,6 +223,7 @@ describe("(#292) auto-archive paid-off debts so the Bills 'Stops at payoff' row 
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `acct-${randomUUID()}`,
         name: "Visa Card",
@@ -216,6 +237,7 @@ describe("(#292) auto-archive paid-off debts so the Bills 'Stops at payoff' row 
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Plaid Card 2",
         balance: "1500",
         apr: "0.2",

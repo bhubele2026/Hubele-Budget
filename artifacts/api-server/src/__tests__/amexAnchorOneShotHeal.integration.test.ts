@@ -13,10 +13,23 @@ import express from "express";
 import { eq } from "drizzle-orm";
 
 const TEST_USER = `amex-oneshot-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: {
+      userId?: string;
+      actualUserId?: string;
+      householdId?: string;
+      householdOwnerId?: string;
+    },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -30,6 +43,7 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import amexRouter from "../routes/amex";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
 app.use(express.json());
@@ -60,6 +74,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -80,6 +96,7 @@ async function seedAmexItem() {
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `amex-item-${randomUUID()}`,
       accessToken: `access-sandbox-${randomUUID()}`,
       institutionId: "ins_amex",
@@ -99,6 +116,7 @@ describe("(#416) /amex/anchor one-shot heal hook", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item.id,
         accountId: `amex-survivor-${randomUUID()}`,
         name: "Amex Gold",
@@ -111,6 +129,7 @@ describe("(#416) /amex/anchor one-shot heal hook", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item.id,
         accountId: `amex-loser-${randomUUID()}`,
         name: "Amex Gold",
@@ -148,6 +167,7 @@ describe("(#416) /amex/anchor one-shot heal hook", () => {
     // (no dedupe pass), proving one-shot gating works.
     await db.insert(plaidAccountsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item.id,
       accountId: `amex-post-heal-${randomUUID()}`,
       name: "Amex Gold",
@@ -178,6 +198,7 @@ describe("(#416) /amex/anchor one-shot heal hook", () => {
   it("preserves other preference keys (e.g. amexAnchor) when stamping the cleanup flag", async () => {
     await db.insert(settingsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       preferences: {
         amexAnchor: { balance: 1234.56, asOf: "2026-04-01T00:00:00.000Z" },
       },

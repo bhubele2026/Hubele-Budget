@@ -56,6 +56,7 @@ const DEBT_GROUP_BASE_SORT =
 // Also backfills `category_id` on existing "Payment — <debt name>" transactions
 // so the budget's Actual column reflects payments made to each debt.
 async function syncAutoDebtCategories(
+  householdId: string,
   userId: string,
   monthStart: string,
 ): Promise<void> {
@@ -63,7 +64,7 @@ async function syncAutoDebtCategories(
     .select()
     .from(debtsTable)
     .where(
-      and(eq(debtsTable.userId, userId), eq(debtsTable.status, "active")),
+      and(eq(debtsTable.householdId, householdId), eq(debtsTable.status, "active")),
     )
     .orderBy(desc(debtsTable.apr), asc(debtsTable.name));
 
@@ -75,7 +76,7 @@ async function syncAutoDebtCategories(
     .delete(budgetCategoriesTable)
     .where(
       and(
-        eq(budgetCategoriesTable.userId, userId),
+        eq(budgetCategoriesTable.householdId, householdId),
         eq(budgetCategoriesTable.sourceKind, "auto_debts"),
         isNull(budgetCategoriesTable.debtId),
       ),
@@ -85,7 +86,7 @@ async function syncAutoDebtCategories(
       .delete(budgetCategoriesTable)
       .where(
         and(
-          eq(budgetCategoriesTable.userId, userId),
+          eq(budgetCategoriesTable.householdId, householdId),
           eq(budgetCategoriesTable.sourceKind, "auto_debts"),
           notInArray(budgetCategoriesTable.debtId, activeIds),
         ),
@@ -95,7 +96,7 @@ async function syncAutoDebtCategories(
       .delete(budgetCategoriesTable)
       .where(
         and(
-          eq(budgetCategoriesTable.userId, userId),
+          eq(budgetCategoriesTable.householdId, householdId),
           eq(budgetCategoriesTable.sourceKind, "auto_debts"),
         ),
       );
@@ -106,7 +107,7 @@ async function syncAutoDebtCategories(
   // 2. Ensure the budget month row exists so we can attach lines to it.
   await db
     .insert(budgetMonthsTable)
-    .values({ userId, monthStart })
+    .values({ userId, householdId, monthStart })
     .onConflictDoNothing();
 
   // 3. Upsert one auto_debts category per active debt and the matching line
@@ -116,7 +117,7 @@ async function syncAutoDebtCategories(
     .from(budgetCategoriesTable)
     .where(
       and(
-        eq(budgetCategoriesTable.userId, userId),
+        eq(budgetCategoriesTable.householdId, householdId),
         eq(budgetCategoriesTable.sourceKind, "auto_debts"),
       ),
     );
@@ -132,6 +133,7 @@ async function syncAutoDebtCategories(
         .insert(budgetCategoriesTable)
         .values({
           userId,
+          householdId,
           name: d.name,
           kind: "expense",
           groupName: DEBT_GROUP,
@@ -140,7 +142,7 @@ async function syncAutoDebtCategories(
           debtId: d.id,
         })
         .onConflictDoNothing({
-          target: [budgetCategoriesTable.userId, budgetCategoriesTable.debtId],
+          target: [budgetCategoriesTable.householdId, budgetCategoriesTable.debtId],
         })
         .returning();
       if (!row) {
@@ -150,7 +152,7 @@ async function syncAutoDebtCategories(
           .from(budgetCategoriesTable)
           .where(
             and(
-              eq(budgetCategoriesTable.userId, userId),
+              eq(budgetCategoriesTable.householdId, householdId),
               eq(budgetCategoriesTable.debtId, d.id),
             ),
           );
@@ -183,6 +185,7 @@ async function syncAutoDebtCategories(
       .insert(budgetLinesTable)
       .values({
         userId,
+        householdId,
         monthStart,
         categoryId: catId,
         plannedAmount: d.minPayment,
@@ -190,7 +193,7 @@ async function syncAutoDebtCategories(
       })
       .onConflictDoUpdate({
         target: [
-          budgetLinesTable.userId,
+          budgetLinesTable.householdId,
           budgetLinesTable.monthStart,
           budgetLinesTable.categoryId,
         ],
@@ -204,7 +207,7 @@ async function syncAutoDebtCategories(
       .set({ categoryId: catId })
       .where(
         and(
-          eq(transactionsTable.userId, userId),
+          eq(transactionsTable.householdId, householdId),
           isNull(transactionsTable.categoryId),
           sql`${transactionsTable.description} LIKE ${`Payment — ${d.name}%`}`,
         ),
@@ -259,10 +262,10 @@ const HEAL_BILL_LINKS_DONE = new Set<string>();
 const ENSURE_UNCATEGORIZED_DONE = new Set<string>();
 const ENSURE_TRANSFER_DONE = new Set<string>();
 
-async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
-  if (HEAL_BILL_LINKS_DONE.has(userId)) return;
+async function healLegacyRecurringBillLinks(householdId: string): Promise<void> {
+  if (HEAL_BILL_LINKS_DONE.has(householdId)) return;
   // Step 1: relink known bill names to their manual category if such a
-  // category exists for this user. No-op if the recurring item is already
+  // category exists for this household. No-op if the recurring item is already
   // linked to the right category.
   const billNames = Object.keys(BILL_NAME_TO_MANUAL_CATEGORY);
   const targetNames = Array.from(
@@ -277,7 +280,7 @@ async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
       kind: budgetCategoriesTable.kind,
     })
     .from(budgetCategoriesTable)
-    .where(eq(budgetCategoriesTable.userId, userId));
+    .where(eq(budgetCategoriesTable.householdId, householdId));
   const manualByName = new Map<string, string>();
   for (const c of cats) {
     if (c.sourceKind === "manual" && targetNames.includes(c.name)) {
@@ -288,7 +291,7 @@ async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
   const items = await db
     .select()
     .from(recurringItemsTable)
-    .where(eq(recurringItemsTable.userId, userId));
+    .where(eq(recurringItemsTable.householdId, householdId));
   for (const item of items) {
     if (!billNames.includes(item.name)) continue;
     const targetCatName = BILL_NAME_TO_MANUAL_CATEGORY[item.name]!;
@@ -301,19 +304,19 @@ async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
       .where(
         and(
           eq(recurringItemsTable.id, item.id),
-          eq(recurringItemsTable.userId, userId),
+          eq(recurringItemsTable.householdId, householdId),
         ),
       );
   }
 
-  // Step 2: cascade-delete any auto_bills EXPENSE category for this user
+  // Step 2: cascade-delete any auto_bills EXPENSE category for this household
   // that has no active recurring item still linked to it. Income auto_bills
   // categories (paychecks) are preserved.
   const autoExpenseCats = cats.filter(
     (c) => c.sourceKind === "auto_bills" && c.kind === "expense",
   );
   if (autoExpenseCats.length === 0) {
-    HEAL_BILL_LINKS_DONE.add(userId);
+    HEAL_BILL_LINKS_DONE.add(householdId);
     return;
   }
 
@@ -324,7 +327,7 @@ async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
       active: recurringItemsTable.active,
     })
     .from(recurringItemsTable)
-    .where(eq(recurringItemsTable.userId, userId));
+    .where(eq(recurringItemsTable.householdId, householdId));
   for (const r of refreshedItems) {
     if (r.active === "true" && r.categoryId) stillLinked.add(r.categoryId);
   }
@@ -333,7 +336,7 @@ async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
     .filter((c) => !stillLinked.has(c.id))
     .map((c) => c.id);
   if (orphans.length === 0) {
-    HEAL_BILL_LINKS_DONE.add(userId);
+    HEAL_BILL_LINKS_DONE.add(householdId);
     return;
   }
 
@@ -341,7 +344,7 @@ async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
     .delete(budgetLinesTable)
     .where(
       and(
-        eq(budgetLinesTable.userId, userId),
+        eq(budgetLinesTable.householdId, householdId),
         inArray(budgetLinesTable.categoryId, orphans),
       ),
     );
@@ -350,7 +353,7 @@ async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
     .set({ categoryId: null })
     .where(
       and(
-        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.householdId, householdId),
         inArray(transactionsTable.categoryId, orphans),
       ),
     );
@@ -358,7 +361,7 @@ async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
     .delete(mappingRulesTable)
     .where(
       and(
-        eq(mappingRulesTable.userId, userId),
+        eq(mappingRulesTable.householdId, householdId),
         inArray(mappingRulesTable.categoryId, orphans),
       ),
     );
@@ -366,21 +369,24 @@ async function healLegacyRecurringBillLinks(userId: string): Promise<void> {
     .delete(budgetCategoriesTable)
     .where(
       and(
-        eq(budgetCategoriesTable.userId, userId),
+        eq(budgetCategoriesTable.householdId, householdId),
         inArray(budgetCategoriesTable.id, orphans),
       ),
     );
-  HEAL_BILL_LINKS_DONE.add(userId);
+  HEAL_BILL_LINKS_DONE.add(householdId);
 }
 
-async function syncAutoBillsFromRecurring(userId: string): Promise<void> {
+async function syncAutoBillsFromRecurring(
+  householdId: string,
+  userId: string,
+): Promise<void> {
   const items = (
     await db
       .select()
       .from(recurringItemsTable)
       .where(
         and(
-          eq(recurringItemsTable.userId, userId),
+          eq(recurringItemsTable.householdId, householdId),
           eq(recurringItemsTable.active, "true"),
         ),
       )
@@ -403,7 +409,7 @@ async function syncAutoBillsFromRecurring(userId: string): Promise<void> {
       .from(budgetCategoriesTable)
       .where(
         and(
-          eq(budgetCategoriesTable.userId, userId),
+          eq(budgetCategoriesTable.householdId, householdId),
           inArray(budgetCategoriesTable.id, linkedIds),
         ),
       );
@@ -426,7 +432,7 @@ async function syncAutoBillsFromRecurring(userId: string): Promise<void> {
         sourceKind: budgetCategoriesTable.sourceKind,
       })
       .from(budgetCategoriesTable)
-      .where(eq(budgetCategoriesTable.userId, userId));
+      .where(eq(budgetCategoriesTable.householdId, householdId));
     for (const c of all) existingByName.set(c.name, c);
   }
 
@@ -442,6 +448,7 @@ async function syncAutoBillsFromRecurring(userId: string): Promise<void> {
         .insert(budgetCategoriesTable)
         .values({
           userId,
+          householdId,
           name: item.name,
           kind: isIncome ? "income" : "expense",
           groupName: isIncome ? RECURRING_INCOME_GROUP : RECURRING_BILLS_GROUP,
@@ -449,7 +456,7 @@ async function syncAutoBillsFromRecurring(userId: string): Promise<void> {
           sortOrder: nextSort++,
         })
         .onConflictDoNothing({
-          target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+          target: [budgetCategoriesTable.householdId, budgetCategoriesTable.name],
         })
         .returning({ id: budgetCategoriesTable.id });
       if (row) {
@@ -461,7 +468,7 @@ async function syncAutoBillsFromRecurring(userId: string): Promise<void> {
           .from(budgetCategoriesTable)
           .where(
             and(
-              eq(budgetCategoriesTable.userId, userId),
+              eq(budgetCategoriesTable.householdId, householdId),
               eq(budgetCategoriesTable.name, item.name),
             ),
           );
@@ -477,7 +484,7 @@ async function syncAutoBillsFromRecurring(userId: string): Promise<void> {
       .where(
         and(
           eq(recurringItemsTable.id, item.id),
-          eq(recurringItemsTable.userId, userId),
+          eq(recurringItemsTable.householdId, householdId),
         ),
       );
   }
@@ -496,12 +503,16 @@ async function syncAutoBillsFromRecurring(userId: string): Promise<void> {
 //   - Delete the old category
 // For categories that stay (same name), we also refresh group_name and
 // sort_order to match the new seed so the UI groups them correctly.
-async function migrateBudgetCategoriesV2(userId: string): Promise<void> {
+async function migrateBudgetCategoriesV2(
+  householdId: string,
+  householdOwnerId: string,
+  userId: string,
+): Promise<void> {
   // Check the flag first.
   const [s] = await db
     .select()
     .from(settingsTable)
-    .where(eq(settingsTable.userId, userId));
+    .where(eq(settingsTable.userId, householdOwnerId));
   const prefs = (s?.preferences as Record<string, unknown> | null) ?? null;
   if (prefs && prefs.budgetCategoriesV2 === true) return;
 
@@ -509,7 +520,7 @@ async function migrateBudgetCategoriesV2(userId: string): Promise<void> {
     const cats = await tx
       .select()
       .from(budgetCategoriesTable)
-      .where(eq(budgetCategoriesTable.userId, userId));
+      .where(eq(budgetCategoriesTable.householdId, householdId));
     const byName = new Map(cats.map((c) => [c.name, c]));
 
     // Build sortOrder lookup from the new seed.
@@ -532,6 +543,7 @@ async function migrateBudgetCategoriesV2(userId: string): Promise<void> {
         .insert(budgetCategoriesTable)
         .values({
           userId,
+          householdId,
           name: newName,
           kind,
           groupName,
@@ -539,7 +551,7 @@ async function migrateBudgetCategoriesV2(userId: string): Promise<void> {
           sortOrder,
         })
         .onConflictDoUpdate({
-          target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+          target: [budgetCategoriesTable.householdId, budgetCategoriesTable.name],
           set: { groupName, sortOrder },
         })
         .returning();
@@ -563,7 +575,7 @@ async function migrateBudgetCategoriesV2(userId: string): Promise<void> {
         .set({ categoryId: newCat.id })
         .where(
           and(
-            eq(transactionsTable.userId, userId),
+            eq(transactionsTable.householdId, householdId),
             eq(transactionsTable.categoryId, oldCat.id),
           ),
         );
@@ -573,7 +585,7 @@ async function migrateBudgetCategoriesV2(userId: string): Promise<void> {
         .set({ categoryId: newCat.id })
         .where(
           and(
-            eq(recurringItemsTable.userId, userId),
+            eq(recurringItemsTable.householdId, householdId),
             eq(recurringItemsTable.categoryId, oldCat.id),
           ),
         );
@@ -583,7 +595,7 @@ async function migrateBudgetCategoriesV2(userId: string): Promise<void> {
         .set({ categoryId: newCat.id })
         .where(
           and(
-            eq(mappingRulesTable.userId, userId),
+            eq(mappingRulesTable.householdId, householdId),
             eq(mappingRulesTable.categoryId, oldCat.id),
           ),
         );
@@ -593,13 +605,13 @@ async function migrateBudgetCategoriesV2(userId: string): Promise<void> {
         .set({ extraBudgetCategoryId: newCat.id })
         .where(
           and(
-            eq(avalancheSettingsTable.userId, userId),
+            eq(avalancheSettingsTable.userId, householdOwnerId),
             eq(avalancheSettingsTable.extraBudgetCategoryId, oldCat.id),
           ),
         );
 
       // Merge budget_lines: sum planned_amount per month into the new
-      // category's line. We rely on the unique (userId, monthStart, categoryId)
+      // category's line. We rely on the unique (householdId, monthStart, categoryId)
       // index — for each month where both old and new lines exist we sum then
       // delete the old; where only old exists we re-point it.
       const oldLines = await tx
@@ -607,7 +619,7 @@ async function migrateBudgetCategoriesV2(userId: string): Promise<void> {
         .from(budgetLinesTable)
         .where(
           and(
-            eq(budgetLinesTable.userId, userId),
+            eq(budgetLinesTable.householdId, householdId),
             eq(budgetLinesTable.categoryId, oldCat.id),
           ),
         );
@@ -618,7 +630,7 @@ async function migrateBudgetCategoriesV2(userId: string): Promise<void> {
           .from(budgetLinesTable)
           .where(
             and(
-              eq(budgetLinesTable.userId, userId),
+              eq(budgetLinesTable.householdId, householdId),
               eq(budgetLinesTable.monthStart, ol.monthStart),
               eq(budgetLinesTable.categoryId, newCat.id),
             ),
@@ -670,17 +682,17 @@ async function migrateBudgetCategoriesV2(userId: string): Promise<void> {
       }
     }
 
-    // 3. Set the flag so this only runs once per user.
+    // 3. Set the flag so this only runs once per household.
     const nextPrefs = { ...(prefs ?? {}), budgetCategoriesV2: true };
     if (s) {
       await tx
         .update(settingsTable)
         .set({ preferences: nextPrefs })
-        .where(eq(settingsTable.userId, userId));
+        .where(eq(settingsTable.userId, householdOwnerId));
     } else {
       await tx
         .insert(settingsTable)
-        .values({ userId, preferences: nextPrefs })
+        .values({ userId: householdOwnerId, householdId, preferences: nextPrefs })
         .onConflictDoUpdate({
           target: settingsTable.userId,
           set: { preferences: nextPrefs },
@@ -728,11 +740,15 @@ const MAY_2026_CANONICAL_PLANNED: Record<string, string> = {
 const MAY_2026_MONTH = "2026-05-01";
 const MAY_2026_AVALANCHE_MANUAL_EXTRA = "6225.00";
 
-async function reconcileMay2026Amounts(userId: string): Promise<void> {
+async function reconcileMay2026Amounts(
+  householdId: string,
+  householdOwnerId: string,
+  userId: string,
+): Promise<void> {
   const [s] = await db
     .select()
     .from(settingsTable)
-    .where(eq(settingsTable.userId, userId));
+    .where(eq(settingsTable.userId, householdOwnerId));
   const prefs = (s?.preferences as Record<string, unknown> | null) ?? null;
   if (prefs && prefs.budgetMay2026AmountsV1 === true) return;
 
@@ -740,12 +756,12 @@ async function reconcileMay2026Amounts(userId: string): Promise<void> {
     const cats = await tx
       .select()
       .from(budgetCategoriesTable)
-      .where(eq(budgetCategoriesTable.userId, userId));
+      .where(eq(budgetCategoriesTable.householdId, householdId));
     const byName = new Map(cats.map((c) => [c.name, c]));
 
     await tx
       .insert(budgetMonthsTable)
-      .values({ userId, monthStart: MAY_2026_MONTH })
+      .values({ userId, householdId, monthStart: MAY_2026_MONTH })
       .onConflictDoNothing();
 
     for (const [catName, canonical] of Object.entries(
@@ -760,7 +776,7 @@ async function reconcileMay2026Amounts(userId: string): Promise<void> {
         .from(budgetLinesTable)
         .where(
           and(
-            eq(budgetLinesTable.userId, userId),
+            eq(budgetLinesTable.householdId, householdId),
             eq(budgetLinesTable.monthStart, MAY_2026_MONTH),
             eq(budgetLinesTable.categoryId, cat.id),
           ),
@@ -780,6 +796,7 @@ async function reconcileMay2026Amounts(userId: string): Promise<void> {
         .insert(budgetLinesTable)
         .values({
           userId,
+          householdId,
           monthStart: MAY_2026_MONTH,
           categoryId: cat.id,
           plannedAmount: canonical,
@@ -787,7 +804,7 @@ async function reconcileMay2026Amounts(userId: string): Promise<void> {
         })
         .onConflictDoUpdate({
           target: [
-            budgetLinesTable.userId,
+            budgetLinesTable.householdId,
             budgetLinesTable.monthStart,
             budgetLinesTable.categoryId,
           ],
@@ -805,18 +822,19 @@ async function reconcileMay2026Amounts(userId: string): Promise<void> {
       .set({ pinned: true })
       .where(
         and(
-          eq(budgetMonthsTable.userId, userId),
+          eq(budgetMonthsTable.householdId, householdId),
           eq(budgetMonthsTable.monthStart, MAY_2026_MONTH),
         ),
       );
 
-    // Upsert avalanche manualExtra to the canonical $6,225.00 for this user.
+    // Upsert avalanche manualExtra to the canonical $6,225.00 for this household.
     // Use ON CONFLICT to be safe against concurrent reconciles racing the
     // initial INSERT (the dashboard fires multiple parallel month requests).
     await tx
       .insert(avalancheSettingsTable)
       .values({
-        userId,
+        userId: householdOwnerId,
+        householdId,
         manualExtra: MAY_2026_AVALANCHE_MANUAL_EXTRA,
       })
       .onConflictDoUpdate({
@@ -832,11 +850,11 @@ async function reconcileMay2026Amounts(userId: string): Promise<void> {
       await tx
         .update(settingsTable)
         .set({ preferences: nextPrefs })
-        .where(eq(settingsTable.userId, userId));
+        .where(eq(settingsTable.userId, householdOwnerId));
     } else {
       await tx
         .insert(settingsTable)
-        .values({ userId, preferences: nextPrefs })
+        .values({ userId: householdOwnerId, householdId, preferences: nextPrefs })
         .onConflictDoUpdate({
           target: settingsTable.userId,
           set: { preferences: nextPrefs },
@@ -845,7 +863,7 @@ async function reconcileMay2026Amounts(userId: string): Promise<void> {
   });
 
   // Re-sync the managed Avalanche payment line to reflect the new manualExtra.
-  await syncAvalanchePaymentCategory(userId, MAY_2026_MONTH);
+  await syncAvalanchePaymentCategory(householdId, householdOwnerId, MAY_2026_MONTH);
 }
 
 // (#474) Idempotently ensure the system-managed "Uncategorized" category
@@ -855,8 +873,11 @@ async function reconcileMay2026Amounts(userId: string): Promise<void> {
 // roll-up (planned, actual, group, summary) — same way transfers are
 // excluded from actuals. Idempotent via the (userId, name) unique index;
 // also self-heals legacy rows that pre-date the flag by flipping it on.
-async function ensureUncategorizedCategory(userId: string): Promise<void> {
-  if (ENSURE_UNCATEGORIZED_DONE.has(userId)) return;
+async function ensureUncategorizedCategory(
+  householdId: string,
+  userId: string,
+): Promise<void> {
+  if (ENSURE_UNCATEGORIZED_DONE.has(householdId)) return;
   const sortOrderByGroup = new Map<string, number>();
   SEED_GROUP_ORDER.forEach((g, i) => sortOrderByGroup.set(g, i * 100));
   // Park it well after the canonical groups so any debug surface that
@@ -866,6 +887,7 @@ async function ensureUncategorizedCategory(userId: string): Promise<void> {
     .insert(budgetCategoriesTable)
     .values({
       userId,
+      householdId,
       name: UNCATEGORIZED_CATEGORY_NAME,
       kind: "expense",
       groupName: UNCATEGORIZED_CATEGORY_NAME,
@@ -874,10 +896,10 @@ async function ensureUncategorizedCategory(userId: string): Promise<void> {
       excludeFromBudget: true,
     })
     .onConflictDoUpdate({
-      target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+      target: [budgetCategoriesTable.householdId, budgetCategoriesTable.name],
       set: { excludeFromBudget: true },
     });
-  ENSURE_UNCATEGORIZED_DONE.add(userId);
+  ENSURE_UNCATEGORIZED_DONE.add(householdId);
 }
 
 // (#607) Mirror of `ensureUncategorizedCategory` for the system-managed
@@ -886,8 +908,11 @@ async function ensureUncategorizedCategory(userId: string): Promise<void> {
 // math. Stored with `exclude_from_budget=true` so the Budget page filters
 // it out of every roll-up. Idempotent via the (userId, name) unique
 // index; also self-heals legacy rows by flipping the flag on.
-async function ensureTransferCategory(userId: string): Promise<void> {
-  if (ENSURE_TRANSFER_DONE.has(userId)) return;
+async function ensureTransferCategory(
+  householdId: string,
+  userId: string,
+): Promise<void> {
+  if (ENSURE_TRANSFER_DONE.has(householdId)) return;
   // Park it well after the canonical groups so any debug surface that
   // ignores `exclude_from_budget` still renders it last (one slot after
   // the Uncategorized row).
@@ -896,6 +921,7 @@ async function ensureTransferCategory(userId: string): Promise<void> {
     .insert(budgetCategoriesTable)
     .values({
       userId,
+      householdId,
       name: TRANSFER_CATEGORY_NAME,
       kind: "expense",
       groupName: TRANSFER_CATEGORY_NAME,
@@ -904,20 +930,22 @@ async function ensureTransferCategory(userId: string): Promise<void> {
       excludeFromBudget: true,
     })
     .onConflictDoUpdate({
-      target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+      target: [budgetCategoriesTable.householdId, budgetCategoriesTable.name],
       set: { excludeFromBudget: true },
     });
-  ENSURE_TRANSFER_DONE.add(userId);
+  ENSURE_TRANSFER_DONE.add(householdId);
 }
 
 router.get("/budget/categories", requireAuth, async (req, res): Promise<void> => {
-  await ensureSeededDefaults(req.userId!);
-  await ensureUncategorizedCategory(req.userId!);
-  await ensureTransferCategory(req.userId!);
+  const householdId = req.householdId!;
+  const userId = req.userId!;
+  await ensureSeededDefaults(householdId, userId);
+  await ensureUncategorizedCategory(householdId, userId);
+  await ensureTransferCategory(householdId, userId);
   const rows = await db
     .select()
     .from(budgetCategoriesTable)
-    .where(eq(budgetCategoriesTable.userId, req.userId!))
+    .where(eq(budgetCategoriesTable.householdId, householdId))
     .orderBy(asc(budgetCategoriesTable.sortOrder), asc(budgetCategoriesTable.name));
   res.json(rows);
 });
@@ -936,6 +964,7 @@ router.post(
       .insert(budgetCategoriesTable)
       .values({
         userId: req.userId!,
+        householdId: req.householdId!,
         name: data.name,
         kind: data.kind ?? "expense",
         groupName: data.groupName ?? "Other",
@@ -943,7 +972,7 @@ router.post(
         sortOrder: data.sortOrder ?? 0,
       })
       .onConflictDoUpdate({
-        target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+        target: [budgetCategoriesTable.householdId, budgetCategoriesTable.name],
         set: {
           kind: data.kind ?? "expense",
           ...(data.groupName ? { groupName: data.groupName } : {}),
@@ -969,7 +998,7 @@ router.delete(
       .where(
         and(
           eq(budgetCategoriesTable.id, params.data.id),
-          eq(budgetCategoriesTable.userId, req.userId!),
+          eq(budgetCategoriesTable.householdId, req.householdId!),
         ),
       );
     res.sendStatus(204);
@@ -993,7 +1022,10 @@ const ENSURE_SEEDED_DEFAULTS_INFLIGHT = new Map<string, Promise<void>>();
 const ENSURE_SEEDED_DEFAULTS_FAILED_AT = new Map<string, number>();
 const ENSURE_SEEDED_DEFAULTS_FAILURE_COOLDOWN_MS = 60_000;
 
-async function seedDefaultsForUser(userId: string): Promise<{
+async function seedDefaultsForUser(
+  householdId: string,
+  userId: string,
+): Promise<{
   categoriesInserted: number;
   linesInserted: number;
   mappingRulesInserted: number;
@@ -1003,7 +1035,7 @@ async function seedDefaultsForUser(userId: string): Promise<{
       const existing = await tx
         .select()
         .from(budgetCategoriesTable)
-        .where(eq(budgetCategoriesTable.userId, userId));
+        .where(eq(budgetCategoriesTable.householdId, householdId));
       const byName = new Map(existing.map((c) => [c.name, c]));
 
       let categoriesInserted = 0;
@@ -1019,13 +1051,14 @@ async function seedDefaultsForUser(userId: string): Promise<{
           // onConflictDoUpdate keeps the seed transaction safe when
           // another code path (e.g. ensureUncategorizedCategory called
           // from POST /transactions) has already inserted a row with
-          // the same (userId, name) before this lazy seed fires. The
+          // the same (householdId, name) before this lazy seed fires. The
           // update is a no-op shape-wise; we just need a returning row
           // to populate byName for downstream budget_lines linking.
           const [row] = await tx
             .insert(budgetCategoriesTable)
             .values({
               userId,
+              householdId,
               name: seed.name,
               kind: seed.kind,
               groupName: seed.groupName,
@@ -1034,7 +1067,7 @@ async function seedDefaultsForUser(userId: string): Promise<{
               excludeFromBudget: seed.excludeFromBudget ?? false,
             })
             .onConflictDoUpdate({
-              target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+              target: [budgetCategoriesTable.householdId, budgetCategoriesTable.name],
               set: {
                 groupName: seed.groupName,
                 sourceKind: seed.sourceKind,
@@ -1069,28 +1102,29 @@ async function seedDefaultsForUser(userId: string): Promise<{
       // Ensure budget month row.
       await tx
         .insert(budgetMonthsTable)
-        .values({ userId, monthStart: SEED_MONTH })
+        .values({ userId, householdId, monthStart: SEED_MONTH })
         .onConflictDoNothing();
 
       // Seed recurring items that back auto_bills budget categories.
       // Bills link by `categoryName` (so the recurring row name and category
       // name can differ); legacy/income items fall back to a name match.
-      // Idempotent skip-by-name at the *group* level: if the user already
+      // Idempotent skip-by-name at the *group* level: if the household already
       // has any recurring row with a given seed name we leave the entire
       // group untouched (preserves user edits). Duplicate names in the seed
       // (e.g. two PlayStation Network rows on day 5 / day 16) are still
-      // inserted atomically on a fresh user because the existence check
+      // inserted atomically on a fresh household because the existence check
       // runs against the pre-seed table snapshot only.
       const existingRecurring = await tx
         .select()
         .from(recurringItemsTable)
-        .where(eq(recurringItemsTable.userId, userId));
+        .where(eq(recurringItemsTable.householdId, householdId));
       const existingRecurringNames = new Set(existingRecurring.map((r) => r.name));
       for (const r of SEED_RECURRING_ITEMS) {
         if (existingRecurringNames.has(r.name)) continue;
         const cat = byName.get(r.categoryName ?? r.name);
         await tx.insert(recurringItemsTable).values({
           userId,
+          householdId,
           name: r.name,
           kind: r.kind,
           amount: r.amount,
@@ -1107,7 +1141,7 @@ async function seedDefaultsForUser(userId: string): Promise<{
         .from(budgetLinesTable)
         .where(
           and(
-            eq(budgetLinesTable.userId, userId),
+            eq(budgetLinesTable.householdId, householdId),
             eq(budgetLinesTable.monthStart, SEED_MONTH),
           ),
         );
@@ -1126,6 +1160,7 @@ async function seedDefaultsForUser(userId: string): Promise<{
             .insert(budgetLinesTable)
             .values({
               userId,
+              householdId,
               monthStart: SEED_MONTH,
               categoryId: cat.id,
               plannedAmount: seed.planned,
@@ -1133,7 +1168,7 @@ async function seedDefaultsForUser(userId: string): Promise<{
             })
             .onConflictDoNothing({
               target: [
-                budgetLinesTable.userId,
+                budgetLinesTable.householdId,
                 budgetLinesTable.monthStart,
                 budgetLinesTable.categoryId,
               ],
@@ -1148,14 +1183,14 @@ async function seedDefaultsForUser(userId: string): Promise<{
         }
       }
 
-      // Seed mapping rules. Idempotent on (userId, pattern) — we skip seeding
-      // any pattern the user already has a rule for. Existing user-created
+      // Seed mapping rules. Idempotent on (householdId, pattern) — we skip seeding
+      // any pattern the household already has a rule for. Existing user-created
       // rules (including different categoryId mappings for the same pattern)
       // are left untouched so manual customizations survive re-seeds.
       const existingRules = await tx
         .select()
         .from(mappingRulesTable)
-        .where(eq(mappingRulesTable.userId, userId));
+        .where(eq(mappingRulesTable.householdId, householdId));
       const existingPatterns = new Set(
         existingRules.map((r) => r.pattern.toLowerCase()),
       );
@@ -1166,6 +1201,7 @@ async function seedDefaultsForUser(userId: string): Promise<{
         if (!cat) continue;
         await tx.insert(mappingRulesTable).values({
           userId,
+          householdId,
           pattern: seed.pattern,
           matchType: "contains",
           categoryId: cat.id,
@@ -1190,9 +1226,12 @@ async function seedDefaultsForUser(userId: string): Promise<{
 // specs that just call GET /budget/categories (and poll for length>0)
 // see the full default seed without depending on the frontend
 // useEffect that fires on /budget mount. Per-process gated.
-async function ensureSeededDefaults(userId: string): Promise<void> {
-  if (ENSURE_SEEDED_DEFAULTS_DONE.has(userId)) return;
-  const existingInflight = ENSURE_SEEDED_DEFAULTS_INFLIGHT.get(userId);
+async function ensureSeededDefaults(
+  householdId: string,
+  userId: string,
+): Promise<void> {
+  if (ENSURE_SEEDED_DEFAULTS_DONE.has(householdId)) return;
+  const existingInflight = ENSURE_SEEDED_DEFAULTS_INFLIGHT.get(householdId);
   if (existingInflight) {
     // Concurrent first-hit: piggy-back on the in-flight attempt instead of
     // running a second seed transaction in parallel (which would duplicate
@@ -1200,7 +1239,7 @@ async function ensureSeededDefaults(userId: string): Promise<void> {
     await existingInflight;
     return;
   }
-  const failedAt = ENSURE_SEEDED_DEFAULTS_FAILED_AT.get(userId);
+  const failedAt = ENSURE_SEEDED_DEFAULTS_FAILED_AT.get(householdId);
   if (
     failedAt !== undefined &&
     Date.now() - failedAt < ENSURE_SEEDED_DEFAULTS_FAILURE_COOLDOWN_MS
@@ -1212,45 +1251,46 @@ async function ensureSeededDefaults(userId: string): Promise<void> {
   }
   const attempt = (async () => {
     // Skip the seed only when every canonical SEED_CATEGORIES name is
-    // already present for this user. The previous "any non-excluded
+    // already present for this household. The previous "any non-excluded
     // category exists -> skip" check produced an intermittent partial-
     // seed bug: if any other code path (or a prior failed seed) had
     // inserted even one non-excluded category before this lazy seed
     // first fired, the full seed would be skipped and downstream
     // expectations like "Dining & Coffee exists" would silently fail.
     // The seed transaction is idempotent (onConflictDoUpdate on the
-    // (userId, name) unique index) so re-running it on a partially-
-    // seeded user is safe and just fills the gaps.
+    // (householdId, name) unique index) so re-running it on a partially-
+    // seeded household is safe and just fills the gaps.
     const existing = await db
       .select({ name: budgetCategoriesTable.name })
       .from(budgetCategoriesTable)
-      .where(eq(budgetCategoriesTable.userId, userId));
+      .where(eq(budgetCategoriesTable.householdId, householdId));
     const existingNames = new Set(existing.map((r) => r.name));
     const allSeedPresent = SEED_CATEGORIES.every((c) =>
       existingNames.has(c.name),
     );
     if (allSeedPresent) {
-      ENSURE_SEEDED_DEFAULTS_DONE.add(userId);
-      ENSURE_SEEDED_DEFAULTS_FAILED_AT.delete(userId);
+      ENSURE_SEEDED_DEFAULTS_DONE.add(householdId);
+      ENSURE_SEEDED_DEFAULTS_FAILED_AT.delete(householdId);
       return;
     }
     try {
-      await seedDefaultsForUser(userId);
-      ENSURE_SEEDED_DEFAULTS_DONE.add(userId);
-      ENSURE_SEEDED_DEFAULTS_FAILED_AT.delete(userId);
+      await seedDefaultsForUser(householdId, userId);
+      ENSURE_SEEDED_DEFAULTS_DONE.add(householdId);
+      ENSURE_SEEDED_DEFAULTS_FAILED_AT.delete(householdId);
     } catch (err) {
-      ENSURE_SEEDED_DEFAULTS_FAILED_AT.set(userId, Date.now());
+      ENSURE_SEEDED_DEFAULTS_FAILED_AT.set(householdId, Date.now());
       console.error("[budget] ensureSeededDefaults failed", {
+        householdId,
         userId,
         err: err instanceof Error ? err.message : String(err),
       });
     }
   })();
-  ENSURE_SEEDED_DEFAULTS_INFLIGHT.set(userId, attempt);
+  ENSURE_SEEDED_DEFAULTS_INFLIGHT.set(householdId, attempt);
   try {
     await attempt;
   } finally {
-    ENSURE_SEEDED_DEFAULTS_INFLIGHT.delete(userId);
+    ENSURE_SEEDED_DEFAULTS_INFLIGHT.delete(householdId);
   }
 }
 
@@ -1258,8 +1298,8 @@ router.post(
   "/budget/seed-defaults",
   requireAuth,
   async (req, res): Promise<void> => {
-    const result = await seedDefaultsForUser(req.userId!);
-    ENSURE_SEEDED_DEFAULTS_DONE.add(req.userId!);
+    const result = await seedDefaultsForUser(req.householdId!, req.userId!);
+    ENSURE_SEEDED_DEFAULTS_DONE.add(req.householdId!);
     res.json(result);
   },
 );
@@ -1275,6 +1315,7 @@ router.post(
   requireAuth,
   async (req, res): Promise<void> => {
     const userId = req.userId!;
+    const householdId = req.householdId!;
     const result = await db.transaction(async (tx) => {
       const bills = SEED_RECURRING_ITEMS.filter((r) => r.kind !== "income");
 
@@ -1287,7 +1328,7 @@ router.post(
       const existingCats = await tx
         .select()
         .from(budgetCategoriesTable)
-        .where(eq(budgetCategoriesTable.userId, userId));
+        .where(eq(budgetCategoriesTable.householdId, householdId));
       const catByName = new Map(existingCats.map((c) => [c.name, c]));
 
       const sortOrderByGroup = new Map<string, number>();
@@ -1303,6 +1344,7 @@ router.post(
           .insert(budgetCategoriesTable)
           .values({
             userId,
+            householdId,
             name: seed.name,
             kind: seed.kind,
             groupName: seed.groupName,
@@ -1310,7 +1352,7 @@ router.post(
             sortOrder: groupBase + SEED_CATEGORIES.indexOf(seed),
           })
           .onConflictDoNothing({
-            target: [budgetCategoriesTable.userId, budgetCategoriesTable.name],
+            target: [budgetCategoriesTable.householdId, budgetCategoriesTable.name],
           })
           .returning();
         if (row) {
@@ -1320,15 +1362,15 @@ router.post(
       }
 
       // 2. Insert every missing bill. Skip-by-name at the *group* level: if
-      //    the user already has any recurring row with a given seed name we
+      //    the household already has any recurring row with a given seed name we
       //    skip the entire group (preserving user edits). Duplicate seed
       //    names (PlayStation Network, Kwik Trip / gas) are still inserted
-      //    atomically on a fresh user because the existence check runs
+      //    atomically on a fresh household because the existence check runs
       //    against the pre-seed snapshot only.
       const existingRecurring = await tx
         .select()
         .from(recurringItemsTable)
-        .where(eq(recurringItemsTable.userId, userId));
+        .where(eq(recurringItemsTable.householdId, householdId));
       const existingRecurringNames = new Set(existingRecurring.map((r) => r.name));
 
       let billsInserted = 0;
@@ -1337,6 +1379,7 @@ router.post(
         const cat = catByName.get(r.categoryName ?? r.name);
         await tx.insert(recurringItemsTable).values({
           userId,
+          householdId,
           name: r.name,
           kind: r.kind,
           amount: r.amount,
@@ -1390,46 +1433,50 @@ router.get(
       return;
     }
 
+    const householdId = req.householdId!;
+    const householdOwnerId = req.householdOwnerId!;
+    const userId = req.userId!;
+
     // One-time consolidation of the legacy budget category list (task #65).
-    // Gated by a per-user flag, so it's a no-op on subsequent requests.
-    await migrateBudgetCategoriesV2(req.userId!);
+    // Gated by a per-household flag, so it's a no-op on subsequent requests.
+    await migrateBudgetCategoriesV2(householdId, householdOwnerId, userId);
 
     // (#474) Ensure the system-managed Uncategorized category exists and
     // carries `exclude_from_budget=true`. Idempotent — safe on every GET.
-    await ensureUncategorizedCategory(req.userId!);
+    await ensureUncategorizedCategory(householdId, userId);
     // (#607) Same treatment for the system-managed Transfer category.
-    await ensureTransferCategory(req.userId!);
+    await ensureTransferCategory(householdId, userId);
 
-    // One-time reconciliation of May 2026 planned amounts to the user's
+    // One-time reconciliation of May 2026 planned amounts to the household's
     // canonical source-of-truth values (task #106). Only runs when this
-    // request is for May 2026; gated by a per-user flag thereafter.
+    // request is for May 2026; gated by a per-household flag thereafter.
     if (monthStart === MAY_2026_MONTH) {
-      await reconcileMay2026Amounts(req.userId!);
+      await reconcileMay2026Amounts(householdId, householdOwnerId, userId);
     }
 
     // Pull the live Debts tracker into auto_debts categories/lines for this
     // month before reading anything back. Each call ensures the budget rows
     // match the current Debts state (adds, removes, renames, min changes).
-    await syncAutoDebtCategories(req.userId!, monthStart);
+    await syncAutoDebtCategories(householdId, userId, monthStart);
 
     // Ensure every active recurring bill/income (including ones added on the
     // fly via Forecast Review's "Add as bill" flow) has an `auto_bills`
     // budget category linked to it, so the bill appears as a budget line
     // for monthly budgeting. No-op for items already linked to a curated
     // category (e.g. "Utilities" rolling up several bills).
-    await healLegacyRecurringBillLinks(req.userId!);
-    await syncAutoBillsFromRecurring(req.userId!);
+    await healLegacyRecurringBillLinks(householdId);
+    await syncAutoBillsFromRecurring(householdId, userId);
 
     // Ensure the system-managed "Avalanche payment" line is present and
     // mirrors avalancheSettings.manualExtra for this month.
-    await syncAvalanchePaymentCategory(req.userId!, monthStart);
+    await syncAvalanchePaymentCategory(householdId, householdOwnerId, monthStart);
 
     const [month] = await db
       .select()
       .from(budgetMonthsTable)
       .where(
         and(
-          eq(budgetMonthsTable.userId, req.userId!),
+          eq(budgetMonthsTable.householdId, householdId),
           eq(budgetMonthsTable.monthStart, monthStart),
         ),
       );
@@ -1437,7 +1484,7 @@ router.get(
     const allCats = await db
       .select()
       .from(budgetCategoriesTable)
-      .where(eq(budgetCategoriesTable.userId, req.userId!))
+      .where(eq(budgetCategoriesTable.householdId, householdId))
       .orderBy(asc(budgetCategoriesTable.sortOrder), asc(budgetCategoriesTable.name));
 
     // (#474) Filter out `exclude_from_budget` categories (today: just the
@@ -1452,7 +1499,7 @@ router.get(
       .from(budgetLinesTable)
       .where(
         and(
-          eq(budgetLinesTable.userId, req.userId!),
+          eq(budgetLinesTable.householdId, householdId),
           eq(budgetLinesTable.monthStart, monthStart),
         ),
       );
@@ -1502,7 +1549,7 @@ router.get(
                   ORDER BY month_start DESC
                 ) AS rn
               FROM budget_lines
-              WHERE user_id = ${req.userId!}
+              WHERE household_id = ${householdId}
                 AND month_start < ${monthStart}
                 AND category_id IN (${sql.join(
                   missingManualIds.map((id) => sql`${id}`),
@@ -1527,14 +1574,15 @@ router.get(
           if (carry.length > 0) {
             await db
               .insert(budgetMonthsTable)
-              .values({ userId: req.userId!, monthStart })
+              .values({ userId, householdId, monthStart })
               .onConflictDoNothing();
 
             await db
               .insert(budgetLinesTable)
               .values(
                 carry.map((l) => ({
-                  userId: req.userId!,
+                  userId,
+                  householdId,
                   monthStart,
                   categoryId: l.category_id,
                   plannedAmount: l.planned_amount,
@@ -1543,7 +1591,7 @@ router.get(
               )
               .onConflictDoNothing({
                 target: [
-                  budgetLinesTable.userId,
+                  budgetLinesTable.householdId,
                   budgetLinesTable.monthStart,
                   budgetLinesTable.categoryId,
                 ],
@@ -1554,7 +1602,7 @@ router.get(
               .from(budgetLinesTable)
               .where(
                 and(
-                  eq(budgetLinesTable.userId, req.userId!),
+                  eq(budgetLinesTable.householdId, householdId),
                   eq(budgetLinesTable.monthStart, monthStart),
                 ),
               );
@@ -1598,7 +1646,7 @@ router.get(
       const recurring = await db
         .select()
         .from(recurringItemsTable)
-        .where(eq(recurringItemsTable.userId, req.userId!));
+        .where(eq(recurringItemsTable.householdId, householdId));
       const sums = new Map<string, number>();
       for (const r of recurring) {
         if (r.active === "false") continue;
@@ -1635,7 +1683,7 @@ router.get(
       const debts = await db
         .select()
         .from(debtsTable)
-        .where(eq(debtsTable.userId, req.userId!));
+        .where(eq(debtsTable.householdId, householdId));
       const activeDebts = debts
         .filter((d) => d.status === "active")
         .sort((a, b) => b.name.length - a.name.length);
@@ -1675,7 +1723,7 @@ router.get(
       .from(transactionsTable)
       .where(
         and(
-          eq(transactionsTable.userId, req.userId!),
+          eq(transactionsTable.householdId, householdId),
           sql`${transactionsTable.occurredOn} >= ${monthStart}`,
           sql`${transactionsTable.occurredOn} < ${monthEndStr}`,
           eq(transactionsTable.isTransfer, false),
@@ -1891,9 +1939,12 @@ router.post("/budget/lines", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const householdId = req.householdId!;
+  const householdOwnerId = req.householdOwnerId!;
+  const userId = req.userId!;
   await db
     .insert(budgetMonthsTable)
-    .values({ userId: req.userId!, monthStart: parsed.data.monthStart })
+    .values({ userId, householdId, monthStart: parsed.data.monthStart })
     .onConflictDoNothing();
 
   const existing = await db
@@ -1901,7 +1952,7 @@ router.post("/budget/lines", requireAuth, async (req, res): Promise<void> => {
     .from(budgetLinesTable)
     .where(
       and(
-        eq(budgetLinesTable.userId, req.userId!),
+        eq(budgetLinesTable.householdId, householdId),
         eq(budgetLinesTable.monthStart, parsed.data.monthStart),
         eq(budgetLinesTable.categoryId, parsed.data.categoryId),
       ),
@@ -1920,17 +1971,17 @@ router.post("/budget/lines", requireAuth, async (req, res): Promise<void> => {
   } else {
     [row] = await db
       .insert(budgetLinesTable)
-      .values({ ...parsed.data, userId: req.userId! })
+      .values({ ...parsed.data, userId, householdId })
       .returning();
   }
 
   // If the user just edited the managed "Avalanche payment" line on the
   // Budget page, push the new amount back into avalancheSettings.manualExtra
   // so the Avalanche slider stays in sync.
-  if (await isAvalanchePaymentCategory(req.userId!, parsed.data.categoryId)) {
+  if (await isAvalanchePaymentCategory(householdId, parsed.data.categoryId)) {
     await db
       .insert(avalancheSettingsTable)
-      .values({ userId: req.userId!, manualExtra: parsed.data.plannedAmount })
+      .values({ userId: householdOwnerId, householdId, manualExtra: parsed.data.plannedAmount })
       .onConflictDoUpdate({
         target: avalancheSettingsTable.userId,
         set: {
@@ -1947,16 +1998,18 @@ router.post("/budget/lines", requireAuth, async (req, res): Promise<void> => {
 // by the pin endpoints so that pinning captures whatever is on screen now,
 // not whatever happens to already be persisted (which may be stale).
 async function snapshotAutoLinesForMonth(
+  householdId: string,
+  householdOwnerId: string,
   userId: string,
   monthStart: string,
 ): Promise<void> {
-  await syncAutoDebtCategories(userId, monthStart);
-  await syncAvalanchePaymentCategory(userId, monthStart);
+  await syncAutoDebtCategories(householdId, userId, monthStart);
+  await syncAvalanchePaymentCategory(householdId, householdOwnerId, monthStart);
 
   const cats = await db
     .select()
     .from(budgetCategoriesTable)
-    .where(eq(budgetCategoriesTable.userId, userId));
+    .where(eq(budgetCategoriesTable.householdId, householdId));
 
   const monthEnd0 = new Date(monthStart);
   monthEnd0.setMonth(monthEnd0.getMonth() + 1);
@@ -1974,7 +2027,7 @@ async function snapshotAutoLinesForMonth(
     const recurring = await db
       .select()
       .from(recurringItemsTable)
-      .where(eq(recurringItemsTable.userId, userId));
+      .where(eq(recurringItemsTable.householdId, householdId));
     const sums = new Map<string, number>();
     for (const r of recurring) {
       if (r.active === "false") continue;
@@ -1993,7 +2046,7 @@ async function snapshotAutoLinesForMonth(
     const debts = await db
       .select()
       .from(debtsTable)
-      .where(eq(debtsTable.userId, userId));
+      .where(eq(debtsTable.householdId, householdId));
     const activeDebts = debts
       .filter((d) => d.status === "active")
       .sort((a, b) => b.name.length - a.name.length);
@@ -2009,16 +2062,16 @@ async function snapshotAutoLinesForMonth(
 
   await db
     .insert(budgetMonthsTable)
-    .values({ userId, monthStart })
+    .values({ userId, householdId, monthStart })
     .onConflictDoNothing();
 
   for (const [categoryId, planned] of autoPlannedByCat) {
     await db
       .insert(budgetLinesTable)
-      .values({ userId, monthStart, categoryId, plannedAmount: planned })
+      .values({ userId, householdId, monthStart, categoryId, plannedAmount: planned })
       .onConflictDoNothing({
         target: [
-          budgetLinesTable.userId,
+          budgetLinesTable.householdId,
           budgetLinesTable.monthStart,
           budgetLinesTable.categoryId,
         ],
@@ -2040,6 +2093,8 @@ router.post(
       res.status(400).json({ error: body.error.message });
       return;
     }
+    const householdId = req.householdId!;
+    const householdOwnerId = req.householdOwnerId!;
     const userId = req.userId!;
     const { monthStart } = params.data;
     const { pinned } = body.data;
@@ -2047,14 +2102,14 @@ router.post(
     if (pinned) {
       // Snapshot whatever the live derivation currently shows so the pin
       // captures what the user sees on screen.
-      await snapshotAutoLinesForMonth(userId, monthStart);
+      await snapshotAutoLinesForMonth(householdId, householdOwnerId, userId, monthStart);
     }
 
     await db
       .insert(budgetMonthsTable)
-      .values({ userId, monthStart, pinned })
+      .values({ userId, householdId, monthStart, pinned })
       .onConflictDoUpdate({
-        target: [budgetMonthsTable.userId, budgetMonthsTable.monthStart],
+        target: [budgetMonthsTable.householdId, budgetMonthsTable.monthStart],
         set: { pinned },
       });
 
@@ -2069,7 +2124,7 @@ router.post(
             )
             .where(
               and(
-                eq(budgetLinesTable.userId, userId),
+                eq(budgetLinesTable.householdId, householdId),
                 eq(budgetLinesTable.monthStart, monthStart),
                 inArray(budgetCategoriesTable.sourceKind, [
                   "auto_bills",
@@ -2093,6 +2148,8 @@ router.post(
       res.status(400).json({ error: body.error.message });
       return;
     }
+    const householdId = req.householdId!;
+    const householdOwnerId = req.householdOwnerId!;
     const userId = req.userId!;
     const { monthStart, categoryId, pinned } = body.data;
 
@@ -2103,7 +2160,7 @@ router.post(
       .from(budgetCategoriesTable)
       .where(
         and(
-          eq(budgetCategoriesTable.userId, userId),
+          eq(budgetCategoriesTable.householdId, householdId),
           eq(budgetCategoriesTable.id, categoryId),
         ),
       );
@@ -2114,12 +2171,12 @@ router.post(
 
     if (pinned && cat.sourceKind !== "manual") {
       // Snapshot just this line's currently derived value.
-      await snapshotAutoLinesForMonth(userId, monthStart);
+      await snapshotAutoLinesForMonth(householdId, householdOwnerId, userId, monthStart);
     }
 
     await db
       .insert(budgetMonthsTable)
-      .values({ userId, monthStart })
+      .values({ userId, householdId, monthStart })
       .onConflictDoNothing();
 
     const [existing] = await db
@@ -2127,7 +2184,7 @@ router.post(
       .from(budgetLinesTable)
       .where(
         and(
-          eq(budgetLinesTable.userId, userId),
+          eq(budgetLinesTable.householdId, householdId),
           eq(budgetLinesTable.monthStart, monthStart),
           eq(budgetLinesTable.categoryId, categoryId),
         ),
@@ -2140,7 +2197,7 @@ router.post(
     } else {
       await db
         .insert(budgetLinesTable)
-        .values({ userId, monthStart, categoryId, plannedAmount: "0", pinned })
+        .values({ userId, householdId, monthStart, categoryId, plannedAmount: "0", pinned })
         .onConflictDoNothing();
     }
 
@@ -2149,7 +2206,7 @@ router.post(
       .from(budgetMonthsTable)
       .where(
         and(
-          eq(budgetMonthsTable.userId, userId),
+          eq(budgetMonthsTable.householdId, householdId),
           eq(budgetMonthsTable.monthStart, monthStart),
         ),
       );

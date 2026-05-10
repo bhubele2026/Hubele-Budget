@@ -12,12 +12,25 @@ import { eq } from "drizzle-orm";
 
 const TEST_USER = `amex-plaid-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
+let TEST_HOUSEHOLD_ID: string;
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
-    req.userId = TEST_USER;
-    next();
-  },
-}));
+    requireAuth: (
+      req: {
+        userId?: string;
+        actualUserId?: string;
+        householdId?: string;
+        householdOwnerId?: string;
+      },
+      _res: unknown,
+      next: () => void,
+    ) => {
+      req.userId = TEST_USER;
+      req.actualUserId = TEST_USER;
+      req.householdId = TEST_HOUSEHOLD_ID;
+      req.householdOwnerId = TEST_USER;
+      next();
+    },
+  }));
 
 import {
   db,
@@ -29,6 +42,7 @@ import {
 } from "@workspace/db";
 import amexRouter from "../routes/amex";
 
+import { createTestHousehold } from "./_helpers/testHousehold";
 const app = express();
 app.use(express.json());
 app.use((req: { log?: unknown }, _res, next) => {
@@ -51,6 +65,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -73,6 +89,7 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `amex-item-${suffix}`,
         accessToken: "test-no-access",
         institutionName: "American Express",
@@ -85,6 +102,7 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
     await db.insert(plaidAccountsTable).values([
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `acct-gold-${suffix}`,
         name: "Amex Gold",
@@ -96,6 +114,7 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
       },
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `acct-platinum-${suffix}`,
         name: "Amex Platinum",
@@ -107,6 +126,7 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
       },
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `acct-blue-${suffix}`,
         name: "Amex Blue",
@@ -139,6 +159,7 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `amex-item-${suffix}`,
         accessToken: "test-no-access",
         institutionName: "Some Bank",
@@ -150,6 +171,7 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
     const externalAcct = `acct-amex-${suffix}`;
     await db.insert(plaidAccountsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: externalAcct,
       name: "Amex Card",
@@ -161,6 +183,7 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
     });
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: "2026-04-10",
       description: "Some Amex charge",
       amount: "-50.00",
@@ -183,6 +206,7 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `amex-item-${suffix}`,
         accessToken: "test-no-access",
         institutionName: "American Express",
@@ -191,6 +215,7 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
       .returning();
     await db.insert(plaidAccountsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: `acct-${suffix}`,
       name: "Amex",
@@ -202,6 +227,7 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
     });
     await db.insert(settingsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       preferences: {
         amexAnchor: { balance: 999.99, asOf: "2026-04-01T00:00:00.000Z" },
       },
@@ -222,6 +248,7 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `amex-item-${suffix}`,
         accessToken: "test-no-access",
         institutionName: "American Express",
@@ -230,6 +257,7 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
       .returning();
     await db.insert(plaidAccountsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: `acct-${suffix}`,
       name: "Amex",

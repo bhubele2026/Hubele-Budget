@@ -16,8 +16,10 @@ import {
 } from "../lib/aprilChaseSeed";
 import { isValidPlaidAccessToken, isSyntheticPlaidItem } from "../lib/plaid";
 import { flagMalformedAccessTokens } from "../lib/plaidSync";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const TEST_USER = `seed-token-shape-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 async function cleanup(): Promise<void> {
   await db
@@ -35,7 +37,10 @@ async function cleanup(): Promise<void> {
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  await cleanup();
+  TEST_HOUSEHOLD_ID = (await createTestHousehold(TEST_USER)).householdId;
+});
 afterAll(cleanup);
 
 describe("(#398) aprilChaseSeed writes a well-formed placeholder access_token", () => {
@@ -49,7 +54,7 @@ describe("(#398) aprilChaseSeed writes a well-formed placeholder access_token", 
   });
 
   it("seeding into an empty user materializes the synthetic plaid_item with an access_token that passes the validator and is still classified synthetic", async () => {
-    await seedAprilChase(TEST_USER);
+    await seedAprilChase(TEST_USER, TEST_HOUSEHOLD_ID);
 
     // The synthetic seed row is keyed by a globally-unique itemId
     // (`seed-april-2026-chase`), not per-user — earlier seed runs from

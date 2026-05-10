@@ -6,14 +6,24 @@ import { and, eq, inArray } from "drizzle-orm";
 
 const TEST_USER = `bulk-upd-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 const OTHER_USER = `other-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
+let OTHER_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (
-    req: { userId?: string },
+    req: {
+      userId?: string;
+      actualUserId?: string;
+      householdId?: string;
+      householdOwnerId?: string;
+    },
     _res: unknown,
     next: () => void,
   ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -24,6 +34,7 @@ import {
   forecastResolutionsTable,
 } from "@workspace/db";
 import transactionsRouter from "../routes/transactions";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
 app.use(express.json({ limit: "20mb" }));
@@ -42,6 +53,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  TEST_HOUSEHOLD_ID = (await createTestHousehold(TEST_USER)).householdId;
+  OTHER_HOUSEHOLD_ID = (await createTestHousehold(OTHER_USER)).householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((resolve) =>
@@ -84,10 +97,13 @@ async function insertTxn(
   userId: string,
   overrides: Partial<typeof transactionsTable.$inferInsert> = {},
 ): Promise<string> {
+  const householdId =
+    userId === TEST_USER ? TEST_HOUSEHOLD_ID : OTHER_HOUSEHOLD_ID;
   const [row] = await db
     .insert(transactionsTable)
     .values({
       userId,
+      householdId,
       occurredOn: "2026-04-15",
       description: "Test charge",
       amount: "12.34",
@@ -165,9 +181,9 @@ describe("POST /transactions/bulk-update", () => {
     const untouched = await insertTxn(TEST_USER, { forecastFlag: true });
 
     await db.insert(forecastResolutionsTable).values([
-      { userId: TEST_USER, status: "matched", matchedTxnId: flagged1 },
-      { userId: TEST_USER, status: "matched", matchedTxnId: flagged2 },
-      { userId: TEST_USER, status: "matched", matchedTxnId: untouched },
+      { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, status: "matched", matchedTxnId: flagged1 },
+      { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, status: "matched", matchedTxnId: flagged2 },
+      { userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, status: "matched", matchedTxnId: untouched },
     ]);
 
     const r = await api("POST", "/transactions/bulk-update", {

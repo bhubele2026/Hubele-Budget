@@ -155,6 +155,7 @@ export type ImportResult = {
 
 export async function importWorkbook(
   userId: string,
+  householdId: string,
   wb: XLSX.WorkBook,
   batchId: string,
 ): Promise<ImportResult> {
@@ -241,6 +242,7 @@ export async function importWorkbook(
       if (!name) continue;
       debtValues.push({
         userId,
+        householdId,
         name,
         type: toStr(r[2]),
         apr: toAprDecimal(r[3], `debt "${name}"`),
@@ -273,6 +275,7 @@ export async function importWorkbook(
       if (label.toLowerCase().startsWith("subtotal")) continue;
       catValues.push({
         userId,
+        householdId,
         name: label,
         kind: "expense",
         sortOrder: order++,
@@ -297,7 +300,7 @@ export async function importWorkbook(
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
     await tx
       .insert(budgetMonthsTable)
-      .values({ userId, monthStart })
+      .values({ userId, householdId, monthStart })
       .onConflictDoNothing();
     counts.budget_months = 1;
 
@@ -305,6 +308,7 @@ export async function importWorkbook(
       .filter((l) => catByName.has(l.name))
       .map((l) => ({
         userId,
+        householdId,
         monthStart,
         categoryId: catByName.get(l.name)!,
         plannedAmount: l.planned,
@@ -331,6 +335,7 @@ export async function importWorkbook(
           : "bill";
       recValues.push({
         userId,
+        householdId,
         name,
         kind,
         amount: toNum(r[3]),
@@ -357,6 +362,7 @@ export async function importWorkbook(
       const target = toStr(r[1]);
       mapValues.push({
         userId,
+        householdId,
         pattern,
         matchType: "contains",
         categoryId: target ? catByName.get(target) ?? null : null,
@@ -395,6 +401,7 @@ export async function importWorkbook(
         const remappedCat = oldName ? catByName.get(oldName) ?? null : null;
         return {
           userId,
+          householdId,
           pattern: r.pattern,
           matchType: r.matchType,
           categoryId: remappedCat,
@@ -501,6 +508,7 @@ export async function importWorkbook(
 
       txValues.push({
         userId,
+        householdId,
         occurredOn: date,
         occurredAt,
         description,
@@ -552,7 +560,7 @@ export async function importWorkbook(
       }
       const snapValues: typeof monthlySnapshotsTable.$inferInsert[] = [];
       for (const [ms, payload] of byMonth) {
-        snapValues.push({ userId, monthStart: ms, payload });
+        snapValues.push({ userId, householdId, monthStart: ms, payload });
       }
       if (snapValues.length) {
         await tx

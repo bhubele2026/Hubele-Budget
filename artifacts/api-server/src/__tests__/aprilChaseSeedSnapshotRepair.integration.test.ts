@@ -13,8 +13,10 @@ import {
   seedAprilChase,
   APRIL_2026_ENDING_BALANCE,
 } from "../lib/aprilChaseSeed";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 async function cleanup(): Promise<void> {
   await db
@@ -32,7 +34,10 @@ async function cleanup(): Promise<void> {
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  await cleanup();
+  TEST_HOUSEHOLD_ID = (await createTestHousehold(TEST_USER)).householdId;
+});
 afterAll(cleanup);
 
 describe("seedAprilChase snapshot repair (task #128)", () => {
@@ -44,6 +49,7 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `legacy-${TEST_USER}`,
         accessToken: "synthetic-no-access",
         institutionName: "Chase",
@@ -54,6 +60,7 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `legacy-acct-${TEST_USER}`,
         name: "Chase Checking",
@@ -72,7 +79,7 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
       bankSnapshotMask: acct!.mask,
     });
 
-    const result = await seedAprilChase(TEST_USER);
+    const result = await seedAprilChase(TEST_USER, TEST_HOUSEHOLD_ID);
     expect(result.endingBalance).toBe(APRIL_2026_ENDING_BALANCE.toFixed(2));
     expect(result.endingBalance).toBe("3565.09");
     expect(result.snapshotRepaired).toBe(true);
@@ -97,10 +104,12 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
     // canonical 2026-04-30 date — almost certainly an earlier seed run.
     const otherUser = `${TEST_USER}-stale`;
     try {
+      const otherHouseholdId = (await createTestHousehold(otherUser)).householdId;
       const [item] = await db
         .insert(plaidItemsTable)
         .values({
           userId: otherUser,
+          householdId: otherHouseholdId,
           itemId: `stale-${otherUser}`,
           accessToken: "synthetic-no-access",
           institutionName: "Chase",
@@ -111,6 +120,7 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
         .insert(plaidAccountsTable)
         .values({
           userId: otherUser,
+          householdId: otherHouseholdId,
           itemId: item!.id,
           accountId: `stale-acct-${otherUser}`,
           name: "Chase Checking",
@@ -129,7 +139,7 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
         bankSnapshotMask: acct!.mask,
       });
 
-      const result = await seedAprilChase(otherUser);
+      const result = await seedAprilChase(otherUser, otherHouseholdId);
       expect(result.snapshotRepaired).toBe(true);
 
       const [settings] = await db
@@ -165,10 +175,12 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
     // timestamp). Repair must fire regardless of source.
     const otherUser = `${TEST_USER}-plaid`;
     try {
+      const otherHouseholdId = (await createTestHousehold(otherUser)).householdId;
       const [item] = await db
         .insert(plaidItemsTable)
         .values({
           userId: otherUser,
+          householdId: otherHouseholdId,
           itemId: `plaid-${otherUser}`,
           accessToken: "synthetic-no-access",
           institutionName: "Chase",
@@ -179,6 +191,7 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
         .insert(plaidAccountsTable)
         .values({
           userId: otherUser,
+          householdId: otherHouseholdId,
           itemId: item!.id,
           accountId: `plaid-acct-${otherUser}`,
           name: "Chase Checking",
@@ -197,7 +210,7 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
         bankSnapshotMask: acct!.mask,
       });
 
-      const result = await seedAprilChase(otherUser);
+      const result = await seedAprilChase(otherUser, otherHouseholdId);
       expect(result.snapshotRepaired).toBe(true);
 
       const [settings] = await db
@@ -236,10 +249,12 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
     // balance happens to be stale-looking — it's a live reading.
     const otherUser = `${TEST_USER}-plaid-fresh`;
     try {
+      const otherHouseholdId = (await createTestHousehold(otherUser)).householdId;
       const [item] = await db
         .insert(plaidItemsTable)
         .values({
           userId: otherUser,
+          householdId: otherHouseholdId,
           itemId: `plaid-fresh-${otherUser}`,
           accessToken: "synthetic-no-access",
           institutionName: "Chase",
@@ -250,6 +265,7 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
         .insert(plaidAccountsTable)
         .values({
           userId: otherUser,
+          householdId: otherHouseholdId,
           itemId: item!.id,
           accountId: `plaid-fresh-acct-${otherUser}`,
           name: "Chase Checking",
@@ -268,7 +284,7 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
         bankSnapshotMask: acct!.mask,
       });
 
-      const result = await seedAprilChase(otherUser);
+      const result = await seedAprilChase(otherUser, otherHouseholdId);
       expect(result.snapshotRepaired).toBe(false);
 
       const [settings] = await db
@@ -299,10 +315,12 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
   it("does not overwrite a manual snapshot the user has edited (different date than the seed)", async () => {
     const otherUser = `${TEST_USER}-edited`;
     try {
+      const otherHouseholdId = (await createTestHousehold(otherUser)).householdId;
       const [item] = await db
         .insert(plaidItemsTable)
         .values({
           userId: otherUser,
+          householdId: otherHouseholdId,
           itemId: `edited-${otherUser}`,
           accessToken: "synthetic-no-access",
           institutionName: "Chase",
@@ -313,6 +331,7 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
         .insert(plaidAccountsTable)
         .values({
           userId: otherUser,
+          householdId: otherHouseholdId,
           itemId: item!.id,
           accountId: `edited-acct-${otherUser}`,
           name: "Chase Checking",
@@ -334,7 +353,7 @@ describe("seedAprilChase snapshot repair (task #128)", () => {
         bankSnapshotMask: acct!.mask,
       });
 
-      const result = await seedAprilChase(otherUser);
+      const result = await seedAprilChase(otherUser, otherHouseholdId);
       expect(result.snapshotRepaired).toBe(false);
 
       const [settings] = await db

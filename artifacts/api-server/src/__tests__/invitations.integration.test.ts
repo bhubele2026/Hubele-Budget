@@ -7,13 +7,32 @@ const OWNER_USER = `owner-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8
 const NON_OWNER_USER = `member-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
 let currentUserId = OWNER_USER;
+let TEST_HOUSEHOLD_ID_OWNER: string;
+let TEST_HOUSEHOLD_ID_MEMBER: string;
 process.env.OWNER_EMAIL = "owner@example.com";
 process.env.APP_URL = "https://h2budget.example.com";
 delete process.env.INVITATION_REDIRECT_URL;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: {
+      userId?: string;
+      actualUserId?: string;
+      householdId?: string;
+      householdOwnerId?: string;
+    },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = currentUserId;
+    req.actualUserId = currentUserId;
+    if (currentUserId === OWNER_USER) {
+      req.householdId = TEST_HOUSEHOLD_ID_OWNER;
+      req.householdOwnerId = OWNER_USER;
+    } else {
+      req.householdId = TEST_HOUSEHOLD_ID_MEMBER;
+      req.householdOwnerId = NON_OWNER_USER;
+    }
     next();
   },
 }));
@@ -82,6 +101,7 @@ import { eq } from "drizzle-orm";
 import meRouter from "../routes/me";
 import invitationsRouter from "../routes/invitations";
 import membersRouter from "../routes/members";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
 app.use(express.json());
@@ -108,6 +128,10 @@ async function cleanup() {
 }
 
 beforeAll(async () => {
+  const _ho = await createTestHousehold(OWNER_USER);
+  TEST_HOUSEHOLD_ID_OWNER = _ho.householdId;
+  const _hm = await createTestHousehold(NON_OWNER_USER);
+  TEST_HOUSEHOLD_ID_MEMBER = _hm.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));

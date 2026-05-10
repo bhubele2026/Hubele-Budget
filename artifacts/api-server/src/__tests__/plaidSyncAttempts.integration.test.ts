@@ -11,12 +11,26 @@ import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import express from "express";
 import { eq, sql } from "drizzle-orm";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const TEST_USER = `sync-attempts-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: {
+      userId?: string;
+      actualUserId?: string;
+      householdId?: string;
+      householdOwnerId?: string;
+    },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -87,6 +101,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -112,6 +128,7 @@ async function seedItem(): Promise<{ itemRowId: string }> {
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `item-${randomUUID()}`,
       accessToken: `access-sandbox-${randomUUID()}`,
       institutionName: "Chase",
@@ -173,6 +190,7 @@ describe("(#279) plaid sync attempt audit log", () => {
     const base = Date.now() - 25_000;
     const rows = Array.from({ length: 25 }, (_, i) => ({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       plaidItemId: itemRowId,
       kind: "transactions",
       success: i % 3 !== 0,
@@ -212,6 +230,7 @@ describe("(#279) plaid sync attempt audit log", () => {
     await db.insert(plaidSyncAttemptsTable).values(
       Array.from({ length: total }, (_, i) => ({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         plaidItemId: itemRowId,
         kind: "transactions",
         success: true,

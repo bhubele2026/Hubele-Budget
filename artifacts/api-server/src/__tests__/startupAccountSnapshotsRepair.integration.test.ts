@@ -8,6 +8,7 @@ import {
   plaidItemsTable,
 } from "@workspace/db";
 import { runStartupAccountSnapshotsRepair } from "../lib/startupAccountSnapshotsRepair";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const SUITE_TAG = `startup-snap-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
@@ -22,10 +23,18 @@ async function cleanupForUser(userId: string): Promise<void> {
 }
 
 const allUsers: string[] = [];
-function makeUser(label: string): string {
+const householdByUser = new Map<string, string>();
+async function makeUser(label: string): Promise<string> {
   const id = `${SUITE_TAG}-${label}-${randomUUID().slice(0, 8)}`;
   allUsers.push(id);
+  const { householdId } = await createTestHousehold(id);
+  householdByUser.set(id, householdId);
   return id;
+}
+function householdFor(userId: string): string {
+  const h = householdByUser.get(userId);
+  if (!h) throw new Error(`no household for ${userId}`);
+  return h;
 }
 
 beforeAll(async () => {
@@ -40,12 +49,13 @@ afterAll(async () => {
 
 describe("runStartupAccountSnapshotsRepair (#434)", () => {
   it("salvages an orphan accountSnapshots key onto the surviving plaid_accounts row", async () => {
-    const userId = makeUser("orphan");
+    const userId = await makeUser("orphan");
     const suffix = randomUUID().slice(0, 8);
     const [item] = await db
       .insert(plaidItemsTable)
       .values({
         userId,
+        householdId: householdFor(userId),
         itemId: `startup-item-${suffix}`,
         accessToken: "test-no-access",
         institutionName: "Chase",
@@ -56,6 +66,7 @@ describe("runStartupAccountSnapshotsRepair (#434)", () => {
       .insert(plaidAccountsTable)
       .values({
         userId,
+        householdId: householdFor(userId),
         itemId: item!.id,
         accountId: `startup-survivor-${suffix}`,
         name: "Chase Total Checking",
@@ -67,6 +78,7 @@ describe("runStartupAccountSnapshotsRepair (#434)", () => {
     const orphanId = randomUUID();
     await db.insert(forecastSettingsTable).values({
       userId,
+      householdId: householdFor(userId),
       // Gate already stamped — this is the cohort the startup sweep targets.
       autoDedupeRanAt: new Date(),
       accountSnapshots: {
@@ -99,12 +111,13 @@ describe("runStartupAccountSnapshotsRepair (#434)", () => {
   });
 
   it("is a no-op for a clean user with a healthy accountSnapshots map", async () => {
-    const userId = makeUser("clean");
+    const userId = await makeUser("clean");
     const suffix = randomUUID().slice(0, 8);
     const [item] = await db
       .insert(plaidItemsTable)
       .values({
         userId,
+        householdId: householdFor(userId),
         itemId: `startup-clean-item-${suffix}`,
         accessToken: "test-no-access",
         institutionName: "Chase",
@@ -115,6 +128,7 @@ describe("runStartupAccountSnapshotsRepair (#434)", () => {
       .insert(plaidAccountsTable)
       .values({
         userId,
+        householdId: householdFor(userId),
         itemId: item!.id,
         accountId: `startup-clean-acct-${suffix}`,
         name: "Chase Total Checking",
@@ -134,6 +148,7 @@ describe("runStartupAccountSnapshotsRepair (#434)", () => {
     };
     await db.insert(forecastSettingsTable).values({
       userId,
+      householdId: householdFor(userId),
       autoDedupeRanAt: new Date(),
       accountSnapshots: before,
     });
@@ -150,8 +165,8 @@ describe("runStartupAccountSnapshotsRepair (#434)", () => {
   });
 
   it("skips users whose accountSnapshots map is empty or null", async () => {
-    const emptyUser = makeUser("empty");
-    const nullUser = makeUser("null");
+    const emptyUser = await makeUser("empty");
+    const nullUser = await makeUser("null");
     await db
       .insert(forecastSettingsTable)
       .values({ userId: emptyUser, accountSnapshots: {} });

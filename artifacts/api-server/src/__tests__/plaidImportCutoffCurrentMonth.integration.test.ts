@@ -9,12 +9,26 @@ import {
 } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const TEST_USER = `cutoff403-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: {
+      userId?: string;
+      actualUserId?: string;
+      householdId?: string;
+      householdOwnerId?: string;
+    },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -88,6 +102,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
 });
 afterAll(async () => {
@@ -107,6 +123,7 @@ async function seedChaseChecking(opts: {
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `item-${randomUUID()}`,
       accessToken: `access-sandbox-${randomUUID()}`,
       institutionName: "Chase",
@@ -118,6 +135,7 @@ async function seedChaseChecking(opts: {
     .insert(plaidAccountsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: externalAcctId,
       name: "Chase Checking",
@@ -129,11 +147,13 @@ async function seedChaseChecking(opts: {
     .returning();
   await db.insert(forecastSettingsTable).values({
     userId: TEST_USER,
+    householdId: TEST_HOUSEHOLD_ID,
     bankSnapshotAccountId: acct!.id,
   });
   for (const d of opts.manualDates ?? []) {
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: d,
       description: `manual ${d}`,
       amount: "-12.34",

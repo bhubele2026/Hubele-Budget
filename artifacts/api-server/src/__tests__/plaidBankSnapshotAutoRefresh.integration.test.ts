@@ -31,10 +31,18 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 
 const TEST_USER = `bank-refresh-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: { userId?: string; actualUserId?: string; householdId?: string; householdOwnerId?: string },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -85,6 +93,7 @@ import {
 } from "@workspace/db";
 import { syncAllForAllUsers, syncPlaidItem } from "../lib/plaidSync";
 import { logger } from "../lib/logger";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 async function cleanup(): Promise<void> {
   await db
@@ -100,6 +109,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
 });
 
@@ -122,6 +133,7 @@ async function seedItemAndCheckingAccount(opts: {
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `item-${opts.institutionName}-${randomUUID()}`,
       accessToken: `access-sandbox-${opts.institutionName}-${randomUUID()}`,
       institutionName: opts.institutionName,
@@ -132,6 +144,7 @@ async function seedItemAndCheckingAccount(opts: {
     .insert(plaidAccountsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: externalAccountId,
       name: `${opts.institutionName} Checking`,
@@ -150,6 +163,7 @@ async function seedItemAndCheckingAccount(opts: {
 async function configureSnapshot(plaidAccountRowId: string, name: string): Promise<void> {
   await db.insert(forecastSettingsTable).values({
     userId: TEST_USER,
+    householdId: TEST_HOUSEHOLD_ID,
     bankSnapshotAccountId: plaidAccountRowId,
     bankSnapshotName: name,
     bankSnapshotMask: "1234",

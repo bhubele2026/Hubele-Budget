@@ -8,8 +8,10 @@ import {
   settingsTable,
 } from "@workspace/db";
 import { refreshAmexAnchor } from "../lib/amexAnchor";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const USER = `amex-anchor-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 async function cleanup(): Promise<void> {
   await db.delete(transactionsTable).where(eq(transactionsTable.userId, USER));
@@ -24,6 +26,7 @@ async function insertAmexTxn(
 ): Promise<void> {
   await db.insert(transactionsTable).values({
     userId: USER,
+    householdId: TEST_HOUSEHOLD_ID,
     occurredOn: date,
     description: "Test charge",
     amount,
@@ -36,6 +39,7 @@ async function insertAmexDebt(balance: string): Promise<string> {
     .insert(debtsTable)
     .values({
       userId: USER,
+      householdId: TEST_HOUSEHOLD_ID,
       name: "American Express",
       balance,
       apr: "0.2849",
@@ -64,7 +68,11 @@ async function readAnchor(): Promise<{
   };
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  const _h = await createTestHousehold(USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
+  await cleanup();
+});
 afterAll(cleanup);
 beforeEach(cleanup);
 
@@ -142,6 +150,7 @@ describe("refreshAmexAnchor", () => {
     // Seed a prior anchor whose lastAutoBalance does NOT match the debt.
     await db.insert(settingsTable).values({
       userId: USER,
+      householdId: TEST_HOUSEHOLD_ID,
       preferences: { amexAnchor: { balance: 999, lastAutoBalance: 999 } },
     });
 

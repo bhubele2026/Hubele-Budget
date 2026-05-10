@@ -5,10 +5,23 @@ import express from "express";
 import { and, eq } from "drizzle-orm";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: {
+      userId?: string;
+      actualUserId?: string;
+      householdId?: string;
+      householdOwnerId?: string;
+    },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -26,6 +39,7 @@ import {
   plaidItemsTable,
 } from "@workspace/db";
 import debtsRouter from "../routes/debts";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
 app.use(express.json());
@@ -47,6 +61,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -88,6 +104,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `item-${randomUUID()}`,
         accessToken: `access-sandbox-${randomUUID()}`,
         institutionName: "TestBank",
@@ -98,6 +115,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `acct-${randomUUID()}`,
         name: "Visa",
@@ -111,6 +129,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Visa",
         balance: "1000",
         apr: "0.2",
@@ -127,6 +146,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
     await db.insert(transactionsTable).values([
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: txnAt1.slice(0, 10),
         occurredAt: txnAt1,
         description: "Chase payment to Visa",
@@ -136,6 +156,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       },
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: txnAt2.slice(0, 10),
         occurredAt: txnAt2,
         description: "Chase payment to Visa",
@@ -145,6 +166,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       },
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: oldTxnAt.slice(0, 10),
         occurredAt: oldTxnAt,
         description: "Old payment",
@@ -169,6 +191,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `item-${randomUUID()}`,
         accessToken: `access-sandbox-${randomUUID()}`,
         institutionName: "TestBank",
@@ -179,6 +202,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `acct-${randomUUID()}`,
         name: "Visa",
@@ -193,6 +217,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Visa",
         balance: "1000",
         apr: "0.2",
@@ -205,6 +230,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       .returning();
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: txnAt.slice(0, 10),
       occurredAt: txnAt,
       description: "Chase payment to Visa",
@@ -240,6 +266,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Manual Card",
         balance: "500",
         apr: "0.15",
@@ -252,6 +279,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
     await db.insert(transactionsTable).values([
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-04-20",
         occurredAt: "2026-04-20T10:00:00Z",
         description: "Payment",
@@ -261,6 +289,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       },
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-04-10",
         occurredAt: "2026-04-10T10:00:00Z",
         description: "Old payment baked in",
@@ -280,6 +309,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Card A",
         balance: "500",
         apr: "0.1",
@@ -293,6 +323,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Card B",
         balance: "200",
         apr: "0.1",
@@ -306,6 +337,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       // tagged to A
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-04-10",
         occurredAt: "2026-04-10T10:00:00Z",
         description: "to A",
@@ -316,6 +348,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       // tagged to B (must not bleed into A)
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-04-12",
         occurredAt: "2026-04-12T10:00:00Z",
         description: "to B",
@@ -326,6 +359,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       // untagged checking spend (no debtId) — must be ignored
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-04-13",
         occurredAt: "2026-04-13T10:00:00Z",
         description: "groceries",
@@ -336,6 +370,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       // negative-amount refund tagged to A — not a payment-direction txn
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-04-14",
         occurredAt: "2026-04-14T10:00:00Z",
         description: "refund",
@@ -358,6 +393,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Card",
         balance: "500",
         apr: "0.1",
@@ -371,6 +407,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-04-15",
         occurredAt: "2026-04-15T10:00:00Z",
         description: "Chase payment",
@@ -403,6 +440,7 @@ describe("(#421) pending tagged-payment decrement on debts API", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Quiet Card",
         balance: "300",
         apr: "0.1",

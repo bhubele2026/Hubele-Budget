@@ -199,6 +199,7 @@ export function buildSuggestedDebt(
  */
 export async function createOrLinkDebtFromPlaidAccount(opts: {
   userId: string;
+  householdId: string;
   account: PlaidAccountRow;
   institutionName: string | null | undefined;
   // (#44) Optional caller override (used by the post-Link bulk dialog
@@ -209,7 +210,7 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
   debt: typeof debtsTable.$inferSelect;
   action: "created" | "linked-existing";
 }> {
-  const { userId, account, institutionName, nameOverride } = opts;
+  const { userId, householdId, account, institutionName, nameOverride } = opts;
   const suggested = buildSuggestedDebt(account, institutionName);
   const overridden = nameOverride?.trim();
   const finalName = overridden && overridden.length > 0 ? overridden : suggested.name;
@@ -222,7 +223,7 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
     .from(debtsTable)
     .where(
       and(
-        eq(debtsTable.userId, userId),
+        eq(debtsTable.householdId, householdId),
         eq(debtsTable.name, finalName),
         sql`${debtsTable.plaidAccountId} is null`,
       ),
@@ -269,7 +270,7 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
       const [updated] = await db
         .update(debtsTable)
         .set(patch)
-        .where(and(eq(debtsTable.id, target.id), eq(debtsTable.userId, userId)))
+        .where(and(eq(debtsTable.id, target.id), eq(debtsTable.householdId, householdId)))
         .returning();
       // (#361) Now that this Plaid account is linked to a debt with
       // (potentially) historical manual rows, re-compute the import
@@ -307,6 +308,7 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
   // ignored as "user-entered manual".
   const values: typeof debtsTable.$inferInsert = {
     userId,
+    householdId,
     name: finalName,
     type: suggested.type,
     status: "active",
@@ -402,7 +404,7 @@ router.post(
       .where(
         and(
           eq(plaidItemsTable.id, itemId),
-          eq(plaidItemsTable.userId, req.userId!),
+          eq(plaidItemsTable.householdId, req.householdId!),
         ),
       );
     if (!item) {
@@ -550,6 +552,7 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       .insert(plaidItemsTable)
       .values({
         userId: req.userId!,
+        householdId: req.householdId!,
         itemId,
         accessToken,
         institutionId: resolvedInstId,
@@ -664,7 +667,7 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
             )
             .where(
               and(
-                eq(plaidAccountsTable.userId, req.userId!),
+                eq(plaidAccountsTable.householdId, req.householdId!),
                 eq(plaidAccountsTable.mask, a.mask),
               ),
             );
@@ -700,6 +703,7 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
           .insert(plaidAccountsTable)
           .values({
             userId: req.userId!,
+            householdId: req.householdId!,
             itemId: item!.id,
             accountId: a.account_id,
             name: a.name ?? null,
@@ -1036,7 +1040,7 @@ router.patch(
       .where(
         and(
           eq(plaidAccountsTable.id, id),
-          eq(plaidAccountsTable.userId, req.userId!),
+          eq(plaidAccountsTable.householdId, req.householdId!),
         ),
       );
     if (!acct) {
@@ -1066,7 +1070,7 @@ router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
   const allItems = await db
     .select()
     .from(plaidItemsTable)
-    .where(eq(plaidItemsTable.userId, req.userId!));
+    .where(eq(plaidItemsTable.householdId, req.householdId!));
   // (#398) Hide synthetic seed rows (April-2026 Chase placeholder)
   // from Linked Banks / reauth banner / sync-button chip — they were
   // never real Plaid connections and should never surface a "needs
@@ -1076,7 +1080,7 @@ router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
   const accts = await db
     .select()
     .from(plaidAccountsTable)
-    .where(eq(plaidAccountsTable.userId, req.userId!));
+    .where(eq(plaidAccountsTable.householdId, req.householdId!));
   const byItem = new Map<string, PlaidAccountRow[]>();
   for (const a of accts) {
     const arr = byItem.get(a.itemId) ?? [];
@@ -1099,7 +1103,7 @@ router.get("/plaid/items", requireAuth, async (req, res): Promise<void> => {
       .from(transactionsTable)
       .where(
         and(
-          eq(transactionsTable.userId, req.userId!),
+          eq(transactionsTable.householdId, req.householdId!),
           inArray(transactionsTable.plaidAccountId, externalIds),
         ),
       )
@@ -1143,7 +1147,7 @@ router.post(
       .where(
         and(
           eq(plaidItemsTable.id, id),
-          eq(plaidItemsTable.userId, req.userId!),
+          eq(plaidItemsTable.householdId, req.householdId!),
         ),
       );
     if (!item) {
@@ -1161,7 +1165,7 @@ router.post(
         .where(
           and(
             eq(plaidAccountsTable.itemId, item.id),
-            eq(plaidAccountsTable.userId, req.userId!),
+            eq(plaidAccountsTable.householdId, req.householdId!),
           ),
         );
       res.json(serializePlaidItemDetail(item, accts));
@@ -1173,7 +1177,7 @@ router.post(
       .where(
         and(
           eq(plaidItemsTable.id, item.id),
-          eq(plaidItemsTable.userId, req.userId!),
+          eq(plaidItemsTable.householdId, req.householdId!),
         ),
       )
       .returning();
@@ -1183,7 +1187,7 @@ router.post(
       .where(
         and(
           eq(plaidAccountsTable.itemId, item.id),
-          eq(plaidAccountsTable.userId, req.userId!),
+          eq(plaidAccountsTable.householdId, req.householdId!),
         ),
       );
     res.json(serializePlaidItemDetail(updated ?? item, accts));
@@ -1196,7 +1200,7 @@ router.delete("/plaid/items/:id", requireAuth, async (req, res): Promise<void> =
     .select()
     .from(plaidItemsTable)
     .where(
-      and(eq(plaidItemsTable.id, id), eq(plaidItemsTable.userId, req.userId!)),
+      and(eq(plaidItemsTable.id, id), eq(plaidItemsTable.householdId, req.householdId!)),
     );
   if (!item) {
     res.sendStatus(204);
@@ -1227,7 +1231,7 @@ router.delete("/plaid/items/:id", requireAuth, async (req, res): Promise<void> =
     .where(
       and(
         eq(plaidAccountsTable.itemId, item.id),
-        eq(plaidAccountsTable.userId, req.userId!),
+        eq(plaidAccountsTable.householdId, req.householdId!),
       ),
     );
   const itemAcctIds = itemAccounts.map((a) => a.id);
@@ -1243,7 +1247,7 @@ router.delete("/plaid/items/:id", requireAuth, async (req, res): Promise<void> =
       })
       .where(
         and(
-          eq(debtsTable.userId, req.userId!),
+          eq(debtsTable.householdId, req.householdId!),
           inArray(debtsTable.plaidAccountId, itemAcctIds),
         ),
       );
@@ -1253,13 +1257,13 @@ router.delete("/plaid/items/:id", requireAuth, async (req, res): Promise<void> =
     .where(
       and(
         eq(plaidAccountsTable.itemId, item.id),
-        eq(plaidAccountsTable.userId, req.userId!),
+        eq(plaidAccountsTable.householdId, req.householdId!),
       ),
     );
   await db
     .delete(plaidItemsTable)
     .where(
-      and(eq(plaidItemsTable.id, item.id), eq(plaidItemsTable.userId, req.userId!)),
+      and(eq(plaidItemsTable.id, item.id), eq(plaidItemsTable.householdId, req.householdId!)),
     );
   res.sendStatus(204);
 });
@@ -1269,10 +1273,11 @@ router.get(
   requireAuth,
   async (req, res): Promise<void> => {
     const userId = req.userId!;
+    const householdId = req.householdId!;
     const refresh = String(req.query.refresh ?? "") === "true";
     if (refresh) {
       try {
-        await fetchLiabilitiesForUser(userId);
+        await fetchLiabilitiesForUser(userId, householdId);
       } catch (e) {
         req.log.warn({ err: e }, "fetchLiabilitiesForUser failed");
       }
@@ -1283,13 +1288,13 @@ router.get(
         .from(plaidAccountsTable)
         .where(
           and(
-            eq(plaidAccountsTable.userId, userId),
+            eq(plaidAccountsTable.householdId, householdId),
             sql`${plaidAccountsTable.liabilityLastFetchedAt} is not null`,
           ),
         );
       if (Number(count ?? 0) === 0) {
         try {
-          await fetchLiabilitiesForUser(userId);
+          await fetchLiabilitiesForUser(userId, householdId);
         } catch (e) {
           req.log.warn({ err: e }, "initial liabilities fetch failed");
         }
@@ -1299,16 +1304,16 @@ router.get(
     const items = await db
       .select()
       .from(plaidItemsTable)
-      .where(eq(plaidItemsTable.userId, userId));
+      .where(eq(plaidItemsTable.householdId, householdId));
     const itemById = new Map(items.map((i) => [i.id, i]));
     const accts = await db
       .select()
       .from(plaidAccountsTable)
-      .where(eq(plaidAccountsTable.userId, userId));
+      .where(eq(plaidAccountsTable.householdId, householdId));
     const linkedDebts = await db
       .select({ id: debtsTable.id, name: debtsTable.name, plaidAccountId: debtsTable.plaidAccountId })
       .from(debtsTable)
-      .where(eq(debtsTable.userId, userId));
+      .where(eq(debtsTable.householdId, householdId));
     const linkedByAcct = new Map(
       linkedDebts
         .filter((d) => d.plaidAccountId)
@@ -1362,6 +1367,7 @@ router.post(
   requireAuth,
   async (req, res): Promise<void> => {
     const userId = req.userId!;
+    const householdId = req.householdId!;
     const plaidAccountId = String(req.params.plaidAccountId);
     const [acct] = await db
       .select()
@@ -1369,7 +1375,7 @@ router.post(
       .where(
         and(
           eq(plaidAccountsTable.id, plaidAccountId),
-          eq(plaidAccountsTable.userId, userId),
+          eq(plaidAccountsTable.householdId, householdId),
         ),
       );
     if (!acct) {
@@ -1387,7 +1393,7 @@ router.post(
       .from(debtsTable)
       .where(
         and(
-          eq(debtsTable.userId, userId),
+          eq(debtsTable.householdId, householdId),
           eq(debtsTable.plaidAccountId, plaidAccountId),
         ),
       );
@@ -1416,24 +1422,26 @@ router.post(
       .where(
         and(
           eq(plaidAccountsTable.id, plaidAccountId),
-          eq(plaidAccountsTable.userId, userId),
+          eq(plaidAccountsTable.householdId, householdId),
         ),
       );
-    // (#44) Always scope by userId — even though we already verified the
-    // account belongs to the user, the item lookup must not silently
-    // grab another user's institution name if a row id ever overlaps.
+    // (#44) Always scope by householdId — even though we already verified
+    // the account belongs to the household, the item lookup must not
+    // silently grab another household's institution name if a row id ever
+    // overlaps.
     const [item] = await db
       .select({ institutionName: plaidItemsTable.institutionName })
       .from(plaidItemsTable)
       .where(
         and(
           eq(plaidItemsTable.id, (refreshed ?? acct).itemId),
-          eq(plaidItemsTable.userId, userId),
+          eq(plaidItemsTable.householdId, householdId),
         ),
       );
     try {
       const result = await createOrLinkDebtFromPlaidAccount({
         userId,
+        householdId,
         account: refreshed ?? acct,
         institutionName: item?.institutionName ?? null,
       });
@@ -1459,7 +1467,7 @@ router.post(
           .from(debtsTable)
           .where(
             and(
-              eq(debtsTable.userId, userId),
+              eq(debtsTable.householdId, householdId),
               eq(debtsTable.plaidAccountId, plaidAccountId),
             ),
           );
@@ -1487,6 +1495,7 @@ router.post(
   requireAuth,
   async (req, res): Promise<void> => {
     const userId = req.userId!;
+    const householdId = req.householdId!;
     const body = (req.body ?? {}) as {
       accounts?: Array<{ plaidAccountId?: unknown; name?: unknown }>;
     };
@@ -1531,7 +1540,7 @@ router.post(
         .where(
           and(
             eq(plaidAccountsTable.id, plaidAccountId),
-            eq(plaidAccountsTable.userId, userId),
+            eq(plaidAccountsTable.householdId, householdId),
           ),
         );
       if (!acct) {
@@ -1547,7 +1556,7 @@ router.post(
         .from(debtsTable)
         .where(
           and(
-            eq(debtsTable.userId, userId),
+            eq(debtsTable.householdId, householdId),
             eq(debtsTable.plaidAccountId, plaidAccountId),
           ),
         );
@@ -1579,7 +1588,7 @@ router.post(
         .where(
           and(
             eq(plaidAccountsTable.id, plaidAccountId),
-            eq(plaidAccountsTable.userId, userId),
+            eq(plaidAccountsTable.householdId, householdId),
           ),
         );
       const [item] = await db
@@ -1588,12 +1597,13 @@ router.post(
         .where(
           and(
             eq(plaidItemsTable.id, (refreshed ?? acct).itemId),
-            eq(plaidItemsTable.userId, userId),
+            eq(plaidItemsTable.householdId, householdId),
           ),
         );
       try {
         const r = await createOrLinkDebtFromPlaidAccount({
           userId,
+          householdId,
           account: refreshed ?? acct,
           institutionName: item?.institutionName ?? null,
           nameOverride,
@@ -1611,7 +1621,7 @@ router.post(
             .from(debtsTable)
             .where(
               and(
-                eq(debtsTable.userId, userId),
+                eq(debtsTable.householdId, householdId),
                 eq(debtsTable.plaidAccountId, plaidAccountId),
               ),
             );
@@ -1649,7 +1659,7 @@ router.get("/plaid/environment", requireAuth, async (req, res): Promise<void> =>
   const items = await db
     .select({ id: plaidItemsTable.id, accessToken: plaidItemsTable.accessToken, institutionName: plaidItemsTable.institutionName })
     .from(plaidItemsTable)
-    .where(eq(plaidItemsTable.userId, req.userId!));
+    .where(eq(plaidItemsTable.householdId, req.householdId!));
   const nonProdItems = items
     .map((it) => ({ id: it.id, institutionName: it.institutionName, env: tokenEnv(it.accessToken) }))
     .filter((it) => it.env !== null && it.env !== "production");
@@ -1669,7 +1679,7 @@ router.post(
     const items = await db
       .select()
       .from(plaidItemsTable)
-      .where(eq(plaidItemsTable.userId, req.userId!));
+      .where(eq(plaidItemsTable.householdId, req.householdId!));
     const targets = items.filter((it) => {
       const env = tokenEnv(it.accessToken);
       return env !== null && env !== "production";
@@ -1699,7 +1709,7 @@ router.post(
         .where(
           and(
             eq(plaidAccountsTable.itemId, item.id),
-            eq(plaidAccountsTable.userId, req.userId!),
+            eq(plaidAccountsTable.householdId, req.householdId!),
           ),
         );
       const itemAcctIds = itemAccounts.map((a) => a.id);
@@ -1715,7 +1725,7 @@ router.post(
           })
           .where(
             and(
-              eq(debtsTable.userId, req.userId!),
+              eq(debtsTable.householdId, req.householdId!),
               inArray(debtsTable.plaidAccountId, itemAcctIds),
             ),
           );
@@ -1725,7 +1735,7 @@ router.post(
         .where(
           and(
             eq(plaidAccountsTable.itemId, item.id),
-            eq(plaidAccountsTable.userId, req.userId!),
+            eq(plaidAccountsTable.householdId, req.householdId!),
           ),
         );
       await db
@@ -1733,7 +1743,7 @@ router.post(
         .where(
           and(
             eq(plaidItemsTable.id, item.id),
-            eq(plaidItemsTable.userId, req.userId!),
+            eq(plaidItemsTable.householdId, req.householdId!),
           ),
         );
       removed++;
@@ -1939,7 +1949,7 @@ router.post(
   requireAuth,
   async (req, res): Promise<void> => {
     try {
-      const results = await refreshConsentExpirationForUser(req.userId!);
+      const results = await refreshConsentExpirationForUser(req.householdId!);
       res.json({
         scanned: results.length,
         updated: results.filter((r) => r.changed && !r.error).length,
@@ -2051,7 +2061,7 @@ router.get(
       .where(
         and(
           eq(plaidItemsTable.id, itemRowId),
-          eq(plaidItemsTable.userId, req.userId!),
+          eq(plaidItemsTable.householdId, req.householdId!),
         ),
       );
     if (!item) {
@@ -2072,7 +2082,7 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
   try {
     const results = itemId
       ? [await syncPlaidItem(req.userId!, String(itemId))]
-      : await syncAllForUser(req.userId!);
+      : await syncAllForUser(req.userId!, req.householdId!);
     res.json({ items: results });
   } catch (e) {
     const { message: msg } = extractPlaidError(e);

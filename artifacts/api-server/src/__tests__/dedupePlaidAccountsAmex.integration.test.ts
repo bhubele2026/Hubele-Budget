@@ -12,8 +12,10 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import { dedupePlaidAccountsForUser } from "../lib/dedupePlaidAccounts";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const TEST_USER = `dedupe-amex-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 async function cleanup(): Promise<void> {
   await db
@@ -35,7 +37,11 @@ async function cleanup(): Promise<void> {
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
+  await cleanup();
+});
 afterAll(cleanup);
 
 describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () => {
@@ -45,6 +51,7 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `amex-item-merge-${suffix}`,
         accessToken: "test-no-access",
         institutionName: "American Express",
@@ -58,6 +65,7 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `acct-survivor-${suffix}`,
         name: "Amex Gold",
@@ -70,6 +78,7 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `acct-loser-${suffix}`,
         name: "Amex Gold",
@@ -82,6 +91,7 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Amex Gold",
         balance: "500",
         plaidAccountId: survivorAcct!.id,
@@ -91,6 +101,7 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Amex Gold (dupe)",
         balance: "750",
         plaidAccountId: loserAcct!.id,
@@ -100,6 +111,7 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
     // repointed onto the survivor-debt as part of the merge.
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: "2026-04-15",
       description: "Manual on dupe debt",
       amount: "-25.00",
@@ -113,18 +125,21 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
     await db.insert(debtBalanceHistoryTable).values([
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         debtId: survivorDebt!.id,
         recordedOn: "2026-03-01",
         balance: "500.00",
       },
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         debtId: loserDebt!.id,
         recordedOn: "2026-03-15",
         balance: "750.00",
       },
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         debtId: loserDebt!.id,
         recordedOn: "2026-03-01",
         balance: "999.99",
@@ -136,6 +151,7 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Amex dupe cat ${suffix}`,
         kind: "expense",
         groupName: "Debt",
@@ -212,6 +228,7 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `amex-item-${suffix}`,
         accessToken: "test-no-access",
         institutionName: "American Express",
@@ -233,6 +250,7 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
         .insert(plaidAccountsTable)
         .values({
           userId: TEST_USER,
+          householdId: TEST_HOUSEHOLD_ID,
           itemId: item!.id,
           accountId: `amex-${mask}-${tag}-${suffix}`,
           name: `Amex ··${mask}`,
@@ -261,6 +279,7 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
     ) => {
       await db.insert(transactionsTable).values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-05-01",
         occurredAt: new Date("2026-05-01T12:00:00Z").toISOString(),
         description: `amex-${suffix}-${tag}`,
@@ -283,6 +302,7 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Amex ··1001 (${suffix})`,
         balance: "1000.00",
         plaidAccountId: card1Old.id,
@@ -292,6 +312,7 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Amex ··2002 (${suffix})`,
         balance: "2000.00",
         plaidAccountId: card2Old.id,
@@ -301,6 +322,7 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Amex ··3003 (${suffix})`,
         balance: "3000.00",
         plaidAccountId: card3Old.id,

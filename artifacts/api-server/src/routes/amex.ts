@@ -29,6 +29,8 @@ const router: IRouter = Router();
  */
 router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
+  const ownerId = req.householdOwnerId!;
+  const householdId = req.householdId!;
 
   // (#416) One-shot heal hook. Collapse any duplicate Amex
   // `plaid_accounts` rows the user accumulated from re-linking
@@ -43,7 +45,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     const [prefRow] = await db
       .select({ preferences: settingsTable.preferences })
       .from(settingsTable)
-      .where(eq(settingsTable.userId, userId));
+      .where(eq(settingsTable.userId, ownerId));
     const prefs =
       (prefRow?.preferences as Record<string, unknown> | null | undefined) ??
       {};
@@ -74,11 +76,11 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
         await db
           .update(settingsTable)
           .set({ preferences: nextPrefs, updatedAt: new Date() })
-          .where(eq(settingsTable.userId, userId));
+          .where(eq(settingsTable.userId, ownerId));
       } else {
         await db
           .insert(settingsTable)
-          .values({ userId, preferences: nextPrefs })
+          .values({ userId: ownerId, householdId, preferences: nextPrefs })
           .onConflictDoUpdate({
             target: settingsTable.userId,
             set: { preferences: nextPrefs, updatedAt: new Date() },
@@ -97,7 +99,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     .from(transactionsTable)
     .where(
       and(
-        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.householdId, householdId),
         inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
         sql`${transactionsTable.plaidAccountId} is not null`,
       ),
@@ -120,7 +122,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     .innerJoin(plaidItemsTable, eq(plaidAccountsTable.itemId, plaidItemsTable.id))
     .where(
       and(
-        eq(plaidAccountsTable.userId, userId),
+        eq(plaidAccountsTable.householdId, householdId),
         sql`${plaidItemsTable.institutionSlug} ~* '(amex|american[-_\\s]*express)'`,
       ),
     );
@@ -149,7 +151,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
       .from(debtsTable)
       .where(
         and(
-          eq(debtsTable.userId, userId),
+          eq(debtsTable.householdId, householdId),
           inArray(sql`${debtsTable.plaidAccountId}::text`, amexPlaidAccountIds),
         ),
       );
@@ -164,7 +166,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
       .from(debtsTable)
       .where(
         and(
-          eq(debtsTable.userId, userId),
+          eq(debtsTable.householdId, householdId),
           sql`${debtsTable.name} ~* '(amex|american\\s*express)'`,
         ),
       );
@@ -194,7 +196,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   const [settingsRow] = await db
     .select({ preferences: settingsTable.preferences })
     .from(settingsTable)
-    .where(eq(settingsTable.userId, userId));
+    .where(eq(settingsTable.userId, ownerId));
   const anchor =
     settingsRow?.preferences &&
     typeof settingsRow.preferences === "object" &&
@@ -244,7 +246,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
       .from(plaidAccountsTable)
       .where(
         and(
-          eq(plaidAccountsTable.userId, userId),
+          eq(plaidAccountsTable.householdId, householdId),
           inArray(plaidAccountsTable.accountId, amexPlaidAccountIds),
         ),
       );
@@ -279,7 +281,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     .from(transactionsTable)
     .where(
       and(
-        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.householdId, householdId),
         inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
       ),
     );
@@ -312,7 +314,8 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
  * Body: { balance: number, asOf?: string (ISO) }
  */
 router.post("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
-  const userId = req.userId!;
+  const ownerId = req.householdOwnerId!;
+  const householdId = req.householdId!;
   const body = (req.body ?? {}) as { balance?: unknown; asOf?: unknown };
   const balanceNum = Number(body.balance);
   if (!Number.isFinite(balanceNum)) {
@@ -335,7 +338,7 @@ router.post("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     const [existing] = await tx
       .select({ preferences: settingsTable.preferences })
       .from(settingsTable)
-      .where(eq(settingsTable.userId, userId));
+      .where(eq(settingsTable.userId, ownerId));
     const prevPrefs =
       (existing?.preferences as Record<string, unknown> | null | undefined) ??
       {};
@@ -347,11 +350,11 @@ router.post("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
       await tx
         .update(settingsTable)
         .set({ preferences: nextPrefs, updatedAt: new Date() })
-        .where(eq(settingsTable.userId, userId));
+        .where(eq(settingsTable.userId, ownerId));
     } else {
       await tx
         .insert(settingsTable)
-        .values({ userId, preferences: nextPrefs })
+        .values({ userId: ownerId, householdId, preferences: nextPrefs })
         .onConflictDoUpdate({
           target: settingsTable.userId,
           set: { preferences: nextPrefs, updatedAt: new Date() },
@@ -373,12 +376,12 @@ router.post("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
  * or the missing state — whichever resolves next via GET /amex/anchor.
  */
 router.delete("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
-  const userId = req.userId!;
+  const ownerId = req.householdOwnerId!;
   await db.transaction(async (tx) => {
     const [existing] = await tx
       .select({ preferences: settingsTable.preferences })
       .from(settingsTable)
-      .where(eq(settingsTable.userId, userId));
+      .where(eq(settingsTable.userId, ownerId));
     if (!existing) return;
     const prevPrefs =
       (existing.preferences as Record<string, unknown> | null | undefined) ??
@@ -389,7 +392,7 @@ router.delete("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     await tx
       .update(settingsTable)
       .set({ preferences: nextPrefs, updatedAt: new Date() })
-      .where(eq(settingsTable.userId, userId));
+      .where(eq(settingsTable.userId, ownerId));
   });
   res.json({ ok: true });
 });

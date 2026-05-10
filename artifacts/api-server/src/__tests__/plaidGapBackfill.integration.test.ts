@@ -10,7 +10,10 @@ import {
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 
+import { createTestHousehold } from "./_helpers/testHousehold";
+
 const TEST_USER = `gapbf-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 // (#408) Mocked /transactions/get response that the backfill helper
 // pages through. Each test seeds this before invoking the backfill so
@@ -83,6 +86,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
 });
 afterAll(async () => {
@@ -102,6 +107,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: externalItemId,
         accessToken: "access-sandbox-fresh-token-after-relink",
         institutionId: "ins_56",
@@ -111,6 +117,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .returning();
     await db.insert(plaidAccountsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: externalAcctId,
       name: "Chase Sapphire",
@@ -121,6 +128,7 @@ describe("(#408) runGapBackfillForItem", () => {
     // The newest Plaid-sourced row already on file for this account.
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: "2026-04-20",
       description: "older row",
       amount: "-15.50",
@@ -175,6 +183,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: externalItemId,
         accessToken: "access-sandbox-fresh-token-idem",
         institutionId: "ins_56",
@@ -184,6 +193,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .returning();
     await db.insert(plaidAccountsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: externalAcctId,
       name: "Chase Sapphire",
@@ -234,6 +244,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: externalItemId,
         accessToken: "access-sandbox-fresh-token-merge",
         institutionId: "ins_56",
@@ -245,6 +256,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: externalAcctId,
         name: "Chase Sapphire",
@@ -258,6 +270,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Chase Sapphire",
         balance: "1500",
         plaidAccountId: acct!.id,
@@ -271,6 +284,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-05-02",
         description: "manual outage entry",
         amount: "-42.00",
@@ -316,6 +330,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: externalItemId,
         accessToken: "access-sandbox-fresh-token-noanchor",
         institutionId: "ins_56",
@@ -325,6 +340,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .returning();
     await db.insert(plaidAccountsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: externalAcctId,
       name: "Chase Sapphire",
@@ -350,6 +366,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: externalItemId,
         accessToken: "access-sandbox-fresh-token-checking",
         institutionId: "ins_56",
@@ -361,6 +378,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: externalAcctId,
         name: "Chase Checking",
@@ -375,12 +393,14 @@ describe("(#408) runGapBackfillForItem", () => {
     // link instead of inserting a duplicate Plaid row.
     await db.insert(forecastSettingsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       bankSnapshotAccountId: acct!.id,
     });
     const [manual] = await db
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-05-03",
         description: "manual checking outage entry",
         amount: "-77.00",
@@ -424,6 +444,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: externalItemId,
         accessToken: "",
         institutionId: "ins_56",
@@ -433,6 +454,7 @@ describe("(#408) runGapBackfillForItem", () => {
       .returning();
     await db.insert(plaidAccountsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: externalAcctId,
       name: "Chase Sapphire",

@@ -60,7 +60,13 @@ vi.mock("@clerk/express", () => ({
   getAuth: vi.fn(),
 }));
 
-import { db, profilesTable, transactionsTable } from "@workspace/db";
+import {
+  db,
+  profilesTable,
+  transactionsTable,
+  householdsTable,
+  householdMembersTable,
+} from "@workspace/db";
 import {
   requireAuth,
   _resetHouseholdCacheForTests,
@@ -71,6 +77,12 @@ async function cleanupAll(): Promise<void> {
   await db
     .delete(transactionsTable)
     .where(inArray(transactionsTable.userId, ids));
+  await db
+    .delete(householdMembersTable)
+    .where(inArray(householdMembersTable.userId, ids));
+  // Households orphaned by the cascade above? Owner-by-userId rows aren't
+  // tracked on households directly; we just clean up profiles which carry
+  // a back-pointer in legacy code paths.
   await db.delete(profilesTable).where(inArray(profilesTable.id, ids));
 }
 
@@ -90,6 +102,8 @@ beforeEach(async () => {
 interface FakeReq {
   userId?: string;
   actualUserId?: string;
+  householdId?: string;
+  householdOwnerId?: string;
   log: { warn: (...a: unknown[]) => void };
 }
 
@@ -119,96 +133,124 @@ async function callRequireAuthAs(actualUserId: string): Promise<FakeReq> {
 }
 
 describe("(#623) shared household data model", () => {
-  it("invited member sees the owner's transactions through req.userId remap", async () => {
-    // Owner inserts a transaction.
+  it("invited member shares the owner's household via household_members membership", async () => {
+    // Owner signs in first → bootstraps household + self-membership.
+    const ownerReq = await callRequireAuthAs(OWNER_ID);
+    expect(ownerReq.actualUserId).toBe(OWNER_ID);
+    expect(ownerReq.userId).toBe(OWNER_ID);
+    expect(ownerReq.householdOwnerId).toBe(OWNER_ID);
+    const ownerHouseholdId = ownerReq.householdId!;
+    expect(ownerHouseholdId).toBeTruthy();
+
+    // Owner inserts a transaction, scoped to the owner household.
     await db.insert(transactionsTable).values({
       userId: OWNER_ID,
+      householdId: ownerHouseholdId,
       occurredOn: "2026-05-01",
       description: "Shared household coffee",
       amount: "-4.50",
       source: "manual",
     });
 
-    // Owner signs in → resolves household = self
-    const ownerReq = await callRequireAuthAs(OWNER_ID);
-    expect(ownerReq.actualUserId).toBe(OWNER_ID);
-    expect(ownerReq.userId).toBe(OWNER_ID);
-
-    // Invited member signs in → req.userId remapped to OWNER_ID,
-    // actualUserId preserved as MEMBER_ID
+    // Invited member signs in → joins the owner's household via the
+    // accepted-invitation bootstrap; req.userId stays the actor's id
+    // (no remap), but req.householdId points at the owner household so
+    // every household-scoped query returns the owner's data.
     const memberReq = await callRequireAuthAs(MEMBER_ID);
     expect(memberReq.actualUserId).toBe(MEMBER_ID);
-    expect(memberReq.userId).toBe(OWNER_ID);
+    expect(memberReq.userId).toBe(MEMBER_ID);
+    expect(memberReq.householdId).toBe(ownerHouseholdId);
+    expect(memberReq.householdOwnerId).toBe(OWNER_ID);
 
-    // Profile row persists the resolution so subsequent requests skip Clerk
-    const [memberProfile] = await db
+    // Membership row persists so subsequent requests skip the Clerk
+    // invitation lookup.
+    const memberRows = await db
       .select()
-      .from(profilesTable)
-      .where(eq(profilesTable.id, MEMBER_ID));
-    expect(memberProfile?.householdOwnerId).toBe(OWNER_ID);
+      .from(householdMembersTable)
+      .where(eq(householdMembersTable.userId, MEMBER_ID));
+    expect(memberRows).toHaveLength(1);
+    expect(memberRows[0].householdId).toBe(ownerHouseholdId);
 
-    // Member's data query (keyed on req.userId) returns the owner's row.
+    // Member's data query (keyed on req.householdId) returns the owner's row.
     const rowsAsMember = await db
       .select()
       .from(transactionsTable)
-      .where(eq(transactionsTable.userId, memberReq.userId!));
+      .where(eq(transactionsTable.householdId, memberReq.householdId!));
     expect(rowsAsMember.map((r) => r.description)).toContain(
       "Shared household coffee",
     );
   });
 
-  it("uninvited stranger CANNOT access the owner's household — household isolation holds", async () => {
-    // Seed a transaction in the owner's household.
+  it("uninvited stranger gets their OWN household — no access to the owner's data", async () => {
+    // Bootstrap owner household first.
+    const ownerReq = await callRequireAuthAs(OWNER_ID);
+    const ownerHouseholdId = ownerReq.householdId!;
     await db.insert(transactionsTable).values({
       userId: OWNER_ID,
+      householdId: ownerHouseholdId,
       occurredOn: "2026-05-01",
       description: "Owner-only secret",
       amount: "-9.99",
       source: "manual",
     });
 
-    // STRANGER_EMAIL is NOT in acceptedInvitations. The stranger holds
-    // a valid Clerk session but was never invited.
+    // STRANGER_EMAIL is NOT in acceptedInvitations and is not the owner.
+    // requireAuth must self-isolate them into their own household.
     const strangerReq = await callRequireAuthAs(STRANGER_ID);
-
-    // Defense in depth: req.userId must NOT be remapped to the owner.
     expect(strangerReq.actualUserId).toBe(STRANGER_ID);
     expect(strangerReq.userId).toBe(STRANGER_ID);
+    expect(strangerReq.householdOwnerId).toBe(STRANGER_ID);
+    expect(strangerReq.householdId).toBeTruthy();
+    expect(strangerReq.householdId).not.toBe(ownerHouseholdId);
 
-    // Their data query returns nothing — they cannot see the owner's row.
+    // Their household-scoped query returns nothing — owner's row is invisible.
     const rowsAsStranger = await db
       .select()
       .from(transactionsTable)
-      .where(eq(transactionsTable.userId, strangerReq.userId!));
+      .where(eq(transactionsTable.householdId, strangerReq.householdId!));
     expect(rowsAsStranger).toHaveLength(0);
 
-    // Persisted profile records the self-mapping (no leak path on retry).
-    const [strangerProfile] = await db
+    // The stranger's household_members row points at their own household,
+    // not the owner's — defense in depth against any leak path.
+    const [strangerMembership] = await db
       .select()
-      .from(profilesTable)
-      .where(eq(profilesTable.id, STRANGER_ID));
-    expect(strangerProfile?.householdOwnerId).toBe(STRANGER_ID);
+      .from(householdMembersTable)
+      .where(eq(householdMembersTable.userId, STRANGER_ID));
+    expect(strangerMembership?.householdId).toBe(strangerReq.householdId);
+    expect(strangerMembership?.householdId).not.toBe(ownerHouseholdId);
   });
 
-  it("the owner sees their own household and is unaffected by stranger profiles", async () => {
+  it("the owner's household exists in the households table and is unaffected by stranger sign-ins", async () => {
+    const ownerReq = await callRequireAuthAs(OWNER_ID);
+    const ownerHouseholdId = ownerReq.householdId!;
     await db.insert(transactionsTable).values({
       userId: OWNER_ID,
+      householdId: ownerHouseholdId,
       occurredOn: "2026-05-01",
       description: "Mortgage",
       amount: "-1500.00",
       source: "manual",
     });
 
-    // A stranger signs in first and records a self-mapped profile.
+    // A stranger signs in first and gets self-isolated.
     await callRequireAuthAs(STRANGER_ID);
 
-    // Owner signs in.
-    const ownerReq = await callRequireAuthAs(OWNER_ID);
-    expect(ownerReq.userId).toBe(OWNER_ID);
+    // Owner signs in again — same household resolved.
+    const ownerReq2 = await callRequireAuthAs(OWNER_ID);
+    expect(ownerReq2.userId).toBe(OWNER_ID);
+    expect(ownerReq2.householdId).toBe(ownerHouseholdId);
+
     const rows = await db
       .select()
       .from(transactionsTable)
-      .where(eq(transactionsTable.userId, ownerReq.userId!));
+      .where(eq(transactionsTable.householdId, ownerReq2.householdId!));
     expect(rows.map((r) => r.description)).toContain("Mortgage");
+
+    // households table has exactly one row for the owner.
+    const ownerHouseholds = await db
+      .select()
+      .from(householdsTable)
+      .where(eq(householdsTable.id, ownerHouseholdId));
+    expect(ownerHouseholds).toHaveLength(1);
   });
 });

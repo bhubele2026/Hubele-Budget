@@ -30,6 +30,7 @@ function todayISO(): string {
 
 async function recordBalanceSnapshot(
   userId: string,
+  householdId: string,
   debtId: string,
   balance: string | number,
 ): Promise<void> {
@@ -39,13 +40,14 @@ async function recordBalanceSnapshot(
     .insert(debtBalanceHistoryTable)
     .values({
       userId,
+      householdId,
       debtId,
       recordedOn: todayISO(),
       balance: balStr,
     })
     .onConflictDoNothing({
       target: [
-        debtBalanceHistoryTable.userId,
+        debtBalanceHistoryTable.householdId,
         debtBalanceHistoryTable.debtId,
         debtBalanceHistoryTable.recordedOn,
       ],
@@ -95,7 +97,7 @@ type AccountRow = typeof plaidAccountsTable.$inferSelect;
 type ItemRow = typeof plaidItemsTable.$inferSelect;
 
 async function loadAccountContext(
-  userId: string,
+  householdId: string,
   accountIds: string[],
 ): Promise<{ accountById: Map<string, AccountRow>; itemById: Map<string, ItemRow> }> {
   if (accountIds.length === 0) {
@@ -106,7 +108,7 @@ async function loadAccountContext(
     .from(plaidAccountsTable)
     .where(
       and(
-        eq(plaidAccountsTable.userId, userId),
+        eq(plaidAccountsTable.householdId, householdId),
         inArray(plaidAccountsTable.id, accountIds),
       ),
     );
@@ -118,7 +120,7 @@ async function loadAccountContext(
           .from(plaidItemsTable)
           .where(
             and(
-              eq(plaidItemsTable.userId, userId),
+              eq(plaidItemsTable.householdId, householdId),
               inArray(plaidItemsTable.id, itemIds),
             ),
           )
@@ -146,7 +148,7 @@ function pendingCutoffForDebt(d: DebtRow): Date | null {
 }
 
 async function loadPendingPayments(
-  userId: string,
+  householdId: string,
   debts: DebtRow[],
 ): Promise<Map<string, PendingEntry>> {
   const out = new Map<string, PendingEntry>();
@@ -162,7 +164,7 @@ async function loadPendingPayments(
     .from(transactionsTable)
     .where(
       and(
-        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.householdId, householdId),
         isNotNull(transactionsTable.debtId),
         inArray(transactionsTable.debtId, ids),
         // payment-direction (positive amount): pays down the debt
@@ -273,6 +275,7 @@ function shapeDebt(
  */
 async function applyLiabilityToDebt(
   userId: string,
+  householdId: string,
   debt: DebtRow,
   mode: "adopt" | "refresh" = "refresh",
   stampSync: boolean = true,
@@ -284,7 +287,7 @@ async function applyLiabilityToDebt(
     .where(
       and(
         eq(plaidAccountsTable.id, debt.plaidAccountId),
-        eq(plaidAccountsTable.userId, userId),
+        eq(plaidAccountsTable.householdId, householdId),
       ),
     );
   if (!acct) return debt;
@@ -329,16 +332,17 @@ async function applyLiabilityToDebt(
   const [updated] = await db
     .update(debtsTable)
     .set(patch)
-    .where(and(eq(debtsTable.id, debt.id), eq(debtsTable.userId, userId)))
+    .where(and(eq(debtsTable.id, debt.id), eq(debtsTable.householdId, householdId)))
     .returning();
   if (updated && patch.balance != null) {
-    await recordBalanceSnapshot(userId, updated.id, updated.balance);
+    await recordBalanceSnapshot(userId, householdId, updated.id, updated.balance);
   }
   return updated ?? debt;
 }
 
 async function refreshLinkedDebt(
   userId: string,
+  householdId: string,
   debt: DebtRow,
 ): Promise<{ debt: DebtRow; fetchOk: boolean; error?: unknown }> {
   if (!debt.plaidAccountId) return { debt, fetchOk: true };
@@ -348,7 +352,7 @@ async function refreshLinkedDebt(
     .where(
       and(
         eq(plaidAccountsTable.id, debt.plaidAccountId),
-        eq(plaidAccountsTable.userId, userId),
+        eq(plaidAccountsTable.householdId, householdId),
       ),
     );
   if (!acct) return { debt, fetchOk: true };
@@ -363,7 +367,7 @@ async function refreshLinkedDebt(
   // Only stamp plaidLastSyncedAt when the Plaid fetch actually succeeded —
   // otherwise the UI should keep showing the previous sync time and the
   // 1-hour staleness window remains open for retry.
-  const updated = await applyLiabilityToDebt(userId, debt, "refresh", fetchOk);
+  const updated = await applyLiabilityToDebt(userId, householdId, debt, "refresh", fetchOk);
   return { debt: updated, fetchOk, error };
 }
 
@@ -371,7 +375,7 @@ router.get(
   "/debts/balance-history",
   requireAuth,
   async (req, res): Promise<void> => {
-    const userId = req.userId!;
+    const householdId = req.householdId!;
     const rows = await db
       .select({
         debtId: debtBalanceHistoryTable.debtId,
@@ -379,7 +383,7 @@ router.get(
         balance: debtBalanceHistoryTable.balance,
       })
       .from(debtBalanceHistoryTable)
-      .where(eq(debtBalanceHistoryTable.userId, userId))
+      .where(eq(debtBalanceHistoryTable.householdId, householdId))
       .orderBy(asc(debtBalanceHistoryTable.recordedOn));
     res.json(rows);
   },
@@ -387,10 +391,11 @@ router.get(
 
 router.get("/debts", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
+  const householdId = req.householdId!;
   let rows = await db
     .select()
     .from(debtsTable)
-    .where(eq(debtsTable.userId, userId))
+    .where(eq(debtsTable.householdId, householdId))
     .orderBy(asc(debtsTable.sortOrder), desc(debtsTable.apr), asc(debtsTable.name));
 
   // Opportunistic refresh of stale linked debts
@@ -411,7 +416,7 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
       .from(plaidAccountsTable)
       .where(
         and(
-          eq(plaidAccountsTable.userId, userId),
+          eq(plaidAccountsTable.householdId, householdId),
           inArray(plaidAccountsTable.id, accountIds),
         ),
       );
@@ -431,7 +436,7 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
       // Don't break GET /debts if a single Plaid value is malformed — the
       // explicit /refresh endpoint surfaces that as a 400.
       try {
-        await applyLiabilityToDebt(userId, d, "refresh", ok);
+        await applyLiabilityToDebt(userId, householdId, d, "refresh", ok);
       } catch (e) {
         if (!(e instanceof AprValidationError)) throw e;
       }
@@ -439,7 +444,7 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
     rows = await db
       .select()
       .from(debtsTable)
-      .where(eq(debtsTable.userId, userId))
+      .where(eq(debtsTable.householdId, householdId))
       .orderBy(asc(debtsTable.sortOrder), desc(debtsTable.apr), asc(debtsTable.name));
   }
 
@@ -447,7 +452,7 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
   // reports thermometer and per-debt rings have a starting reference.
   for (const d of rows) {
     if (d.status !== "active") continue;
-    await recordBalanceSnapshot(userId, d.id, d.balance);
+    await recordBalanceSnapshot(userId, householdId, d.id, d.balance);
   }
 
   // Backfill `originalBalance` for any debts that pre-date the column.
@@ -466,7 +471,7 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
       .from(debtBalanceHistoryTable)
       .where(
         and(
-          eq(debtBalanceHistoryTable.userId, userId),
+          eq(debtBalanceHistoryTable.householdId, householdId),
           inArray(debtBalanceHistoryTable.debtId, ids),
         ),
       )
@@ -482,7 +487,7 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
         .where(
           and(
             eq(debtsTable.id, d.id),
-            eq(debtsTable.userId, userId),
+            eq(debtsTable.householdId, householdId),
             isNull(debtsTable.originalBalance),
           ),
         );
@@ -493,8 +498,8 @@ router.get("/debts", requireAuth, async (req, res): Promise<void> => {
   const accountIds = rows
     .map((r) => r.plaidAccountId)
     .filter((v): v is string => !!v);
-  const { accountById, itemById } = await loadAccountContext(userId, accountIds);
-  const pendingByDebt = await loadPendingPayments(userId, rows);
+  const { accountById, itemById } = await loadAccountContext(householdId, accountIds);
+  const pendingByDebt = await loadPendingPayments(householdId, rows);
   res.json(
     rows.map((r) => shapeDebt(r, accountById, itemById, pendingByDebt)),
   );
@@ -509,10 +514,10 @@ router.post("/debts", requireAuth, async (req, res): Promise<void> => {
   const [{ maxOrder }] = await db
     .select({ maxOrder: sql<number>`coalesce(max(${debtsTable.sortOrder}), 0)` })
     .from(debtsTable)
-    .where(eq(debtsTable.userId, req.userId!));
+    .where(eq(debtsTable.householdId, req.householdId!));
   let values: Record<string, unknown>;
   try {
-    values = normalize({ ...parsed.data, userId: req.userId! });
+    values = normalize({ ...parsed.data, userId: req.userId!, householdId: req.householdId! });
   } catch (e) {
     if (e instanceof AprValidationError) {
       res.status(400).json({ error: e.message });
@@ -530,17 +535,17 @@ router.post("/debts", requireAuth, async (req, res): Promise<void> => {
     .insert(debtsTable)
     .values(values as typeof debtsTable.$inferInsert)
     .returning();
-  await recordBalanceSnapshot(req.userId!, row.id, row.balance);
-  const pendingByDebt = await loadPendingPayments(req.userId!, [row]);
+  await recordBalanceSnapshot(req.userId!, req.householdId!, row.id, row.balance);
+  const pendingByDebt = await loadPendingPayments(req.householdId!, [row]);
   res.status(201).json(shapeDebt(row, new Map(), new Map(), pendingByDebt));
 });
 
 router.post("/debts/sync-minimums", requireAuth, async (req, res): Promise<void> => {
-  const userId = req.userId!;
+  const householdId = req.householdId!;
   const debts = await db
     .select()
     .from(debtsTable)
-    .where(eq(debtsTable.userId, userId));
+    .where(eq(debtsTable.householdId, householdId));
   const since = new Date();
   since.setDate(since.getDate() - 90);
   const sinceISO = since.toISOString().slice(0, 10);
@@ -549,7 +554,7 @@ router.post("/debts/sync-minimums", requireAuth, async (req, res): Promise<void>
     .from(transactionsTable)
     .where(
       and(
-        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.householdId, householdId),
         gte(transactionsTable.occurredOn, sinceISO),
       ),
     );
@@ -572,7 +577,7 @@ router.post("/debts/sync-minimums", requireAuth, async (req, res): Promise<void>
     await db
       .update(debtsTable)
       .set({ minPayment: newMinStr, updatedAt: new Date() })
-      .where(and(eq(debtsTable.id, d.id), eq(debtsTable.userId, userId)));
+      .where(and(eq(debtsTable.id, d.id), eq(debtsTable.householdId, householdId)));
     updated.push({
       id: d.id,
       name: d.name,
@@ -601,7 +606,7 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
     .select()
     .from(debtsTable)
     .where(
-      and(eq(debtsTable.id, String(params.data.id)), eq(debtsTable.userId, req.userId!)),
+      and(eq(debtsTable.id, String(params.data.id)), eq(debtsTable.householdId, req.householdId!)),
     );
   if (!current) {
     res.status(404).json({ error: "Not found" });
@@ -643,7 +648,7 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
     .update(debtsTable)
     .set({ ...normalizedPatch, ...overrides, updatedAt: new Date() })
     .where(
-      and(eq(debtsTable.id, String(params.data.id)), eq(debtsTable.userId, req.userId!)),
+      and(eq(debtsTable.id, String(params.data.id)), eq(debtsTable.householdId, req.householdId!)),
     )
     .returning();
   if (!row) {
@@ -651,7 +656,7 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   if (changed(parsed.data.balance, current.balance)) {
-    await recordBalanceSnapshot(req.userId!, row.id, row.balance);
+    await recordBalanceSnapshot(req.userId!, req.householdId!, row.id, row.balance);
     // If a manual edit pushes the balance above the recorded original
     // (or no original anchor exists yet), bump the anchor so progress
     // never goes negative.
@@ -665,15 +670,15 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
         .where(
           and(
             eq(debtsTable.id, row.id),
-            eq(debtsTable.userId, req.userId!),
+            eq(debtsTable.householdId, req.householdId!),
           ),
         );
       row.originalBalance = next;
     }
   }
   const accountIds = row.plaidAccountId ? [row.plaidAccountId] : [];
-  const { accountById, itemById } = await loadAccountContext(req.userId!, accountIds);
-  const pendingByDebt = await loadPendingPayments(req.userId!, [row]);
+  const { accountById, itemById } = await loadAccountContext(req.householdId!, accountIds);
+  const pendingByDebt = await loadPendingPayments(req.householdId!, [row]);
   res.json(shapeDebt(row, accountById, itemById, pendingByDebt));
 });
 
@@ -682,6 +687,7 @@ router.post(
   requireAuth,
   async (req, res): Promise<void> => {
     const userId = req.userId!;
+    const householdId = req.householdId!;
     const debtId = String(req.params.id);
     const plaidAccountId = String(req.body?.plaidAccountId ?? "");
     if (!plaidAccountId) {
@@ -691,7 +697,7 @@ router.post(
     const [debt] = await db
       .select()
       .from(debtsTable)
-      .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)));
+      .where(and(eq(debtsTable.id, debtId), eq(debtsTable.householdId, householdId)));
     if (!debt) {
       res.status(404).json({ error: "Debt not found" });
       return;
@@ -702,7 +708,7 @@ router.post(
       .where(
         and(
           eq(plaidAccountsTable.id, plaidAccountId),
-          eq(plaidAccountsTable.userId, userId),
+          eq(plaidAccountsTable.householdId, householdId),
         ),
       );
     if (!acct) {
@@ -733,7 +739,7 @@ router.post(
       .from(debtsTable)
       .where(
         and(
-          eq(debtsTable.userId, userId),
+          eq(debtsTable.householdId, householdId),
           eq(debtsTable.plaidAccountId, plaidAccountId),
         ),
       );
@@ -755,11 +761,11 @@ router.post(
     const [linked] = await db
       .update(debtsTable)
       .set({ plaidAccountId, updatedAt: new Date() })
-      .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)))
+      .where(and(eq(debtsTable.id, debtId), eq(debtsTable.householdId, householdId)))
       .returning();
     let refreshed;
     try {
-      refreshed = await applyLiabilityToDebt(userId, linked, "adopt", fetchOk);
+      refreshed = await applyLiabilityToDebt(userId, householdId, linked, "adopt", fetchOk);
     } catch (e) {
       if (e instanceof AprValidationError) {
         // Roll back the link write so the debt isn't left half-attached
@@ -770,14 +776,14 @@ router.post(
             plaidAccountId: debt.plaidAccountId,
             updatedAt: new Date(),
           })
-          .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)));
+          .where(and(eq(debtsTable.id, debtId), eq(debtsTable.householdId, householdId)));
         res.status(400).json({ error: e.message });
         return;
       }
       throw e;
     }
-    const { accountById, itemById } = await loadAccountContext(userId, [plaidAccountId]);
-    const pendingByDebt = await loadPendingPayments(userId, [refreshed]);
+    const { accountById, itemById } = await loadAccountContext(householdId, [plaidAccountId]);
+    const pendingByDebt = await loadPendingPayments(householdId, [refreshed]);
     res.json(shapeDebt(refreshed, accountById, itemById, pendingByDebt));
   },
 );
@@ -786,7 +792,7 @@ router.post(
   "/debts/:id/unlink",
   requireAuth,
   async (req, res): Promise<void> => {
-    const userId = req.userId!;
+    const householdId = req.householdId!;
     const debtId = String(req.params.id);
     const [row] = await db
       .update(debtsTable)
@@ -798,13 +804,13 @@ router.post(
         minPaymentSource: "manual",
         updatedAt: new Date(),
       })
-      .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)))
+      .where(and(eq(debtsTable.id, debtId), eq(debtsTable.householdId, householdId)))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Not found" });
       return;
     }
-    const pendingByDebt = await loadPendingPayments(userId, [row]);
+    const pendingByDebt = await loadPendingPayments(householdId, [row]);
     res.json(shapeDebt(row, new Map(), new Map(), pendingByDebt));
   },
 );
@@ -814,11 +820,12 @@ router.post(
   requireAuth,
   async (req, res): Promise<void> => {
     const userId = req.userId!;
+    const householdId = req.householdId!;
     const debtId = String(req.params.id);
     const [debt] = await db
       .select()
       .from(debtsTable)
-      .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)));
+      .where(and(eq(debtsTable.id, debtId), eq(debtsTable.householdId, householdId)));
     if (!debt) {
       res.status(404).json({ error: "Debt not found" });
       return;
@@ -829,7 +836,7 @@ router.post(
     }
     let result;
     try {
-      result = await refreshLinkedDebt(userId, debt);
+      result = await refreshLinkedDebt(userId, householdId, debt);
     } catch (e) {
       if (e instanceof AprValidationError) {
         res.status(400).json({ error: e.message });
@@ -844,10 +851,10 @@ router.post(
       });
       return;
     }
-    const { accountById, itemById } = await loadAccountContext(userId, [
+    const { accountById, itemById } = await loadAccountContext(householdId, [
       result.debt.plaidAccountId!,
     ]);
-    const pendingByDebt = await loadPendingPayments(userId, [result.debt]);
+    const pendingByDebt = await loadPendingPayments(householdId, [result.debt]);
     res.json(shapeDebt(result.debt, accountById, itemById, pendingByDebt));
   },
 );
@@ -868,6 +875,7 @@ router.post(
     }
     const debtId = String(params.data.id);
     const userId = req.userId!;
+    const householdId = req.householdId!;
     const amount = Number(parsed.data.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       res.status(400).json({ error: "amount must be > 0" });
@@ -877,7 +885,7 @@ router.post(
       const [debt] = await tx
         .select()
         .from(debtsTable)
-        .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)));
+        .where(and(eq(debtsTable.id, debtId), eq(debtsTable.householdId, householdId)));
       if (!debt) return null;
       const oldBal = Number(debt.balance);
       const newBal = Math.max(0, oldBal - amount);
@@ -894,6 +902,7 @@ router.post(
         .insert(transactionsTable)
         .values({
           userId,
+          householdId,
           occurredOn,
           description: killed
             ? `Payment — ${debt.name} (PAID OFF)`
@@ -914,7 +923,7 @@ router.post(
           updatedAt: new Date(),
           ...(killed ? { status: "archived" } : {}),
         })
-        .where(and(eq(debtsTable.id, debtId), eq(debtsTable.userId, userId)))
+        .where(and(eq(debtsTable.id, debtId), eq(debtsTable.householdId, householdId)))
         .returning();
       return { debt: updated, transaction: txn, killed };
     });
@@ -922,10 +931,10 @@ router.post(
       res.status(404).json({ error: "Not found" });
       return;
     }
-    await recordBalanceSnapshot(req.userId!, result.debt.id, result.debt.balance);
+    await recordBalanceSnapshot(req.userId!, householdId, result.debt.id, result.debt.balance);
     const accountIds = result.debt.plaidAccountId ? [result.debt.plaidAccountId] : [];
-    const { accountById, itemById } = await loadAccountContext(req.userId!, accountIds);
-    const pendingByDebt = await loadPendingPayments(req.userId!, [result.debt]);
+    const { accountById, itemById } = await loadAccountContext(householdId, accountIds);
+    const pendingByDebt = await loadPendingPayments(householdId, [result.debt]);
     res.status(201).json({
       debt: shapeDebt(result.debt, accountById, itemById, pendingByDebt),
       transaction: result.transaction,
@@ -943,7 +952,7 @@ router.delete("/debts/:id", requireAuth, async (req, res): Promise<void> => {
   await db
     .delete(debtsTable)
     .where(
-      and(eq(debtsTable.id, String(params.data.id)), eq(debtsTable.userId, req.userId!)),
+      and(eq(debtsTable.id, String(params.data.id)), eq(debtsTable.householdId, req.householdId!)),
     );
   res.sendStatus(204);
 });

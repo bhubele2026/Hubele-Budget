@@ -1,36 +1,53 @@
 import type { Request, Response, NextFunction } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
-import { db, profilesTable } from "@workspace/db";
+import {
+  db,
+  householdsTable,
+  householdMembersTable,
+  profilesTable,
+} from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getOwnerEmail } from "./requireOwner";
 
 declare global {
   namespace Express {
     interface Request {
-      // The household-scoped data identity. For the owner this is the
-      // owner's own Clerk userId; for any invited family member this
-      // is REMAPPED to the owner's Clerk userId so every existing
-      // route — which keys on `req.userId` — reads and writes the
-      // shared household's rows. (#623)
-      userId?: string;
-      // The signed-in user's actual Clerk userId. Used for owner
-      // gating (`requireOwner`) and member-only checks (e.g. self
-      // removal in /members/:id) where we need to know WHO is making
-      // the request, independent of whose data they're viewing.
+      // The signed-in Clerk userId of the actor making the request.
+      // Used wherever we need to know WHO did something — owner
+      // gating, /me identity, audit columns on inserts, Plaid
+      // client_user_id, self-removal checks. (#623)
       actualUserId?: string;
+      // Back-compat alias of `actualUserId`. The legacy route code
+      // wrote `userId: req.userId` into audit columns; that
+      // semantic is preserved by this alias.
+      userId?: string;
+      // The household this request reads/writes. Resolved from
+      // `household_members.user_id = actualUserId`. Routes filter
+      // shared-data tables on this column. (#623)
+      householdId?: string;
+      // The household owner's Clerk userId (so plaid_items inserts
+      // and any other "this belongs to the owner" semantics can
+      // resolve without a second DB hit). Equal to actualUserId
+      // when the actor IS the owner.
+      householdOwnerId?: string;
     }
   }
 }
 
-// Process-local cache of resolved household owner per signed-in user.
+interface ResolvedHousehold {
+  householdId: string;
+  householdOwnerId: string;
+}
+
+// Process-local cache of resolved household per signed-in user.
 // Cleared by `_resetHouseholdCacheForTests` and by member removal
-// (handled in routes/members.ts) so a re-invited user picks up a new
+// in routes/members.ts so a re-invited user picks up a new
 // household without a server restart.
-const householdCache = new Map<string, string>();
+const householdCache = new Map<string, ResolvedHousehold>();
 
 // Process-local cache of the owner's Clerk userId, looked up by
 // matching OWNER_EMAIL against Clerk's user list. Refreshed at most
-// once per minute. Single-household app: there is exactly one owner.
+// once per minute. Single-household app: one owner.
 let cachedOwnerUserId: string | null = null;
 let cachedOwnerLookupAt = 0;
 const OWNER_CACHE_TTL_MS = 60_000;
@@ -42,11 +59,9 @@ export function _resetHouseholdCacheForTests(): void {
 }
 
 /**
- * Evict any cached household resolution for `actualUserId`. Call this
- * when a member is removed so that if the same person is re-invited in
- * the same process lifetime, the next sign-in re-resolves their
- * household from the (now updated) profile row instead of serving the
- * stale in-memory mapping.
+ * Evict any cached household resolution for `actualUserId`. Call
+ * this when a member is removed so re-invitation in the same
+ * process re-resolves their membership cleanly.
  */
 export function evictHouseholdCacheFor(actualUserId: string): void {
   householdCache.delete(actualUserId);
@@ -76,7 +91,7 @@ async function resolveOwnerUserId(): Promise<string | null> {
       cachedOwnerLookupAt = now;
     }
   } catch {
-    // best-effort — falls back to remap=self below
+    // best-effort — caller falls back gracefully
   }
   return cachedOwnerUserId;
 }
@@ -99,17 +114,14 @@ interface MinimalLogger {
 
 /**
  * Returns true iff this email has at least one Clerk invitation in
- * `accepted` status. Acceptance is the upstream signal that an owner
- * explicitly granted this person household access — without it we
- * MUST NOT remap them to the owner's data. (#623)
+ * `accepted` status. This is the upstream signal that an owner
+ * explicitly granted household access; without it we MUST NOT add
+ * the user to the owner's household. (#623)
  */
 async function hasAcceptedInvitation(email: string): Promise<boolean> {
   const target = email.toLowerCase().trim();
   if (!target) return false;
   try {
-    // Clerk's invitations API doesn't filter by email server-side, so
-    // we page through accepted invitations (typically a tiny set for
-    // a single-household app) and look for an exact match.
     const pageSize = 100;
     const max = 1000;
     let offset = 0;
@@ -136,59 +148,137 @@ async function hasAcceptedInvitation(email: string): Promise<boolean> {
   return false;
 }
 
-async function resolveHouseholdOwnerId(
+/**
+ * Ensure a household row exists for `ownerUserId`, returning its
+ * id. Idempotent.
+ */
+async function ensureHousehold(ownerUserId: string): Promise<string> {
+  const [existing] = await db
+    .select({ id: householdsTable.id })
+    .from(householdsTable)
+    .where(eq(householdsTable.ownerUserId, ownerUserId));
+  if (existing) return existing.id;
+  const [inserted] = await db
+    .insert(householdsTable)
+    .values({ ownerUserId })
+    .onConflictDoNothing({ target: householdsTable.ownerUserId })
+    .returning({ id: householdsTable.id });
+  if (inserted) return inserted.id;
+  // Lost the race; re-read.
+  const [again] = await db
+    .select({ id: householdsTable.id })
+    .from(householdsTable)
+    .where(eq(householdsTable.ownerUserId, ownerUserId));
+  if (!again) throw new Error("Failed to create or fetch household");
+  return again.id;
+}
+
+async function resolveHousehold(
   actualUserId: string,
   log: MinimalLogger,
-): Promise<string> {
+): Promise<ResolvedHousehold> {
   const cached = householdCache.get(actualUserId);
   if (cached) return cached;
 
-  let householdOwnerId: string | null = null;
+  // Path A: existing membership row (the durable, post-bootstrap path).
+  let row: { householdId: string; ownerUserId: string } | undefined;
   try {
-    const [row] = await db
-      .select({ householdOwnerId: profilesTable.householdOwnerId })
-      .from(profilesTable)
-      .where(eq(profilesTable.id, actualUserId));
-    householdOwnerId = row?.householdOwnerId ?? null;
+    const rows = await db
+      .select({
+        householdId: householdMembersTable.householdId,
+        ownerUserId: householdsTable.ownerUserId,
+      })
+      .from(householdMembersTable)
+      .innerJoin(
+        householdsTable,
+        eq(householdsTable.id, householdMembersTable.householdId),
+      )
+      .where(eq(householdMembersTable.userId, actualUserId));
+    row = rows[0];
   } catch (e) {
-    log.warn({ err: e }, "Failed to read profile for household resolution");
+    log.warn({ err: e }, "Household membership lookup failed");
   }
 
-  if (!householdOwnerId) {
-    // First-time resolution. Three branches, in strict order:
-    //   1. The signed-in user IS the owner (email matches OWNER_EMAIL).
-    //      → household = self.
-    //   2. The signed-in user has an accepted Clerk invitation
-    //      (granted by the owner). → household = owner's userId.
-    //   3. Anyone else (signed in to Clerk but never invited).
-    //      → household = self, so they see only their own (empty)
-    //      data and CANNOT read the owner's household. This is the
-    //      defense-in-depth gate against a public sign-up slipping
-    //      past Clerk's invitation-only enforcement upstream.
-    const myEmail = (await loadEmail(actualUserId))?.toLowerCase().trim();
-    if (myEmail && myEmail === getOwnerEmail()) {
-      householdOwnerId = actualUserId;
-    } else if (myEmail && (await hasAcceptedInvitation(myEmail))) {
-      const ownerId = await resolveOwnerUserId();
-      householdOwnerId = ownerId ?? actualUserId;
+  if (row) {
+    const resolved = {
+      householdId: row.householdId,
+      householdOwnerId: row.ownerUserId,
+    };
+    householdCache.set(actualUserId, resolved);
+    return resolved;
+  }
+
+  // Path B: bootstrap. Three branches in strict order — the same
+  // gating used by the previous middleware-remap implementation,
+  // but now persisted as a real `household_members` row instead of
+  // remapping req.userId.
+  const myEmail = (await loadEmail(actualUserId))?.toLowerCase().trim();
+
+  let ownerUserIdForHousehold = actualUserId;
+  let role: "owner" | "member" = "owner";
+  let invitedEmail: string | null = null;
+
+  if (myEmail && myEmail === getOwnerEmail()) {
+    // Branch 1: signed-in user IS the owner. Bootstrap their own
+    // household.
+    ownerUserIdForHousehold = actualUserId;
+    role = "owner";
+  } else if (myEmail && (await hasAcceptedInvitation(myEmail))) {
+    // Branch 2: invited family member. Join the owner's household.
+    const ownerId = await resolveOwnerUserId();
+    if (ownerId) {
+      ownerUserIdForHousehold = ownerId;
+      role = "member";
+      invitedEmail = myEmail;
     } else {
-      householdOwnerId = actualUserId;
+      // Owner not (yet) signed in — fall back to self-isolation.
+      ownerUserIdForHousehold = actualUserId;
+      role = "owner";
     }
-    try {
-      await db
-        .insert(profilesTable)
-        .values({ id: actualUserId, householdOwnerId })
-        .onConflictDoUpdate({
-          target: profilesTable.id,
-          set: { householdOwnerId },
-        });
-    } catch (e) {
-      log.warn({ err: e }, "Failed to persist householdOwnerId");
-    }
+  } else {
+    // Branch 3: no invitation. Isolated household with no shared data.
+    ownerUserIdForHousehold = actualUserId;
+    role = "owner";
   }
 
-  householdCache.set(actualUserId, householdOwnerId);
-  return householdOwnerId;
+  const householdId = await ensureHousehold(ownerUserIdForHousehold);
+
+  // Best-effort: create the membership row. Ignore conflicts — a
+  // concurrent request from the same user may have inserted first.
+  try {
+    await db
+      .insert(householdMembersTable)
+      .values({
+        userId: actualUserId,
+        householdId,
+        role,
+        invitedEmail,
+      })
+      .onConflictDoNothing({ target: householdMembersTable.userId });
+  } catch (e) {
+    log.warn({ err: e }, "Failed to persist household_members row");
+  }
+
+  // Maintain a profile row for compatibility with any code path
+  // that still reads from it (e.g. owner email cache).
+  try {
+    await db
+      .insert(profilesTable)
+      .values({ id: actualUserId, email: myEmail ?? null })
+      .onConflictDoUpdate({
+        target: profilesTable.id,
+        set: { email: myEmail ?? null },
+      });
+  } catch {
+    // non-fatal
+  }
+
+  const resolved = {
+    householdId,
+    householdOwnerId: ownerUserIdForHousehold,
+  };
+  householdCache.set(actualUserId, resolved);
+  return resolved;
 }
 
 export async function requireAuth(
@@ -205,18 +295,24 @@ export async function requireAuth(
     return;
   }
   req.actualUserId = actualUserId;
+  // Back-compat alias used by legacy code paths that record an
+  // actor on insert. Read paths now use req.householdId.
+  req.userId = actualUserId;
   try {
-    req.userId = await resolveHouseholdOwnerId(actualUserId, req.log);
+    const h = await resolveHousehold(actualUserId, req.log);
+    req.householdId = h.householdId;
+    req.householdOwnerId = h.householdOwnerId;
   } catch (e) {
-    req.log.warn({ err: e }, "Household resolution failed; falling back to self");
-    req.userId = actualUserId;
+    req.log.warn({ err: e }, "Household resolution failed");
+    res.status(500).json({ error: "Failed to resolve household" });
+    return;
   }
   next();
 }
 
-// Test-only export: lets requireAuth.test.ts evict cache without
-// reaching into module internals.
+// Test-only export.
 export const __testing = {
-  resolveHouseholdOwnerId,
+  resolveHousehold,
   resolveOwnerUserId,
+  ensureHousehold,
 };

@@ -6,14 +6,23 @@ import { and, eq } from "drizzle-orm";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 const PLAID_ACCESS_TOKEN = "access-sandbox-test-token";
+let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (
-    req: { userId?: string },
+    req: {
+      userId?: string;
+      actualUserId?: string;
+      householdId?: string;
+      householdOwnerId?: string;
+    },
     _res: unknown,
     next: () => void,
   ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -37,6 +46,7 @@ import {
 } from "@workspace/db";
 import transactionsRouter from "../routes/transactions";
 import { syncPlaidItem } from "../lib/plaidSync";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
 app.use(express.json({ limit: "20mb" }));
@@ -53,6 +63,7 @@ async function deleteAllForUser(): Promise<void> {
 }
 
 beforeAll(async () => {
+  TEST_HOUSEHOLD_ID = (await createTestHousehold(TEST_USER)).householdId;
   await deleteAllForUser();
   server = createServer(app);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -106,6 +117,7 @@ describe("isTransfer user override (#479)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-05-01",
         description: "ONLINE TRANSFER TO SAVINGS",
         amount: "-100.00",
@@ -130,6 +142,7 @@ describe("isTransfer user override (#479)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-05-02",
         description: "STARBUCKS STORE 4477",
         amount: "-5.50",
@@ -157,6 +170,7 @@ describe("isTransfer user override (#479)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-05-03",
         description: "AMAZON.COM AMZN.COM/BILL WA",
         amount: "-32.18",
@@ -184,6 +198,7 @@ describe("isTransfer user override (#479)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-05-04",
         description: "ONLINE TRANSFER TO SAVINGS XXXX1234",
         amount: "-500.00",
@@ -205,6 +220,7 @@ describe("isTransfer user override (#479)", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `it-${randomUUID()}`,
         accessToken: PLAID_ACCESS_TOKEN,
         institutionName: "Test Bank",
@@ -249,6 +265,7 @@ describe("isTransfer user override (#479)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-05-06",
         description: "ONLINE TRANSFER TO SAVINGS XXXX5555",
         amount: "-50.00",
@@ -286,6 +303,7 @@ describe("isTransfer user override (#479)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Transfer",
         excludeFromBudget: true,
       })
@@ -294,6 +312,7 @@ describe("isTransfer user override (#479)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-05-07",
         description: "ZELLE PAYMENT TO MOM",
         amount: "-200.00",
@@ -324,6 +343,7 @@ describe("isTransfer user override (#479)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Transfer",
         excludeFromBudget: true,
       })
@@ -364,6 +384,7 @@ describe("isTransfer user override (#479)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-05-05",
         description: "ONLINE TRANSFER TO SAVINGS XXXX9999",
         amount: "-200.00",
@@ -379,6 +400,7 @@ describe("isTransfer user override (#479)", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `it-${randomUUID()}`,
         accessToken: PLAID_ACCESS_TOKEN,
         institutionName: "Test Bank 2",

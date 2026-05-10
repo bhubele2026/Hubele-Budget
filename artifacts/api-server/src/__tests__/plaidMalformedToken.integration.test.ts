@@ -10,7 +10,10 @@ import {
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 
+import { createTestHousehold } from "./_helpers/testHousehold";
+
 const TEST_USER = `malformed-token-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 // (#366) The whole point of this file is to prove zero Plaid calls
 // happen for a malformed-token sync. We mock every product call this
@@ -95,7 +98,11 @@ async function cleanup(): Promise<void> {
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
+  await cleanup();
+});
 afterAll(cleanup);
 
 beforeEach(async () => {
@@ -117,6 +124,7 @@ async function seedMalformedItem(
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: externalItemId,
       accessToken,
       institutionName: "Chase",

@@ -11,12 +11,26 @@ import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import express from "express";
 import { and, eq } from "drizzle-orm";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const TEST_USER = `cutoff-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: {
+      userId?: string;
+      actualUserId?: string;
+      householdId?: string;
+      householdOwnerId?: string;
+    },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -104,6 +118,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -136,6 +152,7 @@ async function seedAmexCardScenario(opts: {
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `item-${randomUUID()}`,
       accessToken: `access-sandbox-${randomUUID()}`,
       institutionName: "American Express",
@@ -147,6 +164,7 @@ async function seedAmexCardScenario(opts: {
     .insert(plaidAccountsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: externalAcctId,
       name: "Amex Gold",
@@ -160,6 +178,7 @@ async function seedAmexCardScenario(opts: {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Amex Gold",
         balance: "1000",
         plaidAccountId: acct!.id,
@@ -169,6 +188,7 @@ async function seedAmexCardScenario(opts: {
     for (const d of opts.manualDates ?? []) {
       await db.insert(transactionsTable).values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: d,
         description: `manual ${d}`,
         amount: "-50.00",
@@ -180,6 +200,7 @@ async function seedAmexCardScenario(opts: {
   for (const d of opts.amexSourceDates ?? []) {
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: d,
       description: `amex import ${d}`,
       amount: "-25.00",
@@ -285,6 +306,7 @@ describe("(#361) Plaid first-sync import cutoff", () => {
     // scope, source=manual, plaidTransactionId NULL).
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: "2026-02-26",
       description: "Coffee — manually entered before link",
       amount: "-42.00",
@@ -339,6 +361,7 @@ describe("(#361) Plaid first-sync import cutoff", () => {
     // stale manual line. Post-#452, anything <= cutoff is fair game.
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: "2026-01-05",
       description: "Annual fee — typed in last month",
       amount: "-95.00",
@@ -385,6 +408,7 @@ describe("(#361) Plaid first-sync import cutoff", () => {
     // Manual "pending" row at $19.99 on 2026-02-25.
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: "2026-02-25",
       description: "Coffee (pending)",
       amount: "-19.99",
@@ -476,6 +500,7 @@ describe("(#361) Plaid first-sync import cutoff", () => {
     });
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: "2026-02-20",
       description: "Pure manual row",
       amount: "-9.99",

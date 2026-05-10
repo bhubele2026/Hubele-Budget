@@ -16,18 +16,69 @@ import {
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 
+// (#623) HOUSEHOLD DATA MODEL
+//
+// A household is the unit of data sharing. The owner (defined by
+// OWNER_EMAIL on first sign-in) creates the single household; invited
+// family members join it via `householdMembersTable`. Every user-scoped
+// table carries a `household_id uuid` FK so reads and writes are scoped
+// to the household, not to an individual user. The legacy `user_id`
+// column on those tables is preserved as the *actor* (who created the
+// row) for audit / display purposes — it is no longer used to filter
+// reads.
+//
+// Resolution at request time happens in `requireAuth`:
+//   * `req.actualUserId` — signed-in Clerk user id (the actor).
+//   * `req.userId`       — alias of `req.actualUserId` (kept for back-
+//                          compat in legacy call sites that record an
+//                          actor on insert).
+//   * `req.householdId`  — data scope, looked up via
+//                          `household_members.user_id = actualUserId`.
+//
+// Member removal is durable: deleting a `household_members` row +
+// revoking pending Clerk invitations is sufficient to permanently
+// revoke access; there is no historical-invitation heuristic.
+
+export const householdsTable = pgTable("households", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  // The Clerk userId of the household owner. Unique because the app
+  // is single-household-per-owner (owner_email model). Used by
+  // requireAuth to bootstrap the owner's household on first sign-in.
+  ownerUserId: text("owner_user_id").notNull().unique(),
+  name: text("name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const householdMembersTable = pgTable(
+  "household_members",
+  {
+    // The signed-in Clerk userId of this member. PK because each user
+    // belongs to at most one household.
+    userId: text("user_id").primaryKey(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    // The email used in the original Clerk invitation. Stored so a
+    // re-invite/lookup can match historical state without a Clerk
+    // round-trip. Null for the owner (self-bootstrap).
+    invitedEmail: text("invited_email"),
+    // 'owner' or 'member'. Owner is bootstrapped from OWNER_EMAIL;
+    // members are inserted on first sign-in after accepting an invite.
+    role: text("role").notNull().default("member"),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    householdIdx: index("household_members_household_idx").on(t.householdId),
+  }),
+);
+
 export const profilesTable = pgTable("profiles", {
   id: text("id").primaryKey(),
   email: text("email"),
   displayName: text("display_name"),
-  // (#623) Shared-household data model. When set, every API request
-  // signed in as this Clerk user resolves `req.userId` to this value
-  // (the household owner's Clerk id) so all data queries — debts,
-  // budget, transactions, Plaid items, settings, etc. — read and
-  // write the owner's rows. The owner's own profile has this set to
-  // their own id (or null, which behaves identically). null on a
-  // non-owner profile means the household hasn't been resolved yet
-  // and `requireAuth` will resolve it on the next request.
+  // (#623) Legacy column from the previous middleware-remap approach.
+  // Retained nullable so existing data is not lost; not read by the
+  // current household-scoped queries (those use `household_members`).
   householdOwnerId: text("household_owner_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -36,7 +87,13 @@ export const debtsTable = pgTable(
   "debts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Audit / actor: the signed-in user who created the row. Reads
+    // are scoped by `household_id`, not this column.
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     name: text("name").notNull(),
     balance: numeric("balance", { precision: 12, scale: 2 }).notNull().default("0"),
     originalBalance: numeric("original_balance", { precision: 12, scale: 2 }),
@@ -63,10 +120,8 @@ export const debtsTable = pgTable(
   },
   (t) => ({
     userIdx: index("debts_user_idx").on(t.userId),
+    householdIdx: index("debts_household_idx").on(t.householdId),
     plaidAcctIdx: index("debts_plaid_account_idx").on(t.plaidAccountId),
-    // (#44) One Plaid account → at most one debt. Partial uniqueness so
-    // the many manual debts (plaid_account_id IS NULL) are unaffected.
-    // The api-server catches the resulting 23505 and returns 409.
     plaidAcctUnique: uniqueIndex("debts_plaid_account_unique")
       .on(t.plaidAccountId)
       .where(sql`${t.plaidAccountId} IS NOT NULL`),
@@ -78,6 +133,10 @@ export const debtBalanceHistoryTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     debtId: uuid("debt_id")
       .notNull()
       .references(() => debtsTable.id, { onDelete: "cascade" }),
@@ -86,17 +145,29 @@ export const debtBalanceHistoryTable = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
+    // Original per-user uniqueness preserved (it's a strict-superset
+    // of the household uniqueness when one household = one owner).
     userDebtDayUnique: uniqueIndex("debt_balance_history_user_debt_day_uq").on(
       t.userId,
       t.debtId,
       t.recordedOn,
     ),
     userDebtIdx: index("debt_balance_history_user_debt_idx").on(t.userId, t.debtId),
+    householdDebtDayUq: uniqueIndex(
+      "debt_balance_history_household_debt_day_uq",
+    ).on(t.householdId, t.debtId, t.recordedOn),
   }),
 );
 
 export const avalancheSettingsTable = pgTable("avalanche_settings", {
+  // userId remains PK for backward compatibility with the existing
+  // single-row-per-user data; one row per household owner is exactly
+  // one row per household.
   userId: text("user_id").primaryKey(),
+  householdId: uuid("household_id").references(
+    () => householdsTable.id,
+    { onDelete: "cascade" },
+  ),
   strategy: text("strategy").notNull().default("avalanche"),
   extraSource: text("extra_source").notNull().default("manual"),
   extraBudgetCategoryId: uuid("extra_budget_category_id"),
@@ -110,24 +181,30 @@ export const budgetCategoriesTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     name: text("name").notNull(),
     kind: text("kind").notNull().default("expense"),
     groupName: text("group_name").notNull().default("Other"),
     sourceKind: text("source_kind").notNull().default("manual"),
     sortOrder: integer("sort_order").notNull().default(0),
     debtId: uuid("debt_id").references(() => debtsTable.id, { onDelete: "cascade" }),
-    // (#474) When true the category is omitted from the Budget page entirely:
-    // its planned line is never rendered, its actuals do not roll up into any
-    // group/summary total, and the mapping-rules UI hides it from category
-    // pickers (and the API rejects rules pointing at it). Used by the
-    // system-managed "Uncategorized" category so users can mark a row as
-    // triaged without contaminating budget math.
     excludeFromBudget: boolean("exclude_from_budget").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
     userNameUnique: uniqueIndex("budget_categories_user_name_uq").on(t.userId, t.name),
     userDebtUnique: uniqueIndex("budget_categories_user_debt_uq").on(t.userId, t.debtId),
+    householdNameUq: uniqueIndex("budget_categories_household_name_uq").on(
+      t.householdId,
+      t.name,
+    ),
+    householdDebtUq: uniqueIndex("budget_categories_household_debt_uq").on(
+      t.householdId,
+      t.debtId,
+    ),
   }),
 );
 
@@ -136,6 +213,10 @@ export const budgetMonthsTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     monthStart: date("month_start").notNull(),
     note: text("note"),
     pinned: boolean("pinned").notNull().default(false),
@@ -143,6 +224,10 @@ export const budgetMonthsTable = pgTable(
   },
   (t) => ({
     userMonthUnique: uniqueIndex("budget_months_user_month_uq").on(t.userId, t.monthStart),
+    householdMonthUq: uniqueIndex("budget_months_household_month_uq").on(
+      t.householdId,
+      t.monthStart,
+    ),
   }),
 );
 
@@ -151,6 +236,10 @@ export const budgetLinesTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     monthStart: date("month_start").notNull(),
     categoryId: uuid("category_id").notNull(),
     plannedAmount: numeric("planned_amount", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -165,6 +254,12 @@ export const budgetLinesTable = pgTable(
       t.monthStart,
       t.categoryId,
     ),
+    householdIdx: index("budget_lines_household_idx").on(t.householdId, t.monthStart),
+    householdMonthCatUq: uniqueIndex("budget_lines_household_month_cat_uq").on(
+      t.householdId,
+      t.monthStart,
+      t.categoryId,
+    ),
   }),
 );
 
@@ -173,6 +268,10 @@ export const recurringItemsTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     name: text("name").notNull(),
     kind: text("kind").notNull().default("bill"),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -186,6 +285,7 @@ export const recurringItemsTable = pgTable(
   },
   (t) => ({
     userIdx: index("recurring_items_user_idx").on(t.userId),
+    householdIdx: index("recurring_items_household_idx").on(t.householdId),
   }),
 );
 
@@ -194,6 +294,10 @@ export const transactionsTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     occurredOn: date("occurred_on").notNull(),
     occurredAt: timestamp("occurred_at", { withTimezone: true, mode: "string" }),
     description: text("description").notNull(),
@@ -209,12 +313,6 @@ export const transactionsTable = pgTable(
     reimbursed: boolean("reimbursed").notNull().default(false),
     reviewed: boolean("reviewed").notNull().default(false),
     isTransfer: boolean("is_transfer").notNull().default(false),
-    // (#479) When true, the user has explicitly toggled `isTransfer`
-    // (cleared the auto-flag from the row's "Transfer" pill, picked a real
-    // category on a transfer row, or flipped the toggle in the Edit dialog).
-    // The Plaid sync / XLSX import / aprilChaseSeed re-categorize paths
-    // honor this flag and skip the description/PFC transfer heuristic so
-    // future syncs of the same row don't silently re-flag it as a transfer.
     isTransferUserOverridden: boolean("is_transfer_user_overridden")
       .notNull()
       .default(false),
@@ -235,6 +333,12 @@ export const transactionsTable = pgTable(
     sourceIdx: index("transactions_user_source_idx").on(t.userId, t.source),
     plaidTxnUq: uniqueIndex("transactions_plaid_txn_uq").on(t.plaidTransactionId),
     debtIdx: index("transactions_debt_idx").on(t.userId, t.debtId),
+    householdIdx: index("transactions_household_idx").on(t.householdId, t.occurredOn),
+    householdSourceIdx: index("transactions_household_source_idx").on(
+      t.householdId,
+      t.source,
+    ),
+    householdDebtIdx: index("transactions_household_debt_idx").on(t.householdId, t.debtId),
   }),
 );
 
@@ -243,6 +347,10 @@ export const plaidItemsTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     itemId: text("item_id").notNull(),
     accessToken: text("access_token").notNull(),
     institutionId: text("institution_id"),
@@ -252,56 +360,18 @@ export const plaidItemsTable = pgTable(
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
     lastSyncError: text("last_sync_error"),
     lastSyncErrorCode: text("last_sync_error_code"),
-    // Set whenever a Plaid call returns PRODUCT_NOT_READY (the bank is still
-    // staging the historical batch for a freshly linked item) and cleared on
-    // the next successful sync. Lets the Settings page show a per-item
-    // "Still preparing" badge so the user knows which institution is in the
-    // transient warm-up window vs. genuinely healthy.
     stillPreparingSince: timestamp("still_preparing_since", { withTimezone: true }),
-    // (#238) Plaid's `consent_expiration_time` from /item/get — the cutoff
-    // date after which the bank link will be auto-disconnected unless the
-    // user re-consents. Captured at exchange time and refreshed during
-    // every sync (the value can move forward as the user re-consents).
-    // Null when Plaid does not report a date for this item (most non-OAuth
-    // institutions). Powers the dated PENDING_EXPIRATION /
-    // PENDING_DISCONNECT subline copy on the reconnect banners.
     consentExpirationAt: timestamp("consent_expiration_at", { withTimezone: true }),
-    // (#258) Wall-clock timestamp of when we last successfully verified
-    // `consent_expiration_at` against Plaid (any path: exchange, on-sync
-    // refresh, or the daily cron). Updated on every successful /item/get
-    // call regardless of whether the cutoff value actually changed, so
-    // support can answer "did the daily refresh run today?" and "is the
-    // disconnect countdown the user is seeing fresh?" without diffing
-    // logs. Null until the first successful refresh (e.g. for items
-    // linked before this column existed).
     consentExpirationLastRefreshedAt: timestamp(
       "consent_expiration_last_refreshed_at",
       { withTimezone: true },
     ),
-    // (#265) Latest /item/get failure message captured during the
-    // consent_expiration refresh path (manual trigger, on-sync
-    // PENDING_EXPIRATION refresh, or daily cron). Cleared on the
-    // next successful refresh. Lets the Settings page render an
-    // inline "why" under the per-item "Disconnect date checked …"
-    // line so a user who walks away after running the manual
-    // refresh can still see which bank errored without having to
-    // re-click the button. Distinct from `last_sync_error` (which
-    // tracks /transactions/sync failures) so a healthy sync does
-    // not erase the consent-refresh failure and vice versa.
     consentExpirationLastRefreshError: text(
       "consent_expiration_last_refresh_error",
     ),
     consentExpirationLastRefreshErrorCode: text(
       "consent_expiration_last_refresh_error_code",
     ),
-    // (#274) The value of `consent_expiration_at` at the moment the
-    // user clicked dismiss on the dashboard "bank consent expiring
-    // soon" banner. The frontend suppresses the alert for an item
-    // only while its current cutoff matches this stored value, so a
-    // re-consent (which rolls the cutoff forward) or a brand-new item
-    // entering the window naturally re-surfaces the banner without
-    // needing a separate "clear dismissal" mutation. Null until the
-    // user dismisses for the first time.
     consentWarningDismissedForCutoff: timestamp(
       "consent_warning_dismissed_for_cutoff",
       { withTimezone: true },
@@ -311,30 +381,19 @@ export const plaidItemsTable = pgTable(
   (t) => ({
     itemUq: uniqueIndex("plaid_items_item_uq").on(t.itemId),
     userIdx: index("plaid_items_user_idx").on(t.userId),
+    householdIdx: index("plaid_items_household_idx").on(t.householdId),
   }),
 );
 
-// (#262) Tracks which (plaid_item, consent cutoff) pairs we have
-// already emailed/pushed an "about to disconnect" reminder for so the
-// daily sweep does not spam the same user every morning while an item
-// sits inside the alert window. Keyed by (plaidItemId, cutoffSentFor):
-//
-//   * Same cutoff → already notified, skip.
-//   * Different cutoff → fresh reminder is allowed. In practice a
-//     successful re-consent rolls Plaid's cutoff months out (well past
-//     the alert window), so the next sweep will not even consider the
-//     item — silence falls out for free without us having to look up
-//     reconnect events explicitly.
-//
-// `recipient` and `channel` are recorded for support/debugging so we
-// can answer "what did we tell this user, and where did we send it?"
-// without re-running the sweep. Cascade delete on the parent item so
-// removing a Plaid link cleans up its history.
 export const plaidConsentRemindersSentTable = pgTable(
   "plaid_consent_reminders_sent",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     plaidItemId: uuid("plaid_item_id")
       .notNull()
       .references((): AnyPgColumn => plaidItemsTable.id, {
@@ -357,32 +416,6 @@ export const plaidConsentRemindersSentTable = pgTable(
   }),
 );
 
-// (#396) De-dup state for the daily malformed-token operator alert
-// (#371). The sweep fires every morning the flagged count crosses the
-// threshold, but a config-level breakage that takes a few days to
-// fully clean up (rolling reconnects, manual DB fixes) would otherwise
-// re-page operators with the same alert every morning until `flagged`
-// drops back below the threshold — exactly the channel-noise the
-// original ticket warned against.
-//
-// Each row is the fingerprint of an alert that actually went out:
-//
-//   * `digest` — sha256 of the sorted flagged `item_row_id` list. Two
-//     consecutive sweeps with the same flagged set produce the same
-//     digest, so the next morning's sweep can short-circuit before
-//     paging anyone.
-//   * `flagged_item_row_ids` — the same list as JSON so the suppress
-//     check can compare set membership and detect "any new items?"
-//     even if the count happens to stay flat (one user reconnected,
-//     another broke).
-//   * `flagged` / `scanned` / `threshold` — the raw numbers at the
-//     time of the alert so the suppress check can decide whether the
-//     spike grew enough day-over-day to re-arm.
-//
-// Append-only — never updated. The suppress check reads the most
-// recent row by `sent_at`. Persisting in Postgres (rather than an
-// in-memory cache) is the explicit "survives process restarts"
-// requirement from the task.
 export const plaidMalformedTokenAlertsSentTable = pgTable(
   "plaid_malformed_token_alerts_sent",
   {
@@ -405,22 +438,15 @@ export const plaidMalformedTokenAlertsSentTable = pgTable(
   }),
 );
 
-// (#279) Append-only audit log of every Plaid sync attempt — one row
-// per (item, kind) outcome. Surfaces the full recent-history (e.g.
-// "this bank failed 4 of the last 10 syncs") in Settings → Linked
-// banks so users can spot a flaky bank link before they only see the
-// latest `lastSyncError` snapshot. Pruned by a daily cron so the
-// table stays bounded.
-//
-// `kind` is one of:
-//   * "transactions" — /transactions/sync (called from syncPlaidItem)
-//   * "balance"      — /accounts/balance/get (bank-snapshot refresh)
-//   * "liabilities"  — /liabilities/get + /accounts/get fallback
 export const plaidSyncAttemptsTable = pgTable(
   "plaid_sync_attempts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     plaidItemId: uuid("plaid_item_id")
       .notNull()
       .references((): AnyPgColumn => plaidItemsTable.id, {
@@ -433,20 +459,9 @@ export const plaidSyncAttemptsTable = pgTable(
     success: boolean("success").notNull(),
     errorCode: text("error_code"),
     errorMessage: text("error_message"),
-    // (#357) Enriched per-attempt failure metadata so Settings → Recent
-    // activity (and any future surface) can render exactly the same
-    // structured Plaid failure the live sync toast renders, without a
-    // second round-trip to Plaid. All optional — populated only on
-    // failure rows that came from extractPlaidError().
     plaidDisplayMessage: text("plaid_display_message"),
     requestId: text("request_id"),
     httpStatus: integer("http_status"),
-    // Categorical bucket: reauth | rate_limit | institution_down |
-    // transient | unknown. Lets the UI decide when to surface a
-    // Reconnect CTA on a historical row without re-deriving from the
-    // raw error_code each render. Named `errorKind` (col
-    // `error_kind`) so it doesn't collide with the existing `kind`
-    // column which records the Plaid product call.
     errorKind: text("error_kind"),
   },
   (t) => ({
@@ -455,6 +470,7 @@ export const plaidSyncAttemptsTable = pgTable(
       t.attemptedAt,
     ),
     userIdx: index("plaid_sync_attempts_user_idx").on(t.userId),
+    householdIdx: index("plaid_sync_attempts_household_idx").on(t.householdId),
   }),
 );
 
@@ -463,6 +479,10 @@ export const plaidAccountsTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     itemId: uuid("item_id").notNull(),
     accountId: text("account_id").notNull(),
     name: text("name"),
@@ -474,34 +494,17 @@ export const plaidAccountsTable = pgTable(
     liabilityBalance: numeric("liability_balance", { precision: 12, scale: 2 }),
     liabilityApr: numeric("liability_apr", { precision: 6, scale: 4 }),
     liabilityMinPayment: numeric("liability_min_payment", { precision: 12, scale: 2 }),
-    // (#44) Day-of-month derived from /liabilities/get's
-    // next_payment_due_date / last_statement_issue_date so that
-    // GET /plaid/liability-accounts can pre-fill the suggestedDebt
-    // payload without an extra Plaid round-trip on each render.
     liabilityDueDay: integer("liability_due_day"),
     liabilityStatementDay: integer("liability_statement_day"),
     liabilityLastFetchedAt: timestamp("liability_last_fetched_at", { withTimezone: true }),
-    // (#361) First-sync dedupe gate. `importCutoffDate` is the inclusive
-    // upper bound on dates Plaid is allowed to *insert* during the very
-    // first /transactions/sync against this account: rows whose `date` is
-    // on/before this cutoff are skipped (assumed to overlap manual /
-    // imported history the user already has). Rows within ±7 days of the
-    // cutoff first try to merge with an unattached manual row at the same
-    // amount/date — successful merges adopt `plaidTransactionId` /
-    // `plaidAccountId` instead of inserting a duplicate. Auto-detected
-    // at link time from the user's existing manual rows; user-overridable
-    // via Settings while `firstSyncCompletedAt` is still null.
     importCutoffDate: date("import_cutoff_date"),
-    // (#361) Stamped at the end of the first successful /transactions/sync
-    // for this account. Until set, the cutoff gate above is active. After
-    // it is set, the gate is permanently disabled (subsequent cursor-based
-    // syncs behave exactly as today).
     firstSyncCompletedAt: timestamp("first_sync_completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
     accountUq: uniqueIndex("plaid_accounts_account_uq").on(t.accountId),
     userIdx: index("plaid_accounts_user_idx").on(t.userId),
+    householdIdx: index("plaid_accounts_household_idx").on(t.householdId),
   }),
 );
 
@@ -510,6 +513,10 @@ export const mappingRulesTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     pattern: text("pattern").notNull(),
     matchType: text("match_type").notNull().default("contains"),
     categoryId: uuid("category_id"),
@@ -518,6 +525,7 @@ export const mappingRulesTable = pgTable(
   },
   (t) => ({
     userIdx: index("mapping_rules_user_idx").on(t.userId),
+    householdIdx: index("mapping_rules_household_idx").on(t.householdId),
   }),
 );
 
@@ -526,17 +534,29 @@ export const monthlySnapshotsTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     monthStart: date("month_start").notNull(),
     payload: jsonb("payload").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
     userMonthUq: uniqueIndex("monthly_snapshots_user_month_uq").on(t.userId, t.monthStart),
+    householdMonthUq: uniqueIndex("monthly_snapshots_household_month_uq").on(
+      t.householdId,
+      t.monthStart,
+    ),
   }),
 );
 
 export const settingsTable = pgTable("settings", {
   userId: text("user_id").primaryKey(),
+  householdId: uuid("household_id").references(
+    () => householdsTable.id,
+    { onDelete: "cascade" },
+  ),
   weeklyAllowanceAmount: numeric("weekly_allowance_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   monthlyAllowanceAmount: numeric("monthly_allowance_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   unplannedAllowanceAmount: numeric("unplanned_allowance_amount", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -548,6 +568,10 @@ export const settingsTable = pgTable("settings", {
 export const importBatchesTable = pgTable("import_batches", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").notNull(),
+  householdId: uuid("household_id").references(
+    () => householdsTable.id,
+    { onDelete: "cascade" },
+  ),
   filename: text("filename"),
   summary: jsonb("summary"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -558,6 +582,10 @@ export const forecastResolutionsTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     recurringItemId: text("recurring_item_id"),
     occurrenceDate: date("occurrence_date"),
     status: text("status").notNull(),
@@ -567,6 +595,7 @@ export const forecastResolutionsTable = pgTable(
   },
   (t) => ({
     userIdx: index("forecast_resolutions_user_idx").on(t.userId),
+    householdIdx: index("forecast_resolutions_household_idx").on(t.householdId),
   }),
 );
 
@@ -575,16 +604,28 @@ export const forecastClosedMonthsTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     monthKey: text("month_key").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
     userMonthUq: uniqueIndex("forecast_closed_months_uq").on(t.userId, t.monthKey),
+    householdMonthUq: uniqueIndex("forecast_closed_months_household_uq").on(
+      t.householdId,
+      t.monthKey,
+    ),
   }),
 );
 
 export const forecastSettingsTable = pgTable("forecast_settings", {
   userId: text("user_id").primaryKey(),
+  householdId: uuid("household_id").references(
+    () => householdsTable.id,
+    { onDelete: "cascade" },
+  ),
   daysAhead: integer("days_ahead").notNull().default(90),
   startingBalance: numeric("starting_balance", { precision: 12, scale: 2 }).notNull().default("0"),
   cashBuffer: numeric("cash_buffer", { precision: 12, scale: 2 }).notNull().default("500"),
@@ -609,11 +650,6 @@ export const forecastSettingsTable = pgTable("forecast_settings", {
       }
     >
   >(),
-  // Per-account current-balance snapshots, keyed by `plaid_accounts.id`.
-  // The legacy `bankSnapshot*` columns above remain the "primary" snapshot
-  // (drives Forecast page balance math + cash-signal). This map lets the
-  // Chase page anchor Starting/Ending balance for non-primary checking
-  // accounts the user picks via the multi-account picker (#296).
   accountSnapshots: jsonb("account_snapshots").$type<
     Record<
       string,
@@ -626,11 +662,6 @@ export const forecastSettingsTable = pgTable("forecast_settings", {
       }
     >
   >(),
-  // (#411) Set the first time we auto-run `dedupePlaidAccountsForUser`
-  // on a user's behalf (Chase/transactions hit, post-link, or sign-in).
-  // Used as the gate that prevents the auto-dedupe from re-running on
-  // every request — once it's set, the routine only fires again when
-  // explicitly invoked (Plaid (re)link, the maintenance endpoint).
   autoDedupeRanAt: timestamp("auto_dedupe_ran_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -640,6 +671,10 @@ export const dashboardBudgetsTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(
+      () => householdsTable.id,
+      { onDelete: "cascade" },
+    ),
     bucket: text("bucket").notNull(),
     periodKey: text("period_key").notNull(),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -647,31 +682,38 @@ export const dashboardBudgetsTable = pgTable(
   },
   (t) => ({
     uq: uniqueIndex("dashboard_budgets_uq").on(t.userId, t.bucket, t.periodKey),
+    householdUq: uniqueIndex("dashboard_budgets_household_uq").on(
+      t.householdId,
+      t.bucket,
+      t.periodKey,
+    ),
   }),
 );
 
 export const insertDebtSchema = createInsertSchema(debtsTable).omit({
-  id: true, userId: true, createdAt: true, updatedAt: true,
+  id: true, userId: true, householdId: true, createdAt: true, updatedAt: true,
 });
 export const insertCategorySchema = createInsertSchema(budgetCategoriesTable).omit({
-  id: true, userId: true, createdAt: true,
+  id: true, userId: true, householdId: true, createdAt: true,
 });
 export const insertBudgetMonthSchema = createInsertSchema(budgetMonthsTable).omit({
-  id: true, userId: true, createdAt: true,
+  id: true, userId: true, householdId: true, createdAt: true,
 });
 export const insertBudgetLineSchema = createInsertSchema(budgetLinesTable).omit({
-  id: true, userId: true, createdAt: true,
+  id: true, userId: true, householdId: true, createdAt: true,
 });
 export const insertRecurringSchema = createInsertSchema(recurringItemsTable).omit({
-  id: true, userId: true, createdAt: true,
+  id: true, userId: true, householdId: true, createdAt: true,
 });
 export const insertTransactionSchema = createInsertSchema(transactionsTable).omit({
-  id: true, userId: true, createdAt: true,
+  id: true, userId: true, householdId: true, createdAt: true,
 });
 export const insertMappingRuleSchema = createInsertSchema(mappingRulesTable).omit({
-  id: true, userId: true, createdAt: true,
+  id: true, userId: true, householdId: true, createdAt: true,
 });
 
+export type Household = typeof householdsTable.$inferSelect;
+export type HouseholdMember = typeof householdMembersTable.$inferSelect;
 export type Debt = typeof debtsTable.$inferSelect;
 export type Category = typeof budgetCategoriesTable.$inferSelect;
 export type BudgetMonth = typeof budgetMonthsTable.$inferSelect;

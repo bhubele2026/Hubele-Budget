@@ -4,6 +4,11 @@ import {
   plaidItemsTable,
   plaidAccountsTable,
 } from "@workspace/db";
+// (#623) plaidLiabilities scopes account/item writes by household, not
+// actor: any household member must be able to refresh balances on
+// items linked by the owner. `userId` arg is kept for audit fields
+// (recordPlaidSyncAttempt, log context) but is no longer used to
+// filter rows.
 import {
   plaid,
   isValidPlaidAccessToken,
@@ -81,10 +86,13 @@ export async function fetchLiabilitiesForItem(
   const [item] = await db
     .select()
     .from(plaidItemsTable)
-    .where(
-      and(eq(plaidItemsTable.id, itemRowId), eq(plaidItemsTable.userId, userId)),
-    );
+    .where(eq(plaidItemsTable.id, itemRowId));
   if (!item) return [];
+  // (#623) Scope updates by householdId so member-driven liability
+  // refreshes touch the same plaid_accounts rows the owner originally
+  // linked. The actor-keyed `eq(...userId, userId)` was preventing a
+  // member from ever refreshing the owner's debts.
+  const householdId = item.householdId!;
   // (#366) Centralized malformed-token guard. Without this, a bad
   // row-level access_token would cascade into Plaid 400s on
   // /accounts/get + /liabilities/get that the existing catch path
@@ -201,12 +209,7 @@ export async function fetchLiabilitiesForItem(
         lastSyncError: `Liability refresh failed: ${message}`,
         lastSyncErrorCode: code,
       })
-      .where(
-        and(
-          eq(plaidItemsTable.id, itemRowId),
-          eq(plaidItemsTable.userId, userId),
-        ),
-      );
+      .where(eq(plaidItemsTable.id, itemRowId));
     // (#359) Persist Plaid's display_message / request_id / http_status /
     // kind so Settings → Recent activity can show the plain-English
     // reason and quote the request id when filing support tickets.
@@ -229,12 +232,7 @@ export async function fetchLiabilitiesForItem(
         lastSyncError: null,
         lastSyncErrorCode: null,
       })
-      .where(
-        and(
-          eq(plaidItemsTable.id, itemRowId),
-          eq(plaidItemsTable.userId, userId),
-        ),
-      );
+      .where(eq(plaidItemsTable.id, itemRowId));
     // (#279) Successful liability fetch — record so users see "fetched
     // ok" rows in Settings. Note INVALID_PRODUCT (handled silently
     // above) lands here too, which is the right call: from the user's
@@ -286,7 +284,7 @@ export async function fetchLiabilitiesForItem(
       })
       .where(
         and(
-          eq(plaidAccountsTable.userId, userId),
+          eq(plaidAccountsTable.householdId, householdId),
           eq(plaidAccountsTable.accountId, a.account_id),
         ),
       );
@@ -363,7 +361,7 @@ export async function fetchLiabilitiesForItem(
       .set(patch)
       .where(
         and(
-          eq(plaidAccountsTable.userId, userId),
+          eq(plaidAccountsTable.householdId, householdId),
           eq(plaidAccountsTable.accountId, r.accountId),
         ),
       );
@@ -371,16 +369,22 @@ export async function fetchLiabilitiesForItem(
   return out;
 }
 
+/**
+ * (#623) Iterates every Plaid item belonging to the household (not just
+ * those linked by the actor). `actorUserId` is forwarded as the audit
+ * principal for `recordPlaidSyncAttempt` rows.
+ */
 export async function fetchLiabilitiesForUser(
-  userId: string,
+  actorUserId: string,
+  householdId: string,
 ): Promise<LiabilityRow[]> {
   const items = await db
     .select({ id: plaidItemsTable.id })
     .from(plaidItemsTable)
-    .where(eq(plaidItemsTable.userId, userId));
+    .where(eq(plaidItemsTable.householdId, householdId));
   const out: LiabilityRow[] = [];
   for (const it of items) {
-    const rows = await fetchLiabilitiesForItem(userId, it.id);
+    const rows = await fetchLiabilitiesForItem(actorUserId, it.id);
     out.push(...rows);
   }
   return out;

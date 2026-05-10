@@ -13,10 +13,18 @@ import express from "express";
 import { eq } from "drizzle-orm";
 
 const TEST_USER = `relink-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: { userId?: string; actualUserId?: string; householdId?: string; householdOwnerId?: string },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -124,6 +132,7 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import plaidRouter from "../routes/plaid";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
 app.use(express.json());
@@ -153,6 +162,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -199,6 +210,7 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
     // reconnect" state the user is trying to clear.
     await db.insert(plaidItemsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: nextExchangeItemId,
       accessToken: "stale-access-token-do-not-use",
       institutionId: "ins_56",
@@ -271,6 +283,7 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: externalItemId,
         accessToken: "stale-token-do-not-use",
         institutionId: "ins_56",
@@ -285,6 +298,7 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: externalAcctId,
         name: "Chase Sapphire",
@@ -298,6 +312,7 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Chase Sapphire",
         balance: "1500",
         plaidAccountId: acct!.id,
@@ -311,6 +326,7 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
     for (const r of manualRows) {
       await db.insert(transactionsTable).values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: r.occurredOn,
         description: r.description,
         amount: r.amount,
@@ -453,6 +469,7 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: oldExternalItemId,
         accessToken: "",
         institutionId: "ins_56",
@@ -465,6 +482,7 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
       .returning();
     await db.insert(plaidAccountsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: oldItem!.id,
       accountId: oldExternalAcctId,
       name: "Chase Sapphire (broken)",
@@ -538,6 +556,7 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: externalItemId,
         accessToken: "",
         institutionId: "ins_56",
@@ -552,6 +571,7 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: externalAcctId,
         name: "Chase Sapphire",
@@ -565,6 +585,7 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "Chase Sapphire",
         balance: "1500",
         plaidAccountId: acct!.id,
@@ -573,6 +594,7 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
     // Newest pre-outage Plaid row — backfill must start the day AFTER.
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: "2026-04-25",
       description: "older plaid row",
       amount: "-10.00",
@@ -587,6 +609,7 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-05-02",
         description: "manual outage entry",
         amount: "-42.00",
@@ -656,6 +679,7 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
     const healthyExternalItemId = `item-healthy-${randomUUID()}`;
     await db.insert(plaidItemsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: healthyExternalItemId,
       accessToken: `access-sandbox-${randomUUID()}`,
       institutionId: "ins_56",

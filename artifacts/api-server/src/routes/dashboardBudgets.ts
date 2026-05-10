@@ -20,8 +20,9 @@ function settingsAmountFor(
 }
 
 router.get("/dashboard-budgets", requireAuth, async (req, res): Promise<void> => {
-  const userId = req.userId!;
-  const conds = [eq(dashboardBudgetsTable.userId, userId)];
+  const householdId = req.householdId!;
+  const ownerUserId = req.householdOwnerId!;
+  const conds = [eq(dashboardBudgetsTable.householdId, householdId)];
   const bucketFilter = typeof req.query.bucket === "string" ? req.query.bucket : undefined;
   const periodKeyFilter = typeof req.query.periodKey === "string" ? req.query.periodKey : undefined;
   if (bucketFilter) conds.push(eq(dashboardBudgetsTable.bucket, bucketFilter));
@@ -34,7 +35,7 @@ router.get("/dashboard-budgets", requireAuth, async (req, res): Promise<void> =>
     const [s] = await db
       .select()
       .from(settingsTable)
-      .where(eq(settingsTable.userId, userId));
+      .where(eq(settingsTable.userId, ownerUserId));
     const amount = settingsAmountFor(bucketFilter, s);
     res.json([
       {
@@ -53,6 +54,7 @@ router.get("/dashboard-budgets", requireAuth, async (req, res): Promise<void> =>
 
 router.put("/dashboard-budgets", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
+  const householdId = req.householdId!;
   const { bucket, periodKey, amount } = req.body ?? {};
   if (!bucket || !periodKey || typeof amount !== "string") {
     res.status(400).json({ error: "bucket, periodKey, amount required" });
@@ -60,10 +62,10 @@ router.put("/dashboard-budgets", requireAuth, async (req, res): Promise<void> =>
   }
   const [row] = await db
     .insert(dashboardBudgetsTable)
-    .values({ userId, bucket, periodKey, amount })
+    .values({ userId, householdId, bucket, periodKey, amount })
     .onConflictDoUpdate({
       target: [
-        dashboardBudgetsTable.userId,
+        dashboardBudgetsTable.householdId,
         dashboardBudgetsTable.bucket,
         dashboardBudgetsTable.periodKey,
       ],
@@ -74,7 +76,7 @@ router.put("/dashboard-budgets", requireAuth, async (req, res): Promise<void> =>
 });
 
 router.delete("/dashboard-budgets", requireAuth, async (req, res): Promise<void> => {
-  const userId = req.userId!;
+  const householdId = req.householdId!;
   const bucket = typeof req.query.bucket === "string" ? req.query.bucket : undefined;
   const periodKey = typeof req.query.periodKey === "string" ? req.query.periodKey : undefined;
   if (!bucket || !periodKey) {
@@ -85,7 +87,7 @@ router.delete("/dashboard-budgets", requireAuth, async (req, res): Promise<void>
     .delete(dashboardBudgetsTable)
     .where(
       and(
-        eq(dashboardBudgetsTable.userId, userId),
+        eq(dashboardBudgetsTable.householdId, householdId),
         eq(dashboardBudgetsTable.bucket, bucket),
         eq(dashboardBudgetsTable.periodKey, periodKey),
       ),

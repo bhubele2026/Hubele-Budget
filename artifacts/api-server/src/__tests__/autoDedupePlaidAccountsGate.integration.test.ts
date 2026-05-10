@@ -12,8 +12,10 @@ import {
   runAutoDedupeIfNeeded,
 } from "../lib/dedupePlaidAccounts";
 import { listCheckingAccounts } from "../routes/forecast";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const TEST_USER = `auto-dedupe-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 async function cleanup(): Promise<void> {
   await db
@@ -25,7 +27,11 @@ async function cleanup(): Promise<void> {
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  await cleanup();
+  const h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = h.householdId;
+});
 afterAll(cleanup);
 
 describe("runAutoDedupeIfNeeded — gated auto-heal (#411)", () => {
@@ -35,6 +41,7 @@ describe("runAutoDedupeIfNeeded — gated auto-heal (#411)", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `auto-item-${suffix}`,
         accessToken: "test-no-access",
         institutionName: "Chase",
@@ -45,6 +52,7 @@ describe("runAutoDedupeIfNeeded — gated auto-heal (#411)", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `auto-survivor-${suffix}`,
         name: "Chase Total Checking",
@@ -58,6 +66,7 @@ describe("runAutoDedupeIfNeeded — gated auto-heal (#411)", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item!.id,
         accountId: `auto-loser-${suffix}`,
         name: "Chase Total Checking",
@@ -69,6 +78,7 @@ describe("runAutoDedupeIfNeeded — gated auto-heal (#411)", () => {
       .returning();
     await db.insert(forecastSettingsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       bankSnapshotAccountId: survivor!.id,
     });
 
@@ -85,7 +95,7 @@ describe("runAutoDedupeIfNeeded — gated auto-heal (#411)", () => {
     expect(preRows.length).toBe(2);
 
     // First listCheckingAccounts call triggers the auto-heal.
-    const accounts = await listCheckingAccounts(TEST_USER);
+    const accounts = await listCheckingAccounts(TEST_USER, TEST_HOUSEHOLD_ID, TEST_USER);
     expect(accounts.length).toBe(1);
     expect(accounts[0].id).toBe(survivor!.id);
 

@@ -6,18 +6,27 @@ import { and, eq, inArray } from "drizzle-orm";
 import * as XLSX from "xlsx";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 const PLAID_ACCESS_TOKEN = "access-sandbox-test-access-token";
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (
-    req: { userId?: string },
-    _res: unknown,
-    next: () => void,
-  ) => {
-    req.userId = TEST_USER;
-    next();
-  },
-}));
+    requireAuth: (
+      req: {
+        userId?: string;
+        actualUserId?: string;
+        householdId?: string;
+        householdOwnerId?: string;
+      },
+      _res: unknown,
+      next: () => void,
+    ) => {
+      req.userId = TEST_USER;
+      req.actualUserId = TEST_USER;
+      req.householdId = TEST_HOUSEHOLD_ID;
+      req.householdOwnerId = TEST_USER;
+      next();
+    },
+  }));
 
 const transactionsSyncMock = vi.fn();
 vi.mock("../lib/plaid", async () => {
@@ -41,6 +50,7 @@ import {
   transactionsTable,
 } from "@workspace/db";
 import budgetRouter from "../routes/budget";
+import { createTestHousehold } from "./_helpers/testHousehold";
 import transactionsRouter from "../routes/transactions";
 import { syncPlaidItem } from "../lib/plaidSync";
 import { importWorkbook } from "../lib/workbookImporter";
@@ -76,6 +86,8 @@ async function deleteAllForUser(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await deleteAllForUser();
   server = createServer(app);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -177,11 +189,12 @@ describe("categorization pipeline (integration)", () => {
     //    mapping_rules, and source="amex" transactions for the test user.
     const [batch] = await db
       .insert(importBatchesTable)
-      .values({ userId: TEST_USER, filename: "test.xlsx" })
+      .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, filename: "test.xlsx" })
       .returning();
     const wb = buildAmexWorkbook();
     const { counts, ruleAttributions } = await importWorkbook(
       TEST_USER,
+      TEST_HOUSEHOLD_ID,
       wb,
       batch!.id,
     );
@@ -201,6 +214,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `it-${randomUUID()}`,
         accessToken: PLAID_ACCESS_TOKEN,
         institutionName: "Test Bank",
@@ -327,6 +341,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Mystery Test ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -338,6 +353,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: dateInCurrentMonth(22),
         description: `${merchant} STORE 0001`,
         amount: "-12.34",
@@ -373,7 +389,7 @@ describe("categorization pipeline (integration)", () => {
     expect(rules[0]!.matchType).toBe("contains");
 
     // Re-running the rule engine should match a similar description.
-    const ruleRows = await loadUserRules(TEST_USER);
+    const ruleRows = await loadUserRules(TEST_HOUSEHOLD_ID);
     const result = categorize(
       { description: `${merchant} ANOTHER LOCATION 9999` },
       ruleRows,
@@ -385,6 +401,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Mystery Test 2 ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -424,6 +441,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Auto Test ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -435,6 +453,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: dateInCurrentMonth(23),
         description: `${merchant} STORE #5523`,
         amount: "-9.99",
@@ -485,6 +504,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Undo Test A ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -495,6 +515,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Undo Test B ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -505,6 +526,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: dateInCurrentMonth(24),
         description: `${merchant} STORE 0001`,
         amount: "-7.77",
@@ -578,6 +600,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Created Bulk Dest ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -588,6 +611,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Created Bulk Other ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -604,6 +628,7 @@ describe("categorization pipeline (integration)", () => {
         .insert(transactionsTable)
         .values({
           userId: TEST_USER,
+          householdId: TEST_HOUSEHOLD_ID,
           occurredOn: dateInCurrentMonth(day),
           description: `${merchant} STORE #${1000 + day}`,
           amount: "-15.00",
@@ -619,6 +644,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: dateInCurrentMonth(8),
         description: `${merchant} STORE MANUAL`,
         amount: "-9.00",
@@ -635,6 +661,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: dateInCurrentMonth(10),
         description: `${merchant} STORE TRIGGER`,
         amount: "-12.00",
@@ -718,6 +745,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: dateInCurrentMonth(11),
         description: `${merchant} STORE TRIGGER2`,
         amount: "-7.50",
@@ -728,6 +756,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Created Bulk Dest2 ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -763,6 +792,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Misc Buffer Bulk ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -773,6 +803,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Amex Bulk ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Debt",
@@ -783,6 +814,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Other Bulk ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -799,6 +831,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(mappingRulesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         pattern: seedPattern,
         matchType: "contains",
         categoryId: miscCat!.id,
@@ -814,6 +847,7 @@ describe("categorization pipeline (integration)", () => {
         .insert(transactionsTable)
         .values({
           userId: TEST_USER,
+          householdId: TEST_HOUSEHOLD_ID,
           occurredOn: dateInCurrentMonth(day),
           description: `${seedPattern} PMT XXXX${1000 + day}`,
           amount: "-150.00",
@@ -830,6 +864,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: dateInCurrentMonth(8),
         description: `${seedPattern} PMT MANUAL`,
         amount: "-99.00",
@@ -844,6 +879,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: dateInCurrentMonth(9),
         description: `${seedPattern} PMT UNCAT`,
         amount: "-12.00",
@@ -1157,6 +1193,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Misc Buffer ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -1167,6 +1204,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Amex Delta SkyMiles ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Debt",
@@ -1182,6 +1220,7 @@ describe("categorization pipeline (integration)", () => {
     const seedPattern = `SEEDPMT ACH-${randomUUID().slice(0, 6).toUpperCase()}`;
     await db.insert(mappingRulesTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       pattern: seedPattern,
       matchType: "contains",
       categoryId: miscCat!.id,
@@ -1192,6 +1231,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: dateInCurrentMonth(25),
         description: `${seedPattern} PMT XXXX5234`,
         amount: "-200.00",
@@ -1242,7 +1282,7 @@ describe("categorization pipeline (integration)", () => {
 
     // A future transaction with a similar description now auto-categorizes
     // to the debt category, not Misc / Buffer.
-    const ruleRows = await loadUserRules(TEST_USER);
+    const ruleRows = await loadUserRules(TEST_HOUSEHOLD_ID);
     const result = categorize(
       { description: `${seedPattern} PMT XXXX9999` },
       ruleRows,
@@ -1262,6 +1302,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Shopping ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -1272,6 +1313,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Groceries ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -1284,6 +1326,7 @@ describe("categorization pipeline (integration)", () => {
     const merchantTag = `AMZN${randomUUID().slice(0, 6).toUpperCase()}`;
     await db.insert(mappingRulesTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       pattern: merchantTag,
       matchType: "contains",
       categoryId: shoppingCat!.id,
@@ -1294,6 +1337,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: dateInCurrentMonth(26),
         description: `${merchantTag} FRESH 123`,
         amount: "-45.67",
@@ -1357,7 +1401,7 @@ describe("categorization pipeline (integration)", () => {
     // End-to-end: a future "MERCHANTTAG FRESH ..." charge auto-categorizes
     // to Groceries (specific rule wins on priority), while a generic
     // "MERCHANTTAG ..." charge still routes to Shopping.
-    const ruleRows = await loadUserRules(TEST_USER);
+    const ruleRows = await loadUserRules(TEST_HOUSEHOLD_ID);
     const freshResult = categorize(
       { description: `${merchantTag} FRESH ANOTHER STORE` },
       ruleRows,
@@ -1380,6 +1424,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Shopping2 ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -1390,6 +1435,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Other2 ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -1400,6 +1446,7 @@ describe("categorization pipeline (integration)", () => {
     const merchantTag = `SOLO${randomUUID().slice(0, 6).toUpperCase()}`;
     await db.insert(mappingRulesTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       pattern: merchantTag,
       matchType: "contains",
       categoryId: shoppingCat!.id,
@@ -1410,6 +1457,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: dateInCurrentMonth(27),
         description: merchantTag,
         amount: "-7.89",
@@ -1454,6 +1502,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Transfer Test ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -1466,6 +1515,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: dateInCurrentMonth(24),
         description: uniqueDesc,
         amount: "-50.00",
@@ -1517,6 +1567,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Manual Coffee ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -1527,6 +1578,7 @@ describe("categorization pipeline (integration)", () => {
       .insert(budgetCategoriesTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: `Manual Other ${randomUUID().slice(0, 6)}`,
         kind: "expense",
         groupName: "Other",
@@ -1536,6 +1588,7 @@ describe("categorization pipeline (integration)", () => {
     const merchant = `MANUALMERCH${randomUUID().slice(0, 6).toUpperCase()}`;
     await db.insert(mappingRulesTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       pattern: merchant,
       matchType: "contains",
       categoryId: coffeeCat!.id,

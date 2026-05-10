@@ -39,20 +39,20 @@ import {
 
 const router: IRouter = Router();
 
-async function ensureSettings(userId: string) {
+async function ensureSettings(ownerUserId: string, householdId: string) {
   const [row] = await db
     .select()
     .from(forecastSettingsTable)
-    .where(eq(forecastSettingsTable.userId, userId));
+    .where(eq(forecastSettingsTable.userId, ownerUserId));
   if (row) return row;
   // Upsert to avoid PK collisions when parallel requests for the same fresh
   // user race past the SELECT (mirrors the fix in avalanche.ts).
   const [created] = await db
     .insert(forecastSettingsTable)
-    .values({ userId })
+    .values({ userId: ownerUserId, householdId })
     .onConflictDoUpdate({
       target: forecastSettingsTable.userId,
-      set: { userId },
+      set: { userId: ownerUserId },
     })
     .returning();
   return created;
@@ -78,7 +78,13 @@ function presentSnapshot(row: typeof forecastSettingsTable.$inferSelect) {
   };
 }
 
-export async function listCheckingAccounts(userId: string) {
+export async function listCheckingAccounts(
+  userId: string,
+  householdId?: string,
+  ownerUserId?: string,
+) {
+  const ownerId = ownerUserId ?? userId;
+  const hhId = householdId ?? userId;
   // (#411) First time this user lands on the Chase / transactions page,
   // collapse any leftover duplicate `plaid_accounts` rows so the picker
   // and balances render against a single survivor row. Gated by
@@ -93,7 +99,7 @@ export async function listCheckingAccounts(userId: string) {
   const [settingsRow] = await db
     .select({ bankSnapshotAccountId: forecastSettingsTable.bankSnapshotAccountId })
     .from(forecastSettingsTable)
-    .where(eq(forecastSettingsTable.userId, userId));
+    .where(eq(forecastSettingsTable.userId, ownerId));
   const snapshotAccountId = settingsRow?.bankSnapshotAccountId ?? null;
 
   const rows = await db
@@ -109,7 +115,7 @@ export async function listCheckingAccounts(userId: string) {
     })
     .from(plaidAccountsTable)
     .leftJoin(plaidItemsTable, eq(plaidAccountsTable.itemId, plaidItemsTable.id))
-    .where(eq(plaidAccountsTable.userId, userId));
+    .where(eq(plaidAccountsTable.householdId, hhId));
   const checking = rows.filter(
     (a) =>
       a.subtype === "checking" ||
@@ -170,8 +176,10 @@ const FORECAST_DEDUPE_DONE = new Set<string>();
 
 router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
-  await archiveExpiredOneTime(userId);
-  let settings = await ensureSettings(userId);
+  const householdId = req.householdId!;
+  const ownerUserId = req.householdOwnerId!;
+  await archiveExpiredOneTime(householdId);
+  let settings = await ensureSettings(ownerUserId, householdId);
   // (#411) Auto-dedupe / accountSnapshots auto-repair pass. Gated by
   // `forecast_settings.auto_dedupe_ran_at` so it runs at most once per
   // user from this code path instead of re-firing on every /forecast
@@ -186,7 +194,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   ) {
     // Re-read settings so the response below reflects the repaired
     // accountSnapshots map instead of the stale pre-dedupe copy.
-    settings = await ensureSettings(userId);
+    settings = await ensureSettings(ownerUserId, householdId);
   }
   // (#432-followup) Heal stale snapshot identity: when
   // `bank_snapshot_account_id` points at a real plaid_accounts row but
@@ -220,14 +228,14 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
           })
           .where(
             and(
-              eq(forecastSettingsTable.userId, userId),
+              eq(forecastSettingsTable.userId, ownerUserId),
               eq(
                 forecastSettingsTable.bankSnapshotAccountId,
                 settings.bankSnapshotAccountId,
               ),
             ),
           );
-        settings = await ensureSettings(userId);
+        settings = await ensureSettings(ownerUserId, householdId);
       }
     } catch (err) {
       console.error(
@@ -286,12 +294,12 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   const recurring = await db
     .select()
     .from(recurringItemsTable)
-    .where(eq(recurringItemsTable.userId, userId));
+    .where(eq(recurringItemsTable.householdId, householdId));
 
   const debtsList = await db
     .select()
     .from(debtsTable)
-    .where(eq(debtsTable.userId, userId));
+    .where(eq(debtsTable.householdId, householdId));
 
   // Same series as Bills: linked recurring items represent the debt's
   // minimum; for unlinked active debts we synthesize monthly events so the
@@ -316,7 +324,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   const [avaSettingsRow] = await db
     .select()
     .from(avalancheSettingsTable)
-    .where(eq(avalancheSettingsTable.userId, userId));
+    .where(eq(avalancheSettingsTable.userId, ownerUserId));
   const manualExtra = Number(avaSettingsRow?.manualExtra ?? 0) || 0;
   events.push(...expandAvalancheExtra(debtsList, manualExtra, from, to, today));
   events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
@@ -354,7 +362,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     .from(transactionsTable)
     .where(
       and(
-        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.householdId, householdId),
         eq(transactionsTable.forecastFlag, true),
         gte(transactionsTable.occurredOn, fromISO),
         lte(transactionsTable.occurredOn, toISO),
@@ -382,7 +390,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
       transactionsTable,
       eq(forecastResolutionsTable.matchedTxnId, transactionsTable.id),
     )
-    .where(eq(forecastResolutionsTable.userId, userId));
+    .where(eq(forecastResolutionsTable.householdId, householdId));
 
   // Drop resolutions whose matched transaction isn't bank-checking, so
   // legacy Amex matches no longer mark planned items as `matched` on
@@ -398,10 +406,14 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
   const closedRows = await db
     .select()
     .from(forecastClosedMonthsTable)
-    .where(eq(forecastClosedMonthsTable.userId, userId));
+    .where(eq(forecastClosedMonthsTable.householdId, householdId));
 
-  const cashSignal = await computeCashSignal(userId);
-  const plaidCheckingAccounts = await listCheckingAccounts(userId);
+  const cashSignal = await computeCashSignal(householdId, ownerUserId);
+  const plaidCheckingAccounts = await listCheckingAccounts(
+    userId,
+    householdId,
+    ownerUserId,
+  );
 
   res.json({
     fromDate: fromISO,
@@ -420,13 +432,14 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/forecast/settings", requireAuth, async (req, res): Promise<void> => {
-  const s = await ensureSettings(req.userId!);
+  const s = await ensureSettings(req.householdOwnerId!, req.householdId!);
   res.json(presentSettings(s));
 });
 
 router.put("/forecast/settings", requireAuth, async (req, res): Promise<void> => {
-  const userId = req.userId!;
-  await ensureSettings(userId);
+  const ownerUserId = req.householdOwnerId!;
+  const householdId = req.householdId!;
+  await ensureSettings(ownerUserId, householdId);
   const body = req.body ?? {};
   const update: Record<string, unknown> = { updatedAt: new Date() };
   if (typeof body.daysAhead === "number") update.daysAhead = body.daysAhead;
@@ -436,7 +449,7 @@ router.put("/forecast/settings", requireAuth, async (req, res): Promise<void> =>
   const [row] = await db
     .update(forecastSettingsTable)
     .set(update)
-    .where(eq(forecastSettingsTable.userId, userId))
+    .where(eq(forecastSettingsTable.userId, ownerUserId))
     .returning();
   res.json(presentSettings(row));
 });
@@ -464,13 +477,15 @@ router.get("/forecast/cash-signal", requireAuth, async (req, res): Promise<void>
     }
     fromDate = req.query.fromDate;
   }
-  const signal = await computeCashSignal(req.userId!, { horizonDays, fromDate });
+  const signal = await computeCashSignal(req.householdId!, req.householdOwnerId!, { horizonDays, fromDate });
   res.json(signal);
 });
 
 router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
-  await ensureSettings(userId);
+  const householdId = req.householdId!;
+  const ownerUserId = req.householdOwnerId!;
+  await ensureSettings(ownerUserId, householdId);
   const { balance, plaidAccountId } = req.body ?? {};
 
   let snapshotBalance: string | null = null;
@@ -487,7 +502,7 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
       .where(
         and(
           eq(plaidAccountsTable.id, String(plaidAccountId)),
-          eq(plaidAccountsTable.userId, userId),
+          eq(plaidAccountsTable.householdId, householdId),
         ),
       );
     if (!acct) {
@@ -533,7 +548,7 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
         await db
           .select({ accountSnapshots: forecastSettingsTable.accountSnapshots })
           .from(forecastSettingsTable)
-          .where(eq(forecastSettingsTable.userId, userId))
+          .where(eq(forecastSettingsTable.userId, ownerUserId))
       )[0]?.accountSnapshots ?? {};
       const nextMap = {
         ...prevMap,
@@ -548,7 +563,7 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
       await db
         .update(forecastSettingsTable)
         .set({ accountSnapshots: nextMap })
-        .where(eq(forecastSettingsTable.userId, userId));
+        .where(eq(forecastSettingsTable.userId, ownerUserId));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Plaid balance fetch failed";
       req.log.error({ err: e }, "accountsBalanceGet failed");
@@ -580,14 +595,15 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
       bankSnapshotMask: accountMask,
       updatedAt: new Date(),
     })
-    .where(eq(forecastSettingsTable.userId, userId))
+    .where(eq(forecastSettingsTable.userId, ownerUserId))
     .returning();
   res.json(presentSnapshot(row));
 });
 
 router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<void> => {
-  const userId = req.userId!;
-  const settings = await ensureSettings(userId);
+  const householdId = req.householdId!;
+  const ownerUserId = req.householdOwnerId!;
+  const settings = await ensureSettings(ownerUserId, householdId);
   // #296 — accept an optional `plaidAccountId` so the Chase page can
   // refresh whichever account the user is currently viewing, not just
   // the primary snapshot account. Falls back to the primary account
@@ -606,7 +622,7 @@ router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<voi
     .where(
       and(
         eq(plaidAccountsTable.id, requestedId),
-        eq(plaidAccountsTable.userId, userId),
+        eq(plaidAccountsTable.householdId, householdId),
       ),
     );
   if (!acct) {
@@ -675,7 +691,7 @@ router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<voi
     const [row] = await db
       .update(forecastSettingsTable)
       .set(update)
-      .where(eq(forecastSettingsTable.userId, userId))
+      .where(eq(forecastSettingsTable.userId, ownerUserId))
       .returning();
     // Keep the response shape backward-compatible (BankSnapshot). When
     // refreshing a non-primary account, synthesize the snapshot
@@ -743,6 +759,7 @@ router.get(
 
 router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
+  const householdId = req.householdId!;
   const { recurringItemId, occurrenceDate, status, matchedTxnId, rescheduledTo } =
     req.body ?? {};
   if (!status) {
@@ -775,7 +792,7 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
       .delete(forecastResolutionsTable)
       .where(
         and(
-          eq(forecastResolutionsTable.userId, userId),
+          eq(forecastResolutionsTable.householdId, householdId),
           eq(forecastResolutionsTable.recurringItemId, recurringItemId),
           eq(forecastResolutionsTable.occurrenceDate, occurrenceDate),
         ),
@@ -786,7 +803,7 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
       .delete(forecastResolutionsTable)
       .where(
         and(
-          eq(forecastResolutionsTable.userId, userId),
+          eq(forecastResolutionsTable.householdId, householdId),
           eq(forecastResolutionsTable.matchedTxnId, matchedTxnId),
         ),
       );
@@ -796,6 +813,7 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
     .insert(forecastResolutionsTable)
     .values({
       userId,
+      householdId,
       recurringItemId: recurringItemId ?? null,
       occurrenceDate: occurrenceDate ?? null,
       status,
@@ -815,7 +833,7 @@ router.delete(
       .where(
         and(
           eq(forecastResolutionsTable.id, String(req.params.id)),
-          eq(forecastResolutionsTable.userId, req.userId!),
+          eq(forecastResolutionsTable.householdId, req.householdId!),
         ),
       );
     res.sendStatus(204);
@@ -827,6 +845,8 @@ router.post(
   requireAuth,
   async (req, res): Promise<void> => {
     const userId = req.userId!;
+    const householdId = req.householdId!;
+    const ownerUserId = req.householdOwnerId!;
     const body = req.body ?? {};
     const monthKey = body.monthKey;
     if (!monthKey) {
@@ -835,9 +855,12 @@ router.post(
     }
     const [row] = await db
       .insert(forecastClosedMonthsTable)
-      .values({ userId, monthKey })
+      .values({ userId, householdId, monthKey })
       .onConflictDoUpdate({
-        target: [forecastClosedMonthsTable.userId, forecastClosedMonthsTable.monthKey],
+        target: [
+          forecastClosedMonthsTable.householdId,
+          forecastClosedMonthsTable.monthKey,
+        ],
         set: { monthKey },
       })
       .returning();
@@ -845,7 +868,7 @@ router.post(
     // Freeze the current snapshot into monthSnapshots[monthKey], including the
     // reconcile state at close time so prior months can be displayed with a
     // ✓/gap badge later.
-    const settings = await ensureSettings(userId);
+    const settings = await ensureSettings(ownerUserId, householdId);
     if (settings.bankSnapshotBalance != null && settings.bankSnapshotAt) {
       const closedAt = new Date().toISOString();
       const entry: {
@@ -884,7 +907,7 @@ router.post(
       await db
         .update(forecastSettingsTable)
         .set({ monthSnapshots, updatedAt: new Date() })
-        .where(eq(forecastSettingsTable.userId, userId));
+        .where(eq(forecastSettingsTable.userId, ownerUserId));
     }
 
     res.json(row);
@@ -895,25 +918,26 @@ router.delete(
   "/forecast/closed-months/:monthKey",
   requireAuth,
   async (req, res): Promise<void> => {
-    const userId = req.userId!;
+    const householdId = req.householdId!;
+    const ownerUserId = req.householdOwnerId!;
     const monthKey = String(req.params.monthKey);
     await db
       .delete(forecastClosedMonthsTable)
       .where(
         and(
-          eq(forecastClosedMonthsTable.userId, userId),
+          eq(forecastClosedMonthsTable.householdId, householdId),
           eq(forecastClosedMonthsTable.monthKey, monthKey),
         ),
       );
     // Drop the frozen snapshot for this month, if any
-    const settings = await ensureSettings(userId);
+    const settings = await ensureSettings(ownerUserId, householdId);
     if (settings.monthSnapshots && monthKey in settings.monthSnapshots) {
       const monthSnapshots = { ...settings.monthSnapshots };
       delete monthSnapshots[monthKey];
       await db
         .update(forecastSettingsTable)
         .set({ monthSnapshots, updatedAt: new Date() })
-        .where(eq(forecastSettingsTable.userId, userId));
+        .where(eq(forecastSettingsTable.userId, ownerUserId));
     }
     res.sendStatus(204);
   },

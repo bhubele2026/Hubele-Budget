@@ -6,12 +6,25 @@ import { eq } from "drizzle-orm";
 
 const TEST_USER = `amex-route-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
+let TEST_HOUSEHOLD_ID: string;
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
-    req.userId = TEST_USER;
-    next();
-  },
-}));
+    requireAuth: (
+      req: {
+        userId?: string;
+        actualUserId?: string;
+        householdId?: string;
+        householdOwnerId?: string;
+      },
+      _res: unknown,
+      next: () => void,
+    ) => {
+      req.userId = TEST_USER;
+      req.actualUserId = TEST_USER;
+      req.householdId = TEST_HOUSEHOLD_ID;
+      req.householdOwnerId = TEST_USER;
+      next();
+    },
+  }));
 
 import {
   db,
@@ -20,6 +33,7 @@ import {
   settingsTable,
 } from "@workspace/db";
 import amexRouter from "../routes/amex";
+import { createTestHousehold } from "./_helpers/testHousehold";
 import { refreshAmexAnchor } from "../lib/amexAnchor";
 
 const app = express();
@@ -40,6 +54,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -59,6 +75,7 @@ describe("DELETE /amex/anchor", () => {
   it("removes a present anchor from settings.preferences", async () => {
     await db.insert(settingsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       preferences: {
         amexAnchor: { balance: 1234.56, asOf: "2026-04-01T00:00:00.000Z" },
       },
@@ -94,6 +111,7 @@ describe("DELETE /amex/anchor", () => {
   it("is a no-op when a settings row exists but has no amexAnchor key", async () => {
     await db.insert(settingsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       preferences: { someOtherKey: "keep-me" },
     });
 
@@ -112,6 +130,7 @@ describe("DELETE /amex/anchor", () => {
   it("preserves other preference keys when removing amexAnchor", async () => {
     await db.insert(settingsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       preferences: {
         amexAnchor: { balance: 50, asOf: "2026-04-01T00:00:00.000Z" },
         forecastFloor: 250,
@@ -164,6 +183,7 @@ describe("POST /amex/anchor", () => {
   it("preserves other preference keys when upserting on an existing row", async () => {
     await db.insert(settingsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       preferences: {
         forecastFloor: 250,
         nested: { keepMe: true },
@@ -253,6 +273,7 @@ describe("GET /amex/anchor", () => {
     // Seed: one Amex txn + a linked debt row whose updatedAt is OLD.
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: "2026-04-01",
       description: "Amex charge",
       amount: "100.00",
@@ -263,6 +284,7 @@ describe("GET /amex/anchor", () => {
       .insert(debtsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         name: "American Express",
         balance: "100.00",
         apr: "0.2849",
@@ -293,6 +315,7 @@ describe("GET /amex/anchor", () => {
     // for debt.balance, but the settings anchor advances).
     await db.insert(transactionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       occurredOn: "2026-04-05",
       description: "Amex charge 2",
       amount: "25.00",

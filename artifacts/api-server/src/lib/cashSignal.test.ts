@@ -8,6 +8,7 @@ function rec(overrides: Partial<MinRecurringRow>): MinRecurringRow {
   return {
     id: overrides.id ?? "ri-1",
     userId: "u",
+    householdId: null,
     name: overrides.name ?? "Test",
     kind: overrides.kind ?? "expense",
     amount: overrides.amount ?? "100",

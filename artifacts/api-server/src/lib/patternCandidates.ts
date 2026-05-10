@@ -56,7 +56,7 @@ export type PatternCandidate = {
  * apply unconditionally.
  */
 export async function selectPatternCandidates(
-  userId: string,
+  householdId: string,
   rule: { pattern: string; matchType: string },
   fromCategoryId: string | null,
 ): Promise<PatternCandidate[]> {
@@ -70,7 +70,7 @@ export async function selectPatternCandidates(
     .from(transactionsTable)
     .where(
       and(
-        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.householdId, householdId),
         fromCategoryId === null
           ? isNull(transactionsTable.categoryId)
           : eq(transactionsTable.categoryId, fromCategoryId),
@@ -87,7 +87,7 @@ export async function selectPatternCandidates(
  * Same `fromCategoryId === null` semantics as `selectPatternCandidates`.
  */
 export async function countPatternCandidates(
-  userId: string,
+  householdId: string,
   rule: { pattern: string; matchType: string },
   fromCategoryId: string | null,
 ): Promise<number> {
@@ -96,7 +96,7 @@ export async function countPatternCandidates(
     .from(transactionsTable)
     .where(
       and(
-        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.householdId, householdId),
         fromCategoryId === null
           ? isNull(transactionsTable.categoryId)
           : eq(transactionsTable.categoryId, fromCategoryId),

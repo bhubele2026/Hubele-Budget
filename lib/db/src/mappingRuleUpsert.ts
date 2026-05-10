@@ -4,6 +4,7 @@ import { mappingRulesTable } from "./schema";
 
 export type UpsertMappingRuleInput = {
   userId: string;
+  householdId: string;
   pattern: string;
   matchType: "contains" | "starts_with" | "exact";
   categoryId: string | null;
@@ -41,7 +42,8 @@ export async function upsertMappingRule(
   conn: NodePgDatabase<any>,
   input: UpsertMappingRuleInput,
 ): Promise<UpsertMappingRuleResult> {
-  const { userId, pattern, matchType, categoryId, priority } = input;
+  const { userId, householdId, pattern, matchType, categoryId, priority } =
+    input;
   if (!pattern || pattern.length < 3) return { status: "noop", ruleId: null };
 
   const existing = await conn
@@ -49,7 +51,7 @@ export async function upsertMappingRule(
     .from(mappingRulesTable)
     .where(
       and(
-        eq(mappingRulesTable.userId, userId),
+        eq(mappingRulesTable.householdId, householdId),
         eq(mappingRulesTable.pattern, pattern),
       ),
     )
@@ -60,6 +62,7 @@ export async function upsertMappingRule(
       .insert(mappingRulesTable)
       .values({
         userId,
+        householdId,
         pattern,
         matchType,
         categoryId,

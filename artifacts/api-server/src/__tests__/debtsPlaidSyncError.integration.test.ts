@@ -5,10 +5,23 @@ import express from "express";
 import { eq } from "drizzle-orm";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: {
+      userId?: string;
+      actualUserId?: string;
+      householdId?: string;
+      householdOwnerId?: string;
+    },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
@@ -21,6 +34,7 @@ import {
   plaidItemsTable,
 } from "@workspace/db";
 import debtsRouter from "../routes/debts";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
 app.use(express.json());
@@ -43,6 +57,8 @@ async function cleanup(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -66,6 +82,7 @@ async function seedItem(opts: {
     .insert(plaidItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: `item-${randomUUID()}`,
       accessToken: `access-sandbox-${randomUUID()}`,
       institutionName: "TestBank",
@@ -79,6 +96,7 @@ async function seedItem(opts: {
     .insert(plaidAccountsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       itemId: item!.id,
       accountId: `acct-${randomUUID()}`,
       name: "Visa Card",
@@ -109,6 +127,7 @@ describe("(#43) GET /debts surfaces parent Plaid item lastSyncError", () => {
     const { accountRowId } = await seedItem({ lastSyncError: null });
     await db.insert(debtsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       name: "Healthy Card",
       balance: "1000",
       apr: "0.2",
@@ -131,6 +150,7 @@ describe("(#43) GET /debts surfaces parent Plaid item lastSyncError", () => {
     });
     await db.insert(debtsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       name: "Failing Card",
       balance: "1500",
       apr: "0.25",
@@ -154,6 +174,7 @@ describe("(#43) GET /debts surfaces parent Plaid item lastSyncError", () => {
   it("returns plaidLastSyncError null for manual (non-Plaid) debts", async () => {
     await db.insert(debtsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       name: "Manual Card",
       balance: "500",
       apr: "0.18",
@@ -178,6 +199,7 @@ describe("(#198) GET /debts mirrors plaidLastSyncErrorCode + plaidAccount.itemId
     });
     await db.insert(debtsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       name: "Reauth Card",
       balance: "1500",
       apr: "0.25",
@@ -204,6 +226,7 @@ describe("(#198) GET /debts mirrors plaidLastSyncErrorCode + plaidAccount.itemId
     });
     await db.insert(debtsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       name: "Legacy Err Card",
       balance: "800",
       apr: "0.2",

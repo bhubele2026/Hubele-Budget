@@ -27,8 +27,10 @@ import {
   debtsTable,
 } from "@workspace/db";
 import { computeCashSignal } from "../lib/cashSignal";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const TEST_USER = `cash-signal-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
 
 async function cleanup(): Promise<void> {
   await db
@@ -50,7 +52,11 @@ async function cleanup(): Promise<void> {
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
+  await cleanup();
+});
 afterAll(cleanup);
 beforeEach(cleanup);
 
@@ -63,6 +69,7 @@ async function setSettings(opts: {
 } = {}): Promise<void> {
   await db.insert(forecastSettingsTable).values({
     userId: TEST_USER,
+    householdId: TEST_HOUSEHOLD_ID,
     daysAhead: opts.daysAhead ?? 90,
     startingBalance: opts.startingBalance ?? "0",
     cashBuffer: opts.cashBuffer ?? "500",
@@ -79,6 +86,7 @@ async function addRecurring(
     .insert(recurringItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       name: "Bill",
       kind: "expense",
       amount: "200",
@@ -105,7 +113,7 @@ describe("computeCashSignal — snapshot anchoring", () => {
     // snapshot taken on the same day.
     await addRecurring({ dayOfMonth: 15, amount: "200" });
 
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-15",
       horizonDays: 31,
     });
@@ -135,7 +143,7 @@ describe("computeCashSignal — snapshot anchoring", () => {
       amount: "300",
     });
 
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-05-01",
       horizonDays: 30,
     });
@@ -167,12 +175,13 @@ describe("computeCashSignal — matched resolution suppression", () => {
     // already saw.
     await db.insert(forecastResolutionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       recurringItemId: item.id,
       occurrenceDate: "2026-04-15",
       status: "matched",
     });
 
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
       horizonDays: 60, // covers both 04-15 and 05-15
     });
@@ -196,12 +205,13 @@ describe("computeCashSignal — matched resolution suppression", () => {
     // still apply the planned event.
     await db.insert(forecastResolutionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       recurringItemId: item.id,
       occurrenceDate: "2026-04-15",
       status: "pending",
     });
 
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
       horizonDays: 60,
     });
@@ -220,7 +230,7 @@ describe("computeCashSignal — status thresholds", () => {
       cashBuffer: "500",
     });
 
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
       horizonDays: 30,
     });
@@ -241,7 +251,7 @@ describe("computeCashSignal — status thresholds", () => {
       cashBuffer: "300",
     });
     // No bills: lowest stays at 1000 ≥ 300 + 200 → ready.
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
       horizonDays: 30,
     });
@@ -257,7 +267,7 @@ describe("computeCashSignal — status thresholds", () => {
       cashBuffer: "500",
     });
     // No bills: lowest = 650, in [500, 700) → tight.
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
       horizonDays: 30,
     });
@@ -274,7 +284,7 @@ describe("computeCashSignal — status thresholds", () => {
     });
     // lowest == cashBuffer is the boundary case — still 'tight',
     // never 'not_yet'.
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
       horizonDays: 30,
     });
@@ -292,7 +302,7 @@ describe("computeCashSignal — status thresholds", () => {
     // 04-15 bill of $200 drops the balance to 400 < 500.
     await addRecurring({ dayOfMonth: 15, amount: "200" });
 
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
       horizonDays: 30,
     });
@@ -311,7 +321,7 @@ describe("computeCashSignal — status thresholds", () => {
       cashBuffer: "500",
     });
     // lowest == cashBuffer + 200 is the boundary case — must be 'ready'.
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
       horizonDays: 30,
     });
@@ -338,13 +348,14 @@ describe("computeCashSignal — rescheduled resolutions", () => {
     // both 04-15 and 04-25) or silently skip the rescheduled hit.
     await db.insert(forecastResolutionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       recurringItemId: item.id,
       occurrenceDate: "2026-04-15",
       status: "rescheduled",
       rescheduledTo: "2026-04-25",
     });
 
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
       horizonDays: 60, // covers 04-25 and 05-15
     });
@@ -381,12 +392,13 @@ describe("computeCashSignal — skipped resolutions", () => {
 
     await db.insert(forecastResolutionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       recurringItemId: item.id,
       occurrenceDate: "2026-04-15",
       status: "skipped",
     });
 
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
       horizonDays: 60, // covers both 04-15 and 05-15
     });
@@ -417,7 +429,7 @@ describe("computeCashSignal — skipped resolutions", () => {
     });
     await addRecurring({ dayOfMonth: 15, amount: "200" });
 
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
       horizonDays: 60,
     });
@@ -443,6 +455,7 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
       .insert(plaidItemsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: `item-${randomUUID()}`,
         accessToken: "test-token",
         institutionSlug: opts.institutionSlug ?? "chase",
@@ -452,6 +465,7 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
       .insert(plaidAccountsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         itemId: item.id,
         accountId: opts.externalId,
         name: opts.name,
@@ -470,6 +484,7 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: opts.occurredOn,
         description: "matched",
         amount: opts.amount,
@@ -509,13 +524,14 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
     });
     await db.insert(forecastResolutionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       recurringItemId: item.id,
       occurrenceDate: "2026-04-15",
       status: "matched",
       matchedTxnId: chaseTxnId,
     });
 
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
       horizonDays: 60, // covers 04-15 and 05-15
     });
@@ -559,13 +575,14 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
     });
     await db.insert(forecastResolutionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       recurringItemId: item.id,
       occurrenceDate: "2026-04-15",
       status: "matched",
       matchedTxnId: amexTxnId,
     });
 
-    const sig = await computeCashSignal(TEST_USER, {
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
       horizonDays: 60,
     });

@@ -251,7 +251,10 @@ function isTransferRow(r: SeedRow): boolean {
   return TRANSFER_HINTS.some((p) => hay.includes(p));
 }
 
-async function ensureChaseAccount(userId: string): Promise<{
+async function ensureChaseAccount(
+  userId: string,
+  householdId: string,
+): Promise<{
   itemRowId: string;
   accountIdText: string;
   accountRowId: string;
@@ -332,7 +335,7 @@ async function ensureChaseAccount(userId: string): Promise<{
     const accounts = await db
       .select()
       .from(plaidAccountsTable)
-      .where(eq(plaidAccountsTable.userId, userId));
+      .where(eq(plaidAccountsTable.householdId, householdId));
     const checking = accounts.find(
       (a) => a.subtype === "checking" || a.type === "depository",
     );
@@ -346,7 +349,7 @@ async function ensureChaseAccount(userId: string): Promise<{
       .where(
         and(
           eq(plaidAccountsTable.id, accountRowId),
-          eq(plaidAccountsTable.userId, userId),
+          eq(plaidAccountsTable.householdId, householdId),
         ),
       );
     if (acct) {
@@ -483,16 +486,19 @@ async function ensureChaseAccount(userId: string): Promise<{
   };
 }
 
-async function ensureExtraMappingRules(userId: string): Promise<number> {
+async function ensureExtraMappingRules(
+  userId: string,
+  householdId: string,
+): Promise<number> {
   const [cats, existingRules] = await Promise.all([
     db
       .select()
       .from(budgetCategoriesTable)
-      .where(eq(budgetCategoriesTable.userId, userId)),
+      .where(eq(budgetCategoriesTable.householdId, householdId)),
     db
       .select()
       .from(mappingRulesTable)
-      .where(eq(mappingRulesTable.userId, userId)),
+      .where(eq(mappingRulesTable.householdId, householdId)),
   ]);
   const catByName = new Map(cats.map((c) => [c.name, c]));
   const havePattern = new Set(
@@ -531,6 +537,7 @@ async function ensureExtraMappingRules(userId: string): Promise<number> {
     const isFallback = !exact && !contains;
     await db.insert(mappingRulesTable).values({
       userId,
+      householdId,
       pattern: seed.pattern,
       matchType: "contains",
       categoryId: target.id,
@@ -561,12 +568,20 @@ export type AprilChaseSeedResult = {
   snapshotRepaired: boolean;
 };
 
+/**
+ * (#623) `ownerUserId` keeps the legacy "owner-keyed settings + plaid
+ * items" semantics for the synthetic Chase placeholder; `householdId`
+ * scopes everything that lives on shared tables (transactions,
+ * mapping_rules, budget_categories) so a member who hits Reset →
+ * Reseed seeds into the same household the rest of the data is in.
+ */
 export async function seedAprilChase(
-  userId: string,
+  ownerUserId: string,
+  householdId: string,
 ): Promise<AprilChaseSeedResult> {
-  const rulesAdded = await ensureExtraMappingRules(userId);
-  const acct = await ensureChaseAccount(userId);
-  const rules = await loadUserRules(userId);
+  const rulesAdded = await ensureExtraMappingRules(ownerUserId, householdId);
+  const acct = await ensureChaseAccount(ownerUserId, householdId);
+  const rules = await loadUserRules(householdId);
 
   // Backfill: re-categorize previously-seeded April Chase rows that landed
   // uncategorized (e.g. from an earlier seed run before the new mapping
@@ -580,7 +595,7 @@ export async function seedAprilChase(
     .from(transactionsTable)
     .where(
       and(
-        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.householdId, householdId),
         isNull(transactionsTable.categoryId),
         eq(transactionsTable.isTransfer, false),
         like(transactionsTable.plaidTransactionId, "seed-april-2026-chase:%"),
@@ -632,7 +647,8 @@ export async function seedAprilChase(
       r.type === "income" ? r.amount.toFixed(2) : (-r.amount).toFixed(2);
 
     await db.insert(transactionsTable).values({
-      userId,
+      userId: ownerUserId,
+      householdId,
       occurredOn: r.date,
       occurredAt: new Date(`${r.date}T12:00:00Z`).toISOString(),
       description: r.description,

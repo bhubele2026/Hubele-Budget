@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import { createTestHousehold } from "./_helpers/testHousehold";
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import express from "express";
@@ -12,11 +13,26 @@ const OWNER_USER = `owner-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8
 const NON_OWNER_USER = `member-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
 let currentUserId = OWNER_USER;
+let OWNER_HOUSEHOLD_ID: string;
+let NON_OWNER_HOUSEHOLD_ID: string;
 process.env.OWNER_EMAIL = "owner@example.com";
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+  requireAuth: (
+    req: {
+      userId?: string;
+      actualUserId?: string;
+      householdId?: string;
+      householdOwnerId?: string;
+    },
+    _res: unknown,
+    next: () => void,
+  ) => {
     req.userId = currentUserId;
+    req.actualUserId = currentUserId;
+    req.householdId =
+      currentUserId === OWNER_USER ? OWNER_HOUSEHOLD_ID : NON_OWNER_HOUSEHOLD_ID;
+    req.householdOwnerId = currentUserId;
     next();
   },
 }));
@@ -107,6 +123,10 @@ async function cleanup() {
 }
 
 beforeAll(async () => {
+  const _o = await createTestHousehold(OWNER_USER);
+  OWNER_HOUSEHOLD_ID = _o.householdId;
+  const _n = await createTestHousehold(NON_OWNER_USER);
+  NON_OWNER_HOUSEHOLD_ID = _n.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));

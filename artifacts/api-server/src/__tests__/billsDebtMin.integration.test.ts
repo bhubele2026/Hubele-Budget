@@ -6,12 +6,25 @@ import { eq } from "drizzle-orm";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
+let TEST_HOUSEHOLD_ID: string;
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
-    req.userId = TEST_USER;
-    next();
-  },
-}));
+    requireAuth: (
+      req: {
+        userId?: string;
+        actualUserId?: string;
+        householdId?: string;
+        householdOwnerId?: string;
+      },
+      _res: unknown,
+      next: () => void,
+    ) => {
+      req.userId = TEST_USER;
+      req.actualUserId = TEST_USER;
+      req.householdId = TEST_HOUSEHOLD_ID;
+      req.householdOwnerId = TEST_USER;
+      next();
+    },
+  }));
 
 import {
   db,
@@ -23,6 +36,7 @@ import {
   avalancheSettingsTable,
 } from "@workspace/db";
 import billsRouter from "../routes/bills";
+import { createTestHousehold } from "./_helpers/testHousehold";
 import forecastRouter from "../routes/forecast";
 
 const app = express();
@@ -55,7 +69,7 @@ async function cleanup(): Promise<void> {
 async function setManualExtra(amount: string): Promise<void> {
   await db
     .insert(avalancheSettingsTable)
-    .values({ userId: TEST_USER, manualExtra: amount })
+    .values({ userId: TEST_USER, householdId: TEST_HOUSEHOLD_ID, manualExtra: amount })
     .onConflictDoUpdate({
       target: avalancheSettingsTable.userId,
       set: { manualExtra: amount },
@@ -63,6 +77,8 @@ async function setManualExtra(amount: string): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
   server = createServer(app);
   await new Promise<void>((res) => server.listen(0, "127.0.0.1", res));
@@ -112,6 +128,7 @@ async function insertDebt(over: Partial<typeof debtsTable.$inferInsert> = {}) {
     .insert(debtsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       name: "Capital One",
       balance: "5000",
       apr: "0.2299",
@@ -133,6 +150,7 @@ async function insertRecurring(
     .insert(recurringItemsTable)
     .values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       name: "Capital One",
       kind: "bill",
       amount: "75",
@@ -349,6 +367,7 @@ describe("bills/summary debt minimums", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: monthStart,
         description: "Rent payment",
         amount: "-1200",
@@ -361,6 +380,7 @@ describe("bills/summary debt minimums", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: lastMonthEnd,
         description: "Rent payment (old)",
         amount: "-1200",
@@ -370,6 +390,7 @@ describe("bills/summary debt minimums", () => {
 
     await db.insert(forecastResolutionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       recurringItemId: rent.id,
       occurrenceDate: monthStart,
       status: "matched",
@@ -377,6 +398,7 @@ describe("bills/summary debt minimums", () => {
     });
     await db.insert(forecastResolutionsTable).values({
       userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
       recurringItemId: rent.id,
       occurrenceDate: lastMonthEnd,
       status: "matched",
@@ -406,6 +428,7 @@ describe("bills/summary debt minimums", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: day1,
         description: "Electric partial 1",
         amount: "-50",
@@ -416,6 +439,7 @@ describe("bills/summary debt minimums", () => {
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         occurredOn: day2,
         description: "Electric partial 2",
         amount: "-90",
@@ -425,6 +449,7 @@ describe("bills/summary debt minimums", () => {
     await db.insert(forecastResolutionsTable).values([
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         recurringItemId: utility.id,
         occurrenceDate: day1,
         status: "matched",
@@ -432,6 +457,7 @@ describe("bills/summary debt minimums", () => {
       },
       {
         userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
         recurringItemId: utility.id,
         occurrenceDate: day2,
         status: "matched",

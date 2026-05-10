@@ -14,20 +14,31 @@ import { eq } from "drizzle-orm";
 
 const TEST_USER = `test-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 const OTHER_USER = `other-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+let TEST_HOUSEHOLD_ID: string;
+let OTHER_HOUSEHOLD_ID: string;
 
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (
-    req: { userId?: string },
+    req: {
+      userId?: string;
+      actualUserId?: string;
+      householdId?: string;
+      householdOwnerId?: string;
+    },
     _res: unknown,
     next: () => void,
   ) => {
     req.userId = TEST_USER;
+    req.actualUserId = TEST_USER;
+    req.householdId = TEST_HOUSEHOLD_ID;
+    req.householdOwnerId = TEST_USER;
     next();
   },
 }));
 
 import { db, mappingRulesTable, transactionsTable } from "@workspace/db";
 import mappingRouter from "../routes/mapping";
+import { createTestHousehold } from "./_helpers/testHousehold";
 
 const app = express();
 app.use(express.json());
@@ -52,6 +63,10 @@ async function deleteAll(): Promise<void> {
 }
 
 beforeAll(async () => {
+  const _h = await createTestHousehold(TEST_USER);
+  TEST_HOUSEHOLD_ID = _h.householdId;
+  const _ho = await createTestHousehold(OTHER_USER);
+  OTHER_HOUSEHOLD_ID = _ho.householdId;
   await deleteAll();
   server = createServer(app);
   await new Promise<void>((resolve) =>
@@ -104,6 +119,7 @@ async function seedRule(
     .insert(mappingRulesTable)
     .values({
       userId,
+      householdId: userId === TEST_USER ? TEST_HOUSEHOLD_ID : OTHER_HOUSEHOLD_ID,
       pattern,
       matchType,
       categoryId,
@@ -205,6 +221,10 @@ describe("POST /mapping-rules", () => {
       .insert(transactionsTable)
       .values({
         userId: opts.userId ?? TEST_USER,
+        householdId:
+          (opts.userId ?? TEST_USER) === TEST_USER
+            ? TEST_HOUSEHOLD_ID
+            : OTHER_HOUSEHOLD_ID,
         occurredOn: opts.occurredOn ?? "2026-04-15",
         description: opts.description,
         amount: opts.amount ?? "-12.34",
