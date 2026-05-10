@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { dashboardSourceLabel, detectChipSources, nonAmexSourceLabel } from "./dashboard";
+import {
+  dashboardSourceLabel,
+  detectChipSources,
+  isTxnInBucket,
+  nonAmexSourceLabel,
+} from "./dashboard";
 import type { Transaction } from "@workspace/api-client-react";
 
 describe("nonAmexSourceLabel — WK/MO/UN row source badge (#28)", () => {
@@ -54,6 +59,7 @@ function tx(over: Partial<Transaction>): Transaction {
     weeklyAllowance: false,
     monthlyAllowance: false,
     unplannedAllowance: false,
+    isTransfer: false,
     ...over,
   } as Transaction;
 }
@@ -99,5 +105,85 @@ describe("detectChipSources — chip row above WK/MO/UN buckets (#278)", () => {
       end,
     );
     expect(out).toEqual(["amex", "chase", "manual"]);
+  });
+});
+
+describe("isTxnInBucket — Unplanned excludes forecast-resolved transfers (#631)", () => {
+  it("includes a non-transfer txn that is in the bucket via a forecast Unplanned resolution", () => {
+    const t = tx({ id: "n", isTransfer: false });
+    expect(isTxnInBucket(t, "unplanned", new Set(["n"]))).toBe(true);
+  });
+
+  it("excludes a transfer that only landed in Unplanned via a forecast resolution", () => {
+    const t = tx({
+      id: "x",
+      description: "ONLINE TRANSFER FROM SAV ...9128",
+      isTransfer: true,
+    });
+    expect(isTxnInBucket(t, "unplanned", new Set(["x"]))).toBe(false);
+  });
+
+  it("respects an explicit unplannedAllowance toggle even when isTransfer is true", () => {
+    const t = tx({ id: "x", isTransfer: true, unplannedAllowance: true });
+    expect(isTxnInBucket(t, "unplanned", new Set(["x"]))).toBe(true);
+  });
+
+  it("ignores resolution membership for the Monthly bucket", () => {
+    const t = tx({ id: "m", monthlyAllowance: true, isTransfer: true });
+    expect(isTxnInBucket(t, "monthly", new Set(["m"]))).toBe(true);
+    const u = tx({ id: "u", isTransfer: false });
+    expect(isTxnInBucket(u, "monthly", new Set(["u"]))).toBe(false);
+  });
+});
+
+describe("detectChipSources — transfers don't surface a chip via forecast resolutions (#631)", () => {
+  const start = "2025-05-01";
+  const end = "2025-05-31";
+
+  it("excludes a chase chip when the only chase row is a transfer marked Unplanned in the inbox", () => {
+    const out = detectChipSources(
+      [
+        tx({
+          id: "x",
+          source: "plaid:chase",
+          description: "ONLINE TRANSFER FROM SAV ...9128",
+          isTransfer: true,
+        }),
+        tx({ id: "y", source: "amex", weeklyAllowance: true }),
+      ],
+      start,
+      end,
+      new Set(["x"]),
+    );
+    expect(out).toEqual(["amex"]);
+  });
+
+  it("still surfaces a chip for a non-transfer txn marked Unplanned in the inbox", () => {
+    const out = detectChipSources(
+      [
+        tx({ id: "n", source: "plaid:chase", isTransfer: false }),
+      ],
+      start,
+      end,
+      new Set(["n"]),
+    );
+    expect(out).toEqual(["chase"]);
+  });
+
+  it("still surfaces a chip when the user explicitly toggled unplannedAllowance on a transfer", () => {
+    const out = detectChipSources(
+      [
+        tx({
+          id: "x",
+          source: "plaid:chase",
+          isTransfer: true,
+          unplannedAllowance: true,
+        }),
+      ],
+      start,
+      end,
+      new Set(["x"]),
+    );
+    expect(out).toEqual(["chase"]);
   });
 });

@@ -534,12 +534,7 @@ function MonthlyLikeSection({
   const { total, recent } = useMemo(() => {
     const filtered = transactions.filter((t) => {
       if (!selectedSources.has(dashboardSourceLabel(t.source))) return false;
-      const matches =
-        bucket === "monthly"
-          ? t.monthlyAllowance
-          : t.unplannedAllowance ||
-            !!resolvedUnplannedTxnIds?.has(t.id);
-      if (!matches) return false;
+      if (!isTxnInBucket(t, bucket, resolvedUnplannedTxnIds)) return false;
       return t.occurredOn >= monthStartISO && t.occurredOn <= monthEndISO;
     });
     const sum = filtered.reduce((s, t) => s + expenseAmount(t), 0);
@@ -1653,6 +1648,27 @@ function DashboardSnapshotSection({
 const INCLUDE_ALL_SOURCES_KEY = "h2budget:dashboardIncludeAllSources";
 const SELECTED_SOURCES_KEY = "h2budget:dashboardSelectedSources";
 
+// (#631) Whether `t` belongs in the dashboard's Monthly / Unplanned
+// roll-up. Extracted so MonthlyLikeSection's filter and the unit tests
+// share a single predicate.
+//
+// For "unplanned" we explicitly exclude transactions where `isTransfer`
+// is true UNLESS the user manually toggled `unplannedAllowance = true`
+// on that row — in which case the explicit user choice wins over the
+// transfer flag. Transfer rows that only land in the bucket via a
+// forecast-inbox `ignored_unforecasted` / `unplanned` resolution are
+// not real spend and must not inflate the Unplanned total / list.
+export function isTxnInBucket(
+  t: Transaction,
+  bucket: "monthly" | "unplanned",
+  resolvedUnplannedTxnIds?: ReadonlySet<string>,
+): boolean {
+  if (bucket === "monthly") return !!t.monthlyAllowance;
+  if (t.unplannedAllowance) return true;
+  if (resolvedUnplannedTxnIds?.has(t.id) && !t.isTransfer) return true;
+  return false;
+}
+
 // (#278) Detected source chips for a given month — derived from transactions
 // that are tagged into any WK/MO/UN bucket and fall in [monthStartISO,
 // monthEndISO]. Returned sorted with "amex" first (the historical default),
@@ -1669,12 +1685,17 @@ export function detectChipSources(
     // for chip purposes too — otherwise the only Chase txn the user
     // marked unplanned this month would not surface a Chase chip and
     // they could not toggle it on to see the roll-up.
-    const tagged =
+    const taggedByUser =
       t.weeklyAllowance ||
       t.monthlyAllowance ||
-      t.unplannedAllowance ||
-      !!resolvedUnplannedTxnIds?.has(t.id);
-    if (!tagged) continue;
+      t.unplannedAllowance;
+    // (#631) A txn flagged as a transfer is not real spend; if its only
+    // claim to a chip is a forecast Unplanned resolution, ignore it so
+    // the chip row doesn't surface a source solely because the user
+    // marked an account-to-account move "Unplanned" in the inbox.
+    const taggedByForecast =
+      !!resolvedUnplannedTxnIds?.has(t.id) && !t.isTransfer;
+    if (!taggedByUser && !taggedByForecast) continue;
     if (t.occurredOn < monthStartISO || t.occurredOn > monthEndISO) continue;
     set.add(dashboardSourceLabel(t.source));
   }
