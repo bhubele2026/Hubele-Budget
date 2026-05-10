@@ -15,6 +15,7 @@ import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
 import { runStartupAvalancheHealRevert } from "./lib/startupAvalancheHealRevert";
 import { runStartupGroceriesRename } from "./lib/startupGroceriesRename";
+import { runStartupHouseholdBackfill } from "./lib/startupHouseholdBackfill";
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,
@@ -108,6 +109,27 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // (#623 follow-up) One-shot startup pass: stamp household_id on
+  // every user-scoped row that's still NULL. The schema migration
+  // for the household refactor is auto-applied by Replit's Publish
+  // flow, but the data backfill (scripts/backfill_households.sql) is
+  // not — without this, a freshly deployed prod has the columns but
+  // every existing transaction/account/etc. carries household_id=NULL,
+  // so the new household-scoped routes return zero rows. Idempotent:
+  // re-running on a converged DB is a no-op. Best-effort: never blocks
+  // boot, never crashes it.
+  runStartupHouseholdBackfill()
+    .then((summary) => {
+      if (summary.ran) {
+        logger.info(summary, "Startup household backfill complete");
+      } else {
+        logger.error(summary, "Startup household backfill did not run");
+      }
+    })
+    .catch((err) => {
+      logger.error({ err }, "Startup household backfill failed");
+    });
 
   // (#434) One-shot startup pass: walk every user with a non-empty
   // `forecast_settings.accountSnapshots` map and run the dedupe routine
