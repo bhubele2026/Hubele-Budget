@@ -55,7 +55,6 @@ import { useToast } from "@/hooks/use-toast";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
-import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { PostLinkProgressBanner } from "@/components/post-link-progress";
@@ -251,7 +250,6 @@ export default function AmexPage() {
   const updateTx = useUpdateTransaction();
   const bulkUpdateTx = useBulkUpdateTransactions();
   const buildRuleUndoAction = useRuleActionUndo();
-  const weeklyLabels = useWeeklyBucketLabels();
 
   // "Set actual balance" popover (only surfaced when ending balance source
   // is "computed"). Persists the typed value to the server-side anchor at
@@ -1071,19 +1069,6 @@ export default function AmexPage() {
     } else {
       // Toggling off — only clear if this bubble was the active bucket.
       if (currentBucket(t) === bucket) setRowBucket(t, "");
-    }
-  };
-
-  const setRowSource = async (id: string, source: string) => {
-    try {
-      await updateTx.mutateAsync({ id, data: { source } });
-      invalidateTxns();
-    } catch (e) {
-      toast({
-        title: "Couldn't update source",
-        description: (e as Error).message,
-        variant: "destructive",
-      });
     }
   };
 
@@ -2056,17 +2041,6 @@ export default function AmexPage() {
                           setRowCategory(t.id, id, remember)
                         }
                       />
-                      <Select
-                        value={t.source}
-                        onValueChange={(v) => setRowSource(t.id, v)}
-                      >
-                        <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="amex">amex</SelectItem>
-                          <SelectItem value="manual">manual</SelectItem>
-                          <SelectItem value="import">import</SelectItem>
-                        </SelectContent>
-                      </Select>
                       {/* (#607) Transfer rows are excluded from budget
                           actuals, so weekly/monthly/unplanned bubbles
                           would never affect any roll-up. Hide them on
@@ -2082,35 +2056,6 @@ export default function AmexPage() {
                           onToggle={(b, next) => onBubbleToggle(t, b, next)}
                         />
                       )}
-                      {/* (#626) Always reserve the weekly-bucket slot
-                          so toggling WK on/off doesn't change the row
-                          height and bounce the virtualized list. */}
-                      <div
-                        className="h-7 w-28 shrink-0"
-                        aria-hidden={t.weeklyAllowance ? undefined : true}
-                        style={
-                          t.weeklyAllowance
-                            ? undefined
-                            : { visibility: "hidden", pointerEvents: "none" }
-                        }
-                      >
-                        {t.weeklyAllowance ? (
-                          <Select
-                            value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}
-                            onValueChange={(v) =>
-                              setRowBucket(t, "weekly", v as typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket])
-                            }
-                          >
-                            <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={TransactionWeeklyBucket.groceries}>{weeklyLabels.groceries}</SelectItem>
-                              <SelectItem value={TransactionWeeklyBucket.dining}>{weeklyLabels.dining}</SelectItem>
-                              <SelectItem value={TransactionWeeklyBucket.entertainment}>{weeklyLabels.entertainment}</SelectItem>
-                              <SelectItem value={TransactionWeeklyBucket.misc}>{weeklyLabels.misc}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : null}
-                      </div>
                       {!t.isTransfer && t.isTransferUserOverridden && (
                         <Badge
                           variant="outline"
@@ -2299,19 +2244,6 @@ export default function AmexPage() {
                           </div>
                         </td>
                         <td className="px-3 py-2">
-                          <Select
-                            value={t.source}
-                            onValueChange={(v) => setRowSource(t.id, v)}
-                          >
-                            <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="amex">amex</SelectItem>
-                              <SelectItem value="manual">manual</SelectItem>
-                              <SelectItem value="import">import</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
                             {/* (#607) Hide bucket bubbles on transfer
                                 rows — see mobile layout above. */}
@@ -2326,36 +2258,6 @@ export default function AmexPage() {
                                 onToggle={(b, next) => onBubbleToggle(t, b, next)}
                               />
                             )}
-                            {/* (#626) Always reserve the weekly-bucket
-                                slot so toggling WK on/off doesn't change
-                                the row height and bounce the virtualized
-                                list. */}
-                            <div
-                              className="h-7 w-28 shrink-0"
-                              aria-hidden={t.weeklyAllowance ? undefined : true}
-                              style={
-                                t.weeklyAllowance
-                                  ? undefined
-                                  : { visibility: "hidden", pointerEvents: "none" }
-                              }
-                            >
-                              {t.weeklyAllowance ? (
-                                <Select
-                                  value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}
-                                  onValueChange={(v) =>
-                                    setRowBucket(t, "weekly", v as typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket])
-                                  }
-                                >
-                                  <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value={TransactionWeeklyBucket.groceries}>{weeklyLabels.groceries}</SelectItem>
-                                    <SelectItem value={TransactionWeeklyBucket.dining}>{weeklyLabels.dining}</SelectItem>
-                                    <SelectItem value={TransactionWeeklyBucket.entertainment}>{weeklyLabels.entertainment}</SelectItem>
-                                    <SelectItem value={TransactionWeeklyBucket.misc}>{weeklyLabels.misc}</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              ) : null}
-                            </div>
                           </div>
                         </td>
                         <td className="px-3 py-2 text-right font-mono tabular-nums whitespace-nowrap">
