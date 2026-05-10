@@ -760,6 +760,11 @@ export async function syncPlaidItem(
         source,
         plaidTransactionId: t.transaction_id,
         plaidAccountId: t.account_id,
+        // (#636) Persist Plaid PFC so the startup card-payment audit
+        // can catch bland-description rows whose taxonomy reveals
+        // them as a transfer.
+        pfcPrimary: pfc?.primary ?? null,
+        pfcDetailed: pfc?.detailed ?? null,
         debtId,
         notes: t.pending ? "[pending]" : null,
         forecastFlag: isChecking && !cat.isTransfer,
@@ -788,6 +793,11 @@ export async function syncPlaidItem(
             // preserve its current value instead of letting the auto-
             // categorize transfer heuristic re-flip it on every sync.
             isTransfer: sql`CASE WHEN ${transactionsTable.isTransferUserOverridden} THEN ${transactionsTable.isTransfer} ELSE ${values.isTransfer} END`,
+            // (#636) Refresh persisted PFC on every sync so the
+            // startup audit always sees the latest taxonomy. These
+            // come straight from Plaid and are not user-editable.
+            pfcPrimary: values.pfcPrimary,
+            pfcDetailed: values.pfcDetailed,
             // (#632) When the classifier flips a row to a transfer
             // (e.g. a card-payment row caught by the new LOAN_PAYMENTS
             // PFC / "online payment" patterns), also clear the
@@ -1892,6 +1902,10 @@ export async function runGapBackfillForItem(
           source,
           plaidTransactionId: t.transaction_id,
           plaidAccountId: t.account_id,
+          // (#636) Twin of cursor-sync values block — persist Plaid
+          // PFC on the gap-backfill path too.
+          pfcPrimary: pfc?.primary ?? null,
+          pfcDetailed: pfc?.detailed ?? null,
           debtId,
           notes: t.pending ? "[pending]" : null,
           forecastFlag: false,
@@ -1923,6 +1937,10 @@ export async function runGapBackfillForItem(
               // path must honor the user's manual `isTransfer` override the
               // same way as the cursor sync path.
               isTransfer: sql`CASE WHEN ${transactionsTable.isTransferUserOverridden} THEN ${transactionsTable.isTransfer} ELSE ${values.isTransfer} END`,
+              // (#636) Refresh persisted PFC on the gap-backfill
+              // upsert too — twin of the cursor-sync block above.
+              pfcPrimary: values.pfcPrimary,
+              pfcDetailed: values.pfcDetailed,
               // (#632) Twin of the cursor-sync allowance-clearing block:
               // when the classifier flips this row to a transfer (e.g.
               // newly-covered card-payment patterns), drop the dashboard

@@ -124,6 +124,81 @@ describe("(#632) startup card-payment reclassify sweep", () => {
     expect(second.reclassified).toBe(0);
   });
 
+  it("(#636) catches bland-description rows via persisted Plaid PFC, leaves null-PFC and user-overridden twins alone", async () => {
+    // (a) Bland description, but PFC reveals it as a card payment.
+    const [pfcCardPayment] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-04-25",
+        description: "ACH WEB PAYMENT 12345",
+        amount: "-300.00",
+        isTransfer: false,
+        monthlyAllowance: true,
+        source: "plaid:card",
+        plaidTransactionId: `t-${randomUUID()}`,
+        plaidAccountId: "acct-cc-2",
+        pfcPrimary: "LOAN_PAYMENTS",
+        pfcDetailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
+      })
+      .returning();
+
+    // (b) Same bland description, no PFC -> description arm can't catch
+    //     it, PFC arm doesn't apply, so it must stay untouched.
+    const [noPfcTwin] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-04-26",
+        description: "ACH WEB PAYMENT 99999",
+        amount: "-150.00",
+        isTransfer: false,
+        weeklyAllowance: true,
+        source: "manual",
+      })
+      .returning();
+
+    // (c) PFC says LOAN_PAYMENTS but the user explicitly overrode the
+    //     transfer flag — must not be touched.
+    const [pfcOverridden] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-04-27",
+        description: "ACH WEB PAYMENT 77777",
+        amount: "-75.00",
+        isTransfer: false,
+        isTransferUserOverridden: true,
+        weeklyAllowance: true,
+        source: "plaid:card",
+        plaidTransactionId: `t-${randomUUID()}`,
+        plaidAccountId: "acct-cc-3",
+        pfcPrimary: "LOAN_PAYMENTS",
+      })
+      .returning();
+
+    const summary = await runStartupCardPaymentReclassify();
+    expect(summary.reclassified).toBeGreaterThanOrEqual(1);
+
+    const a = await readRow(pfcCardPayment!.id);
+    expect(a.isTransfer).toBe(true);
+    expect(a.monthlyAllowance).toBe(false);
+    expect(a.weeklyAllowance).toBe(false);
+    expect(a.unplannedAllowance).toBe(false);
+
+    const b = await readRow(noPfcTwin!.id);
+    expect(b.isTransfer).toBe(false);
+    expect(b.weeklyAllowance).toBe(true);
+
+    const c = await readRow(pfcOverridden!.id);
+    expect(c.isTransfer).toBe(false);
+    expect(c.isTransferUserOverridden).toBe(true);
+    expect(c.weeklyAllowance).toBe(true);
+  });
+
   it("Plaid sync upsert clears Weekly/Monthly/Unplanned allowance flags when the row is auto-classified as transfer", async () => {
     const plaidTxnId = `t-${randomUUID()}`;
     // Pre-existing row carrying stale allowance flags.

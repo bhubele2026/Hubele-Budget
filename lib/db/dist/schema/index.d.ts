@@ -2095,6 +2095,40 @@ export declare const transactionsTable: import("drizzle-orm/pg-core").PgTableWit
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        pfcPrimary: import("drizzle-orm/pg-core").PgColumn<{
+            name: "pfc_primary";
+            tableName: "transactions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        pfcDetailed: import("drizzle-orm/pg-core").PgColumn<{
+            name: "pfc_detailed";
+            tableName: "transactions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         debtId: import("drizzle-orm/pg-core").PgColumn<{
             name: "debt_id";
             tableName: "transactions";
@@ -4611,6 +4645,8 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
     source: import("zod/v4").ZodOptional<import("zod/v4").ZodString>;
     owedBy: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     plaidTransactionId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    pfcPrimary: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    pfcDetailed: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
 }, {
     out: {};
     in: {};

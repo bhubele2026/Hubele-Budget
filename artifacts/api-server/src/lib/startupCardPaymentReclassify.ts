@@ -1,6 +1,9 @@
-import { and, eq, ilike, or } from "drizzle-orm";
+import { and, eq, ilike, or, sql } from "drizzle-orm";
 import { db, transactionsTable } from "@workspace/db";
-import { TRANSFER_DESC_PATTERNS } from "./autoCategorize";
+import {
+  TRANSFER_DESC_PATTERNS,
+  TRANSFER_PFC_PRIMARY,
+} from "./autoCategorize";
 import { logger } from "./logger";
 
 /**
@@ -11,12 +14,11 @@ import { logger } from "./logger";
  * each, set `isTransfer=true` and zero out the three allowance flags so
  * the row stops contaminating dashboard buckets.
  *
- * Description-only by design: the schema does not persist Plaid's
- * personal_finance_category, so PFC-based catch-up isn't possible from
- * stored data. The live classifier (`autoCategorize` + `plaidSync`)
- * already covers the LOAN_PAYMENTS PFC path on every future sync, so
- * any row touched again will be repaired automatically. See follow-up
- * task #636 for persisting PFC and broadening the backfill.
+ * (#636) Now also catches rows whose description is bland but whose
+ * persisted Plaid `pfc_primary` falls in the transfer set
+ * (LOAN_PAYMENTS / TRANSFER_IN / TRANSFER_OUT). PFC is nullable on
+ * pre-#636 rows; until they're either synced again or backfilled
+ * (#641), the description arm remains the safety net.
  *
  * Skips rows the user has explicitly toggled
  * (`is_transfer_user_overridden=true`) — same contract the live
@@ -38,8 +40,22 @@ export async function runStartupCardPaymentReclassify(): Promise<{
     const descConds = TRANSFER_DESC_PATTERNS.map((frag) =>
       ilike(transactionsTable.description, `%${frag}%`),
     );
-    const descMatch = or(...descConds);
-    if (!descMatch) {
+    // (#636) PFC arm: any persisted pfc_primary in the transfer set
+    // counts as a transfer regardless of description text. Built as
+    // a parameterized IN list via Drizzle's `sql` template so the
+    // upper-cased values stay safely escaped.
+    const pfcList = Array.from(TRANSFER_PFC_PRIMARY);
+    const pfcMatch =
+      pfcList.length > 0
+        ? sql`upper(${transactionsTable.pfcPrimary}) in (${sql.join(
+            pfcList.map((v) => sql`${v}`),
+            sql`, `,
+          )})`
+        : null;
+    const matchAny = pfcMatch
+      ? or(...descConds, pfcMatch)
+      : or(...descConds);
+    if (!matchAny) {
       // No patterns configured -> nothing to do.
       return summary;
     }
@@ -62,7 +78,7 @@ export async function runStartupCardPaymentReclassify(): Promise<{
       .where(
         and(
           eq(transactionsTable.isTransferUserOverridden, false),
-          descMatch,
+          matchAny,
           needsFix,
         ),
       )
