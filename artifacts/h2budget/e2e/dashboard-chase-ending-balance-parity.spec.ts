@@ -11,6 +11,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -140,6 +141,7 @@ test.describe("Dashboard ↔ Chase page — Chase ending balance parity (#477)",
       "dash-chase-parity",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     // --- Direct DB seed: one Chase Plaid item + one checking account
@@ -152,6 +154,7 @@ test.describe("Dashboard ↔ Chase page — Chase ending balance parity (#477)",
       .insert(plaidItemsTable)
       .values({
         userId,
+        householdId,
         itemId: `e2e-item-${suffix}`,
         accessToken: "e2e-no-access",
         institutionName: "Chase",
@@ -162,6 +165,7 @@ test.describe("Dashboard ↔ Chase page — Chase ending balance parity (#477)",
       .insert(plaidAccountsTable)
       .values({
         userId,
+        householdId,
         itemId: item.id,
         accountId: `e2e-acct-${suffix}`,
         name: "Total Checking",
@@ -183,6 +187,7 @@ test.describe("Dashboard ↔ Chase page — Chase ending balance parity (#477)",
     const anchorBalance = 5000;
     await db.insert(forecastSettingsTable).values({
       userId,
+      householdId,
       bankSnapshotBalance: anchorBalance.toFixed(2),
       bankSnapshotAt: new Date(
         now.getFullYear(),
@@ -233,6 +238,7 @@ test.describe("Dashboard ↔ Chase page — Chase ending balance parity (#477)",
     for (const s of seeds) {
       await db.insert(transactionsTable).values({
         userId,
+        householdId,
         occurredOn: s.occurredOn,
         // occurredAt at midnight UTC of `occurredOn` so any
         // newest-first comparator sees a stable order; the parity

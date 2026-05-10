@@ -5,6 +5,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -50,6 +51,7 @@ test.describe("Dashboard Plaid expiring-soon banner — dismiss + return (#325)"
       "dash-plaid-expiring-dismiss",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     // Seed a single Plaid item with a near-future consent cutoff that
@@ -62,6 +64,7 @@ test.describe("Dashboard Plaid expiring-soon banner — dismiss + return (#325)"
       .insert(plaidItemsTable)
       .values({
         userId,
+        householdId,
         itemId: `e2e-item-${suffix}`,
         accessToken: "e2e-no-access",
         institutionName: "Chase",

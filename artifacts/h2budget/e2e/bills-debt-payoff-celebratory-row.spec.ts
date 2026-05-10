@@ -5,6 +5,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -43,12 +44,14 @@ test.describe("Bills celebratory 'Stops at payoff' row after auto-archive (Task 
       "bills-payoff-row",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     const [debt] = await db
       .insert(debtsTable)
       .values({
         userId,
+        householdId,
         name: "Visa Killer",
         balance: "1500",
         apr: "0.2299",

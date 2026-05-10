@@ -11,6 +11,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -81,6 +82,7 @@ test.describe("Chase refresh-bank no_balance toast (#385)", () => {
       "txn-chase-refresh-no-balance",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     // --- Seed: one Chase Plaid item + checking account so the Chase
@@ -95,6 +97,7 @@ test.describe("Chase refresh-bank no_balance toast (#385)", () => {
       .insert(plaidItemsTable)
       .values({
         userId,
+        householdId,
         itemId: `e2e-item-${suffix}`,
         accessToken: "e2e-no-access",
         institutionName: "Chase",
@@ -105,6 +108,7 @@ test.describe("Chase refresh-bank no_balance toast (#385)", () => {
       .insert(plaidAccountsTable)
       .values({
         userId,
+        householdId,
         itemId: item.id,
         accountId: `e2e-acct-${suffix}`,
         name: ACCOUNT_NAME,
@@ -120,6 +124,7 @@ test.describe("Chase refresh-bank no_balance toast (#385)", () => {
     const today = todayISO();
     await db.insert(forecastSettingsTable).values({
       userId,
+      householdId,
       bankSnapshotBalance: "1234.56",
       bankSnapshotAt: new Date(`${today}T12:00:00Z`),
       bankSnapshotSource: "manual",

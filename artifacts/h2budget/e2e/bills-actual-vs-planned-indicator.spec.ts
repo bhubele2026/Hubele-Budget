@@ -10,6 +10,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -59,6 +60,7 @@ test.describe("Bills planned-vs-actual indicator (#166)", () => {
       "bills-actual-indicator",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     const monthStart = thisMonthStartISO();
@@ -72,6 +74,7 @@ test.describe("Bills planned-vs-actual indicator (#166)", () => {
       .insert(recurringItemsTable)
       .values({
         userId,
+        householdId,
         name: "E2E Rent (paid)",
         kind: "bill",
         amount: "1200",
@@ -84,6 +87,7 @@ test.describe("Bills planned-vs-actual indicator (#166)", () => {
       .insert(recurringItemsTable)
       .values({
         userId,
+        householdId,
         name: "E2E Electric (partial)",
         kind: "bill",
         amount: "300",
@@ -96,6 +100,7 @@ test.describe("Bills planned-vs-actual indicator (#166)", () => {
       .insert(recurringItemsTable)
       .values({
         userId,
+        householdId,
         name: "E2E Internet (none)",
         kind: "bill",
         amount: "75",
@@ -112,6 +117,7 @@ test.describe("Bills planned-vs-actual indicator (#166)", () => {
       .insert(transactionsTable)
       .values({
         userId,
+        householdId,
         occurredOn: monthStart,
         description: "Rent payment",
         amount: "-1200",
@@ -122,6 +128,7 @@ test.describe("Bills planned-vs-actual indicator (#166)", () => {
       .insert(transactionsTable)
       .values({
         userId,
+        householdId,
         occurredOn: monthStart,
         description: "Electric partial",
         amount: "-140",
@@ -135,6 +142,7 @@ test.describe("Bills planned-vs-actual indicator (#166)", () => {
     await db.insert(forecastResolutionsTable).values([
       {
         userId,
+        householdId,
         recurringItemId: paidBill.id,
         occurrenceDate: monthStart,
         status: "matched",
@@ -142,6 +150,7 @@ test.describe("Bills planned-vs-actual indicator (#166)", () => {
       },
       {
         userId,
+        householdId,
         recurringItemId: partialBill.id,
         occurrenceDate: monthStart,
         status: "matched",

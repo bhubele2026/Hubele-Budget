@@ -9,6 +9,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -68,11 +69,13 @@ test.describe("Bills month picker — right-side summaries (#540)", () => {
       "bills-month-summary",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     await db.insert(recurringItemsTable).values([
       {
         userId,
+        householdId,
         name: "E2E Biweekly Income",
         kind: "income",
         amount: "200",
@@ -82,6 +85,7 @@ test.describe("Bills month picker — right-side summaries (#540)", () => {
       },
       {
         userId,
+        householdId,
         name: "E2E Biweekly Bill",
         kind: "bill",
         amount: "100",
@@ -94,6 +98,7 @@ test.describe("Bills month picker — right-side summaries (#540)", () => {
     await db.insert(transactionsTable).values([
       {
         userId,
+        householdId,
         occurredOn: "2026-05-03",
         occurredAt: new Date("2026-05-03T15:00:00Z").toISOString(),
         description: "E2E May income",
@@ -102,6 +107,7 @@ test.describe("Bills month picker — right-side summaries (#540)", () => {
       },
       {
         userId,
+        householdId,
         occurredOn: "2026-05-10",
         occurredAt: new Date("2026-05-10T15:00:00Z").toISOString(),
         description: "E2E May spend",
@@ -110,6 +116,7 @@ test.describe("Bills month picker — right-side summaries (#540)", () => {
       },
       {
         userId,
+        householdId,
         occurredOn: "2026-05-15",
         occurredAt: new Date("2026-05-15T15:00:00Z").toISOString(),
         description: "E2E May transfer (excluded)",
@@ -119,6 +126,7 @@ test.describe("Bills month picker — right-side summaries (#540)", () => {
       },
       {
         userId,
+        householdId,
         occurredOn: "2026-06-04",
         occurredAt: new Date("2026-06-04T15:00:00Z").toISOString(),
         description: "E2E June income",
@@ -127,6 +135,7 @@ test.describe("Bills month picker — right-side summaries (#540)", () => {
       },
       {
         userId,
+        householdId,
         occurredOn: "2026-06-08",
         occurredAt: new Date("2026-06-08T15:00:00Z").toISOString(),
         description: "E2E June spend",

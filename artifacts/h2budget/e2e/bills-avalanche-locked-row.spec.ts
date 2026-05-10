@@ -5,6 +5,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 const provisionedUserIds: string[] = [];
@@ -33,6 +34,7 @@ test.describe("Bills locked-row affordance + Avalanche deep-link (Task #70)", ()
       "bills-locked-row",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     // Direct DB seed: minPaymentSource="plaid" is only writable via the
@@ -41,6 +43,7 @@ test.describe("Bills locked-row affordance + Avalanche deep-link (Task #70)", ()
       .insert(debtsTable)
       .values({
         userId,
+        householdId,
         name: "Capital One Quicksilver",
         balance: "3500",
         apr: "0.2299",
@@ -55,6 +58,7 @@ test.describe("Bills locked-row affordance + Avalanche deep-link (Task #70)", ()
       .insert(debtsTable)
       .values({
         userId,
+        householdId,
         name: "Discover It",
         balance: "1800",
         apr: "0.1899",
@@ -69,6 +73,7 @@ test.describe("Bills locked-row affordance + Avalanche deep-link (Task #70)", ()
       .insert(recurringItemsTable)
       .values({
         userId,
+        householdId,
         name: "Discover It Min",
         kind: "bill",
         amount: "55",
@@ -81,6 +86,7 @@ test.describe("Bills locked-row affordance + Avalanche deep-link (Task #70)", ()
     // Unrelated bill — must survive dedup so the test isn't trivially passing.
     await db.insert(recurringItemsTable).values({
       userId,
+      householdId,
       name: "Internet",
       kind: "bill",
       amount: "75",

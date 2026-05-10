@@ -11,6 +11,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -67,6 +68,7 @@ test.describe("Chase month tiles — May 2026 totals (#447, covers #443)", () =>
       "txn-chase-month-tiles",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     // --- Direct DB seed: one Chase checking account that owns the
@@ -78,6 +80,7 @@ test.describe("Chase month tiles — May 2026 totals (#447, covers #443)", () =>
       .insert(plaidItemsTable)
       .values({
         userId,
+        householdId,
         itemId: `e2e-item-${suffix}`,
         accessToken: "e2e-no-access",
         institutionName: "Chase",
@@ -88,6 +91,7 @@ test.describe("Chase month tiles — May 2026 totals (#447, covers #443)", () =>
       .insert(plaidAccountsTable)
       .values({
         userId,
+        householdId,
         itemId: item.id,
         accountId: `e2e-acct-${suffix}`,
         name: "Total Checking",
@@ -103,6 +107,7 @@ test.describe("Chase month tiles — May 2026 totals (#447, covers #443)", () =>
     // (which would otherwise rewrite balance/source/at on us).
     await db.insert(forecastSettingsTable).values({
       userId,
+      householdId,
       bankSnapshotBalance: "3565.09",
       bankSnapshotAt: new Date("2026-04-30T23:59:59Z"),
       bankSnapshotSource: "manual",

@@ -1,6 +1,7 @@
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 export type UpsertMappingRuleInput = {
     userId: string;
+    householdId: string;
     pattern: string;
     matchType: "contains" | "starts_with" | "exact";
     categoryId: string | null;

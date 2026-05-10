@@ -5,6 +5,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -49,6 +50,7 @@ test.describe("Bills month picker (#538)", () => {
       "bills-month-picker",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     // Single biweekly bill. Per-event = $100, anchored 2026-05-01. The
@@ -58,6 +60,7 @@ test.describe("Bills month picker (#538)", () => {
       .insert(recurringItemsTable)
       .values({
         userId,
+        householdId,
         name: "E2E Biweekly Bill",
         kind: "bill",
         amount: "100",

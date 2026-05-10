@@ -5,6 +5,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -46,12 +47,14 @@ test.describe("Bills per-paycheck row display (#413)", () => {
       "bills-per-paycheck-row",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     const [income] = await db
       .insert(recurringItemsTable)
       .values({
         userId,
+        householdId,
         name: "E2E Biweekly Paycheck",
         kind: "income",
         amount: "4050",

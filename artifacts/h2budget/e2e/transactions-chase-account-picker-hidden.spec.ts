@@ -11,6 +11,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -67,6 +68,7 @@ test.describe("Chase per-account picker — hidden for single-account users (#41
       "txn-chase-account-picker-hidden",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     const suffix = Math.random().toString(36).slice(2, 8);
@@ -74,6 +76,7 @@ test.describe("Chase per-account picker — hidden for single-account users (#41
       .insert(plaidItemsTable)
       .values({
         userId,
+        householdId,
         itemId: `e2e-item-${suffix}`,
         accessToken: "e2e-no-access",
         institutionName: "Chase",
@@ -84,6 +87,7 @@ test.describe("Chase per-account picker — hidden for single-account users (#41
       .insert(plaidAccountsTable)
       .values({
         userId,
+        householdId,
         itemId: item.id,
         accountId: `e2e-acct-${suffix}`,
         name: "Total Checking",
@@ -96,6 +100,7 @@ test.describe("Chase per-account picker — hidden for single-account users (#41
     const today = todayISO();
     await db.insert(forecastSettingsTable).values({
       userId,
+      householdId,
       bankSnapshotBalance: "1234.56",
       bankSnapshotAt: new Date(`${today}T12:00:00Z`),
       bankSnapshotSource: "manual",
@@ -106,6 +111,7 @@ test.describe("Chase per-account picker — hidden for single-account users (#41
 
     await db.insert(transactionsTable).values({
       userId,
+      householdId,
       occurredOn: today,
       occurredAt: new Date(`${today}T15:00:00Z`).toISOString(),
       description: `E2E-${suffix} solo`,

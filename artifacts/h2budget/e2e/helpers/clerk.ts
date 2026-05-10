@@ -1,6 +1,38 @@
 import { expect, type Page } from "@playwright/test";
 import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { createClerkClient } from "@clerk/backend";
+import { db, householdsTable, householdMembersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+
+/**
+ * (#623) Bootstraps a real household + member row for a Clerk-provisioned
+ * test user so e2e fixtures that insert directly via the db client can set
+ * the now-required `household_id` column. Returns the household id. The
+ * server's requireAuth middleware caches household resolution per actualUserId,
+ * so it will pick up this row on the first authed request.
+ */
+export async function provisionTestHousehold(
+  ownerUserId: string,
+): Promise<string> {
+  const [inserted] = await db
+    .insert(householdsTable)
+    .values({ ownerUserId })
+    .onConflictDoNothing({ target: householdsTable.ownerUserId })
+    .returning({ id: householdsTable.id });
+  let householdId = inserted?.id;
+  if (!householdId) {
+    const [existing] = await db
+      .select({ id: householdsTable.id })
+      .from(householdsTable)
+      .where(eq(householdsTable.ownerUserId, ownerUserId));
+    householdId = existing!.id;
+  }
+  await db
+    .insert(householdMembersTable)
+    .values({ userId: ownerUserId, householdId, role: "owner" })
+    .onConflictDoNothing({ target: householdMembersTable.userId });
+  return householdId;
+}
 
 /**
  * Shared Clerk-backed Playwright harness used by the self-heal e2e specs.

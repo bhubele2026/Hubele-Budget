@@ -11,6 +11,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -73,6 +74,7 @@ test.describe("Transactions Manual view suppresses reauth noise (#360)", () => {
       "txn-manual-suppresses-reauth",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     // Seed a single Plaid item for "Chase" stuck in ITEM_LOGIN_REQUIRED so
@@ -84,6 +86,7 @@ test.describe("Transactions Manual view suppresses reauth noise (#360)", () => {
       .insert(plaidItemsTable)
       .values({
         userId,
+        householdId,
         itemId: `e2e-item-${suffix}`,
         accessToken: "e2e-no-access",
         institutionName: "Chase",
@@ -96,6 +99,7 @@ test.describe("Transactions Manual view suppresses reauth noise (#360)", () => {
       .insert(plaidAccountsTable)
       .values({
         userId,
+        householdId,
         itemId: item.id,
         accountId: `e2e-acct-${suffix}`,
         name: "Total Checking",
@@ -110,6 +114,7 @@ test.describe("Transactions Manual view suppresses reauth noise (#360)", () => {
     const today = todayISO();
     await db.insert(forecastSettingsTable).values({
       userId,
+      householdId,
       bankSnapshotBalance: "1234.56",
       bankSnapshotAt: new Date(`${today}T12:00:00Z`),
       bankSnapshotSource: "manual",
@@ -122,6 +127,7 @@ test.describe("Transactions Manual view suppresses reauth noise (#360)", () => {
     // one row to confirm the picker actually switched.
     await db.insert(transactionsTable).values({
       userId,
+      householdId,
       occurredOn: today,
       occurredAt: new Date(`${today}T15:00:00Z`).toISOString(),
       description: `E2E-${suffix} plaid`,
@@ -133,6 +139,7 @@ test.describe("Transactions Manual view suppresses reauth noise (#360)", () => {
     });
     await db.insert(transactionsTable).values({
       userId,
+      householdId,
       occurredOn: today,
       occurredAt: new Date(`${today}T16:00:00Z`).toISOString(),
       description: `E2E-${suffix} manual`,

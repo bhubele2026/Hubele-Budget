@@ -10,6 +10,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -59,6 +60,7 @@ test.describe("Debts cards page — projected payoff dates (Task #424)", () => {
       "debts-payoff-dates",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     // Solvable, highest APR — should be the avalanche Target.
@@ -66,6 +68,7 @@ test.describe("Debts cards page — projected payoff dates (Task #424)", () => {
       .insert(debtsTable)
       .values({
         userId,
+        householdId,
         name: "Visa Quick Kill",
         balance: "1500",
         apr: "0.2299",
@@ -81,6 +84,7 @@ test.describe("Debts cards page — projected payoff dates (Task #424)", () => {
       .insert(debtsTable)
       .values({
         userId,
+        householdId,
         name: "Discover Small",
         balance: "500",
         apr: "0.0999",
@@ -96,6 +100,7 @@ test.describe("Debts cards page — projected payoff dates (Task #424)", () => {
       .insert(debtsTable)
       .values({
         userId,
+        householdId,
         name: "Drowning Card",
         balance: "10000",
         apr: "0.3999",

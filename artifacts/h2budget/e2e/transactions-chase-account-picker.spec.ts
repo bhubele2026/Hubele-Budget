@@ -11,6 +11,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -72,6 +73,7 @@ test.describe("Chase per-account picker (#297, covers #103)", () => {
       "txn-chase-account-picker",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     // --- Direct DB seed: two linked checking accounts under the same Plaid
@@ -83,6 +85,7 @@ test.describe("Chase per-account picker (#297, covers #103)", () => {
       .insert(plaidItemsTable)
       .values({
         userId,
+        householdId,
         itemId: `e2e-item-${suffix}`,
         accessToken: "e2e-no-access",
         institutionName: "Chase",
@@ -93,6 +96,7 @@ test.describe("Chase per-account picker (#297, covers #103)", () => {
       .insert(plaidAccountsTable)
       .values({
         userId,
+        householdId,
         itemId: item.id,
         accountId: `e2e-acct-A-${suffix}`,
         name: "Total Checking",
@@ -105,6 +109,7 @@ test.describe("Chase per-account picker (#297, covers #103)", () => {
       .insert(plaidAccountsTable)
       .values({
         userId,
+        householdId,
         itemId: item.id,
         accountId: `e2e-acct-B-${suffix}`,
         name: "Joint Checking",
@@ -123,6 +128,7 @@ test.describe("Chase per-account picker (#297, covers #103)", () => {
     const today = todayISO();
     await db.insert(forecastSettingsTable).values({
       userId,
+      householdId,
       bankSnapshotBalance: "1234.56",
       bankSnapshotAt: new Date(`${today}T12:00:00Z`),
       bankSnapshotSource: "manual",
@@ -141,6 +147,7 @@ test.describe("Chase per-account picker (#297, covers #103)", () => {
         .insert(transactionsTable)
         .values({
           userId,
+          householdId,
           occurredOn: today,
           occurredAt: new Date(`${today}T15:00:00Z`).toISOString(),
           description: `E2E-${suffix} ${tag}${idx}`,

@@ -11,6 +11,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -81,6 +82,7 @@ test.describe("Chase Transactions page — no duplicate rows after sync (#459, c
       "txn-chase-no-dup",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     // --- Direct DB seed: one Chase checking account that owns the
@@ -92,6 +94,7 @@ test.describe("Chase Transactions page — no duplicate rows after sync (#459, c
       .insert(plaidItemsTable)
       .values({
         userId,
+        householdId,
         itemId: `e2e-item-${suffix}`,
         accessToken: "e2e-no-access",
         institutionName: "Chase",
@@ -102,6 +105,7 @@ test.describe("Chase Transactions page — no duplicate rows after sync (#459, c
       .insert(plaidAccountsTable)
       .values({
         userId,
+        householdId,
         itemId: item.id,
         accountId: `e2e-acct-${suffix}`,
         name: "Total Checking",
@@ -117,6 +121,7 @@ test.describe("Chase Transactions page — no duplicate rows after sync (#459, c
     // seedAprilChase repair path on first mount.
     await db.insert(forecastSettingsTable).values({
       userId,
+      householdId,
       bankSnapshotBalance: "3565.09",
       bankSnapshotAt: new Date("2026-04-30T23:59:59Z"),
       bankSnapshotSource: "manual",

@@ -11,6 +11,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -180,6 +181,7 @@ test.describe("Chase Transactions page — per-row running balance (#393)", () =
       "chase-running-balance",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     // --- Direct DB seed: one Chase checking account that owns the
@@ -191,6 +193,7 @@ test.describe("Chase Transactions page — per-row running balance (#393)", () =
       .insert(plaidItemsTable)
       .values({
         userId,
+        householdId,
         itemId: `e2e-item-${suffix}`,
         accessToken: "e2e-no-access",
         institutionName: "Chase",
@@ -201,6 +204,7 @@ test.describe("Chase Transactions page — per-row running balance (#393)", () =
       .insert(plaidAccountsTable)
       .values({
         userId,
+        householdId,
         itemId: item.id,
         accountId: `e2e-acct-${suffix}`,
         name: "Total Checking",
@@ -217,6 +221,7 @@ test.describe("Chase Transactions page — per-row running balance (#393)", () =
     const anchorBalance = 5000;
     await db.insert(forecastSettingsTable).values({
       userId,
+      householdId,
       bankSnapshotBalance: anchorBalance.toFixed(2),
       bankSnapshotAt: new Date(),
       bankSnapshotSource: "manual",

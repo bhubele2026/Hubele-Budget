@@ -11,6 +11,7 @@ import {
   cleanupTestUsers,
   createTestUser,
   signInAndOpen,
+  provisionTestHousehold,
 } from "./helpers/clerk";
 
 /**
@@ -94,6 +95,7 @@ test.describe("Chase Starting/Ending balance — effective snapshot wiring (#435
       "txn-chase-effective-snapshot",
       provisionedUserIds,
     );
+    const householdId = await provisionTestHousehold(userId);
     seededUserIds.push(userId);
 
     // --- Seed: two linked Chase checking accounts under the same
@@ -111,6 +113,7 @@ test.describe("Chase Starting/Ending balance — effective snapshot wiring (#435
       .insert(plaidItemsTable)
       .values({
         userId,
+        householdId,
         itemId: `e2e-item-${suffix}`,
         accessToken: "e2e-no-access",
         institutionName: "Chase",
@@ -121,6 +124,7 @@ test.describe("Chase Starting/Ending balance — effective snapshot wiring (#435
       .insert(plaidAccountsTable)
       .values({
         userId,
+        householdId,
         itemId: item.id,
         accountId: `e2e-acct-A-${suffix}`,
         name: "Total Checking",
@@ -133,6 +137,7 @@ test.describe("Chase Starting/Ending balance — effective snapshot wiring (#435
       .insert(plaidAccountsTable)
       .values({
         userId,
+        householdId,
         itemId: item.id,
         accountId: `e2e-acct-B-${suffix}`,
         name: "Joint Checking",
@@ -148,6 +153,7 @@ test.describe("Chase Starting/Ending balance — effective snapshot wiring (#435
     const today = todayISO();
     await db.insert(forecastSettingsTable).values({
       userId,
+      householdId,
       bankSnapshotBalance: "1234.56",
       bankSnapshotAt: new Date(`${today}T12:00:00Z`),
       bankSnapshotSource: "manual",
@@ -174,6 +180,7 @@ test.describe("Chase Starting/Ending balance — effective snapshot wiring (#435
         .insert(transactionsTable)
         .values({
           userId,
+          householdId,
           occurredOn: today,
           occurredAt: new Date(`${today}T15:00:00Z`).toISOString(),
           description: `E2E-${suffix} ${tag}${idx}`,
