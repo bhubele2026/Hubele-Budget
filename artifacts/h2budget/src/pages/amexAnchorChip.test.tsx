@@ -77,6 +77,11 @@ vi.mock("@workspace/api-client-react", () => {
       mutateAsync: async () => undefined,
       mutate: () => undefined,
     }),
+    useBulkUpdateTransactions: () => ({
+      mutateAsync: async () => undefined,
+      mutate: () => undefined,
+      isPending: false,
+    }),
     // amex.tsx imports useListMappingRules directly, and
     // useBulkRecategorizePrompt (called at amex.tsx:110) calls both
     // useListMappingRules and useRecategorizeTransactionsByPattern at

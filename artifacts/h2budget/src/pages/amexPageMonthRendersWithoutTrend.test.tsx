@@ -97,6 +97,11 @@ vi.mock("@workspace/api-client-react", () => {
       mutateAsync: async () => undefined,
       mutate: () => undefined,
     }),
+    useBulkUpdateTransactions: () => ({
+      mutateAsync: async () => undefined,
+      mutate: () => undefined,
+      isPending: false,
+    }),
     useListMappingRules: () => ({ data: [], isLoading: false }),
     useRecategorizeTransactionsByPattern: () => ({
       mutate: () => undefined,

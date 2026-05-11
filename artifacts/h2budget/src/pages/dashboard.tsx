@@ -1275,6 +1275,7 @@ function MonthlySnapshotTiles({
   chaseEndingBalance,
   amexEndingBalance,
   bankSnapshot,
+  amexAnchor,
 }: {
   state: MonthlySnapshotState;
   totalDebt: string;
@@ -1282,6 +1283,7 @@ function MonthlySnapshotTiles({
   chaseEndingBalance: (monthStart: string) => number | null;
   amexEndingBalance: (monthStart: string) => number | null;
   bankSnapshot: { source: "manual" | "plaid"; at: string } | null;
+  amexAnchor: { source: "manual" | "plaid"; at: string } | null;
 }) {
   const { monthStart, monthLabel, shortMonth, canPrev, canNext, stepMonth } =
     state;
@@ -1428,6 +1430,14 @@ function MonthlySnapshotTiles({
                   <div className="text-xs text-muted-foreground mt-1">
                     end of {shortMonth}
                   </div>
+                  {amexAnchor && (
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      <BankSnapshotFreshness
+                        source={amexAnchor.source}
+                        at={amexAnchor.at}
+                      />
+                    </div>
+                  )}
                 </>
               );
             })()}
@@ -1620,6 +1630,7 @@ function DashboardSnapshotSection({
   chaseEndingBalance,
   amexEndingBalance,
   bankSnapshot,
+  amexAnchor,
 }: {
   today: Date;
   totalDebt: string;
@@ -1627,6 +1638,7 @@ function DashboardSnapshotSection({
   chaseEndingBalance: (monthStart: string) => number | null;
   amexEndingBalance: (monthStart: string) => number | null;
   bankSnapshot: { source: "manual" | "plaid"; at: string } | null;
+  amexAnchor: { source: "manual" | "plaid"; at: string } | null;
 }) {
   const state = useMonthlySnapshotState(today);
   return (
@@ -1639,6 +1651,7 @@ function DashboardSnapshotSection({
         chaseEndingBalance={chaseEndingBalance}
         amexEndingBalance={amexEndingBalance}
         bankSnapshot={bankSnapshot}
+        amexAnchor={amexAnchor}
       />
       <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 pt-4 md:pt-6 pb-4 bg-background border-b shadow-sm">
         <MonthVsPlanPanel state={state} today={today} />
@@ -2147,6 +2160,18 @@ export default function DashboardPage() {
         bankSnapshot={
           bankSnapshot
             ? { source: bankSnapshot.source, at: bankSnapshot.at }
+            : null
+        }
+        amexAnchor={
+          amexResolvedAnchor && amexResolvedAnchor.asOf
+            ? {
+                source:
+                  (amexDebt && amexDebt.plaidLastSyncedAt) ||
+                  amexAnchorResp?.source === "plaid"
+                    ? "plaid"
+                    : "manual",
+                at: amexResolvedAnchor.asOf,
+              }
             : null
         }
       />

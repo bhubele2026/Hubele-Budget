@@ -166,6 +166,18 @@ vi.mock("@workspace/api-client-react", () => {
     useListCategories: () => ({ data: [] }),
     useListDebts: () => ({ data: debtsState }),
     useListMappingRules: () => ({ data: [], isLoading: false }),
+    useListWeeklySettlements: () => ({ data: [], isLoading: false }),
+    useCloseOutWeek: () => ({
+      mutateAsync: async () => undefined,
+      mutate: () => undefined,
+      isPending: false,
+    }),
+    useReopenWeek: () => ({
+      mutateAsync: async () => undefined,
+      mutate: () => undefined,
+      isPending: false,
+    }),
+    getListWeeklySettlementsQueryKey: () => ["/api/weekly-settlements"],
     useListDashboardBudgets: () => ({ data: [{ amount: "0", isDefault: true }] }),
     useUpsertDashboardBudget: () => ({ mutate: () => {}, isPending: false }),
     useDeleteDashboardBudget: () => ({ mutate: () => {}, isPending: false }),
