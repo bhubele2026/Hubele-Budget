@@ -1,4 +1,9 @@
 export * from "./generated/api";
+export {
+  TRANSFER_DESC_PATTERNS,
+  TRANSFER_PFC_PRIMARY,
+  isHeuristicTransfer,
+} from "./transferHeuristic";
 export type {
   BudgetLine,
   BudgetLineInput,

@@ -1,5 +1,10 @@
 import { eq } from "drizzle-orm";
 import { db, mappingRulesTable } from "@workspace/db";
+import {
+  TRANSFER_DESC_PATTERNS as SHARED_TRANSFER_DESC_PATTERNS,
+  TRANSFER_PFC_PRIMARY as SHARED_TRANSFER_PFC_PRIMARY,
+  isHeuristicTransfer as sharedIsHeuristicTransfer,
+} from "@workspace/api-zod";
 
 export type RuleRow = {
   id: string;
@@ -123,62 +128,15 @@ export function findMatchingRules(
 }
 
 /**
- * Plaid `personal_finance_category.primary` values that always represent
- * money-movement between the user's own accounts and must NOT count toward
- * either budgeted income or budgeted spending.
- *
- * (#632) `LOAN_PAYMENTS` covers credit-card payments from a checking account
- * (Plaid's detailed code `LOAN_PAYMENTS_CREDIT_CARD_PAYMENT`). Those rows
- * are transfers between the user's own accounts (checking → card), not real
- * spend, and otherwise sneak into Monthly/Weekly/Unplanned buckets.
+ * (#642) The transfer / card-payment heuristic now lives in the shared
+ * `@workspace/api-zod` package so the dashboard's bucket-membership
+ * predicate, the chip detector, and the server-side write-path guards
+ * all agree on what "looks like a transfer". Re-exported here for
+ * backward compatibility with existing server callers.
  */
-export const TRANSFER_PFC_PRIMARY = new Set([
-  "TRANSFER_IN",
-  "TRANSFER_OUT",
-  "LOAN_PAYMENTS",
-]);
-
-/**
- * Description fragments (case-insensitive) that flag obvious internal transfers
- * even when there is no Plaid PFC available (e.g. ODP between checking/savings,
- * or card-payment rows on the credit-card side that ship without a PFC).
- *
- * (#632) Card-payment phrasings — Amex's "ONLINE PAYMENT - THANK YOU",
- * Chase's "AUTOPAY PAYMENT", "MOBILE PAYMENT - THANK YOU", generic
- * "PAYMENT RECEIVED" — must classify as transfers so they're excluded
- * from every spending bucket on the dashboard.
- */
-export const TRANSFER_DESC_PATTERNS = [
-  "odp transfer",
-  "online transfer to",
-  "online transfer from",
-  "transfer to savings",
-  "transfer from savings",
-  "internal transfer",
-  // (#632) Card-payment patterns.
-  "payment - thank you",
-  "payment thank you",
-  "online payment",
-  "mobile payment",
-  "autopay payment",
-  "payment received",
-];
-
-/**
- * (#632) Returns true when the input matches any card-payment / transfer
- * heuristic (PFC OR description pattern). Exported so the startup
- * reclassify sweep can find existing rows to back-fill without
- * duplicating the rule list.
- */
-export function isHeuristicTransfer(
-  description: string | null | undefined,
-  pfcPrimary?: string | null,
-): boolean {
-  const hay = (description ?? "").toLowerCase();
-  const prim = (pfcPrimary ?? "").toUpperCase();
-  if (TRANSFER_PFC_PRIMARY.has(prim)) return true;
-  return TRANSFER_DESC_PATTERNS.some((p) => hay.includes(p));
-}
+export const TRANSFER_PFC_PRIMARY: ReadonlySet<string> = SHARED_TRANSFER_PFC_PRIMARY;
+export const TRANSFER_DESC_PATTERNS: readonly string[] = SHARED_TRANSFER_DESC_PATTERNS;
+export const isHeuristicTransfer = sharedIsHeuristicTransfer;
 
 export type CategorizeInput = {
   description: string;

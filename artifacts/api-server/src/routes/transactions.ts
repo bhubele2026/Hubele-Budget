@@ -13,6 +13,7 @@ import {
   categorize,
   findMatchedRuleId,
   findMatchingRules,
+  isHeuristicTransfer,
   loadUserRules,
 } from "../lib/autoCategorize";
 import { selectPatternCandidates } from "../lib/patternCandidates";
@@ -133,6 +134,17 @@ function isPatternSpecific(pattern: string): boolean {
   return pattern.trim().split(/\s+/).filter(Boolean).length >= 2;
 }
 
+/**
+ * (#642) Error code returned to the client when a write would tag a
+ * transfer-looking row as Unplanned. Surfaced as a short toast/inline
+ * message so the user understands why nothing happened. Kept as a
+ * named export so client tests / future consumers can match on the
+ * `code` rather than the human-readable message.
+ */
+export const UNPLANNED_TRANSFER_REJECT_CODE = "unplanned_transfer_rejected";
+export const UNPLANNED_TRANSFER_REJECT_MESSAGE =
+  "This row looks like a transfer or card payment, so it can't be tagged as Unplanned spending.";
+
 async function userOwnsDebt(householdId: string, debtId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: debtsTable.id })
@@ -224,6 +236,23 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     insertValues.monthlyAllowance = false;
     insertValues.unplannedAllowance = false;
   }
+  // (#642) Defensive guard on the create path: a row whose description
+  // already looks like a transfer / card payment must never be born
+  // tagged Unplanned, no matter what the client sent. Runs *after* the
+  // Transfer-category override (#607) above so a user explicitly picking
+  // the Transfer category — which clears `unplannedAllowance` itself —
+  // is not falsely rejected. Mirrors the dashboard's bucket predicate so
+  // the two stay in lockstep.
+  if (
+    insertValues.unplannedAllowance === true &&
+    isHeuristicTransfer(parsed.data.description)
+  ) {
+    res.status(422).json({
+      code: UNPLANNED_TRANSFER_REJECT_CODE,
+      error: UNPLANNED_TRANSFER_REJECT_MESSAGE,
+    });
+    return;
+  }
   const [row] = await db
     .insert(transactionsTable)
     .values(insertValues as typeof transactionsTable.$inferInsert)
@@ -299,6 +328,38 @@ router.patch(
       patchToApply.unplannedAllowance = false;
     } else if (pickingCategory && !bodyHasIsTransfer) {
       patchToApply.isTransfer = false;
+    }
+    // (#642) Reject any attempt to flip `unplannedAllowance` to true on a
+    // row whose persisted description looks like a transfer / card
+    // payment. Same heuristic the dashboard's bucket predicate uses, so
+    // the user can't sneak a transfer into Unplanned via the per-row
+    // toggle on Amex / Transactions / Forecast surfaces. Picking the
+    // Transfer category (above) already cleared the flag, so this only
+    // fires when the patch explicitly sets `unplannedAllowance=true`.
+    if (patchToApply.unplannedAllowance === true) {
+      const [existing] = await db
+        .select({
+          description: transactionsTable.description,
+          pfcPrimary: transactionsTable.pfcPrimary,
+        })
+        .from(transactionsTable)
+        .where(
+          and(
+            eq(transactionsTable.id, params.data.id),
+            eq(transactionsTable.householdId, req.householdId!),
+          ),
+        );
+      if (!existing) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      if (isHeuristicTransfer(existing.description, existing.pfcPrimary)) {
+        res.status(422).json({
+          code: UNPLANNED_TRANSFER_REJECT_CODE,
+          error: UNPLANNED_TRANSFER_REJECT_MESSAGE,
+        });
+        return;
+      }
     }
     const [row] = await db
       .update(transactionsTable)
@@ -906,6 +967,45 @@ router.post(
       res.status(400).json({ error: "Invalid debtId" });
       return;
     }
+    // (#642) Bulk variant of the per-row Unplanned guard: when the patch
+    // would set `unplannedAllowance=true`, refuse to flip any rows whose
+    // description matches the transfer / card-payment heuristic. Rather
+    // than failing the whole request (which would punish the typical
+    // case of a 50-row bulk where a single transfer slipped in), we
+    // narrow the affected ids to the safe rows and report the rejected
+    // ids back per-id so the client can surface the same toast it would
+    // see for a per-row PATCH.
+    let bulkRejectedIds: string[] = [];
+    if (drizzlePatch.unplannedAllowance === true && ids.length > 0) {
+      const rows = await db
+        .select({
+          id: transactionsTable.id,
+          description: transactionsTable.description,
+          pfcPrimary: transactionsTable.pfcPrimary,
+        })
+        .from(transactionsTable)
+        .where(
+          and(
+            eq(transactionsTable.householdId, req.householdId!),
+            inArray(transactionsTable.id, ids),
+          ),
+        );
+      const rejected = new Set<string>();
+      for (const r of rows) {
+        if (isHeuristicTransfer(r.description, r.pfcPrimary)) rejected.add(r.id);
+      }
+      bulkRejectedIds = Array.from(rejected);
+      if (bulkRejectedIds.length === ids.length) {
+        res.status(422).json({
+          code: UNPLANNED_TRANSFER_REJECT_CODE,
+          error: UNPLANNED_TRANSFER_REJECT_MESSAGE,
+        });
+        return;
+      }
+    }
+    const safeIds = bulkRejectedIds.length
+      ? ids.filter((id) => !bulkRejectedIds.includes(id))
+      : ids;
     // Empty patch (e.g. caller sent only `ids`) — nothing to write,
     // but report a per-id "ok" for each owned row so the toast still
     // makes sense. Cheap to detect and avoids issuing a no-op UPDATE.
@@ -936,19 +1036,23 @@ router.post(
       });
       return;
     }
-    const updated = await db
-      .update(transactionsTable)
-      .set(drizzlePatch)
-      .where(
-        and(
-          eq(transactionsTable.householdId, req.householdId!),
-          inArray(transactionsTable.id, ids),
-        ),
-      )
-      .returning({
-        id: transactionsTable.id,
-        occurredOn: transactionsTable.occurredOn,
-      });
+    const rejectedSet = new Set(bulkRejectedIds);
+    const updated =
+      safeIds.length === 0
+        ? []
+        : await db
+            .update(transactionsTable)
+            .set(drizzlePatch)
+            .where(
+              and(
+                eq(transactionsTable.householdId, req.householdId!),
+                inArray(transactionsTable.id, safeIds),
+              ),
+            )
+            .returning({
+              id: transactionsTable.id,
+              occurredOn: transactionsTable.occurredOn,
+            });
     const okIds = new Set(updated.map((r) => r.id));
     // Mirror per-row PATCH cleanup: if forecast_flag was flipped off,
     // drop any forecast_resolutions pointing at the affected rows so
@@ -970,11 +1074,21 @@ router.post(
     for (const r of updated) monthSet.add(`${r.occurredOn.slice(0, 7)}-01`);
     res.json({
       updated: updated.length,
-      results: ids.map((id) => ({
-        id,
-        ok: okIds.has(id),
-        error: okIds.has(id) ? null : "not found",
-      })),
+      results: ids.map((id) => {
+        if (rejectedSet.has(id)) {
+          return {
+            id,
+            ok: false,
+            error: UNPLANNED_TRANSFER_REJECT_MESSAGE,
+            code: UNPLANNED_TRANSFER_REJECT_CODE,
+          };
+        }
+        return {
+          id,
+          ok: okIds.has(id),
+          error: okIds.has(id) ? null : "not found",
+        };
+      }),
       affectedMonths: Array.from(monthSet).sort(),
     });
   },

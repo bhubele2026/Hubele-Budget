@@ -284,4 +284,70 @@ describe("POST /transactions/bulk-update", () => {
     expect(r.status).toBe(200);
     expect(r.json).toEqual({ updated: 0, results: [], affectedMonths: [] });
   });
+
+  // (#642) Transfer-looking rows must never be tagged Unplanned via
+  // bulk-update. Mixed batches succeed for the safe rows and report the
+  // rejected ones per-id with `code: "unplanned_transfer_rejected"`;
+  // an all-transfer batch fails the whole request with 422.
+  describe("(#642) Unplanned-transfer guard", () => {
+    it("rejects per-id transfer rows in a mixed bulk-update and tags only the safe rows", async () => {
+      const safe = await insertTxn(TEST_USER, {
+        description: "STARBUCKS COFFEE #221",
+        unplannedAllowance: false,
+      });
+      const transfer = await insertTxn(TEST_USER, {
+        description: "Online Transfer to SAV ...9128",
+        unplannedAllowance: false,
+      });
+
+      const r = await api("POST", "/transactions/bulk-update", {
+        ids: [safe, transfer],
+        patch: { unplannedAllowance: true },
+      });
+
+      expect(r.status).toBe(200);
+      const body = r.json as {
+        updated: number;
+        affectedMonths: string[];
+        results: { id: string; ok: boolean; error: string | null; code?: string }[];
+      };
+      expect(body.updated).toBe(1);
+      const byId = Object.fromEntries(body.results.map((x) => [x.id, x]));
+      expect(byId[safe]?.ok).toBe(true);
+      expect(byId[transfer]?.ok).toBe(false);
+      expect(byId[transfer]?.code).toBe("unplanned_transfer_rejected");
+
+      const rows = await db
+        .select({
+          id: transactionsTable.id,
+          unplannedAllowance: transactionsTable.unplannedAllowance,
+        })
+        .from(transactionsTable)
+        .where(inArray(transactionsTable.id, [safe, transfer]));
+      const flagsById = Object.fromEntries(
+        rows.map((r) => [r.id, r.unplannedAllowance]),
+      );
+      expect(flagsById[safe]).toBe(true);
+      expect(flagsById[transfer]).toBe(false);
+    });
+
+    it("returns 422 when EVERY id in the batch is a transfer-looking row", async () => {
+      const t1 = await insertTxn(TEST_USER, {
+        description: "ONLINE PAYMENT - THANK YOU",
+      });
+      const t2 = await insertTxn(TEST_USER, {
+        description: "ODP TRANSFER FROM CHECKING",
+      });
+
+      const r = await api("POST", "/transactions/bulk-update", {
+        ids: [t1, t2],
+        patch: { unplannedAllowance: true },
+      });
+
+      expect(r.status).toBe(422);
+      expect((r.json as { code?: string }).code).toBe(
+        "unplanned_transfer_rejected",
+      );
+    });
+  });
 });

@@ -23,6 +23,7 @@ import {
   type Transaction,
   type MappingRule,
 } from "@workspace/api-client-react";
+import { isHeuristicTransfer } from "@workspace/api-zod";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import {
   computeChaseEndOfMonthBalance,
@@ -1690,6 +1691,17 @@ export function isTxnInBucket(
   // spend. Defensively keep it out of every bucket regardless of
   // allowance flags or forecast resolutions.
   if (t.isExternalCardPayment) return false;
+  // (#642) Defense-in-depth: even when the row's `isTransfer` is false
+  // (e.g. the user toggled the Transfer pill off, or the auto-classifier
+  // missed a phrasing the description heuristic now catches), a row
+  // whose description / PFC clearly looks like an internal transfer or
+  // card payment must never roll into Unplanned. The startup auto-heal
+  // sweep clears the stale allowance flag asynchronously; this guard
+  // keeps the Unplanned bucket honest in the meantime and matches the
+  // server-side write-path guard so the two stay in lockstep.
+  if (bucket === "unplanned" && isHeuristicTransfer(t.description)) {
+    return false;
+  }
   if (bucket === "monthly") return !!t.monthlyAllowance;
   if (t.unplannedAllowance) return true;
   if (resolvedUnplannedTxnIds?.has(t.id)) return true;
@@ -1723,6 +1735,12 @@ export function detectChipSources(
     // chip would be a dead-end. Drop it whether the tag came from the
     // user (stale allowance flag) or the forecast inbox.
     if (t.isTransfer) continue;
+    // (#642) Same defensive heuristic the Unplanned bucket uses: drop
+    // chips whose only in-month tagged row matches a transfer / card
+    // payment pattern, so the Chase chip doesn't appear solely because
+    // a stale `unplannedAllowance` flag is sitting on a transfer row
+    // that is about to be auto-healed.
+    if (isHeuristicTransfer(t.description)) continue;
     if (t.occurredOn < monthStartISO || t.occurredOn > monthEndISO) continue;
     set.add(dashboardSourceLabel(t.source));
   }

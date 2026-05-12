@@ -36,8 +36,13 @@ import { logger } from "./logger";
 export async function runStartupCardPaymentReclassify(): Promise<{
   scanned: number;
   reclassified: number;
+  // (#642) Count of user-overridden rows whose stale `unplannedAllowance`
+  // flag was stripped so they leave the dashboard's Unplanned bucket
+  // without flipping `isTransfer` (which we leave alone for overridden
+  // rows so the user's choice is preserved).
+  unplannedStripped: number;
 }> {
-  const summary = { scanned: 0, reclassified: 0 };
+  const summary = { scanned: 0, reclassified: 0, unplannedStripped: 0 };
   try {
     // Description match: OR-chain of case-insensitive ILIKE %frag% built
     // via Drizzle's `or()` builder so the SQL is fully parenthesised
@@ -93,6 +98,29 @@ export async function runStartupCardPaymentReclassify(): Promise<{
 
     summary.scanned = result.length;
     summary.reclassified = result.length;
+
+    // (#642) Sibling sweep: strip a stale `unplannedAllowance=true` flag
+    // from rows whose description / PFC matches the transfer heuristic
+    // even when the user has explicitly overridden the transfer flag
+    // (`is_transfer_user_overridden=true`). The primary sweep above
+    // intentionally skips those rows so the user's manual classification
+    // sticks, but a transfer-looking row never represents real Unplanned
+    // spend — we just need it to leave the dashboard's Unplanned bucket
+    // without touching `isTransfer`. This is the source of the
+    // "Online Transfer to SAV …9128" row leaking into Unplanned even
+    // after the original (#632) fix shipped.
+    const unplannedHeal = await db
+      .update(transactionsTable)
+      .set({ unplannedAllowance: false })
+      .where(
+        and(
+          eq(transactionsTable.unplannedAllowance, true),
+          matchAny,
+        ),
+      )
+      .returning({ id: transactionsTable.id });
+    summary.unplannedStripped = unplannedHeal.length;
+
     logger.info(
       summary,
       "Startup card-payment reclassify sweep complete",

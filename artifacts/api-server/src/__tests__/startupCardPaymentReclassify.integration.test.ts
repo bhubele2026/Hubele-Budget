@@ -142,4 +142,40 @@ describe("runStartupCardPaymentReclassify (#632)", () => {
     const second = await runStartupCardPaymentReclassify();
     expect(second.reclassified).toBe(0);
   });
+
+  // (#642) The original sweep skips user-overridden rows by design (so the
+  // user's manual classification sticks). But a transfer-looking row that
+  // is *also* tagged Unplanned is a contradiction: it shouldn't drive the
+  // dashboard's Unplanned bucket. The sibling sweep clears just the
+  // `unplannedAllowance` flag, leaving `isTransfer` and the override flag
+  // alone.
+  it("(#642) strips unplannedAllowance from user-overridden transfer-looking rows without flipping isTransfer", async () => {
+    const [overriddenUnplanned] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-13",
+        description: "Online Transfer to SAV ...9128",
+        amount: "-500.00",
+        isTransfer: false,
+        isTransferUserOverridden: true,
+        weeklyAllowance: false,
+        monthlyAllowance: false,
+        unplannedAllowance: true,
+        source: "plaid:chase",
+      })
+      .returning();
+
+    const out = await runStartupCardPaymentReclassify();
+    expect(out.unplannedStripped).toBeGreaterThanOrEqual(1);
+
+    const after = await readRow(overriddenUnplanned!.id);
+    expect(after.unplannedAllowance).toBe(false);
+    expect(after.isTransfer).toBe(false);
+    expect(after.isTransferUserOverridden).toBe(true);
+
+    const second = await runStartupCardPaymentReclassify();
+    expect(second.unplannedStripped).toBe(0);
+  });
 });

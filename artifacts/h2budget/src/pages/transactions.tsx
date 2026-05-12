@@ -2265,6 +2265,24 @@ export default function TransactionsPage() {
                                 onSuccess: () => {
                                   queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
                                 },
+                                // (#642) Surface the server-side
+                                // "transfer can't be tagged Unplanned"
+                                // rejection as a short toast so the
+                                // user understands why nothing happened
+                                // when they click the UN bubble on a
+                                // transfer-looking row. Same toast for
+                                // any other rejection (e.g. transient
+                                // network error) so we don't silently
+                                // swallow failures.
+                                onError: (e: unknown) => {
+                                  toast({
+                                    title: "Couldn't update bucket",
+                                    description:
+                                      (e as Error)?.message ??
+                                      "Please try again.",
+                                    variant: "destructive",
+                                  });
+                                },
                               },
                             );
                           }}
