@@ -97,8 +97,13 @@ vi.mock("@workspace/api-client-react", () => {
       mutateAsync: async () => undefined,
       mutate: () => undefined,
     }),
+    // (#502) The page calls `useBulkUpdateTransactions` at top level
+    // even when no bulk action is in flight, so the mock has to
+    // exist for the page to render at all.
     useBulkUpdateTransactions: () => ({
-      mutateAsync: async () => undefined,
+      mutateAsync: async (vars: { data: { ids: string[] } }) => ({
+        results: vars.data.ids.map((id) => ({ id, ok: true })),
+      }),
       mutate: () => undefined,
       isPending: false,
     }),

@@ -116,10 +116,17 @@ vi.mock("@workspace/api-client-react", () => {
         : async () => undefined,
       mutate: () => undefined,
     }),
+    // Bulk runner powering every bulk action on the page (#502). The
+    // perf-tweaks test exercises `runBulkPatch` via the
+    // bulk-clear-owed-by button, so honor `pendingUpdate` here too —
+    // a hanging bulk request is what keeps the progress chip on
+    // screen long enough to assert against.
     useBulkUpdateTransactions: () => ({
       mutateAsync: state.pendingUpdate
         ? () => new Promise(() => {})
-        : async () => undefined,
+        : async (vars: { data: { ids: string[] } }) => ({
+            results: vars.data.ids.map((id) => ({ id, ok: true })),
+          }),
       mutate: () => undefined,
       isPending: state.pendingUpdate,
     }),
