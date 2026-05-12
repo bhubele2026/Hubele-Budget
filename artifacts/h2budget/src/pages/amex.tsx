@@ -2136,41 +2136,50 @@ export default function AmexPage() {
                           onToggle={(b, next) => onBubbleToggle(t, b, next)}
                         />
                       )}
-                      {/* (#626/#638) Always reserve the weekly-bucket
-                          slot so toggling WK on/off doesn't change the
-                          row height and bounce the virtualized list. */}
-                      <div
-                        className="h-7 w-28 shrink-0"
-                        aria-hidden={t.weeklyAllowance ? undefined : true}
-                        style={
-                          t.weeklyAllowance
-                            ? undefined
-                            : { visibility: "hidden", pointerEvents: "none" }
-                        }
-                        data-testid={`slot-weekly-bucket-mobile-${t.id}`}
-                      >
-                        {t.weeklyAllowance ? (
-                          <Select
-                            value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}
-                            onValueChange={(v) =>
-                              setRowBucket(t, "weekly", v as typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket])
-                            }
-                          >
-                            <SelectTrigger
-                              className="h-7 w-28 text-xs"
-                              data-testid={`select-weekly-bucket-mobile-${t.id}`}
+                      {/* (#638) Per-row weekly-bucket picker. Always
+                          rendered in a fixed-size slot so toggling WK
+                          on/off doesn't change the row height and
+                          bounce the virtualized list (#626). The
+                          inner Select is only mounted (and only
+                          interactive) when WK is on. */}
+                      {!t.isTransfer && (
+                        <div
+                          className="h-7 w-28 shrink-0"
+                          aria-hidden={t.weeklyAllowance ? undefined : true}
+                          style={
+                            t.weeklyAllowance
+                              ? undefined
+                              : { visibility: "hidden", pointerEvents: "none" }
+                          }
+                          data-testid={`slot-weekly-bucket-mobile-${t.id}`}
+                        >
+                          {t.weeklyAllowance ? (
+                            <Select
+                              value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}
+                              onValueChange={(v) =>
+                                setRowBucket(
+                                  t,
+                                  "weekly",
+                                  v as typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket],
+                                )
+                              }
                             >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={TransactionWeeklyBucket.groceries}>{weeklyLabels.groceries}</SelectItem>
-                              <SelectItem value={TransactionWeeklyBucket.dining}>{weeklyLabels.dining}</SelectItem>
-                              <SelectItem value={TransactionWeeklyBucket.entertainment}>{weeklyLabels.entertainment}</SelectItem>
-                              <SelectItem value={TransactionWeeklyBucket.misc}>{weeklyLabels.misc}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : null}
-                      </div>
+                              <SelectTrigger
+                                className="h-7 w-28 text-xs"
+                                data-testid={`select-weekly-bucket-mobile-${t.id}`}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={TransactionWeeklyBucket.groceries}>{weeklyLabels.groceries}</SelectItem>
+                                <SelectItem value={TransactionWeeklyBucket.dining}>{weeklyLabels.dining}</SelectItem>
+                                <SelectItem value={TransactionWeeklyBucket.entertainment}>{weeklyLabels.entertainment}</SelectItem>
+                                <SelectItem value={TransactionWeeklyBucket.misc}>{weeklyLabels.misc}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : null}
+                        </div>
+                      )}
                       {!t.isTransfer && t.isTransferUserOverridden && (
                         <Badge
                           variant="outline"
@@ -2426,42 +2435,51 @@ export default function AmexPage() {
                                 onToggle={(b, next) => onBubbleToggle(t, b, next)}
                               />
                             )}
-                            {/* (#626/#638) Always reserve the weekly-bucket
-                                slot so toggling WK on/off doesn't change
-                                the row height and bounce the virtualized
-                                list. */}
-                            <div
-                              className="h-7 w-28 shrink-0"
-                              aria-hidden={t.weeklyAllowance ? undefined : true}
-                              style={
-                                t.weeklyAllowance
-                                  ? undefined
-                                  : { visibility: "hidden", pointerEvents: "none" }
-                              }
-                              data-testid={`slot-weekly-bucket-${t.id}`}
-                            >
-                              {t.weeklyAllowance ? (
-                                <Select
-                                  value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}
-                                  onValueChange={(v) =>
-                                    setRowBucket(t, "weekly", v as typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket])
-                                  }
-                                >
-                                  <SelectTrigger
-                                    className="h-7 w-28 text-xs"
-                                    data-testid={`select-weekly-bucket-${t.id}`}
+                            {/* (#638) Per-row weekly-bucket picker.
+                                Always rendered in a fixed-size slot so
+                                toggling WK on/off doesn't change the
+                                row height and bounce the virtualized
+                                list (#626). The inner Select is only
+                                mounted (and only interactive) when WK
+                                is on. */}
+                            {!t.isTransfer && (
+                              <div
+                                className="h-7 w-28 shrink-0"
+                                aria-hidden={t.weeklyAllowance ? undefined : true}
+                                style={
+                                  t.weeklyAllowance
+                                    ? undefined
+                                    : { visibility: "hidden", pointerEvents: "none" }
+                                }
+                                data-testid={`slot-weekly-bucket-${t.id}`}
+                              >
+                                {t.weeklyAllowance ? (
+                                  <Select
+                                    value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}
+                                    onValueChange={(v) =>
+                                      setRowBucket(
+                                        t,
+                                        "weekly",
+                                        v as typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket],
+                                      )
+                                    }
                                   >
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value={TransactionWeeklyBucket.groceries}>{weeklyLabels.groceries}</SelectItem>
-                                    <SelectItem value={TransactionWeeklyBucket.dining}>{weeklyLabels.dining}</SelectItem>
-                                    <SelectItem value={TransactionWeeklyBucket.entertainment}>{weeklyLabels.entertainment}</SelectItem>
-                                    <SelectItem value={TransactionWeeklyBucket.misc}>{weeklyLabels.misc}</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              ) : null}
-                            </div>
+                                    <SelectTrigger
+                                      className="h-7 w-28 text-xs"
+                                      data-testid={`select-weekly-bucket-${t.id}`}
+                                    >
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value={TransactionWeeklyBucket.groceries}>{weeklyLabels.groceries}</SelectItem>
+                                      <SelectItem value={TransactionWeeklyBucket.dining}>{weeklyLabels.dining}</SelectItem>
+                                      <SelectItem value={TransactionWeeklyBucket.entertainment}>{weeklyLabels.entertainment}</SelectItem>
+                                      <SelectItem value={TransactionWeeklyBucket.misc}>{weeklyLabels.misc}</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                ) : null}
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="px-3 py-2 text-right font-mono tabular-nums whitespace-nowrap">
