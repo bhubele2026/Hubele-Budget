@@ -7,7 +7,7 @@ import {
 } from "@workspace/api-client-react";
 import type { Debt, DebtBalanceHistoryEntry } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
 import {
@@ -295,38 +295,74 @@ export default function DebtsPage() {
                       {payoffLabel}
                     </span>
                   </div>
-                  {isTarget && (
-                    <div className="flex justify-between pt-2 border-t border-border/60">
-                      <span className="text-sm text-muted-foreground">Target payoff</span>
-                      <span
-                        className="text-sm font-semibold tabular-nums text-primary"
-                        data-testid="debt-card-target-payoff-date"
-                        data-debt-id={debt.id}
-                        title={payoffDate ? "Projected target payoff month" : payoffReason}
-                        aria-label={
-                          payoffDate
-                            ? `Target payoff ${payoffLabel}`
-                            : `No projected target payoff: ${payoffReason}`
-                        }
-                      >
-                        {payoffLabel}
-                      </span>
-                    </div>
-                  )}
-                  {isTarget && targetExtra > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Extra this month</span>
-                      <span
-                        className="text-sm font-semibold tabular-nums text-primary"
-                        data-testid="debt-card-target-extra"
-                        data-debt-id={debt.id}
-                        title="Avalanche extra applied to this target this month"
-                        aria-label={`Extra this month ${formatCurrency(targetExtra)}`}
-                      >
-                        {formatCurrency(targetExtra)}
-                      </span>
-                    </div>
-                  )}
+                  {/* (#639) Reserve the same vertical footprint for the
+                      Target-only "Target payoff" row even on non-target
+                      cards, so flipping isTarget (e.g. when avalanche
+                      extra changes) can't grow/shrink the card and
+                      stretch the surrounding CSS-grid row. Mirrors the
+                      reserved-slot pattern #626 used on the Amex
+                      virtualized rows. The testid is only attached in
+                      the visible case so existing assertions that count
+                      target rows by testid stay accurate. */}
+                  <div
+                    className={cn(
+                      "flex justify-between pt-2 border-t border-border/60",
+                      !isTarget && "invisible",
+                    )}
+                    aria-hidden={!isTarget}
+                    data-testid={
+                      isTarget ? undefined : "debt-card-target-payoff-slot"
+                    }
+                  >
+                    <span className="text-sm text-muted-foreground">Target payoff</span>
+                    <span
+                      className="text-sm font-semibold tabular-nums text-primary"
+                      data-testid={
+                        isTarget ? "debt-card-target-payoff-date" : undefined
+                      }
+                      data-debt-id={debt.id}
+                      title={payoffDate ? "Projected target payoff month" : payoffReason}
+                      aria-label={
+                        payoffDate
+                          ? `Target payoff ${payoffLabel}`
+                          : `No projected target payoff: ${payoffReason}`
+                      }
+                    >
+                      {payoffLabel}
+                    </span>
+                  </div>
+                  {/* (#639) Same reserved-slot pattern for the per-target
+                      "Extra this month" row. The placeholder shows the
+                      same dollar string so its line height matches the
+                      rendered case exactly, with `invisible` keeping it
+                      off-screen on non-targets / $0-extra cards. */}
+                  <div
+                    className={cn(
+                      "flex justify-between",
+                      !(isTarget && targetExtra > 0) && "invisible",
+                    )}
+                    aria-hidden={!(isTarget && targetExtra > 0)}
+                    data-testid={
+                      isTarget && targetExtra > 0
+                        ? undefined
+                        : "debt-card-target-extra-slot"
+                    }
+                  >
+                    <span className="text-sm text-muted-foreground">Extra this month</span>
+                    <span
+                      className="text-sm font-semibold tabular-nums text-primary"
+                      data-testid={
+                        isTarget && targetExtra > 0
+                          ? "debt-card-target-extra"
+                          : undefined
+                      }
+                      data-debt-id={debt.id}
+                      title="Avalanche extra applied to this target this month"
+                      aria-label={`Extra this month ${formatCurrency(Math.max(targetExtra, 0))}`}
+                    >
+                      {formatCurrency(Math.max(targetExtra, 0))}
+                    </span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
