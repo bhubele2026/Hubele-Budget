@@ -1275,7 +1275,7 @@ function MonthlySnapshotTiles({
   chaseEndingBalance,
   amexEndingBalance,
   bankSnapshot,
-  amexAnchor,
+  amexBankSnapshot,
 }: {
   state: MonthlySnapshotState;
   totalDebt: string;
@@ -1283,7 +1283,7 @@ function MonthlySnapshotTiles({
   chaseEndingBalance: (monthStart: string) => number | null;
   amexEndingBalance: (monthStart: string) => number | null;
   bankSnapshot: { source: "manual" | "plaid"; at: string } | null;
-  amexAnchor: { source: "manual" | "plaid"; at: string } | null;
+  amexBankSnapshot: { source: "manual" | "plaid"; at: string } | null;
 }) {
   const { monthStart, monthLabel, shortMonth, canPrev, canNext, stepMonth } =
     state;
@@ -1430,11 +1430,11 @@ function MonthlySnapshotTiles({
                   <div className="text-xs text-muted-foreground mt-1">
                     end of {shortMonth}
                   </div>
-                  {amexAnchor && (
+                  {amexBankSnapshot && (
                     <div className="text-xs text-muted-foreground mt-0.5">
                       <BankSnapshotFreshness
-                        source={amexAnchor.source}
-                        at={amexAnchor.at}
+                        source={amexBankSnapshot.source}
+                        at={amexBankSnapshot.at}
                       />
                     </div>
                   )}
@@ -1630,7 +1630,7 @@ function DashboardSnapshotSection({
   chaseEndingBalance,
   amexEndingBalance,
   bankSnapshot,
-  amexAnchor,
+  amexBankSnapshot,
 }: {
   today: Date;
   totalDebt: string;
@@ -1638,7 +1638,7 @@ function DashboardSnapshotSection({
   chaseEndingBalance: (monthStart: string) => number | null;
   amexEndingBalance: (monthStart: string) => number | null;
   bankSnapshot: { source: "manual" | "plaid"; at: string } | null;
-  amexAnchor: { source: "manual" | "plaid"; at: string } | null;
+  amexBankSnapshot: { source: "manual" | "plaid"; at: string } | null;
 }) {
   const state = useMonthlySnapshotState(today);
   return (
@@ -1651,7 +1651,7 @@ function DashboardSnapshotSection({
         chaseEndingBalance={chaseEndingBalance}
         amexEndingBalance={amexEndingBalance}
         bankSnapshot={bankSnapshot}
-        amexAnchor={amexAnchor}
+        amexBankSnapshot={amexBankSnapshot}
       />
       <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 pt-4 md:pt-6 pb-4 bg-background border-b shadow-sm">
         <MonthVsPlanPanel state={state} today={today} />
@@ -2094,6 +2094,29 @@ export default function DashboardPage() {
     () => resolveAmexAnchor({ amexDebt, amexAnchorResp }),
     [amexDebt, amexAnchorResp],
   );
+  // (#600) Freshness hint for the dashboard Amex tile — mirrors the Chase
+  // tile's `BankSnapshotFreshness` line so users can see at a glance how
+  // recently the underlying balance was refreshed. Source classification:
+  //   - debt row with a manual `lastBalanceUpdate` -> "manual"
+  //   - debt row whose only timestamp is `plaidLastSyncedAt` -> "plaid"
+  //   - server anchor fallback: `plaid` source -> "plaid", else "manual"
+  // Omitted entirely when no `asOf` is known (no "as of unknown" placeholder).
+  const amexBankSnapshot = useMemo<{
+    source: "manual" | "plaid";
+    at: string;
+  } | null>(() => {
+    const at = amexResolvedAnchor?.asOf;
+    if (!at) return null;
+    if (amexDebt) {
+      const source: "manual" | "plaid" = amexDebt.lastBalanceUpdate
+        ? "manual"
+        : "plaid";
+      return { source, at };
+    }
+    const source: "manual" | "plaid" =
+      amexAnchorResp?.source === "plaid" ? "plaid" : "manual";
+    return { source, at };
+  }, [amexResolvedAnchor, amexDebt, amexAnchorResp]);
   const amexFallbackMonth = useMemo(() => monthKeyOf(today), [today]);
   const amexEndingBalance = useMemo(() => {
     return (monthStart: string): number | null =>
@@ -2162,18 +2185,7 @@ export default function DashboardPage() {
             ? { source: bankSnapshot.source, at: bankSnapshot.at }
             : null
         }
-        amexAnchor={
-          amexResolvedAnchor && amexResolvedAnchor.asOf
-            ? {
-                source:
-                  (amexDebt && amexDebt.plaidLastSyncedAt) ||
-                  amexAnchorResp?.source === "plaid"
-                    ? "plaid"
-                    : "manual",
-                at: amexResolvedAnchor.asOf,
-              }
-            : null
-        }
+        amexBankSnapshot={amexBankSnapshot}
       />
 
       <DashboardMonthlyBuckets
