@@ -7,18 +7,23 @@ import {
 import { logger } from "./logger";
 
 /**
- * (#632) One-shot startup pass: find existing transactions whose
- * description matches the card-payment / transfer patterns added in
- * this task and either (a) aren't yet flagged `isTransfer=true`, or (b)
- * still carry one of the Weekly/Monthly/Unplanned allowance flags. For
- * each, set `isTransfer=true` and zero out the three allowance flags so
- * the row stops contaminating dashboard buckets.
- *
- * (#636) Now also catches rows whose description is bland but whose
+ * (#632, #636) One-shot startup pass: find existing transactions whose
+ * description matches the card-payment / transfer patterns OR whose
  * persisted Plaid `pfc_primary` falls in the transfer set
- * (LOAN_PAYMENTS / TRANSFER_IN / TRANSFER_OUT). PFC is nullable on
- * pre-#636 rows; until they're either synced again or backfilled
- * (#641), the description arm remains the safety net.
+ * (LOAN_PAYMENTS / TRANSFER_IN / TRANSFER_OUT) and either (a) aren't
+ * yet flagged `isTransfer=true`, or (b) still carry one of the
+ * Weekly/Monthly/Unplanned allowance flags. For each, set
+ * `isTransfer=true` and zero out the three allowance flags so the row
+ * stops contaminating dashboard buckets.
+ *
+ * Why the PFC arm matters: a bank can ship a card-payment row whose
+ * description is something generic ("ACH WEB PAYMENT 12345") and the
+ * description-only sweep cannot catch it. With #636 persisting Plaid's
+ * `personal_finance_category` on every insert/refresh, the transfer-set
+ * primaries flag those rows reliably regardless of how bland the
+ * merchant string is. PFC is nullable on pre-#636 rows; until they're
+ * either synced again or backfilled (#641), the description arm
+ * remains the safety net.
  *
  * Skips rows the user has explicitly toggled
  * (`is_transfer_user_overridden=true`) — same contract the live
@@ -41,9 +46,11 @@ export async function runStartupCardPaymentReclassify(): Promise<{
       ilike(transactionsTable.description, `%${frag}%`),
     );
     // (#636) PFC arm: any persisted pfc_primary in the transfer set
-    // counts as a transfer regardless of description text. Built as
-    // a parameterized IN list via Drizzle's `sql` template so the
-    // upper-cased values stay safely escaped.
+    // (LOAN_PAYMENTS / TRANSFER_IN / TRANSFER_OUT) counts as a transfer
+    // regardless of description text. Built as a parameterized IN list
+    // via Drizzle's `sql` template so the upper-cased values stay
+    // safely escaped, and uses the shared `TRANSFER_PFC_PRIMARY`
+    // constant so the audit stays in lockstep with the live classifier.
     const pfcList = Array.from(TRANSFER_PFC_PRIMARY);
     const pfcMatch =
       pfcList.length > 0

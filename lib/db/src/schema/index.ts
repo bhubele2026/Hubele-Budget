@@ -326,12 +326,15 @@ export const transactionsTable = pgTable(
     owedBy: text("owed_by"),
     plaidTransactionId: text("plaid_transaction_id"),
     plaidAccountId: text("plaid_account_id"),
-    // (#636) Persisted Plaid personal_finance_category. Nullable —
-    // only set on rows synced after the column landed and on rows
-    // backfilled by the live classifier. Used by the startup card-
-    // payment audit so a row whose description is bland (e.g. "ACH
-    // WEB PAYMENT 12345") but whose PFC was LOAN_PAYMENTS still gets
-    // re-flagged as a transfer instead of inflating Monthly spend.
+    // (#636) Plaid `personal_finance_category.primary` / `.detailed`
+    // persisted on every insert/refresh from Plaid sync so the startup
+    // card-payment sweep (and any future audits) can catch rows whose
+    // description is too bland to match the heuristic patterns (e.g.
+    // "ACH WEB PAYMENT 12345") but whose PFC clearly identifies them
+    // as a card payment / transfer (LOAN_PAYMENTS, TRANSFER_IN/OUT).
+    // Nullable: rows that did not originate from Plaid (manual / xlsx)
+    // and rows pre-dating this column carry NULL until the live
+    // classifier next refreshes them.
     pfcPrimary: text("pfc_primary"),
     pfcDetailed: text("pfc_detailed"),
     debtId: uuid("debt_id").references((): AnyPgColumn => debtsTable.id, {

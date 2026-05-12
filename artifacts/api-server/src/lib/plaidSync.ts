@@ -760,9 +760,10 @@ export async function syncPlaidItem(
         source,
         plaidTransactionId: t.transaction_id,
         plaidAccountId: t.account_id,
-        // (#636) Persist Plaid PFC so the startup card-payment audit
-        // can catch bland-description rows whose taxonomy reveals
-        // them as a transfer.
+        // (#636) Persist Plaid's PFC on every insert so the startup
+        // card-payment audit / future audits can catch bland-description
+        // rows by pfc_primary (LOAN_PAYMENTS / TRANSFER_IN / TRANSFER_OUT)
+        // even when the description never matches a heuristic pattern.
         pfcPrimary: pfc?.primary ?? null,
         pfcDetailed: pfc?.detailed ?? null,
         debtId,
@@ -1902,8 +1903,10 @@ export async function runGapBackfillForItem(
           source,
           plaidTransactionId: t.transaction_id,
           plaidAccountId: t.account_id,
-          // (#636) Twin of cursor-sync values block — persist Plaid
-          // PFC on the gap-backfill path too.
+          // (#636) Twin of the cursor-sync values block — persist Plaid's
+          // PFC on the gap-backfill path too so a row that lands here
+          // (and never came back through the cursor sync) is still
+          // picked up by the startup card-payment audit.
           pfcPrimary: pfc?.primary ?? null,
           pfcDetailed: pfc?.detailed ?? null,
           debtId,
