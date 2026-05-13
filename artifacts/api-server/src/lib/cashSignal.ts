@@ -460,20 +460,20 @@ export async function computeCashSignal(
     if (rawEffectiveDate === anchorISO) continue;
     // Past-dated plans (strictly before the snapshot) that are still in
     // "pending" status — not matched to a bank txn, not skipped, not
-    // marked missed — continue to weigh on the projection. Snap their
-    // effective date forward to the chart's first day so the drag shows
-    // up as a visible day-0 dip on the projected line (and lowers
-    // `lowest`) instead of silently shrinking the pre-window starting
-    // balance below the bank-balance card.
+    // marked missed — continue to weigh on the projection. We keep the
+    // event on its ORIGINAL date when that date is inside the chart
+    // window so the drag shows up as a visible dip on the same day the
+    // user sees the "Pending plan" row. Only when the original date is
+    // earlier than the chart's first day do we snap forward to fromISO,
+    // landing the drag as a day-0 dip rather than silently shrinking
+    // the pre-window starting balance.
     let effectiveDate = rawEffectiveDate;
-    if (effectiveDate < anchorISO) {
-      // Land the drag on the chart's first day so it shows as a visible
-      // day-0 dip. (Same-day-as-anchor events were dropped above, so
-      // landing on `fromISO` here can't double-count the snapshot.)
-      // If the requested chart window starts before the snapshot — an
-      // unusual case — fall back to anchor+1 so the event still lands
-      // strictly after the snapshot date.
-      effectiveDate = fromISO >= anchorISO ? fromISO : fmtISO(addDays(parseISO(anchorISO), 1));
+    if (effectiveDate < anchorISO && effectiveDate < fromISO) {
+      // Past-of-snapshot pending plan dated even before the chart's
+      // first day — snap forward to fromISO so the drag is at least
+      // visible as a day-0 dip rather than silently shrinking the
+      // pre-window starting balance.
+      effectiveDate = fromISO;
     }
     items.push({ date: effectiveDate, amount: ev.amount, matched: false });
     if (ev.amount < 0) {
