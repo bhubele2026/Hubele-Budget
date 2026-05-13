@@ -2302,39 +2302,6 @@ export default function ForecastPage({
     ? inbox.find((c) => c.id === activeDragId) ?? null
     : null;
 
-  // Status counters for hero — filtered to the active forecast window so they
-  // stay consistent with the chart and KPIs above the register.
-  const headerCounts = (() => {
-    let flagged = 0;
-    let plan = 0;
-    let matched = 0;
-    let unplanned = 0;
-    let toMatch = 0;
-    const fromISO = forecastFromDate;
-    const toDateObj = new Date(`${forecastFromDate}T00:00:00`);
-    toDateObj.setDate(toDateObj.getDate() + horizonDays);
-    const y = toDateObj.getFullYear();
-    const m = String(toDateObj.getMonth() + 1).padStart(2, "0");
-    const dd = String(toDateObj.getDate()).padStart(2, "0");
-    const toISO = `${y}-${m}-${dd}`;
-    const inWindow = (d: string) => d >= fromISO && d <= toISO;
-    if (register) {
-      for (const p of register.allPlan) {
-        if (!inWindow(p.date)) continue;
-        if (p.status === "pending_plan" || p.status === "future") plan++;
-        else if (p.status === "matched") matched++;
-      }
-      for (const b of register.allBank) {
-        if (!inWindow(b.date)) continue;
-        flagged++;
-        if (b.status === "pending_bank") toMatch++;
-        else if (b.status === "matched") matched++;
-        else if (b.status === "ignored_unforecasted") unplanned++;
-      }
-    }
-    return { flagged, plan, toMatch, matched, unplanned };
-  })();
-
   const proj = cashProjection;
   const endingNum = proj?.endingBalance ? Number(proj.endingBalance) : NaN;
   const lowestNum = proj?.lowestProjected ? Number(proj.lowestProjected) : NaN;
@@ -2519,25 +2486,6 @@ export default function ForecastPage({
               </div>
             </div>
             <div className="flex flex-col items-end gap-2 text-xs">
-              <div className="flex items-center gap-1.5 flex-wrap justify-end" data-testid="hero-counters">
-                <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-200">
-                  {headerCounts.flagged} flagged
-                </Badge>
-                <span className="text-muted-foreground">·</span>
-                <Badge variant="outline">{headerCounts.plan} plan</Badge>
-                <span className="text-muted-foreground">·</span>
-                <Badge variant="outline" className="bg-sky-50 text-sky-900 border-sky-200">
-                  {headerCounts.toMatch} to match
-                </Badge>
-                <span className="text-muted-foreground">·</span>
-                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                  {headerCounts.matched} matched
-                </Badge>
-                <span className="text-muted-foreground">·</span>
-                <Badge variant="outline" className="bg-muted text-muted-foreground">
-                  {headerCounts.unplanned} unplanned
-                </Badge>
-              </div>
               {inboxCount === 0 && reconciledNow && (
                 <Badge
                   className="bg-primary/15 text-primary border-primary/30"
@@ -2546,127 +2494,6 @@ export default function ForecastPage({
                   <PartyPopper className="w-3.5 h-3.5 mr-1" /> Inbox cleared
                 </Badge>
               )}
-              {inboxCount === 0 &&
-                !reconciledNow &&
-                bankReconcile.hasBank &&
-                !bankReconcile.isPriorMonth &&
-                bankReconcile.gap >= 0.01 && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        {/* (#527) Badge is now a real button. Clicking it
-                          fires the same jump as the largest contributor
-                          (matched-pair → scroll+highlight the offending
-                          plan row; starting-balance → open Settings on
-                          the starting-balance field) so the user can go
-                          from "you're off by $X" to "fix it here" in one
-                          tap, without hunting through the register or
-                          remembering the contributor list lives behind a
-                          hover tooltip. */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const lc = bankReconcile.largestContributor;
-                            if (!lc) return;
-                            if (lc.kind === "matched" && lc.planKey) {
-                              const [itemId, date] = lc.planKey.split("|");
-                              if (itemId && date) jumpToPlan(itemId, date);
-                            } else if (lc.kind === "starting") {
-                              openSettings({ focusStartingBalance: true });
-                            }
-                          }}
-                          disabled={!bankReconcile.largestContributor}
-                          aria-label={
-                            bankReconcile.largestContributor?.kind === "matched"
-                              ? "Jump to the plan row driving this mismatch"
-                              : bankReconcile.largestContributor?.kind ===
-                                  "starting"
-                                ? "Open Settings to fix the starting balance"
-                                : "Off-from-bank details"
-                          }
-                          className="inline-flex items-center rounded-full border bg-amber-50 text-amber-900 border-amber-200 max-w-[260px] whitespace-normal text-right text-xs px-2.5 py-0.5 font-semibold cursor-pointer hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:cursor-help disabled:hover:bg-amber-50"
-                          data-testid="badge-balance-mismatch"
-                          data-contributor-kind={
-                            bankReconcile.largestContributor?.kind ?? "none"
-                          }
-                        >
-                          <AlertCircle className="w-3.5 h-3.5 mr-1 flex-none" />
-                          Inbox clear, but the forecast and the bank disagree
-                          by {formatCurrency(bankReconcile.gap)} as of the
-                          latest bank snapshot
-                          {bankReconcile.largestContributor ? (
-                            <>
-                              {" "}
-                              — biggest:{" "}
-                              <span data-testid="badge-balance-mismatch-hint">
-                                {bankReconcile.largestContributor.kind ===
-                                "matched"
-                                  ? "matched amount differs"
-                                  : "starting balance off"}
-                              </span>
-                              .
-                            </>
-                          ) : (
-                            <> — check the starting balance or matched amounts.</>
-                          )}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent
-                        side="bottom"
-                        className="max-w-xs text-left"
-                        data-testid="tooltip-balance-mismatch"
-                      >
-                        <div className="font-medium mb-1">
-                          What's driving the gap
-                        </div>
-                        {bankReconcile.contributors.length === 0 ? (
-                          <div className="text-xs">
-                            No single contributor identified — review the
-                            starting balance and matched amounts.
-                          </div>
-                        ) : (
-                          <ul className="text-xs space-y-1">
-                            {bankReconcile.contributors
-                              .slice(0, 4)
-                              .map((c, i) => {
-                                // (#527) Make each contributor a one-click
-                                // jump to the row (or settings field) that's
-                                // actually disagreeing, so the user doesn't
-                                // have to scroll-hunt for it.
-                                const onClick = () => {
-                                  if (c.kind === "matched" && c.planKey) {
-                                    const [itemId, date] =
-                                      c.planKey.split("|");
-                                    if (itemId && date) jumpToPlan(itemId, date);
-                                  } else if (c.kind === "starting") {
-                                    openSettings({
-                                      focusStartingBalance: true,
-                                    });
-                                  }
-                                };
-                                return (
-                                  <li key={i} className="tabular-nums">
-                                    <button
-                                      type="button"
-                                      onClick={onClick}
-                                      className="text-left w-full hover:underline focus:underline focus:outline-none"
-                                      data-testid={`tooltip-balance-mismatch-contributor-${i}`}
-                                      data-contributor-kind={c.kind}
-                                    >
-                                      <span className="font-medium">
-                                        {formatCurrency(c.delta)}
-                                      </span>{" "}
-                                      · {c.label}
-                                    </button>
-                                  </li>
-                                );
-                              })}
-                          </ul>
-                        )}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
             </div>
           </div>
         </CardContent>
