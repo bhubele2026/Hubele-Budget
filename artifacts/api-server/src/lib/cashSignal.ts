@@ -249,6 +249,12 @@ export async function computeCashSignal(
   // the snapshot) silently disappear from the chart even though they
   // still owe and have not been matched or marked missed.
   const earliestAnchorOrFrom = anchorISO < fromISO ? parseISO(anchorISO) : fromDateOnly;
+  // Reach back to the first day of the month BEFORE today — matching
+  // the lookback the Forecast register uses to surface "Pending plan"
+  // rows. Anchored on today (not fromDate) because the production
+  // chart window is always centered on today; non-current-month
+  // windows are an edge case that may under-expand past-pending
+  // occurrences.
   const priorMonthStart = new Date(
     todayDateOnly.getFullYear(),
     todayDateOnly.getMonth() - 1,
