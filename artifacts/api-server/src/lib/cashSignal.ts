@@ -241,8 +241,20 @@ export async function computeCashSignal(
   // Anchor: events strictly AFTER snapshot date are projected; if no snapshot, project from today
   const anchorISO = snapshotISO ?? fmtISO(todayDateOnly);
   // Expansion start: cover from min(anchor, fromDate) so we can roll the
-  // balance forward to fromDate even when fromDate > anchor.
-  const expandStart = anchorISO < fromISO ? parseISO(anchorISO) : fromDateOnly;
+  // balance forward to fromDate even when fromDate > anchor. We also reach
+  // back to the first day of the prior month — matching the lookback the
+  // Forecast register uses — so plan occurrences the user can still see
+  // as "Pending plan" in the planned-items list are also expanded into
+  // the projection. Without this, past-pending bills (e.g. dated before
+  // the snapshot) silently disappear from the chart even though they
+  // still owe and have not been matched or marked missed.
+  const earliestAnchorOrFrom = anchorISO < fromISO ? parseISO(anchorISO) : fromDateOnly;
+  const priorMonthStart = new Date(
+    todayDateOnly.getFullYear(),
+    todayDateOnly.getMonth() - 1,
+    1,
+  );
+  const expandStart = priorMonthStart < earliestAnchorOrFrom ? priorMonthStart : earliestAnchorOrFrom;
 
   const recurring = await db
     .select()
@@ -382,6 +394,12 @@ export async function computeCashSignal(
   // shape as `matchedPlanKeys` so the existing `events` loop can drop
   // them with one extra check.
   const skippedPlanKeys = new Set<string>();
+  // Plan occurrences the user explicitly marked as missed (or dismissed).
+  // These stop dragging the projection — a "missed" plan means the user
+  // acknowledged the bill won't actually post (or already has been
+  // accounted for elsewhere). Until that mark, a past-dated pending plan
+  // continues to weigh on the projection.
+  const missedPlanKeys = new Set<string>();
   for (const r of resolutions) {
     if (r.status === "matched") {
       if (r.recurringItemId && r.occurrenceDate) {
@@ -404,6 +422,12 @@ export async function computeCashSignal(
       r.occurrenceDate
     ) {
       skippedPlanKeys.add(`${r.recurringItemId}|${r.occurrenceDate}`);
+    } else if (
+      (r.status === "missed" || r.status === "dismissed") &&
+      r.recurringItemId &&
+      r.occurrenceDate
+    ) {
+      missedPlanKeys.add(`${r.recurringItemId}|${r.occurrenceDate}`);
     }
   }
 
@@ -421,13 +445,36 @@ export async function computeCashSignal(
   }> = [];
   for (const ev of events) {
     const origKey = `${ev.itemId}|${ev.date}`;
-    const effectiveDate = rescheduledByKey.get(origKey) ?? ev.date;
-    if (effectiveDate <= anchorISO) continue; // already baked into snapshot
+    const rawEffectiveDate = rescheduledByKey.get(origKey) ?? ev.date;
     const matched = matchedPlanKeys.has(origKey);
     if (matched) continue;
     // (#480) Skipped occurrences must NOT contribute to the projection
     // (chart line, lowest, ending balance, expenseEvents markers).
     if (skippedPlanKeys.has(origKey)) continue;
+    // Plans the user explicitly marked missed/dismissed are likewise
+    // dropped — the user has acknowledged they won't post.
+    if (missedPlanKeys.has(origKey)) continue;
+    // Same-day-as-snapshot occurrences are considered baked into the
+    // snapshot balance (the bank reading on day X already reflects every
+    // posted txn from that day) and dropped from the projection.
+    if (rawEffectiveDate === anchorISO) continue;
+    // Past-dated plans (strictly before the snapshot) that are still in
+    // "pending" status — not matched to a bank txn, not skipped, not
+    // marked missed — continue to weigh on the projection. Snap their
+    // effective date forward to the chart's first day so the drag shows
+    // up as a visible day-0 dip on the projected line (and lowers
+    // `lowest`) instead of silently shrinking the pre-window starting
+    // balance below the bank-balance card.
+    let effectiveDate = rawEffectiveDate;
+    if (effectiveDate < anchorISO) {
+      // Land the drag on the chart's first day so it shows as a visible
+      // day-0 dip. (Same-day-as-anchor events were dropped above, so
+      // landing on `fromISO` here can't double-count the snapshot.)
+      // If the requested chart window starts before the snapshot — an
+      // unusual case — fall back to anchor+1 so the event still lands
+      // strictly after the snapshot date.
+      effectiveDate = fromISO >= anchorISO ? fromISO : fmtISO(addDays(parseISO(anchorISO), 1));
+    }
     items.push({ date: effectiveDate, amount: ev.amount, matched: false });
     if (ev.amount < 0) {
       expenseEvents.push({
