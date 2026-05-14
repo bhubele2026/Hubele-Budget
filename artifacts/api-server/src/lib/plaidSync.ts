@@ -344,6 +344,28 @@ export async function syncPlaidItem(
     .where(eq(householdsTable.id, householdId));
   const ownerUserId = householdRow?.ownerUserId ?? userId;
 
+  // (#623 follow-up) Self-heal misattributed rows from the original
+  // bug. Before this fix, transaction inserts stamped `user_id` with
+  // the *actor* (whoever's session triggered the sync) instead of the
+  // household owner. When a non-owner member opened the app and a
+  // background sync fired under their session, every new Plaid row
+  // for this item landed under the member's user_id. The owner's
+  // user_id-scoped ledger view then rendered them invisible — Plaid
+  // had the data, the DB had the data, but the user couldn't see it.
+  // Repoint any rows on this item's accounts that are still attributed
+  // to a non-owner so the back-history shows up on the next page load.
+  // Idempotent — no-op once everything already points at the owner.
+  await db.execute(sql`
+    UPDATE transactions
+       SET user_id = ${ownerUserId}
+     WHERE household_id = ${householdId}
+       AND user_id <> ${ownerUserId}
+       AND plaid_account_id IN (
+         SELECT account_id FROM plaid_accounts
+          WHERE item_id = ${itemRowId}::uuid
+       )
+  `);
+
   // (#398) Synthetic seed rows (April-2026 Chase placeholder) are not
   // real Plaid connections — they exist only to anchor the bank
   // snapshot tile before the user completes OAuth. Silently no-op
@@ -749,7 +771,13 @@ export async function syncPlaidItem(
       }
 
       const values = {
-        userId,
+        // (#623 follow-up) Data-owner is the household owner, not the
+        // actor that triggered this sync. Using the actor here was the
+        // root cause of "Plaid sees the expense but the app doesn't":
+        // when a non-owner household member's session fired the sync,
+        // every new row landed under their user_id and was filtered out
+        // of the owner's ledger.
+        userId: ownerUserId,
         householdId,
         occurredOn: t.date,
         occurredAt,
@@ -842,10 +870,15 @@ export async function syncPlaidItem(
     }
     for (const externalAcctId of touchedExternalAcctIds) {
       try {
-        await dedupeTransactionsForAccount(userId, externalAcctId);
+        // (#623 follow-up) Dedupe is scoped by user_id; if we passed
+        // the actor here it would only see the actor's slice of rows
+        // and miss historical owner-attributed twins (or vice versa).
+        // Always run as the owner so the dedupe pass sees the canonical
+        // household-owner view of this account.
+        await dedupeTransactionsForAccount(ownerUserId, externalAcctId);
       } catch (e) {
         logger.warn(
-          { userId, itemRowId, externalAcctId, err: e },
+          { userId, ownerUserId, itemRowId, externalAcctId, err: e },
           "[plaid-sync] post-upsert dedupeTransactionsForAccount failed (non-fatal)",
         );
       }
@@ -906,7 +939,11 @@ export async function syncPlaidItem(
         }
         if (bestKey && bestItemId && bestDate) {
           await db.insert(forecastResolutionsTable).values({
-            userId,
+            // (#623 follow-up) Same data-owner fix as the transactions
+            // insert above — resolutions belong to the household owner
+            // so the owner's user_id-scoped forecast view sees them
+            // regardless of which member's session triggered the sync.
+            userId: ownerUserId,
             householdId,
             recurringItemId: bestItemId,
             occurrenceDate: bestDate,
@@ -1892,7 +1929,11 @@ export async function runGapBackfillForItem(
         }
 
         const values = {
-          userId,
+          // (#623 follow-up) Twin of the cursor-sync data-owner fix:
+          // gap-backfill inserts must also land on the household owner,
+          // not the actor that triggered the sync, so the rows are
+          // visible in the owner-scoped ledger.
+          userId: ownerUserId,
           householdId: item.householdId!,
           occurredOn: t.date,
           occurredAt: null,
