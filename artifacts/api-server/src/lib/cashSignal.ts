@@ -187,26 +187,6 @@ export type CashSignal = {
   acceptedImpact?: string;
   daily?: Array<{ date: string; balance: string }>;
   /**
-   * Parallel "what if pending posts" series for the chart's branch line.
-   * Equal to `daily` for pre-snapshot dates; for dates on/after the
-   * snapshot it subtracts the cumulative impact of unmatched
-   * pre-snapshot pending plans (those suppressed from `daily` by the
-   * snapshot-wins rule). Lets the UI render a second line showing
-   * where the balance would land if those still-tracked pending plans
-   * actually post.
-   */
-  dailyWithPending?: Array<{ date: string; balance: string }>;
-  /**
-   * Sum (negative) of unmatched pre-snapshot pending plan amounts that
-   * are dropped from `daily` but applied to `dailyWithPending`. "0.00"
-   * means the two series are identical.
-   */
-  pendingPreSnapshotImpact?: string;
-  /** Lowest value across the with-pending branch line. */
-  lowestProjectedWithPending?: string;
-  /** Date of the lowest value on the with-pending branch line. */
-  lowestDateWithPending?: string | null;
-  /**
    * Per-day expense events (planned recurring + synthesized debt-min) that
    * land inside the projection window, with their bill name and signed
    * amount. The forecast chart uses this to mark big-bill days. Income
@@ -227,16 +207,17 @@ function r2(n: number): string {
 /**
  * Compute the cash signal: today's bank balance + projection of lowest balance.
  *
- * Anchored on the bank snapshot when present (SNAPSHOT-WINS rule):
+ * Anchored on the bank snapshot when present:
  *   - Skip checking transactions on/before the snapshot date (already counted).
- *   - Skip planned events dated on/before the snapshot date — the snapshot
- *     is the source of truth for those dates. Pre-snapshot pending plans
- *     remain visible in the planned-items register so the user can match,
- *     mark missed, or skip them, but they no longer drag the chart line
- *     below the actual bank balance.
- *   - Post-snapshot planned events project forward and drag the line
- *     until the user matches them to a real bank txn (or marks
- *     missed/skipped).
+ *   - Planned events dated on/before the snapshot that the user has NOT yet
+ *     matched / marked missed / skipped get dragged forward to the chart's
+ *     first day (today by default). Rationale: those plans haven't been
+ *     reconciled against a real bank txn, so they're still outstanding
+ *     obligations. Showing them as a dip on today reflects the user's true
+ *     pending exposure until they match (removes the dip) or hit "missed"
+ *     / "skipped" (also removes it).
+ *   - Post-snapshot planned events project forward on their own date and
+ *     drag the line until the user matches/misses/skips them.
  */
 export async function computeCashSignal(
   householdId: string,
@@ -466,15 +447,6 @@ export async function computeCashSignal(
 
   type Item = { date: string; amount: number; matched: boolean };
   const items: Item[] = [];
-  // Pre-snapshot pending plans suppressed from `daily` by snapshot-wins
-  // but tracked here so we can render a parallel "what if pending posts"
-  // branch line on the chart.
-  const pendingPreSnapshotItems: Array<{
-    date: string;
-    amount: number;
-    label: string;
-    itemId: string;
-  }> = [];
   // Parallel list of labeled expense events surfaced to the chart. We only
   // include entries that ACTUALLY drag the balance down (negative amount,
   // post-anchor, not already matched out by a real txn) so the markers line
@@ -496,35 +468,29 @@ export async function computeCashSignal(
     // Plans the user explicitly marked missed/dismissed are likewise
     // dropped — the user has acknowledged they won't post.
     if (missedPlanKeys.has(origKey)) continue;
-    // SNAPSHOT-WINS RULE: any plan occurrence dated ON OR BEFORE the
-    // bank snapshot is suppressed from the projection — the snapshot
-    // already represents what actually happened on that date, so
-    // subtracting unmatched pending plans from it would synthesize a
-    // fake past trajectory below the real bank balance (e.g. chart
-    // showing "Lowest $2,507 on May 13" when the bank actually closed
-    // May 13 at $3,248 because four old pending plans had not been
-    // matched yet). Pre-snapshot pending plans the user still needs to
-    // address remain visible in the planned-items register so they can
-    // be reviewed (matched / marked missed / skipped) — they just no
-    // longer drag the chart line below the snapshot.
+    // DRAG-TO-TODAY RULE: a pending plan dated ON OR BEFORE the bank
+    // snapshot that the user has NOT matched / marked missed / skipped
+    // is still an outstanding obligation. Snap its effective date
+    // forward to fromISO (today by default) so it appears as a real
+    // dip on the current day instead of silently disappearing into
+    // history. The user can clear the dip by matching it to a real
+    // bank txn, or by hitting "Mark missed" / "Skip" in the
+    // planned-items register.
+    //
+    // NOTE: plans dated AFTER the snapshot but BEFORE fromISO (i.e.
+    // when the user is viewing a fromDate well past the snapshot) are
+    // intentionally NOT dragged — they're consumed by the pre-window
+    // roll-forward into `startingBalance` (see below). That preserves
+    // the existing semantics for "view chart starting from <future
+    // date>" where pre-window plans should be assumed to post.
     let effectiveDate = rawEffectiveDate;
-    if (snapshotISO && effectiveDate <= snapshotISO) {
-      // Snapshot wins for the main `daily` series, but track this
-      // pending plan so the with-pending branch line can show its
-      // impact ("what if these still post").
-      pendingPreSnapshotItems.push({
-        date: rawEffectiveDate,
-        amount: ev.amount,
-        label: ev.label,
-        itemId: ev.itemId,
-      });
-      continue;
-    }
-    if (effectiveDate < anchorISO && effectiveDate < fromISO) {
-      // No-snapshot fallback path: snap pre-window pending plans
-      // forward to fromISO so the drag is at least visible as a day-0
-      // dip rather than silently shrinking the pre-window starting
-      // balance.
+    if (snapshotISO) {
+      if (effectiveDate <= snapshotISO && effectiveDate < fromISO) {
+        effectiveDate = fromISO;
+      }
+    } else if (effectiveDate < fromISO) {
+      // No-snapshot fallback: surface pre-window pending plans as a
+      // day-0 dip rather than silently shrinking startingBalance.
       effectiveDate = fromISO;
     }
     items.push({ date: effectiveDate, amount: ev.amount, matched: false });
@@ -590,41 +556,6 @@ export async function computeCashSignal(
   const endingBalance = bal;
   const endingDate = toISO;
 
-  // Build the parallel "with pending" series. The bug-fix snapshot-wins
-  // rule drops pre-snapshot pending plans from `daily` so the chart's
-  // historical section equals the real bank snapshot. But the user
-  // still wants to see the impact of those pending plans — "if these
-  // do come through, my balance lands here". We render that as a
-  // secondary line by subtracting the cumulative pending impact from
-  // every day on/after the snapshot date.
-  const pendingPreSnapshotImpact = pendingPreSnapshotItems.reduce(
-    (s, it) => s + it.amount,
-    0,
-  );
-  const pendingImpactRounded = Math.round(pendingPreSnapshotImpact * 100) / 100;
-  const dailyWithPending: Array<{ date: string; balance: string }> = daily.map(
-    (d) => {
-      if (!snapshotISO || d.date < snapshotISO) return d;
-      return {
-        date: d.date,
-        balance: r2(Number(d.balance) + pendingImpactRounded),
-      };
-    },
-  );
-  let lowestWithPending = lowest;
-  let lowestDateWithPending: string | null = lowestDate;
-  if (snapshotISO && pendingImpactRounded !== 0) {
-    lowestWithPending = Number(dailyWithPending[0]?.balance ?? lowest);
-    lowestDateWithPending = dailyWithPending[0]?.date ?? lowestDate;
-    for (const d of dailyWithPending) {
-      const v = Number(d.balance);
-      if (v < lowestWithPending) {
-        lowestWithPending = v;
-        lowestDateWithPending = d.date;
-      }
-    }
-  }
-
   const headroom = Math.max(0, lowest - cashBuffer);
   let status: CashSignal["status"];
   if (snapshotBalance == null) status = "no_data";
@@ -651,10 +582,6 @@ export async function computeCashSignal(
     projectedExpenses: r2(projectedExpenses),
     acceptedImpact: r2(acceptedImpact),
     daily,
-    dailyWithPending,
-    pendingPreSnapshotImpact: r2(pendingImpactRounded),
-    lowestProjectedWithPending: r2(lowestWithPending),
-    lowestDateWithPending,
     events: expenseEvents
       .filter((e) => e.date >= fromISO && e.date <= toISO)
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
