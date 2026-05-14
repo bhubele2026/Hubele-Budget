@@ -206,37 +206,13 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
           | undefined)
       : undefined;
 
-  if (debt) {
-    const debtAsOf = (debt.updatedAt ?? new Date()).toISOString();
-    const anchorAsOf = anchor?.asOf ?? null;
-    const asOf =
-      anchorAsOf && anchorAsOf > debtAsOf ? anchorAsOf : debtAsOf;
-    res.json({
-      amexEndingBalance: Number(debt.balance),
-      asOf,
-      source: "debt" as const,
-    });
-    return;
-  }
-
-  if (anchor && anchor.balance !== undefined && anchor.balance !== null) {
-    const n = Number(anchor.balance);
-    if (Number.isFinite(n)) {
-      res.json({
-        amexEndingBalance: n,
-        asOf: anchor.asOf ?? new Date().toISOString(),
-        source: "anchor" as const,
-      });
-      return;
-    }
-  }
-
-  // (#483) No linked Amex debt row, no manual anchor — fall back to the
-  // live Plaid liability balances cached on the Amex-owned
-  // `plaid_accounts` rows. Sums across every linked sub-account so a
-  // single login that owns three physical Amex cards still shows the
-  // combined liability. The "as of" timestamp is the most recent
-  // `liability_last_fetched_at` across the rows that contributed.
+  // (#651) Prefer the live Plaid liability balance over the
+  // cached `debts.balance` row whenever Plaid has actually returned a
+  // balance for the linked Amex sub-accounts. The debt row's `balance`
+  // column can drift stale (manual edits, paused syncs, mid-relink
+  // races), and the user has explicitly asked that the Amex Ending
+  // Balance come from the Plaid connection — Plaid is the source of
+  // truth here, the debt row is just a convenience cache.
   if (amexPlaidAccountIds.length > 0) {
     const balRows = await db
       .select({
@@ -267,6 +243,31 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
         amexEndingBalance: total,
         asOf: (latest ?? new Date()).toISOString(),
         source: "plaid" as const,
+      });
+      return;
+    }
+  }
+
+  if (debt) {
+    const debtAsOf = (debt.updatedAt ?? new Date()).toISOString();
+    const anchorAsOf = anchor?.asOf ?? null;
+    const asOf =
+      anchorAsOf && anchorAsOf > debtAsOf ? anchorAsOf : debtAsOf;
+    res.json({
+      amexEndingBalance: Number(debt.balance),
+      asOf,
+      source: "debt" as const,
+    });
+    return;
+  }
+
+  if (anchor && anchor.balance !== undefined && anchor.balance !== null) {
+    const n = Number(anchor.balance);
+    if (Number.isFinite(n)) {
+      res.json({
+        amexEndingBalance: n,
+        asOf: anchor.asOf ?? new Date().toISOString(),
+        source: "anchor" as const,
       });
       return;
     }

@@ -696,7 +696,10 @@ describe("Amex anchor regression after auto-create-debt", () => {
       source: string;
       amexEndingBalance: number | null;
     };
-    expect(afterBody.source).toBe("debt");
+    // (#651) Plaid liability balance now wins over the auto-created
+    // debt row's cached `balance` column — the debt row is just a
+    // convenience cache, the live Plaid figure is the source of truth.
+    expect(afterBody.source).toBe("plaid");
     expect(afterBody.source).not.toBe("missing");
     expect(afterBody.amexEndingBalance).toBeCloseTo(750.25);
   });

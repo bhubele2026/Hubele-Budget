@@ -633,11 +633,12 @@ export default function AmexPage() {
     let anchor: number | null = null;
     let resolvedSource: "debt" | "anchor" | "computed" | "plaid" = "debt";
     let asOf: string | null = null;
-    if (amexDebt) {
-      anchor = parseSigned(amexDebt.balance);
-      resolvedSource = "debt";
-      asOf = amexDebt.lastBalanceUpdate ?? amexDebt.plaidLastSyncedAt ?? null;
-    } else if (
+    // (#651) Trust the server's resolved anchor first — it now prefers
+    // the live Plaid liability balance over the cached `debts.balance`
+    // row, which is the source of truth the user expects to see in the
+    // Ending Balance tile. Fall back to the local debt row only while
+    // the server response is still loading or genuinely missing.
+    if (
       amexAnchorResp &&
       amexAnchorResp.amexEndingBalance !== null &&
       amexAnchorResp.source !== "missing"
@@ -646,6 +647,10 @@ export default function AmexPage() {
       resolvedSource =
         amexAnchorResp.source === "debt" ? "anchor" : amexAnchorResp.source;
       asOf = amexAnchorResp.asOf ?? null;
+    } else if (amexDebt) {
+      anchor = parseSigned(amexDebt.balance);
+      resolvedSource = "debt";
+      asOf = amexDebt.lastBalanceUpdate ?? amexDebt.plaidLastSyncedAt ?? null;
     }
     return { anchor, resolvedSource, asOf };
   }, [amexDebt, amexAnchorResp]);

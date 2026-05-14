@@ -200,7 +200,7 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
     expect(body.amexEndingBalance).toBeCloseTo(321.0, 2);
   });
 
-  it("manual settings anchor still wins over the live Plaid balance", async () => {
+  it("(#651) live Plaid balance wins over a stale settings anchor", async () => {
     const suffix = randomUUID().slice(0, 8);
     const [item] = await db
       .insert(plaidItemsTable)
@@ -238,8 +238,8 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
       amexEndingBalance: number;
       source: string;
     };
-    expect(body.source).toBe("anchor");
-    expect(body.amexEndingBalance).toBeCloseTo(999.99, 2);
+    expect(body.source).toBe("plaid");
+    expect(body.amexEndingBalance).toBeCloseTo(100.0, 2);
   });
 
   it("returns missing when Plaid accounts exist but liability balances are null", async () => {
