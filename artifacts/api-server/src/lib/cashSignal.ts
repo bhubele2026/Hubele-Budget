@@ -456,6 +456,13 @@ export async function computeCashSignal(
     label: string;
     amount: number;
     itemId: string;
+    // (#650) Original (pre-drag) date the plan was scheduled for. When
+    // `originalDate !== date`, this event was dragged forward by the
+    // pre-snapshot drag-to-today rule. The forecast tooltip uses this
+    // to distinguish "still-pending plans pulled onto today" from
+    // "bills naturally due today" so the "Pending plans dragging
+    // this day" list isn't polluted with normal due-today bills.
+    originalDate: string;
   }> = [];
   for (const ev of events) {
     const origKey = `${ev.itemId}|${ev.date}`;
@@ -513,6 +520,7 @@ export async function computeCashSignal(
         label: ev.label,
         amount: ev.amount,
         itemId: ev.itemId,
+        originalDate: rawEffectiveDate,
       });
     }
   }
@@ -603,6 +611,7 @@ export async function computeCashSignal(
         label: e.label,
         amount: r2(e.amount),
         itemId: e.itemId,
+        originalDate: e.originalDate,
       })),
   };
 }

@@ -11,4 +11,11 @@ export type CashSignalEventsItem = {
   label: string;
   amount: string;
   itemId?: string;
+  /** Original (pre-drag) date the plan was scheduled for.
+When `originalDate !== date`, this event was dragged
+forward by the pre-snapshot drag-to-today rule. Used
+by the chart tooltip to distinguish dragged plans
+from bills naturally due that day.
+ */
+  originalDate?: string;
 };

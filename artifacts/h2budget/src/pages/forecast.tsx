@@ -2371,13 +2371,31 @@ export default function ForecastPage({
     const evs = proj?.events ?? [];
     const map = new Map<
       string,
-      Array<{ label: string; amount: number; itemId?: string }>
+      Array<{
+        label: string;
+        amount: number;
+        itemId?: string;
+        // (#650) True iff the cash signal pulled this event forward
+        // onto `date` from a pre-snapshot pending plan. The chart
+        // tooltip uses this flag to keep the "Pending plans dragging
+        // this day" list focused on the actual drag — bills naturally
+        // due today do NOT belong in that section.
+        dragged: boolean;
+        originalDate?: string;
+      }>
     >();
     for (const e of evs) {
       const amt = Number(e.amount);
       if (!Number.isFinite(amt) || amt >= 0) continue;
       const slot = map.get(e.date) ?? [];
-      slot.push({ label: e.label, amount: amt, itemId: e.itemId });
+      const orig = (e as { originalDate?: string }).originalDate;
+      slot.push({
+        label: e.label,
+        amount: amt,
+        itemId: e.itemId,
+        dragged: !!orig && orig !== e.date,
+        originalDate: orig,
+      });
       map.set(e.date, slot);
     }
     for (const [, list] of map) list.sort((a, b) => a.amount - b.amount);
@@ -2692,8 +2710,36 @@ export default function ForecastPage({
                               : "—"}
                           </span>
                         </div>
-                        {dayEvents && dayEvents.length > 0 && rawDate && (
-                          <div style={{ marginTop: 6 }}>
+                        {dayEvents && dayEvents.length > 0 && rawDate && (() => {
+                          // (#650) Split this day's events into two
+                          // groups so the "dragging" section only lists
+                          // items that were actually pulled forward
+                          // from a pre-snapshot pending plan. Bills
+                          // naturally due on this calendar day go
+                          // under "Bills due this day" instead.
+                          const dragged = dayEvents.filter((b) => b.dragged);
+                          const dueToday = dayEvents.filter((b) => !b.dragged);
+                          const sections: Array<{
+                            title: string;
+                            bills: typeof dayEvents;
+                          }> = [];
+                          if (dragged.length > 0) {
+                            sections.push({
+                              title: "Pending plans dragging this day",
+                              bills: dragged,
+                            });
+                          }
+                          if (dueToday.length > 0) {
+                            sections.push({
+                              title: "Bills due this day",
+                              bills: dueToday,
+                            });
+                          }
+                          return sections.map((section, sIdx) => (
+                          <div
+                            key={section.title}
+                            style={{ marginTop: sIdx === 0 ? 6 : 8 }}
+                          >
                             <div
                               style={{
                                 fontSize: 10,
@@ -2703,7 +2749,7 @@ export default function ForecastPage({
                                 marginBottom: 4,
                               }}
                             >
-                              Pending plans dragging this day
+                              {section.title}
                             </div>
                             <div
                               style={{
@@ -2712,7 +2758,7 @@ export default function ForecastPage({
                                 gap: 2,
                               }}
                             >
-                              {dayEvents.map((b, idx) => {
+                              {section.bills.map((b, idx) => {
                                 const canJump = !!b.itemId;
                                 return (
                                   <button
@@ -2756,7 +2802,8 @@ export default function ForecastPage({
                               })}
                             </div>
                           </div>
-                        )}
+                          ));
+                        })()}
                       </div>
                     );
                   }}

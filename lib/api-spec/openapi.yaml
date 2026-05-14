@@ -3165,6 +3165,14 @@ components:
               label: { type: string }
               amount: { type: string }
               itemId: { type: string }
+              originalDate:
+                type: string
+                description: |
+                  Original (pre-drag) date the plan was scheduled for.
+                  When `originalDate !== date`, this event was dragged
+                  forward by the pre-snapshot drag-to-today rule. Used
+                  by the chart tooltip to distinguish dragged plans
+                  from bills naturally due that day.
     ForecastBundle:
       type: object
       required: [events, transactions, resolutions, closedMonths, settings, fromDate, toDate, plaidCheckingAccounts]

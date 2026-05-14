@@ -177,6 +177,21 @@ describe("computeCashSignal — snapshot anchoring", () => {
     expect(eventDates.filter((d) => d === "2026-05-14").length).toBe(2);
     expect(eventDates).not.toContain("2026-05-13");
     expect(eventDates).not.toContain("2026-05-10");
+    // (#650) Each dragged event keeps its pre-drag date in
+    // `originalDate` so the chart tooltip can label them as "dragging
+    // this day" instead of mixing them with bills naturally due today.
+    const draggedEvents = (sig.events ?? []).filter(
+      (e) => e.date === "2026-05-14",
+    );
+    const draggedOriginals = draggedEvents
+      .map((e) => (e as { originalDate?: string }).originalDate)
+      .sort();
+    expect(draggedOriginals).toEqual(["2026-05-10", "2026-05-13"]);
+    for (const e of draggedEvents) {
+      expect(
+        (e as { originalDate?: string }).originalDate,
+      ).not.toBe(e.date);
+    }
   });
 
   it("drag-to-today: when fromDate == today, pending plans still snap to today", async () => {

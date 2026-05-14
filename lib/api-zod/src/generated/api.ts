@@ -2079,6 +2079,12 @@ export const GetForecastResponse = zod.object({
               label: zod.string(),
               amount: zod.string(),
               itemId: zod.string().optional(),
+              originalDate: zod
+                .string()
+                .optional()
+                .describe(
+                  "Original (pre-drag) date the plan was scheduled for.\nWhen `originalDate !== date`, this event was dragged\nforward by the pre-snapshot drag-to-today rule. Used\nby the chart tooltip to distinguish dragged plans\nfrom bills naturally due that day.\n",
+                ),
             }),
           )
           .optional(),
@@ -2244,6 +2250,12 @@ export const GetForecastCashSignalResponse = zod.object({
         label: zod.string(),
         amount: zod.string(),
         itemId: zod.string().optional(),
+        originalDate: zod
+          .string()
+          .optional()
+          .describe(
+            "Original (pre-drag) date the plan was scheduled for.\nWhen `originalDate !== date`, this event was dragged\nforward by the pre-snapshot drag-to-today rule. Used\nby the chart tooltip to distinguish dragged plans\nfrom bills naturally due that day.\n",
+          ),
       }),
     )
     .optional(),
