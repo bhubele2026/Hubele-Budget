@@ -2362,6 +2362,28 @@ export default function ForecastPage({
   })();
   const bigBillByDate = new Map(bigBillMarkers.map((m) => [m.date, m]));
 
+  // Per-day index of EVERY expense event the cash signal returned (not
+  // just "big bill" days). Used by the chart tooltip so hovering on any
+  // point clearly surfaces which pending plans are dragging that day's
+  // projected balance — addresses the "are pending transactions actually
+  // affecting the line?" confusion.
+  const eventsByDate = (() => {
+    const evs = proj?.events ?? [];
+    const map = new Map<
+      string,
+      Array<{ label: string; amount: number; itemId?: string }>
+    >();
+    for (const e of evs) {
+      const amt = Number(e.amount);
+      if (!Number.isFinite(amt) || amt >= 0) continue;
+      const slot = map.get(e.date) ?? [];
+      slot.push({ label: e.label, amount: amt, itemId: e.itemId });
+      map.set(e.date, slot);
+    }
+    for (const [, list] of map) list.sort((a, b) => a.amount - b.amount);
+    return map;
+  })();
+
   return (
     <div className="space-y-6">
       <PlaidReauthBanner />
@@ -2640,6 +2662,10 @@ export default function ForecastPage({
                     const rawDate = p?.rawDate;
                     const balance = Number(p?.balance);
                     const marker = rawDate ? bigBillByDate.get(rawDate) : undefined;
+                    const dayEvents = rawDate ? eventsByDate.get(rawDate) : undefined;
+                    const dayTotal = dayEvents
+                      ? dayEvents.reduce((s, b) => s + b.amount, 0)
+                      : 0;
                     return (
                       <div
                         style={{
@@ -2663,7 +2689,7 @@ export default function ForecastPage({
                               : "—"}
                           </span>
                         </div>
-                        {marker && (
+                        {dayEvents && dayEvents.length > 0 && rawDate && (
                           <div style={{ marginTop: 6 }}>
                             <div
                               style={{
@@ -2674,7 +2700,7 @@ export default function ForecastPage({
                                 marginBottom: 4,
                               }}
                             >
-                              Big bills today
+                              Pending plans dragging this day
                             </div>
                             <div
                               style={{
@@ -2683,7 +2709,7 @@ export default function ForecastPage({
                                 gap: 2,
                               }}
                             >
-                              {marker.bills.map((b, idx) => {
+                              {dayEvents.map((b, idx) => {
                                 const canJump = !!b.itemId;
                                 return (
                                   <button
@@ -2692,9 +2718,9 @@ export default function ForecastPage({
                                     disabled={!canJump}
                                     onClick={() => {
                                       if (b.itemId)
-                                        jumpToPlan(b.itemId, marker.date);
+                                        jumpToPlan(b.itemId, rawDate);
                                     }}
-                                    data-testid={`tooltip-bill-${marker.date}-${b.itemId ?? idx}`}
+                                    data-testid={`tooltip-bill-${rawDate}-${b.itemId ?? idx}`}
                                     style={{
                                       display: "flex",
                                       justifyContent: "space-between",

@@ -208,8 +208,10 @@ function r2(n: number): string {
  * Compute the cash signal: today's bank balance + projection of lowest balance.
  *
  * Anchored on the bank snapshot when present:
- *   - Skip planned events whose date is on/before the snapshot date (already baked in).
  *   - Skip checking transactions on/before the snapshot date (already counted).
+ *   - Pending planned events on the snapshot date continue to drag the
+ *     projection (drag-until-matched). The user must explicitly match,
+ *     mark missed, or skip an occurrence to remove it from the chart.
  */
 export async function computeCashSignal(
   householdId: string,
@@ -460,10 +462,16 @@ export async function computeCashSignal(
     // Plans the user explicitly marked missed/dismissed are likewise
     // dropped — the user has acknowledged they won't post.
     if (missedPlanKeys.has(origKey)) continue;
-    // Same-day-as-snapshot occurrences are considered baked into the
-    // snapshot balance (the bank reading on day X already reflects every
-    // posted txn from that day) and dropped from the projection.
-    if (rawEffectiveDate === anchorISO) continue;
+    // NOTE: previously we dropped same-day-as-snapshot occurrences as
+    // "already baked into the snapshot balance." That collapsed pending
+    // plans dated on the snapshot day (e.g. a Mortgage due today that
+    // hasn't actually posted yet) into invisible $0 contributors, which
+    // contradicts the user's "drag until matched/missed/skipped" model.
+    // Now: same-day pending plans continue to drag the projection until
+    // the user explicitly matches, marks missed, or skips them. If the
+    // bank snapshot already reflected the txn, the user matches the
+    // plan to that bank txn — the matchedPlanKeys check above then
+    // suppresses the drag and avoids double-counting.
     // Past-dated plans (strictly before the snapshot) that are still in
     // "pending" status — not matched to a bank txn, not skipped, not
     // marked missed — continue to weigh on the projection. We keep the

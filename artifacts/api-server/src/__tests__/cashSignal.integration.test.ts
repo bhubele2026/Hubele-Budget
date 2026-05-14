@@ -101,16 +101,17 @@ async function addRecurring(
 }
 
 describe("computeCashSignal — snapshot anchoring", () => {
-  it("skips events on or before the snapshot date (already baked into the snapshot balance)", async () => {
+  it("same-day-as-snapshot pending plans continue to drag the projection (drag-until-matched)", async () => {
     await setSettings({
       balance: "1000",
       at: new Date("2026-04-15T12:00:00Z"),
       cashBuffer: "0",
     });
     // Monthly $200 on the 15th. Within the test window the expansion
-    // produces 2026-04-15 and 2026-05-15. Only 05-15 should reduce the
-    // projection — 04-15 is already accounted for in the $1,000
-    // snapshot taken on the same day.
+    // produces 2026-04-15 and 2026-05-15. Both should drag — the user
+    // hasn't matched, missed, or skipped the 04-15 occurrence so the
+    // projection treats it as still owed (mirrors the "Pending plan"
+    // row the user sees in the Forecast register on the snapshot day).
     await addRecurring({ dayOfMonth: 15, amount: "200" });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
@@ -120,10 +121,11 @@ describe("computeCashSignal — snapshot anchoring", () => {
 
     expect(sig.bankToday).toBe("1000.00");
     expect(sig.startingBalance).toBe("1000.00");
-    expect(sig.endingBalance).toBe("800.00");
-    expect(sig.lowestProjected).toBe("800.00");
+    // Both 04-15 and 05-15 drag.
+    expect(sig.endingBalance).toBe("600.00");
+    expect(sig.lowestProjected).toBe("600.00");
     expect(sig.lowestDate).toBe("2026-05-15");
-    expect(sig.projectedExpenses).toBe("200.00");
+    expect(sig.projectedExpenses).toBe("400.00");
     expect(sig.projectedIncome).toBe("0.00");
     expect(sig.snapshotAt).not.toBeNull();
   });
@@ -161,6 +163,37 @@ describe("computeCashSignal — snapshot anchoring", () => {
 });
 
 describe("computeCashSignal — matched resolution suppression", () => {
+  it("a same-day-as-snapshot occurrence with a 'matched' resolution does NOT drag (no double-count)", async () => {
+    // Regression for the drag-until-matched fix: when the user matches
+    // the snapshot-day plan to a real bank txn (the snapshot already
+    // reflects), matchedPlanKeys must suppress the drag so we don't
+    // double-count the same outflow.
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-04-15T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    const item = await addRecurring({ dayOfMonth: 15, amount: "200" });
+    await db.insert(forecastResolutionsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      recurringItemId: item.id,
+      occurrenceDate: "2026-04-15",
+      status: "matched",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-04-15",
+      horizonDays: 31,
+    });
+
+    // 04-15 suppressed by match; only 05-15 drags.
+    expect(sig.endingBalance).toBe("800.00");
+    expect(sig.projectedExpenses).toBe("200.00");
+    expect(sig.lowestProjected).toBe("800.00");
+    expect(sig.lowestDate).toBe("2026-05-15");
+  });
+
   it("removes plan items whose forecast_resolutions row is 'matched'", async () => {
     await setSettings({
       balance: "1000",
