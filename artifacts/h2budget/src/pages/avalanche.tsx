@@ -324,8 +324,14 @@ export default function AvalanchePage() {
   // drive the headline or the simulation past the cap.
   const isManualSource =
     (resolvedExtra?.source ?? settings?.extraSource ?? "manual") === "manual";
+  // (#652) While the user is actively dragging the Avalanche budget slider,
+  // drive the simulation/projection/What-if math from the *live* draft value
+  // instead of waiting for the server-side `resolvedExtra` to round-trip.
+  // Without this, the chart and projection table only update after you let
+  // go of the thumb (and the settings PATCH lands), making the slider feel
+  // sluggish and disconnected from the numbers it controls.
   const resolvedExtraAmount = isManualSource
-    ? clampManual(rawResolvedExtraAmount)
+    ? clampManual(manualExtraDraft ?? rawResolvedExtraAmount)
     : Number.isFinite(rawResolvedExtraAmount)
       ? Math.max(0, rawResolvedExtraAmount)
       : 0;
@@ -1024,8 +1030,15 @@ export default function AvalanchePage() {
                 <div className="pt-2">
                   <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
                     <span>Avalanche budget</span>
-                    <span className="tabular-nums normal-case tracking-normal text-foreground font-medium">
-                      {fmtMoney(budgetCap)}/mo
+                    <span
+                      className="tabular-nums normal-case tracking-normal text-foreground font-medium"
+                      data-testid="text-avalanche-budget-live"
+                    >
+                      {fmtMoney(Math.min(liveManualExtra, budgetCap))}
+                      <span className="text-muted-foreground/70 font-normal">
+                        {" / "}
+                        {fmtMoney(budgetCap)}/mo
+                      </span>
                     </span>
                   </div>
                   <Slider
