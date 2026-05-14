@@ -920,6 +920,7 @@ const HORIZON_OPTS: HorizonOpt[] = [
 
 const FORECAST_FROM_KEY = "h2budget:forecastFromDate";
 const FORECAST_HORIZON_KEY = "h2budget:forecastHorizonDays";
+const FORECAST_LOOKBACK_OPEN_KEY = "h2budget:forecastLookbackOpen";
 const FORECAST_MIN_FROM_DATE = "2026-05-01";
 
 function todayISO(): string {
@@ -955,14 +956,41 @@ export default function ForecastPage({
       return 90;
     }
   });
+  // (#650 follow-up) Default the chart to start at TODAY so the
+  // projected line keeps moving forward as the calendar advances —
+  // pre-today bills (which have either already posted or are stale
+  // pending plans) no longer pile onto the first day. Past dates are
+  // available behind a "Look back" toggle alongside the horizon tabs.
+  const [lookbackOpen, setLookbackOpen] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem(FORECAST_LOOKBACK_OPEN_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
   const [forecastFromDate, setForecastFromDate] = useState<string>(() => {
     try {
       const stored = sessionStorage.getItem(FORECAST_FROM_KEY);
-      return clampForecastFrom(stored || FORECAST_MIN_FROM_DATE);
+      const wasOpen = sessionStorage.getItem(FORECAST_LOOKBACK_OPEN_KEY) === "true";
+      // Honor a stored past date only if the user previously opened
+      // the look-back panel; otherwise snap to today on every fresh
+      // visit so the forecast keeps moving forward.
+      if (wasOpen && stored) return clampForecastFrom(stored);
+      return todayISO();
     } catch {
-      return FORECAST_MIN_FROM_DATE;
+      return todayISO();
     }
   });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        FORECAST_LOOKBACK_OPEN_KEY,
+        lookbackOpen ? "true" : "false",
+      );
+    } catch {
+      /* no-op */
+    }
+  }, [lookbackOpen]);
   useEffect(() => {
     try {
       sessionStorage.setItem(FORECAST_HORIZON_KEY, String(horizonDays));
@@ -2416,29 +2444,6 @@ export default function ForecastPage({
           </h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="forecast-from" className="text-xs text-muted-foreground">
-              Forecast from
-            </Label>
-            <Input
-              id="forecast-from"
-              type="date"
-              value={forecastFromDate}
-              min={FORECAST_MIN_FROM_DATE}
-              onChange={(e) => setForecastFromDate(clampForecastFrom(e.target.value))}
-              className="h-8 w-[150px] text-xs"
-              data-testid="input-forecast-from"
-              data-pending={fromDateSwitchPending ? "true" : undefined}
-              aria-busy={fromDateSwitchPending || undefined}
-            />
-            {fromDateSwitchPending && (
-              <RefreshCw
-                className="w-3 h-3 animate-spin text-muted-foreground"
-                data-testid="forecast-from-pending"
-                aria-hidden="true"
-              />
-            )}
-          </div>
           <Button variant="outline" size="sm" asChild className="h-8">
             <Link href="/bills" data-testid="link-manage-bills">
               Manage in Bills
@@ -2480,6 +2485,57 @@ export default function ForecastPage({
             </Button>
           );
         })}
+        {/* (#650 follow-up) Look-back toggle. Default chart starts at
+            today; clicking this reveals a date picker so the user can
+            rewind the chart to a historical start date when needed. */}
+        <Button
+          variant={lookbackOpen ? "default" : "outline"}
+          size="sm"
+          onClick={() => {
+            const next = !lookbackOpen;
+            setLookbackOpen(next);
+            // Closing the panel snaps the chart back to today so the
+            // forecast keeps moving forward.
+            if (!next) setForecastFromDate(todayISO());
+          }}
+          className="text-xs tracking-wider h-7 px-2.5"
+          data-testid="toggle-forecast-lookback"
+          aria-expanded={lookbackOpen}
+          aria-controls="forecast-lookback-panel"
+        >
+          <CalendarDays className="w-3 h-3 mr-1.5" aria-hidden="true" />
+          LOOK BACK
+        </Button>
+        {lookbackOpen && (
+          <div
+            id="forecast-lookback-panel"
+            className="flex items-center gap-2"
+            data-testid="forecast-lookback-panel"
+          >
+            <Label htmlFor="forecast-from" className="text-xs text-muted-foreground">
+              Start
+            </Label>
+            <Input
+              id="forecast-from"
+              type="date"
+              value={forecastFromDate}
+              min={FORECAST_MIN_FROM_DATE}
+              max={todayISO()}
+              onChange={(e) => setForecastFromDate(clampForecastFrom(e.target.value))}
+              className="h-7 w-[150px] text-xs"
+              data-testid="input-forecast-from"
+              data-pending={fromDateSwitchPending ? "true" : undefined}
+              aria-busy={fromDateSwitchPending || undefined}
+            />
+            {fromDateSwitchPending && (
+              <RefreshCw
+                className="w-3 h-3 animate-spin text-muted-foreground"
+                data-testid="forecast-from-pending"
+                aria-hidden="true"
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {mode === "overall" && (
