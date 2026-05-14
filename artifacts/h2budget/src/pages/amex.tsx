@@ -756,11 +756,18 @@ export default function AmexPage() {
       endingBalance.source === "plaid"
         ? formatRelativeTime(endingBalance.asOf)
         : "";
+    // (#651) While the user's "Refresh from Plaid" click is in flight,
+    // override the stale "Updated X ago" with a live "Refreshing…" label
+    // so they get clear, immediate feedback that the new fetch is
+    // running. Once the response lands the memo recomputes against the
+    // fresh asOf and snaps to "Updated just now".
     const footer =
       endingBalance.source === "plaid"
-        ? relativeAsOf
-          ? `${sourceLabel} · Updated ${relativeAsOf}`
-          : sourceLabel
+        ? isAmexSyncing
+          ? `${sourceLabel} · Refreshing…`
+          : relativeAsOf
+            ? `${sourceLabel} · Updated ${relativeAsOf}`
+            : sourceLabel
         : asOfLabel
           ? `${sourceLabel} · as of ${asOfLabel}`
           : sourceLabel;
@@ -771,7 +778,7 @@ export default function AmexPage() {
           ? `${sourceLabel} · as of ${asOfLabel}\nFetched directly from Plaid's per-account balance. Click refresh to re-fetch.`
           : footer;
     return { sourceLabel, asOfLabel, relativeAsOf, footer, tooltip };
-  }, [endingBalance]);
+  }, [endingBalance, isAmexSyncing]);
 
   // Trailing 12-month ending-balance series, anchored at the snapshot
   // month's known Amex balance and rolled month-by-month using the same
