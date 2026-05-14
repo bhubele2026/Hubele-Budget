@@ -9,6 +9,7 @@ import {
 import { sendExpirationRemindersForAllUsers } from "./lib/plaidExpirationReminder";
 import { maybeAlertOnMalformedTokenSpike } from "./lib/plaidMalformedTokenAlert";
 import { backfillMalformedTokenSiblings } from "./lib/plaidMalformedSiblingCleanup";
+import { backfillOrphanPlaidItems } from "./lib/plaidOrphanItemCleanup";
 import { maybeAlertOnSiblingCleanup } from "./lib/plaidMalformedSiblingCleanupAlert";
 import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
@@ -252,6 +253,26 @@ app.listen(port, (err) => {
           { err },
           "Plaid malformed-token sibling backfill failed",
         );
+      });
+
+    // (#650) Orphan plaid_items sweep: rows with a valid token AND zero
+    // attached accounts AND a healthy sibling at the same institution
+    // for the same user. These survive the malformed-sibling cleanup
+    // (their tokens are valid) and burn /transactions/sync quota every
+    // hour for nothing. Idempotent + best-effort.
+    backfillOrphanPlaidItems()
+      .then((summary) => {
+        logger.info(
+          {
+            scannedOrphans: summary.scannedOrphans,
+            removedOrphans: summary.removedOrphans,
+            skippedNoHealthySibling: summary.skippedNoHealthySibling,
+          },
+          "Plaid orphan plaid_items backfill complete",
+        );
+      })
+      .catch((err) => {
+        logger.error({ err }, "Plaid orphan plaid_items backfill failed");
       });
 
     cron.schedule("0 * * * *", () => {
