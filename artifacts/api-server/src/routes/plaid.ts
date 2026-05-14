@@ -2077,6 +2077,92 @@ router.get(
   },
 );
 
+/**
+ * (#651) Force-unstick a Plaid item whose `/transactions/sync` cursor
+ * has drifted past real bank activity. Clears `cursor` (and any stale
+ * sync-error fields) on the caller's item, then runs one fresh sync
+ * which re-pages the historical window. Existing rows update in place
+ * via the unique index on `transactions.plaid_transaction_id`, so this
+ * never produces duplicates.
+ *
+ * Authorization: caller must be authenticated AND the item must belong
+ * to the caller's household. Synthetic seed items and items with
+ * malformed access tokens are rejected (those need different recovery
+ * paths — re-link, not cursor reset).
+ */
+router.post(
+  "/plaid/items/:itemId/reset-cursor",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const itemId = String(req.params.itemId ?? "");
+    if (!itemId) {
+      res.status(400).json({ error: "itemId is required" });
+      return;
+    }
+    const [item] = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(
+        and(
+          eq(plaidItemsTable.id, itemId),
+          eq(plaidItemsTable.householdId, req.householdId!),
+        ),
+      );
+    if (!item) {
+      res.status(404).json({ error: "Plaid item not found" });
+      return;
+    }
+    if (isSyntheticPlaidItem(item)) {
+      res.status(400).json({
+        error: "Synthetic seed items cannot have their cursor reset.",
+      });
+      return;
+    }
+    if (!isValidPlaidAccessToken(item.accessToken)) {
+      res.status(409).json({
+        error: MALFORMED_PLAID_TOKEN_MESSAGE,
+        code: "ITEM_LOGIN_REQUIRED",
+        action: "relink",
+      });
+      return;
+    }
+    try {
+      await db
+        .update(plaidItemsTable)
+        .set({
+          cursor: null,
+          lastSyncError: null,
+          lastSyncErrorCode: null,
+        })
+        .where(eq(plaidItemsTable.id, item.id));
+      req.log.info(
+        {
+          itemRowId: item.id,
+          plaidItemIdExternal: item.itemId,
+          institutionName: item.institutionName,
+        },
+        "[plaid-reset-cursor] cursor cleared, triggering fresh sync",
+      );
+      const result = await syncPlaidItem(req.userId!, item.id);
+      res.json({
+        ok: true,
+        item: {
+          id: item.id,
+          institutionName: item.institutionName,
+        },
+        sync: result,
+      });
+    } catch (e) {
+      const { message: msg } = extractPlaidError(e);
+      req.log.error(
+        { err: e, itemRowId: item.id },
+        "[plaid-reset-cursor] reset/sync failed",
+      );
+      res.status(500).json({ error: msg });
+    }
+  },
+);
+
 router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
   const { itemId } = req.body ?? {};
   try {
