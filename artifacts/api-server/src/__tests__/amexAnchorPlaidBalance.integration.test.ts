@@ -242,6 +242,87 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
     expect(body.amexEndingBalance).toBeCloseTo(100.0, 2);
   });
 
+  it("(#651) excludes non-credit sub-accounts (depository cash) from the Plaid balance sum", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const [item] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: `amex-item-${suffix}`,
+        accessToken: "test-no-access",
+        institutionName: "American Express",
+        institutionSlug: "amex",
+      })
+      .returning();
+    const fetchedAt = new Date("2026-04-15T12:00:00.000Z");
+    await db.insert(plaidAccountsTable).values([
+      // Real credit-card debt — should count.
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: item!.id,
+        accountId: `acct-card-${suffix}`,
+        name: "Amex Platinum",
+        mask: "0001",
+        type: "credit",
+        subtype: "credit card",
+        liabilityBalance: "1500.00",
+        liabilityLastFetchedAt: fetchedAt,
+      },
+      // Same-login HYSA / Membership Rewards cash sub-account whose
+      // generic /accounts/get balance leaked into liability_balance.
+      // Pre-fix: this $2,729.43 of POSITIVE cash was being summed
+      // alongside the credit-card debt, yielding -$1,229.43
+      // (1500 - 2729.43) and a stale "1 week ago" timestamp on the
+      // tile because /plaid/sync never re-pulled liabilities.
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: item!.id,
+        accountId: `acct-hysa-${suffix}`,
+        name: "Amex High-Yield Savings",
+        mask: "0002",
+        type: "depository",
+        subtype: "savings",
+        liabilityBalance: "2729.43",
+        liabilityLastFetchedAt: fetchedAt,
+      },
+    ]);
+    // Force the depository sub-account into the discovery set via a
+    // transaction tagged source=amex (mirrors the real-world bug:
+    // institution_slug discovery picks both up).
+    await db.insert(transactionsTable).values([
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-04-10",
+        description: "Amex card charge",
+        amount: "-50.00",
+        source: "plaid:amex",
+        plaidAccountId: `acct-card-${suffix}`,
+      },
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-04-10",
+        description: "HYSA interest",
+        amount: "1.50",
+        source: "plaid:amex",
+        plaidAccountId: `acct-hysa-${suffix}`,
+      },
+    ]);
+
+    const res = await fetch(`${baseUrl}/amex/anchor`);
+    const body = (await res.json()) as {
+      amexEndingBalance: number;
+      source: string;
+    };
+    expect(body.source).toBe("plaid");
+    // Only the credit-card debt counts — depository cash is excluded.
+    expect(body.amexEndingBalance).toBeCloseTo(1500.0, 2);
+  });
+
   it("returns missing when Plaid accounts exist but liability balances are null", async () => {
     const suffix = randomUUID().slice(0, 8);
     const [item] = await db

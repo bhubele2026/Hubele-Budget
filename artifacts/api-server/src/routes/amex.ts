@@ -213,6 +213,19 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   // races), and the user has explicitly asked that the Amex Ending
   // Balance come from the Plaid connection — Plaid is the source of
   // truth here, the debt row is just a convenience cache.
+  //
+  // (#651) Filter the sum to *credit/loan* accounts only. The
+  // discovery set above (txn-derived ∪ institution-slug-derived) can
+  // pull in non-debt sub-accounts on the same Amex login (Membership
+  // Rewards / High-Yield Savings / brokerage cash). Their
+  // `liability_balance` column may be populated from /accounts/get's
+  // generic balance (positive cash) and would otherwise be summed in
+  // alongside the credit-card debt — yielding a wrong, often
+  // negative-signed Ending Balance because cash partially offsets
+  // owed-debt. Restrict to `type IN ('credit','loan')` (or to rows
+  // where `liability_kind` is set, which only happens for accounts
+  // the liabilities-product run actually classified) so cash sub-
+  // accounts can never poison the sum.
   if (amexPlaidAccountIds.length > 0) {
     const balRows = await db
       .select({
@@ -224,6 +237,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
         and(
           eq(plaidAccountsTable.householdId, householdId),
           inArray(plaidAccountsTable.accountId, amexPlaidAccountIds),
+          sql`(${plaidAccountsTable.type} in ('credit','loan') or ${plaidAccountsTable.liabilityKind} is not null)`,
         ),
       );
     let total = 0;

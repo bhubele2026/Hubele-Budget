@@ -2169,6 +2169,42 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
     const results = itemId
       ? [await syncPlaidItem(req.userId!, String(itemId))]
       : await syncAllForUser(req.userId!, req.householdId!);
+    // (#651) The Amex page's "Refresh from Plaid" button calls this
+    // endpoint expecting the live Plaid liability balance to update too
+    // — but `syncPlaidItem` only walks /transactions/sync. Without a
+    // companion liabilities fetch, `plaid_accounts.liability_balance` and
+    // `liability_last_fetched_at` stay stale and the Amex Ending Balance
+    // tile reads "Updated 1 week ago" right after the user clicks
+    // refresh. Trigger `fetchLiabilitiesForItem` for every successfully
+    // synced item that has at least one debt-eligible account on file —
+    // this naturally skips bank-only items so we don't waste a Plaid
+    // call (and avoid the INVALID_PRODUCT error spam from clients
+    // without the liabilities product enabled). Each call is best-
+    // effort: a per-item failure must not 500 the sync response since
+    // the transactions sync already succeeded.
+    for (const r of results) {
+      if (r.error) continue;
+      if (!r.plaidItemRowId) continue;
+      const [hasLiabilityAcct] = await db
+        .select({ id: plaidAccountsTable.id })
+        .from(plaidAccountsTable)
+        .where(
+          and(
+            eq(plaidAccountsTable.itemId, r.plaidItemRowId),
+            sql`(${plaidAccountsTable.type} in ('credit','loan') or ${plaidAccountsTable.liabilityKind} is not null)`,
+          ),
+        )
+        .limit(1);
+      if (!hasLiabilityAcct) continue;
+      try {
+        await fetchLiabilitiesForItem(req.userId!, r.plaidItemRowId);
+      } catch (liabErr) {
+        req.log.warn(
+          { err: liabErr, plaidItemRowId: r.plaidItemRowId },
+          "fetchLiabilitiesForItem after /plaid/sync failed — Ending Balance tile may stay stale until next refresh",
+        );
+      }
+    }
     res.json({ items: results });
   } catch (e) {
     const { message: msg } = extractPlaidError(e);
