@@ -471,11 +471,19 @@ export async function computeCashSignal(
     // DRAG-TO-TODAY RULE: a pending plan dated ON OR BEFORE the bank
     // snapshot that the user has NOT matched / marked missed / skipped
     // is still an outstanding obligation. Snap its effective date
-    // forward to fromISO (today by default) so it appears as a real
-    // dip on the current day instead of silently disappearing into
-    // history. The user can clear the dip by matching it to a real
-    // bank txn, or by hitting "Mark missed" / "Skip" in the
-    // planned-items register.
+    // forward to MAX(today, fromISO) so it appears as a real dip on
+    // the CURRENT day (not on the snapshot date, and not on the
+    // chart's first day if that's earlier than today). The user can
+    // clear the dip by matching it to a real bank txn, or by hitting
+    // "Mark missed" / "Skip" in the planned-items register.
+    //
+    // Why MAX(today, fromISO) and not just fromISO: when the user
+    // views a chart whose fromDate is BEFORE today (e.g. fromDate =
+    // first of the month, today = the 14th), the snapshot value IS
+    // the truth for every day from fromDate up to and including the
+    // snapshot date. Dragging the dip back to fromDate would dip the
+    // line on a day the bank has already confirmed was flat. Today
+    // is the earliest day the dip can legitimately appear.
     //
     // NOTE: plans dated AFTER the snapshot but BEFORE fromISO (i.e.
     // when the user is viewing a fromDate well past the snapshot) are
@@ -483,14 +491,19 @@ export async function computeCashSignal(
     // roll-forward into `startingBalance` (see below). That preserves
     // the existing semantics for "view chart starting from <future
     // date>" where pre-window plans should be assumed to post.
+    const todayISO = fmtISO(todayDateOnly);
+    const dragTargetISO = todayISO > fromISO ? todayISO : fromISO;
     let effectiveDate = rawEffectiveDate;
     if (snapshotISO) {
-      if (effectiveDate <= snapshotISO && effectiveDate < fromISO) {
-        effectiveDate = fromISO;
+      if (effectiveDate <= snapshotISO && effectiveDate < dragTargetISO) {
+        effectiveDate = dragTargetISO;
       }
     } else if (effectiveDate < fromISO) {
-      // No-snapshot fallback: surface pre-window pending plans as a
+      // No-snapshot fallback: surface PRE-WINDOW pending plans as a
       // day-0 dip rather than silently shrinking startingBalance.
+      // Intentionally still keyed off fromISO (not dragTargetISO) so
+      // in-window past dates keep their original date — without a
+      // snapshot we have no proof the line was flat through them.
       effectiveDate = fromISO;
     }
     items.push({ date: effectiveDate, amount: ev.amount, matched: false });

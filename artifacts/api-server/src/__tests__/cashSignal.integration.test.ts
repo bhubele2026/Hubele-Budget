@@ -12,6 +12,8 @@ import {
   beforeAll,
   afterAll,
   beforeEach,
+  afterEach,
+  vi,
 } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
@@ -52,13 +54,27 @@ async function cleanup(): Promise<void> {
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
 }
 
+// (#650) Pin "now" so the drag-to-today rule is deterministic across
+// CI runs. Without this, every test that has a snapshot/fromDate in
+// the past silently behaves differently depending on what day the
+// suite happens to run — and the production scenario regression below
+// can only assert "today = 2026-05-14" if `new Date()` reports it.
+const PINNED_NOW = new Date("2026-05-14T12:00:00Z");
+
 beforeAll(async () => {
   const _h = await createTestHousehold(TEST_USER);
   TEST_HOUSEHOLD_ID = _h.householdId;
   await cleanup();
 });
 afterAll(cleanup);
-beforeEach(cleanup);
+beforeEach(async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(PINNED_NOW);
+  await cleanup();
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 async function setSettings(opts: {
   balance?: string | null;
@@ -101,21 +117,26 @@ async function addRecurring(
 }
 
 describe("computeCashSignal — snapshot anchoring", () => {
-  it("drag-to-today: pre-snapshot pending plans get pulled forward to fromDate so they dip the current day", async () => {
-    // User's Real Scenario (#h2budget): bank snapshot $3,248.68 on
-    // May 13 from Plaid; two unmatched pending plans dated May 13
-    // (Mortgage -$1,989.81 and Capital One -$38.00). The chart was
-    // dating that drop on May 13 itself, which is wrong — the snapshot
-    // IS the truth for May 13. Per user, those still-outstanding
-    // obligations should drag the CURRENT DAY (fromDate, today) so
-    // the user can see their true exposure until they match the txn
-    // or hit "Mark missed" / "Skip".
+  it("drag-to-today: pre-snapshot pending plans get pulled to TODAY (not fromDate, not snapshot date) when fromDate < today", async () => {
+    // User's Real Scenario (#650): bank snapshot $3,248.68 on
+    // May 13 from Plaid; two unmatched pending plans dated on/before
+    // May 13 (Mortgage -$1,989.81 on 05-13, Capital One -$38.00 on
+    // 05-10). The user views the chart with fromDate = May 1 (start
+    // of month) and today = May 14.
+    //
+    // Wrong shapes we've shipped before:
+    //   - dip on the SNAPSHOT date (May 13) → wrong: the snapshot IS
+    //     the bank's truth for May 13, the line must be flat there.
+    //   - dip on FROMDATE (May 1) → wrong: the snapshot proves the
+    //     line was flat from May 1 through May 13.
+    //
+    // Right shape: line flat at $3,248.68 from May 1 through May 13,
+    // drops to $1,220.87 on May 14 (today).
     await setSettings({
       balance: "3248.68",
       at: new Date("2026-05-13T12:00:00Z"),
       cashBuffer: "500",
     });
-    // Two pre-snapshot pending plans (one on snapshot day, one before).
     await addRecurring({
       frequency: "onetime",
       anchorDate: "2026-05-13",
@@ -128,40 +149,63 @@ describe("computeCashSignal — snapshot anchoring", () => {
     });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-01",
+      horizonDays: 30,
+    });
+
+    // Starting balance reflects the snapshot — pre-snapshot plans were
+    // NOT consumed by the pre-window roll-forward; they wait for today.
+    expect(sig.startingBalance).toBe("3248.68");
+    // Every day from fromDate (05-01) through the snapshot date
+    // (05-13) is flat at the snapshot value.
+    const daily = sig.daily ?? [];
+    const flatRange = daily.filter(
+      (d) => d.date >= "2026-05-01" && d.date <= "2026-05-13",
+    );
+    expect(flatRange.length).toBe(13);
+    for (const d of flatRange) {
+      expect(d.balance).toBe("3248.68");
+    }
+    // Today (05-14) takes the full hit: 3248.68 - 1989.81 - 38.00.
+    const today = daily.find((d) => d.date === "2026-05-14");
+    expect(today?.balance).toBe("1220.87");
+    expect(sig.lowestProjected).toBe("1220.87");
+    expect(sig.lowestDate).toBe("2026-05-14");
+    // Both expense events surface as markers on TODAY, not on their
+    // original pre-snapshot dates.
+    const eventDates = (sig.events ?? []).map((e) => e.date);
+    expect(eventDates.filter((d) => d === "2026-05-14").length).toBe(2);
+    expect(eventDates).not.toContain("2026-05-13");
+    expect(eventDates).not.toContain("2026-05-10");
+  });
+
+  it("drag-to-today: when fromDate == today, pending plans still snap to today", async () => {
+    // Sanity case for the existing "view chart starting today"
+    // shape — drag target is MAX(today, fromISO) = today either way.
+    await setSettings({
+      balance: "3248.68",
+      at: new Date("2026-05-13T12:00:00Z"),
+      cashBuffer: "500",
+    });
+    await addRecurring({
+      frequency: "onetime",
+      anchorDate: "2026-05-13",
+      amount: "1989.81",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-05-14",
       horizonDays: 14,
     });
 
-    // Starting balance reflects the snapshot — pre-window plans were
-    // dragged FORWARD into the window, not backward into the
-    // pre-window roll-up.
     expect(sig.startingBalance).toBe("3248.68");
-    // Day-0 (today) takes the full hit: 3248.68 - 1989.81 - 38.00.
     expect(sig.daily?.[0]).toEqual({
       date: "2026-05-14",
-      balance: "1220.87",
+      balance: "1258.87",
     });
-    expect(sig.lowestProjected).toBe("1220.87");
-    expect(sig.lowestDate).toBe("2026-05-14");
-    // Both expense events surface as markers on today, not on their
-    // original pre-snapshot dates.
-    const todayEvents = (sig.events ?? []).filter(
-      (e) => e.date === "2026-05-14",
-    );
-    expect(todayEvents.length).toBe(2);
-    for (const e of todayEvents) {
-      expect(e.date).toBe("2026-05-14");
-    }
   });
 
-  it("matched/missed/skipped pre-snapshot plans do NOT drag the current day", async () => {
-    // Counterpart to the drag test: once the user reconciles a pending
-    // plan, it must vanish from the chart entirely. We can't easily
-    // create a real ledger match here, but the missed/skipped paths
-    // already exist on the recurring item itself for one-time plans —
-    // verify by adding a plan and simulating it via the
-    // missedPlanKeys path indirectly by NOT adding any recurring
-    // plans (no plans → no drag).
+  it("drag-to-today: with no pending plans, the chart stays flat at the snapshot value", async () => {
     await setSettings({
       balance: "3248.68",
       at: new Date("2026-05-13T12:00:00Z"),
@@ -177,6 +221,42 @@ describe("computeCashSignal — snapshot anchoring", () => {
       balance: "3248.68",
     });
     expect(sig.lowestProjected).toBe("3248.68");
+  });
+
+  it("drag-to-today: when fromDate > today, post-snapshot pre-from plans flow to roll-forward (NOT to today, NOT to fromDate)", async () => {
+    // Locks the "view chart starting from a future date" branch.
+    // Setup: snapshot on 04-01, today=05-14 (pinned), fromDate=06-01.
+    // A plan dated 04-15 is AFTER the snapshot but BEFORE fromDate;
+    // it must be consumed by the pre-window roll-forward into
+    // startingBalance, not dragged to today (05-14) or fromDate (06-01).
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-04-01T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await addRecurring({
+      frequency: "onetime",
+      anchorDate: "2026-04-15",
+      amount: "300",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-06-01",
+      horizonDays: 30,
+    });
+
+    // Plan was consumed by the pre-window roll-forward → starting
+    // balance is reduced, no day-0 dip, no today (05-14) dip.
+    expect(sig.startingBalance).toBe("700.00");
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-06-01",
+      balance: "700.00",
+    });
+    expect(sig.projectedExpenses).toBe("0.00");
+    const eventDates = (sig.events ?? []).map((e) => e.date);
+    expect(eventDates).not.toContain("2026-04-15");
+    expect(eventDates).not.toContain("2026-05-14");
+    expect(eventDates).not.toContain("2026-06-01");
   });
 
   it("rolls the balance forward from anchor up to fromDate when fromDate > snapshot date", async () => {
