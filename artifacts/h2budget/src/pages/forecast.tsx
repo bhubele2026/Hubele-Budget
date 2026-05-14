@@ -2305,12 +2305,38 @@ export default function ForecastPage({
   const proj = cashProjection;
   const endingNum = proj?.endingBalance ? Number(proj.endingBalance) : NaN;
   const lowestNum = proj?.lowestProjected ? Number(proj.lowestProjected) : NaN;
+  // Merge the actual `daily` series with the parallel "with pending"
+  // branch line so Recharts can render both as overlaid <Area>s. The
+  // with-pending series matches `daily` for pre-snapshot dates and
+  // diverges on/after the snapshot — see cashSignal.ts dailyWithPending.
+  const projAny = proj as
+    | (typeof proj & {
+        dailyWithPending?: Array<{ date: string; balance: string }>;
+        pendingPreSnapshotImpact?: string;
+      })
+    | undefined;
+  const dailyWithPendingByDate = new Map(
+    (projAny?.dailyWithPending ?? []).map((d) => [d.date, Number(d.balance)]),
+  );
+  const pendingImpactNum = projAny?.pendingPreSnapshotImpact
+    ? Number(projAny.pendingPreSnapshotImpact)
+    : 0;
+  const hasPendingBranch =
+    Number.isFinite(pendingImpactNum) && pendingImpactNum < 0;
   const dailySeries = (proj?.daily ?? [])
-    .map((d: { date: string; balance: string | number }) => ({
-      date: shortDate(d.date),
-      rawDate: d.date,
-      balance: Number(d.balance),
-    }))
+    .map((d: { date: string; balance: string | number }) => {
+      const baseBalance = Number(d.balance);
+      const branchBalance = dailyWithPendingByDate.get(d.date);
+      return {
+        date: shortDate(d.date),
+        rawDate: d.date,
+        balance: baseBalance,
+        balanceWithPending:
+          hasPendingBranch && branchBalance !== undefined
+            ? branchBalance
+            : null,
+      };
+    })
     .filter((d) => Number.isFinite(d.balance));
   const cashBufferNum = proj?.cashBuffer ? Number(proj.cashBuffer) : NaN;
   const lowestPoint = (() => {
@@ -2657,10 +2683,18 @@ export default function ForecastPage({
                   content={({ active, payload }: { active?: boolean; payload?: any[] }) => {
                     if (!active || !payload || payload.length === 0) return null;
                     const p = payload[0]?.payload as
-                      | { rawDate?: string; balance?: number }
+                      | {
+                          rawDate?: string;
+                          balance?: number;
+                          balanceWithPending?: number | null;
+                        }
                       | undefined;
                     const rawDate = p?.rawDate;
                     const balance = Number(p?.balance);
+                    const balanceWithPending =
+                      p?.balanceWithPending != null
+                        ? Number(p.balanceWithPending)
+                        : null;
                     const marker = rawDate ? bigBillByDate.get(rawDate) : undefined;
                     const dayEvents = rawDate ? eventsByDate.get(rawDate) : undefined;
                     const dayTotal = dayEvents
@@ -2689,6 +2723,24 @@ export default function ForecastPage({
                               : "—"}
                           </span>
                         </div>
+                        {balanceWithPending != null &&
+                          Number.isFinite(balanceWithPending) &&
+                          balanceWithPending !== balance && (
+                            <div
+                              style={{
+                                marginTop: 2,
+                                color: "hsl(var(--destructive))",
+                              }}
+                              data-testid="tooltip-with-pending"
+                            >
+                              If pending posts:{" "}
+                              <span
+                                style={{ fontVariantNumeric: "tabular-nums" }}
+                              >
+                                {formatCurrency(balanceWithPending)}
+                              </span>
+                            </div>
+                          )}
                         {dayEvents && dayEvents.length > 0 && rawDate && (
                           <div style={{ marginTop: 6 }}>
                             <div
@@ -2767,6 +2819,20 @@ export default function ForecastPage({
                   name="Projected balance"
                   isAnimationActive={false}
                 />
+                {hasPendingBranch && (
+                  <Area
+                    type="monotone"
+                    dataKey="balanceWithPending"
+                    stroke="hsl(var(--destructive))"
+                    strokeWidth={2}
+                    strokeDasharray="5 4"
+                    fill="none"
+                    name="If pending posts"
+                    isAnimationActive={false}
+                    connectNulls={false}
+                    data-testid="area-with-pending"
+                  />
+                )}
                 {Number.isFinite(cashBufferNum) && (
                   <ReferenceLine
                     y={cashBufferNum}

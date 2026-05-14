@@ -178,6 +178,34 @@ describe("computeCashSignal — snapshot anchoring", () => {
     // The chart's lowest must not be below the snapshot value when no
     // post-snapshot plans drag it.
     expect(Number(sig.lowestProjected)).toBeGreaterThanOrEqual(3248.68);
+
+    // PARALLEL "with pending" branch line: pre-snapshot dates equal
+    // the main line; on/after snapshot date the pending impact is
+    // applied so the user sees "if pending posts, you'd land here".
+    expect(sig.pendingPreSnapshotImpact).toBe("-741.12");
+    const wp = sig.dailyWithPending ?? [];
+    expect(wp.length).toBe((sig.daily ?? []).length);
+    const wpBeforeSnap = wp.filter((d) => d.date < "2026-05-13");
+    for (const d of wpBeforeSnap) expect(d.balance).toBe("3248.68");
+    const wpOnSnap = wp.find((d) => d.date === "2026-05-13");
+    expect(wpOnSnap?.balance).toBe("2507.56"); // 3248.68 - 741.12
+    expect(Number(sig.lowestProjectedWithPending)).toBeCloseTo(2507.56, 2);
+    expect(sig.lowestDateWithPending).toBe("2026-05-13");
+  });
+
+  it("when there are no pre-snapshot pending plans, dailyWithPending equals daily and pendingPreSnapshotImpact is 0", async () => {
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-04-15T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-04-15",
+      horizonDays: 14,
+    });
+    expect(sig.pendingPreSnapshotImpact).toBe("0.00");
+    expect(sig.dailyWithPending).toEqual(sig.daily);
+    expect(sig.lowestProjectedWithPending).toBe(sig.lowestProjected);
   });
 
   it("rolls the balance forward from anchor up to fromDate when fromDate > snapshot date", async () => {
