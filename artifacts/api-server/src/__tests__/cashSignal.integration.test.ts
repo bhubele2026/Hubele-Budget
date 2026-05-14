@@ -101,17 +101,24 @@ async function addRecurring(
 }
 
 describe("computeCashSignal — snapshot anchoring", () => {
-  it("same-day-as-snapshot pending plans continue to drag the projection (drag-until-matched)", async () => {
+  it("snapshot wins: plan occurrences dated on/before the bank snapshot do NOT drag the projection", async () => {
+    // User's Real Scenario (#h2budget): bank snapshot $3,248.68 on
+    // May 13 from Plaid; chart was showing "Lowest $2,507 · May 13"
+    // because four unmatched pending plans dated <= May 13 were being
+    // subtracted from the snapshot value. The snapshot IS the truth
+    // for its date; plans dated on/before the snapshot must not drag
+    // the chart line below the actual bank balance. Pre-snapshot
+    // pending plans remain visible in the planned-items register so
+    // the user can match / mark missed / skip them — but they no
+    // longer synthesize a fake past trajectory.
     await setSettings({
       balance: "1000",
       at: new Date("2026-04-15T12:00:00Z"),
       cashBuffer: "0",
     });
-    // Monthly $200 on the 15th. Within the test window the expansion
-    // produces 2026-04-15 and 2026-05-15. Both should drag — the user
-    // hasn't matched, missed, or skipped the 04-15 occurrence so the
-    // projection treats it as still owed (mirrors the "Pending plan"
-    // row the user sees in the Forecast register on the snapshot day).
+    // Monthly $200 on the 15th. Expansion in this window produces
+    // 2026-04-15 (snapshot day) and 2026-05-15 (post-snapshot). Only
+    // 05-15 should drag — 04-15 is suppressed by snapshot-wins.
     await addRecurring({ dayOfMonth: 15, amount: "200" });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
@@ -120,14 +127,57 @@ describe("computeCashSignal — snapshot anchoring", () => {
     });
 
     expect(sig.bankToday).toBe("1000.00");
+    // On the snapshot day (chart's first day here), balance equals the
+    // snapshot — pre/same-day plans are suppressed.
     expect(sig.startingBalance).toBe("1000.00");
-    // Both 04-15 and 05-15 drag.
-    expect(sig.endingBalance).toBe("600.00");
-    expect(sig.lowestProjected).toBe("600.00");
+    expect(sig.daily?.[0]).toEqual({ date: "2026-04-15", balance: "1000.00" });
+    // Only the post-snapshot 05-15 occurrence drags.
+    expect(sig.endingBalance).toBe("800.00");
+    expect(sig.lowestProjected).toBe("800.00");
     expect(sig.lowestDate).toBe("2026-05-15");
-    expect(sig.projectedExpenses).toBe("400.00");
+    expect(sig.projectedExpenses).toBe("200.00");
     expect(sig.projectedIncome).toBe("0.00");
     expect(sig.snapshotAt).not.toBeNull();
+  });
+
+  it("snapshot wins even when fromDate is BEFORE the snapshot (chart's pre-snapshot section is flat at snapshot value)", async () => {
+    // Reproduces the production chart shape: fromDate = May 1, snapshot
+    // = May 13. The pre-snapshot section (May 1 - May 13) was being
+    // synthesized by walking the May-13 snapshot value backwards and
+    // subtracting unmatched pre-snapshot pending plans, producing a
+    // fictional dip. Now the chart line stays flat at the snapshot
+    // value through the snapshot date, then projects forward from
+    // there.
+    await setSettings({
+      balance: "3248.68",
+      at: new Date("2026-05-13T12:00:00Z"),
+      cashBuffer: "500",
+    });
+    // A pre-snapshot pending plan on 05-10 (still unmatched) — the
+    // bug was that this dragged the May 1-13 line down by $741.
+    await addRecurring({
+      frequency: "onetime",
+      anchorDate: "2026-05-10",
+      amount: "741.12",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-01",
+      horizonDays: 60,
+    });
+
+    // Pre-snapshot pending plan must NOT drag the projection.
+    expect(sig.startingBalance).toBe("3248.68");
+    // Every day from fromDate through the snapshot date equals the
+    // snapshot value — no fake dip below it.
+    const through13 = (sig.daily ?? []).filter((d) => d.date <= "2026-05-13");
+    expect(through13.length).toBeGreaterThan(0);
+    for (const d of through13) {
+      expect(d.balance).toBe("3248.68");
+    }
+    // The chart's lowest must not be below the snapshot value when no
+    // post-snapshot plans drag it.
+    expect(Number(sig.lowestProjected)).toBeGreaterThanOrEqual(3248.68);
   });
 
   it("rolls the balance forward from anchor up to fromDate when fromDate > snapshot date", async () => {

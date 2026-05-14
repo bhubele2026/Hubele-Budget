@@ -207,11 +207,16 @@ function r2(n: number): string {
 /**
  * Compute the cash signal: today's bank balance + projection of lowest balance.
  *
- * Anchored on the bank snapshot when present:
+ * Anchored on the bank snapshot when present (SNAPSHOT-WINS rule):
  *   - Skip checking transactions on/before the snapshot date (already counted).
- *   - Pending planned events on the snapshot date continue to drag the
- *     projection (drag-until-matched). The user must explicitly match,
- *     mark missed, or skip an occurrence to remove it from the chart.
+ *   - Skip planned events dated on/before the snapshot date — the snapshot
+ *     is the source of truth for those dates. Pre-snapshot pending plans
+ *     remain visible in the planned-items register so the user can match,
+ *     mark missed, or skip them, but they no longer drag the chart line
+ *     below the actual bank balance.
+ *   - Post-snapshot planned events project forward and drag the line
+ *     until the user matches them to a real bank txn (or marks
+ *     missed/skipped).
  */
 export async function computeCashSignal(
   householdId: string,
@@ -462,31 +467,24 @@ export async function computeCashSignal(
     // Plans the user explicitly marked missed/dismissed are likewise
     // dropped — the user has acknowledged they won't post.
     if (missedPlanKeys.has(origKey)) continue;
-    // NOTE: previously we dropped same-day-as-snapshot occurrences as
-    // "already baked into the snapshot balance." That collapsed pending
-    // plans dated on the snapshot day (e.g. a Mortgage due today that
-    // hasn't actually posted yet) into invisible $0 contributors, which
-    // contradicts the user's "drag until matched/missed/skipped" model.
-    // Now: same-day pending plans continue to drag the projection until
-    // the user explicitly matches, marks missed, or skips them. If the
-    // bank snapshot already reflected the txn, the user matches the
-    // plan to that bank txn — the matchedPlanKeys check above then
-    // suppresses the drag and avoids double-counting.
-    // Past-dated plans (strictly before the snapshot) that are still in
-    // "pending" status — not matched to a bank txn, not skipped, not
-    // marked missed — continue to weigh on the projection. We keep the
-    // event on its ORIGINAL date when that date is inside the chart
-    // window so the drag shows up as a visible dip on the same day the
-    // user sees the "Pending plan" row. Only when the original date is
-    // earlier than the chart's first day do we snap forward to fromISO,
-    // landing the drag as a day-0 dip rather than silently shrinking
-    // the pre-window starting balance.
+    // SNAPSHOT-WINS RULE: any plan occurrence dated ON OR BEFORE the
+    // bank snapshot is suppressed from the projection — the snapshot
+    // already represents what actually happened on that date, so
+    // subtracting unmatched pending plans from it would synthesize a
+    // fake past trajectory below the real bank balance (e.g. chart
+    // showing "Lowest $2,507 on May 13" when the bank actually closed
+    // May 13 at $3,248 because four old pending plans had not been
+    // matched yet). Pre-snapshot pending plans the user still needs to
+    // address remain visible in the planned-items register so they can
+    // be reviewed (matched / marked missed / skipped) — they just no
+    // longer drag the chart line below the snapshot.
     let effectiveDate = rawEffectiveDate;
+    if (snapshotISO && effectiveDate <= snapshotISO) continue;
     if (effectiveDate < anchorISO && effectiveDate < fromISO) {
-      // Past-of-snapshot pending plan dated even before the chart's
-      // first day — snap forward to fromISO so the drag is at least
-      // visible as a day-0 dip rather than silently shrinking the
-      // pre-window starting balance.
+      // No-snapshot fallback path: snap pre-window pending plans
+      // forward to fromISO so the drag is at least visible as a day-0
+      // dip rather than silently shrinking the pre-window starting
+      // balance.
       effectiveDate = fromISO;
     }
     items.push({ date: effectiveDate, amount: ev.amount, matched: false });
