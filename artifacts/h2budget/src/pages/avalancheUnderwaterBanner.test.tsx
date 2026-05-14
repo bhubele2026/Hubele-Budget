@@ -306,10 +306,12 @@ describe("Avalanche manual-extra slider — clamping", () => {
     expect(slider!.getAttribute("aria-valuemin")).toBe("0");
 
     // The cap label is rendered next to the slider, regardless of the much
-    // larger availableMoney value.
-    expect(screen.getByText("$5,000.00/mo")).toBeTruthy();
+    // larger availableMoney value. Since the live readout splits the value
+    // and the cap across spans, match against the combined text content.
+    const liveLabel = screen.getByTestId("text-avalanche-budget-live");
+    expect(liveLabel.textContent ?? "").toContain("$5,000.00/mo");
     // availableMoney = $100k must NOT appear as a slider ceiling label.
-    expect(screen.queryByText("$100,000.00/mo")).toBeNull();
+    expect(liveLabel.textContent ?? "").not.toContain("$100,000.00");
   });
 
   it("keeps the slider max at $5,000 even when availableMoney is tiny", () => {
