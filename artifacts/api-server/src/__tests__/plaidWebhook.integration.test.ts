@@ -77,10 +77,16 @@ let TEST_HOUSEHOLD_ID: string;
 // Disable webhook signature verification for this suite — the verifier path
 // is exercised separately in plaidWebhookVerify.unit.test.ts.
 process.env.PLAID_WEBHOOK_VERIFICATION_DISABLED = "true";
-// Use a small but non-zero debounce window so a burst of webhooks fired
-// concurrently in a test all land before the timer fires. Tests then call
-// `_flushPlaidSyncSchedulerForTests()` to drain it immediately.
-process.env.PLAID_SYNC_DEBOUNCE_MS = "100";
+// Use a large debounce window so the timer never fires on its own during
+// a test — every burst of webhooks must land in `scheduleSyncForItem`
+// before any sync starts. Tests then call
+// `_flushPlaidSyncSchedulerForTests()` which clears the timer and runs
+// the pending sync immediately. A small debounce (e.g. 100ms) was flaky
+// because under DB I/O load some of the concurrent webhook handlers took
+// longer than the debounce to reach `scheduleSyncForItem`, so the timer
+// fired mid-burst, started one sync, and the late webhooks queued a
+// trailing rerun — yielding two syncPlaidItem calls instead of one.
+process.env.PLAID_SYNC_DEBOUNCE_MS = "60000";
 
 const app = express();
 app.use(express.json());
