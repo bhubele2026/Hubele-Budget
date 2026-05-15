@@ -13,10 +13,15 @@
 --   stamps the reauth columns immediately so the Reconnect button
 --   lights up on the next page load with no waiting.
 --
--- Idempotent: only updates rows whose env-prefix doesn't match the
--- target env AND whose lastSyncErrorCode is currently null or already
--- INVALID_ACCESS_TOKEN. Re-running is a no-op once the user reconnects
--- (the new token's prefix matches and the WHERE clause excludes it).
+-- Idempotent: updates EVERY row whose access_token env-prefix doesn't
+-- match the target env, regardless of any prior lastSyncErrorCode
+-- (architect feedback on #654 — narrower predicates left rows that
+-- happened to carry an unrelated stale error code unremediated, so
+-- their Reconnect button wouldn't appear until the next failed sync).
+-- Re-running is a no-op once the user reconnects, because the new
+-- token's prefix will match target_env and the WHERE clause skips it.
+-- It is also a no-op for rows already stamped to the canonical state
+-- (same code + same message) thanks to IS DISTINCT FROM guards.
 --
 -- :target_env defaults to 'production' below — match the live server's
 -- PLAID_ENV. Override at runtime with:
@@ -42,8 +47,9 @@ BEGIN
       AND access_token !~ ('^access-' || target_env || '-')
       AND access_token ~ '^access-(sandbox|development|production)-'
       AND (
-        last_sync_error_code IS NULL
-        OR last_sync_error_code = 'INVALID_ACCESS_TOKEN'
+        last_sync_error_code IS DISTINCT FROM 'INVALID_ACCESS_TOKEN'
+        OR last_sync_error IS DISTINCT FROM
+          'This bank was linked from a different Plaid environment. Please reconnect to refresh.'
       )
     RETURNING id, institution_name
   )
