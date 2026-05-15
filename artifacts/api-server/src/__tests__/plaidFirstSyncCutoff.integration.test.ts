@@ -569,4 +569,152 @@ describe("(#361) Plaid first-sync import cutoff", () => {
     );
     expect(bad.status).toBe(400);
   });
+
+  // (#662) Regression coverage: after a relink mints fresh
+  // plaid_accounts rows (firstSyncCompletedAt = null, fresh
+  // importCutoffDate ≈ today), Plaid's pending charges carry an
+  // authorization date a day or two old. The pre-fix gate skipped
+  // every one of them — bank showed pending, app showed nothing,
+  // Sync toast said "0 added". Pending rows now bypass the gate
+  // entirely; posted rows still respect it.
+  it("(#662) inserts pending Plaid rows on first sync even when t.date <= cutoff (posted rows still gated)", async () => {
+    const { itemRowId, acctRowId, externalAcctId } =
+      await seedAmexCardScenario({
+        withLinkedDebt: true,
+        manualDates: ["2026-02-28"],
+      });
+    await autoDetectCutoffsForItem(TEST_USER, itemRowId, "amex");
+    // Cutoff is "2026-02-28" (newest manual). The pending row dated
+    // "2026-02-20" is BEFORE cutoff, no manual match at $502 — pre-fix
+    // it would have been silently skipped. Post-fix it MUST insert.
+    // The posted row dated "2026-02-10" with no manual match MUST
+    // still be skipped (gate behavior unchanged for non-pending).
+    nextSyncResponse = {
+      added: [
+        {
+          transaction_id: "plaid-pending-venmo",
+          account_id: externalAcctId,
+          date: "2026-02-20",
+          amount: 502.0,
+          name: "VENMO PAYMENT (pending)",
+          pending: true,
+        },
+        {
+          transaction_id: "plaid-posted-old",
+          account_id: externalAcctId,
+          date: "2026-02-10",
+          amount: 9.99,
+          name: "Old posted purchase, no manual match",
+          pending: false,
+        },
+        {
+          transaction_id: "plaid-posted-new",
+          account_id: externalAcctId,
+          date: "2026-03-05",
+          amount: 7.5,
+          name: "New posted purchase after cutoff",
+          pending: false,
+        },
+      ],
+      modified: [],
+      removed: [],
+    };
+    const result = await syncPlaidItem(TEST_USER, itemRowId);
+
+    const txns = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    const plaidIds = txns
+      .map((t) => t.plaidTransactionId)
+      .filter((x): x is string => x !== null)
+      .sort();
+    // Pending row inserted despite t.date <= cutoff. Posted-after-
+    // cutoff row inserted (normal path). Posted-before-cutoff row
+    // skipped (gate still applies to non-pending).
+    expect(plaidIds).toEqual(["plaid-pending-venmo", "plaid-posted-new"]);
+
+    // The pending row carries the "[pending]" notes marker so the
+    // pending→posted reconciliation later updates it in place.
+    const pending = txns.find(
+      (t) => t.plaidTransactionId === "plaid-pending-venmo",
+    );
+    expect(pending).toBeDefined();
+    expect(pending!.notes).toBe("[pending]");
+    expect(pending!.amount).toBe("-502.00");
+
+    // Manual row preserved.
+    expect(txns.filter((t) => t.source === "manual")).toHaveLength(1);
+
+    // Result surfaces the skipped count — observability hook.
+    expect(result.skippedPreCutoff).toBe(1);
+
+    // First-sync gate stays "completed" after this run.
+    const [acct] = await db
+      .select()
+      .from(plaidAccountsTable)
+      .where(eq(plaidAccountsTable.id, acctRowId));
+    expect(acct.firstSyncCompletedAt).not.toBeNull();
+  });
+
+  // (#662) Lifecycle: the pending row's later posted twin (same
+  // transaction_id, pending=false) arrives as a `modified` row,
+  // which the gate already bypasses. The same DB row updates in
+  // place via onConflictDoUpdate — no duplicate.
+  it("(#662) pending→posted converges on a single row via the modified path", async () => {
+    const { itemRowId, externalAcctId } = await seedAmexCardScenario({
+      withLinkedDebt: true,
+      manualDates: ["2026-02-28"],
+    });
+    await autoDetectCutoffsForItem(TEST_USER, itemRowId, "amex");
+    nextSyncResponse = {
+      added: [
+        {
+          transaction_id: "plaid-pending-then-posted",
+          account_id: externalAcctId,
+          date: "2026-02-25",
+          amount: 85.0,
+          name: "VENMO CASHOUT (pending)",
+          pending: true,
+        },
+      ],
+      modified: [],
+      removed: [],
+    };
+    await syncPlaidItem(TEST_USER, itemRowId);
+    let txns = await db
+      .select()
+      .from(transactionsTable)
+      .where(
+        eq(transactionsTable.plaidTransactionId, "plaid-pending-then-posted"),
+      );
+    expect(txns).toHaveLength(1);
+    expect(txns[0]!.notes).toBe("[pending]");
+
+    // Plaid replays the same transaction_id as `modified`, now
+    // posted. The cursor moves; gate doesn't re-engage on modified.
+    nextSyncResponse = {
+      added: [],
+      modified: [
+        {
+          transaction_id: "plaid-pending-then-posted",
+          account_id: externalAcctId,
+          date: "2026-02-25",
+          amount: 85.0,
+          name: "VENMO CASHOUT",
+          pending: false,
+        },
+      ],
+      removed: [],
+    };
+    await syncPlaidItem(TEST_USER, itemRowId);
+    txns = await db
+      .select()
+      .from(transactionsTable)
+      .where(
+        eq(transactionsTable.plaidTransactionId, "plaid-pending-then-posted"),
+      );
+    expect(txns).toHaveLength(1);
+    expect(txns[0]!.notes).toBeNull();
+  });
 });

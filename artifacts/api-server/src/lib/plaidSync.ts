@@ -141,6 +141,16 @@ export type SyncResult = {
   // newer charge from a different bank. Null when this run touched no
   // rows (or on the failure / still-preparing branches).
   lastOccurredOn?: string | null;
+  // (#662) Number of `added` rows that were silently dropped by the
+  // first-sync import-cutoff gate (`firstSyncCompletedAt is null` AND
+  // `t.date <= importCutoffDate`). Surfaced so the UI can distinguish
+  // "0 added — genuinely caught up" from "0 added — N rows filtered
+  // by the gate", and so log-based observability catches future
+  // regressions where pending or otherwise-live rows get filtered.
+  // Always present (0 when nothing was skipped); kept optional in
+  // the type for compatibility with synthesized failure results that
+  // never reach the sync loop.
+  skippedPreCutoff?: number;
 };
 
 type PlaidErrorBody = {
@@ -711,11 +721,29 @@ export async function syncPlaidItem(
       // `modified` rows are never gated (they're updates of rows we
       // already inserted on a previous, post-cutoff sync).
       const acctRow = acctByExternalId.get(t.account_id);
+      // (#662) NEVER apply the first-sync cutoff gate to pending Plaid
+      // rows. The gate exists to suppress historical backfill that
+      // would duplicate manual rows the user already typed in pre-link
+      // — but pending charges are inherently live activity, never
+      // historical, and have no manual pre-image to collide with. The
+      // user-reported regression: after a relink mints fresh
+      // plaid_accounts rows (firstSyncCompletedAt = null, fresh
+      // importCutoffDate ≈ today), every pending row Chase returns
+      // carries an authorization date a day or two old, falls into
+      // `txnMs <= cutoffMs`, and was silently `continue`'d at the
+      // skip branch below. The bank shows pending charges; H2 shows
+      // none; the Sync toast says "0 added". Excluding `t.pending`
+      // from the gate restores the previous behavior. The pending
+      // row's later posted twin (same transaction_id, pending=false)
+      // arrives as a `modified` row, which the gate already bypasses
+      // (it only checks `addedTxnIds`), so the pending→posted
+      // lifecycle keeps converging on a single row.
       const isFirstSyncForAcct =
         addedTxnIds.has(t.transaction_id) &&
         acctRow != null &&
         acctRow.firstSyncCompletedAt == null &&
-        acctRow.importCutoffDate != null;
+        acctRow.importCutoffDate != null &&
+        !t.pending;
       if (isFirstSyncForAcct) {
         const cutoffStr = acctRow.importCutoffDate as string;
         const cutoffMs = parseISO(cutoffStr).getTime();
@@ -1047,7 +1075,6 @@ export async function syncPlaidItem(
           sql`${plaidAccountsTable.firstSyncCompletedAt} is null`,
         ),
       );
-    void firstSyncSkipped;
     void firstSyncMerged;
 
     // If this item is American Express, refresh the persisted Amex anchor so
@@ -1246,6 +1273,10 @@ export async function syncPlaidItem(
           : null,
       error: balanceRefreshError,
       lastOccurredOn,
+      // (#662) Surface how many `added` rows the first-sync gate
+      // dropped on this run so observability catches future
+      // regressions where live rows get silently filtered.
+      skippedPreCutoff: firstSyncSkipped,
       // (#357) Mirror the structured fields onto the response so a
       // failed balance refresh on an otherwise-healthy /transactions/sync
       // still gives the client a real Plaid code + display message + kind
