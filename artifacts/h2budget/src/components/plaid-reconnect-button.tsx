@@ -24,6 +24,14 @@ export const PLAID_REAUTH_ERROR_CODES = new Set<string>([
   "ITEM_LOGIN_REQUIRED",
   "PENDING_EXPIRATION",
   "PENDING_DISCONNECT",
+  // (#654) Plaid hard-rejects the stored access_token itself — most
+  // commonly because it was issued for a different Plaid environment
+  // than the server is now talking to (e.g. a sandbox-prefixed token
+  // on a production server). The only fix is for the user to re-link
+  // the bank in the active environment, so this code surfaces the
+  // same Reconnect CTA as the other reauth codes. Mirrors the server
+  // set in artifacts/api-server/src/lib/plaidReauthCodes.ts.
+  "INVALID_ACCESS_TOKEN",
 ]);
 
 export function isPlaidReauthCode(code: string | null | undefined): boolean {
@@ -53,6 +61,10 @@ export const PLAID_REAUTH_ERROR_REASONS: Record<string, string> = {
     "This bank's connection is about to expire — re-authorize to keep it linked.",
   PENDING_DISCONNECT:
     "Plaid will disconnect this bank soon — reconnect now to keep it linked.",
+  // (#654) Worded so a non-technical user knows what to do without
+  // exposing the underlying "wrong Plaid environment" detail.
+  INVALID_ACCESS_TOKEN:
+    "This bank's saved login is no longer valid — reconnect to bring in new transactions.",
 };
 
 const PLAID_REAUTH_FALLBACK_REASON =

@@ -86,7 +86,10 @@ async function insertItemAndAccount(): Promise<{
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       itemId: `item-liab-${randomUUID()}`,
-      accessToken: "access-sandbox-test-token",
+      // (#654) Use a token whose env prefix matches the server's
+      // PLAID_ENV so the env-mismatch guard doesn't short-circuit the
+      // whole flow before /accounts/get / /liabilities/get are exercised.
+      accessToken: `access-${(process.env.PLAID_ENV ?? "sandbox").toLowerCase()}-test-token`,
       institutionName: "Test Bank",
       institutionSlug: "test-bank",
     })

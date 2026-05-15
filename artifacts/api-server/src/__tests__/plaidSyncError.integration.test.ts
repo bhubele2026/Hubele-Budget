@@ -673,7 +673,7 @@ describe("/plaid/link-token/update (re-auth in update mode)", () => {
     ).toBeUndefined();
   });
 
-  it("surfaces Plaid's structured error_code/error_message when /link/token/create fails", async () => {
+  it("(#654) translates Plaid INVALID_ACCESS_TOKEN from /link/token/create into a 409 relink response so the Reconnect button's fresh-link fallback recovers", async () => {
     const { itemRowId } = await seedItem();
     linkTokenCreateMock = async () => {
       throw {
@@ -694,10 +694,80 @@ describe("/plaid/link-token/update (re-auth in update mode)", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ itemId: itemRowId }),
     });
-    expect(res.status).toBe(500);
-    const body = (await res.json()) as { error: string; code?: string };
-    expect(body.error).toMatch(/the access_token is no longer valid/);
+    // Pre-#654 this returned 500 with the raw Plaid error, leaving the
+    // user stuck on a generic toast. Now we translate to the same
+    // {409, action:"relink"} shape the malformed-token branch uses,
+    // which the Reconnect button knows how to handle by falling back
+    // to a fresh-link flow.
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as {
+      error: string;
+      code?: string;
+      action?: string;
+    };
     expect(body.code).toBe("INVALID_ACCESS_TOKEN");
+    expect(body.action).toBe("relink");
+    // The persisted columns must also be updated so the Settings chip
+    // and Reconnect gating reflect the new state on the next render.
+    const [row] = await db
+      .select({
+        lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+        lastSyncError: plaidItemsTable.lastSyncError,
+      })
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    expect(row?.lastSyncErrorCode).toBe("INVALID_ACCESS_TOKEN");
+    expect(row?.lastSyncError).toMatch(/different Plaid environment/i);
+  });
+
+  it("(#654) pre-flight env-mismatch guard short-circuits before calling Plaid and returns {409, action:relink}", async () => {
+    const { itemRowId } = await seedItem();
+    // Force the env mismatch the user actually has in production
+    // (sandbox-prefixed token from seedItem default + production
+    // server). Restore inside the same test to keep the rest of the
+    // suite on the singleFork shared sandbox env.
+    const PRIOR = process.env.PLAID_ENV;
+    process.env.PLAID_ENV = "production";
+    let linkTokenCreateWasCalled = false;
+    const previousLinkTokenCreateMock = linkTokenCreateMock;
+    linkTokenCreateMock = async () => {
+      linkTokenCreateWasCalled = true;
+      throw new Error(
+        "guard regressed: linkTokenCreate was called for an env-mismatched item",
+      );
+    };
+
+    try {
+      const res = await fetch(`${baseUrl}/plaid/link-token/update`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ itemId: itemRowId }),
+      });
+      expect(res.status).toBe(409);
+      const body = (await res.json()) as {
+        error: string;
+        code?: string;
+        action?: string;
+      };
+      expect(body.code).toBe("INVALID_ACCESS_TOKEN");
+      expect(body.action).toBe("relink");
+      expect(body.error).toMatch(/different Plaid environment/i);
+      expect(linkTokenCreateWasCalled).toBe(false);
+
+      const [row] = await db
+        .select({
+          lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+          lastSyncError: plaidItemsTable.lastSyncError,
+        })
+        .from(plaidItemsTable)
+        .where(eq(plaidItemsTable.id, itemRowId));
+      expect(row?.lastSyncErrorCode).toBe("INVALID_ACCESS_TOKEN");
+      expect(row?.lastSyncError).toMatch(/different Plaid environment/i);
+    } finally {
+      if (PRIOR === undefined) delete process.env.PLAID_ENV;
+      else process.env.PLAID_ENV = PRIOR;
+      linkTokenCreateMock = previousLinkTokenCreateMock;
+    }
   });
 
   it("clears stillPreparingSince on a healthy sync so the Settings badge goes away", async () => {

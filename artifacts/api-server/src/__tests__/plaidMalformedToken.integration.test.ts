@@ -217,8 +217,17 @@ describe("(#366) malformed Plaid access_token short-circuits to needs-reconnect"
 
   it("flagMalformedAccessTokens backfills pre-existing bad rows on boot", async () => {
     const { itemRowId: badId } = await seedMalformedItem("legacy-bad-row");
+    // (#654) Use a token whose env prefix matches the server's
+    // PLAID_ENV so the env-mismatch guard added in #654 doesn't also
+    // flag this "good" row. Without this, a sandbox-prefixed token on
+    // a non-sandbox test runner gets correctly flagged as INVALID_ACCESS_TOKEN
+    // by the new sweep, which would break the negative assertion below.
+    // Lowercased because Plaid's token prefix is always lowercase
+    // (`access-sandbox-…` / `access-production-…`) even when PLAID_ENV
+    // is configured with mixed case (e.g. "Production").
+    const env = (process.env.PLAID_ENV ?? "sandbox").toLowerCase();
     const { itemRowId: goodId } = await seedMalformedItem(
-      `access-sandbox-${randomUUID()}`,
+      `access-${env}-${randomUUID()}`,
     );
 
     const summary = await flagMalformedAccessTokens();

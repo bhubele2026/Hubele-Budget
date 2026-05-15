@@ -7,5 +7,6 @@ export default defineConfig({
     hookTimeout: 30_000,
     pool: "forks",
     forks: { singleFork: true },
+    setupFiles: ["src/__tests__/_setup/forceSandboxPlaidEnv.ts"],
   },
 });

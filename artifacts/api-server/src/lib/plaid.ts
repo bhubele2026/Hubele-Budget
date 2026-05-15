@@ -60,6 +60,55 @@ export const MALFORMED_PLAID_TOKEN_MESSAGE =
   "Stored Plaid credential is malformed — please reconnect this bank.";
 
 /**
+ * (#654) Friendlier chip + toast copy for the specific case where a
+ * stored access token is well-formed but was issued for a different
+ * Plaid environment than the server is currently running against
+ * (e.g. an `access-sandbox-…` token while `PLAID_ENV=production`).
+ * Plaid will reject every product call against such a token with
+ * `INVALID_ACCESS_TOKEN`, so the only path forward is for the user to
+ * reconnect via Plaid Link in the active environment. Worded so the
+ * user sees what to do, not the env names (which leak infra details
+ * a non-technical user can't act on anyway).
+ */
+export const ENV_MISMATCH_PLAID_TOKEN_MESSAGE =
+  "This bank was linked from a different Plaid environment — please reconnect to refresh.";
+
+/**
+ * (#654) Pull the env segment out of a Plaid access token. Returns
+ * `null` for any value that doesn't match the documented
+ * `access-<env>-<opaque>` shape, including empty / non-string / wrong
+ * env. Used by `isAccessTokenForCurrentEnv` to short-circuit syncs
+ * before they ever reach Plaid when the stored token's env doesn't
+ * match `PLAID_ENV`.
+ */
+export function accessTokenEnv(
+  token: string | null | undefined,
+): PlaidEnv | null {
+  if (typeof token !== "string" || token.length === 0) return null;
+  const m = PLAID_ACCESS_TOKEN_RE.exec(token);
+  if (!m) return null;
+  return m[1] as PlaidEnv;
+}
+
+/**
+ * (#654) True when `token` is well-formed AND its embedded env
+ * (sandbox/development/production) matches the server's active
+ * `PLAID_ENV`. False for malformed tokens, env mismatches, and any
+ * value that fails `isValidPlaidAccessToken`. Callers should treat
+ * `false` as "do not call Plaid; mark the item for reconnect" — even
+ * a well-formed env-mismatched token will produce
+ * `INVALID_ACCESS_TOKEN` on every product call until the user
+ * re-links the bank in the active environment.
+ */
+export function isAccessTokenForCurrentEnv(
+  token: string | null | undefined,
+): boolean {
+  const env = accessTokenEnv(token);
+  if (!env) return false;
+  return env === getPlaidEnv();
+}
+
+/**
  * (#398) Sentinel access_token written by the April-2026 Chase seed
  * (`aprilChaseSeed.ts`) to anchor the bank-snapshot tile when the user
  * has not yet completed real Plaid OAuth. Synthetic seed rows are not

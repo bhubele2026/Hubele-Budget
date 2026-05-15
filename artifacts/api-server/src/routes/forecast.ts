@@ -25,7 +25,14 @@ import {
   expandDebtMin,
   expandAvalancheExtra,
 } from "../lib/debtMinSchedule";
-import { plaid } from "../lib/plaid";
+import {
+  plaid,
+  isValidPlaidAccessToken,
+  isAccessTokenForCurrentEnv,
+  ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+  MALFORMED_PLAID_TOKEN_MESSAGE,
+} from "../lib/plaid";
+import { markItemMalformedToken } from "../lib/plaidSync";
 import { archiveExpiredOneTime } from "./bills";
 import {
   dedupePlaidAccountsForUser,
@@ -517,6 +524,35 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
       res.status(404).json({ error: "Plaid item not found" });
       return;
     }
+    // (#654) Preflight token guards — mirror the same {409, action:"relink",
+    // code} contract /plaid/link-token/update returns so the Reconnect button
+    // and the manual snapshot/refresh flows recover identically. Without
+    // these, a sandbox-prefixed token on a production server would call
+    // Plaid, get INVALID_ACCESS_TOKEN, surface as a generic 502, and never
+    // stamp the per-item reauth state.
+    if (!isValidPlaidAccessToken(item.accessToken)) {
+      await markItemMalformedToken(item.id);
+      res.status(409).json({
+        error: MALFORMED_PLAID_TOKEN_MESSAGE,
+        code: "ITEM_LOGIN_REQUIRED",
+        action: "relink",
+        account: { name: acct.name ?? null, mask: acct.mask ?? null },
+      });
+      return;
+    }
+    if (!isAccessTokenForCurrentEnv(item.accessToken)) {
+      await markItemMalformedToken(item.id, {
+        code: "INVALID_ACCESS_TOKEN",
+        message: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+      });
+      res.status(409).json({
+        error: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+        code: "INVALID_ACCESS_TOKEN",
+        action: "relink",
+        account: { name: acct.name ?? null, mask: acct.mask ?? null },
+      });
+      return;
+    }
     try {
       const resp = await plaid().accountsBalanceGet({
         access_token: item.accessToken,
@@ -635,6 +671,34 @@ router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<voi
     .where(eq(plaidItemsTable.id, acct.itemId));
   if (!item) {
     res.status(404).json({ error: "Plaid item not found" });
+    return;
+  }
+  // (#654) Same preflight token guards as the snapshot-set endpoint
+  // above. /forecast/refresh-bank is the most common manual recovery
+  // path users tap when their Plaid balance is stale, so a stuck
+  // env-mismatched item must surface as a Reconnect-actionable 409
+  // here too — not a generic 502 that the user has nowhere to go from.
+  if (!isValidPlaidAccessToken(item.accessToken)) {
+    await markItemMalformedToken(item.id);
+    res.status(409).json({
+      error: MALFORMED_PLAID_TOKEN_MESSAGE,
+      code: "ITEM_LOGIN_REQUIRED",
+      action: "relink",
+      account: { name: acct.name ?? null, mask: acct.mask ?? null },
+    });
+    return;
+  }
+  if (!isAccessTokenForCurrentEnv(item.accessToken)) {
+    await markItemMalformedToken(item.id, {
+      code: "INVALID_ACCESS_TOKEN",
+      message: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+    });
+    res.status(409).json({
+      error: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+      code: "INVALID_ACCESS_TOKEN",
+      action: "relink",
+      account: { name: acct.name ?? null, mask: acct.mask ?? null },
+    });
     return;
   }
   try {

@@ -12,7 +12,9 @@ import {
 import {
   plaid,
   isValidPlaidAccessToken,
+  isAccessTokenForCurrentEnv,
   MALFORMED_PLAID_TOKEN_MESSAGE,
+  ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
 } from "./plaid";
 import { logger } from "./logger";
 import {
@@ -115,6 +117,33 @@ export async function fetchLiabilitiesForItem(
     logger.warn(
       { userId, itemRowId },
       "[plaid-liabilities] short-circuit: stored access_token failed isValidPlaidAccessToken — flagged as needs-reconnect, no Plaid call made",
+    );
+    return [];
+  }
+  // (#654) Env-mismatch guard. Mirrors plaidSync.ts — a well-formed
+  // sandbox token on a production server will be bounced by Plaid with
+  // INVALID_ACCESS_TOKEN on /accounts/get + /liabilities/get. Short-
+  // circuit so the Avalanche debt rollup doesn't keep hammering Plaid
+  // with calls it can't ever satisfy, and so the same Reconnect CTA
+  // appears on the debts page that bank-only users see in Settings.
+  if (!isAccessTokenForCurrentEnv(item.accessToken)) {
+    await markItemMalformedToken(itemRowId, {
+      code: "INVALID_ACCESS_TOKEN",
+      message: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+    });
+    await recordPlaidSyncAttempt({
+      userId,
+      plaidItemId: itemRowId,
+      kind: "liabilities",
+      success: false,
+      errorCode: "INVALID_ACCESS_TOKEN",
+      errorMessage: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+      plaidDisplayMessage: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+      errorKind: "reauth",
+    });
+    logger.warn(
+      { userId, itemRowId },
+      "[plaid-liabilities] short-circuit: stored access_token env does not match PLAID_ENV — flagged as needs-reconnect, no Plaid call made",
     );
     return [];
   }

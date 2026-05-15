@@ -14,8 +14,10 @@ import {
   plaid,
   institutionSlug,
   isValidPlaidAccessToken,
+  isAccessTokenForCurrentEnv,
   isSyntheticPlaidItem,
   MALFORMED_PLAID_TOKEN_MESSAGE,
+  ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
   type PlaidTxn,
 } from "./plaid";
 import { loadUserRules, categorize } from "./autoCategorize";
@@ -248,9 +250,10 @@ export function plaidLogContext(
  */
 export async function markItemMalformedToken(
   itemRowId: string,
+  overrides: { code?: string; message?: string } = {},
 ): Promise<{ lastSyncError: string; lastSyncErrorCode: string }> {
-  const lastSyncError = MALFORMED_PLAID_TOKEN_MESSAGE;
-  const lastSyncErrorCode = "ITEM_LOGIN_REQUIRED";
+  const lastSyncError = overrides.message ?? MALFORMED_PLAID_TOKEN_MESSAGE;
+  const lastSyncErrorCode = overrides.code ?? "ITEM_LOGIN_REQUIRED";
   await db
     .update(plaidItemsTable)
     .set({ lastSyncError, lastSyncErrorCode })
@@ -264,12 +267,16 @@ export async function markItemMalformedToken(
  * branch so downstream consumers (web toast, mobile, recordPlaidSyncAttempt
  * audit) can render it without a special case.
  */
-export function synthesizeMalformedTokenSyncResult(item: {
-  id: string;
-  itemId: string;
-  institutionName: string | null;
-}): SyncResult {
-  const message = MALFORMED_PLAID_TOKEN_MESSAGE;
+export function synthesizeMalformedTokenSyncResult(
+  item: {
+    id: string;
+    itemId: string;
+    institutionName: string | null;
+  },
+  overrides: { code?: string; message?: string } = {},
+): SyncResult {
+  const message = overrides.message ?? MALFORMED_PLAID_TOKEN_MESSAGE;
+  const code = overrides.code ?? "ITEM_LOGIN_REQUIRED";
   return {
     itemId: item.itemId,
     plaidItemRowId: item.id,
@@ -280,7 +287,7 @@ export function synthesizeMalformedTokenSyncResult(item: {
     autoCategorized: 0,
     ruleAttributions: [],
     error: message,
-    plaidErrorCode: "ITEM_LOGIN_REQUIRED",
+    plaidErrorCode: code,
     plaidErrorMessage: message,
     plaidDisplayMessage: message,
     requestId: null,
@@ -418,6 +425,48 @@ export async function syncPlaidItem(
       "[plaid-sync] short-circuit: stored access_token failed isValidPlaidAccessToken — flagged as needs-reconnect, no Plaid call made",
     );
     return synthesizeMalformedTokenSyncResult(item);
+  }
+  // (#654) Env-mismatch guard. The format check above only validates the
+  // `access-<env>-<opaque>` shape. A well-formed sandbox-prefixed token
+  // on a production server passes the format guard, reaches Plaid, and
+  // is rejected with INVALID_ACCESS_TOKEN ("provided access token is for
+  // the wrong Plaid environment") on every single call — exactly the
+  // state the user's two real Chase items are stuck in today. Short-
+  // circuit just like the malformed branch but with a friendlier
+  // message and the actual code Plaid would have returned, so existing
+  // rows already stamped INVALID_ACCESS_TOKEN and new ones light up the
+  // same Reconnect CTA without leaking infra-level "wrong environment"
+  // copy at the user.
+  if (!isAccessTokenForCurrentEnv(item.accessToken)) {
+    await markItemMalformedToken(itemRowId, {
+      code: "INVALID_ACCESS_TOKEN",
+      message: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+    });
+    await recordPlaidSyncAttempt({
+      userId,
+      plaidItemId: itemRowId,
+      kind: "transactions",
+      success: false,
+      errorCode: "INVALID_ACCESS_TOKEN",
+      errorMessage: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+      plaidDisplayMessage: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+      requestId: null,
+      httpStatus: null,
+      errorKind: "reauth",
+    });
+    logger.warn(
+      {
+        userId,
+        itemRowId,
+        plaidItemIdExternal: item.itemId,
+        institutionName: item.institutionName,
+      },
+      "[plaid-sync] short-circuit: stored access_token env does not match PLAID_ENV — flagged as needs-reconnect, no Plaid call made",
+    );
+    return synthesizeMalformedTokenSyncResult(item, {
+      code: "INVALID_ACCESS_TOKEN",
+      message: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+    });
   }
 
   const slug = item.institutionSlug || institutionSlug(item.institutionName);
@@ -1512,6 +1561,29 @@ export async function refreshConsentExpirationForItem(
       error: MALFORMED_PLAID_TOKEN_MESSAGE,
     };
   }
+  // (#654) Env-mismatch guard — same rationale as the syncPlaidItem
+  // env-mismatch branch. Don't call /item/get with a token Plaid will
+  // bounce; flag the item as INVALID_ACCESS_TOKEN so the Reconnect CTA
+  // shows up.
+  if (!isAccessTokenForCurrentEnv(item.accessToken)) {
+    await markItemMalformedToken(item.id, {
+      code: "INVALID_ACCESS_TOKEN",
+      message: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+    });
+    return {
+      itemRowId: item.id,
+      itemId: item.itemId,
+      institutionName: item.institutionName,
+      consentExpirationAt: item.consentExpirationAt
+        ? item.consentExpirationAt.toISOString()
+        : null,
+      consentExpirationLastRefreshedAt: item.consentExpirationLastRefreshedAt
+        ? item.consentExpirationLastRefreshedAt.toISOString()
+        : null,
+      changed: false,
+      error: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+    };
+  }
   try {
     const itemResp = await plaid().itemGet({ access_token: item.accessToken });
     const cet = (itemResp.data.item as unknown as {
@@ -1656,7 +1728,15 @@ export async function flagMalformedAccessTokens(): Promise<{
     // health-check spike alert (#371) and re-poisons /plaid/items
     // every cron tick.
     if (isSyntheticPlaidItem(it)) continue;
-    if (isValidPlaidAccessToken(it.accessToken)) continue;
+    const malformed = !isValidPlaidAccessToken(it.accessToken);
+    // (#654) Treat env-mismatched-but-well-formed tokens the same as
+    // malformed for the daily backfill sweep — Plaid will reject every
+    // call against them with INVALID_ACCESS_TOKEN, so the user needs
+    // the same Reconnect CTA without waiting for the next sync cycle
+    // to re-stamp the row.
+    const envMismatch =
+      !malformed && !isAccessTokenForCurrentEnv(it.accessToken);
+    if (!malformed && !envMismatch) continue;
     flagged++;
     flaggedItems.push({
       itemRowId: it.id,
@@ -1666,14 +1746,22 @@ export async function flagMalformedAccessTokens(): Promise<{
     // Always write — same value twice is harmless, and we can't
     // distinguish a "real" ITEM_LOGIN_REQUIRED from our synthetic one
     // without re-checking the message column.
-    await markItemMalformedToken(it.id);
+    if (envMismatch) {
+      await markItemMalformedToken(it.id, {
+        code: "INVALID_ACCESS_TOKEN",
+        message: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+      });
+    } else {
+      await markItemMalformedToken(it.id);
+    }
     logger.warn(
       {
         itemRowId: it.id,
         plaidItemIdExternal: it.itemId,
         institutionName: it.institutionName,
+        envMismatch,
       },
-      "[plaid-backfill] flagged item with malformed stored access_token as needs-reconnect",
+      "[plaid-backfill] flagged item with unusable stored access_token as needs-reconnect",
     );
   }
   return { scanned: items.length, flagged, flaggedItems };
@@ -1724,6 +1812,16 @@ export async function runGapBackfillForItem(
     return { added: 0, importedDateRange: null, perAccount: [] };
   }
   if (!isValidPlaidAccessToken(item.accessToken)) {
+    return { added: 0, importedDateRange: null, perAccount: [] };
+  }
+  // (#654) Env-mismatch guard. Same rationale as syncPlaidItem — a
+  // sandbox-prefixed token on a production server would be bounced by
+  // Plaid on every /transactions/get page. Bail before the per-account
+  // loop hammers Plaid with calls it can't satisfy. Wrapping callers
+  // (syncPlaidItem, the manual /plaid/sync route) have already
+  // short-circuited and stamped the reauth state, so this is a
+  // belt-and-braces guard for any future direct caller.
+  if (!isAccessTokenForCurrentEnv(item.accessToken)) {
     return { added: 0, importedDateRange: null, perAccount: [] };
   }
   // (#623) See syncPlaidItem comment — actor is `userId`; data scope

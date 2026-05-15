@@ -18,6 +18,8 @@ import {
   getPlaidEnv,
   isPlaidConfigured,
   isValidPlaidAccessToken,
+  isAccessTokenForCurrentEnv,
+  ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
   isSyntheticPlaidItem,
   MALFORMED_PLAID_TOKEN_MESSAGE,
 } from "../lib/plaid";
@@ -429,6 +431,29 @@ router.post(
       });
       return;
     }
+    // (#654) Env-mismatch guard. Update-mode link-token creation needs
+    // a token Plaid will accept — a sandbox-prefixed token on a
+    // production server is bounced with INVALID_ACCESS_TOKEN, so the
+    // user would click Reconnect, see a 500, and stay stuck. Treat
+    // this exactly like the malformed-token branch: tell the client to
+    // remove + relink from scratch (action: "relink") so the existing
+    // fresh-link fallback in the Reconnect button kicks in instead.
+    if (!isAccessTokenForCurrentEnv(item.accessToken)) {
+      await markItemMalformedToken(item.id, {
+        code: "INVALID_ACCESS_TOKEN",
+        message: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+      });
+      req.log.warn(
+        { itemRowId: item.id, plaidItemIdExternal: item.itemId },
+        "[plaid-update] short-circuit: stored access_token env does not match PLAID_ENV — caller must remove + relink",
+      );
+      res.status(409).json({
+        error: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+        code: "INVALID_ACCESS_TOKEN",
+        action: "relink",
+      });
+      return;
+    }
     try {
       const redirectUri = process.env.PLAID_REDIRECT_URI?.trim();
       const resp = await plaid().linkTokenCreate({
@@ -450,6 +475,24 @@ router.post(
         { err: e, ...plaidLogContext(e, "/link/token/create (update)") },
         "Plaid update link token failed",
       );
+      // (#654) Defensive: even after the pre-flight env-mismatch guard,
+      // Plaid can still surface INVALID_ACCESS_TOKEN for other reasons
+      // (rotated server credentials, item-side disconnect that hasn't
+      // been webhooked back yet). Translate to the same 409 relink
+      // response so the Reconnect button's fresh-link fallback always
+      // recovers instead of leaving the user on a generic 500.
+      if (plaidCode === "INVALID_ACCESS_TOKEN") {
+        await markItemMalformedToken(item.id, {
+          code: "INVALID_ACCESS_TOKEN",
+          message: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+        });
+        res.status(409).json({
+          error: ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
+          code: "INVALID_ACCESS_TOKEN",
+          action: "relink",
+        });
+        return;
+      }
       res.status(500).json({
         error: msg,
         ...(plaidCode ? { code: plaidCode } : {}),
