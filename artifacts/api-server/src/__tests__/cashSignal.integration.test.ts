@@ -118,21 +118,20 @@ async function addRecurring(
 }
 
 describe("computeCashSignal — snapshot anchoring", () => {
-  it("drag-to-today: pre-snapshot pending plans get pulled to TODAY (not fromDate, not snapshot date) when fromDate < today", async () => {
-    // User's Real Scenario (#650): bank snapshot $3,248.68 on
-    // May 13 from Plaid; two unmatched pending plans dated on/before
-    // May 13 (Mortgage -$1,989.81 on 05-13, Capital One -$38.00 on
-    // 05-10). The user views the chart with fromDate = May 1 (start
-    // of month) and today = May 14.
+  it("(#666) pre-snapshot pending plans are dropped — snapshot is truth, not dragged onto today", async () => {
+    // (#666) Inverted from the old (#650) assertion. The previous
+    // semantic dragged pre-snapshot pending plans onto today, which
+    // silently shifted the chart's first point up or down depending
+    // on whether the dragged events happened to net positive or
+    // negative. Real-world bug: bank $4,922.56, but the chart started
+    // at $3,805 (drag negative) one day, then ~$8,000 (drag positive)
+    // the next day after a partial fix. Both wrong.
     //
-    // Wrong shapes we've shipped before:
-    //   - dip on the SNAPSHOT date (May 13) → wrong: the snapshot IS
-    //     the bank's truth for May 13, the line must be flat there.
-    //   - dip on FROMDATE (May 1) → wrong: the snapshot proves the
-    //     line was flat from May 1 through May 13.
-    //
-    // Right shape: line flat at $3,248.68 from May 1 through May 13,
-    // drops to $1,220.87 on May 14 (today).
+    // New semantic: the bank snapshot is the truth. Anything dated
+    // on or before it is already reflected — drop it entirely. The
+    // chart line is flat at the snapshot value from fromDate through
+    // today, and stays at the snapshot value on today when nothing
+    // is actionable.
     await setSettings({
       balance: "3248.68",
       at: new Date("2026-05-13T12:00:00Z"),
@@ -154,50 +153,27 @@ describe("computeCashSignal — snapshot anchoring", () => {
       horizonDays: 30,
     });
 
-    // Starting balance reflects the snapshot — pre-snapshot plans were
-    // NOT consumed by the pre-window roll-forward; they wait for today.
+    // Snapshot is truth — pre-snapshot plans are dropped, not dragged.
     expect(sig.startingBalance).toBe("3248.68");
-    // Every day from fromDate (05-01) through the snapshot date
-    // (05-13) is flat at the snapshot value.
     const daily = sig.daily ?? [];
+    // Every day from fromDate through today is flat at the snapshot.
     const flatRange = daily.filter(
-      (d) => d.date >= "2026-05-01" && d.date <= "2026-05-13",
+      (d) => d.date >= "2026-05-01" && d.date <= "2026-05-14",
     );
-    expect(flatRange.length).toBe(13);
     for (const d of flatRange) {
       expect(d.balance).toBe("3248.68");
     }
-    // Today (05-14) takes the full hit: 3248.68 - 1989.81 - 38.00.
-    const today = daily.find((d) => d.date === "2026-05-14");
-    expect(today?.balance).toBe("1220.87");
-    expect(sig.lowestProjected).toBe("1220.87");
-    expect(sig.lowestDate).toBe("2026-05-14");
-    // Both expense events surface as markers on TODAY, not on their
-    // original pre-snapshot dates.
+    // No drag onto today; no markers for the pre-snapshot dates.
     const eventDates = (sig.events ?? []).map((e) => e.date);
-    expect(eventDates.filter((d) => d === "2026-05-14").length).toBe(2);
+    expect(eventDates).not.toContain("2026-05-14");
     expect(eventDates).not.toContain("2026-05-13");
     expect(eventDates).not.toContain("2026-05-10");
-    // (#650) Each dragged event keeps its pre-drag date in
-    // `originalDate` so the chart tooltip can label them as "dragging
-    // this day" instead of mixing them with bills naturally due today.
-    const draggedEvents = (sig.events ?? []).filter(
-      (e) => e.date === "2026-05-14",
-    );
-    const draggedOriginals = draggedEvents
-      .map((e) => (e as { originalDate?: string }).originalDate)
-      .sort();
-    expect(draggedOriginals).toEqual(["2026-05-10", "2026-05-13"]);
-    for (const e of draggedEvents) {
-      expect(
-        (e as { originalDate?: string }).originalDate,
-      ).not.toBe(e.date);
-    }
   });
 
-  it("drag-to-today: when fromDate == today, pending plans still snap to today", async () => {
-    // Sanity case for the existing "view chart starting today"
-    // shape — drag target is MAX(today, fromISO) = today either way.
+  it("(#666) when fromDate == today, snapshot-day plans are dropped (chart starts at bank balance)", async () => {
+    // Companion to the broader (#666) drop rule: a recurring plan
+    // dated exactly on the snapshot date does NOT drag onto today.
+    // The chart's first day equals the bank balance to the cent.
     await setSettings({
       balance: "3248.68",
       at: new Date("2026-05-13T12:00:00Z"),
@@ -217,8 +193,56 @@ describe("computeCashSignal — snapshot anchoring", () => {
     expect(sig.startingBalance).toBe("3248.68");
     expect(sig.daily?.[0]).toEqual({
       date: "2026-05-14",
-      balance: "1258.87",
+      balance: "3248.68",
     });
+  });
+
+  it("(#666) mixed pre-snapshot income AND expense both drop — chart starts at bank balance", async () => {
+    // User's actual Forecast scenario after the partial (#667) fix:
+    // bank $4,922.56, but the chart started ABOVE the bank (~$8K)
+    // because real recurring INCOME dated <= snapshot was being
+    // dragged onto today, lifting the day-0 point above truth.
+    // With both an expense AND an income dated before the snapshot,
+    // the chart's first point must equal the bank balance — neither
+    // drag direction is allowed.
+    await setSettings({
+      balance: "4922.56",
+      at: new Date("2026-05-14T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await addRecurring({
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-12",
+      amount: "1117.29",
+    });
+    await addRecurring({
+      kind: "income",
+      frequency: "onetime",
+      anchorDate: "2026-05-13",
+      amount: "3500.00",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-14",
+      horizonDays: 30,
+    });
+
+    // The chart's first day equals the bank balance — no drag in
+    // either direction.
+    expect(sig.startingBalance).toBe("4922.56");
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-05-14",
+      balance: "4922.56",
+    });
+    // Lowest cannot dip below the snapshot on day 0 from these
+    // pre-snapshot events.
+    expect(Number(sig.lowestProjected)).toBeGreaterThanOrEqual(4922.56);
+    // Neither pre-snapshot event creates a marker.
+    const eventDates = (sig.events ?? []).map((e) => e.date);
+    expect(eventDates).not.toContain("2026-05-12");
+    expect(eventDates).not.toContain("2026-05-13");
+    expect(eventDates).not.toContain("2026-05-14");
   });
 
   it("(#667) synthetic debt-min events dated before the snapshot do NOT drag onto today", async () => {

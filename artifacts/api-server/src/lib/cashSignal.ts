@@ -209,13 +209,15 @@ function r2(n: number): string {
  *
  * Anchored on the bank snapshot when present:
  *   - Skip checking transactions on/before the snapshot date (already counted).
- *   - Planned events dated on/before the snapshot that the user has NOT yet
- *     matched / marked missed / skipped get dragged forward to the chart's
- *     first day (today by default). Rationale: those plans haven't been
- *     reconciled against a real bank txn, so they're still outstanding
- *     obligations. Showing them as a dip on today reflects the user's true
- *     pending exposure until they match (removes the dip) or hit "missed"
- *     / "skipped" (also removes it).
+ *   - (#666) Planned events dated on/before the snapshot are dropped entirely
+ *     — bills AND income, real AND synthetic. The bank snapshot is the
+ *     truth: anything dated on or before it is already reflected in the
+ *     bank balance, or it never posted (in which case the user can mark it
+ *     missed). Dropping these guarantees the chart's first point equals
+ *     the bank balance whenever there's nothing actionable in Pending.
+ *     This replaces the previous "drag pre-snapshot to today" rule, which
+ *     silently shifted the chart's first point up or down depending on
+ *     which side of zero the dragged events happened to net.
  *   - Post-snapshot planned events project forward on their own date and
  *     drag the line until the user matches/misses/skips them.
  */
@@ -499,37 +501,22 @@ export async function computeCashSignal(
     // Plans the user explicitly marked missed/dismissed are likewise
     // dropped — the user has acknowledged they won't post.
     if (missedPlanKeys.has(origKey)) continue;
-    // DRAG-TO-TODAY RULE: a pending plan dated ON OR BEFORE the bank
-    // snapshot that the user has NOT matched / marked missed / skipped
-    // is still an outstanding obligation. Snap its effective date
-    // forward to MAX(today, fromISO) so it appears as a real dip on
-    // the CURRENT day (not on the snapshot date, and not on the
-    // chart's first day if that's earlier than today). The user can
-    // clear the dip by matching it to a real bank txn, or by hitting
-    // "Mark missed" / "Skip" in the planned-items register.
-    //
-    // Why MAX(today, fromISO) and not just fromISO: when the user
-    // views a chart whose fromDate is BEFORE today (e.g. fromDate =
-    // first of the month, today = the 14th), the snapshot value IS
-    // the truth for every day from fromDate up to and including the
-    // snapshot date. Dragging the dip back to fromDate would dip the
-    // line on a day the bank has already confirmed was flat. Today
-    // is the earliest day the dip can legitimately appear.
-    //
-    // NOTE: plans dated AFTER the snapshot but BEFORE fromISO (i.e.
-    // when the user is viewing a fromDate well past the snapshot) are
-    // intentionally NOT dragged — they're consumed by the pre-window
-    // roll-forward into `startingBalance` (see below). That preserves
-    // the existing semantics for "view chart starting from <future
-    // date>" where pre-window plans should be assumed to post.
-    const todayISO = fmtISO(todayDateOnly);
-    const dragTargetISO = todayISO > fromISO ? todayISO : fromISO;
+    // (#666) BANK SNAPSHOT IS THE TRUTH: any event whose effective
+    // date is on or before the snapshot is already reflected in the
+    // bank balance (or it never posted, in which case the user can
+    // mark it missed — but until then it's NOT something to project).
+    // Dropping these unconditionally — bills AND income, real AND
+    // synthetic — guarantees the chart's first point equals the bank
+    // balance whenever there's nothing actionable in Pending. This
+    // replaces the previous "drag pre-snapshot to today" rule, which
+    // silently shifted the start of the chart up or down depending
+    // on which side of zero the dragged events happened to net.
+    if (snapshotISO && rawEffectiveDate <= snapshotISO) continue;
+    // POST-SNAPSHOT events keep their natural date. (No drag — the
+    // previous "drag pre-snapshot to today" branch is now unreachable
+    // because pre-snapshot events are short-circuited above.)
     let effectiveDate = rawEffectiveDate;
-    if (snapshotISO) {
-      if (effectiveDate <= snapshotISO && effectiveDate < dragTargetISO) {
-        effectiveDate = dragTargetISO;
-      }
-    } else if (effectiveDate < fromISO) {
+    if (!snapshotISO && effectiveDate < fromISO) {
       // No-snapshot fallback: surface PRE-WINDOW pending plans as a
       // day-0 dip rather than silently shrinking startingBalance.
       // Intentionally still keyed off fromISO (not dragTargetISO) so
