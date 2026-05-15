@@ -579,114 +579,141 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     }
 
     const slug = institutionSlug(resolvedName);
-    // (#367) Compute `relinked` from the actual upsert path: was there
-    // already a row for this Plaid item_id (re-link of an existing,
-    // possibly chip-flagged item) or is this a brand-new insert
-    // (first-ever link of this institution for this user)? The Settings
-    // UI uses this to choose between "Bank reconnected" copy and the
-    // celebratory "Account linked" copy. Hardcoding `true` would
-    // misdrive the brand-new-link case.
-    const [existingItem] = await db
-      .select({ id: plaidItemsTable.id })
-      .from(plaidItemsTable)
-      .where(eq(plaidItemsTable.itemId, itemId));
-    const relinked = !!existingItem;
-    const [item] = await db
-      .insert(plaidItemsTable)
-      .values({
-        userId: req.userId!,
-        householdId: req.householdId!,
-        itemId,
-        accessToken,
-        institutionId: resolvedInstId,
-        institutionName: resolvedName,
-        institutionSlug: slug,
-        consentExpirationAt,
-        consentExpirationLastRefreshedAt: consentRefreshedAt,
-      })
-      .onConflictDoUpdate({
-        target: plaidItemsTable.itemId,
-        set: {
+    // (#659) Atomic upsert + sibling cleanup. Before this transaction
+    // wrap, the survivor row insert and `cleanupMalformedTokenSiblings`
+    // ran as two independent statements with the cleanup wrapped in a
+    // best-effort try/catch — so a transient DB blip after the survivor
+    // committed but before the orphan delete left the env-mismatched
+    // ghost in `plaid_items` forever (a regression of the very bug
+    // this task closes). Wrapping both in `db.transaction` means a
+    // cleanup failure rolls the survivor insert back too; the user
+    // sees a 5xx and retries Reconnect, which is strictly better than
+    // a silent half-cleanup masquerading as success.
+    const { item, cleaned, relinked } = await db.transaction(async (tx) => {
+      const [existingItem] = await tx
+        .select({ id: plaidItemsTable.id })
+        .from(plaidItemsTable)
+        .where(eq(plaidItemsTable.itemId, itemId));
+      // (#367) Compute `relinked` from the actual upsert path: was
+      // there already a row for this Plaid item_id (re-link of an
+      // existing, possibly chip-flagged item) or is this a brand-new
+      // insert (first-ever link of this institution for this user)?
+      // The Settings UI uses this to choose between "Bank reconnected"
+      // copy and the celebratory "Account linked" copy. Hardcoding
+      // `true` would misdrive the brand-new-link case.
+      const relinkedInTx = !!existingItem;
+      const [itemRow] = await tx
+        .insert(plaidItemsTable)
+        .values({
+          userId: req.userId!,
+          householdId: req.householdId!,
+          itemId,
           accessToken,
           institutionId: resolvedInstId,
           institutionName: resolvedName,
           institutionSlug: slug,
           consentExpirationAt,
-          // Only bump the freshness timestamp when /item/get actually
-          // succeeded above; otherwise leave any prior value alone.
-          ...(consentRefreshedAt
-            ? { consentExpirationLastRefreshedAt: consentRefreshedAt }
-            : {}),
-          // (#367) Self-heal: when Plaid Link comes back through the
-          // exchange path it ALWAYS represents a freshly authorized
-          // item — any previously persisted reconnect-state error is
-          // by definition stale. Clearing the chip + the still-
-          // preparing timestamp here is what stops the "Reconnect
-          // loop" the user reported: previously, a successful relink
-          // left the synthetic ITEM_LOGIN_REQUIRED chip in place
-          // until the next /transactions/sync happened to succeed,
-          // which the over-strict token guard would then misclassify
-          // as malformed all over again.
-          lastSyncError: null,
-          lastSyncErrorCode: null,
-          stillPreparingSince: null,
-          consentExpirationLastRefreshError: null,
-          consentExpirationLastRefreshErrorCode: null,
-        },
-      })
-      .returning();
+          consentExpirationLastRefreshedAt: consentRefreshedAt,
+        })
+        .onConflictDoUpdate({
+          target: plaidItemsTable.itemId,
+          set: {
+            accessToken,
+            institutionId: resolvedInstId,
+            institutionName: resolvedName,
+            institutionSlug: slug,
+            consentExpirationAt,
+            // Only bump the freshness timestamp when /item/get actually
+            // succeeded above; otherwise leave any prior value alone.
+            ...(consentRefreshedAt
+              ? { consentExpirationLastRefreshedAt: consentRefreshedAt }
+              : {}),
+            // (#367) Self-heal: when Plaid Link comes back through the
+            // exchange path it ALWAYS represents a freshly authorized
+            // item — any previously persisted reconnect-state error is
+            // by definition stale. Clearing the chip + the still-
+            // preparing timestamp here is what stops the "Reconnect
+            // loop" the user reported: previously, a successful relink
+            // left the synthetic ITEM_LOGIN_REQUIRED chip in place
+            // until the next /transactions/sync happened to succeed,
+            // which the over-strict token guard would then misclassify
+            // as malformed all over again.
+            lastSyncError: null,
+            lastSyncErrorCode: null,
+            stillPreparingSince: null,
+            consentExpirationLastRefreshError: null,
+            consentExpirationLastRefreshErrorCode: null,
+          },
+        })
+        .returning();
 
-    // (#401) Auto-clean up any *other* row for the same user + same
-    // institution whose stored access_token is unusable for the
-    // current server. When Plaid mints a fresh internal item_id on a
-    // re-link from scratch (instead of going through update mode),
-    // the original broken row would otherwise sit forever with a
-    // stale "Stored Plaid credential is malformed" / "wrong Plaid
-    // environment" chip and re-surface stale "needs reconnecting"
-    // banners on other pages and in the daily health-check cron.
-    //
-    // (#659) "Unusable" covers BOTH the original malformed-token case
-    // AND env-mismatched tokens (well-formed but wrong PLAID_ENV
-    // prefix). The user's production Chase ghost row is the latter:
-    // a sandbox-prefixed token that survived a previous re-link
-    // because the upsert is keyed on `item_id` and the fresh OAuth
-    // grant minted a brand-new item_id. We never touch a healthy
-    // duplicate sibling — a user with two legitimate Chase logins is
-    // left alone. Local cleanup only (debt source flags reset,
-    // accounts + item deleted); skipping the upstream itemRemove is
-    // safe because Plaid would reject the token anyway (400 on
-    // malformed, INVALID_ACCESS_TOKEN on env-mismatch).
-    try {
-      const { cleaned } = await cleanupMalformedTokenSiblings({
+      // (#401, #659) Auto-clean up any *other* row for the same
+      // household + same institution whose stored access_token is
+      // unusable for the current server. When Plaid mints a fresh
+      // internal item_id on a re-link from scratch (instead of going
+      // through update mode), the original broken row would otherwise
+      // sit forever with a stale "Stored Plaid credential is
+      // malformed" / "wrong Plaid environment" chip and re-surface
+      // stale "needs reconnecting" banners on other pages and in the
+      // daily health-check cron.
+      //
+      // "Unusable" covers BOTH the original malformed-token case AND
+      // env-mismatched tokens (well-formed but wrong PLAID_ENV
+      // prefix). The user's production Chase ghost row is the
+      // latter: a sandbox-prefixed token that survived a previous
+      // re-link because the upsert is keyed on `item_id` and the
+      // fresh OAuth grant minted a brand-new item_id. We never touch
+      // a healthy duplicate sibling — a user with two legitimate
+      // Chase logins is left alone. Local cleanup only (debt source
+      // flags reset, accounts + item deleted); skipping the upstream
+      // itemRemove is safe because Plaid would reject the token
+      // anyway (400 on malformed, INVALID_ACCESS_TOKEN on env-
+      // mismatch).
+      const { cleaned: cleanedSiblings } = await cleanupMalformedTokenSiblings({
         userId: req.userId!,
-        survivorItemRowId: item!.id,
+        householdId: req.householdId!,
+        survivorItemRowId: itemRow!.id,
         institutionId: resolvedInstId,
         institutionSlug: slug,
         log: req.log,
+        tx,
       });
-      for (const c of cleaned) {
-        req.log.info(
-          {
-            userId: req.userId,
-            replacedByItemRowId: item!.id,
-            replacedByPlaidItemIdExternal: item!.itemId,
-            cleanedItemRowId: c.itemRowId,
-            cleanedPlaidItemIdExternal: c.itemId,
-            institutionName: c.institutionName,
-          },
-          "[plaid-exchange] auto-archived stale malformed-token row replaced by fresh re-link",
-        );
-      }
-    } catch (e) {
-      req.log.warn(
+      return { item: itemRow, cleaned: cleanedSiblings, relinked: relinkedInTx };
+    });
+
+    // (#659) Per-task contract: emit a single summary line so support
+    // can grep `[plaid-exchange] archived N orphan` and immediately
+    // see how many ghost rows the relink swept. The per-row info
+    // line below is preserved for drill-down. `cleaned.length === 0`
+    // is the common case (first-ever link) and we still emit a debug
+    // line so the absence of cleanup is observable too.
+    const institutionLabel = resolvedName ?? slug ?? "unknown institution";
+    if (cleaned.length > 0) {
+      req.log.info(
         {
-          err: e,
           userId: req.userId,
-          plaidItemRowId: item!.id,
-          plaidItemIdExternal: item!.itemId,
-          institutionName: item!.institutionName,
+          householdId: req.householdId,
+          replacedByItemRowId: item!.id,
+          replacedByPlaidItemIdExternal: item!.itemId,
+          institution: institutionLabel,
+          archivedCount: cleaned.length,
+          archivedItemRowIds: cleaned.map((c) => c.itemRowId),
         },
-        "[plaid-exchange] cleanup of stale malformed-token sibling rows failed — duplicate may remain in Settings",
+        `[plaid-exchange] archived ${cleaned.length} orphan env-mismatched item(s) for ${institutionLabel}`,
+      );
+    }
+    for (const c of cleaned) {
+      req.log.info(
+        {
+          userId: req.userId,
+          householdId: req.householdId,
+          replacedByItemRowId: item!.id,
+          replacedByPlaidItemIdExternal: item!.itemId,
+          cleanedItemRowId: c.itemRowId,
+          cleanedPlaidItemIdExternal: c.itemId,
+          institutionName: c.institutionName,
+        },
+        "[plaid-exchange] auto-archived stale unusable-token row replaced by fresh re-link",
       );
     }
 

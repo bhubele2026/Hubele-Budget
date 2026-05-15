@@ -44,15 +44,37 @@ export type CleanedSibling = {
  * INVALID_ACCESS_TOKEN on env-mismatch) anyway, and the only side
  * effect is the local Settings + dashboard banner cleanup we want.
  */
+type DbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 export async function cleanupMalformedTokenSiblings(opts: {
   userId: string;
+  // (#659) Required for per-exchange callers so the cleanup is scoped
+  // to the household the relink belongs to (per task contract). The
+  // backfill scan still resolves household indirectly via the row's
+  // own `householdId`. Optional here so the existing callers that
+  // already scope by user only (ie tests + backfill) keep working.
+  householdId?: string;
   survivorItemRowId: string;
   institutionId: string | null;
   institutionSlug: string | null;
   log?: Logger;
+  // (#659) Optional drizzle transaction client. When the caller is
+  // already inside `db.transaction(...)` (eg the /plaid/exchange
+  // atomic upsert+cleanup block), passing the tx here makes every
+  // statement below participate in the same transaction so a failure
+  // anywhere rolls back BOTH the survivor insert AND any partial
+  // sibling deletes — the user never sees a half-cleaned state.
+  tx?: DbClient;
 }): Promise<{ cleaned: CleanedSibling[] }> {
-  const { userId, survivorItemRowId, institutionId, institutionSlug } = opts;
+  const {
+    userId,
+    householdId,
+    survivorItemRowId,
+    institutionId,
+    institutionSlug,
+  } = opts;
   const log = opts.log ?? defaultLogger;
+  const dbc: DbClient = opts.tx ?? db;
   const cleaned: CleanedSibling[] = [];
 
   // Need at least one of institutionId / institutionSlug to scope the
@@ -69,10 +91,20 @@ export async function cleanupMalformedTokenSiblings(opts: {
     filters.length === 1 ? filters[0] : or(...filters);
   if (!institutionFilter) return { cleaned };
 
-  const sameInstitutionRows = await db
+  // (#659) Per-task contract: cleanup must be scoped to the same
+  // household + same institution. When the caller passes
+  // `householdId`, prefer it over `userId` so a multi-household /
+  // shared-household relink only sweeps orphans inside the right
+  // household. We keep `userId` in the WHERE as a defense-in-depth
+  // belt: the same user is always a member of the household they
+  // re-linked from, and the join keeps the existing test fixtures
+  // (which always pair a user with their own household) green.
+  const scope: SQL[] = [eq(plaidItemsTable.userId, userId)];
+  if (householdId) scope.push(eq(plaidItemsTable.householdId, householdId));
+  const sameInstitutionRows = await dbc
     .select()
     .from(plaidItemsTable)
-    .where(and(eq(plaidItemsTable.userId, userId), institutionFilter));
+    .where(and(...scope, institutionFilter));
 
   for (const stale of sameInstitutionRows) {
     if (stale.id === survivorItemRowId) continue;
@@ -84,7 +116,7 @@ export async function cleanupMalformedTokenSiblings(opts: {
     // production server (or a malformed one) both fall through here.
     if (isAccessTokenForCurrentEnv(stale.accessToken)) continue;
 
-    const staleAccts = await db
+    const staleAccts = await dbc
       .select({ id: plaidAccountsTable.id })
       .from(plaidAccountsTable)
       .where(
@@ -95,7 +127,7 @@ export async function cleanupMalformedTokenSiblings(opts: {
       );
     const staleAcctIds = staleAccts.map((a) => a.id);
     if (staleAcctIds.length > 0) {
-      await db
+      await dbc
         .update(debtsTable)
         .set({
           balanceSource: "manual",
@@ -111,7 +143,7 @@ export async function cleanupMalformedTokenSiblings(opts: {
           ),
         );
     }
-    await db
+    await dbc
       .delete(plaidAccountsTable)
       .where(
         and(
@@ -119,7 +151,7 @@ export async function cleanupMalformedTokenSiblings(opts: {
           eq(plaidAccountsTable.userId, userId),
         ),
       );
-    await db
+    await dbc
       .delete(plaidItemsTable)
       .where(
         and(
@@ -135,12 +167,13 @@ export async function cleanupMalformedTokenSiblings(opts: {
     log.info(
       {
         userId,
+        householdId: householdId ?? null,
         survivorItemRowId,
         cleanedItemRowId: stale.id,
         cleanedPlaidItemIdExternal: stale.itemId,
         institutionName: stale.institutionName,
       },
-      "[plaid-malformed-sibling] auto-archived stale malformed-token row",
+      "[plaid-malformed-sibling] auto-archived stale unusable-token row",
     );
   }
 

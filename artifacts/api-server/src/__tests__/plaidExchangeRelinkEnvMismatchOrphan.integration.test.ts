@@ -226,6 +226,22 @@ describe("(#659) /plaid/exchange auto-archives env-mismatched orphan rows on rel
     // The orphan id is gone — assert by id explicitly so a future
     // refactor that leaves the row but flags it would still fail.
     expect(items.find((it) => it.id === orphan!.id)).toBeUndefined();
+
+    // (#659, code-review feedback) Walk the user-visible API path,
+    // not just the raw table — the Settings → Linked banks list is
+    // what the user actually sees and is the ultimate contract for
+    // this task. /plaid/items filters by householdId and hides
+    // synthetic rows, so a regression that left the orphan in the
+    // DB but somehow filtered it out here would still be a bug.
+    const itemsResp = await fetch(`${baseUrl}/plaid/items`);
+    expect(itemsResp.status).toBe(200);
+    const itemsBody = (await itemsResp.json()) as Array<{
+      itemId: string;
+      institutionName: string | null;
+    }>;
+    expect(itemsBody).toHaveLength(1);
+    expect(itemsBody[0]!.itemId).toBe(nextExchangeItemId);
+    expect(itemsBody[0]!.institutionName).toBe("Chase");
   });
 
   it("leaves a healthy sibling alone when only the orphan should be cleaned", async () => {
