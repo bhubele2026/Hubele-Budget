@@ -637,19 +637,25 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       .returning();
 
     // (#401) Auto-clean up any *other* row for the same user + same
-    // institution that is stuck in the malformed-token state. When
-    // Plaid mints a fresh internal item_id on a re-link from scratch
-    // (instead of going through update mode), the original broken row
-    // would otherwise sit forever with a "Stored Plaid credential is
-    // malformed" chip and re-surface stale "needs reconnecting"
+    // institution whose stored access_token is unusable for the
+    // current server. When Plaid mints a fresh internal item_id on a
+    // re-link from scratch (instead of going through update mode),
+    // the original broken row would otherwise sit forever with a
+    // stale "Stored Plaid credential is malformed" / "wrong Plaid
+    // environment" chip and re-surface stale "needs reconnecting"
     // banners on other pages and in the daily health-check cron.
     //
-    // We only touch rows where the stored access_token genuinely
-    // fails the malformed-token guard — never a healthy duplicate
-    // sibling — so a user with two legitimate Chase logins is left
-    // alone. Local cleanup only (debt source flags reset, accounts +
-    // item deleted); skipping the upstream itemRemove is safe because
-    // the token was malformed and Plaid would 400 on it anyway.
+    // (#659) "Unusable" covers BOTH the original malformed-token case
+    // AND env-mismatched tokens (well-formed but wrong PLAID_ENV
+    // prefix). The user's production Chase ghost row is the latter:
+    // a sandbox-prefixed token that survived a previous re-link
+    // because the upsert is keyed on `item_id` and the fresh OAuth
+    // grant minted a brand-new item_id. We never touch a healthy
+    // duplicate sibling — a user with two legitimate Chase logins is
+    // left alone. Local cleanup only (debt source flags reset,
+    // accounts + item deleted); skipping the upstream itemRemove is
+    // safe because Plaid would reject the token anyway (400 on
+    // malformed, INVALID_ACCESS_TOKEN on env-mismatch).
     try {
       const { cleaned } = await cleanupMalformedTokenSiblings({
         userId: req.userId!,

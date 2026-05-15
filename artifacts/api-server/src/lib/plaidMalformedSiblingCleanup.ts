@@ -5,7 +5,7 @@ import {
   plaidAccountsTable,
   plaidItemsTable,
 } from "@workspace/db";
-import { isSyntheticPlaidItem, isValidPlaidAccessToken } from "./plaid";
+import { isAccessTokenForCurrentEnv, isSyntheticPlaidItem } from "./plaid";
 import { logger as defaultLogger } from "./logger";
 
 type Logger = {
@@ -20,19 +20,29 @@ export type CleanedSibling = {
 };
 
 /**
- * (#406) Local-only cleanup of malformed-token sibling `plaid_items` rows
- * for a given user + institution. Mirrors the inline block under the
- * (#401) comment in `routes/plaid.ts`: any other row for the same user
- * and institution that fails the malformed-token guard is treated as a
- * stale leftover from before the upstream guard existed and is removed
- * locally — debt rows pointing at its accounts are reset to manual
- * source, then the accounts and the item itself are deleted. We never
- * touch a healthy sibling, so a user with two legitimate logins for the
- * same institution is left alone.
+ * (#406) Local-only cleanup of unusable sibling `plaid_items` rows for a
+ * given user + institution. Mirrors the inline block under the (#401)
+ * comment in `routes/plaid.ts`: any other row for the same user and
+ * institution whose stored access_token is unusable for the current
+ * server is treated as a stale leftover from before the upstream guard
+ * existed and is removed locally — debt rows pointing at its accounts
+ * are reset to manual source, then the accounts and the item itself
+ * are deleted. We never touch a healthy sibling, so a user with two
+ * legitimate logins for the same institution is left alone.
+ *
+ * (#659) "Unusable" means EITHER the token fails the format guard
+ * (malformed) OR its env-prefix doesn't match the current `PLAID_ENV`
+ * (env-mismatch — production scenario where a fresh re-link mints a
+ * brand-new `item_id`, so the upsert in `/plaid/exchange` doesn't
+ * conflict with the old sandbox-prefixed row and a ghost duplicate
+ * lingers in `plaid_items` forever). `isAccessTokenForCurrentEnv`
+ * collapses both checks: it requires `isValidPlaidAccessToken` first,
+ * then enforces the env match.
  *
  * Skipping the upstream Plaid `/item/remove` is safe because the token
- * is malformed: Plaid would 400 on it anyway, and the only side effect
- * is the local Settings + dashboard banner cleanup we want.
+ * is unusable: Plaid would reject it (400 on malformed,
+ * INVALID_ACCESS_TOKEN on env-mismatch) anyway, and the only side
+ * effect is the local Settings + dashboard banner cleanup we want.
  */
 export async function cleanupMalformedTokenSiblings(opts: {
   userId: string;
@@ -67,7 +77,12 @@ export async function cleanupMalformedTokenSiblings(opts: {
   for (const stale of sameInstitutionRows) {
     if (stale.id === survivorItemRowId) continue;
     if (isSyntheticPlaidItem(stale)) continue;
-    if (isValidPlaidAccessToken(stale.accessToken)) continue;
+    // (#659) Treat env-mismatched tokens as unusable too — see the
+    // function-level comment. `isAccessTokenForCurrentEnv` is `true`
+    // only when the token is well-formed AND its env-prefix matches
+    // the current PLAID_ENV, so a sandbox-prefixed token on a
+    // production server (or a malformed one) both fall through here.
+    if (isAccessTokenForCurrentEnv(stale.accessToken)) continue;
 
     const staleAccts = await db
       .select({ id: plaidAccountsTable.id })
@@ -176,13 +191,20 @@ export async function backfillMalformedTokenSiblings(): Promise<{
   for (const [userId, userItems] of byUser) {
     for (const stale of userItems) {
       if (isSyntheticPlaidItem(stale)) continue;
-      if (isValidPlaidAccessToken(stale.accessToken)) continue;
+      // (#659) Backfill scope mirrors the per-exchange helper above:
+      // a stored token is "stale" if it's malformed OR env-mismatched
+      // for the current PLAID_ENV. The production Chase ghost row
+      // (`access-sandbox-…` on a production server) is the canonical
+      // env-mismatch case this widening picks up.
+      if (isAccessTokenForCurrentEnv(stale.accessToken)) continue;
       scannedMalformed += 1;
 
       const healthy = userItems.find((other) => {
         if (other.id === stale.id) return false;
         if (isSyntheticPlaidItem(other)) return false;
-        if (!isValidPlaidAccessToken(other.accessToken)) return false;
+        // (#659) The survivor must be a token we could actually sync
+        // against — well-formed AND for the current PLAID_ENV.
+        if (!isAccessTokenForCurrentEnv(other.accessToken)) return false;
         if (
           stale.institutionId &&
           other.institutionId &&
