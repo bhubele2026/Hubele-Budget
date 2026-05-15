@@ -53,3 +53,15 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
 # (idempotent; skips rows already < 1.0).
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f "$(dirname "$0")/migrate_debt_apr_to_decimal.sql"
+
+# Task #654 — flag any plaid_items row whose stored access_token was
+# minted in a different Plaid environment than the live server (the
+# user's two Chase rows hit this exact case). Stamps lastSyncErrorCode
+# = INVALID_ACCESS_TOKEN so the Reconnect button shows on next page
+# load instead of waiting for the next failed sync to re-stamp it.
+# Idempotent — no-op once the user reconnects with a matching-env token.
+PLAID_TARGET_ENV="${PLAID_ENV:-production}"
+PLAID_TARGET_ENV_LOWER="$(echo "$PLAID_TARGET_ENV" | tr '[:upper:]' '[:lower:]')"
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -c "SET plaid.target_env = '${PLAID_TARGET_ENV_LOWER}';" \
+  -f "$(dirname "$0")/remediate_plaid_env_mismatch.sql"

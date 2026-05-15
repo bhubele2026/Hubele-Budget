@@ -50,6 +50,13 @@ vi.mock("@workspace/api-client-react", () => ({
     mutate: vi.fn(),
     isPending: false,
   }),
+  // (#654) The plaid-reconnect-listener wired into the Reconnect popover
+  // calls both useCreatePlaidUpdateLinkToken AND useCreatePlaidLinkToken
+  // (the latter for the fresh-link fallback when the server returns
+  // 409 + action:"relink"). The mock has to expose both or render fails
+  // with "No 'useCreatePlaidLinkToken' export is defined".
+  useCreatePlaidLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  useExchangePlaidPublicToken: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 // Stub react-plaid-link so PlaidReconnectButton can render without trying to
@@ -240,6 +247,32 @@ describe("SyncButton", () => {
     fireEvent.click(trigger);
     await waitFor(() => {
       expect(screen.getByTestId("button-plaid-reconnect-i-bad")).toBeTruthy();
+    });
+  });
+
+  it("(#654) shows a Reconnect popover trigger for INVALID_ACCESS_TOKEN (env-mismatched Chase token)", async () => {
+    // The user's two real Chase rows persist as INVALID_ACCESS_TOKEN
+    // because their sandbox-prefixed access_tokens are rejected by
+    // Plaid on every sync. The bank-chip Reconnect popover MUST treat
+    // that code as a reauth state on first render — without it the
+    // user has no way to recover until the next sync re-stamps the row
+    // (which itself can't happen because of the same token problem).
+    plaidItems = [
+      {
+        id: "i-envmismatch",
+        institutionName: "Chase",
+        lastSyncedAt: new Date().toISOString(),
+        lastSyncError:
+          "This bank was linked from a different Plaid environment. Please reconnect to refresh.",
+        lastSyncErrorCode: "INVALID_ACCESS_TOKEN",
+      },
+    ];
+    renderButton();
+    fireEvent.click(screen.getByTestId("button-plaid-reconnect-trigger"));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("button-plaid-reconnect-i-envmismatch"),
+      ).toBeTruthy();
     });
   });
 

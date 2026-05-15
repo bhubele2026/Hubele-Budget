@@ -11,6 +11,10 @@ vi.mock("@workspace/api-client-react", () => ({
   useUnlinkDebtFromPlaid: () => ({ mutate: vi.fn(), isPending: false }),
   useRefreshDebtFromPlaid: () => ({ mutate: vi.fn(), isPending: false }),
   useCreatePlaidUpdateLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  // (#654) plaid-reconnect-listener also calls useCreatePlaidLinkToken
+  // for the fresh-link fallback when the server returns 409+relink.
+  useCreatePlaidLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  useExchangePlaidPublicToken: () => ({ mutate: vi.fn(), isPending: false }),
   getListDebtsQueryKey: () => ["/api/debts"],
   getListPlaidLiabilityAccountsQueryKey: () => ["/api/plaid/liability-accounts"],
   getGetBillsSummaryQueryKey: () => ["/api/bills/summary"],
@@ -94,6 +98,22 @@ describe("(#198) DebtPlaidActions surfaces Reconnect when item is in re-auth sta
     // The standard refresh + unlink controls must still be present.
     expect(screen.getByTestId("button-debt-refresh-d-1")).toBeTruthy();
     expect(screen.getByTestId("button-debt-unlink-d-1")).toBeTruthy();
+  });
+
+  it("(#654) renders Reconnect when plaidLastSyncErrorCode === 'INVALID_ACCESS_TOKEN' (env-mismatched Chase token)", () => {
+    // Reproduces the exact persisted state of the user's two real Chase
+    // rows after #654: a sandbox-prefixed access_token on a production
+    // server that Plaid bounces with INVALID_ACCESS_TOKEN. The Reconnect
+    // button MUST render off this code so the user can re-link without
+    // waiting for a new sync to re-stamp the row.
+    renderRow(
+      baseDebt({
+        plaidLastSyncError:
+          "This bank was linked from a different Plaid environment. Please reconnect to refresh.",
+        plaidLastSyncErrorCode: "INVALID_ACCESS_TOKEN",
+      }),
+    );
+    expect(screen.getByTestId("button-plaid-reconnect-item-row-1")).toBeTruthy();
   });
 
   it("renders Reconnect for PENDING_EXPIRATION too (other re-auth code)", () => {
