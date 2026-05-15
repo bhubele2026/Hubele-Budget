@@ -228,27 +228,12 @@ const NEW_MAPPING_RULES: RuleSeed[] = [
   ], fallbackMiscBuffer: true },
 ];
 
-// Description fragments that flag transfers between the user's own accounts.
-// Mostly already covered by autoCategorize.ts's TRANSFER_DESC_PATTERNS plus
-// the TRANSFER_IN/TRANSFER_OUT PFC primary, but we list them here as a
-// belt-and-suspenders to be sure every row in the seed is correctly tagged.
-const TRANSFER_HINTS = [
-  "online transfer to",
-  "online transfer from",
-  "odp transfer",
-  "venmo",
-  "paypal transfer",
-  "fid bkg svc",
-  "apple gs savings transfer",
-  "atm withdrawal",
-  "remote online deposit",
-  "paypal inst xfer 1049422616723",
-];
-
-function isTransferRow(r: SeedRow): boolean {
-  if (r.pfc === "TRANSFER_IN" || r.pfc === "TRANSFER_OUT") return true;
-  const hay = r.description.toLowerCase();
-  return TRANSFER_HINTS.some((p) => hay.includes(p));
+// (#666) Auto-detection of transfers is disabled across the entire app
+// — including the seed path. Seeded rows are inserted with
+// isTransfer=false; the user explicitly assigns the system "Transfer"
+// category to any row they want excluded from buckets.
+function isTransferRow(_r: SeedRow): boolean {
+  return false;
 }
 
 async function ensureChaseAccount(

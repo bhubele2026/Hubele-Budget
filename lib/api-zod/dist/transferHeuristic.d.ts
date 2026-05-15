@@ -1,35 +1,41 @@
 /**
- * (#642) Shared transfer / card-payment heuristic.
+ * (#642 / #666) Shared transfer / card-payment heuristic.
  *
- * Both the API server (auto-categorize, startup reclassify sweep, write-path
- * guards) and the web client (dashboard bucket membership predicate, chip
- * detection) must agree on what "looks like a transfer" so the dashboard's
- * Unplanned bucket can never sum a transfer-looking row regardless of how
- * its allowance flag got set. Lifting the patterns into the shared
- * `@workspace/api-zod` package keeps the two sides in lockstep — there is
- * no zod dependency here so this remains a zero-cost addition for both
- * runtimes.
- */
-/**
- * Plaid `personal_finance_category.primary` values that always represent
- * money-movement between the user's own accounts and must NOT count toward
- * either budgeted income or budgeted spending.
+ * Originally this heuristic auto-flagged any transaction whose Plaid
+ * `personal_finance_category.primary` was TRANSFER_IN/TRANSFER_OUT/
+ * LOAN_PAYMENTS, or whose description matched a list of canonical
+ * transfer phrasings (e.g. "Online Transfer to SAV", "payment - thank
+ * you"), as `isTransfer=true` so it would be excluded from spending
+ * buckets.
  *
- * `LOAN_PAYMENTS` covers credit-card payments from a checking account
- * (Plaid's detailed code `LOAN_PAYMENTS_CREDIT_CARD_PAYMENT`).
+ * (#666) Per user request, auto-detection is disabled. The user wants
+ * full manual control: a transaction only becomes a transfer when they
+ * explicitly assign it to the system "Transfer" category. The
+ * constants below are intentionally empty so:
+ *   - `categorize()` in `autoCategorize.ts` always returns
+ *     `isTransfer: false` for new rows on Plaid sync / XLSX import.
+ *   - The dashboard's defensive bucket predicate
+ *     (`isTxnInBucket` in `dashboard.tsx`) no longer hides rows whose
+ *     description "looks like" a transfer.
+ *   - The startup card-payment reclassify sweep
+ *     (`runStartupCardPaymentReclassify`) walks empty pattern lists,
+ *     short-circuits, and is a no-op on every boot.
+ *   - The Unplanned-bucket write guards in `routes/transactions.ts`
+ *     never reject a user's tag attempt.
+ *
+ * Existing rows whose `isTransfer=true` was set by the previous
+ * heuristic are left alone (the user can clear them individually via
+ * the Transfer chip's X). The manual "pick the Transfer category"
+ * path in `routes/transactions.ts` continues to set `isTransfer=true`
+ * + `isTransferUserOverridden=true`, which is the only auto-flagging
+ * path that remains.
  */
 export declare const TRANSFER_PFC_PRIMARY: ReadonlySet<string>;
-/**
- * Description fragments (case-insensitive) that flag obvious internal
- * transfers / card payments even when no Plaid PFC is available
- * (e.g. ODP between checking/savings, the credit-card side of a payment
- * row, etc).
- */
 export declare const TRANSFER_DESC_PATTERNS: readonly string[];
 /**
- * Returns true when the input matches any card-payment / transfer
- * heuristic (PFC OR description pattern). Pure function, safe to call
- * from both the server and the browser.
+ * (#666) Always returns false. Kept as an exported function so existing
+ * call sites compile unchanged; with the constants above empty, this
+ * is a constant-false predicate.
  */
-export declare function isHeuristicTransfer(description: string | null | undefined, pfcPrimary?: string | null): boolean;
+export declare function isHeuristicTransfer(_description?: string | null | undefined, _pfcPrimary?: string | null): boolean;
 //# sourceMappingURL=transferHeuristic.d.ts.map

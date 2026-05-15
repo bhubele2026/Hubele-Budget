@@ -285,23 +285,23 @@ describe("POST /transactions/bulk-update", () => {
     expect(r.json).toEqual({ updated: 0, results: [], affectedMonths: [] });
   });
 
-  // (#642) Transfer-looking rows must never be tagged Unplanned via
-  // bulk-update. Mixed batches succeed for the safe rows and report the
-  // rejected ones per-id with `code: "unplanned_transfer_rejected"`;
-  // an all-transfer batch fails the whole request with 422.
-  describe("(#642) Unplanned-transfer guard", () => {
-    it("rejects per-id transfer rows in a mixed bulk-update and tags only the safe rows", async () => {
+  // (#666) Auto-detection of transfers is disabled, so the bulk-update
+  // Unplanned-transfer guard never fires anymore. The user has full
+  // manual control over which rows are tagged Unplanned regardless of
+  // their description or Plaid PFC.
+  describe("(#666) Unplanned-transfer guard no longer rejects bulk patches", () => {
+    it("tags every row in a mixed bulk-update — including transfer-looking descriptions", async () => {
       const safe = await insertTxn(TEST_USER, {
         description: "STARBUCKS COFFEE #221",
         unplannedAllowance: false,
       });
-      const transfer = await insertTxn(TEST_USER, {
+      const transferLooking = await insertTxn(TEST_USER, {
         description: "Online Transfer to SAV ...9128",
         unplannedAllowance: false,
       });
 
       const r = await api("POST", "/transactions/bulk-update", {
-        ids: [safe, transfer],
+        ids: [safe, transferLooking],
         patch: { unplannedAllowance: true },
       });
 
@@ -311,11 +311,7 @@ describe("POST /transactions/bulk-update", () => {
         affectedMonths: string[];
         results: { id: string; ok: boolean; error: string | null; code?: string }[];
       };
-      expect(body.updated).toBe(1);
-      const byId = Object.fromEntries(body.results.map((x) => [x.id, x]));
-      expect(byId[safe]?.ok).toBe(true);
-      expect(byId[transfer]?.ok).toBe(false);
-      expect(byId[transfer]?.code).toBe("unplanned_transfer_rejected");
+      expect(body.updated).toBe(2);
 
       const rows = await db
         .select({
@@ -323,15 +319,15 @@ describe("POST /transactions/bulk-update", () => {
           unplannedAllowance: transactionsTable.unplannedAllowance,
         })
         .from(transactionsTable)
-        .where(inArray(transactionsTable.id, [safe, transfer]));
+        .where(inArray(transactionsTable.id, [safe, transferLooking]));
       const flagsById = Object.fromEntries(
         rows.map((r) => [r.id, r.unplannedAllowance]),
       );
       expect(flagsById[safe]).toBe(true);
-      expect(flagsById[transfer]).toBe(false);
+      expect(flagsById[transferLooking]).toBe(true);
     });
 
-    it("returns 422 when EVERY id in the batch is a transfer-looking row", async () => {
+    it("succeeds (200) when every id in the batch was previously rejected as transfer-looking", async () => {
       const t1 = await insertTxn(TEST_USER, {
         description: "ONLINE PAYMENT - THANK YOU",
       });
@@ -344,10 +340,7 @@ describe("POST /transactions/bulk-update", () => {
         patch: { unplannedAllowance: true },
       });
 
-      expect(r.status).toBe(422);
-      expect((r.json as { code?: string }).code).toBe(
-        "unplanned_transfer_rejected",
-      );
+      expect(r.status).toBe(200);
     });
   });
 });

@@ -52,9 +52,13 @@ async function readRow(id: string) {
   return row;
 }
 
-describe("(#632) startup card-payment reclassify sweep", () => {
-  it("flips card-payment rows to isTransfer + clears allowance flags, leaves user-overridden and unrelated rows alone, and is idempotent", async () => {
-    // (a) Card-payment row mis-tagged as Monthly spend.
+// (#666) Auto-detection of transfers and card payments is disabled.
+// The startup reclassify sweep is a no-op, and Plaid sync no longer
+// flips `isTransfer` on bland-description / LOAN_PAYMENTS rows. The
+// user is in full manual control: only explicitly assigning a row to
+// the system "Transfer" category sets `isTransfer=true`.
+describe("(#666) Card-payment auto-classification is disabled", () => {
+  it("startup sweep does NOT flip card-payment-pattern rows to isTransfer", async () => {
     const [cardPayment] = await db
       .insert(transactionsTable)
       .values({
@@ -69,63 +73,15 @@ describe("(#632) startup card-payment reclassify sweep", () => {
       })
       .returning();
 
-    // (b) Card-payment-pattern row the user has explicitly overridden
-    //     (they want it to count as spend, weird but allowed).
-    const [overridden] = await db
-      .insert(transactionsTable)
-      .values({
-        userId: TEST_USER,
-        householdId: TEST_HOUSEHOLD_ID,
-        occurredOn: "2026-04-16",
-        description: "AUTOPAY PAYMENT TO CHASE CARD 4444",
-        amount: "-200.00",
-        isTransfer: false,
-        isTransferUserOverridden: true,
-        weeklyAllowance: true,
-        source: "manual",
-      })
-      .returning();
-
-    // (c) Unrelated merchant row — must not be touched.
-    const [merchant] = await db
-      .insert(transactionsTable)
-      .values({
-        userId: TEST_USER,
-        householdId: TEST_HOUSEHOLD_ID,
-        occurredOn: "2026-04-17",
-        description: "STARBUCKS STORE 4477",
-        amount: "-5.50",
-        isTransfer: false,
-        weeklyAllowance: true,
-        source: "manual",
-      })
-      .returning();
-
     const summary = await runStartupCardPaymentReclassify();
-    expect(summary.reclassified).toBeGreaterThanOrEqual(1);
+    expect(summary.reclassified).toBe(0);
 
-    const a = await readRow(cardPayment!.id);
-    expect(a.isTransfer).toBe(true);
-    expect(a.weeklyAllowance).toBe(false);
-    expect(a.monthlyAllowance).toBe(false);
-    expect(a.unplannedAllowance).toBe(false);
-
-    const b = await readRow(overridden!.id);
-    expect(b.isTransfer).toBe(false);
-    expect(b.isTransferUserOverridden).toBe(true);
-    expect(b.weeklyAllowance).toBe(true);
-
-    const c = await readRow(merchant!.id);
-    expect(c.isTransfer).toBe(false);
-    expect(c.weeklyAllowance).toBe(true);
-
-    // Idempotency: a second run finds nothing left to fix.
-    const second = await runStartupCardPaymentReclassify();
-    expect(second.reclassified).toBe(0);
+    const after = await readRow(cardPayment!.id);
+    expect(after.isTransfer).toBe(false);
+    expect(after.monthlyAllowance).toBe(true);
   });
 
-  it("(#636) catches bland-description rows via persisted Plaid PFC, leaves null-PFC and user-overridden twins alone", async () => {
-    // (a) Bland description, but PFC reveals it as a card payment.
+  it("startup sweep does NOT flip rows whose Plaid PFC primary is LOAN_PAYMENTS", async () => {
     const [pfcCardPayment] = await db
       .insert(transactionsTable)
       .values({
@@ -144,64 +100,16 @@ describe("(#632) startup card-payment reclassify sweep", () => {
       })
       .returning();
 
-    // (b) Same bland description, no PFC -> description arm can't catch
-    //     it, PFC arm doesn't apply, so it must stay untouched.
-    const [noPfcTwin] = await db
-      .insert(transactionsTable)
-      .values({
-        userId: TEST_USER,
-        householdId: TEST_HOUSEHOLD_ID,
-        occurredOn: "2026-04-26",
-        description: "ACH WEB PAYMENT 99999",
-        amount: "-150.00",
-        isTransfer: false,
-        weeklyAllowance: true,
-        source: "manual",
-      })
-      .returning();
-
-    // (c) PFC says LOAN_PAYMENTS but the user explicitly overrode the
-    //     transfer flag — must not be touched.
-    const [pfcOverridden] = await db
-      .insert(transactionsTable)
-      .values({
-        userId: TEST_USER,
-        householdId: TEST_HOUSEHOLD_ID,
-        occurredOn: "2026-04-27",
-        description: "ACH WEB PAYMENT 77777",
-        amount: "-75.00",
-        isTransfer: false,
-        isTransferUserOverridden: true,
-        weeklyAllowance: true,
-        source: "plaid:card",
-        plaidTransactionId: `t-${randomUUID()}`,
-        plaidAccountId: "acct-cc-3",
-        pfcPrimary: "LOAN_PAYMENTS",
-      })
-      .returning();
-
     const summary = await runStartupCardPaymentReclassify();
-    expect(summary.reclassified).toBeGreaterThanOrEqual(1);
+    expect(summary.reclassified).toBe(0);
 
-    const a = await readRow(pfcCardPayment!.id);
-    expect(a.isTransfer).toBe(true);
-    expect(a.monthlyAllowance).toBe(false);
-    expect(a.weeklyAllowance).toBe(false);
-    expect(a.unplannedAllowance).toBe(false);
-
-    const b = await readRow(noPfcTwin!.id);
-    expect(b.isTransfer).toBe(false);
-    expect(b.weeklyAllowance).toBe(true);
-
-    const c = await readRow(pfcOverridden!.id);
-    expect(c.isTransfer).toBe(false);
-    expect(c.isTransferUserOverridden).toBe(true);
-    expect(c.weeklyAllowance).toBe(true);
+    const after = await readRow(pfcCardPayment!.id);
+    expect(after.isTransfer).toBe(false);
+    expect(after.monthlyAllowance).toBe(true);
   });
 
-  it("Plaid sync upsert clears Weekly/Monthly/Unplanned allowance flags when the row is auto-classified as transfer", async () => {
+  it("Plaid sync upsert does NOT flip pre-existing rows to transfer when modified row carries LOAN_PAYMENTS PFC", async () => {
     const plaidTxnId = `t-${randomUUID()}`;
-    // Pre-existing row carrying stale allowance flags.
     const [row] = await db
       .insert(transactionsTable)
       .values({
@@ -260,9 +168,9 @@ describe("(#632) startup card-payment reclassify sweep", () => {
     expect(syncResult.error).toBeNull();
 
     const after = await readRow(row!.id);
-    expect(after.isTransfer).toBe(true);
-    expect(after.weeklyAllowance).toBe(false);
-    expect(after.monthlyAllowance).toBe(false);
-    expect(after.unplannedAllowance).toBe(false);
+    expect(after.isTransfer).toBe(false);
+    expect(after.weeklyAllowance).toBe(true);
+    expect(after.monthlyAllowance).toBe(true);
+    expect(after.unplannedAllowance).toBe(true);
   });
 });

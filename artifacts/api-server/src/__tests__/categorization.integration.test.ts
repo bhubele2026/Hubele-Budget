@@ -226,8 +226,12 @@ describe("categorization pipeline (integration)", () => {
     // 3) Mock Plaid transactionsSync to return:
     //    a) Starbucks → Coffee via description rule
     //    b) MGE → Electric via description rule
-    //    c) "Online transfer to savings" → flagged via description, excluded
-    //    d) TRANSFER_IN PFC → flagged via PFC, excluded
+    //    c) "Online transfer to savings" — (#666) auto-detect disabled,
+    //       this row is NOT flagged as transfer; lands as un-categorized
+    //       and is excluded from buckets only because it has no allowance
+    //       flag set (the dashboard never includes un-tagged rows).
+    //    d) TRANSFER_IN PFC — (#666) same; the PFC arm is disabled so the
+    //       row lands as un-categorized, no transfer flag.
     const fakeTxns = [
       {
         transaction_id: `t-${randomUUID()}`,
@@ -322,6 +326,10 @@ describe("categorization pipeline (integration)", () => {
     // Transfers ($500 + $100) MUST NOT be included anywhere.
     expect(totalActual).toBeCloseTo(9.75 + 241.0 + 32.18, 2);
 
+    // (#666) Auto-detect disabled: no Plaid-synced row gets isTransfer=true
+    // automatically. Both the description-shaped and PFC-shaped rows land
+    // as plain un-categorized rows (still correctly excluded from bucket
+    // totals because no allowance flag was set).
     const transferRows = await db
       .select()
       .from(transactionsTable)
@@ -331,7 +339,7 @@ describe("categorization pipeline (integration)", () => {
           eq(transactionsTable.isTransfer, true),
         ),
       );
-    expect(transferRows.length).toBe(2);
+    expect(transferRows.length).toBe(0);
   });
 
   it("PATCH /transactions/:id with rememberPattern upserts a mapping_rule and re-categorizes similar txns", async () => {
@@ -1625,10 +1633,11 @@ describe("categorization pipeline (integration)", () => {
       );
     expect(createdRow.autoCategorizedRuleId).toBe(matchedRuleRow!.id);
 
-    // 2) POST a description that trips the transfer-detection regex →
-    //    isTransfer should be true (and categoryId stays null because
-    //    no rule matches that description). The transfer flag is what
-    //    keeps the row out of the budget actuals aggregation.
+    // 2) (#666) POST a description that previously tripped the
+    //    transfer-detection regex → with auto-detect disabled, the row
+    //    must NOT be auto-flagged. The user is in full manual control;
+    //    they explicitly pick the system "Transfer" category when they
+    //    want a row excluded from buckets.
     const transfer = await api("POST", "/transactions", {
       occurredOn: dateInCurrentMonth(12),
       description: "ONLINE TRANSFER TO SAVINGS XXXX9999",
@@ -1642,17 +1651,14 @@ describe("categorization pipeline (integration)", () => {
       isTransfer: boolean;
       autoCategorizedRuleId: string | null;
     };
-    expect(transferRow.isTransfer).toBe(true);
+    expect(transferRow.isTransfer).toBe(false);
     expect(transferRow.categoryId).toBeNull();
-    // No rule matched, so no auto-attribution to surface.
     expect(transferRow.autoCategorizedRuleId).toBeNull();
-    // Budget actuals exclude isTransfer rows the same way Plaid sync does
-    // — confirm the row really did land with isTransfer=true on disk.
     const [persistedTransfer] = await db
       .select()
       .from(transactionsTable)
       .where(eq(transactionsTable.id, transferRow.id));
-    expect(persistedTransfer!.isTransfer).toBe(true);
+    expect(persistedTransfer!.isTransfer).toBe(false);
 
     // 3) POST with an explicit categoryId → server must NOT silently
     //    overwrite it with the rule's pick (otherCat wins even though

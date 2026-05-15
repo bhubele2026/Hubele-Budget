@@ -63,12 +63,14 @@ async function readRow(id: string) {
   return row;
 }
 
-describe("runStartupCardPaymentReclassify (#632)", () => {
-  it("flips matching rows, leaves user-overridden + non-matching rows alone, and is idempotent", async () => {
-    // (a) Card-payment-pattern row with monthlyAllowance=true and
-    //     isTransfer=false. Should be flipped to isTransfer=true with all
-    //     three allowance flags cleared.
-    const [needsFix] = await db
+// (#666) Auto-detection of transfers is disabled. The startup
+// reclassify sweep walks empty pattern lists and is a no-op: it must
+// NOT flip `isTransfer` on any row regardless of description / PFC,
+// and it must NOT strip `unplannedAllowance` from rows the user has
+// tagged. The user is now in full manual control.
+describe("(#666) runStartupCardPaymentReclassify is a no-op", () => {
+  it("does not touch any row regardless of description, PFC, or allowance flags", async () => {
+    const [a] = await db
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
@@ -84,73 +86,7 @@ describe("runStartupCardPaymentReclassify (#632)", () => {
       })
       .returning();
 
-    // (b) Card-payment-pattern row the user has explicitly overridden —
-    //     should be left untouched even though the description matches.
-    const [overridden] = await db
-      .insert(transactionsTable)
-      .values({
-        userId: TEST_USER,
-        householdId: TEST_HOUSEHOLD_ID,
-        occurredOn: "2026-05-11",
-        description: "ONLINE PAYMENT - THANK YOU",
-        amount: "-225.00",
-        isTransfer: false,
-        isTransferUserOverridden: true,
-        weeklyAllowance: true,
-        monthlyAllowance: false,
-        unplannedAllowance: false,
-        source: "plaid:amex",
-      })
-      .returning();
-
-    // (c) Normal merchant row that doesn't match any heuristic pattern.
-    const [merchant] = await db
-      .insert(transactionsTable)
-      .values({
-        userId: TEST_USER,
-        householdId: TEST_HOUSEHOLD_ID,
-        occurredOn: "2026-05-12",
-        description: "STARBUCKS STORE 4477",
-        amount: "-5.50",
-        isTransfer: false,
-        weeklyAllowance: true,
-        monthlyAllowance: false,
-        unplannedAllowance: false,
-        source: "manual",
-      })
-      .returning();
-
-    const first = await runStartupCardPaymentReclassify();
-    expect(first.reclassified).toBeGreaterThanOrEqual(1);
-
-    const afterA = await readRow(needsFix!.id);
-    expect(afterA.isTransfer).toBe(true);
-    expect(afterA.weeklyAllowance).toBe(false);
-    expect(afterA.monthlyAllowance).toBe(false);
-    expect(afterA.unplannedAllowance).toBe(false);
-
-    const afterB = await readRow(overridden!.id);
-    expect(afterB.isTransfer).toBe(false);
-    expect(afterB.isTransferUserOverridden).toBe(true);
-    expect(afterB.weeklyAllowance).toBe(true);
-
-    const afterC = await readRow(merchant!.id);
-    expect(afterC.isTransfer).toBe(false);
-    expect(afterC.weeklyAllowance).toBe(true);
-
-    // Idempotency: a second pass should match nothing.
-    const second = await runStartupCardPaymentReclassify();
-    expect(second.reclassified).toBe(0);
-  });
-
-  // (#642) The original sweep skips user-overridden rows by design (so the
-  // user's manual classification sticks). But a transfer-looking row that
-  // is *also* tagged Unplanned is a contradiction: it shouldn't drive the
-  // dashboard's Unplanned bucket. The sibling sweep clears just the
-  // `unplannedAllowance` flag, leaving `isTransfer` and the override flag
-  // alone.
-  it("(#642) strips unplannedAllowance from user-overridden transfer-looking rows without flipping isTransfer", async () => {
-    const [overriddenUnplanned] = await db
+    const [b] = await db
       .insert(transactionsTable)
       .values({
         userId: TEST_USER,
@@ -159,23 +95,21 @@ describe("runStartupCardPaymentReclassify (#632)", () => {
         description: "Online Transfer to SAV ...9128",
         amount: "-500.00",
         isTransfer: false,
-        isTransferUserOverridden: true,
-        weeklyAllowance: false,
-        monthlyAllowance: false,
         unplannedAllowance: true,
         source: "plaid:chase",
       })
       .returning();
 
-    const out = await runStartupCardPaymentReclassify();
-    expect(out.unplannedStripped).toBeGreaterThanOrEqual(1);
+    const summary = await runStartupCardPaymentReclassify();
+    expect(summary.reclassified).toBe(0);
+    expect(summary.unplannedStripped).toBe(0);
 
-    const after = await readRow(overriddenUnplanned!.id);
-    expect(after.unplannedAllowance).toBe(false);
-    expect(after.isTransfer).toBe(false);
-    expect(after.isTransferUserOverridden).toBe(true);
+    const afterA = await readRow(a!.id);
+    expect(afterA.isTransfer).toBe(false);
+    expect(afterA.monthlyAllowance).toBe(true);
 
-    const second = await runStartupCardPaymentReclassify();
-    expect(second.unplannedStripped).toBe(0);
+    const afterB = await readRow(b!.id);
+    expect(afterB.isTransfer).toBe(false);
+    expect(afterB.unplannedAllowance).toBe(true);
   });
 });

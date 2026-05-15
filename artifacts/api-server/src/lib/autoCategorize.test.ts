@@ -67,8 +67,6 @@ describe("findMatchingRules", () => {
 });
 
 describe("findMatchedRuleId", () => {
-  // Rules input is expected to already be sorted by priority desc — just
-  // like loadUserRules() returns. Fixtures here mirror that contract.
   const sortedRules: RuleRow[] = [
     { id: "r-pay", pattern: "EXACT", matchType: "starts_with", categoryId: "cat-paycheck", priority: 60 },
     { id: "r-coffee", pattern: "STARBUCKS", matchType: "contains", categoryId: "cat-coffee", priority: 50 },
@@ -82,8 +80,6 @@ describe("findMatchedRuleId", () => {
   });
 
   it("returns null when the highest-priority matching rule disagrees with the current category (manual override)", () => {
-    // Rule says cat-coffee, but the user moved this row to cat-other —
-    // attribution to r-coffee would be misleading.
     expect(
       findMatchedRuleId("Starbucks #1234 Madison", "cat-other", sortedRules),
     ).toBeNull();
@@ -111,9 +107,6 @@ describe("findMatchedRuleId", () => {
   });
 
   it("only considers the FIRST matching rule, mirroring categorize()'s priority-desc walk", () => {
-    // r-amex (priority 50) wins for this description; even though a
-    // lower-priority orphan "AMEX" rule pointing at cat-other also
-    // matches, we never reach it.
     const ruleSet: RuleRow[] = [
       { id: "r-amex", pattern: "AMERICAN EXPRESS ACH", matchType: "contains", categoryId: "cat-amex-pmt", priority: 50 },
       { id: "r-amex-broad", pattern: "AMEX", matchType: "contains", categoryId: "cat-other", priority: 10 },
@@ -147,35 +140,70 @@ describe("categorize", () => {
     expect(out.isTransfer).toBe(false);
   });
 
-  it("flags TRANSFER_IN as a transfer with no category", () => {
-    const out = categorize(
-      { description: "ACH credit from savings", pfcPrimary: "TRANSFER_IN" },
-      rules,
-    );
-    expect(out.isTransfer).toBe(true);
-    expect(out.categoryId).toBeNull();
-  });
+  // (#666) Auto-detection of transfers via Plaid PFC and description
+  // patterns is disabled. Every call to categorize() returns
+  // `isTransfer: false` regardless of input — the user is in full
+  // manual control: they explicitly assign rows to the system
+  // "Transfer" category when they want a row excluded from buckets.
+  describe("(#666) auto-detect disabled — categorize never auto-flags as transfer", () => {
+    it("does NOT flag TRANSFER_IN PFC", () => {
+      const out = categorize(
+        { description: "ACH credit from savings", pfcPrimary: "TRANSFER_IN" },
+        rules,
+      );
+      expect(out.isTransfer).toBe(false);
+    });
 
-  it("flags TRANSFER_OUT as a transfer", () => {
-    const out = categorize(
-      { description: "Outbound move", pfcPrimary: "TRANSFER_OUT" },
-      rules,
-    );
-    expect(out.isTransfer).toBe(true);
-  });
+    it("does NOT flag TRANSFER_OUT PFC", () => {
+      const out = categorize(
+        { description: "Outbound move", pfcPrimary: "TRANSFER_OUT" },
+        rules,
+      );
+      expect(out.isTransfer).toBe(false);
+    });
 
-  it("flags ODP transfer descriptions as transfers even without a PFC", () => {
-    const out = categorize({ description: "ODP TRANSFER FROM CHECKING" }, rules);
-    expect(out.isTransfer).toBe(true);
-    expect(out.categoryId).toBeNull();
-  });
+    it("does NOT flag LOAN_PAYMENTS PFC", () => {
+      const out = categorize(
+        { description: "Some bank-side card payment", pfcPrimary: "LOAN_PAYMENTS" },
+        [],
+      );
+      expect(out.isTransfer).toBe(false);
+    });
 
-  it("flags 'online transfer to' descriptions as transfers", () => {
-    const out = categorize(
-      { description: "ONLINE TRANSFER TO SAVINGS XXXX1234" },
-      rules,
-    );
-    expect(out.isTransfer).toBe(true);
+    it("does NOT flag ODP transfer descriptions", () => {
+      const out = categorize({ description: "ODP TRANSFER FROM CHECKING" }, rules);
+      expect(out.isTransfer).toBe(false);
+    });
+
+    it("does NOT flag 'online transfer to' descriptions", () => {
+      const out = categorize(
+        { description: "ONLINE TRANSFER TO SAVINGS XXXX1234" },
+        rules,
+      );
+      expect(out.isTransfer).toBe(false);
+    });
+
+    it("does NOT flag 'ONLINE PAYMENT - THANK YOU' descriptions", () => {
+      const out = categorize({ description: "ONLINE PAYMENT - THANK YOU" }, []);
+      expect(out.isTransfer).toBe(false);
+    });
+
+    it("does NOT flag 'AUTOPAY PAYMENT' descriptions", () => {
+      const out = categorize(
+        { description: "AUTOPAY PAYMENT - THANK YOU" },
+        [],
+      );
+      expect(out.isTransfer).toBe(false);
+    });
+
+    it("description rule still wins regardless of PFC, and isTransfer stays false", () => {
+      const out = categorize(
+        { description: "AMERICAN EXPRESS ACH PAYMENT", pfcPrimary: "TRANSFER_OUT" },
+        rules,
+      );
+      expect(out.categoryId).toBe("cat-amex-pmt");
+      expect(out.isTransfer).toBe(false);
+    });
   });
 
   it("returns no match when neither rules nor PFC apply", () => {
@@ -187,76 +215,8 @@ describe("categorize", () => {
     expect(out.isTransfer).toBe(false);
   });
 
-  it("description rule still wins even when transfer flag is true", () => {
-    const out = categorize(
-      { description: "AMERICAN EXPRESS ACH PAYMENT", pfcPrimary: "TRANSFER_OUT" },
-      rules,
-    );
-    expect(out.categoryId).toBe("cat-amex-pmt");
-    expect(out.isTransfer).toBe(true);
-  });
-
-  // (#632) Card-payment classification: description patterns + LOAN_PAYMENTS
-  // PFC must mark the row as a transfer so it never lands in Monthly /
-  // Weekly / Unplanned buckets.
-  describe("(#632) card-payment heuristics", () => {
-    it("flags Amex 'ONLINE PAYMENT - THANK YOU' as a transfer", () => {
-      const out = categorize(
-        { description: "ONLINE PAYMENT - THANK YOU" },
-        [],
-      );
-      expect(out.isTransfer).toBe(true);
-    });
-
-    it("flags 'PAYMENT - THANK YOU' (no 'ONLINE' prefix) as a transfer", () => {
-      const out = categorize({ description: "PAYMENT - THANK YOU" }, []);
-      expect(out.isTransfer).toBe(true);
-    });
-
-    it("flags 'MOBILE PAYMENT - THANK YOU' as a transfer", () => {
-      const out = categorize(
-        { description: "MOBILE PAYMENT - THANK YOU" },
-        [],
-      );
-      expect(out.isTransfer).toBe(true);
-    });
-
-    it("flags 'AUTOPAY PAYMENT' (Chase autopay) as a transfer", () => {
-      const out = categorize(
-        { description: "AUTOPAY PAYMENT - THANK YOU" },
-        [],
-      );
-      expect(out.isTransfer).toBe(true);
-    });
-
-    it("flags 'PAYMENT RECEIVED' as a transfer", () => {
-      const out = categorize({ description: "PAYMENT RECEIVED 12345" }, []);
-      expect(out.isTransfer).toBe(true);
-    });
-
-    it("flags Plaid LOAN_PAYMENTS PFC primary as a transfer", () => {
-      const out = categorize(
-        { description: "Some bank-side card payment", pfcPrimary: "LOAN_PAYMENTS" },
-        [],
-      );
-      expect(out.isTransfer).toBe(true);
-    });
-
-    it("flags LOAN_PAYMENTS_CREDIT_CARD_PAYMENT detailed via its primary", () => {
-      const out = categorize(
-        {
-          description: "AMEX EPAYMENT ACH PMT",
-          pfcPrimary: "LOAN_PAYMENTS",
-          pfcDetailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
-        },
-        [],
-      );
-      expect(out.isTransfer).toBe(true);
-    });
-
-    it("does NOT flag a plain merchant charge that happens to contain 'pay'", () => {
-      const out = categorize({ description: "PAYLESS SHOES #4521" }, []);
-      expect(out.isTransfer).toBe(false);
-    });
+  it("does NOT flag a plain merchant charge that happens to contain 'pay'", () => {
+    const out = categorize({ description: "PAYLESS SHOES #4521" }, []);
+    expect(out.isTransfer).toBe(false);
   });
 });

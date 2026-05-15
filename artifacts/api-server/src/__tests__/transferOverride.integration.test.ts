@@ -375,10 +375,12 @@ describe("isTransfer user override (#479)", () => {
     expect(after.unplannedAllowance).toBe(false);
   });
 
-  it("Without the override flag, Plaid sync still re-applies the auto-Transfer heuristic", async () => {
-    // Sanity check that the CASE expression's ELSE branch is wired up — a
-    // row whose user-overridden flag is *false* keeps getting re-flagged
-    // by future syncs (the existing pre-#479 behavior).
+  it("(#666) With auto-detect disabled, Plaid sync no longer auto-flags transfer-looking rows", async () => {
+    // (#666) The auto-Transfer heuristic is disabled. A non-overridden row
+    // synced from Plaid with a TRANSFER_OUT PFC and a transfer-shaped
+    // description must NOT be auto-flagged — the user is now in full
+    // manual control. They explicitly pick the system "Transfer" category
+    // when they want a row excluded from buckets.
     const plaidTxnId = `t-${randomUUID()}`;
     const [row] = await db
       .insert(transactionsTable)
@@ -436,7 +438,7 @@ describe("isTransfer user override (#479)", () => {
     expect(syncResult.error).toBeNull();
 
     const after = await readRow(row!.id);
-    expect(after.isTransfer).toBe(true);
+    expect(after.isTransfer).toBe(false);
     expect(after.isTransferUserOverridden).toBe(false);
     void row;
   });

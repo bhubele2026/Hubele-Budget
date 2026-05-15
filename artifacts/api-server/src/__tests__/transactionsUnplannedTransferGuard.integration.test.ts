@@ -97,8 +97,12 @@ async function insertTxn(
   return row!.id;
 }
 
-describe("(#642) PATCH /transactions/:id Unplanned-transfer guard", () => {
-  it("rejects setting unplannedAllowance=true on a row whose description matches the transfer heuristic", async () => {
+// (#666) The Unplanned-transfer write guard relied on the now-disabled
+// description/PFC heuristic. With auto-detection off, the user has full
+// manual control over every row's bucket assignment — the guard never
+// fires anymore, even on descriptions / PFCs that previously rejected.
+describe("(#666) Unplanned-transfer guard no longer rejects", () => {
+  it("allows setting unplannedAllowance=true on a previously-rejected description", async () => {
     const id = await insertTxn({
       description: "Online Transfer to SAV ...9128",
       unplannedAllowance: false,
@@ -108,17 +112,16 @@ describe("(#642) PATCH /transactions/:id Unplanned-transfer guard", () => {
       unplannedAllowance: true,
     });
 
-    expect(r.status).toBe(422);
-    expect((r.json as { code?: string }).code).toBe("unplanned_transfer_rejected");
+    expect(r.status).toBe(200);
 
     const [row] = await db
       .select({ unplannedAllowance: transactionsTable.unplannedAllowance })
       .from(transactionsTable)
       .where(eq(transactionsTable.id, id));
-    expect(row?.unplannedAllowance).toBe(false);
+    expect(row?.unplannedAllowance).toBe(true);
   });
 
-  it("rejects setting unplannedAllowance=true on a row whose pfc_primary marks it as a transfer (bland description)", async () => {
+  it("allows setting unplannedAllowance=true on a row whose pfc_primary is TRANSFER_OUT", async () => {
     const id = await insertTxn({
       description: "GENERIC BANK MOVE 12345",
       pfcPrimary: "TRANSFER_OUT",
@@ -129,8 +132,7 @@ describe("(#642) PATCH /transactions/:id Unplanned-transfer guard", () => {
       unplannedAllowance: true,
     });
 
-    expect(r.status).toBe(422);
-    expect((r.json as { code?: string }).code).toBe("unplanned_transfer_rejected");
+    expect(r.status).toBe(200);
   });
 
   it("allows setting unplannedAllowance=true on a normal merchant row", async () => {
