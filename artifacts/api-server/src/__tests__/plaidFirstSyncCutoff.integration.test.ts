@@ -449,6 +449,72 @@ describe("(#361) Plaid first-sync import cutoff", () => {
     expect(merged!.source).toBe("plaid:amex");
   });
 
+  it("(#662) inserts a pending=true row even when its date is on/before the cutoff and exposes skippedPreCutoff", async () => {
+    const { itemRowId, acctRowId, externalAcctId } =
+      await seedAmexCardScenario({
+        withLinkedDebt: true,
+        manualDates: ["2026-02-28"],
+      });
+    await autoDetectCutoffsForItem(TEST_USER, itemRowId, "amex");
+    nextSyncResponse = {
+      added: [
+        {
+          // Pending Plaid row with an authorization date a couple days
+          // before the cutoff — pre-#662 the gate would have silently
+          // dropped it because t.date <= cutoff and no manual pre-image
+          // exists to merge with.
+          transaction_id: "plaid-pending-bypass",
+          account_id: externalAcctId,
+          date: "2026-02-26",
+          amount: 502.0,
+          name: "Pending Venmo charge",
+          pending: true,
+        },
+        {
+          // Posted backfill row pre-cutoff — must STILL be skipped so
+          // historical Plaid noise doesn't double the user's manual
+          // ledger after a relink.
+          transaction_id: "plaid-posted-skipped",
+          account_id: externalAcctId,
+          date: "2026-02-10",
+          amount: 12.34,
+          name: "Posted backfill before cutoff",
+        },
+      ],
+      modified: [],
+      removed: [],
+    };
+    const result = await syncPlaidItem(TEST_USER, itemRowId);
+
+    const txns = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    const plaidIds = txns
+      .map((t) => t.plaidTransactionId)
+      .filter((x): x is string => x !== null)
+      .sort();
+    // The pending row landed; the posted backfill row was filtered out.
+    expect(plaidIds).toEqual(["plaid-pending-bypass"]);
+    const pending = txns.find(
+      (t) => t.plaidTransactionId === "plaid-pending-bypass",
+    );
+    expect(pending).toBeDefined();
+    expect(pending!.notes).toBe("[pending]");
+    // The skip is now observable on the per-item result.
+    expect(result.skippedPreCutoff).toBe(1);
+    // Manual seed row preserved untouched.
+    const manualRows = txns.filter((t) => t.source === "manual");
+    expect(manualRows).toHaveLength(1);
+    expect(manualRows[0].plaidTransactionId).toBeNull();
+    // First sync still considered complete on this account.
+    const [acct] = await db
+      .select()
+      .from(plaidAccountsTable)
+      .where(eq(plaidAccountsTable.id, acctRowId));
+    expect(acct.firstSyncCompletedAt).not.toBeNull();
+  });
+
   it("does not gate added rows once firstSyncCompletedAt is stamped", async () => {
     const { itemRowId, acctRowId, externalAcctId } =
       await seedAmexCardScenario({

@@ -2281,7 +2281,15 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
         );
       }
     }
-    res.json({ items: results });
+    // (#662) Roll the per-item silent-drop count up into a top-level
+    // total so the toast layer can eventually distinguish "0 added —
+    // nothing new" from "0 added — N rows filtered by the first-sync
+    // import cutoff" without having to walk every item.
+    const skippedPreCutoff = results.reduce(
+      (sum, r) => sum + (r.skippedPreCutoff ?? 0),
+      0,
+    );
+    res.json({ items: results, skippedPreCutoff });
   } catch (e) {
     const { message: msg } = extractPlaidError(e);
     req.log.error(

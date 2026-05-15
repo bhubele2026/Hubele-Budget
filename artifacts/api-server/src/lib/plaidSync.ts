@@ -147,9 +147,11 @@ export type SyncResult = {
   // "0 added — genuinely caught up" from "0 added — N rows filtered
   // by the gate", and so log-based observability catches future
   // regressions where pending or otherwise-live rows get filtered.
-  // Always present (0 when nothing was skipped); kept optional in
-  // the type for compatibility with synthesized failure results that
-  // never reach the sync loop.
+  // Pending rows are no longer gated (#662), so this counts only
+  // posted backfill below the cutoff on accounts that haven't
+  // completed their first sync yet. Always present (0 when nothing
+  // was skipped); kept optional in the type for compatibility with
+  // synthesized failure results that never reach the sync loop.
   skippedPreCutoff?: number;
 };
 
@@ -737,7 +739,8 @@ export async function syncPlaidItem(
       // row's later posted twin (same transaction_id, pending=false)
       // arrives as a `modified` row, which the gate already bypasses
       // (it only checks `addedTxnIds`), so the pending→posted
-      // lifecycle keeps converging on a single row.
+      // lifecycle keeps converging on a single row via the existing
+      // `onConflictDoUpdate` below.
       const isFirstSyncForAcct =
         addedTxnIds.has(t.transaction_id) &&
         acctRow != null &&
