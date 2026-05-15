@@ -846,8 +846,11 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       );
     }
 
-    // Initial sync (last 90 days come via /transactions/sync naturally)
-    await syncPlaidItem(req.userId!, item!.id);
+    // Initial sync (last 90 days come via /transactions/sync naturally).
+    // (#665) `forceRefresh: true` so the very first sync after a fresh
+    // link / relink asks Plaid to pull from the bank right now instead
+    // of returning whatever Plaid happened to have cached pre-link.
+    await syncPlaidItem(req.userId!, item!.id, { forceRefresh: true });
 
     // (#408) Heal-driven gap backfill on relink. The /exchange upsert
     // above proactively cleared any prior `lastSyncErrorCode` chip on
@@ -1999,7 +2002,10 @@ router.post("/plaid/webhook", async (req, res): Promise<void> => {
         .set({ lastSyncError: null, lastSyncErrorCode: null })
         .where(eq(plaidItemsTable.id, item.id));
       try {
-        await syncPlaidItem(item.userId, item.id);
+        // (#665) `forceRefresh: true` — user just re-authed in another
+        // flow, so ask Plaid to pull fresh data from the bank rather
+        // than replaying its cached cursor state.
+        await syncPlaidItem(item.userId, item.id, { forceRefresh: true });
       } catch (e) {
         req.log.warn(
           { err: e },
@@ -2219,7 +2225,13 @@ router.post(
         },
         "[plaid-reset-cursor] cursor cleared, triggering fresh sync",
       );
-      const result = await syncPlaidItem(req.userId!, item.id);
+      // (#665) Admin "reset cursor & resync" is an explicit user
+      // action — pair it with a /transactions/refresh so the resync
+      // walks fresh data, not whatever Plaid had cached when the
+      // cursor got stuck.
+      const result = await syncPlaidItem(req.userId!, item.id, {
+        forceRefresh: true,
+      });
       res.json({
         ok: true,
         item: {
@@ -2240,11 +2252,27 @@ router.post(
 );
 
 router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
-  const { itemId } = req.body ?? {};
+  const { itemId, force } = req.body ?? {};
+  // (#665) This endpoint is the manual "Sync" button (and the post-link
+  // first-sync trigger). Default to a /transactions/refresh before the
+  // cursor sync so newly-authorized pending charges (Venmo, mortgage,
+  // payroll, etc.) land in one click instead of waiting hours for
+  // Plaid's scheduled poll. Callers that intentionally want a cheap
+  // cursor-only sync (e.g. an internal probe) can opt out with body
+  // `{ force: false }`. Anything other than literal `false` keeps the
+  // refresh on so a fat-fingered or absent body never silently
+  // downgrades the user's manual sync.
+  const forceRefresh = force !== false;
   try {
     const results = itemId
-      ? [await syncPlaidItem(req.userId!, String(itemId))]
-      : await syncAllForUser(req.userId!, req.householdId!);
+      ? [
+          await syncPlaidItem(req.userId!, String(itemId), {
+            forceRefresh,
+          }),
+        ]
+      : await syncAllForUser(req.userId!, req.householdId!, {
+          forceRefresh,
+        });
     // (#651) The Amex page's "Refresh from Plaid" button calls this
     // endpoint expecting the live Plaid liability balance to update too
     // — but `syncPlaidItem` only walks /transactions/sync. Without a

@@ -153,6 +153,16 @@ export type SyncResult = {
   // was skipped); kept optional in the type for compatibility with
   // synthesized failure results that never reach the sync loop.
   skippedPreCutoff?: number;
+  // (#665) True when this sync attempted a `/transactions/refresh`
+  // call before the cursor sync to force Plaid to re-fetch from the
+  // institution. Set on user-triggered syncs (manual Sync button,
+  // post-relink first sync, admin cursor reset, LOGIN_REPAIRED
+  // webhook) so newly-authorized pending charges land in one click
+  // instead of waiting hours for Plaid's scheduled poll. Best-effort:
+  // a refresh that throws (PRODUCT_NOT_READY, rate limit, etc.) still
+  // sets this true since the attempt was made — the cursor sync that
+  // followed proceeded with whatever Plaid had cached.
+  refreshAttempted?: boolean;
 };
 
 type PlaidErrorBody = {
@@ -326,7 +336,14 @@ function plaidAmountToSigned(t: PlaidTxn): string {
 export async function syncPlaidItem(
   userId: string,
   itemRowId: string,
+  opts: { forceRefresh?: boolean } = {},
 ): Promise<SyncResult> {
+  // (#665) `forceRefresh` triggers a `/transactions/refresh` call below
+  // (right before the cursor sync loop) so Plaid re-fetches from the
+  // institution before we read. Manual user-driven sync paths should
+  // pass true; webhook/cron paths should leave it false to avoid
+  // billing the premium endpoint on every coalesced sync.
+  const forceRefresh = opts.forceRefresh === true;
   const [item] = await db
     .select()
     .from(plaidItemsTable)
@@ -594,6 +611,41 @@ export async function syncPlaidItem(
   >();
 
   try {
+    // (#665) Force Plaid to re-fetch from the institution before we
+    // walk the cursor. /transactions/sync only returns what Plaid
+    // already has cached from its scheduled poll; for Chase that
+    // poll routinely lags pending data by 6+ hours, which is exactly
+    // what was leaving the user's freshly-authorized Venmo/mortgage/
+    // payroll pending charges stranded on the bank side. Best-effort
+    // — if Plaid throws (PRODUCT_NOT_READY on a freshly linked item,
+    // RATE_LIMIT, INVALID_PRODUCT for items without /transactions
+    // refresh available, etc.) we log and fall through; the cursor
+    // sync below proceeds with whatever cached data Plaid has. Only
+    // engaged when the caller passed `forceRefresh: true` so the
+    // webhook coalescer / nightly cron don't spam the premium
+    // endpoint and trip rate limits.
+    if (forceRefresh) {
+      try {
+        await plaid().transactionsRefresh({
+          access_token: item.accessToken,
+        });
+      } catch (refreshErr) {
+        const refreshExtracted = extractPlaidError(refreshErr);
+        logger.warn(
+          {
+            userId,
+            itemRowId,
+            plaidItemIdExternal: item.itemId,
+            institutionName: item.institutionName,
+            plaidErrorCode: refreshExtracted.code,
+            plaidErrorMessage: refreshExtracted.message,
+            requestId: refreshExtracted.requestId,
+            httpStatus: refreshExtracted.httpStatus,
+          },
+          "[plaid-sync] /transactions/refresh failed (best-effort) — continuing with cursor sync against cached Plaid data",
+        );
+      }
+    }
     while (hasMore) {
       const resp = await plaid().transactionsSync({
         access_token: item.accessToken,
@@ -1280,6 +1332,9 @@ export async function syncPlaidItem(
       // dropped on this run so observability catches future
       // regressions where live rows get silently filtered.
       skippedPreCutoff: firstSyncSkipped,
+      // (#665) Echo whether we asked Plaid to re-fetch from the bank
+      // before walking the cursor. True for user-triggered syncs.
+      refreshAttempted: forceRefresh,
       // (#357) Mirror the structured fields onto the response so a
       // failed balance refresh on an otherwise-healthy /transactions/sync
       // still gives the client a real Plaid code + display message + kind
@@ -1485,13 +1540,15 @@ export async function syncPlaidItem(
 export async function syncAllForUser(
   actorUserId: string,
   householdId: string,
+  opts: { forceRefresh?: boolean } = {},
 ): Promise<SyncResult[]> {
   const items = await db
     .select({ id: plaidItemsTable.id })
     .from(plaidItemsTable)
     .where(eq(plaidItemsTable.householdId, householdId));
   const out: SyncResult[] = [];
-  for (const it of items) out.push(await syncPlaidItem(actorUserId, it.id));
+  for (const it of items)
+    out.push(await syncPlaidItem(actorUserId, it.id, opts));
   return out;
 }
 
