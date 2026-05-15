@@ -32,7 +32,8 @@ import {
   ENV_MISMATCH_PLAID_TOKEN_MESSAGE,
   MALFORMED_PLAID_TOKEN_MESSAGE,
 } from "../lib/plaid";
-import { markItemMalformedToken } from "../lib/plaidSync";
+import { extractPlaidError, markItemMalformedToken } from "../lib/plaidSync";
+import { PLAID_REAUTH_ERROR_CODES } from "../lib/plaidReauthCodes";
 import { archiveExpiredOneTime } from "./bills";
 import {
   dedupePlaidAccountsForUser,
@@ -601,8 +602,27 @@ router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<vo
         .set({ accountSnapshots: nextMap })
         .where(eq(forecastSettingsTable.userId, ownerUserId));
     } catch (e) {
+      const { code: plaidCode, message: plaidMsg } = extractPlaidError(e);
+      req.log.error({ err: e, code: plaidCode }, "accountsBalanceGet failed");
+      // (#655) Mirror the /plaid/link-token/update catch (#654): if Plaid
+      // rejects the stored access_token at runtime (e.g. after a server
+      // credential rotation), surface the same 409 + relink shape the
+      // preflight guards above produce so the Reconnect button's recovery
+      // path is consistent everywhere — not a dead-end 502.
+      if (plaidCode && PLAID_REAUTH_ERROR_CODES.has(plaidCode)) {
+        await markItemMalformedToken(item.id, {
+          code: plaidCode,
+          message: plaidMsg,
+        });
+        res.status(409).json({
+          error: plaidMsg,
+          code: plaidCode,
+          action: "relink",
+          account: { name: acct.name ?? null, mask: acct.mask ?? null },
+        });
+        return;
+      }
       const msg = e instanceof Error ? e.message : "Plaid balance fetch failed";
-      req.log.error({ err: e }, "accountsBalanceGet failed");
       res.status(502).json({ error: msg });
       return;
     }
@@ -774,8 +794,27 @@ router.post("/forecast/refresh-bank", requireAuth, async (req, res): Promise<voi
       });
     }
   } catch (e) {
+    const { code: plaidCode, message: plaidMsg } = extractPlaidError(e);
+    req.log.error({ err: e, code: plaidCode }, "refresh-bank failed");
+    // (#655) See the matching catch in /forecast/bank-snapshot above.
+    // Translate runtime Plaid reauth errors (INVALID_ACCESS_TOKEN /
+    // ITEM_LOGIN_REQUIRED / PENDING_*) into the same 409 + relink shape
+    // the preflight guards produce so the Reconnect button always has a
+    // recovery path here too.
+    if (plaidCode && PLAID_REAUTH_ERROR_CODES.has(plaidCode)) {
+      await markItemMalformedToken(item.id, {
+        code: plaidCode,
+        message: plaidMsg,
+      });
+      res.status(409).json({
+        error: plaidMsg,
+        code: plaidCode,
+        action: "relink",
+        account: { name: acct.name ?? null, mask: acct.mask ?? null },
+      });
+      return;
+    }
     const msg = e instanceof Error ? e.message : "Plaid balance fetch failed";
-    req.log.error({ err: e }, "refresh-bank failed");
     res.status(502).json({ error: msg });
   }
 });
