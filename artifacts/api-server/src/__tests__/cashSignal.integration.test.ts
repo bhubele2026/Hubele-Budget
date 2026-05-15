@@ -27,6 +27,7 @@ import {
   plaidAccountsTable,
   plaidItemsTable,
   debtsTable,
+  avalancheSettingsTable,
 } from "@workspace/db";
 import { computeCashSignal } from "../lib/cashSignal";
 import { createTestHousehold } from "./_helpers/testHousehold";
@@ -217,6 +218,135 @@ describe("computeCashSignal — snapshot anchoring", () => {
     expect(sig.daily?.[0]).toEqual({
       date: "2026-05-14",
       balance: "1258.87",
+    });
+  });
+
+  it("(#667) synthetic debt-min events dated before the snapshot do NOT drag onto today", async () => {
+    // User's bug report: "All my pending is matched, no forecasted
+    // pending, why is the bank off?" — bank $4,922.56, chart starts at
+    // $3,805.27 (down $1,117) with the Pending list completely empty.
+    //
+    // Root cause: `expandDebtMin` (and `expandAvalancheExtra`) used to
+    // emit events back to the prior-month start to mirror the recurring
+    // expansion lookback. But synthetic events have NO Pending UI row
+    // the user can match/skip/miss, so any pre-snapshot synthetic event
+    // would silently drag onto today with no way for the user to
+    // dismiss the dip. Snapshot is the truth — anything dated on or
+    // before it is already reflected in the bank balance.
+    //
+    // This test pins the fix: a debt-min that would naturally land on
+    // a pre-snapshot date is suppressed entirely and does NOT pull the
+    // chart down on today.
+    await setSettings({
+      balance: "4922.56",
+      at: new Date("2026-05-13T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    // Debt with dueDay=10 → would emit 04-10 and 05-10 events back at
+    // expandStart=2026-04-01 under the old behavior. Both fall on/before
+    // the snapshot date (05-13) and would drag onto today (05-14).
+    await db.insert(debtsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      name: "Capital One Platinum",
+      kind: "credit_card",
+      balance: "1000",
+      minPayment: "38",
+      dueDay: 10,
+      active: "true",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-14",
+      horizonDays: 30,
+    });
+
+    // Chart starts AT the bank snapshot — no silent drag from the
+    // pre-snapshot synthetic debt-min.
+    expect(sig.startingBalance).toBe("4922.56");
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-05-14",
+      balance: "4922.56",
+    });
+    // Future debt-min events (06-10, 07-10, ...) still project normally.
+    const eventDates = (sig.events ?? []).map((e) => e.date).sort();
+    expect(eventDates).not.toContain("2026-04-10");
+    expect(eventDates).not.toContain("2026-05-10");
+    expect(eventDates.some((d) => d >= "2026-05-14")).toBe(true);
+  });
+
+  it("(#667) synthetic Avalanche extra payment dated before the snapshot does NOT drag", async () => {
+    // Companion to the debt-min regression: the avalanche extra series
+    // is also synthetic (no Pending UI row) and must respect the same
+    // snapshot anchor. Snapshot=2026-05-13, today=05-14, fromDate=05-14.
+    // The 04-30 month-end avalanche extra would otherwise expand back
+    // to expandStart=2026-04-01 and drag onto today.
+    await setSettings({
+      balance: "4922.56",
+      at: new Date("2026-05-13T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await db.insert(debtsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      name: "Capital One Platinum",
+      kind: "credit_card",
+      balance: "1000",
+      minPayment: "38",
+      dueDay: 25, // post-snapshot, so debt-min isn't the noise here
+      active: "true",
+    });
+    await db.insert(avalancheSettingsTable).values({
+      userId: TEST_USER,
+      manualExtra: "200",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-14",
+      horizonDays: 30,
+    });
+
+    expect(sig.startingBalance).toBe("4922.56");
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-05-14",
+      balance: "4922.56",
+    });
+    // 04-30 avalanche extra is suppressed; 05-31 still appears.
+    const eventDates = (sig.events ?? []).map((e) => e.date);
+    expect(eventDates).not.toContain("2026-04-30");
+    expect(eventDates).toContain("2026-05-31");
+  });
+
+  it("(#667) boundary: synthetic event dated exactly snapshot+1 still appears (no off-by-one)", async () => {
+    // Snapshot=2026-05-13, dueDay=14 → first synthetic debt-min lands
+    // on 2026-05-14 which is snapshot+1 day. Must NOT be suppressed.
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-05-13T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await db.insert(debtsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      name: "Edge Card",
+      kind: "credit_card",
+      balance: "500",
+      minPayment: "38",
+      dueDay: 14,
+      active: "true",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-14",
+      horizonDays: 30,
+    });
+
+    const eventDates = (sig.events ?? []).map((e) => e.date);
+    expect(eventDates).toContain("2026-05-14");
+    expect(eventDates.filter((d) => d === "2026-05-14").length).toBe(1);
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-05-14",
+      balance: "962.00",
     });
   });
 

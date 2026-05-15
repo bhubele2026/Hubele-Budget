@@ -286,6 +286,30 @@ export async function computeCashSignal(
   }
   const events: CashEvent[] = [];
   for (const item of recurring) events.push(...expandItem(item, expandStart, to));
+  // (#667) Synthetic events (debt minimums for debts WITHOUT a linked
+  // recurring item, and the "Avalanche extra payment" series) have NO
+  // representation in the Forecast Pending UI — the user can't match,
+  // skip, or mark-missed them. So if we expanded them back into the
+  // pre-snapshot lookback window, the drag-to-today rule would silently
+  // pull them onto today's projection with no way for the user to
+  // dismiss the dip. The bank snapshot is the truth for everything
+  // dated on or before it, so synthetic events are anchored at
+  // MAX(expandStart, snapshot+1) — only future synthetic obligations
+  // contribute to the projection. Real recurring items keep their
+  // existing pre-snapshot expansion since they DO surface as "Pending
+  // plan" rows the user can act on.
+  const syntheticExpandStart = snapshotAt
+    ? new Date(
+        Math.max(
+          expandStart.getTime(),
+          new Date(
+            snapshotAt.getFullYear(),
+            snapshotAt.getMonth(),
+            snapshotAt.getDate() + 1,
+          ).getTime(),
+        ),
+      )
+    : expandStart;
   // Inject monthly debt-min events for active debts WITHOUT a linked
   // recurring item — same series the Bills page renders for "Debt
   // minimums", so the projection never double-counts and never misses an
@@ -296,7 +320,7 @@ export async function computeCashSignal(
       ...expandDebtMin(
         d,
         linkedRecurringByDebt.get(d.id) ?? null,
-        expandStart,
+        syntheticExpandStart,
         to,
       ),
     );
@@ -311,7 +335,7 @@ export async function computeCashSignal(
     .where(eq(avalancheSettingsTable.userId, ownerUserId));
   const manualExtra = Number(avaSettingsRow?.manualExtra ?? 0) || 0;
   events.push(
-    ...expandAvalancheExtra(debtsList, manualExtra, expandStart, to, todayDateOnly),
+    ...expandAvalancheExtra(debtsList, manualExtra, syntheticExpandStart, to, todayDateOnly),
   );
 
   // Resolve the configured Chase checking account's external Plaid
