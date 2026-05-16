@@ -1670,11 +1670,58 @@ export async function syncPlaidItem(
  * same set of linked items), not per-actor. `actorUserId` is the
  * signed-in user used for audit logging on each per-item sync.
  */
+/**
+ * (#671 follow-up) Delete transactions left behind when an old plaid_item
+ * was deleted (e.g. a sandbox-token item the user re-linked in
+ * production). Their `plaid_account_id` points at a `plaid_accounts.id`
+ * that no longer exists, so:
+ *   * they can never be refreshed by Plaid again (no item, no token),
+ *   * their `plaid_transaction_id` never collides with the new item's
+ *     freshly-issued ids, so the existing onConflict / first-sync merge
+ *     can't dedupe them, and
+ *   * they appear as 1-for-1 ghost twins of every row the relinked item
+ *     just brought in, flooding the forecast review bucket.
+ * Run once at the top of every household sync — idempotent, scoped to a
+ * single household, and only ever touches rows whose Plaid account row
+ * is gone for good. If the user merely un-linked an item temporarily,
+ * its plaid_accounts rows survive (item-delete is what cascades them),
+ * so those transactions are left alone.
+ */
+export async function pruneOrphanPlaidTransactionsForHousehold(
+  householdId: string,
+): Promise<number> {
+  const result = await db
+    .delete(transactionsTable)
+    .where(
+      and(
+        eq(transactionsTable.householdId, householdId),
+        sql`${transactionsTable.plaidTransactionId} is not null`,
+        sql`${transactionsTable.plaidAccountId} is not null`,
+        sql`not exists (select 1 from ${plaidAccountsTable}
+              where ${plaidAccountsTable.accountId} = ${transactionsTable.plaidAccountId})`,
+      ),
+    )
+    .returning({ id: transactionsTable.id });
+  if (result.length > 0) {
+    logger.info(
+      { householdId, prunedCount: result.length },
+      "[plaid-sync] pruned orphan plaid transactions (account row deleted with a prior item)",
+    );
+  }
+  return result.length;
+}
+
 export async function syncAllForUser(
   actorUserId: string,
   householdId: string,
   opts: { forceRefresh?: boolean } = {},
 ): Promise<SyncResult[]> {
+  // (#671 follow-up) Cull orphans BEFORE we fetch the new batch so the
+  // first-sync merge inside `syncPlaidItem` doesn't have to compete
+  // with rows that already carry a (now-meaningless) plaidTransactionId
+  // — those rows would otherwise survive as ghost twins of every line
+  // the relinked item brings back.
+  await pruneOrphanPlaidTransactionsForHousehold(householdId);
   const items = await db
     .select({ id: plaidItemsTable.id })
     .from(plaidItemsTable)

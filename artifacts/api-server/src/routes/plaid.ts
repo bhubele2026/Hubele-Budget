@@ -44,6 +44,7 @@ import {
   syncPlaidItem,
   syncPlaidItemSerialized,
   syncAllForUser,
+  pruneOrphanPlaidTransactionsForHousehold,
   runGapBackfillForItem,
   derivePlaidErrorKind,
 } from "../lib/plaidSync";
@@ -2265,6 +2266,14 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
   // downgrades the user's manual sync.
   const forceRefresh = force !== false;
   try {
+    // (#671 follow-up) Always prune orphan Plaid transactions for the
+    // household on a manual Sync click — covers the itemId-only path
+    // too, which is the exact path the post-relink first-sync trigger
+    // uses (it passes the brand-new item's id). Without this, the
+    // ghost twins from the previously-deleted item survive and flood
+    // the forecast review bucket with duplicates of every line the
+    // relinked item brings back.
+    await pruneOrphanPlaidTransactionsForHousehold(req.householdId!);
     const results = itemId
       ? [
           await syncPlaidItemSerialized(req.userId!, String(itemId), {
