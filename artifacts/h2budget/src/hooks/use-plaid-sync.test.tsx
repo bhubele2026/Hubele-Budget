@@ -100,6 +100,36 @@ beforeEach(() => {
   syncResponse = { items: [] };
 });
 
+describe("usePlaidSync — empty-fleet toast", () => {
+  it("shows 'No banks connected' with an Open Settings CTA when the response has zero items", async () => {
+    // (#671 follow-up) Reproduces the real bug the user hit: their
+    // household had 0 linked Plaid items but 95 leftover transactions
+    // from a previously-deleted item. The old code fell through to
+    // "Your bank is still preparing the initial batch" — a lie, since
+    // no Plaid call was even made. Verify the new branch wins and
+    // surfaces an actionable CTA.
+    syncResponse = { items: [] };
+    renderHarness();
+    fireEvent.click(screen.getByTestId("run-sync"));
+    await waitFor(() => {
+      expect(toastFn).toHaveBeenCalled();
+    });
+    const arg = toastFn.mock.calls[0][0] as {
+      title: string;
+      description: string;
+      action?: React.ReactElement;
+    };
+    expect(arg.title).toBe("No banks connected");
+    expect(arg.description).toContain("Connect a bank in Settings");
+    expect(arg.description).not.toContain("still preparing");
+    expect(arg.action).toBeTruthy();
+    const { getByTestId, unmount } = render(arg.action as React.ReactElement);
+    fireEvent.click(getByTestId("button-toast-open-settings"));
+    expect(navigateFn).toHaveBeenCalledWith("/settings");
+    unmount();
+  });
+});
+
 describe("usePlaidSync — rule-attribution toast", () => {
   it("includes the per-rule attribution line in the success toast description", async () => {
     syncResponse = {

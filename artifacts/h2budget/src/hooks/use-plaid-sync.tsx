@@ -225,7 +225,30 @@ export function usePlaidSync() {
               // a no-op for users without an Amex item linked.
               qc.invalidateQueries({ queryKey: ["/api/amex/anchor"] });
               if (!silent) {
-                if (totals.errorDetails.length > 0) {
+                if (items.length === 0) {
+                  // (#671 follow-up) Truth-in-toast: when the user's
+                  // household has zero linked Plaid items, Sync is a
+                  // structural no-op — there is literally nothing to
+                  // refresh. The old "still preparing the initial
+                  // batch" copy was a lie that made it look like the
+                  // app was waiting on Plaid when in fact no item was
+                  // ever queried. Tell the user the actual state and
+                  // give them a one-click path to fix it.
+                  toast({
+                    title: "No banks connected",
+                    description:
+                      "Connect a bank in Settings to start syncing transactions.",
+                    action: (
+                      <ToastAction
+                        altText="Open Settings"
+                        onClick={() => navigate("/settings")}
+                        data-testid="button-toast-open-settings"
+                      >
+                        Open Settings
+                      </ToastAction>
+                    ),
+                  });
+                } else if (totals.errorDetails.length > 0) {
                   // (#357) Compose "<Institution>: <reason>" lines so the
                   // toast names exactly which bank is broken — never the
                   // raw axios message. When at least one error is a
