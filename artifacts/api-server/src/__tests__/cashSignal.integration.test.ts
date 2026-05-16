@@ -1185,7 +1185,19 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
     expect(sig.lowestDate).toBe("2026-05-15");
   });
 
-  it("ignores a 'matched' resolution whose matched txn is on a non-Chase (Amex) account", async () => {
+  it("(#687) honors a 'matched' resolution whose matched txn is on a non-Chase (Amex) account — plan-key suppression is account-agnostic", async () => {
+    // Inverted from the legacy behavior. Previously cashSignal dropped
+    // any matched resolution pointing at a non-Chase txn and let the
+    // plan re-emit, which (after #681) silently dragged onto today+1
+    // even though the planned-items register correctly hid it.
+    //
+    // New semantic: a `matched` resolution is the user's (or
+    // auto-matcher's) acceptance that the plan is paid. The bank
+    // snapshot already reflects the resulting Chase balance whichever
+    // account the payment came from (#666). Re-projecting these
+    // plans against the snapshot double-counts and is exactly what
+    // produced the user's phantom tooltip entries (Reimbursement,
+    // Mortgage, HELOC, ...).
     const chase = await addPlaidAccount({
       externalId: "chase-ext-2",
       name: "Chase Checking",
@@ -1207,9 +1219,6 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
       .where(eq(forecastSettingsTable.userId, TEST_USER));
 
     const item = await addRecurring({ dayOfMonth: 15, amount: "200" });
-    // Legacy resolution: someone matched the planned bill against an
-    // Amex charge. The bank projection MUST ignore this match — the
-    // bill still has to come out of Chase.
     const amexTxnId = await addTxn({
       occurredOn: "2026-03-30",
       amount: "-200",
@@ -1230,10 +1239,96 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
       horizonDays: 60,
     });
 
-    // Amex match is filtered out → both 04-15 and 05-15 apply:
-    // 1000 - 200 - 200 = 600.
-    expect(sig.endingBalance).toBe("600.00");
-    expect(sig.projectedExpenses).toBe("400.00");
+    // Amex match suppresses the 04-15 plan; only 05-15 applies:
+    // 1000 - 200 = 800.
+    expect(sig.endingBalance).toBe("800.00");
+    expect(sig.projectedExpenses).toBe("200.00");
     expect(sig.lowestDate).toBe("2026-05-15");
+  });
+
+  it("(#687) Amex-matched past-due plan does NOT drag onto today+1 (matches what the register hides)", async () => {
+    // The user's actual complaint scenario: a recurring expense
+    // dated 05-15 has a `matched` resolution whose matched
+    // transaction lives on Amex (the user paid the bill with their
+    // Amex card). The planned-items register correctly hides this
+    // as resolved, but cashSignal used to re-emit it as unresolved
+    // and the (#681) drag rule then surfaced it on today+1 in the
+    // chart tooltip ("Reimbursement -$3,200", "Mortgage -$2,085.79",
+    // etc.). Today=2026-05-16, snapshot dated 2026-05-14 ($4871.20).
+    vi.setSystemTime(new Date("2026-05-16T12:00:00Z"));
+    const chase = await addPlaidAccount({
+      externalId: "chase-ext-687",
+      name: "Chase Checking",
+      institutionSlug: "chase",
+    });
+    const amex = await addPlaidAccount({
+      externalId: "amex-ext-687",
+      name: "Amex Card",
+      institutionSlug: "amex",
+    });
+    await setSettings({
+      balance: "4871.20",
+      at: new Date("2026-05-14T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await db
+      .update(forecastSettingsTable)
+      .set({ bankSnapshotAccountId: chase.id })
+      .where(eq(forecastSettingsTable.userId, TEST_USER));
+
+    // The phantom plan: matched to an Amex charge.
+    const mortgage = await addRecurring({
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-15",
+      amount: "2085.79",
+      name: "Mortgage (Lakeview)",
+    });
+    const amexTxnId = await addTxn({
+      occurredOn: "2026-05-15",
+      amount: "-2085.79",
+      plaidAccountId: amex.externalId,
+      source: "plaid:amex",
+    });
+    await db.insert(forecastResolutionsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      recurringItemId: mortgage.id,
+      occurrenceDate: "2026-05-15",
+      status: "matched",
+      matchedTxnId: amexTxnId,
+    });
+    // A true pending plan with no resolution — this one SHOULD drag.
+    await addRecurring({
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-15",
+      amount: "400.00",
+      name: "Verizon Wireless",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-16",
+      horizonDays: 30,
+    });
+
+    // Day 0 == bank snapshot.
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-05-16",
+      balance: "4871.20",
+    });
+    // Day 1 drops by ONLY Verizon ($400), NOT by Mortgage ($2,085.79).
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-17",
+      balance: "4471.20",
+    });
+    // The Mortgage Amex-matched plan does NOT appear in the
+    // "Pending plans dragging this day" tooltip.
+    const draggedOn17 = (sig.events ?? []).filter(
+      (e) => e.date === "2026-05-17",
+    );
+    expect(draggedOn17.length).toBe(1);
+    expect(draggedOn17[0].label).toBe("Verizon Wireless");
+    expect(draggedOn17[0].amount).toBe("-400.00");
   });
 });

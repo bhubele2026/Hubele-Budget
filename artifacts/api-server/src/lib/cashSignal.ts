@@ -409,11 +409,22 @@ export async function computeCashSignal(
   );
 
   // Get matched-resolutions to suppress double-count of plan items already paid for by a txn.
-  // Drop any resolution whose matched transaction is NOT a Chase
-  // checking row, so a legacy Amex match can't suppress a planned item
-  // from the projection. Validate the matched transaction's account
-  // *independently* of the projection window — a Chase match dated
-  // outside [anchor, to] still legitimately suppresses its plan item.
+  //
+  // (#687) PLAN-KEY suppression is account-agnostic. A `matched`
+  // resolution means the user (or auto-matcher) has accepted that
+  // the plan is paid — even if the matching transaction sits on a
+  // non-Chase account (e.g. Amex). The bank snapshot already
+  // reflects the resulting Chase balance whichever account the
+  // payment came from (#666). Re-projecting these plans against
+  // the snapshot double-counts and produces phantom "Pending
+  // plans dragging this day" entries that the user never sees in
+  // their planned-items register.
+  //
+  // TXN-LEVEL dedup, on the other hand, must stay Chase-only —
+  // `matchedTxnIds` is consulted when iterating Chase bank
+  // transactions in `txns`, and a non-Chase txn id never appears
+  // there anyway. Keep the `matchedTxnBankSet` lookup for that
+  // narrower purpose.
   const resolutionsAll = await db
     .select()
     .from(forecastResolutionsTable)
@@ -446,9 +457,6 @@ export async function computeCashSignal(
       }
     }
   }
-  const resolutions = resolutionsAll.filter(
-    (r) => !r.matchedTxnId || matchedTxnBankSet.has(r.matchedTxnId),
-  );
   const matchedPlanKeys = new Set<string>();
   const matchedTxnIds = new Set<string>();
   const rescheduledByKey = new Map<string, string>();
@@ -463,12 +471,18 @@ export async function computeCashSignal(
   // accounted for elsewhere). Until that mark, a past-dated pending plan
   // continues to weigh on the projection.
   const missedPlanKeys = new Set<string>();
-  for (const r of resolutions) {
+  for (const r of resolutionsAll) {
     if (r.status === "matched") {
+      // (#687) Plan-key suppression: account-agnostic.
       if (r.recurringItemId && r.occurrenceDate) {
         matchedPlanKeys.add(`${r.recurringItemId}|${r.occurrenceDate}`);
       }
-      if (r.matchedTxnId) matchedTxnIds.add(r.matchedTxnId);
+      // Txn-level dedup: Chase-only — a non-Chase matched txn id
+      // never appears in `txns` anyway, so we'd never collide, but
+      // keep the explicit guard so the intent is clear.
+      if (r.matchedTxnId && matchedTxnBankSet.has(r.matchedTxnId)) {
+        matchedTxnIds.add(r.matchedTxnId);
+      }
     } else if (
       r.status === "rescheduled" &&
       r.recurringItemId &&
