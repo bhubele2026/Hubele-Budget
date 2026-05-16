@@ -100,6 +100,58 @@ describe("useOpportunisticPlaidSync", () => {
     await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(2));
   });
 
+  it("fires again when the tab regains focus after the cooldown has elapsed (#673)", async () => {
+    render(withProvider(<Harness cooldownMs={1} />));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
+
+    // Let the cooldown lapse so the focus event is the trigger, not
+    // an inflight collision.
+    await new Promise((r) => setTimeout(r, 10));
+
+    // Simulate the user switching back to the tab. The hook listens
+    // on both `visibilitychange` (preferred modern signal) and
+    // `focus` (older fallback). Dispatching `focus` is enough to
+    // exercise the new code path.
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(2));
+  });
+
+  it("fires when the document becomes visible again after cooldown (#673 visibilitychange path)", async () => {
+    render(withProvider(<Harness cooldownMs={1} />));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
+
+    await new Promise((r) => setTimeout(r, 10));
+
+    // jsdom defaults visibilityState to "visible" — flip to hidden,
+    // then back to visible, and dispatch the corresponding event the
+    // hook listens for.
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "hidden",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "visible",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(2));
+  });
+
+  it("does NOT fire on rapid tab flips inside the cooldown window (#673)", async () => {
+    render(withProvider(<Harness cooldownMs={60_000} />));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
+
+    // Five quick alt-tabs — every one should be swallowed by the
+    // module-level cooldown so Plaid never sees a burst.
+    for (let i = 0; i < 5; i++) {
+      window.dispatchEvent(new Event("focus"));
+    }
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mutateMock).toHaveBeenCalledTimes(1);
+  });
+
   it("never raises a toast on error (silent best-effort)", async () => {
     mutateMock.mockImplementationOnce(
       (

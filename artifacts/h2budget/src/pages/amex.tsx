@@ -65,6 +65,7 @@ import {
 import { SyncButton } from "@/components/sync-button";
 import { useListPlaidItems } from "@workspace/api-client-react";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
+import { useOpportunisticPlaidSync } from "@/hooks/use-opportunistic-plaid-sync";
 import { cn } from "@/lib/utils";
 import { relevantAmexPlaidItemIds } from "@/pages/amexPlaidScope";
 import { makeAmexBalanceAtEndOf, resolveAmexDebt } from "@/lib/amexEndingBalance";
@@ -185,6 +186,13 @@ export default function AmexPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { offerBulkRecategorize, previewDialog } = useBulkRecategorizePrompt();
+
+  // (#673) Layer 4 — fire a silent best-effort Plaid sync when the
+  // user opens the Amex page or returns to the tab from background,
+  // so a just-swiped pending charge is on screen without a Sync
+  // click. Module-level cooldown inside the hook keeps tab-flip
+  // bursts down to a single call.
+  useOpportunisticPlaidSync();
 
   // Filters
   const [sourceFilter, setSourceFilter] = useState<string>("all");
