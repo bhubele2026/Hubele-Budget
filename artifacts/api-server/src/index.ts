@@ -18,6 +18,7 @@ import { runStartupAvalancheHealRevert } from "./lib/startupAvalancheHealRevert"
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
 import { runStartupGroceriesRename } from "./lib/startupGroceriesRename";
 import { runStartupMay2026BackfillSweep } from "./lib/startupMay2026BackfillSweep";
+import { runStartupMay2026ChaseDelete } from "./lib/startupMay2026ChaseDelete";
 import { runStartupHouseholdBackfill } from "./lib/startupHouseholdBackfill";
 
 // Plaid configuration validation:
@@ -198,6 +199,22 @@ app.listen(port, (err) => {
     })
     .catch((err) => {
       logger.error({ err }, "Startup May-2026 backfill sweep failed");
+    });
+
+  // (#679) Hard-delete the 75 duplicated plaid:chase May rows the
+  // Chase re-link back-filled. The #676 sweep only flagged them, but
+  // the inbox shows un-matched plaid rows regardless of those flags
+  // and the May spend total was inflated. Preserves the 2 real pending
+  // rows from today, the 1 currently-matched row, and any pending
+  // pre-today rows. Safety-aborts if preflight exceeds SAFETY_MAX
+  // (real expected count: 75). Idempotent — converges to a no-op
+  // after the first boot.
+  runStartupMay2026ChaseDelete()
+    .then((summary) => {
+      logger.info(summary, "Startup May-2026 chase delete complete");
+    })
+    .catch((err) => {
+      logger.error({ err }, "Startup May-2026 chase delete failed");
     });
 
   if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
