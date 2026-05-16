@@ -197,14 +197,15 @@ describe("computeCashSignal — snapshot anchoring", () => {
     });
   });
 
-  it("(#666) mixed pre-snapshot income AND expense both drop — chart starts at bank balance", async () => {
-    // User's actual Forecast scenario after the partial (#667) fix:
-    // bank $4,922.56, but the chart started ABOVE the bank (~$8K)
-    // because real recurring INCOME dated <= snapshot was being
-    // dragged onto today, lifting the day-0 point above truth.
-    // With both an expense AND an income dated before the snapshot,
-    // the chart's first point must equal the bank balance — neither
-    // drag direction is allowed.
+  it("(#666/#681) pre-snapshot income drops; pre-snapshot expense drags to today+1", async () => {
+    // User's Forecast scenario: bank $4,922.56, real recurring
+    // income dated <= snapshot, and a real recurring expense dated
+    // <= snapshot. (#666) pinned that day-0 must equal the bank
+    // balance — neither side double-counts. (#681) refines this:
+    // past-due unresolved EXPENSE pendings drag to today+1 so the
+    // user still sees the upcoming impact, while INCOME continues to
+    // drop (a past-due deposit that didn't land is more likely a
+    // real miss than a delayed-but-coming check).
     await setSettings({
       balance: "4922.56",
       at: new Date("2026-05-14T12:00:00Z"),
@@ -228,21 +229,31 @@ describe("computeCashSignal — snapshot anchoring", () => {
       horizonDays: 30,
     });
 
-    // The chart's first day equals the bank balance — no drag in
-    // either direction.
+    // Day 0 (today = 2026-05-14) still equals the bank snapshot.
     expect(sig.startingBalance).toBe("4922.56");
     expect(sig.daily?.[0]).toEqual({
       date: "2026-05-14",
       balance: "4922.56",
     });
-    // Lowest cannot dip below the snapshot on day 0 from these
-    // pre-snapshot events.
-    expect(Number(sig.lowestProjected)).toBeGreaterThanOrEqual(4922.56);
-    // Neither pre-snapshot event creates a marker.
+    // Day 1 (today+1 = 2026-05-15) absorbs the dragged expense; the
+    // pre-snapshot income stays dropped.
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-15",
+      balance: "3805.27",
+    });
+    // Pre-snapshot dates do NOT appear as their own markers — the
+    // dragged expense surfaces on today+1 instead.
     const eventDates = (sig.events ?? []).map((e) => e.date);
     expect(eventDates).not.toContain("2026-05-12");
     expect(eventDates).not.toContain("2026-05-13");
     expect(eventDates).not.toContain("2026-05-14");
+    expect(eventDates).toContain("2026-05-15");
+    // The marker for the dragged expense preserves its original date
+    // for the "Pending plans dragging this day" UI.
+    const dragged = (sig.events ?? []).find(
+      (e) => e.date === "2026-05-15" && e.originalDate === "2026-05-12",
+    );
+    expect(dragged?.amount).toBe("-1117.29");
   });
 
   it("(#667) synthetic debt-min events dated before the snapshot do NOT drag onto today", async () => {
@@ -341,9 +352,12 @@ describe("computeCashSignal — snapshot anchoring", () => {
     expect(eventDates).toContain("2026-05-31");
   });
 
-  it("(#667) boundary: synthetic event dated exactly snapshot+1 still appears (no off-by-one)", async () => {
-    // Snapshot=2026-05-13, dueDay=14 → first synthetic debt-min lands
-    // on 2026-05-14 which is snapshot+1 day. Must NOT be suppressed.
+  it("(#667/#681) boundary: synthetic event dated exactly on today drags to today+1", async () => {
+    // Snapshot=2026-05-13, today=2026-05-14 (PINNED_NOW), dueDay=14
+    // → first synthetic debt-min lands on 2026-05-14 = today. It is
+    // NOT suppressed (#667), but because it is past-due-as-of-today
+    // (#681) the projection hops it to today+1 = 2026-05-15 so the
+    // chart's day-0 point still equals the bank snapshot.
     await setSettings({
       balance: "1000",
       at: new Date("2026-05-13T12:00:00Z"),
@@ -366,10 +380,16 @@ describe("computeCashSignal — snapshot anchoring", () => {
     });
 
     const eventDates = (sig.events ?? []).map((e) => e.date);
-    expect(eventDates).toContain("2026-05-14");
-    expect(eventDates.filter((d) => d === "2026-05-14").length).toBe(1);
+    // Dragged to today+1, not on today itself.
+    expect(eventDates).not.toContain("2026-05-14");
+    expect(eventDates).toContain("2026-05-15");
+    // Day 0 equals the bank snapshot; day 1 absorbs the drag.
     expect(sig.daily?.[0]).toEqual({
       date: "2026-05-14",
+      balance: "1000.00",
+    });
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-15",
       balance: "962.00",
     });
   });
@@ -428,15 +448,207 @@ describe("computeCashSignal — snapshot anchoring", () => {
     expect(eventDates).not.toContain("2026-06-01");
   });
 
-  it("rolls the balance forward from anchor up to fromDate when fromDate > snapshot date", async () => {
+  it("(#681) production May-15/May-16 scenario: two past-due pendings drag to today+1", async () => {
+    // User's production screenshot: today=2026-05-16, bank=$4,871.20
+    // (snapshot dated today), Verizon -$400 and PlayStation -$18.98
+    // both planned 2026-05-15 with no resolution. Day-0 must equal
+    // the bank balance, day-1 must drop by $418.98.
+    vi.setSystemTime(new Date("2026-05-16T12:00:00Z"));
+    await setSettings({
+      balance: "4871.20",
+      at: new Date("2026-05-16T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await addRecurring({
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-15",
+      amount: "400.00",
+      name: "Verizon Wireless",
+    });
+    await addRecurring({
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-15",
+      amount: "18.98",
+      name: "PlayStation Network",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-16",
+      horizonDays: 30,
+    });
+
+    expect(sig.startingBalance).toBe("4871.20");
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-05-16",
+      balance: "4871.20",
+    });
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-17",
+      balance: "4452.22",
+    });
+    expect(sig.lowestDate).toBe("2026-05-17");
+    expect(sig.lowestProjected).toBe("4452.22");
+    // Both dragged events surface on 05-17 with their original 05-15
+    // date preserved for the "Pending plans dragging this day" UI.
+    const draggedOn17 = (sig.events ?? []).filter(
+      (e) => e.date === "2026-05-17" && e.originalDate === "2026-05-15",
+    );
+    expect(draggedOn17.length).toBe(2);
+  });
+
+  it("(#681) the hop target follows real time — same plans land on day after today", async () => {
+    // Same two pendings as the May-15/16 scenario, but one real-world
+    // day later: today=05-17 (snapshot unchanged at 05-16=$4871.20).
+    // The dip must roll forward to today+1 = 2026-05-18.
+    vi.setSystemTime(new Date("2026-05-17T12:00:00Z"));
+    await setSettings({
+      balance: "4871.20",
+      at: new Date("2026-05-16T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await addRecurring({
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-15",
+      amount: "400.00",
+      name: "Verizon Wireless",
+    });
+    await addRecurring({
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-15",
+      amount: "18.98",
+      name: "PlayStation Network",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-17",
+      horizonDays: 30,
+    });
+
+    // Day 0 still equals the bank; the dip is on today+1, NOT today.
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-05-17",
+      balance: "4871.20",
+    });
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-18",
+      balance: "4452.22",
+    });
+    const eventDates = (sig.events ?? []).map((e) => e.date);
+    expect(eventDates).not.toContain("2026-05-17");
+    expect(eventDates.filter((d) => d === "2026-05-18").length).toBe(2);
+  });
+
+  it("(#681) marking a past-due pending 'missed' clears its drag", async () => {
+    // Same May-15/16 scenario, but the Verizon plan now has a
+    // 'missed' resolution. Only PlayStation continues to drag onto
+    // today+1; the day-1 dip is $18.98, not $418.98.
+    vi.setSystemTime(new Date("2026-05-16T12:00:00Z"));
+    await setSettings({
+      balance: "4871.20",
+      at: new Date("2026-05-16T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    const verizon = await addRecurring({
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-15",
+      amount: "400.00",
+      name: "Verizon Wireless",
+    });
+    await addRecurring({
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-15",
+      amount: "18.98",
+      name: "PlayStation Network",
+    });
+    await db.insert(forecastResolutionsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      recurringItemId: verizon.id,
+      occurrenceDate: "2026-05-15",
+      status: "missed",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-16",
+      horizonDays: 30,
+    });
+
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-05-16",
+      balance: "4871.20",
+    });
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-17",
+      balance: "4852.22",
+    });
+    const draggedOn17 = (sig.events ?? []).filter(
+      (e) => e.date === "2026-05-17",
+    );
+    expect(draggedOn17.length).toBe(1);
+    expect(draggedOn17[0].amount).toBe("-18.98");
+  });
+
+  it("(#681) past-due unresolved income is dropped, never landing on day 0", async () => {
+    // snapshot=2026-05-15 ($1000), today=2026-05-16. An unresolved
+    // income of +$500 planned for 2026-05-15 (or even for today) is
+    // past-due. It must NOT land on day-0 — that would push the
+    // chart's first point above the bank balance and break the
+    // bank=day-0 invariant. It also does NOT drag forward, because
+    // not-yet-landed paychecks shouldn't inflate tomorrow's
+    // projection either.
+    vi.setSystemTime(new Date("2026-05-16T12:00:00Z"));
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-05-15T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await addRecurring({
+      kind: "income",
+      frequency: "onetime",
+      anchorDate: "2026-05-15",
+      amount: "500.00",
+      name: "Paycheck",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-16",
+      horizonDays: 30,
+    });
+
+    expect(sig.startingBalance).toBe("1000.00");
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-05-16",
+      balance: "1000.00",
+    });
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-17",
+      balance: "1000.00",
+    });
+    expect(sig.endingBalance).toBe("1000.00");
+    const eventDates = (sig.events ?? []).map((e) => e.date);
+    expect(eventDates).not.toContain("2026-05-15");
+    expect(eventDates).not.toContain("2026-05-16");
+    expect(eventDates).not.toContain("2026-05-17");
+  });
+
+  it("(#681) when today is in-window, past-due expenses drag to today+1 instead of rolling forward", async () => {
+    // snapshot=04-01, today=05-14 (PINNED_NOW), fromDate=05-01,
+    // horizon=30 → toDate=05-31, so today is INSIDE the window.
+    // A 04-15 expense is past-due-as-of-today; under (#681) it must
+    // drag to today+1 (05-15) so the user can still see it weighing
+    // on the projection, rather than being silently consumed into
+    // startingBalance by the pre-window roll-forward.
     await setSettings({
       balance: "1000",
       at: new Date("2026-04-01T12:00:00Z"),
       cashBuffer: "0",
     });
-    // One-time $300 bill on 04-15 — between snapshot (04-01) and the
-    // chart's first day (05-01). Should be applied to startingBalance,
-    // not the daily projection inside the window.
     await addRecurring({
       frequency: "onetime",
       anchorDate: "2026-04-15",
@@ -448,15 +660,16 @@ describe("computeCashSignal — snapshot anchoring", () => {
       horizonDays: 30,
     });
 
-    // bankToday is the snapshot value at the anchor, not yet rolled forward.
     expect(sig.bankToday).toBe("1000.00");
-    // startingBalance reflects the anchor balance after applying events
-    // strictly between the anchor and the chart's first day.
-    expect(sig.startingBalance).toBe("700.00");
-    // The 04-15 event must NOT show up inside the window's projected
-    // expenses — it was consumed by the roll-forward.
-    expect(sig.projectedExpenses).toBe("0.00");
+    // No roll-forward consumption — the past-due expense drags into
+    // the window instead.
+    expect(sig.startingBalance).toBe("1000.00");
+    expect(sig.projectedExpenses).toBe("300.00");
     expect(sig.endingBalance).toBe("700.00");
+    expect(sig.lowestDate).toBe("2026-05-15");
+    const eventDates = (sig.events ?? []).map((e) => e.date);
+    expect(eventDates).toContain("2026-05-15");
+    expect(eventDates).not.toContain("2026-04-15");
   });
 });
 
@@ -664,46 +877,57 @@ describe("computeCashSignal — status thresholds", () => {
 
 describe("computeCashSignal — rescheduled resolutions", () => {
   it("moves a plan item from its original date to rescheduledTo", async () => {
+    // PINNED_NOW = 2026-05-14. Use post-today one-time expenses so
+    // the (#681) drag-to-today+1 rule does not fire — this test
+    // isolates the rescheduledTo mechanism.
     await setSettings({
       balance: "1000",
-      at: new Date("2026-04-01T12:00:00Z"),
+      at: new Date("2026-05-14T12:00:00Z"),
       cashBuffer: "0",
     });
-    // Monthly $200 on the 15th. Within the test window the expansion
-    // produces 2026-04-15 and 2026-05-15.
-    const item = await addRecurring({ dayOfMonth: 15, amount: "200" });
+    const item = await addRecurring({
+      frequency: "onetime",
+      anchorDate: "2026-05-20",
+      amount: "200",
+      name: "First",
+    });
+    await addRecurring({
+      frequency: "onetime",
+      anchorDate: "2026-06-15",
+      amount: "200",
+      name: "Second",
+    });
 
-    // Reschedule the 04-15 occurrence to 04-25. The projection should
-    // skip 04-15 and instead drop the balance on 04-25; 05-15 keeps
-    // its place. A regression here would either double-count (apply
-    // both 04-15 and 04-25) or silently skip the rescheduled hit.
+    // Reschedule the 05-20 occurrence to 05-25. The projection should
+    // skip 05-20 and instead drop the balance on 05-25; 06-15 keeps
+    // its place.
     await db.insert(forecastResolutionsTable).values({
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       recurringItemId: item.id,
-      occurrenceDate: "2026-04-15",
+      occurrenceDate: "2026-05-20",
       status: "rescheduled",
-      rescheduledTo: "2026-04-25",
+      rescheduledTo: "2026-05-25",
     });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
-      fromDate: "2026-04-01",
-      horizonDays: 60, // covers 04-25 and 05-15
+      fromDate: "2026-05-14",
+      horizonDays: 60, // covers 05-25 and 06-15
     });
 
     // Both events still hit (just one of them on a moved date):
-    // 1000 - 200 (04-25) - 200 (05-15) = 600.
+    // 1000 - 200 (05-25) - 200 (06-15) = 600.
     expect(sig.endingBalance).toBe("600.00");
     expect(sig.projectedExpenses).toBe("400.00");
-    // Lowest is reached at the second hit, 05-15.
+    // Lowest is reached at the second hit, 06-15.
     expect(sig.lowestProjected).toBe("600.00");
-    expect(sig.lowestDate).toBe("2026-05-15");
+    expect(sig.lowestDate).toBe("2026-06-15");
     // The rescheduled date is surfaced in the chart's per-day events,
-    // and the original 04-15 is NOT.
+    // and the original 05-20 is NOT.
     const eventDates = (sig.events ?? []).map((e) => e.date);
-    expect(eventDates).toContain("2026-04-25");
-    expect(eventDates).toContain("2026-05-15");
-    expect(eventDates).not.toContain("2026-04-15");
+    expect(eventDates).toContain("2026-05-25");
+    expect(eventDates).toContain("2026-06-15");
+    expect(eventDates).not.toContain("2026-05-20");
   });
 });
 
@@ -747,32 +971,42 @@ describe("computeCashSignal — skipped resolutions", () => {
     expect(eventDates).toContain("2026-05-15");
   });
 
-  it("control: without the skipped resolution, the same 04-15 occurrence IS included", async () => {
-    // Same setup as the skip case, minus the resolution row. If the
-    // skip filter regresses, the previous test would still pass when
-    // the occurrence is silently kept — this control fails loudly to
-    // prove the only difference between included and excluded is the
-    // 'skipped' resolution row.
+  it("control: without the skipped resolution, the same occurrence IS included", async () => {
+    // Same setup as the skip case, minus the resolution row. Uses
+    // post-today one-time expenses so neither hit is reshaped by the
+    // (#681) drag-to-today+1 rule — the only difference between this
+    // test and the previous one is the 'skipped' resolution row.
     await setSettings({
       balance: "1000",
-      at: new Date("2026-04-01T12:00:00Z"),
+      at: new Date("2026-05-14T12:00:00Z"),
       cashBuffer: "0",
     });
-    await addRecurring({ dayOfMonth: 15, amount: "200" });
+    await addRecurring({
+      frequency: "onetime",
+      anchorDate: "2026-05-20",
+      amount: "200",
+      name: "First",
+    });
+    await addRecurring({
+      frequency: "onetime",
+      anchorDate: "2026-06-15",
+      amount: "200",
+      name: "Second",
+    });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
-      fromDate: "2026-04-01",
+      fromDate: "2026-05-14",
       horizonDays: 60,
     });
 
-    // Both 04-15 and 05-15 apply: 1000 - 200 - 200 = 600.
+    // Both 05-20 and 06-15 apply: 1000 - 200 - 200 = 600.
     expect(sig.endingBalance).toBe("600.00");
     expect(sig.projectedExpenses).toBe("400.00");
     expect(sig.lowestProjected).toBe("600.00");
-    expect(sig.lowestDate).toBe("2026-05-15");
+    expect(sig.lowestDate).toBe("2026-06-15");
     const eventDates = (sig.events ?? []).map((e) => e.date);
-    expect(eventDates).toContain("2026-04-15");
-    expect(eventDates).toContain("2026-05-15");
+    expect(eventDates).toContain("2026-05-20");
+    expect(eventDates).toContain("2026-06-15");
   });
 });
 

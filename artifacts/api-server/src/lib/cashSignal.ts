@@ -249,7 +249,27 @@ export async function computeCashSignal(
   // No snapshot → fall back to startingBalance
   const startBalanceAtAnchor = snapshotBalance ?? (Number(settings?.startingBalance ?? 0) || 0);
   // Anchor: events strictly AFTER snapshot date are projected; if no snapshot, project from today
-  const anchorISO = snapshotISO ?? fmtISO(todayDateOnly);
+  const todayISO = fmtISO(todayDateOnly);
+  const anchorISO = snapshotISO ?? todayISO;
+  // (#681) Past-due pending plans drag the projection to today+1.
+  // The bank balance card and the chart's day-0 point both equal the
+  // snapshot — anything past-due (still pending and unresolved) is
+  // assumed to still post, just not on its original date — so the
+  // projection hops it onto tomorrow and keeps re-hopping it forward
+  // every real-world day until the user marks it matched, missed,
+  // skipped, or dismissed.
+  const dragTargetISO = fmtISO(addDays(todayDateOnly, 1));
+  // Past-due cutoff: any pending plan whose effective date is on or
+  // before MAX(snapshot, today) is considered past-due. We compare
+  // against the later of the two so a snapshot dated yesterday and a
+  // pending plan dated today both qualify.
+  const dragCutoffISO =
+    snapshotISO && snapshotISO > todayISO ? snapshotISO : todayISO;
+  // Gate the drag to chart windows that actually include today. When
+  // the user is viewing a future window (fromDate > today) or a past
+  // window (toDate < today), dragging to today+1 would either land
+  // outside the chart entirely or distort a historical view. In those
+  // cases, fall through to the (#666) snapshot-is-truth drop instead.
   // Expansion start: cover from min(anchor, fromDate) so we can roll the
   // balance forward to fromDate even when fromDate > anchor. We also reach
   // back to the first day of the prior month — matching the lookback the
@@ -501,27 +521,45 @@ export async function computeCashSignal(
     // Plans the user explicitly marked missed/dismissed are likewise
     // dropped — the user has acknowledged they won't post.
     if (missedPlanKeys.has(origKey)) continue;
-    // (#666) BANK SNAPSHOT IS THE TRUTH: any event whose effective
-    // date is on or before the snapshot is already reflected in the
-    // bank balance (or it never posted, in which case the user can
-    // mark it missed — but until then it's NOT something to project).
-    // Dropping these unconditionally — bills AND income, real AND
-    // synthetic — guarantees the chart's first point equals the bank
-    // balance whenever there's nothing actionable in Pending. This
-    // replaces the previous "drag pre-snapshot to today" rule, which
-    // silently shifted the start of the chart up or down depending
-    // on which side of zero the dragged events happened to net.
+    // (#681) Past-due unresolved EXPENSE pendings drag the projection
+    // to today+1. The day-0 chart point still equals the bank snapshot
+    // (no double-counting today), but the expense continues to weigh
+    // on tomorrow until the user marks it matched/missed/skipped or
+    // it gets matched to a real bank transaction. Gated to chart
+    // windows that include today — past or future windows fall back
+    // to (#666) drop semantics so a hop to today+1 doesn't land
+    // outside the visible chart.
+    const todayInWindow = todayISO >= fromISO && todayISO <= toISO;
+    if (todayInWindow && rawEffectiveDate <= dragCutoffISO) {
+      if (ev.amount < 0) {
+        // (#681) Past-due unresolved EXPENSE pendings drag the
+        // projection to today+1.
+        items.push({ date: dragTargetISO, amount: ev.amount, matched: false });
+        expenseEvents.push({
+          date: dragTargetISO,
+          label: ev.label,
+          amount: ev.amount,
+          itemId: ev.itemId,
+          originalDate: rawEffectiveDate,
+        });
+      }
+      // Past-due INCOME is dropped — it is intentionally excluded from
+      // the drag (a not-yet-landed paycheck shouldn't inflate the
+      // chart by hopping onto tomorrow), and it must not land on
+      // day-0 either, or the day-0 point would exceed the bank
+      // snapshot. The user will see the deposit on the chart only
+      // once it actually posts.
+      continue;
+    }
+    // (#666) BANK SNAPSHOT IS THE TRUTH: anything that didn't qualify
+    // for the (#681) drag (e.g. windows that don't contain today) is
+    // dropped if it's on or before the snapshot.
     if (snapshotISO && rawEffectiveDate <= snapshotISO) continue;
-    // POST-SNAPSHOT events keep their natural date. (No drag — the
-    // previous "drag pre-snapshot to today" branch is now unreachable
-    // because pre-snapshot events are short-circuited above.)
     let effectiveDate = rawEffectiveDate;
     if (!snapshotISO && effectiveDate < fromISO) {
-      // No-snapshot fallback: surface PRE-WINDOW pending plans as a
-      // day-0 dip rather than silently shrinking startingBalance.
-      // Intentionally still keyed off fromISO (not dragTargetISO) so
-      // in-window past dates keep their original date — without a
-      // snapshot we have no proof the line was flat through them.
+      // No-snapshot fallback for non-drag cases (income, or windows
+      // that don't include today): surface PRE-WINDOW pending plans
+      // as a day-0 dip rather than silently shrinking startingBalance.
       effectiveDate = fromISO;
     }
     items.push({ date: effectiveDate, amount: ev.amount, matched: false });
