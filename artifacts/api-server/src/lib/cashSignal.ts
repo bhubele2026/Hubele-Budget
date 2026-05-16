@@ -265,11 +265,14 @@ export async function computeCashSignal(
   // pending plan dated today both qualify.
   const dragCutoffISO =
     snapshotISO && snapshotISO > todayISO ? snapshotISO : todayISO;
-  // Gate the drag to chart windows that actually include today. When
-  // the user is viewing a future window (fromDate > today) or a past
-  // window (toDate < today), dragging to today+1 would either land
-  // outside the chart entirely or distort a historical view. In those
-  // cases, fall through to the (#666) snapshot-is-truth drop instead.
+  // The drag is applied unconditionally — independent of the chart
+  // window. Window placement is handled by the normal roll-forward /
+  // daily-projection logic downstream: if today+1 falls inside the
+  // window the dip is visible there; if it falls before the window
+  // the roll-forward consumes it into startingBalance; if it falls
+  // after the window the daily loop naturally ignores it. Gating on
+  // window choice would make the same plan appear and disappear based
+  // on which date range the user selects.
   // Expansion start: cover from min(anchor, fromDate) so we can roll the
   // balance forward to fromDate even when fromDate > anchor. We also reach
   // back to the first day of the prior month — matching the lookback the
@@ -522,18 +525,18 @@ export async function computeCashSignal(
     // dropped — the user has acknowledged they won't post.
     if (missedPlanKeys.has(origKey)) continue;
     // (#681) Past-due unresolved EXPENSE pendings drag the projection
-    // to today+1. The day-0 chart point still equals the bank snapshot
-    // (no double-counting today), but the expense continues to weigh
-    // on tomorrow until the user marks it matched/missed/skipped or
-    // it gets matched to a real bank transaction. Gated to chart
-    // windows that include today — past or future windows fall back
-    // to (#666) drop semantics so a hop to today+1 doesn't land
-    // outside the visible chart.
-    const todayInWindow = todayISO >= fromISO && todayISO <= toISO;
-    if (todayInWindow && rawEffectiveDate <= dragCutoffISO) {
+    // to today+1. Day-0 still equals the bank snapshot (no
+    // double-counting today), but the expense continues to weigh on
+    // tomorrow until the user marks it matched/missed/skipped or it
+    // gets matched to a real bank transaction. Income is excluded
+    // from the drag and dropped instead.
+    //
+    // Applied unconditionally — the daily-projection / roll-forward
+    // logic below decides where today+1 lands relative to the
+    // requested window, so the same plan can't appear/disappear just
+    // because the user picked a different chart range.
+    if (rawEffectiveDate <= dragCutoffISO) {
       if (ev.amount < 0) {
-        // (#681) Past-due unresolved EXPENSE pendings drag the
-        // projection to today+1.
         items.push({ date: dragTargetISO, amount: ev.amount, matched: false });
         expenseEvents.push({
           date: dragTargetISO,
@@ -543,17 +546,14 @@ export async function computeCashSignal(
           originalDate: rawEffectiveDate,
         });
       }
-      // Past-due INCOME is dropped — it is intentionally excluded from
-      // the drag (a not-yet-landed paycheck shouldn't inflate the
-      // chart by hopping onto tomorrow), and it must not land on
-      // day-0 either, or the day-0 point would exceed the bank
-      // snapshot. The user will see the deposit on the chart only
-      // once it actually posts.
+      // Past-due INCOME is dropped — a not-yet-landed paycheck
+      // shouldn't inflate tomorrow by hopping onto it, and it must
+      // not land on day-0 either, or day-0 would exceed the bank
+      // snapshot.
       continue;
     }
     // (#666) BANK SNAPSHOT IS THE TRUTH: anything that didn't qualify
-    // for the (#681) drag (e.g. windows that don't contain today) is
-    // dropped if it's on or before the snapshot.
+    // for the (#681) drag is dropped if it's on or before the snapshot.
     if (snapshotISO && rawEffectiveDate <= snapshotISO) continue;
     let effectiveDate = rawEffectiveDate;
     if (!snapshotISO && effectiveDate < fromISO) {

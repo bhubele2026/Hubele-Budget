@@ -594,6 +594,77 @@ describe("computeCashSignal — snapshot anchoring", () => {
     expect(draggedOn17[0].amount).toBe("-18.98");
   });
 
+  it("(#681) future window with snapshot: drag-target before fromDate flows into startingBalance", async () => {
+    // Code-review regression: the (#681) drag must apply
+    // independent of the chart window. snapshot=04-01, today=05-14,
+    // fromDate=06-01 (a future window that does NOT contain today).
+    // A 04-15 plan drags to today+1 = 05-15, which is before
+    // fromDate, so the pre-window roll-forward consumes it into
+    // startingBalance. Same plan must NOT appear in one window and
+    // disappear in another.
+    await setSettings({
+      balance: "1000",
+      at: new Date("2026-04-01T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await addRecurring({
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-04-15",
+      amount: "300",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-06-01",
+      horizonDays: 30,
+    });
+
+    // Drag-target 05-15 is < fromDate=06-01 → consumed into starting.
+    expect(sig.startingBalance).toBe("700.00");
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-06-01",
+      balance: "700.00",
+    });
+    expect(sig.projectedExpenses).toBe("0.00");
+  });
+
+  it("(#681) no-snapshot variant: past-due expense still drags by today+1", async () => {
+    // Code-review regression: the (#681) drag must work even when
+    // there is no bank snapshot. With no snapshot, the anchor falls
+    // back to today, dragCutoff = today, and a plan dated yesterday
+    // must still hop onto today+1.
+    vi.setSystemTime(new Date("2026-05-16T12:00:00Z"));
+    // No bankSnapshot → fall back to legacy startingBalance. The
+    // (#681) drag must still apply, anchored on today.
+    await setSettings({ startingBalance: "1000", cashBuffer: "0" });
+    await addRecurring({
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-15",
+      amount: "200",
+      name: "Past-due bill",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-16",
+      horizonDays: 30,
+    });
+
+    // Day 0 = startingBalance; day 1 absorbs the dragged expense.
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-05-16",
+      balance: "1000.00",
+    });
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-17",
+      balance: "800.00",
+    });
+    const dragged = (sig.events ?? []).find(
+      (e) => e.date === "2026-05-17" && e.originalDate === "2026-05-15",
+    );
+    expect(dragged?.amount).toBe("-200.00");
+  });
+
   it("(#681) past-due unresolved income is dropped, never landing on day 0", async () => {
     // snapshot=2026-05-15 ($1000), today=2026-05-16. An unresolved
     // income of +$500 planned for 2026-05-15 (or even for today) is
@@ -838,13 +909,22 @@ describe("computeCashSignal — status thresholds", () => {
   });
 
   it("returns 'not_yet' when lowest falls below cashBuffer", async () => {
+    // Pin today to a date before the 04-15 plan so the (#681)
+    // drag-to-today+1 rule doesn't move the dip out of this test's
+    // window. The point of the test is the status threshold, not the
+    // drag behavior.
+    vi.setSystemTime(new Date("2026-04-14T12:00:00Z"));
     await setSettings({
       balance: "600",
       at: new Date("2026-04-01T12:00:00Z"),
       cashBuffer: "500",
     });
     // 04-15 bill of $200 drops the balance to 400 < 500.
-    await addRecurring({ dayOfMonth: 15, amount: "200" });
+    await addRecurring({
+      frequency: "onetime",
+      anchorDate: "2026-04-15",
+      amount: "200",
+    });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
       fromDate: "2026-04-01",
