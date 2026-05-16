@@ -344,6 +344,11 @@ export async function syncPlaidItem(
   // pass true; webhook/cron paths should leave it false to avoid
   // billing the premium endpoint on every coalesced sync.
   const forceRefresh = opts.forceRefresh === true;
+  // (#671) Function-scoped so the failure-path delivery-metrics log
+  // in the wrapping catch can still reference whether the refresh
+  // fired and how many cursor walks burned before we threw.
+  let refreshSucceeded = false;
+  let pollAttemptsUsed = 0;
   const [item] = await db
     .select()
     .from(plaidItemsTable)
@@ -624,7 +629,6 @@ export async function syncPlaidItem(
     // engaged when the caller passed `forceRefresh: true` so the
     // webhook coalescer / nightly cron don't spam the premium
     // endpoint and trip rate limits.
-    let refreshSucceeded = false;
     if (forceRefresh) {
       try {
         await plaid().transactionsRefresh({
@@ -679,7 +683,6 @@ export async function syncPlaidItem(
       }
       return [2500, 4000];
     })();
-    let pollAttemptsUsed = 0;
     while (pollAttemptsUsed < pollAttemptsMax) {
       let walkAdded = 0;
       let walkModified = 0;
