@@ -38,13 +38,16 @@ import NotFound from "./pages/not-found";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Cached responses stay "fresh" for 30s, so revisiting a page
+      // Cached responses stay "fresh" for 5 min, so revisiting a page
       // (or a previously-loaded budget month) renders from cache
       // instantly instead of triggering a full refetch + skeleton.
-      staleTime: 30_000,
-      // Keep evicted entries around for 10 min so back-and-forth
+      // Mutations invalidate the relevant keys explicitly, so a
+      // longer staleTime doesn't cause "stale data" — it just stops
+      // the background refetch storm that makes navigation feel slow.
+      staleTime: 5 * 60_000,
+      // Keep evicted entries around for 30 min so back-and-forth
       // navigation between months hits the cache.
-      gcTime: 10 * 60_000,
+      gcTime: 30 * 60_000,
       // The aggressive default refetch-on-focus was causing the
       // budget grid to re-skeleton every time the user tabbed back
       // to the window.

@@ -14,10 +14,7 @@ import { maybeAlertOnSiblingCleanup } from "./lib/plaidMalformedSiblingCleanupAl
 import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
-import { runStartupAvalancheHealRevert } from "./lib/startupAvalancheHealRevert";
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
-import { runStartupGroceriesRename } from "./lib/startupGroceriesRename";
-import { runStartupHouseholdBackfill } from "./lib/startupHouseholdBackfill";
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,
@@ -112,27 +109,6 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
 
-  // (#623 follow-up) One-shot startup pass: stamp household_id on
-  // every user-scoped row that's still NULL. The schema migration
-  // for the household refactor is auto-applied by Replit's Publish
-  // flow, but the data backfill (scripts/backfill_households.sql) is
-  // not — without this, a freshly deployed prod has the columns but
-  // every existing transaction/account/etc. carries household_id=NULL,
-  // so the new household-scoped routes return zero rows. Idempotent:
-  // re-running on a converged DB is a no-op. Best-effort: never blocks
-  // boot, never crashes it.
-  runStartupHouseholdBackfill()
-    .then((summary) => {
-      if (summary.ran) {
-        logger.info(summary, "Startup household backfill complete");
-      } else {
-        logger.error(summary, "Startup household backfill did not run");
-      }
-    })
-    .catch((err) => {
-      logger.error({ err }, "Startup household backfill failed");
-    });
-
   // (#434) One-shot startup pass: walk every user with a non-empty
   // `forecast_settings.accountSnapshots` map and run the dedupe routine
   // so users whose auto-dedupe gate was already stamped before #429
@@ -150,18 +126,6 @@ app.listen(port, (err) => {
       logger.error({ err }, "Startup accountSnapshots repair sweep failed");
     });
 
-  // One-shot revert: undo the bad `healAvalancheDuplication` auto-migration
-  // that ran during the ed23a30..revert window. Restores extra_source='manual'
-  // for any user it incorrectly flipped to 'budget_line' so the slider on
-  // /avalanche reappears and the Avalanche group on /budget refills.
-  runStartupAvalancheHealRevert()
-    .then((summary) => {
-      logger.info(summary, "Startup avalanche-heal revert complete");
-    })
-    .catch((err) => {
-      logger.error({ err }, "Startup avalanche-heal revert failed");
-    });
-
   // (#632) One-shot per-startup sweep: clean up existing transactions
   // that match the new card-payment heuristics but were tagged into
   // Monthly/Weekly/Unplanned before the upstream classifier knew about
@@ -174,17 +138,6 @@ app.listen(port, (err) => {
     })
     .catch((err) => {
       logger.error({ err }, "Startup card-payment reclassify failed");
-    });
-
-  // One-shot per-user fix: confirmed in chat that the user's "Weekly Spend"
-  // $450/wk bill is actually their groceries + dining budget, not a
-  // generic catch-all. Rename it and link it to the Groceries category.
-  runStartupGroceriesRename()
-    .then((result) => {
-      logger.info(result, "Startup groceries rename complete");
-    })
-    .catch((err) => {
-      logger.error({ err }, "Startup groceries rename failed");
     });
 
   if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
