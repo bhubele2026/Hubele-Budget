@@ -2436,6 +2436,47 @@ export default function ForecastPage({
     return map;
   })();
 
+  // (#683) Past-due plans dragging tomorrow's projection. The cash signal
+  // collapses every still-pending pre-snapshot/today expense onto
+  // today+1; expose those plans as a discoverable summary card so users
+  // understand why tomorrow looks lower than the calendar would suggest.
+  // All dragged events share the same `date` (today+1) and carry their
+  // original scheduled date in `originalDate`.
+  const draggingPlans = (() => {
+    const evs = proj?.events ?? [];
+    type Row = {
+      itemId: string;
+      label: string;
+      amount: number;
+      originalDate: string;
+      effectiveDate: string;
+    };
+    const rows: Row[] = [];
+    for (const e of evs) {
+      const orig = (e as { originalDate?: string }).originalDate;
+      if (!orig || orig === e.date) continue;
+      const amt = Number(e.amount);
+      if (!Number.isFinite(amt) || amt >= 0) continue;
+      rows.push({
+        itemId: e.itemId ?? "",
+        label: e.label,
+        amount: amt,
+        originalDate: orig,
+        effectiveDate: e.date,
+      });
+    }
+    rows.sort((a, b) =>
+      a.originalDate < b.originalDate
+        ? -1
+        : a.originalDate > b.originalDate
+          ? 1
+          : a.amount - b.amount,
+    );
+    return rows;
+  })();
+  const draggingTotal = draggingPlans.reduce((s, r) => s + r.amount, 0);
+  const draggingTargetDate = draggingPlans[0]?.effectiveDate ?? null;
+
   return (
     <div className="space-y-6">
       <PlaidReauthBanner />
@@ -2678,6 +2719,71 @@ export default function ForecastPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* (#683) Past-due plans dragging tomorrow — discoverable summary */}
+      {draggingPlans.length > 0 && draggingTargetDate && (
+        <Card
+          data-testid="card-dragging-plans-summary"
+          className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-900"
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2 text-amber-900 dark:text-amber-100">
+              <AlertCircle className="w-4 h-4" />
+              <span>
+                {draggingPlans.length === 1
+                  ? "1 past-due plan is weighing on"
+                  : `${draggingPlans.length} past-due plans are weighing on`}{" "}
+                {formatDate(draggingTargetDate)}
+              </span>
+              <span
+                className="ml-auto tabular-nums text-amber-900 dark:text-amber-100"
+                data-testid="dragging-plans-total"
+              >
+                {formatCurrency(draggingTotal)}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-amber-900/80 dark:text-amber-100/80 mb-2">
+              These plans were due earlier but haven't been matched, missed,
+              or skipped yet — so the projection keeps them on{" "}
+              {formatDate(draggingTargetDate)} until you resolve them.
+            </p>
+            <ul
+              className="divide-y divide-amber-200 dark:divide-amber-900 rounded-md border border-amber-200 dark:border-amber-900 bg-background"
+              data-testid="dragging-plans-list"
+            >
+              {draggingPlans.map((row) => (
+                <li
+                  key={`${row.itemId}|${row.originalDate}`}
+                  data-testid={`dragging-plan-${row.itemId}-${row.originalDate}`}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      jumpToPlan(row.itemId, row.originalDate)
+                    }
+                    className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-amber-50 dark:hover:bg-amber-950/30 focus-visible:bg-amber-50 dark:focus-visible:bg-amber-950/30 outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                    title={`Jump to ${row.label} in the planned-items register`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">
+                        {row.label}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Originally due {formatDate(row.originalDate)}
+                      </div>
+                    </div>
+                    <span className="text-sm font-medium tabular-nums text-destructive">
+                      {formatCurrency(row.amount)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Projected Balance area chart */}
       <Card data-testid="card-projected-balance-chart">
