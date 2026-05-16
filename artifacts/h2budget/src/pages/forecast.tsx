@@ -3048,7 +3048,7 @@ export default function ForecastPage({
         </Card>
       )}
 
-      {mode === "overall" && inbox.length > 0 && (
+      {mode === "overall" && bankInbox.length > 0 && (
         <Card
           className="border-amber-200 bg-amber-50/60 dark:bg-amber-950/30"
           data-testid="banner-review-waiting"
@@ -3057,7 +3057,7 @@ export default function ForecastPage({
             <div className="flex items-center gap-2 text-sm min-w-0">
               <InboxIcon className="w-4 h-4 text-amber-700 dark:text-amber-300 flex-none" />
               <span className="font-medium text-amber-900 dark:text-amber-100">
-                {inbox.length} waiting in Review
+                {bankInbox.length} waiting in Review
               </span>
               <span className="text-xs text-amber-800/80 dark:text-amber-200/80 truncate">
                 Match Chase activity against your planned items.
