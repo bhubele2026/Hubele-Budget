@@ -349,19 +349,27 @@ export default function BillsPage() {
     );
   };
 
-  const onDelete = () => {
-    if (!editing) return;
-    if (!confirm(`Delete "${editing.name}"?`)) return;
+  const deleteRecurring = (item: RecurringItem, opts?: { closeDialog?: boolean }) => {
+    if (!confirm(`Delete "${item.name}"? This can't be undone.`)) return;
     deleteItem.mutate(
-      { id: editing.id },
+      { id: item.id },
       {
         onSuccess: () => {
           invalidateAll();
-          setDialogOpen(false);
+          if (opts?.closeDialog) setDialogOpen(false);
           toast({ title: "Deleted" });
         },
       },
     );
+  };
+
+  const onDelete = () => {
+    if (!editing) return;
+    deleteRecurring(editing, { closeDialog: true });
+  };
+
+  const onDeleteRow = (item: RecurringItem) => {
+    deleteRecurring(item);
   };
 
   // Run the same avalanche simulation the Forecast uses so Bills hides debt
@@ -530,6 +538,7 @@ export default function BillsPage() {
             rows={incomeRows}
             onEdit={openEdit}
             onToggleActive={onToggleActive}
+            onDeleteRow={onDeleteRow}
             togglingId={updateItem.isPending ? togglingId : null}
           />
           <BillGroupCard
@@ -539,6 +548,7 @@ export default function BillsPage() {
             rows={billRows}
             onEdit={openEdit}
             onToggleActive={onToggleActive}
+            onDeleteRow={onDeleteRow}
             togglingId={updateItem.isPending ? togglingId : null}
           />
           {debtMinRows.length > 0 ? (
@@ -911,6 +921,7 @@ function BillGroupCard({
   rows,
   onEdit,
   onToggleActive,
+  onDeleteRow,
   togglingId,
 }: {
   title: string;
@@ -919,6 +930,7 @@ function BillGroupCard({
   rows: BillsSummaryRow[];
   onEdit: (item: RecurringItem) => void;
   onToggleActive: (item: RecurringItem) => void;
+  onDeleteRow: (item: RecurringItem) => void;
   togglingId: string | null;
 }) {
   const Icon = tone === "income" ? ArrowUpCircle : ArrowDownCircle;
@@ -1077,6 +1089,19 @@ function BillGroupCard({
                     aria-label={`Edit ${item.name}`}
                   >
                     <Pencil className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                  <button
+                    type="button"
+                    className="p-1.5 rounded hover:bg-background"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteRow(item);
+                    }}
+                    aria-label={`Delete ${item.name}`}
+                    title="Delete"
+                    data-testid={`button-delete-row-${item.id}`}
+                  >
+                    <Trash2 className="w-4 h-4 text-muted-foreground" />
                   </button>
                 </li>
               );
