@@ -22,6 +22,7 @@ import {
   type CreateTransactionInput,
 } from "@workspace/api-client-react";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
+import { useOpportunisticPlaidSync } from "@/hooks/use-opportunistic-plaid-sync";
 import {
   useBulkRecategorizePrompt,
   bulkRuleFromRepointed,
@@ -228,6 +229,10 @@ function readInitialChaseAccount(): string | null {
 }
 
 export default function TransactionsPage() {
+  // (#671) Layer 4 — opportunistic Plaid refresh on Transactions mount.
+  // The most common "where's my pending charge?" entry point — fire a
+  // silent forceRefresh so newly authorized rows land without a click.
+  useOpportunisticPlaidSync();
   const { data: transactions, isLoading } = useListTransactions({ limit: 5000 });
   const { data: categories } = useListCategories();
   const { data: mappingRules } = useListMappingRules();

@@ -35,6 +35,7 @@ import {
 } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
+import { useOpportunisticPlaidSync } from "@/hooks/use-opportunistic-plaid-sync";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -945,6 +946,11 @@ function shortDate(iso: string): string {
 export default function ForecastPage({
   mode = "overall",
 }: { mode?: "review" | "overall" } = {}) {
+  // (#671) Layer 4 — opportunistic Plaid refresh on Forecast mount.
+  // Shared module-level cooldown with Dashboard/Transactions means
+  // hopping between these pages fires one background refresh, not
+  // three.
+  useOpportunisticPlaidSync();
   const [horizonDays, setHorizonDays] = useState<number>(() => {
     try {
       const v = sessionStorage.getItem(FORECAST_HORIZON_KEY);
