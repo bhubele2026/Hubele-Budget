@@ -13,9 +13,21 @@
 // The webhook handler should call `scheduleSyncForItem` and return 200
 // immediately; the actual sync runs asynchronously in the background.
 
-import { syncPlaidItem } from "./plaidSync";
+import { syncPlaidItemSerialized } from "./plaidSync";
 
 const FALLBACK_DEBOUNCE_MS = 7000;
+// (#671) Short debounce used when a webhook arrives inside the
+// post-completion grace window. Plaid commonly fires SYNC_UPDATES_
+// AVAILABLE moments after a /transactions/refresh-driven sync wraps
+// (the bank had a couple of pending charges ingesting just behind
+// the refresh). The default 7s debounce makes that trailing batch
+// look like a separate burst; with the grace shortcut the rerun
+// fires in ≈1.5s so the freshly-ingested rows land before the user
+// loses interest.
+const GRACE_DEBOUNCE_MS = 1500;
+// Window after a sync completes during which a new webhook is
+// treated as the trailing edge of the same upstream event.
+const GRACE_WINDOW_MS = 30_000;
 
 function getDefaultDebounceMs(): number {
   const raw = process.env.PLAID_SYNC_DEBOUNCE_MS;
@@ -26,6 +38,24 @@ function getDefaultDebounceMs(): number {
   return FALLBACK_DEBOUNCE_MS;
 }
 
+function getGraceDebounceMs(): number {
+  const raw = process.env.PLAID_SYNC_GRACE_DEBOUNCE_MS;
+  if (raw != null && raw !== "") {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return GRACE_DEBOUNCE_MS;
+}
+
+function getGraceWindowMs(): number {
+  const raw = process.env.PLAID_SYNC_GRACE_WINDOW_MS;
+  if (raw != null && raw !== "") {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return GRACE_WINDOW_MS;
+}
+
 type Runner = (userId: string, itemId: string) => Promise<unknown>;
 
 type ItemState = {
@@ -33,6 +63,11 @@ type ItemState = {
   fire: (() => void) | null;
   inflight: Promise<void> | null;
   rerunUserId: string | null;
+  // (#671) Wall-clock ms of when the most recent sync finished. Used
+  // to detect "webhook arrived shortly after a just-completed sync"
+  // and shorten the debounce so trailing-edge pending rows land
+  // fast.
+  lastCompletedAt: number | null;
 };
 
 const states = new Map<string, ItemState>();
@@ -40,20 +75,28 @@ const states = new Map<string, ItemState>();
 function getState(itemId: string): ItemState {
   let s = states.get(itemId);
   if (!s) {
-    s = { timer: null, fire: null, inflight: null, rerunUserId: null };
+    s = {
+      timer: null,
+      fire: null,
+      inflight: null,
+      rerunUserId: null,
+      lastCompletedAt: null,
+    };
     states.set(itemId, s);
   }
   return s;
 }
 
-const defaultRunner: Runner = (u, i) => syncPlaidItem(u, i);
+// (#671) Route webhook-driven syncs through the per-item promise chain
+// so they cannot overlap a manual or cron-triggered sync of the same
+// item (which would race on the cursor write and rewind progress).
+const defaultRunner: Runner = (u, i) => syncPlaidItemSerialized(u, i);
 
 export function scheduleSyncForItem(
   userId: string,
   itemId: string,
   opts: { debounceMs?: number; runner?: Runner } = {},
 ): void {
-  const debounceMs = opts.debounceMs ?? getDefaultDebounceMs();
   const runner = opts.runner ?? defaultRunner;
   const s = getState(itemId);
 
@@ -68,6 +111,22 @@ export function scheduleSyncForItem(
     return;
   }
 
+  // (#671) Pick the debounce: caller override → grace shortcut →
+  // configured default. The grace shortcut fires when a webhook
+  // lands within the post-completion window, on the assumption it's
+  // the trailing-edge of the same upstream change we just synced.
+  let debounceMs: number;
+  if (opts.debounceMs != null) {
+    debounceMs = opts.debounceMs;
+  } else if (
+    s.lastCompletedAt != null &&
+    Date.now() - s.lastCompletedAt <= getGraceWindowMs()
+  ) {
+    debounceMs = getGraceDebounceMs();
+  } else {
+    debounceMs = getDefaultDebounceMs();
+  }
+
   const fire = (): void => {
     s.timer = null;
     s.fire = null;
@@ -79,10 +138,11 @@ export function scheduleSyncForItem(
         // swallow here so a background rejection doesn't crash the process.
       } finally {
         s.inflight = null;
+        s.lastCompletedAt = Date.now();
         const next = s.rerunUserId;
         s.rerunUserId = null;
         if (next) {
-          scheduleSyncForItem(next, itemId, { debounceMs, runner });
+          scheduleSyncForItem(next, itemId, { runner });
         }
       }
     })();

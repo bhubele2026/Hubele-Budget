@@ -282,6 +282,39 @@ app.listen(port, (err) => {
     });
     logger.info("Plaid hourly sync scheduled");
 
+    // (#671) Frequent forced-refresh loop. The hourly cron above does a
+    // pure cursor-only /transactions/sync, which only returns what Plaid
+    // happened to cache during its own scheduled bank poll — for several
+    // institutions (notably Chase) that poll routinely lags pending
+    // charges by 6+ hours. Without this loop, a user who never opens
+    // the app sees newly-authorized pending charges land on the *next*
+    // organic Plaid poll, which can be 4–8h after the bank actually
+    // had them. The forced-refresh loop walks every active item, calls
+    // /transactions/refresh, then re-walks /transactions/sync (with
+    // the poll-after-refresh budget inside syncPlaidItem) so pending
+    // rows land within a single cron interval. Reauth-blocked items
+    // are skipped server-side to avoid burning quota on a token Plaid
+    // will bounce. Defaults to every 10 minutes; tunable via
+    // PLAID_FREQUENT_REFRESH_CRON for ops who need a different cadence.
+    const frequentRefreshCron =
+      process.env.PLAID_FREQUENT_REFRESH_CRON || "*/10 * * * *";
+    const frequentRefreshEnabled =
+      process.env.PLAID_FREQUENT_REFRESH_ENABLED !== "false";
+    if (frequentRefreshEnabled) {
+      cron.schedule(frequentRefreshCron, () => {
+        syncAllForAllUsers({ forceRefresh: true }).catch((err) => {
+          logger.error(
+            { err },
+            "[plaid-sync] frequent forced-refresh loop failed",
+          );
+        });
+      });
+      logger.info(
+        { cron: frequentRefreshCron },
+        "Plaid frequent forced-refresh loop scheduled",
+      );
+    }
+
     // (#253) Daily consent_expiration_time refresh. The on-sync path only
     // refreshes the cutoff when sync hits PENDING_EXPIRATION /
     // PENDING_DISCONNECT, so a healthy item silently approaching its

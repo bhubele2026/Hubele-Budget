@@ -42,6 +42,7 @@ import {
   refreshConsentExpirationForItem,
   refreshConsentExpirationForUser,
   syncPlaidItem,
+  syncPlaidItemSerialized,
   syncAllForUser,
   runGapBackfillForItem,
   derivePlaidErrorKind,
@@ -850,7 +851,7 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     // (#665) `forceRefresh: true` so the very first sync after a fresh
     // link / relink asks Plaid to pull from the bank right now instead
     // of returning whatever Plaid happened to have cached pre-link.
-    await syncPlaidItem(req.userId!, item!.id, { forceRefresh: true });
+    await syncPlaidItemSerialized(req.userId!, item!.id, { forceRefresh: true });
 
     // (#408) Heal-driven gap backfill on relink. The /exchange upsert
     // above proactively cleared any prior `lastSyncErrorCode` chip on
@@ -2005,7 +2006,7 @@ router.post("/plaid/webhook", async (req, res): Promise<void> => {
         // (#665) `forceRefresh: true` — user just re-authed in another
         // flow, so ask Plaid to pull fresh data from the bank rather
         // than replaying its cached cursor state.
-        await syncPlaidItem(item.userId, item.id, { forceRefresh: true });
+        await syncPlaidItemSerialized(item.userId, item.id, { forceRefresh: true });
       } catch (e) {
         req.log.warn(
           { err: e },
@@ -2229,7 +2230,7 @@ router.post(
       // action — pair it with a /transactions/refresh so the resync
       // walks fresh data, not whatever Plaid had cached when the
       // cursor got stuck.
-      const result = await syncPlaidItem(req.userId!, item.id, {
+      const result = await syncPlaidItemSerialized(req.userId!, item.id, {
         forceRefresh: true,
       });
       res.json({
@@ -2266,7 +2267,7 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
   try {
     const results = itemId
       ? [
-          await syncPlaidItem(req.userId!, String(itemId), {
+          await syncPlaidItemSerialized(req.userId!, String(itemId), {
             forceRefresh,
           }),
         ]

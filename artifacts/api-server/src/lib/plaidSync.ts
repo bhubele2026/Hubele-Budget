@@ -624,11 +624,13 @@ export async function syncPlaidItem(
     // engaged when the caller passed `forceRefresh: true` so the
     // webhook coalescer / nightly cron don't spam the premium
     // endpoint and trip rate limits.
+    let refreshSucceeded = false;
     if (forceRefresh) {
       try {
         await plaid().transactionsRefresh({
           access_token: item.accessToken,
         });
+        refreshSucceeded = true;
       } catch (refreshErr) {
         const refreshExtracted = extractPlaidError(refreshErr);
         logger.warn(
@@ -646,17 +648,66 @@ export async function syncPlaidItem(
         );
       }
     }
-    while (hasMore) {
-      const resp = await plaid().transactionsSync({
-        access_token: item.accessToken,
-        cursor,
-        count: 500,
-      });
-      added = added.concat(resp.data.added);
-      modified = modified.concat(resp.data.modified);
-      removed = removed.concat(resp.data.removed as { transaction_id: string }[]);
-      cursor = resp.data.next_cursor;
-      hasMore = resp.data.has_more;
+    // (#671) Poll-after-refresh. /transactions/refresh asks Plaid to
+    // re-fetch from the bank, but the response returns immediately —
+    // Plaid then writes new rows into its own cache *asynchronously*.
+    // If we walk /transactions/sync the moment the refresh call
+    // resolves, the cursor commonly returns zero added/modified
+    // because Plaid hasn't finished ingesting yet. The user then
+    // sees "Added 0" and concludes the app is broken even though
+    // the bank actually has fresh pending charges. To make a single
+    // manual Sync click reliably land newly-authorized pending data,
+    // re-walk the cursor a couple of times with short backoffs when
+    // a refresh actually succeeded and the first walk came back
+    // empty. Budget is small (≈8s total) so user-facing latency
+    // stays bounded. Tunable via env for tests.
+    const pollAttemptsEnv = Number(process.env.PLAID_REFRESH_POLL_ATTEMPTS);
+    const pollAttemptsMax =
+      refreshSucceeded
+        ? Number.isFinite(pollAttemptsEnv) && pollAttemptsEnv > 0
+          ? Math.min(pollAttemptsEnv, 5)
+          : 3
+        : 1;
+    const pollDelaysEnv = process.env.PLAID_REFRESH_POLL_DELAYS_MS;
+    const POLL_DELAYS_MS: number[] = (() => {
+      if (pollDelaysEnv != null && pollDelaysEnv !== "") {
+        const parsed = pollDelaysEnv
+          .split(",")
+          .map((s) => Number(s.trim()))
+          .filter((n) => Number.isFinite(n) && n >= 0);
+        if (parsed.length > 0) return parsed;
+      }
+      return [2500, 4000];
+    })();
+    let pollAttemptsUsed = 0;
+    while (pollAttemptsUsed < pollAttemptsMax) {
+      let walkAdded = 0;
+      let walkModified = 0;
+      hasMore = true;
+      while (hasMore) {
+        const resp = await plaid().transactionsSync({
+          access_token: item.accessToken,
+          cursor,
+          count: 500,
+        });
+        added = added.concat(resp.data.added);
+        modified = modified.concat(resp.data.modified);
+        removed = removed.concat(
+          resp.data.removed as { transaction_id: string }[],
+        );
+        walkAdded += resp.data.added.length;
+        walkModified += resp.data.modified.length;
+        cursor = resp.data.next_cursor;
+        hasMore = resp.data.has_more;
+      }
+      pollAttemptsUsed++;
+      if (walkAdded + walkModified > 0) break;
+      if (pollAttemptsUsed >= pollAttemptsMax) break;
+      const delayMs =
+        POLL_DELAYS_MS[pollAttemptsUsed - 1] ??
+        POLL_DELAYS_MS[POLL_DELAYS_MS.length - 1] ??
+        3000;
+      await new Promise((r) => setTimeout(r, delayMs));
     }
 
     // Upsert added/modified
@@ -1311,6 +1362,32 @@ export async function syncPlaidItem(
       if (mergedMin === null || backfillRange.min < mergedMin) mergedMin = backfillRange.min;
       if (mergedMax === null || backfillRange.max > mergedMax) mergedMax = backfillRange.max;
     }
+    // (#671) Single structured delivery-metrics log line per successful
+    // sync. Lets support correlate "where did my pending charge go?"
+    // tickets against the per-item picture (which path triggered the
+    // sync, did /transactions/refresh fire, how many cursor walks did
+    // we burn before data arrived, what's the freshest date Plaid
+    // gave us) without piecing together half a dozen ad-hoc warnings.
+    logger.info(
+      {
+        userId,
+        itemRowId,
+        plaidItemIdExternal: item.itemId,
+        institutionName: item.institutionName,
+        institutionSlug: slug,
+        forceRefresh,
+        refreshSucceeded,
+        pollAttemptsUsed,
+        added: added.length,
+        modified: modified.length,
+        removed: removed.length,
+        backfillAdded,
+        skippedPreCutoff: firstSyncSkipped,
+        lastOccurredOn,
+        wasUnhealthy,
+      },
+      "[plaid-sync] delivery metrics",
+    );
     return {
       itemId: item.itemId,
       plaidItemRowId: itemRowId,
@@ -1508,6 +1585,31 @@ export async function syncPlaidItem(
       },
       "[plaid-sync] /transactions/sync failed",
     );
+    // (#671) Mirror the success-path delivery metrics on the failure
+    // path too so "why didn't my pending charge land?" tickets always
+    // have one structured line per attempt regardless of outcome.
+    logger.info(
+      {
+        userId,
+        itemRowId,
+        plaidItemIdExternal: item.itemId,
+        institutionName: item.institutionName,
+        forceRefresh,
+        refreshSucceeded,
+        pollAttemptsUsed,
+        added: 0,
+        modified: 0,
+        removed: 0,
+        backfillAdded: 0,
+        skippedPreCutoff: 0,
+        lastOccurredOn: null,
+        wasUnhealthy,
+        failed: true,
+        plaidErrorCode: code,
+        errorKind: extracted.kind,
+      },
+      "[plaid-sync] delivery metrics",
+    );
     return {
       itemId: item.itemId,
       plaidItemRowId: itemRowId,
@@ -1547,24 +1649,82 @@ export async function syncAllForUser(
     .from(plaidItemsTable)
     .where(eq(plaidItemsTable.householdId, householdId));
   const out: SyncResult[] = [];
+  // (#671) Per-item promise chain so a /plaid/sync click that lands
+  // while a webhook-triggered sync is already in flight for the same
+  // item queues behind it instead of racing the cursor.
   for (const it of items)
-    out.push(await syncPlaidItem(actorUserId, it.id, opts));
+    out.push(await syncPlaidItemSerialized(actorUserId, it.id, opts));
   return out;
 }
 
-export async function syncAllForAllUsers(): Promise<void> {
+export async function syncAllForAllUsers(
+  opts: { forceRefresh?: boolean } = {},
+): Promise<void> {
   // Use the linker's userId as the actor for audit purposes; the
   // sync itself derives household scope from item.householdId.
   const items = await db
-    .select({ id: plaidItemsTable.id, userId: plaidItemsTable.userId })
+    .select({
+      id: plaidItemsTable.id,
+      userId: plaidItemsTable.userId,
+      lastSyncErrorCode: plaidItemsTable.lastSyncErrorCode,
+    })
     .from(plaidItemsTable);
   for (const it of items) {
+    // (#671) On the frequent forced-refresh loop, skip items already
+    // sitting in a reauth state — calling /transactions/refresh on a
+    // login-required item just burns quota and risks compounding the
+    // rate-limit. Hourly cron (forceRefresh=false) walks them anyway
+    // to surface a fresh chip if the user fixed things out-of-band.
+    if (
+      opts.forceRefresh &&
+      it.lastSyncErrorCode &&
+      PLAID_REAUTH_ERROR_CODES.has(it.lastSyncErrorCode)
+    ) {
+      continue;
+    }
     try {
-      await syncPlaidItem(it.userId, it.id);
+      await syncPlaidItemSerialized(it.userId, it.id, opts);
     } catch {
       // continue
     }
   }
+}
+
+// (#671) Per-item promise chain so background loops, webhook flushes,
+// and manual user clicks for the same item never overlap. Two concurrent
+// /transactions/sync calls with the same starting cursor would each
+// fetch the same batch, both upsert (idempotent on the conflict key but
+// wasteful), and race to write `cursor`; whichever wrote last could
+// rewind the other's advance and silently drop the in-between batch on
+// the *next* sync. Chaining serializes calls per item without blocking
+// other items.
+const itemSyncChain = new Map<string, Promise<unknown>>();
+
+export async function syncPlaidItemSerialized(
+  userId: string,
+  itemRowId: string,
+  opts: { forceRefresh?: boolean } = {},
+): Promise<SyncResult> {
+  const prior = itemSyncChain.get(itemRowId) ?? Promise.resolve();
+  const next: Promise<SyncResult> = prior
+    .catch(() => {})
+    .then(() => syncPlaidItem(userId, itemRowId, opts));
+  itemSyncChain.set(itemRowId, next);
+  try {
+    return await next;
+  } finally {
+    if (itemSyncChain.get(itemRowId) === next) {
+      itemSyncChain.delete(itemRowId);
+    }
+  }
+}
+
+// Test helper — clears the per-item serialization chain. The tests own
+// the mock plaid client and reset state between cases; leaving stale
+// chained promises across tests can leak rerun work into the wrong
+// suite.
+export function _resetPlaidSyncChainForTests(): void {
+  itemSyncChain.clear();
 }
 
 export type ConsentRefreshResult = {

@@ -47,6 +47,11 @@ vi.mock("../lib/plaidSync", async () => {
       syncCalls.push({ userId, itemRowId });
       return { itemRowId, added: 0, modified: 0, removed: 0 };
     },
+    // (#671) Route now calls the serialized wrapper.
+    syncPlaidItemSerialized: async (userId: string, itemRowId: string) => {
+      syncCalls.push({ userId, itemRowId });
+      return { itemRowId, added: 0, modified: 0, removed: 0 };
+    },
   };
 });
 

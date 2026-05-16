@@ -69,6 +69,10 @@ vi.mock("../lib/plaidSync", async () => {
   return {
     ...actual,
     syncPlaidItem: (u: string, i: string) => syncPlaidItemMock(u, i),
+    // (#671) Route now calls the serialized wrapper; in tests we just
+    // delegate straight to the mock so the per-item promise-chain
+    // doesn't drag in the real Plaid client.
+    syncPlaidItemSerialized: (u: string, i: string) => syncPlaidItemMock(u, i),
     syncAllForUser: (u: string, h: string) => syncAllForUserMock(u, h),
   };
 });
