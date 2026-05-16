@@ -17,6 +17,7 @@ import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsR
 import { runStartupAvalancheHealRevert } from "./lib/startupAvalancheHealRevert";
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
 import { runStartupGroceriesRename } from "./lib/startupGroceriesRename";
+import { runStartupMay2026BackfillSweep } from "./lib/startupMay2026BackfillSweep";
 import { runStartupHouseholdBackfill } from "./lib/startupHouseholdBackfill";
 
 // Plaid configuration validation:
@@ -185,6 +186,18 @@ app.listen(port, (err) => {
     })
     .catch((err) => {
       logger.error({ err }, "Startup groceries rename failed");
+    });
+
+  // (#676) One-shot sweep for the target household: clear the May-2026
+  // review-bucket flood that landed after the post-relink Plaid backfill.
+  // Keeps pending charges and any live forecast matches intact.
+  // Idempotent — converges to a no-op after the first boot.
+  runStartupMay2026BackfillSweep()
+    .then((summary) => {
+      logger.info(summary, "Startup May-2026 backfill sweep complete");
+    })
+    .catch((err) => {
+      logger.error({ err }, "Startup May-2026 backfill sweep failed");
     });
 
   if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
