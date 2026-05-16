@@ -227,6 +227,65 @@ describe("(#671) poll-after-refresh in syncPlaidItem", () => {
     expect(transactionsSyncResponses.length).toBe(0);
   });
 
+  it("returns stillPreparing=true when refresh succeeded and the retry budget is exhausted with zero rows", async () => {
+    // Layer 1 contract: Plaid accepted /transactions/refresh but its
+    // cache still hadn't ingested by the time the (3-attempt default)
+    // budget ran out. The sync must signal "still preparing" so the
+    // UI skips the destructive "Added 0" toast and offers a retry —
+    // same UX as the PRODUCT_NOT_READY catch path.
+    const { itemRowId } = await seedItem();
+    // Queue more empty responses than the retry budget so every
+    // attempt returns empty.
+    transactionsSyncResponses.push(
+      emptyResp(),
+      emptyResp(),
+      emptyResp(),
+      emptyResp(),
+      emptyResp(),
+    );
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      forceRefresh: true,
+    });
+
+    expect(transactionsRefreshCalls).toBe(1);
+    expect(result.added).toBe(0);
+    expect(result.modified).toBe(0);
+    expect(result.error ?? null).toBeNull();
+    expect(result.stillPreparing).toBe(true);
+  });
+
+  it("does NOT set stillPreparing when data lands within the retry budget", async () => {
+    // Negative case for the previous test: as long as some row landed
+    // (even on the last attempt), we treat the sync as a normal
+    // success — never stillPreparing.
+    const { itemRowId, externalAccountId } = await seedItem();
+    transactionsSyncResponses.push(emptyResp(), addedResp(externalAccountId));
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      forceRefresh: true,
+    });
+
+    expect(result.added).toBe(1);
+    expect(result.stillPreparing ?? false).toBe(false);
+  });
+
+  it("does NOT set stillPreparing when forceRefresh=false (cursor-only path)", async () => {
+    // Cron/webhook paths intentionally don't fire /transactions/refresh,
+    // so a zero-row walk is a true no-op — not a "still preparing"
+    // condition. Only the user-driven refresh path should ever flip
+    // the flag.
+    const { itemRowId } = await seedItem();
+    transactionsSyncResponses.push(emptyResp());
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      forceRefresh: false,
+    });
+
+    expect(result.added).toBe(0);
+    expect(result.stillPreparing ?? false).toBe(false);
+  });
+
   it("does not retry when forceRefresh=false (hourly cron / webhook path stays cheap)", async () => {
     const { itemRowId } = await seedItem();
     // Queue two empty responses — only the first should be consumed.

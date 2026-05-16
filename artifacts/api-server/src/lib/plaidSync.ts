@@ -712,6 +712,20 @@ export async function syncPlaidItem(
         3000;
       await new Promise((r) => setTimeout(r, delayMs));
     }
+    // (#671) Layer 1 contract: when the user-driven /refresh path
+    // succeeded but Plaid's cache still hadn't ingested any rows by
+    // the time the retry budget ran out, treat the sync as "still
+    // preparing" — same UI semantics as PRODUCT_NOT_READY — so the
+    // frontend renders an encouraging neutral toast instead of
+    // "Added 0", and so a follow-up Sync click is offered. Only true
+    // when refresh actually fired and succeeded; cursor-only
+    // (webhook/cron) paths and refresh-failed paths fall through
+    // with the normal zero-row success result.
+    const pollRetriesExhaustedEmpty =
+      forceRefresh &&
+      refreshSucceeded &&
+      pollAttemptsUsed >= pollAttemptsMax &&
+      added.length + modified.length === 0;
 
     // Upsert added/modified
     const insertedCheckingTxns: { id: string; amount: number; date: string }[] = [];
@@ -1381,9 +1395,19 @@ export async function syncPlaidItem(
         forceRefresh,
         refreshSucceeded,
         pollAttemptsUsed,
+        pollRetriesExhaustedEmpty,
         added: added.length,
         modified: modified.length,
         removed: removed.length,
+        // (#671) Pending-rows count surfaced separately so support can
+        // tell at a glance whether a "no new rows" delivery actually
+        // landed pending charges (the most common user complaint) vs
+        // a true no-op cycle.
+        pending:
+          added.filter((t) => (t as { pending?: boolean }).pending === true)
+            .length +
+          modified.filter((t) => (t as { pending?: boolean }).pending === true)
+            .length,
         backfillAdded,
         skippedPreCutoff: firstSyncSkipped,
         lastOccurredOn,
@@ -1415,6 +1439,10 @@ export async function syncPlaidItem(
       // (#665) Echo whether we asked Plaid to re-fetch from the bank
       // before walking the cursor. True for user-triggered syncs.
       refreshAttempted: forceRefresh,
+      // (#671) Signal Layer-1 "Plaid hasn't ingested yet" so the UI
+      // skips the destructive "Added 0" toast and offers a retry.
+      // Same semantics as the PRODUCT_NOT_READY catch path.
+      ...(pollRetriesExhaustedEmpty ? { stillPreparing: true } : {}),
       // (#357) Mirror the structured fields onto the response so a
       // failed balance refresh on an otherwise-healthy /transactions/sync
       // still gives the client a real Plaid code + display message + kind
