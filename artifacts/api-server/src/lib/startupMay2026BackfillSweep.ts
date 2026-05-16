@@ -3,21 +3,25 @@ import { db, forecastResolutionsTable, transactionsTable } from "@workspace/db";
 import { logger } from "./logger";
 
 /**
- * (#676) One-shot startup pass scoped to a single household: after the
- * user re-linked Chase in Production on 2026-05-16, Plaid back-filled
+ * (#676 / #678) One-shot startup pass scoped to a single household: after
+ * the user re-linked Chase in Production on 2026-05-16, Plaid back-filled
  * ~90 days of history into the household, flooding the forecast review
  * bucket with 75 settled May Chase rows (plus 48 settled May Amex rows
- * from the earlier re-link) on top of the 8 actually-pending charges.
- * The user explicitly asked for the review bucket to drop to just the
- * real pending charges.
+ * from the earlier re-link) on top of the real pending charges. The
+ * user explicitly asked for the review bucket to drop to just the real
+ * pending charges, and they're going LIVE on Production today — they
+ * have no patience left for a toggle-then-republish dance.
  *
- * Operator-gated so it does NOT fire on every boot: enable by setting
- * `RUN_MAY_2026_BACKFILL_SWEEP=1`. Disable in the deployment env after
- * the first successful prod run so subsequent reboots no-op even faster
- * (the predicates are also self-convergent — once swept rows stay swept
- * the predicate count goes to zero — but the env flag makes the
- * intervention auditable as a discrete operator action rather than a
- * permanent boot hook).
+ * Runs unconditionally on every API boot. Idempotency comes from the
+ * self-converging predicate
+ *
+ *     AND (unplanned_allowance = false OR reviewed = false)
+ *
+ * which matches zero rows once the first successful run has set both
+ * flags to true on the targeted rows. Subsequent boots short-circuit
+ * after the preflight count with `reason:"already_converged"` and
+ * `swept:0`. The helper file can be deleted in a follow-up cleanup
+ * task once the user confirms the inbox is clean in prod.
  *
  * Production-DB writes from the Replit sandbox are blocked (read-only),
  * which is why this fix ships as code instead of a direct one-shot SQL
@@ -25,21 +29,13 @@ import { logger } from "./logger";
  *   - currently-pending rows (`notes = '[pending]'`), and
  *   - rows referenced by a live `forecast_resolutions.matched_txn_id`.
  *
- * Runs the preflight count, the update, and the post-update verify
- * inside a single transaction so an unexpected schema state aborts
- * cleanly with no partial flip. Best-effort: never crashes boot.
+ * Runs the preflight count and the update inside a single transaction
+ * so an unexpected schema state aborts cleanly with no partial flip.
+ * Best-effort: never crashes boot.
  */
 const TARGET_HOUSEHOLD_ID = "a7182af8-49f0-48f3-920e-f916c7eab872";
 const MAY_2026_START = "2026-05-01";
 const JUNE_2026_START = "2026-06-01";
-const ENABLE_FLAG = "RUN_MAY_2026_BACKFILL_SWEEP";
-
-function isEnabled(): boolean {
-  const raw = process.env[ENABLE_FLAG];
-  if (!raw) return false;
-  const v = raw.trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes" || v === "on";
-}
 
 export async function runStartupMay2026BackfillSweep(): Promise<{
   ran: boolean;
@@ -49,23 +45,13 @@ export async function runStartupMay2026BackfillSweep(): Promise<{
   preserved_matched: number;
   reason?: string;
 }> {
-  if (!isEnabled()) {
-    return {
-      ran: false,
-      preflight: 0,
-      swept: 0,
-      preserved_pending: 0,
-      preserved_matched: 0,
-      reason: "disabled_env_flag",
-    };
-  }
   try {
     return await db.transaction(async (tx) => {
       // Preflight: count rows the update will affect, plus the rows we
-      // intentionally preserve, so the operator can compare against the
-      // numbers measured in the read-only sandbox preview (75 Chase +
-      // 48 Amex settled = 123 to sweep; 8 pending preserved; 30 matched
-      // preserved). Any large divergence aborts the run.
+      // intentionally preserve, so the log line can be compared against
+      // the numbers measured in the read-only sandbox preview (75 Chase
+      // + 48 Amex settled = 123 to sweep; 7 pending preserved; 1 matched
+      // preserved at the time of writing).
       const targetWhere = and(
         eq(transactionsTable.householdId, TARGET_HOUSEHOLD_ID),
         like(transactionsTable.source, "plaid:%"),
