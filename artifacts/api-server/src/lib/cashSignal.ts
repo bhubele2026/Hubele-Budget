@@ -524,17 +524,24 @@ export async function computeCashSignal(
     // Plans the user explicitly marked missed/dismissed are likewise
     // dropped — the user has acknowledged they won't post.
     if (missedPlanKeys.has(origKey)) continue;
-    // (#681) Past-due unresolved EXPENSE pendings drag the projection
-    // to today+1. Day-0 still equals the bank snapshot (no
-    // double-counting today), but the expense continues to weigh on
-    // tomorrow until the user marks it matched/missed/skipped or it
-    // gets matched to a real bank transaction. Income is excluded
-    // from the drag and dropped instead.
-    //
-    // Applied unconditionally — the daily-projection / roll-forward
-    // logic below decides where today+1 lands relative to the
-    // requested window, so the same plan can't appear/disappear just
-    // because the user picked a different chart range.
+    // (#666) BANK SNAPSHOT IS THE TRUTH: events dated STRICTLY before
+    // the snapshot are dropped. The bank balance already reflects
+    // them — even if the auto-matcher didn't write a `matched`
+    // resolution row (e.g. because the real transaction posted
+    // outside the +/- 3 day / +/- $1 window). This is what suppresses
+    // the phantom Mortgage/HELOC/etc. occurrences that come out of
+    // the prior-month expansion lookback but don't appear in the
+    // user's planned-items register.
+    if (snapshotISO && rawEffectiveDate < snapshotISO) continue;
+    // (#681) Past-due unresolved EXPENSE pendings — only those that
+    // are on or after the snapshot AND on or before today — drag the
+    // projection to today+1. Day-0 still equals the bank snapshot
+    // (no double-counting today), but the expense continues to weigh
+    // on tomorrow until the user marks it matched/missed/skipped or
+    // it gets matched to a real bank transaction. Past-due INCOME is
+    // dropped: a not-yet-landed paycheck shouldn't inflate tomorrow
+    // by hopping onto it, and it must not land on day-0 either, or
+    // day-0 would exceed the bank snapshot.
     if (rawEffectiveDate <= dragCutoffISO) {
       if (ev.amount < 0) {
         items.push({ date: dragTargetISO, amount: ev.amount, matched: false });
@@ -546,15 +553,8 @@ export async function computeCashSignal(
           originalDate: rawEffectiveDate,
         });
       }
-      // Past-due INCOME is dropped — a not-yet-landed paycheck
-      // shouldn't inflate tomorrow by hopping onto it, and it must
-      // not land on day-0 either, or day-0 would exceed the bank
-      // snapshot.
       continue;
     }
-    // (#666) BANK SNAPSHOT IS THE TRUTH: anything that didn't qualify
-    // for the (#681) drag is dropped if it's on or before the snapshot.
-    if (snapshotISO && rawEffectiveDate <= snapshotISO) continue;
     let effectiveDate = rawEffectiveDate;
     if (!snapshotISO && effectiveDate < fromISO) {
       // No-snapshot fallback for non-drag cases (income, or windows

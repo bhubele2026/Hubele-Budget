@@ -197,15 +197,18 @@ describe("computeCashSignal — snapshot anchoring", () => {
     });
   });
 
-  it("(#666/#681) pre-snapshot income drops; pre-snapshot expense drags to today+1", async () => {
-    // User's Forecast scenario: bank $4,922.56, real recurring
-    // income dated <= snapshot, and a real recurring expense dated
-    // <= snapshot. (#666) pinned that day-0 must equal the bank
-    // balance — neither side double-counts. (#681) refines this:
-    // past-due unresolved EXPENSE pendings drag to today+1 so the
-    // user still sees the upcoming impact, while INCOME continues to
-    // drop (a past-due deposit that didn't land is more likely a
-    // real miss than a delayed-but-coming check).
+  it("(#666/#681) strictly pre-snapshot plans drop (both income AND expense) — bank is the truth", async () => {
+    // User's complaint scenario: the bank snapshot is the truth, and
+    // anything dated STRICTLY before the snapshot has already been
+    // accounted for (cleared at the bank) even if the auto-matcher
+    // didn't write a `matched` resolution row. These phantom
+    // pre-snapshot expansions must NOT drag onto today+1 — that's
+    // what was producing the "fuck ton of random shit" tooltip with
+    // Mortgages/HELOC/etc. dragging when the planned-items register
+    // only showed 3 real pendings.
+    //
+    // (#681) drag only fires for plans dated ON OR AFTER the snapshot
+    // (mirroring what the user sees in their planned-items register).
     await setSettings({
       balance: "4922.56",
       at: new Date("2026-05-14T12:00:00Z"),
@@ -229,31 +232,25 @@ describe("computeCashSignal — snapshot anchoring", () => {
       horizonDays: 30,
     });
 
-    // Day 0 (today = 2026-05-14) still equals the bank snapshot.
+    // Day 0 (today = 2026-05-14) equals the bank snapshot.
     expect(sig.startingBalance).toBe("4922.56");
     expect(sig.daily?.[0]).toEqual({
       date: "2026-05-14",
       balance: "4922.56",
     });
-    // Day 1 (today+1 = 2026-05-15) absorbs the dragged expense; the
-    // pre-snapshot income stays dropped.
+    // Day 1 stays flat — BOTH the pre-snapshot expense (05-12) and
+    // the pre-snapshot income (05-13) are dropped. Neither drags.
     expect(sig.daily?.[1]).toEqual({
       date: "2026-05-15",
-      balance: "3805.27",
+      balance: "4922.56",
     });
-    // Pre-snapshot dates do NOT appear as their own markers — the
-    // dragged expense surfaces on today+1 instead.
+    // No pre-snapshot date appears as its own marker, and no
+    // dragged-to-today+1 marker either.
     const eventDates = (sig.events ?? []).map((e) => e.date);
     expect(eventDates).not.toContain("2026-05-12");
     expect(eventDates).not.toContain("2026-05-13");
     expect(eventDates).not.toContain("2026-05-14");
-    expect(eventDates).toContain("2026-05-15");
-    // The marker for the dragged expense preserves its original date
-    // for the "Pending plans dragging this day" UI.
-    const dragged = (sig.events ?? []).find(
-      (e) => e.date === "2026-05-15" && e.originalDate === "2026-05-12",
-    );
-    expect(dragged?.amount).toBe("-1117.29");
+    expect(eventDates).not.toContain("2026-05-15");
   });
 
   it("(#667) synthetic debt-min events dated before the snapshot do NOT drag onto today", async () => {
@@ -450,13 +447,14 @@ describe("computeCashSignal — snapshot anchoring", () => {
 
   it("(#681) production May-15/May-16 scenario: two past-due pendings drag to today+1", async () => {
     // User's production screenshot: today=2026-05-16, bank=$4,871.20
-    // (snapshot dated today), Verizon -$400 and PlayStation -$18.98
-    // both planned 2026-05-15 with no resolution. Day-0 must equal
-    // the bank balance, day-1 must drop by $418.98.
+    // (snapshot taken 2026-05-14, before the planned dates), Verizon
+    // -$400 and PlayStation -$18.98 both planned 2026-05-15 with no
+    // resolution. Day-0 must equal the bank balance, day-1 must drop
+    // by $418.98. Plans are POST-snapshot, so the (#681) drag fires.
     vi.setSystemTime(new Date("2026-05-16T12:00:00Z"));
     await setSettings({
       balance: "4871.20",
-      at: new Date("2026-05-16T12:00:00Z"),
+      at: new Date("2026-05-14T12:00:00Z"),
       cashBuffer: "0",
     });
     await addRecurring({
@@ -500,12 +498,12 @@ describe("computeCashSignal — snapshot anchoring", () => {
 
   it("(#681) the hop target follows real time — same plans land on day after today", async () => {
     // Same two pendings as the May-15/16 scenario, but one real-world
-    // day later: today=05-17 (snapshot unchanged at 05-16=$4871.20).
-    // The dip must roll forward to today+1 = 2026-05-18.
+    // day later: today=05-17 (snapshot dated 05-14 = $4871.20, before
+    // the plans). The dip must roll forward to today+1 = 2026-05-18.
     vi.setSystemTime(new Date("2026-05-17T12:00:00Z"));
     await setSettings({
       balance: "4871.20",
-      at: new Date("2026-05-16T12:00:00Z"),
+      at: new Date("2026-05-14T12:00:00Z"),
       cashBuffer: "0",
     });
     await addRecurring({
@@ -549,7 +547,7 @@ describe("computeCashSignal — snapshot anchoring", () => {
     vi.setSystemTime(new Date("2026-05-16T12:00:00Z"));
     await setSettings({
       balance: "4871.20",
-      at: new Date("2026-05-16T12:00:00Z"),
+      at: new Date("2026-05-14T12:00:00Z"),
       cashBuffer: "0",
     });
     const verizon = await addRecurring({
