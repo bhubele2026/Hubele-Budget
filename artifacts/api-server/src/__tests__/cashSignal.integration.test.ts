@@ -1331,4 +1331,85 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
     expect(draggedOn17[0].label).toBe("Verizon Wireless");
     expect(draggedOn17[0].amount).toBe("-400.00");
   });
+
+  it("(#687) synthetic debt-min on the snapshot date IS surfaced as a dragging pending plan (matches the register)", async () => {
+    // Screenshot scenario the user flagged: snapshot=2026-05-15
+    // ($4,871.20), today=2026-05-16. The Planned forecast items
+    // register lists three Pending plans dated 05-15:
+    //   - Verizon Wireless           -$400.00   (recurring)
+    //   - PlayStation Network        -$18.98    (recurring)
+    //   - Mattress Firm / Synchrony  -$33.00    (synthetic debt-min)
+    // The chart's "Pending plans dragging this day" tooltip used to
+    // show only the first two because synthetic events were
+    // anchored at snapshot+1 (the over-aggressive (#667) fix).
+    // After (#687) they share `expandStart` with real items so all
+    // three appear and the day-1 dip matches their sum.
+    vi.setSystemTime(new Date("2026-05-16T12:00:00Z"));
+    const chase = await addPlaidAccount({
+      externalId: "chase-ext-687-debt",
+      name: "Chase Checking",
+      institutionSlug: "chase",
+    });
+    await setSettings({
+      balance: "4871.20",
+      at: new Date("2026-05-15T12:00:00Z"),
+      cashBuffer: "0",
+    });
+    await db
+      .update(forecastSettingsTable)
+      .set({ bankSnapshotAccountId: chase.id })
+      .where(eq(forecastSettingsTable.userId, TEST_USER));
+
+    await addRecurring({
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-15",
+      amount: "400.00",
+      name: "Verizon Wireless",
+    });
+    await addRecurring({
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-15",
+      amount: "18.98",
+      name: "PlayStation Network",
+    });
+    // Synthetic: debt with no linked recurring item; dueDay=15.
+    await db.insert(debtsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      name: "Mattress Firm / Synchrony Home",
+      kind: "credit_card",
+      balance: "1500",
+      minPayment: "33",
+      dueDay: 15,
+      active: "true",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-16",
+      horizonDays: 30,
+    });
+
+    // Day 0 == bank snapshot.
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-05-16",
+      balance: "4871.20",
+    });
+    // Day 1 drops by ALL THREE: 400 + 18.98 + 33 = 451.98.
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-17",
+      balance: "4419.22",
+    });
+    // All three plans appear in the drag tooltip on 05-17.
+    const draggedLabels = (sig.events ?? [])
+      .filter((e) => e.date === "2026-05-17" && e.originalDate === "2026-05-15")
+      .map((e) => e.label)
+      .sort();
+    expect(draggedLabels).toEqual([
+      "Mattress Firm / Synchrony Home minimum",
+      "PlayStation Network",
+      "Verizon Wireless",
+    ]);
+  });
 });

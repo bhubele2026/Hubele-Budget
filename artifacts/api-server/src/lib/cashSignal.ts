@@ -311,30 +311,23 @@ export async function computeCashSignal(
   }
   const events: CashEvent[] = [];
   for (const item of recurring) events.push(...expandItem(item, expandStart, to));
-  // (#667) Synthetic events (debt minimums for debts WITHOUT a linked
-  // recurring item, and the "Avalanche extra payment" series) have NO
-  // representation in the Forecast Pending UI — the user can't match,
-  // skip, or mark-missed them. So if we expanded them back into the
-  // pre-snapshot lookback window, the drag-to-today rule would silently
-  // pull them onto today's projection with no way for the user to
-  // dismiss the dip. The bank snapshot is the truth for everything
-  // dated on or before it, so synthetic events are anchored at
-  // MAX(expandStart, snapshot+1) — only future synthetic obligations
-  // contribute to the projection. Real recurring items keep their
-  // existing pre-snapshot expansion since they DO surface as "Pending
-  // plan" rows the user can act on.
-  const syntheticExpandStart = snapshotAt
-    ? new Date(
-        Math.max(
-          expandStart.getTime(),
-          new Date(
-            snapshotAt.getFullYear(),
-            snapshotAt.getMonth(),
-            snapshotAt.getDate() + 1,
-          ).getTime(),
-        ),
-      )
-    : expandStart;
+  // (#687) Synthetic events (debt minimums for debts WITHOUT a linked
+  // recurring item, and the "Avalanche extra payment" series) are
+  // expanded from the SAME `expandStart` as real recurring items.
+  // The Forecast Pending register also lists them (forecast.ts uses
+  // identical `expandDebtMin`/`expandAvalancheExtra` from the prior
+  // month), so if cashSignal anchors them later than the register
+  // does, plans visible as "Pending plan" rows go missing from the
+  // chart's drag tooltip — exactly the user's complaint about a
+  // Synchrony debt-min on the snapshot date being absent while
+  // Verizon/PlayStation showed up.
+  //
+  // The earlier (#667) anchor at snapshot+1 was meant to prevent
+  // phantom pre-snapshot drag for synthetic items, but the (#666)
+  // "strictly before snapshot is dropped" rule below already handles
+  // that uniformly for real and synthetic events, and the (#681)
+  // drag is bounded at today so there's no infinite phantom dip.
+  const syntheticExpandStart = expandStart;
   // Inject monthly debt-min events for active debts WITHOUT a linked
   // recurring item — same series the Bills page renders for "Debt
   // minimums", so the projection never double-counts and never misses an
