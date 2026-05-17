@@ -2928,44 +2928,102 @@ export default function ForecastPage({
                             >
                               {section.bills.map((b, idx) => {
                                 const canJump = !!b.itemId;
+                                // (#682) Per-plan "Mark missed" is only
+                                // surfaced for dragged rows — that's the
+                                // recurring source of the day-1 dip the
+                                // tooltip exists to explain. Bills
+                                // naturally due today are handled by the
+                                // planned-items register below.
+                                const canMarkMissed =
+                                  !!b.itemId && !!b.originalDate && b.dragged;
                                 return (
-                                  <button
+                                  <div
                                     key={`${b.itemId ?? "_"}-${idx}`}
-                                    type="button"
-                                    disabled={!canJump}
-                                    onClick={() => {
-                                      if (b.itemId)
-                                        jumpToPlan(b.itemId, rawDate);
-                                    }}
-                                    data-testid={`tooltip-bill-${rawDate}-${b.itemId ?? idx}`}
                                     style={{
                                       display: "flex",
-                                      justifyContent: "space-between",
-                                      gap: 12,
+                                      alignItems: "center",
+                                      gap: 6,
                                       padding: "2px 4px",
                                       borderRadius: 4,
-                                      border: "none",
-                                      background: "transparent",
-                                      cursor: canJump ? "pointer" : "default",
-                                      textAlign: "left",
-                                      color: "inherit",
-                                      font: "inherit",
                                     }}
                                     onMouseEnter={(e) => {
-                                      if (canJump)
-                                        (e.currentTarget as HTMLElement).style.background =
-                                          "hsl(var(--muted))";
+                                      (e.currentTarget as HTMLElement).style.background =
+                                        "hsl(var(--muted))";
                                     }}
                                     onMouseLeave={(e) => {
                                       (e.currentTarget as HTMLElement).style.background =
                                         "transparent";
                                     }}
                                   >
-                                    <span style={{ minWidth: 0 }}>{b.label}</span>
-                                    <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                                      {formatCurrency(b.amount)}
-                                    </span>
-                                  </button>
+                                    <button
+                                      type="button"
+                                      disabled={!canJump}
+                                      onClick={() => {
+                                        if (b.itemId)
+                                          jumpToPlan(b.itemId, rawDate);
+                                      }}
+                                      data-testid={`tooltip-bill-${rawDate}-${b.itemId ?? idx}`}
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: 12,
+                                        flex: 1,
+                                        minWidth: 0,
+                                        border: "none",
+                                        background: "transparent",
+                                        cursor: canJump ? "pointer" : "default",
+                                        textAlign: "left",
+                                        color: "inherit",
+                                        font: "inherit",
+                                        padding: 0,
+                                      }}
+                                    >
+                                      <span style={{ minWidth: 0 }}>{b.label}</span>
+                                      <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                                        {formatCurrency(b.amount)}
+                                      </span>
+                                    </button>
+                                    {canMarkMissed && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          // onMarkMissed only reads
+                                          // status/itemId/originalDate/date/label
+                                          // off the row, so a minimal
+                                          // shape via `unknown` cast
+                                          // avoids fabricating unused
+                                          // PlanLine fields here.
+                                          onMarkMissed({
+                                            itemId: b.itemId!,
+                                            label: b.label,
+                                            amount: String(b.amount),
+                                            date: rawDate,
+                                            originalDate: b.originalDate!,
+                                            status: "pending",
+                                          } as unknown as PlanLine);
+                                        }}
+                                        data-testid={`tooltip-mark-missed-${b.itemId}-${b.originalDate}`}
+                                        title="Mark this past-due plan as missed so it stops dragging the projection"
+                                        style={{
+                                          fontSize: 10,
+                                          textTransform: "uppercase",
+                                          letterSpacing: "0.04em",
+                                          color: "hsl(var(--destructive))",
+                                          border: "1px solid hsl(var(--destructive) / 0.4)",
+                                          background: "transparent",
+                                          borderRadius: 3,
+                                          padding: "1px 6px",
+                                          cursor: "pointer",
+                                          whiteSpace: "nowrap",
+                                          font: "inherit",
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        Mark missed
+                                      </button>
+                                    )}
+                                  </div>
                                 );
                               })}
                             </div>
