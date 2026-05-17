@@ -2988,20 +2988,19 @@ export default function ForecastPage({
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          // onMarkMissed only reads
-                                          // status/itemId/originalDate/date/label
-                                          // off the row, so a minimal
-                                          // shape via `unknown` cast
-                                          // avoids fabricating unused
-                                          // PlanLine fields here.
+                                          // Construct a real PlanLine
+                                          // (no type cast) — onMarkMissed
+                                          // consumes status, itemId,
+                                          // originalDate/date, and label.
                                           onMarkMissed({
+                                            kind: "plan",
                                             itemId: b.itemId!,
                                             label: b.label,
-                                            amount: String(b.amount),
+                                            amount: b.amount,
                                             date: rawDate,
                                             originalDate: b.originalDate!,
-                                            status: "pending",
-                                          } as unknown as PlanLine);
+                                            status: "pending_plan",
+                                          });
                                         }}
                                         data-testid={`tooltip-mark-missed-${b.itemId}-${b.originalDate}`}
                                         title="Mark this past-due plan as missed so it stops dragging the projection"
