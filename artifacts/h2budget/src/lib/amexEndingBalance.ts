@@ -44,6 +44,14 @@ export type AmexDebtLike = {
   plaidAccountId?: string | null;
   lastBalanceUpdate?: string | null;
   plaidLastSyncedAt?: string | null;
+  // (#689) Plaid account type cached on the debt row when it was
+  // first linked / refreshed (artifacts/api-server/src/routes/debts.ts
+  // sets this to `acct.type`). Used here to filter Amex
+  // installment / Pay-Over-Time / "Plan-It" LOAN sub-accounts out of
+  // the credit-card ending-balance resolver — they share the "Amex"
+  // name on the same login but represent a separate liability that
+  // belongs on /debts, not in the Amex card tile.
+  type?: string | null;
 };
 
 export type AmexPlaidAccountLike = {
@@ -90,14 +98,29 @@ export function resolveAmexDebt<T extends AmexDebtLike>(args: {
 }): T | null {
   const { debts, amexPlaidAccountIds, plaidItemsForScope } = args;
   if (!debts || debts.length === 0) return null;
+  // (#689) Pre-filter out Amex installment / Pay-Over-Time / "Plan-It"
+  // LOAN sub-accounts before any matching. These are synced into the
+  // debts table with `type='loan'` (server side: routes/debts.ts sets
+  // `type: acct.type` from the Plaid account). They share the "Amex"
+  // name and even the same Plaid login as the credit card, so without
+  // this filter a $20,000 loan balance can be reported as the user's
+  // Amex card "Ending Balance" tile. The Amex page is specifically
+  // about the revolving credit card; loans belong on /debts.
+  const creditCardDebts = debts.filter((d) => {
+    const t = (d.type ?? "").toLowerCase();
+    // Treat unknown/empty type as credit (legacy / manual debts have
+    // no Plaid type cached). Only exclude when we *know* it's a loan.
+    return t !== "loan";
+  });
+  if (creditCardDebts.length === 0) return null;
   let matches: T[] = [];
   if (amexPlaidAccountIds.size > 0) {
-    matches = debts.filter(
+    matches = creditCardDebts.filter(
       (d) => !!d.plaidAccountId && amexPlaidAccountIds.has(d.plaidAccountId),
     );
   }
   if (matches.length === 0) {
-    matches = debts.filter((d) => AMEX_NAME_REGEX.test(d.name));
+    matches = creditCardDebts.filter((d) => AMEX_NAME_REGEX.test(d.name));
   }
   if (matches.length === 0) return null;
   if (matches.length > 1) {

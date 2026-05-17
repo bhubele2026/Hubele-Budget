@@ -2,10 +2,120 @@ import { describe, it, expect } from "vitest";
 import {
   computeAmexEndOfMonthBalance,
   makeAmexBalanceAtEndOf,
+  resolveAmexDebt,
   type AmexAnchor,
+  type AmexDebtLike,
   type AmexTxnInput,
 } from "./amexEndingBalance";
 import { monthKeyFromISO } from "@/components/account-page";
+
+// (#689) The user's dashboard tile reported "$20,000 Amex Ending
+// Balance" — actually their Amex Pay-Over-Time / "Plan-It"
+// installment LOAN balance, synced into the debts table with the
+// name "Amex …" and `type='loan'`. The credit-card resolver must
+// exclude loan-type debts so this tile shows the revolving credit
+// card balance only.
+describe("(#689) resolveAmexDebt excludes Amex installment LOAN debts", () => {
+  it("ignores a loan-type Amex debt and returns the credit-card one instead", () => {
+    const debts: AmexDebtLike[] = [
+      {
+        name: "Amex Pay Over Time",
+        balance: "20000.00",
+        plaidAccountId: null,
+        lastBalanceUpdate: "2026-05-15T00:00:00.000Z",
+        plaidLastSyncedAt: null,
+        type: "loan",
+      },
+      {
+        name: "Amex Platinum",
+        balance: "742.18",
+        plaidAccountId: null,
+        lastBalanceUpdate: "2026-05-15T00:00:00.000Z",
+        plaidLastSyncedAt: null,
+        type: "credit",
+      },
+    ];
+    const got = resolveAmexDebt({
+      debts,
+      amexPlaidAccountIds: new Set<string>(),
+      plaidItemsForScope: [],
+    });
+    expect(got).not.toBeNull();
+    expect(got!.name).toBe("Amex Platinum");
+    expect(got!.balance).toBe("742.18");
+  });
+
+  it("returns null when the only Amex-named debt is a loan", () => {
+    const debts: AmexDebtLike[] = [
+      {
+        name: "Amex Plan-It Loan",
+        balance: "20000.00",
+        plaidAccountId: null,
+        lastBalanceUpdate: "2026-05-15T00:00:00.000Z",
+        plaidLastSyncedAt: null,
+        type: "loan",
+      },
+    ];
+    const got = resolveAmexDebt({
+      debts,
+      amexPlaidAccountIds: new Set<string>(),
+      plaidItemsForScope: [],
+    });
+    expect(got).toBeNull();
+  });
+
+  it("excludes loan-type even when the debt is Plaid-linked to an amex-tagged account", () => {
+    // Loan sub-account on the same Amex login had transactions tagged
+    // source='plaid:amex', so its accountId is in amexPlaidAccountIds.
+    // Pre-fix, the Plaid-link path would still pick it up.
+    const debts: AmexDebtLike[] = [
+      {
+        name: "Amex Pay Over Time",
+        balance: "20000.00",
+        plaidAccountId: "plaid-acct-loan",
+        lastBalanceUpdate: null,
+        plaidLastSyncedAt: "2026-05-15T00:00:00.000Z",
+        type: "loan",
+      },
+      {
+        name: "Amex Platinum",
+        balance: "742.18",
+        plaidAccountId: "plaid-acct-card",
+        lastBalanceUpdate: null,
+        plaidLastSyncedAt: "2026-05-15T00:00:00.000Z",
+        type: "credit",
+      },
+    ];
+    const got = resolveAmexDebt({
+      debts,
+      amexPlaidAccountIds: new Set(["plaid-acct-loan", "plaid-acct-card"]),
+      plaidItemsForScope: [],
+    });
+    expect(got).not.toBeNull();
+    expect(got!.name).toBe("Amex Platinum");
+    expect(got!.balance).toBe("742.18");
+  });
+
+  it("treats unknown/missing `type` as a credit card (legacy / manual debts still resolve)", () => {
+    const debts: AmexDebtLike[] = [
+      {
+        name: "Amex",
+        balance: "500.00",
+        plaidAccountId: null,
+        lastBalanceUpdate: "2026-05-15T00:00:00.000Z",
+        plaidLastSyncedAt: null,
+        // No type — manual debt from before Plaid was linked.
+      },
+    ];
+    const got = resolveAmexDebt({
+      debts,
+      amexPlaidAccountIds: new Set<string>(),
+      plaidItemsForScope: [],
+    });
+    expect(got).not.toBeNull();
+    expect(got!.balance).toBe("500.00");
+  });
+});
 
 // (#476) Locks in: for the same anchor + Amex transaction list, the
 // (future) dashboard "Amex ending balance" tile and the Amex page's
