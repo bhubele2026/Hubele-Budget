@@ -46,6 +46,13 @@ import { expandItem, parseISO, addDays } from "../lib/cashSignal";
 const router: IRouter = Router();
 
 const DEBT_GROUP = "Debt — Minimum Payments";
+// Task #690 — dedicated manual bucket on the Budget page for personal
+// one-off envelopes that aren't backed by a bill (e.g. "Birthday gifts",
+// "Kid's soccer"). Categories with `sourceKind='manual'` and
+// `groupName=MY_BUDGET_GROUP` render in a separate card below the
+// canonical bill-backed groups. Exported so the same string is reused
+// on both the API response and the frontend.
+export const MY_BUDGET_GROUP = "My budget";
 const DEBT_GROUP_BASE_SORT =
   (SEED_GROUP_ORDER.indexOf(DEBT_GROUP) >= 0
     ? SEED_GROUP_ORDER.indexOf(DEBT_GROUP)
@@ -1907,10 +1914,19 @@ router.get(
         orderedGroups.push(g);
       }
     }
-    // Re-dedupe orderedGroups while preserving order.
+    // Task #690 — "My budget" is a dedicated manual bucket the Budget page
+    // renders below the bill-backed groups. Always include it so a user
+    // who hasn't added any personal envelopes yet still sees the section
+    // and can add their first line.
+    if (!groupMap.has(MY_BUDGET_GROUP)) {
+      groupMap.set(MY_BUDGET_GROUP, []);
+      orderedGroups.push(MY_BUDGET_GROUP);
+    }
+    // Re-dedupe orderedGroups while preserving order. "My budget" is
+    // appended last so it never elbows into the canonical seed groups.
     const seen = new Set<string>();
     const finalGroupOrder = [];
-    for (const g of [...SEED_GROUP_ORDER, ...orderedGroups]) {
+    for (const g of [...SEED_GROUP_ORDER, ...orderedGroups, MY_BUDGET_GROUP]) {
       if (seen.has(g)) continue;
       seen.add(g);
       if (groupMap.has(g)) finalGroupOrder.push(g);

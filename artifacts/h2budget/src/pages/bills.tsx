@@ -141,6 +141,15 @@ function metaLine(item: RecurringItem): string {
 
 const isActive = (item: RecurringItem): boolean => item.active === "true";
 
+// Task #690 — name of the dedicated manual bucket on /budget. Bills must
+// never auto-link into "My budget" (it's the home for personal envelopes
+// that are explicitly NOT tied to a bill), so the Bills modal filters
+// these categories out of the picker entirely. Keep this in lockstep
+// with `MY_BUDGET_GROUP` on the server (api-server/src/routes/budget.ts)
+// and the frontend Budget page.
+const MY_BUDGET_GROUP = "My budget";
+
+
 const DEFAULT_FORM: FormState = {
   name: "",
   kind: "bill",
@@ -880,7 +889,14 @@ export default function BillsPage() {
             {(() => {
               const wantKind = form.kind === "income" ? "income" : "expense";
               const eligible = (categories ?? []).filter(
-                (c) => c.kind === wantKind && !c.excludeFromBudget,
+                // Task #690 — also exclude the "My budget" group: that bucket is
+                // for personal envelopes explicitly NOT tied to a bill, so a bill
+                // must never be able to link into it. Server-side guard in
+                // /api/recurring-items enforces the same rule.
+                (c) =>
+                  c.kind === wantKind &&
+                  !c.excludeFromBudget &&
+                  c.groupName !== MY_BUDGET_GROUP,
               );
               const grouped = new Map<string, typeof eligible>();
               for (const c of eligible) {
