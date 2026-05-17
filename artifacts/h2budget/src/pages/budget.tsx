@@ -6,6 +6,7 @@ import {
   useListCategories,
   useCreateCategory,
   useDeleteCategory,
+  useUpdateCategory,
   useSeedDefaultBudget,
   usePinBudgetMonth,
   usePinBudgetLine,
@@ -88,6 +89,7 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
+  Pencil,
   Pin,
   PinOff,
   Tag,
@@ -258,6 +260,7 @@ export default function BudgetPage() {
   const upsertLine = useUpsertBudgetLine();
   const createCat = useCreateCategory();
   const deleteCat = useDeleteCategory();
+  const updateCat = useUpdateCategory();
   const seedDefaults = useSeedDefaultBudget();
   const pinMonth = usePinBudgetMonth();
   const pinLine = usePinBudgetLine();
@@ -576,6 +579,103 @@ export default function BudgetPage() {
         },
       },
     );
+  };
+
+  // (#692) Rename a manual envelope in the "My budget" bucket. Hooked up
+  // only from that card — the BudgetLineRow on the bill-/debt-backed
+  // groups never gets the onRename prop, so this handler is unreachable
+  // from those rows. The server also enforces sourceKind="manual" so an
+  // API client can't bypass the UI guard.
+  const handleRenameCategory = (categoryId: string, nextName: string) => {
+    updateCat.mutate(
+      { id: categoryId, data: { name: nextName } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getListCategoriesQueryKey(),
+          });
+          invalidate();
+          toast({ title: "Renamed", description: `Now called "${nextName}".` });
+        },
+        onError: (err: unknown) => {
+          const msg =
+            err instanceof Error ? err.message : "Could not rename category";
+          toast({
+            title: "Rename failed",
+            description: msg,
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
+  // (#692) Swap a "My budget" envelope's sortOrder with its neighbor in
+  // the supplied ordered list to move it up/down one slot. We compute the
+  // swap pair here (rather than persisting absolute positions) so the
+  // existing sortOrder column drives display order without needing a
+  // dedicated "position" field. The optimistic invalidate refreshes the
+  // budget month query so the row appears in its new position on the
+  // next render.
+  const handleMoveCategory = (
+    orderedLines: { categoryId: string }[],
+    categoryId: string,
+    direction: "up" | "down",
+  ) => {
+    const idx = orderedLines.findIndex((l) => l.categoryId === categoryId);
+    if (idx < 0) return;
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= orderedLines.length) return;
+    const here = categories?.find((c) => c.id === orderedLines[idx].categoryId);
+    const there = categories?.find(
+      (c) => c.id === orderedLines[swapIdx].categoryId,
+    );
+    if (!here || !there) return;
+    const hereOrder = here.sortOrder;
+    const thereOrder = there.sortOrder;
+    // Direction-aware fallback for the equal-sortOrder case (very common
+    // since newly-created categories are all seeded at 9999): plain swap
+    // would leave order unchanged. Bump whichever side needs to end up
+    // later so the move is actually observable.
+    let nextHere: number;
+    let nextThere: number;
+    if (hereOrder === thereOrder) {
+      if (direction === "down") {
+        nextThere = thereOrder;
+        nextHere = thereOrder + 1;
+      } else {
+        nextHere = hereOrder;
+        nextThere = hereOrder + 1;
+      }
+    } else {
+      nextHere = thereOrder;
+      nextThere = hereOrder;
+    }
+    Promise.all([
+      updateCat.mutateAsync({
+        id: here.id,
+        data: { sortOrder: nextHere },
+      }),
+      updateCat.mutateAsync({
+        id: there.id,
+        data: { sortOrder: nextThere },
+      }),
+    ])
+      .then(() => {
+        queryClient.invalidateQueries({
+          queryKey: getListCategoriesQueryKey(),
+        });
+        invalidate();
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof Error ? err.message : "Could not reorder category";
+        toast({
+          title: "Reorder failed",
+          description: msg,
+          variant: "destructive",
+        });
+      });
   };
 
   const monthName = useMemo(() => {
@@ -950,7 +1050,7 @@ export default function BudgetPage() {
                       e.g. "Birthday gifts" or "Kid's soccer".
                     </div>
                   )}
-                  {myBudgetGroup.lines.map((line) => (
+                  {myBudgetGroup.lines.map((line, idx) => (
                     <BudgetLineRow
                       key={line.categoryId}
                       line={line}
@@ -969,6 +1069,13 @@ export default function BudgetPage() {
                       onReassignTxn={handleReassignTxn}
                       allCategories={categories ?? []}
                       assigning={updateTx.isPending}
+                      onRename={handleRenameCategory}
+                      onMove={(catId, dir) =>
+                        handleMoveCategory(myBudgetGroup.lines, catId, dir)
+                      }
+                      canMoveUp={idx > 0}
+                      canMoveDown={idx < myBudgetGroup.lines.length - 1}
+                      renaming={updateCat.isPending}
                     />
                   ))}
                 </div>
@@ -1372,6 +1479,11 @@ function BudgetLineRow({
   onReassignTxn,
   allCategories,
   assigning,
+  onRename,
+  onMove,
+  canMoveUp,
+  canMoveDown,
+  renaming,
 }: {
   line: BudgetLineWithActual;
   monthPinned: boolean;
@@ -1391,8 +1503,20 @@ function BudgetLineRow({
   ) => void;
   allCategories: { id: string; name: string }[];
   assigning: boolean;
+  // (#692) Optional rename + reorder hooks. Provided only by the
+  // "My budget" card so the standard groups (auto_bills / auto_debts)
+  // never expose controls that the backend would reject anyway.
+  onRename?: (categoryId: string, nextName: string) => void;
+  onMove?: (categoryId: string, direction: "up" | "down") => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  renaming?: boolean;
 }) {
   const [, navigate] = useLocation();
+  // (#692) Local rename state — only ever shown when onRename is wired
+  // up (i.e. from the My budget card). The draft input replaces the
+  // drill-down name button while editing; Enter commits, Esc cancels.
+  const [renameDraft, setRenameDraft] = useState<string | null>(null);
   // #176 (Item 4) — split uncategorized into "suggested" (descriptions that
   // match an existing rule for this category, or contain the row's category
   // name as a fallback) vs the rest. Surfaces the rule-based hint without
@@ -1451,7 +1575,38 @@ function BudgetLineRow({
     <div className="grid grid-cols-12 gap-4 items-center">
       <div className="col-span-12 md:col-span-5 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          {(() => {
+          {renameDraft !== null && onRename ? (
+            // (#692) Inline rename input — replaces the drill-down name
+            // button while editing. Enter commits, Esc cancels, blur
+            // commits if the value changed (so clicking away mirrors
+            // Enter rather than dropping the edit silently).
+            <Input
+              autoFocus
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const next = renameDraft.trim();
+                  if (next && next !== line.categoryName) {
+                    onRename(line.categoryId, next);
+                  }
+                  setRenameDraft(null);
+                } else if (e.key === "Escape") {
+                  setRenameDraft(null);
+                }
+              }}
+              onBlur={() => {
+                const next = renameDraft.trim();
+                if (next && next !== line.categoryName) {
+                  onRename(line.categoryId, next);
+                }
+                setRenameDraft(null);
+              }}
+              className="h-7 max-w-[220px] text-sm"
+              data-testid={`input-rename-${line.categoryId}`}
+            />
+          ) : null}
+          {renameDraft !== null && onRename ? null : (() => {
             const opensInAmex = drillDownHref.startsWith("/amex");
             const destLabel = opensInAmex ? "Amex" : "Transactions";
             return (
@@ -1618,6 +1773,50 @@ function BudgetLineRow({
                     <Pin className="w-3 h-3" />
                   )}
                 </Button>
+              )}
+              {/* (#692) Rename + reorder controls — only shown when the
+                  parent wires up onRename / onMove (i.e. inside the My
+                  budget card). The buttons mirror the existing hover-fade
+                  pattern so they don't add visual noise on the rest of
+                  the budget rows. */}
+              {onRename && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+                  onClick={() => setRenameDraft(line.categoryName)}
+                  disabled={renaming}
+                  data-testid={`button-rename-${line.categoryId}`}
+                  title="Rename this envelope"
+                >
+                  <Pencil className="w-3 h-3" />
+                </Button>
+              )}
+              {onMove && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 disabled:opacity-30"
+                    onClick={() => onMove(line.categoryId, "up")}
+                    disabled={!canMoveUp || renaming}
+                    data-testid={`button-move-up-${line.categoryId}`}
+                    title="Move up"
+                  >
+                    <ChevronUp className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 disabled:opacity-30"
+                    onClick={() => onMove(line.categoryId, "down")}
+                    disabled={!canMoveDown || renaming}
+                    data-testid={`button-move-down-${line.categoryId}`}
+                    title="Move down"
+                  >
+                    <ChevronDown className="w-3 h-3" />
+                  </Button>
+                </>
               )}
               <Button
                 variant="ghost"

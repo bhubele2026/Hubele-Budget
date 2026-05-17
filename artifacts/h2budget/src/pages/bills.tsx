@@ -19,6 +19,7 @@ import {
   type RecurringItemInput,
   type BillsSummaryRow,
   type BillsDebtMinRow,
+  type Category,
 } from "@workspace/api-client-react";
 import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
 import { formatBillRowAmount } from "@/lib/billsRowAmount";
@@ -572,6 +573,7 @@ export default function BillsPage() {
             onToggleActive={onToggleActive}
             onDeleteRow={onDeleteRow}
             togglingId={updateItem.isPending ? togglingId : null}
+            categories={categories ?? []}
           />
           <BillGroupCard
             title="Bills & Expenses"
@@ -582,6 +584,7 @@ export default function BillsPage() {
             onToggleActive={onToggleActive}
             onDeleteRow={onDeleteRow}
             togglingId={updateItem.isPending ? togglingId : null}
+            categories={categories ?? []}
           />
           {debtMinRows.length > 0 ? (
             <DebtMinimumsCard
@@ -1068,6 +1071,7 @@ function BillGroupCard({
   onToggleActive,
   onDeleteRow,
   togglingId,
+  categories,
 }: {
   title: string;
   total: number;
@@ -1077,7 +1081,21 @@ function BillGroupCard({
   onToggleActive: (item: RecurringItem) => void;
   onDeleteRow: (item: RecurringItem) => void;
   togglingId: string | null;
+  // (#691) Used to render a tiny "Category: X" chip on each row so
+  // the bill→budget envelope wiring is visible at a glance. We pass
+  // the full categories list (not just a map) so the chip can show
+  // both the category name and its parent group for context.
+  categories: Category[];
 }) {
+  // (#691) Build a fast id→category lookup once per render. Rows
+  // without a categoryId, or whose categoryId points at a deleted
+  // category (stale link after a category was removed), simply skip
+  // the chip — never crash.
+  const categoryById = useMemo(() => {
+    const m = new Map<string, Category>();
+    for (const c of categories) m.set(c.id, c);
+    return m;
+  }, [categories]);
   const Icon = tone === "income" ? ArrowUpCircle : ArrowDownCircle;
   const tint = tone === "income" ? "text-emerald-700" : "text-destructive";
   const tintBg = tone === "income" ? "bg-emerald-50" : "bg-rose-50";
@@ -1169,9 +1187,29 @@ function BillGroupCard({
                     <div className={`text-sm font-medium truncate ${active ? "text-foreground" : "line-through"}`}>
                       {item.name}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {metaLine(item)}
-                      {!active ? " · paused" : ""}
+                    <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                      <span>{metaLine(item)}</span>
+                      {!active ? <span>· paused</span> : null}
+                      {/* (#691) Category chip — visible only when the bill is
+                          linked to a budget envelope. Shows the destination
+                          category so the bill→budget wiring is obvious from
+                          the list without opening the edit modal. Quietly
+                          omitted for unlinked bills and stale categoryIds. */}
+                      {(() => {
+                        const cat = item.categoryId
+                          ? categoryById.get(item.categoryId)
+                          : undefined;
+                        if (!cat) return null;
+                        return (
+                          <span
+                            className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-border bg-muted/40 text-[10px] font-medium text-foreground/80"
+                            title={`Linked to ${cat.groupName} → ${cat.name}`}
+                            data-testid={`chip-category-${item.id}`}
+                          >
+                            {cat.name}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-0.5">

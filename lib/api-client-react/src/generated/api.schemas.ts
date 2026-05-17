@@ -1172,6 +1172,15 @@ export interface CategoryInput {
   sortOrder?: number;
 }
 
+/**
+ * Patch body for renaming and/or reordering a manual budget category. All fields optional; only the supplied ones are applied. The server rejects edits to non-manual (auto_bills / auto_debts) categories since those names/positions are regenerated from bills and debts on every rollup.
+
+ */
+export interface CategoryPatchInput {
+  name?: string;
+  sortOrder?: number;
+}
+
 export interface BudgetLine {
   id: string;
   monthStart: string;

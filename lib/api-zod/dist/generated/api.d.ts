@@ -2856,6 +2856,51 @@ export declare const CreateCategoryBody: zod.ZodObject<{
     groupName?: string | undefined;
     sourceKind?: "manual" | "auto_bills" | "auto_debts" | undefined;
 }>;
+/**
+ * @summary Rename and/or reorder a budget category (My budget envelopes)
+ */
+export declare const UpdateCategoryParams: zod.ZodObject<{
+    id: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+}, {
+    id: string;
+}>;
+export declare const UpdateCategoryBody: zod.ZodObject<{
+    name: zod.ZodOptional<zod.ZodString>;
+    sortOrder: zod.ZodOptional<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    name?: string | undefined;
+    sortOrder?: number | undefined;
+}, {
+    name?: string | undefined;
+    sortOrder?: number | undefined;
+}>;
+export declare const UpdateCategoryResponse: zod.ZodObject<{
+    id: zod.ZodString;
+    name: zod.ZodString;
+    kind: zod.ZodString;
+    groupName: zod.ZodString;
+    sourceKind: zod.ZodEnum<["manual", "auto_bills", "auto_debts"]>;
+    sortOrder: zod.ZodNumber;
+    excludeFromBudget: zod.ZodOptional<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    id: string;
+    name: string;
+    kind: string;
+    sortOrder: number;
+    groupName: string;
+    sourceKind: "manual" | "auto_bills" | "auto_debts";
+    excludeFromBudget?: boolean | undefined;
+}, {
+    id: string;
+    name: string;
+    kind: string;
+    sortOrder: number;
+    groupName: string;
+    sourceKind: "manual" | "auto_bills" | "auto_debts";
+    excludeFromBudget?: boolean | undefined;
+}>;
 export declare const DeleteCategoryParams: zod.ZodObject<{
     id: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {

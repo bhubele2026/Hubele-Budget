@@ -37,6 +37,7 @@ import type {
   CashSignal,
   Category,
   CategoryInput,
+  CategoryPatchInput,
   CheckInvitationInput,
   CheckInvitationResult,
   CleanupNonProdPlaidItems200,
@@ -2843,6 +2844,93 @@ export const useCreateCategory = <
   TContext
 > => {
   return useMutation(getCreateCategoryMutationOptions(options));
+};
+
+/**
+ * @summary Rename and/or reorder a budget category (My budget envelopes)
+ */
+export const getUpdateCategoryUrl = (id: string) => {
+  return `/api/budget/categories/${id}`;
+};
+
+export const updateCategory = async (
+  id: string,
+  categoryPatchInput: CategoryPatchInput,
+  options?: RequestInit,
+): Promise<Category> => {
+  return customFetch<Category>(getUpdateCategoryUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(categoryPatchInput),
+  });
+};
+
+export const getUpdateCategoryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCategory>>,
+    TError,
+    { id: string; data: BodyType<CategoryPatchInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCategory>>,
+  TError,
+  { id: string; data: BodyType<CategoryPatchInput> },
+  TContext
+> => {
+  const mutationKey = ["updateCategory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCategory>>,
+    { id: string; data: BodyType<CategoryPatchInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateCategory(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateCategoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateCategory>>
+>;
+export type UpdateCategoryMutationBody = BodyType<CategoryPatchInput>;
+export type UpdateCategoryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Rename and/or reorder a budget category (My budget envelopes)
+ */
+export const useUpdateCategory = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCategory>>,
+    TError,
+    { id: string; data: BodyType<CategoryPatchInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateCategory>>,
+  TError,
+  { id: string; data: BodyType<CategoryPatchInput> },
+  TContext
+> => {
+  return useMutation(getUpdateCategoryMutationOptions(options));
 };
 
 export const getDeleteCategoryUrl = (id: string) => {

@@ -61,6 +61,7 @@ export * from "./cashSignalStatus";
 export * from "./category";
 export * from "./categoryInput";
 export * from "./categoryInputSourceKind";
+export * from "./categoryPatchInput";
 export * from "./categorySourceKind";
 export * from "./checkInvitationInput";
 export * from "./checkInvitationResult";

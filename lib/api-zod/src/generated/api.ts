@@ -1379,6 +1379,37 @@ export const CreateCategoryBody = zod.object({
   sortOrder: zod.number().optional(),
 });
 
+/**
+ * @summary Rename and/or reorder a budget category (My budget envelopes)
+ */
+export const UpdateCategoryParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdateCategoryBody = zod
+  .object({
+    name: zod.string().optional(),
+    sortOrder: zod.number().optional(),
+  })
+  .describe(
+    "Patch body for renaming and\/or reordering a manual budget category. All fields optional; only the supplied ones are applied. The server rejects edits to non-manual (auto_bills \/ auto_debts) categories since those names\/positions are regenerated from bills and debts on every rollup.\n",
+  );
+
+export const UpdateCategoryResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  kind: zod.string(),
+  groupName: zod.string(),
+  sourceKind: zod.enum(["manual", "auto_bills", "auto_debts"]),
+  sortOrder: zod.number(),
+  excludeFromBudget: zod
+    .boolean()
+    .optional()
+    .describe(
+      '(#474) When true, this category is omitted from every Budget\npage roll-up (planned, actual, group totals, summary) — same\nway transfers are excluded from actuals. Today only the\nsystem-managed \"Uncategorized\" category carries this flag;\nit is exposed in the categories list so the row-level\ncategory pickers on Transactions\/Chase\/Amex can offer it as\na triage option, while the mapping-rules UI hides it (the\nAPI also rejects rules that target it).\n',
+    ),
+});
+
 export const DeleteCategoryParams = zod.object({
   id: zod.coerce.string(),
 });
