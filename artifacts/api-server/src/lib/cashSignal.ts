@@ -197,7 +197,13 @@ export type CashSignal = {
    * which lets the chart deep-link a marker click to the matching plan row
    * in the register below.
    */
-  events?: Array<{ date: string; label: string; amount: string; itemId: string }>;
+  events?: Array<{
+    date: string;
+    label: string;
+    amount: string;
+    itemId: string;
+    originalDate: string;
+  }>;
 };
 
 function r2(n: number): string {
@@ -539,7 +545,26 @@ export async function computeCashSignal(
     // the phantom Mortgage/HELOC/etc. occurrences that come out of
     // the prior-month expansion lookback but don't appear in the
     // user's planned-items register.
-    if (snapshotISO && rawEffectiveDate < snapshotISO) continue;
+    //
+    // (#688) Narrow exception: a pending past-due EXPENSE dated
+    // EXACTLY the day before a fresh bank snapshot may still be
+    // unposted at the bank — especially on weekends or right after
+    // a manual / auto Plaid refresh. Without this exception,
+    // refreshing the bank balance on day D silently swallows any
+    // day-(D-1) still-pending bill from the chart projection, even
+    // though the register surfaces it as "Pending plan" and the
+    // user expects it to drag forward to day+1. We only widen the
+    // window by ONE day so older pre-snapshot phantoms (the
+    // Mortgage/HELOC scenario (#666) was designed to suppress) stay
+    // suppressed.
+    if (snapshotISO && rawEffectiveDate < snapshotISO) {
+      const oneDayBeforeSnap = fmtISO(addDays(parseISO(snapshotISO), -1));
+      const stillEligibleForDrag =
+        ev.amount < 0 &&
+        rawEffectiveDate >= oneDayBeforeSnap &&
+        rawEffectiveDate <= dragCutoffISO;
+      if (!stillEligibleForDrag) continue;
+    }
     // (#681) Past-due unresolved EXPENSE pendings — only those that
     // are on or after the snapshot AND on or before today — drag the
     // projection to today+1. Day-0 still equals the bank snapshot

@@ -253,6 +253,117 @@ describe("computeCashSignal — snapshot anchoring", () => {
     expect(eventDates).not.toContain("2026-05-15");
   });
 
+  it("(#688) yesterday's pending expense still drags to today+1 even when snapshot just refreshed to today", async () => {
+    // Real-world bug: bank refreshed at Sat May 16 ~8pm.
+    // bankSnapshotAt landed on today (05-16). User has pending plans
+    // dated 05-15 (Verizon -$400, PlayStation -$18.98, Mattress -$33,
+    // total -$451.98) still visible as "Pending plan" in the register.
+    // Under (#666)'s strict-pre-snapshot drop, these all got silently
+    // swallowed — bank balance $4,871.20, chart day-1 stayed flat.
+    // User expected chart's day-1 (05-17 = today+1) to dip by $451.98.
+    //
+    // Fix (#688) narrows (#666) so EXPENSE plans dated exactly the
+    // day before a fresh snapshot still flow through the drag rule.
+    // Plans 2+ days before the snapshot remain dropped (phantom
+    // Mortgage/HELOC suppression preserved).
+    await setSettings({
+      balance: "4871.20",
+      // Snapshot timestamp on TODAY (post auto-refresh).
+      at: new Date("2026-05-14T18:00:00Z"),
+      cashBuffer: "500",
+    });
+    // Three pending plans dated YESTERDAY (today-1 = 05-13).
+    await addRecurring({
+      name: "Verizon Wireless",
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-13",
+      amount: "400.00",
+    });
+    await addRecurring({
+      name: "PlayStation Network",
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-13",
+      amount: "18.98",
+    });
+    await addRecurring({
+      name: "Mattress Firm",
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-13",
+      amount: "33.00",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-14",
+      horizonDays: 30,
+    });
+
+    // Day 0 (today, 05-14) equals the bank snapshot — no double-count.
+    expect(sig.startingBalance).toBe("4871.20");
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-05-14",
+      balance: "4871.20",
+    });
+    // Day 1 (today+1, 05-15) drops by the full $451.98 — all three
+    // pending plans dragged forward.
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-15",
+      balance: "4419.22",
+    });
+    // Markers on the drag target carry the original date so the
+    // tooltip can show "Originally due 05-13".
+    const dragTargetEvents = (sig.events ?? []).filter(
+      (e) => e.date === "2026-05-15",
+    );
+    expect(dragTargetEvents.map((e) => e.label).sort()).toEqual([
+      "Mattress Firm",
+      "PlayStation Network",
+      "Verizon Wireless",
+    ]);
+    for (const e of dragTargetEvents) {
+      expect(e).toMatchObject({ originalDate: "2026-05-13" });
+    }
+  });
+
+  it("(#688) plans dated 2+ days before snapshot stay dropped (phantom suppression preserved)", async () => {
+    // Sibling to (#688) above — confirms the narrow exception does
+    // NOT bring back the (#666) Mortgage/HELOC phantom scenario.
+    // A plan dated 2 days before the snapshot is assumed to have
+    // already posted to the bank and is dropped, even if unmatched.
+    await setSettings({
+      balance: "4871.20",
+      at: new Date("2026-05-14T18:00:00Z"),
+      cashBuffer: "500",
+    });
+    await addRecurring({
+      name: "Old Phantom Mortgage",
+      kind: "expense",
+      frequency: "onetime",
+      anchorDate: "2026-05-12", // 2 days before snapshot (05-14)
+      amount: "1500.00",
+    });
+
+    const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
+      fromDate: "2026-05-14",
+      horizonDays: 30,
+    });
+
+    expect(sig.startingBalance).toBe("4871.20");
+    expect(sig.daily?.[0]).toEqual({
+      date: "2026-05-14",
+      balance: "4871.20",
+    });
+    // Day 1 stays flat — the phantom plan is dropped, NOT dragged.
+    expect(sig.daily?.[1]).toEqual({
+      date: "2026-05-15",
+      balance: "4871.20",
+    });
+    const eventDates = (sig.events ?? []).map((e) => e.date);
+    expect(eventDates).not.toContain("2026-05-15");
+  });
+
   it("(#667) synthetic debt-min events dated before the snapshot do NOT drag onto today", async () => {
     // User's bug report: "All my pending is matched, no forecasted
     // pending, why is the bank off?" — bank $4,922.56, chart starts at
