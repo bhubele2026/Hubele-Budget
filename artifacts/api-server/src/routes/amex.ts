@@ -214,7 +214,7 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   // Balance come from the Plaid connection — Plaid is the source of
   // truth here, the debt row is just a convenience cache.
   //
-  // (#651) Filter the sum to *credit/loan* accounts only. The
+  // (#651) Filter the sum to *credit-card* accounts only. The
   // discovery set above (txn-derived ∪ institution-slug-derived) can
   // pull in non-debt sub-accounts on the same Amex login (Membership
   // Rewards / High-Yield Savings / brokerage cash). Their
@@ -222,10 +222,20 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   // generic balance (positive cash) and would otherwise be summed in
   // alongside the credit-card debt — yielding a wrong, often
   // negative-signed Ending Balance because cash partially offsets
-  // owed-debt. Restrict to `type IN ('credit','loan')` (or to rows
-  // where `liability_kind` is set, which only happens for accounts
-  // the liabilities-product run actually classified) so cash sub-
-  // accounts can never poison the sum.
+  // owed-debt.
+  //
+  // (#689) Originally this filter accepted `type IN ('credit','loan')`,
+  // which let Amex-installment / Pay-Over-Time / "Plan-It" LOAN
+  // sub-accounts leak in alongside the actual credit-card debt. A
+  // user with a $20,000 Amex personal loan was seeing that whole
+  // loan balance reported as their Amex credit-card Ending Balance.
+  // The Amex page (and the dashboard tile that mirrors it) is
+  // specifically about the revolving credit-card liability; loan
+  // sub-accounts belong on /debts, not in this sum. So we now require
+  // `type = 'credit'` AND (when the liabilities product has run)
+  // `liability_kind = 'credit'` — Plaid's liability kinds are
+  // {'credit','student','mortgage'}, of which only 'credit' is a
+  // credit card.
   if (amexPlaidAccountIds.length > 0) {
     const balRows = await db
       .select({
@@ -237,7 +247,8 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
         and(
           eq(plaidAccountsTable.householdId, householdId),
           inArray(plaidAccountsTable.accountId, amexPlaidAccountIds),
-          sql`(${plaidAccountsTable.type} in ('credit','loan') or ${plaidAccountsTable.liabilityKind} is not null)`,
+          sql`${plaidAccountsTable.type} = 'credit'`,
+          sql`(${plaidAccountsTable.liabilityKind} is null or ${plaidAccountsTable.liabilityKind} = 'credit')`,
         ),
       );
     let total = 0;

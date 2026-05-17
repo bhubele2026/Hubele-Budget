@@ -323,6 +323,123 @@ describe("GET /amex/anchor — Plaid liability fallback (#483)", () => {
     expect(body.amexEndingBalance).toBeCloseTo(1500.0, 2);
   });
 
+  it("(#689) excludes Amex installment/Pay-Over-Time LOAN sub-accounts from the Plaid balance sum", async () => {
+    // Real-world bug: a user with an Amex personal-loan / "Plan-It"
+    // installment sub-account (type='loan', $20,000 outstanding) on
+    // the same Amex login was seeing the dashboard's "Amex Ending
+    // Balance" tile report that loan balance as the credit-card
+    // ending balance. The Amex page (and its mirror tile) is
+    // specifically about the revolving credit-card liability — loan
+    // sub-accounts belong on /debts, not in this sum.
+    const suffix = randomUUID().slice(0, 8);
+    const [item] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: `amex-item-${suffix}`,
+        accessToken: "test-no-access",
+        institutionName: "American Express",
+        institutionSlug: "amex",
+      })
+      .returning();
+    const fetchedAt = new Date("2026-05-15T12:00:00.000Z");
+    await db.insert(plaidAccountsTable).values([
+      // Real Amex credit-card debt — should count.
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: item!.id,
+        accountId: `acct-card-${suffix}`,
+        name: "Amex Platinum",
+        mask: "0001",
+        type: "credit",
+        subtype: "credit card",
+        liabilityKind: "credit",
+        liabilityBalance: "742.18",
+        liabilityLastFetchedAt: fetchedAt,
+      },
+      // Amex Plan-It installment loan, same login. Pre-(#689) this
+      // $20,000 was summed into the credit-card ending balance.
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: item!.id,
+        accountId: `acct-loan-${suffix}`,
+        name: "Amex Pay Over Time",
+        mask: "0002",
+        type: "loan",
+        subtype: "loan",
+        liabilityBalance: "20000.00",
+        liabilityLastFetchedAt: fetchedAt,
+      },
+    ]);
+
+    const res = await fetch(`${baseUrl}/amex/anchor`);
+    const body = (await res.json()) as {
+      amexEndingBalance: number;
+      source: string;
+    };
+    expect(body.source).toBe("plaid");
+    // Only the credit-card debt counts — the $20,000 loan is excluded.
+    expect(body.amexEndingBalance).toBeCloseTo(742.18, 2);
+  });
+
+  it("(#689) excludes student/mortgage liability sub-accounts even when type='credit' looks ambiguous", async () => {
+    // Belt-and-suspenders: even if some quirky Plaid response set
+    // `type='credit'` on a non-revolving sub-account, the
+    // `liability_kind` filter still keeps student / mortgage rows out.
+    const suffix = randomUUID().slice(0, 8);
+    const [item] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: `amex-item-${suffix}`,
+        accessToken: "test-no-access",
+        institutionName: "American Express",
+        institutionSlug: "amex",
+      })
+      .returning();
+    const fetchedAt = new Date("2026-05-15T12:00:00.000Z");
+    await db.insert(plaidAccountsTable).values([
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: item!.id,
+        accountId: `acct-card-${suffix}`,
+        name: "Amex Gold",
+        mask: "0001",
+        type: "credit",
+        subtype: "credit card",
+        liabilityKind: "credit",
+        liabilityBalance: "500.00",
+        liabilityLastFetchedAt: fetchedAt,
+      },
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: item!.id,
+        accountId: `acct-student-${suffix}`,
+        name: "Some Student Loan",
+        mask: "0002",
+        type: "credit",
+        subtype: "student",
+        liabilityKind: "student",
+        liabilityBalance: "15000.00",
+        liabilityLastFetchedAt: fetchedAt,
+      },
+    ]);
+
+    const res = await fetch(`${baseUrl}/amex/anchor`);
+    const body = (await res.json()) as {
+      amexEndingBalance: number;
+      source: string;
+    };
+    expect(body.source).toBe("plaid");
+    expect(body.amexEndingBalance).toBeCloseTo(500.0, 2);
+  });
+
   it("returns missing when Plaid accounts exist but liability balances are null", async () => {
     const suffix = randomUUID().slice(0, 8);
     const [item] = await db
