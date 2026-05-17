@@ -27,6 +27,8 @@ import {
   PinBudgetLineBody,
   PinBudgetMonthBody,
   PinBudgetMonthParams,
+  UpdateCategoryBody,
+  UpdateCategoryParams,
   UpsertBudgetLineBody,
 } from "@workspace/api-zod";
 import {
@@ -1030,6 +1032,98 @@ router.post(
       })
       .returning();
     res.status(201).json(row);
+  },
+);
+
+// Task #692 — partial update for a category. Powers the Budget page's
+// inline rename input and the up/down reorder buttons on My budget
+// envelopes. Any field may be omitted; `name` collisions return 409 so
+// the UI can surface a friendly "already taken" message and the user
+// can re-edit without losing the input. We never let `name` be set to
+// the system-managed "Uncategorized" label (it's the lazy-insert target
+// for orphaned txns and renaming a user row over it would collapse two
+// distinct buckets), and we coerce blank names to a 400 so the row's
+// name never silently becomes "".
+router.patch(
+  "/budget/categories/:id",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const params = UpdateCategoryParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const body = UpdateCategoryBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const data = body.data;
+    const updates: Record<string, unknown> = {};
+    if (typeof data.name === "string") {
+      const trimmed = data.name.trim();
+      if (!trimmed) {
+        res.status(400).json({ error: "name cannot be blank" });
+        return;
+      }
+      if (trimmed === UNCATEGORIZED_CATEGORY_NAME) {
+        res.status(400).json({
+          error: `name "${UNCATEGORIZED_CATEGORY_NAME}" is reserved`,
+        });
+        return;
+      }
+      updates.name = trimmed;
+    }
+    if (typeof data.groupName === "string") {
+      updates.groupName = data.groupName;
+    }
+    if (typeof data.sortOrder === "number") {
+      updates.sortOrder = data.sortOrder;
+    }
+    if (Object.keys(updates).length === 0) {
+      const [cur] = await db
+        .select()
+        .from(budgetCategoriesTable)
+        .where(
+          and(
+            eq(budgetCategoriesTable.id, params.data.id),
+            eq(budgetCategoriesTable.householdId, req.householdId!),
+          ),
+        );
+      if (!cur) {
+        res.status(404).json({ error: "not found" });
+        return;
+      }
+      res.json(cur);
+      return;
+    }
+    try {
+      const [row] = await db
+        .update(budgetCategoriesTable)
+        .set(updates)
+        .where(
+          and(
+            eq(budgetCategoriesTable.id, params.data.id),
+            eq(budgetCategoriesTable.householdId, req.householdId!),
+          ),
+        )
+        .returning();
+      if (!row) {
+        res.status(404).json({ error: "not found" });
+        return;
+      }
+      res.json(row);
+    } catch (e) {
+      // Unique constraint on (householdId, name) — surface a 409 so the
+      // UI can tell the user "that name's already taken" instead of a
+      // generic 500.
+      const msg = (e as Error).message ?? "";
+      if (/unique|duplicate/i.test(msg)) {
+        res.status(409).json({ error: "name already in use" });
+        return;
+      }
+      throw e;
+    }
   },
 );
 

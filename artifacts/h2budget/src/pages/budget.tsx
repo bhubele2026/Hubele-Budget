@@ -98,6 +98,9 @@ import {
   MoreHorizontal,
   Check,
   Info,
+  Pencil,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -565,6 +568,65 @@ export default function BudgetPage() {
     }
   };
 
+  // Task #692 — inline rename for any user-editable category. Trims
+  // whitespace, no-ops on unchanged names, and surfaces the API's
+  // 409 "name already in use" as a friendly toast so the user can
+  // pick a different label without losing their input (the row stays
+  // in edit mode if onError keeps it open at the call site).
+  const handleRenameCategory = async (
+    id: string,
+    nextName: string,
+    prevName: string,
+  ): Promise<boolean> => {
+    const trimmed = nextName.trim();
+    if (!trimmed || trimmed === prevName) return false;
+    try {
+      await updateCat.mutateAsync({ id, data: { name: trimmed } });
+      queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+      invalidate();
+      toast({ title: "Renamed" });
+      return true;
+    } catch (e) {
+      toast({
+        title: "Couldn't rename",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  // Task #692 — swap a category's sortOrder with its neighbor inside
+  // the same group. The server orders categories by sortOrder ASC then
+  // name, so swapping the two persisted sortOrders is enough to flip
+  // the displayed order. We fire both PATCHes in parallel and only
+  // invalidate once both settle so the list doesn't redraw mid-swap.
+  const handleMoveCategory = async (
+    a: { id: string; sortOrder: number },
+    b: { id: string; sortOrder: number },
+  ) => {
+    // If two rows somehow share a sortOrder (legacy data, or a fresh
+    // seed where every row in a group sits at the same base offset),
+    // a straight swap is a no-op. Push the target row to neighbor+1
+    // (or -1 if moving up) so the swap still produces a visible change.
+    const aOrder = a.sortOrder === b.sortOrder ? b.sortOrder + 1 : b.sortOrder;
+    const bOrder = a.sortOrder === b.sortOrder ? b.sortOrder : a.sortOrder;
+    try {
+      await Promise.all([
+        updateCat.mutateAsync({ id: a.id, data: { sortOrder: aOrder } }),
+        updateCat.mutateAsync({ id: b.id, data: { sortOrder: bOrder } }),
+      ]);
+      queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+      invalidate();
+    } catch (e) {
+      toast({
+        title: "Couldn't reorder",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDeleteCategory = (id: string) => {
     if (!confirm("Delete this category?")) return;
     deleteCat.mutate(
@@ -885,25 +947,68 @@ export default function BudgetPage() {
                           All clear — no categories in this group yet.
                         </div>
                       )}
-                      {group.lines.map((line) => (
-                        <BudgetLineRow
-                          key={line.categoryId}
-                          line={line}
-                          monthPinned={monthPinned}
-                          monthStart={currentMonth}
-                          onUpdatePlanned={handleUpdatePlanned}
-                          onDelete={handleDeleteCategory}
-                          onTogglePin={handleTogglePinLine}
-                          pinDisabled={pinLine.isPending}
-                          uncategorizedTxns={uncategorizedThisMonth}
-                          categoryRules={rulesByCategory.get(line.categoryId) ?? []}
-                          contributingTxns={txnsByCategoryThisMonth.get(line.categoryId) ?? []}
-                          onAssignTxn={handleAssignTxn}
-                          onReassignTxn={handleReassignTxn}
-                          allCategories={categories ?? []}
-                          assigning={updateTx.isPending}
-                        />
-                      ))}
+                      {group.lines.map((line, idx) => {
+                        const prev = idx > 0 ? group.lines[idx - 1] : null;
+                        const next =
+                          idx < group.lines.length - 1
+                            ? group.lines[idx + 1]
+                            : null;
+                        return (
+                          <BudgetLineRow
+                            key={line.categoryId}
+                            line={line}
+                            monthPinned={monthPinned}
+                            monthStart={currentMonth}
+                            onUpdatePlanned={handleUpdatePlanned}
+                            onDelete={handleDeleteCategory}
+                            onRename={handleRenameCategory}
+                            onMoveUp={
+                              prev
+                                ? () =>
+                                    handleMoveCategory(
+                                      {
+                                        id: line.categoryId,
+                                        sortOrder: line.sortOrder,
+                                      },
+                                      {
+                                        id: prev.categoryId,
+                                        sortOrder: prev.sortOrder,
+                                      },
+                                    )
+                                : null
+                            }
+                            onMoveDown={
+                              next
+                                ? () =>
+                                    handleMoveCategory(
+                                      {
+                                        id: line.categoryId,
+                                        sortOrder: line.sortOrder,
+                                      },
+                                      {
+                                        id: next.categoryId,
+                                        sortOrder: next.sortOrder,
+                                      },
+                                    )
+                                : null
+                            }
+                            reorderDisabled={updateCat.isPending}
+                            onTogglePin={handleTogglePinLine}
+                            pinDisabled={pinLine.isPending}
+                            uncategorizedTxns={uncategorizedThisMonth}
+                            categoryRules={
+                              rulesByCategory.get(line.categoryId) ?? []
+                            }
+                            contributingTxns={
+                              txnsByCategoryThisMonth.get(line.categoryId) ?? []
+                            }
+                            onAssignTxn={handleAssignTxn}
+                            onReassignTxn={handleReassignTxn}
+                            allCategories={categories ?? []}
+                            assigning={updateTx.isPending}
+                          />
+                        );
+                      })}
                     </div>
 
                     <div className="p-3 border-t border-border bg-muted/10">
@@ -1470,6 +1575,10 @@ function BudgetLineRow({
   monthStart,
   onUpdatePlanned,
   onDelete,
+  onRename,
+  onMoveUp,
+  onMoveDown,
+  reorderDisabled,
   onTogglePin,
   pinDisabled,
   uncategorizedTxns,
@@ -1490,6 +1599,14 @@ function BudgetLineRow({
   monthStart: string;
   onUpdatePlanned: (categoryId: string, amount: string) => void;
   onDelete: (id: string) => void;
+  onRename: (
+    id: string,
+    nextName: string,
+    prevName: string,
+  ) => Promise<boolean>;
+  onMoveUp: (() => void) | null;
+  onMoveDown: (() => void) | null;
+  reorderDisabled: boolean;
   onTogglePin: (categoryId: string, currentlyPinned: boolean) => void;
   pinDisabled: boolean;
   uncategorizedTxns: Transaction[];
@@ -1512,6 +1629,17 @@ function BudgetLineRow({
   canMoveDown?: boolean;
   renaming?: boolean;
 }) {
+  // Task #692 — inline rename. The pencil icon next to the name flips
+  // the row into edit mode; we save on blur/Enter and bail on Escape.
+  // We keep the rename affordance off the Avalanche-payment row (system
+  // managed) and off the system-managed "Uncategorized" bucket — every
+  // other line, including bill-backed ones, can be relabeled freely.
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState(line.categoryName);
+  useEffect(() => {
+    if (!editingName) setDraftName(line.categoryName);
+  }, [line.categoryName, editingName]);
+  const isUncategorizedRow = line.categoryName === "Uncategorized";
   const [, navigate] = useLocation();
   // (#692) Local rename state — only ever shown when onRename is wired
   // up (i.e. from the My budget card). The draft input replaces the
@@ -1751,6 +1879,38 @@ function BudgetLineRow({
             </Badge>
           ) : (
             <div className="ml-auto md:ml-0 flex items-center gap-1">
+              {/* Task #692 — reorder this category within its group.
+                  Buttons are present on every non-Avalanche row so power
+                  users can shuffle bill-backed envelopes too; they no-op
+                  (disabled) at the top/bottom of the group. */}
+              {!isAvalanchePayment && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 disabled:opacity-30"
+                    onClick={() => onMoveUp?.()}
+                    disabled={!onMoveUp || reorderDisabled}
+                    title="Move up"
+                    aria-label="Move up"
+                    data-testid={`button-move-up-${line.categoryId}`}
+                  >
+                    <ArrowUp className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 disabled:opacity-30"
+                    onClick={() => onMoveDown?.()}
+                    disabled={!onMoveDown || reorderDisabled}
+                    title="Move down"
+                    aria-label="Move down"
+                    data-testid={`button-move-down-${line.categoryId}`}
+                  >
+                    <ArrowDown className="w-3 h-3" />
+                  </Button>
+                </>
+              )}
               {isReadOnly && !isAvalanchePayment && (
                 <Button
                   variant="ghost"
