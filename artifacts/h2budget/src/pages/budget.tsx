@@ -187,6 +187,14 @@ function SummaryTile({
 
 const MIN_MONTH = "2026-04-01";
 
+// (#690) Dedicated group name for the "My budget" bucket — personal,
+// non-bill-backed envelopes (e.g. "Birthday gifts", "Kid's soccer")
+// the user wants to budget for without standing them up as recurring
+// bills. We render this group as a separate card below the standard
+// groups, with a distinct header and helper copy, and always surface
+// it even when empty so users have an obvious place to add lines.
+export const MY_BUDGET_GROUP = "My budget";
+
 function thisMonthStart(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
@@ -592,7 +600,19 @@ export default function BudgetPage() {
     );
   }
 
-  const groups = budgetData?.groups ?? [];
+  const allGroups = budgetData?.groups ?? [];
+  // (#690) Split off the "My budget" group so the standard groups list
+  // renders unchanged (bill-backed envelopes with their info icon and
+  // auto-pull behavior) and the manual bucket gets its own card below.
+  const groups = allGroups.filter((g) => g.groupName !== MY_BUDGET_GROUP);
+  const myBudgetGroup = allGroups.find(
+    (g) => g.groupName === MY_BUDGET_GROUP,
+  ) ?? {
+    groupName: MY_BUDGET_GROUP,
+    plannedTotal: "0",
+    actualTotal: "0",
+    lines: [],
+  };
   const summary = budgetData?.summary;
 
   return (
@@ -844,6 +864,173 @@ export default function BudgetPage() {
             </Card>
           );
         })}
+
+        {/* (#690) "My budget" — a dedicated card for personal envelopes
+            that aren't tied to a bill. Rendered separately from the
+            bill-backed groups above so users have an obvious place to
+            stand up one-off categories ("Birthday gifts", "Kid's
+            soccer"). Always visible, even when empty. These lines are
+            plain manual categories (sourceKind = "manual", no linked
+            recurring items), so they naturally render without the
+            bill info icon or auto-pull/pin badge. Their actuals roll
+            up the same way as every other manual envelope (any
+            transaction the user categorizes into them counts). */}
+        <Card
+          key={myBudgetGroup.groupName}
+          data-testid={`group-${myBudgetGroup.groupName}`}
+          className="border-primary/30"
+        >
+          <CardContent className="p-0">
+            <button
+              type="button"
+              className="w-full flex items-center justify-between gap-4 p-4 border-b border-border hover:bg-muted/20 text-left"
+              onClick={() => toggleCollapse(myBudgetGroup.groupName)}
+              data-testid={`button-toggle-${myBudgetGroup.groupName}`}
+            >
+              <div className="flex items-center gap-3">
+                {collapsed.has(myBudgetGroup.groupName) ? (
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                ) : (
+                  <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                )}
+                <div>
+                  <div className="font-serif font-semibold text-lg">
+                    My budget
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Things you're budgeting for that aren't tied to a bill.
+                  </div>
+                </div>
+              </div>
+              {(() => {
+                const planned = parseFloat(myBudgetGroup.plannedTotal) || 0;
+                const actual = parseFloat(myBudgetGroup.actualTotal) || 0;
+                const delta = planned - actual;
+                const deltaColor =
+                  delta < 0
+                    ? "text-destructive"
+                    : delta > 0
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-muted-foreground";
+                return (
+                  <div className="hidden md:flex items-center gap-6 text-sm font-mono">
+                    <div>
+                      <span className="text-muted-foreground mr-1">Budget</span>
+                      {formatCurrency(myBudgetGroup.plannedTotal)}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground mr-1">Actual</span>
+                      {formatCurrency(myBudgetGroup.actualTotal)}
+                    </div>
+                    <div className={cn("font-medium w-28 text-right", deltaColor)}>
+                      Δ {delta >= 0 ? "+" : ""}
+                      {formatCurrency(delta)}
+                    </div>
+                  </div>
+                );
+              })()}
+            </button>
+
+            {!collapsed.has(myBudgetGroup.groupName) && (
+              <>
+                <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 border-b border-border bg-muted/20 text-xs uppercase tracking-wide text-muted-foreground">
+                  <div className="col-span-5">Category</div>
+                  <div className="col-span-2 text-right">Budgeted</div>
+                  <div className="col-span-2 text-right">Actual</div>
+                  <div className="col-span-2 text-right">Difference</div>
+                  <div className="col-span-1 text-right">% Spent</div>
+                </div>
+                <div className="divide-y divide-border">
+                  {myBudgetGroup.lines.length === 0 && (
+                    <div
+                      className="px-4 py-6 text-sm text-muted-foreground italic"
+                      data-testid="empty-my-budget"
+                    >
+                      Add a line below to start a personal envelope —
+                      e.g. "Birthday gifts" or "Kid's soccer".
+                    </div>
+                  )}
+                  {myBudgetGroup.lines.map((line) => (
+                    <BudgetLineRow
+                      key={line.categoryId}
+                      line={line}
+                      monthPinned={monthPinned}
+                      monthStart={currentMonth}
+                      onUpdatePlanned={handleUpdatePlanned}
+                      onDelete={handleDeleteCategory}
+                      onTogglePin={handleTogglePinLine}
+                      pinDisabled={pinLine.isPending}
+                      uncategorizedTxns={uncategorizedThisMonth}
+                      categoryRules={rulesByCategory.get(line.categoryId) ?? []}
+                      contributingTxns={
+                        txnsByCategoryThisMonth.get(line.categoryId) ?? []
+                      }
+                      onAssignTxn={handleAssignTxn}
+                      onReassignTxn={handleReassignTxn}
+                      allCategories={categories ?? []}
+                      assigning={updateTx.isPending}
+                    />
+                  ))}
+                </div>
+
+                <div className="p-3 border-t border-border bg-muted/10">
+                  {addingFor === myBudgetGroup.groupName ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        autoFocus
+                        placeholder="New envelope name"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter")
+                            handleAddCategory(myBudgetGroup.groupName);
+                          if (e.key === "Escape") {
+                            setAddingFor(null);
+                            setNewName("");
+                          }
+                        }}
+                        className="max-w-xs"
+                        data-testid={`input-new-line-${myBudgetGroup.groupName}`}
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          handleAddCategory(myBudgetGroup.groupName)
+                        }
+                        disabled={!newName.trim() || createCat.isPending}
+                        data-testid={`button-confirm-add-${myBudgetGroup.groupName}`}
+                      >
+                        Add
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setAddingFor(null);
+                          setNewName("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setAddingFor(myBudgetGroup.groupName);
+                        setNewName("");
+                      }}
+                      data-testid={`button-add-line-${myBudgetGroup.groupName}`}
+                    >
+                      <Plus className="w-4 h-4 mr-1" /> Add line
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

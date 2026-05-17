@@ -8,6 +8,7 @@ import {
   useDeleteRecurringItem,
   useListDebts,
   useListTransactions,
+  useListCategories,
   useGetAvalancheSettings,
   useGetAvalancheExtra,
   getListRecurringItemsQueryKey,
@@ -76,7 +77,17 @@ type FormState = {
   anchorDate: string;
   oneTimeDate: string;
   active: boolean;
+  // (#690) Optional link to a Budget category. Persisted as
+  // `recurring_items.category_id` and consumed by the Budget page's
+  // bill-rollup so manually entered bills feed their planned amount
+  // into the right envelope. Empty string = "— None —" (unlinked).
+  categoryId: string;
 };
+
+// (#690) Sentinel used in the Select since shadcn/ui's <Select> forbids
+// an empty-string item value. We round-trip through this token in the
+// dropdown and convert back to "" / null at the form/payload boundary.
+const NO_CATEGORY = "__none__";
 
 function parseISODate(s: string): Date | null {
   if (!s) return null;
@@ -139,6 +150,7 @@ const DEFAULT_FORM: FormState = {
   anchorDate: "",
   oneTimeDate: "",
   active: true,
+  categoryId: "",
 };
 
 function buildPayload(form: FormState): RecurringItemInput {
@@ -150,6 +162,7 @@ function buildPayload(form: FormState): RecurringItemInput {
     active: form.active ? "true" : "false",
     dayOfMonth: null,
     anchorDate: null,
+    categoryId: form.categoryId ? form.categoryId : null,
   };
   if (form.frequency === "monthly" || form.frequency === "semimonthly") {
     const day = parseInt(form.dayOfMonth, 10);
@@ -176,6 +189,7 @@ function toFormState(item: RecurringItem): FormState {
     anchorDate: freq === "onetime" ? "" : item.anchorDate ?? "",
     oneTimeDate: freq === "onetime" ? item.anchorDate ?? "" : "",
     active: isActive(item),
+    categoryId: item.categoryId ?? "",
   };
 }
 
@@ -246,6 +260,10 @@ export default function BillsPage() {
   const createItem = useCreateRecurringItem();
   const updateItem = useUpdateRecurringItem();
   const deleteItem = useDeleteRecurringItem();
+  // (#690) Budget categories drive the Category picker in the
+  // Add/Edit dialog so users can link a new or existing bill to the
+  // envelope it should roll up into on the Budget page.
+  const { data: categories } = useListCategories();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<RecurringItem | null>(null);
@@ -334,6 +352,11 @@ export default function BillsPage() {
       active: nextActive ? "true" : "false",
       dayOfMonth: item.dayOfMonth ?? null,
       anchorDate: item.anchorDate ?? null,
+      // (#690) Preserve the Budget-category and debt linkage when
+      // pausing/resuming an item — otherwise toggling would silently
+      // unlink the bill from its envelope (and from any backing debt).
+      categoryId: item.categoryId ?? null,
+      debtId: item.debtId ?? null,
     };
     updateItem.mutate(
       { id: item.id, data: payload },
@@ -725,7 +748,16 @@ export default function BillsPage() {
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setForm((f) => ({ ...f, kind: "income" }))}
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    kind: "income",
+                    // (#690) Clear any previously chosen expense category
+                    // so we never persist a mismatched category_id when
+                    // the user flips the bill kind after picking one.
+                    categoryId: "",
+                  }))
+                }
                 className={`px-3 py-2 rounded-md border text-sm font-medium flex items-center justify-center gap-2 transition-colors ${form.kind === "income" ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-border text-muted-foreground hover:bg-muted"}`}
                 data-testid="toggle-income"
               >
@@ -733,7 +765,16 @@ export default function BillsPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setForm((f) => ({ ...f, kind: "bill" }))}
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    kind: "bill",
+                    // (#690) Same guard as the Income button — drop any
+                    // income-side category selection when flipping to a
+                    // bill so buildPayload can't ship a mismatched id.
+                    categoryId: "",
+                  }))
+                }
                 className={`px-3 py-2 rounded-md border text-sm font-medium flex items-center justify-center gap-2 transition-colors ${form.kind === "bill" ? "border-rose-600 bg-rose-50 text-rose-800" : "border-border text-muted-foreground hover:bg-muted"}`}
                 data-testid="toggle-bill"
               >
@@ -829,6 +870,94 @@ export default function BillsPage() {
                 />
               </div>
             )}
+
+            {/* (#690) Category picker — links this bill/income item to a
+                Budget envelope. The Budget page's bill-rollup sums every
+                active recurring item linked to a category into that
+                envelope's planned amount. Options are filtered by kind
+                (income ↔ expense) and grouped by their Budget group so
+                the list reads the same as on the Budget page. */}
+            {(() => {
+              const wantKind = form.kind === "income" ? "income" : "expense";
+              const eligible = (categories ?? []).filter(
+                (c) => c.kind === wantKind && !c.excludeFromBudget,
+              );
+              const grouped = new Map<string, typeof eligible>();
+              for (const c of eligible) {
+                const arr = grouped.get(c.groupName) ?? [];
+                arr.push(c);
+                grouped.set(c.groupName, arr);
+              }
+              for (const arr of grouped.values()) {
+                arr.sort(
+                  (a, b) =>
+                    a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+                );
+              }
+              // Bills auto-linked to a debt take their Budget category
+              // from the debt's matched "Debt — Minimum Payments" row,
+              // not from this picker. Keep the dropdown visible (so the
+              // user sees what's wired) but read-only with a hint.
+              const debtLinked = !!editing?.debtId;
+              return (
+                <div className="space-y-2">
+                  <Label htmlFor="bill-category">Category</Label>
+                  <Select
+                    value={form.categoryId ? form.categoryId : NO_CATEGORY}
+                    onValueChange={(v) =>
+                      setForm((f) => ({
+                        ...f,
+                        categoryId: v === NO_CATEGORY ? "" : v,
+                      }))
+                    }
+                    disabled={debtLinked}
+                  >
+                    <SelectTrigger
+                      id="bill-category"
+                      data-testid="select-category"
+                    >
+                      <SelectValue placeholder="— None —" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        value={NO_CATEGORY}
+                        data-testid="select-category-none"
+                      >
+                        — None —
+                      </SelectItem>
+                      {Array.from(grouped.entries()).map(([groupName, cats]) => (
+                        <div key={groupName}>
+                          <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                            {groupName}
+                          </div>
+                          {cats.map((c) => (
+                            <SelectItem
+                              key={c.id}
+                              value={c.id}
+                              data-testid={`select-category-option-${c.id}`}
+                            >
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {debtLinked ? (
+                    <p className="text-xs text-muted-foreground">
+                      Linked to a debt — its category comes from the
+                      matching Debt — Minimum Payments row on the Budget
+                      page.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Optional. Pick an envelope to roll this item into
+                      on the Budget page.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             <label className="flex items-center gap-2 text-sm">
               <input
