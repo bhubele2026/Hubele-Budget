@@ -2136,6 +2136,48 @@ export default function ForecastPage({
     );
   };
 
+  // (#685) Skip a past-due dragging plan straight from the summary card.
+  // Mirrors `onSkipFromBucket` but takes the lightweight row shape used by
+  // the dragging-plans summary so we don't have to synthesize a full
+  // BucketEntry. Server filters `skipped` resolutions out of the cash
+  // signal, so the card hides itself once no plans are dragging anymore.
+  const onSkipDraggingPlan = (row: {
+    itemId: string;
+    label: string;
+    originalDate: string;
+    effectiveDate: string;
+  }) => {
+    if (!row.itemId || !row.originalDate) return;
+    upsertResolution.mutate(
+      {
+        data: {
+          status: "skipped",
+          recurringItemId: row.itemId,
+          occurrenceDate: row.originalDate,
+        },
+      },
+      {
+        onSuccess: (created: { id?: string } | undefined) => {
+          invalidate();
+          const newId = created?.id;
+          toast({
+            title: "Skipped",
+            description: `${row.label || "Occurrence"} · ${formatDate(row.originalDate)}`,
+            action: newId ? (
+              <ToastAction
+                altText="Undo skip"
+                onClick={() => onUndo(newId)}
+                data-testid="toast-undo-skip-dragging"
+              >
+                Undo
+              </ToastAction>
+            ) : undefined,
+          });
+        },
+      },
+    );
+  };
+
   const onUndo = (resolutionId: string) => {
     deleteResolution.mutate(
       { id: resolutionId },
@@ -2753,33 +2795,115 @@ export default function ForecastPage({
               className="divide-y divide-amber-200 dark:divide-amber-900 rounded-md border border-amber-200 dark:border-amber-900 bg-background"
               data-testid="dragging-plans-list"
             >
-              {draggingPlans.map((row) => (
-                <li
-                  key={`${row.itemId}|${row.originalDate}`}
-                  data-testid={`dragging-plan-${row.itemId}-${row.originalDate}`}
-                >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      jumpToPlan(row.itemId, row.originalDate)
-                    }
-                    className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-amber-50 dark:hover:bg-amber-950/30 focus-visible:bg-amber-50 dark:focus-visible:bg-amber-950/30 outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                    title={`Jump to ${row.label} in the planned-items register`}
+              {draggingPlans.map((row) => {
+                const planLine: PlanLine = {
+                  kind: "plan",
+                  date: row.effectiveDate,
+                  itemId: row.itemId,
+                  label: row.label,
+                  amount: row.amount,
+                  status: "pending_plan",
+                  originalDate: row.originalDate,
+                };
+                return (
+                  <li
+                    key={`${row.itemId}|${row.originalDate}`}
+                    data-testid={`dragging-plan-${row.itemId}-${row.originalDate}`}
+                    className="flex items-center justify-between gap-3 px-3 py-2 flex-wrap"
                   >
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">
-                        {row.label}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        jumpToPlan(row.itemId, row.originalDate)
+                      }
+                      className="flex items-center justify-between gap-3 flex-1 min-w-0 text-left hover:bg-amber-50 dark:hover:bg-amber-950/30 focus-visible:bg-amber-50 dark:focus-visible:bg-amber-950/30 rounded-sm -mx-1 px-1 py-1 outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                      title={`Jump to ${row.label} in the planned-items register`}
+                      data-testid={`dragging-plan-jump-${row.itemId}-${row.originalDate}`}
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">
+                          {row.label}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Originally due {formatDate(row.originalDate)}
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Originally due {formatDate(row.originalDate)}
-                      </div>
+                      <span className="text-sm font-medium tabular-nums text-destructive">
+                        {formatCurrency(row.amount)}
+                      </span>
+                    </button>
+                    <div
+                      className="flex items-center gap-1.5 flex-wrap"
+                      data-testid={`dragging-plan-actions-${row.itemId}-${row.originalDate}`}
+                    >
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={upsertResolution.isPending}
+                        onClick={() => onMarkMissed(planLine)}
+                        data-testid={`dragging-plan-mark-missed-${row.itemId}-${row.originalDate}`}
+                        title="Mark this past-due plan as missed"
+                      >
+                        Mark missed
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={upsertResolution.isPending}
+                        onClick={() => onSkipDraggingPlan(row)}
+                        data-testid={`dragging-plan-skip-${row.itemId}-${row.originalDate}`}
+                        title="Skip this occurrence — it won't drag the projection"
+                      >
+                        Skip
+                      </Button>
+                      <Select
+                        onValueChange={(v) => {
+                          const card = bankInbox.find(
+                            (c) => c.bank.txn.id === v,
+                          );
+                          if (card)
+                            matchInboxToPlan(card.bank.txn.id, planLine);
+                        }}
+                        disabled={
+                          upsertResolution.isPending || bankInbox.length === 0
+                        }
+                      >
+                        <SelectTrigger
+                          className="h-7 w-[170px] text-xs"
+                          data-testid={`dragging-plan-match-trigger-${row.itemId}-${row.originalDate}`}
+                          title={
+                            bankInbox.length === 0
+                              ? "No pending bank transactions to match"
+                              : "Match this plan to a pending bank transaction"
+                          }
+                        >
+                          <SelectValue placeholder="Mark matched to…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {bankInbox.length === 0 && (
+                            <div className="px-2 py-1 text-xs text-muted-foreground">
+                              No pending bank txns
+                            </div>
+                          )}
+                          {bankInbox.map((c) => (
+                            <SelectItem
+                              key={c.bank.txn.id}
+                              value={c.bank.txn.id}
+                              data-testid={`dragging-plan-match-option-${row.itemId}-${row.originalDate}-${c.bank.txn.id}`}
+                            >
+                              {c.bank.txn.description} ·{" "}
+                              {formatDate(c.bank.date)} ·{" "}
+                              {formatCurrency(c.bank.amount)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <span className="text-sm font-medium tabular-nums text-destructive">
-                      {formatCurrency(row.amount)}
-                    </span>
-                  </button>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           </CardContent>
         </Card>
