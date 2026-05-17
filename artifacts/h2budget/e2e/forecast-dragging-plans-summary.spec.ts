@@ -175,7 +175,12 @@ test.describe("Forecast past-due plans summary card (#686)", () => {
     );
     await expect(planRow).toHaveCount(1, { timeout: 10_000 });
 
-    await row.locator("button").click();
+    // The row hosts several action buttons (jump, mark-missed, skip,
+    // match-trigger). Click the explicit "jump" button rather than the
+    // generic locator so the deep-link assertion targets the right one.
+    await page
+      .getByTestId(`dragging-plan-jump-${item.id}-${pastISO}`)
+      .click();
 
     // The page calls scrollIntoView inside a requestAnimationFrame, so
     // give the smooth-scroll a beat before asserting the row is in view.
