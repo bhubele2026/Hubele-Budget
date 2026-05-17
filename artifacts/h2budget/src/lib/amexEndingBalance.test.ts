@@ -96,6 +96,115 @@ describe("(#689) resolveAmexDebt excludes Amex installment LOAN debts", () => {
     expect(got!.balance).toBe("742.18");
   });
 
+  it("(round 3) excludes a manually entered 'Amex Loan' even when `type` is empty", () => {
+    // Real production row that defeated round 2 of this fix:
+    //   {name: "Amex Loan", balance: 20000.00, type: ""}
+    // No Plaid link, no `type`, so the type-based filter was no help —
+    // the name regex `/amex/i` matched and fed $20,000 into the
+    // dashboard Amex Ending Balance tile.
+    const debts: AmexDebtLike[] = [
+      {
+        name: "Amex Loan",
+        balance: "20000.00",
+        plaidAccountId: null,
+        lastBalanceUpdate: "2026-05-15T00:00:00.000Z",
+        plaidLastSyncedAt: null,
+        type: "",
+      },
+    ];
+    const got = resolveAmexDebt({
+      debts,
+      amexPlaidAccountIds: new Set<string>(),
+      plaidItemsForScope: [],
+    });
+    expect(got).toBeNull();
+  });
+
+  it("(round 3) excludes installment-name variants with empty/null type", () => {
+    for (const name of [
+      "Amex Pay Over Time",
+      "Amex Plan-It",
+      "Amex Plan It",
+      "Amex Installment Loan",
+      "American Express Installment",
+    ]) {
+      const debts: AmexDebtLike[] = [
+        {
+          name,
+          balance: "5000.00",
+          plaidAccountId: null,
+          lastBalanceUpdate: "2026-05-15T00:00:00.000Z",
+          plaidLastSyncedAt: null,
+          // No `type` — manual entry.
+        },
+      ];
+      const got = resolveAmexDebt({
+        debts,
+        amexPlaidAccountIds: new Set<string>(),
+        plaidItemsForScope: [],
+      });
+      expect(got, `expected null for name="${name}"`).toBeNull();
+    }
+  });
+
+  it("(round 3) still resolves legitimate Amex credit-card names", () => {
+    for (const name of [
+      "Amex",
+      "Amex Platinum",
+      "Amex Gold",
+      "Amex Blue Cash",
+      "Amex Blue Cash Everyday",
+      "American Express Gold",
+      "American Express Platinum",
+    ]) {
+      const debts: AmexDebtLike[] = [
+        {
+          name,
+          balance: "742.18",
+          plaidAccountId: null,
+          lastBalanceUpdate: "2026-05-15T00:00:00.000Z",
+          plaidLastSyncedAt: null,
+        },
+      ];
+      const got = resolveAmexDebt({
+        debts,
+        amexPlaidAccountIds: new Set<string>(),
+        plaidItemsForScope: [],
+      });
+      expect(got, `expected match for name="${name}"`).not.toBeNull();
+      expect(got!.balance).toBe("742.18");
+    }
+  });
+
+  it("(round 3) returns the credit card from a mixed list (one loan + one card, both manual)", () => {
+    const debts: AmexDebtLike[] = [
+      {
+        name: "Amex Loan",
+        balance: "20000.00",
+        plaidAccountId: null,
+        lastBalanceUpdate: "2026-05-15T00:00:00.000Z",
+        plaidLastSyncedAt: null,
+        type: "",
+      },
+      {
+        name: "Amex Platinum",
+        balance: "742.18",
+        plaidAccountId: null,
+        lastBalanceUpdate: "2026-05-15T00:00:00.000Z",
+        plaidLastSyncedAt: null,
+        // No type — also a manual entry, just not a loan.
+      },
+    ];
+    const got = resolveAmexDebt({
+      debts,
+      amexPlaidAccountIds: new Set<string>(),
+      plaidItemsForScope: [],
+    });
+    expect(got).not.toBeNull();
+    expect(got!.name).toBe("Amex Platinum");
+    expect(got!.balance).toBe("742.18");
+  });
+
   it("treats unknown/missing `type` as a credit card (legacy / manual debts still resolve)", () => {
     const debts: AmexDebtLike[] = [
       {

@@ -67,6 +67,16 @@ export type AmexPlaidItemLike = {
 
 const AMEX_NAME_REGEX = /amex|american\s*express/i;
 
+// (#689 round 3) Names that clearly identify an Amex *loan* product
+// rather than the revolving credit card. Used by `resolveAmexDebt` to
+// keep manually entered loan debts out of the Amex card resolver,
+// matching the real user case `{name: "Amex Loan", type: ""}` whose
+// $20,000 balance kept showing up in the Amex Ending Balance tile.
+// Covers Amex's installment products by name: "Plan-It" / "Plan It",
+// "Pay Over Time", "installment", and the generic word "loan".
+const AMEX_LOAN_NAME_REGEX =
+  /\bloan\b|\bplan[\s-]?it\b|\bpay\s+over\s+time\b|\binstallment\b/i;
+
 function parseSignedAmount(amount: string): number {
   return parseFloat(amount) || 0;
 }
@@ -99,18 +109,28 @@ export function resolveAmexDebt<T extends AmexDebtLike>(args: {
   const { debts, amexPlaidAccountIds, plaidItemsForScope } = args;
   if (!debts || debts.length === 0) return null;
   // (#689) Pre-filter out Amex installment / Pay-Over-Time / "Plan-It"
-  // LOAN sub-accounts before any matching. These are synced into the
-  // debts table with `type='loan'` (server side: routes/debts.ts sets
-  // `type: acct.type` from the Plaid account). They share the "Amex"
+  // LOAN sub-accounts before any matching. These share the "Amex"
   // name and even the same Plaid login as the credit card, so without
   // this filter a $20,000 loan balance can be reported as the user's
   // Amex card "Ending Balance" tile. The Amex page is specifically
   // about the revolving credit card; loans belong on /debts.
+  //
+  // Two-pronged exclusion:
+  //  1. `type === 'loan'` — catches Plaid-synced loan sub-accounts.
+  //     The server (routes/debts.ts) copies `acct.type` into the
+  //     debts row when a Plaid account is auto-linked.
+  //  2. Name match against `AMEX_LOAN_NAME_REGEX` — catches manually
+  //     entered debts (no Plaid link, `type` empty/null) like the
+  //     real user row `{name: "Amex Loan", balance: 20000, type: ""}`
+  //     that slipped past round 2 of this fix. Patterns covered:
+  //     "loan", "plan-it"/"plan it", "pay over time", "installment".
+  //     This intentionally never matches plain "Amex", "Amex
+  //     Platinum", "Amex Blue Cash", "American Express Gold", etc.
   const creditCardDebts = debts.filter((d) => {
     const t = (d.type ?? "").toLowerCase();
-    // Treat unknown/empty type as credit (legacy / manual debts have
-    // no Plaid type cached). Only exclude when we *know* it's a loan.
-    return t !== "loan";
+    if (t === "loan") return false;
+    if (AMEX_LOAN_NAME_REGEX.test(d.name)) return false;
+    return true;
   });
   if (creditCardDebts.length === 0) return null;
   let matches: T[] = [];
