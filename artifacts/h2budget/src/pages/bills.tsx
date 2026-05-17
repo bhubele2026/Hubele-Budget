@@ -20,6 +20,7 @@ import {
   type BillsSummaryRow,
   type BillsDebtMinRow,
   type Category,
+  type Debt,
 } from "@workspace/api-client-react";
 import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
 import { formatBillRowAmount } from "@/lib/billsRowAmount";
@@ -299,14 +300,45 @@ export default function BillsPage() {
     });
   };
 
+  // (#691) When the user clicks the "No category" chip on a bill row,
+  // we open the edit modal and want to drop them right at the Category
+  // picker (scroll it into view + focus its trigger). A simple flag
+  // consumed by a post-mount effect inside the dialog is enough — we
+  // clear it as soon as it's been applied so subsequent opens don't
+  // re-focus the picker unexpectedly.
+  const [focusCategoryOnOpen, setFocusCategoryOnOpen] = useState(false);
+
+  // (#691) After the edit dialog mounts with focusCategoryOnOpen set
+  // (i.e. the user clicked the "No category" chip), wait a tick for
+  // the dialog's enter animation to commit so the trigger is actually
+  // in the DOM, then scroll the Category select into view and focus
+  // it. Cleared via the `if (!open) setFocusCategoryOnOpen(false)`
+  // branch on the Dialog's onOpenChange.
+  useEffect(() => {
+    if (!dialogOpen || !focusCategoryOnOpen) return;
+    const t = window.setTimeout(() => {
+      const el = document.getElementById("bill-category");
+      if (el) {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        (el as HTMLElement).focus();
+      }
+      setFocusCategoryOnOpen(false);
+    }, 50);
+    return () => window.clearTimeout(t);
+  }, [dialogOpen, focusCategoryOnOpen]);
+
   const openNew = () => {
     setEditing(null);
     setForm({ ...DEFAULT_FORM });
     setDialogOpen(true);
   };
-  const openEdit = (item: RecurringItem) => {
+  const openEdit = (
+    item: RecurringItem,
+    opts?: { focus?: "category" },
+  ) => {
     setEditing(item);
     setForm(toFormState(item));
+    setFocusCategoryOnOpen(opts?.focus === "category");
     setDialogOpen(true);
   };
 
@@ -574,6 +606,7 @@ export default function BillsPage() {
             onDeleteRow={onDeleteRow}
             togglingId={updateItem.isPending ? togglingId : null}
             categories={categories ?? []}
+            debts={debts ?? []}
           />
           <BillGroupCard
             title="Bills & Expenses"
@@ -585,6 +618,7 @@ export default function BillsPage() {
             onDeleteRow={onDeleteRow}
             togglingId={updateItem.isPending ? togglingId : null}
             categories={categories ?? []}
+            debts={debts ?? []}
           />
           {debtMinRows.length > 0 ? (
             <DebtMinimumsCard
@@ -749,7 +783,16 @@ export default function BillsPage() {
         </div>
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          // (#691) Clear the focus-on-open intent whenever the dialog
+          // closes so the next plain "edit" doesn't auto-focus the
+          // Category picker out of context.
+          if (!open) setFocusCategoryOnOpen(false);
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
@@ -1072,30 +1115,33 @@ function BillGroupCard({
   onDeleteRow,
   togglingId,
   categories,
+  debts,
 }: {
   title: string;
   total: number;
   tone: "income" | "bill";
   rows: BillsSummaryRow[];
-  onEdit: (item: RecurringItem) => void;
+  onEdit: (item: RecurringItem, opts?: { focus?: "category" }) => void;
   onToggleActive: (item: RecurringItem) => void;
   onDeleteRow: (item: RecurringItem) => void;
   togglingId: string | null;
-  // (#691) Used to render a tiny "Category: X" chip on each row so
-  // the bill→budget envelope wiring is visible at a glance. We pass
-  // the full categories list (not just a map) so the chip can show
-  // both the category name and its parent group for context.
   categories: Category[];
+  debts: Debt[];
 }) {
-  // (#691) Build a fast id→category lookup once per render. Rows
-  // without a categoryId, or whose categoryId points at a deleted
-  // category (stale link after a category was removed), simply skip
-  // the chip — never crash.
+  // (#691) Index categories/debts by id so each row can resolve its
+  // chip in O(1) instead of scanning the list per render. Rows whose
+  // categoryId points at a deleted category (stale link after the
+  // category was removed) simply skip the chip — never crash.
   const categoryById = useMemo(() => {
     const m = new Map<string, Category>();
     for (const c of categories) m.set(c.id, c);
     return m;
   }, [categories]);
+  const debtById = useMemo(() => {
+    const m = new Map<string, Debt>();
+    for (const d of debts) m.set(d.id, d);
+    return m;
+  }, [debts]);
   const Icon = tone === "income" ? ArrowUpCircle : ArrowDownCircle;
   const tint = tone === "income" ? "text-emerald-700" : "text-destructive";
   const tintBg = tone === "income" ? "bg-emerald-50" : "bg-rose-50";
@@ -1136,6 +1182,18 @@ function BillGroupCard({
             {rows.map(({ item, nextOccurrence, monthlyAmount, actualAmount }) => {
               const pill = formatDatePill(nextOccurrence);
               const active = isActive(item);
+              // (#691) Resolve the chip shown under the row name so users
+              // can see at a glance which Budget envelope this item feeds.
+              // Debt-linked bills are driven by the Debt Tracker (their
+              // category comes from the matching Debt — Minimum Payments
+              // row), so we mark them with a lock + the debt's name.
+              // Plain categorized bills show "Group · Name". Uncategorized
+              // bills surface a muted "No category" hint that opens the
+              // edit modal so the wiring is one click away.
+              const linkedDebt = item.debtId ? debtById.get(item.debtId) : null;
+              const linkedCategory = item.categoryId
+                ? categoryById.get(item.categoryId)
+                : null;
               const amt = Number(monthlyAmount) || 0;
               const actual = Number(actualAmount) || 0;
               // (#413) Display the per-event amount the user entered (e.g.
@@ -1187,29 +1245,44 @@ function BillGroupCard({
                     <div className={`text-sm font-medium truncate ${active ? "text-foreground" : "line-through"}`}>
                       {item.name}
                     </div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
-                      <span>{metaLine(item)}</span>
-                      {!active ? <span>· paused</span> : null}
-                      {/* (#691) Category chip — visible only when the bill is
-                          linked to a budget envelope. Shows the destination
-                          category so the bill→budget wiring is obvious from
-                          the list without opening the edit modal. Quietly
-                          omitted for unlinked bills and stale categoryIds. */}
-                      {(() => {
-                        const cat = item.categoryId
-                          ? categoryById.get(item.categoryId)
-                          : undefined;
-                        if (!cat) return null;
-                        return (
-                          <span
-                            className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-border bg-muted/40 text-[10px] font-medium text-foreground/80"
-                            title={`Linked to ${cat.groupName} → ${cat.name}`}
-                            data-testid={`chip-category-${item.id}`}
-                          >
-                            {cat.name}
-                          </span>
-                        );
-                      })()}
+                    <div className="text-xs text-muted-foreground">
+                      {metaLine(item)}
+                      {!active ? " · paused" : ""}
+                    </div>
+                    {/* (#691) Category chip — exposes the bill's Budget
+                        wiring on the list itself so users don't have to
+                        open the edit modal to see (or fix) it. */}
+                    <div className="mt-1">
+                      {linkedDebt ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                          title="Managed by the Debt Tracker — category comes from the matching Debt — Minimum Payments row."
+                          data-testid={`chip-category-${item.id}`}
+                        >
+                          <Lock className="w-3 h-3" aria-hidden />
+                          Debt · {linkedDebt.name}
+                        </span>
+                      ) : linkedCategory ? (
+                        <span
+                          className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                          data-testid={`chip-category-${item.id}`}
+                        >
+                          {linkedCategory.groupName} · {linkedCategory.name}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="inline-flex items-center rounded-full border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-foreground/40"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEdit(item, { focus: "category" });
+                          }}
+                          title="Link this bill to a Budget category"
+                          data-testid={`chip-category-none-${item.id}`}
+                        >
+                          No category
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-0.5">
