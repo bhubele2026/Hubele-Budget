@@ -673,7 +673,14 @@ export async function syncPlaidItem(
         // transactions_refresh add-on, Plaid returns INVALID_PRODUCT.
         // Stamp the item so subsequent syncs short-circuit above
         // rather than retrying the same doomed call every click.
-        if (refreshExtracted.code === "INVALID_PRODUCT") {
+        // Narrow to the specific "transactions_refresh add-on not
+        // enabled" case so unrelated INVALID_PRODUCT errors (e.g. an
+        // assets-only token someone routed here) don't get
+        // misclassified as a permanently-disabled refresh.
+        if (
+          refreshExtracted.code === "INVALID_PRODUCT" &&
+          /transactions_refresh/i.test(refreshExtracted.message ?? "")
+        ) {
           try {
             await db
               .update(plaidItemsTable)
@@ -1526,6 +1533,7 @@ export async function syncPlaidItem(
     // same backfill so we never double-call /transactions/get.
     if (
       syncOrigin === "manual" &&
+      forceRefresh &&
       !wasUnhealthy &&
       added.length === 0 &&
       modified.length === 0 &&
