@@ -2448,6 +2448,7 @@ export const ExchangePlaidPublicTokenResponse = zod.object({
   consentWarningDismissedForCutoff: zod.string().nullish(),
   errorKind: zod.string().nullish(),
   lastBankTxOn: zod.string().nullish(),
+  refreshProductDisabledAt: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),
@@ -2486,6 +2487,7 @@ export const ListPlaidItemsResponseItem = zod.object({
   consentWarningDismissedForCutoff: zod.string().nullish(),
   errorKind: zod.string().nullish(),
   lastBankTxOn: zod.string().nullish(),
+  refreshProductDisabledAt: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),
@@ -2501,6 +2503,59 @@ export const ListPlaidItemsResponseItem = zod.object({
   ),
 });
 export const ListPlaidItemsResponse = zod.array(ListPlaidItemsResponseItem);
+
+/**
+ * @summary (#725) Clear the `refreshProductDisabledAt` short-circuit stamp
+on a single Plaid item so the next manual Sync actually calls
+/transactions/refresh. Surfaced as a "Re-enable refresh" link
+on the Settings bank tile after a user enables the
+`transactions_refresh` add-on on their Plaid Dashboard.
+Idempotent — returns the refreshed PlaidItemDetail with
+`refreshProductDisabledAt: null`.
+
+ */
+export const ClearPlaidItemRefreshDisabledParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ClearPlaidItemRefreshDisabledResponse = zod.object({
+  id: zod.string(),
+  itemId: zod.string(),
+  institutionId: zod.string().nullish(),
+  institutionName: zod.string().nullish(),
+  institutionSlug: zod.string(),
+  lastSyncedAt: zod.string().nullish(),
+  lastSyncError: zod.string().nullish(),
+  lastSyncErrorCode: zod
+    .string()
+    .nullish()
+    .describe(
+      'Plaid\'s structured `error_code` from the most recent failed\nsync (e.g. ITEM_LOGIN_REQUIRED, INVALID_CREDENTIALS,\nPENDING_EXPIRATION). Null when sync is healthy or when the\nprevious failure had no structured code. Used by the UI to\ndecide when to surface the \"Reconnect\" button next to the\nsync chip.\n',
+    ),
+  stillPreparing: zod.boolean().optional(),
+  stillPreparingSince: zod.string().nullish(),
+  consentExpirationAt: zod.string().nullish(),
+  consentExpirationLastRefreshedAt: zod.string().nullish(),
+  consentExpirationLastRefreshError: zod.string().nullish(),
+  consentExpirationLastRefreshErrorCode: zod.string().nullish(),
+  consentWarningDismissedForCutoff: zod.string().nullish(),
+  errorKind: zod.string().nullish(),
+  lastBankTxOn: zod.string().nullish(),
+  refreshProductDisabledAt: zod.string().nullish(),
+  accounts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      name: zod.string().nullish(),
+      officialName: zod.string().nullish(),
+      mask: zod.string().nullish(),
+      type: zod.string().nullish(),
+      subtype: zod.string().nullish(),
+      importCutoffDate: zod.string().nullish(),
+      firstSyncCompletedAt: zod.string().nullish(),
+    }),
+  ),
+});
 
 export const DeletePlaidItemParams = zod.object({
   id: zod.coerce.string(),
@@ -2605,6 +2660,7 @@ export const DismissPlaidExpirationWarningResponse = zod.object({
   consentWarningDismissedForCutoff: zod.string().nullish(),
   errorKind: zod.string().nullish(),
   lastBankTxOn: zod.string().nullish(),
+  refreshProductDisabledAt: zod.string().nullish(),
   accounts: zod.array(
     zod.object({
       id: zod.string(),

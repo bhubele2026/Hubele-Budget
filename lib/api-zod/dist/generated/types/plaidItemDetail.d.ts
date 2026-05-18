@@ -46,6 +46,8 @@ export interface PlaidItemDetail {
     errorKind?: string | null;
     /** @nullable */
     lastBankTxOn?: string | null;
+    /** @nullable */
+    refreshProductDisabledAt?: string | null;
     accounts: PlaidAccount[];
 }
 //# sourceMappingURL=plaidItemDetail.d.ts.map

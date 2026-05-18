@@ -7,6 +7,7 @@ import {
   getListDashboardBudgetsQueryKey,
   useListPlaidItems,
   useDeletePlaidItem,
+  useClearPlaidItemRefreshDisabled,
   useGetPlaidEnvironment,
   useCleanupNonProdPlaidItems,
   getGetPlaidEnvironmentQueryKey,
@@ -119,6 +120,13 @@ export default function SettingsPage() {
     return () => window.clearInterval(id);
   }, [hasPreparingItem]);
   const deletePlaidItem = useDeletePlaidItem();
+  // (#725) Per-item "Re-enable refresh" link on the bank tile. Clears
+  // the server-side `refreshProductDisabledAt` short-circuit stamp so
+  // the next Sync click actually calls /transactions/refresh — used
+  // when the user just enabled the `transactions_refresh` add-on on
+  // their Plaid Dashboard and doesn't want to wait for the 7-day
+  // auto-retry window to elapse.
+  const clearRefreshDisabled = useClearPlaidItemRefreshDisabled();
   const refreshConsentExpirations = useRefreshPlaidConsentExpirations();
   const dedupeTransactions = useDedupeTransactions();
   // (#470) Read-only count powering the "N duplicates found" badge
@@ -868,6 +876,53 @@ export default function SettingsPage() {
                           data-testid={`text-last-sync-error-${item.id}`}
                         >
                           {formatPlaidErrorForDisplay(item.lastSyncError)}
+                        </div>
+                      )}
+                      {/* (#725) Surface a "Re-enable refresh" link when
+                          the server has the INVALID_PRODUCT short-circuit
+                          stamp set on this item. Clicking it clears the
+                          stamp + immediately triggers a Sync so the user
+                          gets confirmation in one click. The server-side
+                          self-heal also clears the stamp on the first
+                          successful refresh, so this link is the explicit
+                          user-driven escape hatch when the user has just
+                          enabled the `transactions_refresh` add-on. */}
+                      {item.refreshProductDisabledAt && (
+                        <div
+                          className="text-xs text-muted-foreground mt-1"
+                          data-testid={`text-refresh-disabled-${item.id}`}
+                        >
+                          Real-time refresh is paused for this bank.{" "}
+                          <button
+                            type="button"
+                            className="underline text-primary hover:no-underline disabled:opacity-50"
+                            disabled={
+                              clearRefreshDisabled.isPending || isAnySyncing
+                            }
+                            data-testid={`button-reenable-refresh-${item.id}`}
+                            onClick={async () => {
+                              try {
+                                await clearRefreshDisabled.mutateAsync({
+                                  id: item.id,
+                                });
+                                await queryClient.invalidateQueries({
+                                  queryKey: getListPlaidItemsQueryKey(),
+                                });
+                                await handleSync(item.id);
+                              } catch (e) {
+                                toast({
+                                  title: "Couldn't re-enable refresh",
+                                  description:
+                                    e instanceof Error
+                                      ? e.message
+                                      : "Try again in a moment.",
+                                  variant: "destructive",
+                                });
+                              }
+                            }}
+                          >
+                            Re-enable refresh
+                          </button>
                         </div>
                       )}
                       {/* (#265) Latest /item/get failure captured during the

@@ -346,6 +346,125 @@ describe("(#665) /transactions/refresh on user-triggered Sync", () => {
     expect(result.refreshDisabledReason).toMatch(/transactions_refresh/i);
   });
 
+  // (#725) Companion self-heal: once Plaid approves the
+  // `transactions_refresh` add-on, the next successful refresh call
+  // must clear any stale `refreshProductDisabledAt` stamp so a future
+  // add-on toggle never leaves items stranded for the full 7-day
+  // auto-retry window. Without this, the user would have to wait up
+  // to a week after Plaid's approval email before Sync started
+  // pulling live data — exactly the gap we hit on 2026-05-18.
+  it("(#725) clears refreshProductDisabledAt automatically after a successful refresh", async () => {
+    const { itemRowId, externalAcctId } = await seedHealthyChase();
+    // Pre-stamp the item as if a prior INVALID_PRODUCT had set it,
+    // but place it far enough in the past that the 7-day short-circuit
+    // does NOT block this call (so the refresh actually fires and the
+    // self-heal path executes).
+    const stalePast = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    await db
+      .update(plaidItemsTable)
+      .set({ refreshProductDisabledAt: stalePast })
+      .where(eq(plaidItemsTable.id, itemRowId));
+    nextSyncResponse = {
+      added: [
+        {
+          transaction_id: "plaid-posted-after-reenable",
+          account_id: externalAcctId,
+          date: "2026-05-18",
+          amount: -42,
+          name: "Kwik Trip",
+        },
+      ],
+      modified: [],
+      removed: [],
+    };
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      forceRefresh: true,
+      syncOrigin: "manual",
+    });
+
+    expect(refreshCalls.length).toBe(1);
+    // syncCalls count is poll-loop dependent and the same #724-tracked
+    // flake the pre-existing refresh-before-sync test trips on; the
+    // self-heal contract only cares that refresh fired and the stamp
+    // got cleared.
+    expect(syncCalls.length).toBeGreaterThanOrEqual(1);
+    expect(result.refreshAttempted).toBe(true);
+    expect(result.refreshDisabledReason).toBeNull();
+    const [persisted] = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    expect(persisted!.refreshProductDisabledAt).toBeNull();
+  });
+
+  // (#725) Manual "Re-enable refresh" button: POST
+  // /plaid/items/:id/clear-refresh-disabled clears the stamp and
+  // returns the refreshed item — same idempotency guarantees as the
+  // other admin-style item routes.
+  it("(#725) POST /plaid/items/:id/clear-refresh-disabled nulls the stamp", async () => {
+    const { itemRowId } = await seedHealthyChase();
+    await db
+      .update(plaidItemsTable)
+      .set({ refreshProductDisabledAt: new Date() })
+      .where(eq(plaidItemsTable.id, itemRowId));
+
+    const resp = await fetch(
+      `${baseUrl}/plaid/items/${itemRowId}/clear-refresh-disabled`,
+      { method: "POST" },
+    );
+    expect(resp.status).toBe(200);
+    const body = (await resp.json()) as {
+      id: string;
+      refreshProductDisabledAt: string | null;
+    };
+    expect(body.id).toBe(itemRowId);
+    expect(body.refreshProductDisabledAt).toBeNull();
+
+    const [persisted] = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    expect(persisted!.refreshProductDisabledAt).toBeNull();
+  });
+
+  // (#725) Cross-household isolation: the new clear-refresh-disabled
+  // route must 404 (not silently mutate someone else's item) when a
+  // user attempts to target a plaidItem belonging to another
+  // household. Guards against the classic IDOR shape on a new
+  // mutation surface.
+  it("(#725) POST /plaid/items/:id/clear-refresh-disabled returns 404 for items in another household", async () => {
+    const { itemRowId } = await seedHealthyChase();
+    await db
+      .update(plaidItemsTable)
+      .set({ refreshProductDisabledAt: new Date() })
+      .where(eq(plaidItemsTable.id, itemRowId));
+    // Move the item out from under the test user's household so the
+    // authenticated requireAuth fixture should NOT be able to clear it.
+    // Use createTestHousehold to satisfy the FK constraint on
+    // plaid_items.household_id.
+    const otherOwnerId = `other-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+    const { householdId: foreignHouseholdId } =
+      await createTestHousehold(otherOwnerId);
+    await db
+      .update(plaidItemsTable)
+      .set({ householdId: foreignHouseholdId })
+      .where(eq(plaidItemsTable.id, itemRowId));
+
+    const resp = await fetch(
+      `${baseUrl}/plaid/items/${itemRowId}/clear-refresh-disabled`,
+      { method: "POST" },
+    );
+    expect(resp.status).toBe(404);
+
+    const [persisted] = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    // Stamp must remain set — the cross-household call was rejected.
+    expect(persisted!.refreshProductDisabledAt).not.toBeNull();
+  });
+
   it("still completes sync when /transactions/refresh throws (best-effort)", async () => {
     const { itemRowId, externalAcctId } = await seedHealthyChase();
     refreshShouldThrow = Object.assign(new Error("PRODUCT_NOT_READY"), {

@@ -695,6 +695,34 @@ export async function syncPlaidItem(
           access_token: item.accessToken,
         });
         refreshSucceeded = true;
+        // (#725) Self-heal: a successful /transactions/refresh call
+        // proves the Plaid client now has the `transactions_refresh`
+        // add-on enabled, so any prior INVALID_PRODUCT short-circuit
+        // stamp is stale. Clear it so we never have to run a manual
+        // SQL fix again the next time the add-on flips on (e.g. after
+        // Plaid approves a product-add request mid-week, as just
+        // happened on 2026-05-18).
+        if (item.refreshProductDisabledAt) {
+          try {
+            await db
+              .update(plaidItemsTable)
+              .set({ refreshProductDisabledAt: null })
+              .where(eq(plaidItemsTable.id, itemRowId));
+            logger.info(
+              {
+                userId,
+                itemRowId,
+                plaidItemIdExternal: item.itemId,
+                institutionName: item.institutionName,
+              },
+              "[plaid-sync] cleared stale refreshProductDisabledAt after successful /transactions/refresh",
+            );
+          } catch {
+            // Best-effort — the refresh still ran, so the user's data
+            // is fresh. The next successful refresh will retry the
+            // clear.
+          }
+        }
       } catch (refreshErr) {
         const refreshExtracted = extractPlaidError(refreshErr);
         // (#720) When the institution simply doesn't have the

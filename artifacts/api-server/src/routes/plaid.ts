@@ -1057,6 +1057,15 @@ function serializePlaidItemDetail(
     // copy after a relink heal that backfilled zero rows. Computed by
     // the caller (max occurredOn across this item's accounts).
     lastBankTxOn,
+    // (#725) Exposed so the Settings bank tile can render a
+    // "Re-enable refresh" link when the short-circuit stamp is set
+    // (e.g. after Plaid just approved the `transactions_refresh`
+    // add-on but the in-memory stamp is still blocking calls for up
+    // to 7 days). Click clears the stamp via
+    // POST /plaid/items/{id}/clear-refresh-disabled.
+    refreshProductDisabledAt: it.refreshProductDisabledAt
+      ? it.refreshProductDisabledAt.toISOString()
+      : null,
     consentWarningDismissedForCutoff: it.consentWarningDismissedForCutoff
       ? it.consentWarningDismissedForCutoff.toISOString()
       : null,
@@ -2177,6 +2186,67 @@ router.get(
  * malformed access tokens are rejected (those need different recovery
  * paths — re-link, not cursor reset).
  */
+/**
+ * (#725) Manually clear the `refreshProductDisabledAt` short-circuit
+ * stamp on a Plaid item. Surfaced as a "Re-enable refresh" link on the
+ * Settings bank tile so a user whose Plaid client just had the
+ * `transactions_refresh` add-on enabled (e.g. Plaid approved a product-
+ * add request) can unblock live refresh calls immediately instead of
+ * waiting up to 7 days for the auto-retry window. Idempotent — safe to
+ * click multiple times. The next manual Sync after this call also
+ * self-heals via the auto-clear in `syncPlaidItem`, so this route is
+ * just the explicit user-driven path.
+ */
+router.post(
+  "/plaid/items/:id/clear-refresh-disabled",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const id = String(req.params.id);
+    const [item] = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(
+        and(
+          eq(plaidItemsTable.id, id),
+          eq(plaidItemsTable.householdId, req.householdId!),
+        ),
+      );
+    if (!item) {
+      res.status(404).json({ error: "Plaid item not found" });
+      return;
+    }
+    if (item.refreshProductDisabledAt) {
+      await db
+        .update(plaidItemsTable)
+        .set({ refreshProductDisabledAt: null })
+        .where(eq(plaidItemsTable.id, item.id));
+      req.log.info(
+        {
+          itemRowId: item.id,
+          plaidItemIdExternal: item.itemId,
+          institutionName: item.institutionName,
+        },
+        "[plaid-clear-refresh-disabled] cleared by user from Settings",
+      );
+    }
+    const accts = await db
+      .select()
+      .from(plaidAccountsTable)
+      .where(
+        and(
+          eq(plaidAccountsTable.itemId, item.id),
+          eq(plaidAccountsTable.householdId, req.householdId!),
+        ),
+      );
+    res.json(
+      serializePlaidItemDetail(
+        { ...item, refreshProductDisabledAt: null },
+        accts,
+      ),
+    );
+  },
+);
+
 router.post(
   "/plaid/items/:itemId/reset-cursor",
   requireAuth,

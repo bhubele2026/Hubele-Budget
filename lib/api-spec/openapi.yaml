@@ -1264,6 +1264,31 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/PlaidItemDetail" }
+  /plaid/items/{id}/clear-refresh-disabled:
+    post:
+      operationId: clearPlaidItemRefreshDisabled
+      tags: [plaid]
+      summary: |
+        (#725) Clear the `refreshProductDisabledAt` short-circuit stamp
+        on a single Plaid item so the next manual Sync actually calls
+        /transactions/refresh. Surfaced as a "Re-enable refresh" link
+        on the Settings bank tile after a user enables the
+        `transactions_refresh` add-on on their Plaid Dashboard.
+        Idempotent — returns the refreshed PlaidItemDetail with
+        `refreshProductDisabledAt: null`.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlaidItemDetail" }
+        "404":
+          description: Plaid item not found
   /plaid/items/{id}:
     delete:
       operationId: deletePlaidItem
@@ -3501,6 +3526,16 @@ components:
         # "No new transactions since <date>" copy after a relink heal
         # that backfills zero rows. Null when no rows exist yet.
         lastBankTxOn: { type: ["string", "null"] }
+        # (#725) ISO timestamp of when the server short-circuited live
+        # /transactions/refresh calls for this item after Plaid returned
+        # INVALID_PRODUCT(transactions_refresh). When non-null, the
+        # Settings bank tile surfaces a "Re-enable refresh" link the
+        # user can click to clear the stamp without waiting for the
+        # 7-day auto-retry — used after Plaid approves a previously
+        # missing add-on. Cleared automatically on the next successful
+        # /transactions/refresh call (self-heal), or by an explicit
+        # POST /plaid/items/{id}/clear-refresh-disabled.
+        refreshProductDisabledAt: { type: ["string", "null"] }
         accounts:
           type: array
           items: { $ref: "#/components/schemas/PlaidAccount" }

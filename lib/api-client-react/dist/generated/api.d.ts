@@ -1695,6 +1695,46 @@ export declare function useListPlaidItems<TData = Awaited<ReturnType<typeof list
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * @summary (#725) Clear the `refreshProductDisabledAt` short-circuit stamp
+on a single Plaid item so the next manual Sync actually calls
+/transactions/refresh. Surfaced as a "Re-enable refresh" link
+on the Settings bank tile after a user enables the
+`transactions_refresh` add-on on their Plaid Dashboard.
+Idempotent — returns the refreshed PlaidItemDetail with
+`refreshProductDisabledAt: null`.
+
+ */
+export declare const getClearPlaidItemRefreshDisabledUrl: (id: string) => string;
+export declare const clearPlaidItemRefreshDisabled: (id: string, options?: RequestInit) => Promise<PlaidItemDetail>;
+export declare const getClearPlaidItemRefreshDisabledMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof clearPlaidItemRefreshDisabled>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof clearPlaidItemRefreshDisabled>>, TError, {
+    id: string;
+}, TContext>;
+export type ClearPlaidItemRefreshDisabledMutationResult = NonNullable<Awaited<ReturnType<typeof clearPlaidItemRefreshDisabled>>>;
+export type ClearPlaidItemRefreshDisabledMutationError = ErrorType<void>;
+/**
+ * @summary (#725) Clear the `refreshProductDisabledAt` short-circuit stamp
+on a single Plaid item so the next manual Sync actually calls
+/transactions/refresh. Surfaced as a "Re-enable refresh" link
+on the Settings bank tile after a user enables the
+`transactions_refresh` add-on on their Plaid Dashboard.
+Idempotent — returns the refreshed PlaidItemDetail with
+`refreshProductDisabledAt: null`.
+
+ */
+export declare const useClearPlaidItemRefreshDisabled: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof clearPlaidItemRefreshDisabled>>, TError, {
+        id: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof clearPlaidItemRefreshDisabled>>, TError, {
+    id: string;
+}, TContext>;
 export declare const getDeletePlaidItemUrl: (id: string) => string;
 export declare const deletePlaidItem: (id: string, options?: RequestInit) => Promise<void>;
 export declare const getDeletePlaidItemMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {

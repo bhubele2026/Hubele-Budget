@@ -2084,6 +2084,8 @@ sync chip.
   errorKind?: string | null;
   /** @nullable */
   lastBankTxOn?: string | null;
+  /** @nullable */
+  refreshProductDisabledAt?: string | null;
   accounts: PlaidAccount[];
 }
 
