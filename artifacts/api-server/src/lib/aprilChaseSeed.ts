@@ -11,6 +11,102 @@ import {
 import { categorize, loadUserRules } from "./autoCategorize";
 import { dedupePlaidAccountsForUser } from "./dedupePlaidAccounts";
 import { isValidPlaidAccessToken } from "./plaid";
+import { logger } from "./logger";
+
+// (#711) Gate for the April-2026 Chase placeholder seeder. The seeder
+// writes a synthetic plaid_item + 95 placeholder transactions + a fixed
+// bank snapshot to make demo / forecast screens look populated. In a
+// real production household this just creates orphan rows that fight
+// the rest of the system (relink, dedupe, malformed-token sweep, etc).
+//
+// Allow rules (any one enables the run):
+//   1. NODE_ENV !== "production" (dev / test / local)
+//   2. ENABLE_APRIL_CHASE_SEED === "true" (explicit opt-in)
+//   3. APRIL_CHASE_SEED_HOUSEHOLD_ALLOWLIST (comma-separated household ids)
+//      contains the household being seeded.
+//
+// In production with no opt-in we skip with a structured log line so it's
+// obvious from boot/runtime logs which mode we're in.
+export type AprilChaseSeedGate = {
+  allowed: boolean;
+  reason:
+    | "non-production"
+    | "env-flag-opt-in"
+    | "household-allowlisted"
+    | "production-disabled";
+};
+
+function parseAllowlist(): Set<string> {
+  const raw = process.env.APRIL_CHASE_SEED_HOUSEHOLD_ALLOWLIST ?? "";
+  return new Set(
+    raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0),
+  );
+}
+
+export function getAprilChaseSeedGate(householdId?: string): AprilChaseSeedGate {
+  if (process.env.NODE_ENV !== "production") {
+    return { allowed: true, reason: "non-production" };
+  }
+  if (process.env.ENABLE_APRIL_CHASE_SEED === "true") {
+    return { allowed: true, reason: "env-flag-opt-in" };
+  }
+  if (householdId && parseAllowlist().has(householdId)) {
+    return { allowed: true, reason: "household-allowlisted" };
+  }
+  return { allowed: false, reason: "production-disabled" };
+}
+
+/**
+ * Boot-time announcement of the seeder's gating state. Called once from
+ * `app.ts` so operators can see in the startup logs whether the April
+ * Chase seeder is armed for this process (and why), without having to
+ * trigger the `/seed/april-chase` endpoint to find out.
+ */
+export function logAprilChaseSeedBootStatus(): void {
+  const gate = getAprilChaseSeedGate();
+  const allowlistSize = parseAllowlist().size;
+  if (gate.allowed) {
+    logger.info(
+      {
+        seeder: "aprilChaseSeed",
+        enabled: true,
+        reason: gate.reason,
+        nodeEnv: process.env.NODE_ENV ?? null,
+        allowlistedHouseholds: allowlistSize,
+      },
+      "April-2026 Chase seeder enabled on this process",
+    );
+  } else if (allowlistSize > 0) {
+    // Globally disabled, but a household allowlist is configured — the
+    // seeder will still run for those specific households. Surface that
+    // explicitly so operators don't read "disabled" and assume the
+    // seeder is truly off everywhere.
+    logger.info(
+      {
+        seeder: "aprilChaseSeed",
+        enabled: "household-scoped",
+        reason: gate.reason,
+        nodeEnv: process.env.NODE_ENV ?? null,
+        allowlistedHouseholds: allowlistSize,
+      },
+      "April-2026 Chase seeder disabled by default but will run for households in APRIL_CHASE_SEED_HOUSEHOLD_ALLOWLIST",
+    );
+  } else {
+    logger.info(
+      {
+        seeder: "aprilChaseSeed",
+        enabled: false,
+        reason: gate.reason,
+        nodeEnv: process.env.NODE_ENV ?? null,
+        allowlistedHouseholds: allowlistSize,
+      },
+      "April-2026 Chase seeder disabled on this process — set ENABLE_APRIL_CHASE_SEED=true or add the household id to APRIL_CHASE_SEED_HOUSEHOLD_ALLOWLIST to allow",
+    );
+  }
+}
 
 // (#398) Placeholder access_token for the synthetic Chase seed row.
 // MUST pass `isValidPlaidAccessToken` (see
@@ -551,6 +647,15 @@ export type AprilChaseSeedResult = {
    * rules were inserted.
    */
   snapshotRepaired: boolean;
+  /**
+   * (#711) True when the seeder bailed out before touching the database
+   * because the production gate (NODE_ENV/env flag/household allowlist)
+   * didn't authorize this run. When true, every count field is 0 and
+   * `accountId` is an empty string.
+   */
+  seedSkipped?: boolean;
+  /** (#711) Gate reason that explains `seedSkipped`. */
+  skipReason?: AprilChaseSeedGate["reason"];
 };
 
 /**
@@ -564,6 +669,45 @@ export async function seedAprilChase(
   ownerUserId: string,
   householdId: string,
 ): Promise<AprilChaseSeedResult> {
+  // (#711) Production safety gate. See `getAprilChaseSeedGate` for the
+  // full rule set. When the gate says no, return a no-op result rather
+  // than throwing — callers (the /seed/april-chase endpoint, the
+  // post-link auto-seed) treat this as a successful idempotent run.
+  const gate = getAprilChaseSeedGate(householdId);
+  if (!gate.allowed) {
+    logger.info(
+      {
+        seeder: "aprilChaseSeed",
+        ownerUserId,
+        householdId,
+        reason: gate.reason,
+      },
+      "April-2026 Chase seed skipped (production gate)",
+    );
+    return {
+      alreadySeeded: true,
+      inserted: 0,
+      skipped: 0,
+      categorized: 0,
+      transfers: 0,
+      rulesAdded: 0,
+      endingBalance: APRIL_2026_ENDING_BALANCE.toFixed(2),
+      syntheticAccount: false,
+      accountId: "",
+      snapshotRepaired: false,
+      seedSkipped: true,
+      skipReason: gate.reason,
+    };
+  }
+  logger.info(
+    {
+      seeder: "aprilChaseSeed",
+      ownerUserId,
+      householdId,
+      reason: gate.reason,
+    },
+    "April-2026 Chase seed running",
+  );
   const rulesAdded = await ensureExtraMappingRules(ownerUserId, householdId);
   const acct = await ensureChaseAccount(ownerUserId, householdId);
   const rules = await loadUserRules(householdId);

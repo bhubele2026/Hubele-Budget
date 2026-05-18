@@ -10,6 +10,13 @@ import {
 } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { logAprilChaseSeedBootStatus } from "./lib/aprilChaseSeed";
+
+// (#711) Announce on boot whether the April-2026 Chase placeholder
+// seeder is armed for this process. Skipping production runs is the
+// default; an explicit env flag or household allowlist is required to
+// re-enable it. See `aprilChaseSeed.ts` for the full gate rules.
+logAprilChaseSeedBootStatus();
 
 const app: Express = express();
 
