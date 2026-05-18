@@ -31,6 +31,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -118,6 +128,32 @@ export default function SettingsPage() {
   // row's spinner spins (the underlying mutation is global, so without this
   // every row would animate at once).
   const [syncingItemId, setSyncingItemId] = useState<string | null>(null);
+  // (#707) When the user clicks Disconnect on an item that's in a reauth
+  // state (INVALID_ACCESS_TOKEN / ITEM_LOGIN_REQUIRED / etc.), open a
+  // confirm dialog steering them to reconnect instead of deleting the
+  // item — deletion drops Plaid's transaction cursor, so a fresh-link
+  // afterwards would re-import every old transaction from scratch.
+  const [disconnectGuardItem, setDisconnectGuardItem] =
+    useState<{ id: string; institutionName: string | null } | null>(null);
+  // (#707) Once the user successfully reconnects from inside the
+  // guard dialog, the next /plaid/items refetch clears the reauth
+  // code. Auto-close the dialog at that point so the user isn't left
+  // staring at a now-stale "needs reconnecting" prompt. Mirrors the
+  // pattern in plaid-link-button.tsx for the #706 fresh-link guard.
+  useEffect(() => {
+    if (!disconnectGuardItem) return;
+    const stillNeedsReauth = (plaidItems ?? []).some(
+      (it) =>
+        it.id === disconnectGuardItem.id &&
+        isPlaidReauthCode(it.lastSyncErrorCode),
+    );
+    const stillExists = (plaidItems ?? []).some(
+      (it) => it.id === disconnectGuardItem.id,
+    );
+    if (stillExists && !stillNeedsReauth) {
+      setDisconnectGuardItem(null);
+    }
+  }, [plaidItems, disconnectGuardItem]);
   const { data: plaidEnv } = useGetPlaidEnvironment();
   const cleanupNonProd = useCleanupNonProdPlaidItems();
   const queryClient = useQueryClient();
@@ -225,8 +261,7 @@ export default function SettingsPage() {
     });
   };
 
-  const handleUnlink = (id: string, name: string | null | undefined) => {
-    if (!confirm(`Unlink ${name || "this institution"}? Already-synced transactions stay; new ones will stop.`)) return;
+  const performUnlink = (id: string) => {
     deletePlaidItem.mutate(
       { id },
       {
@@ -236,6 +271,25 @@ export default function SettingsPage() {
         },
       },
     );
+  };
+
+  const handleUnlink = (
+    id: string,
+    name: string | null | undefined,
+    needsReconnect: boolean,
+  ) => {
+    // (#707) Intercept Disconnect on a reauth-pending item with a
+    // dialog steering the user to Reconnect via Plaid first. Removing
+    // the item drops Plaid's transaction cursor, so any future
+    // fresh-link would re-import all history from scratch instead of
+    // resuming where the dead item left off. Healthy items keep the
+    // existing one-step confirm.
+    if (needsReconnect) {
+      setDisconnectGuardItem({ id, institutionName: name ?? null });
+      return;
+    }
+    if (!confirm(`Unlink ${name || "this institution"}? Already-synced transactions stay; new ones will stop.`)) return;
+    performUnlink(id);
   };
 
   const form = useForm<SettingsFormValues>({
@@ -833,7 +887,13 @@ export default function SettingsPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleUnlink(item.id, item.institutionName)}
+                      onClick={() =>
+                        handleUnlink(
+                          item.id,
+                          item.institutionName,
+                          needsReconnect,
+                        )
+                      }
                       disabled={deletePlaidItem.isPending}
                       data-testid={`button-unlink-${item.id}`}
                     >
@@ -1062,6 +1122,60 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={disconnectGuardItem !== null}
+        onOpenChange={(v) => {
+          if (!v) setDisconnectGuardItem(null);
+        }}
+      >
+        <AlertDialogContent data-testid="dialog-disconnect-guard">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Reconnect{" "}
+              {disconnectGuardItem?.institutionName || "this bank"} via Plaid
+              instead?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              If you remove this, you'll lose Plaid's transaction cursor and
+              any future sync starts from scratch. Reconnecting via Plaid
+              keeps your history intact and resumes where the broken
+              connection left off.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-disconnect-guard-cancel">
+              Cancel
+            </AlertDialogCancel>
+            {disconnectGuardItem && (
+              // (#707) Do NOT wrap this in an onClick that closes the
+              // dialog — PlaidReconnectButton kicks off an async
+              // token fetch and only opens Plaid Link once the token
+              // state lands. Unmounting it mid-flow strands the user
+              // with no Plaid modal. The useEffect below closes the
+              // dialog automatically once /plaid/items reports the
+              // item is no longer in a reauth state. The button copy
+              // ("Reconnect" from the shared component) is what
+              // satisfies the "Reconnect via Plaid" CTA contract.
+              <PlaidReconnectButton
+                itemId={disconnectGuardItem.id}
+                institutionName={disconnectGuardItem.institutionName}
+              />
+            )}
+            <AlertDialogAction
+              onClick={() => {
+                if (disconnectGuardItem) {
+                  performUnlink(disconnectGuardItem.id);
+                  setDisconnectGuardItem(null);
+                }
+              }}
+              data-testid="button-disconnect-guard-remove-anyway"
+            >
+              Remove anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
