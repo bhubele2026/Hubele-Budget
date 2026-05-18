@@ -98,7 +98,6 @@ import {
   MoreHorizontal,
   Check,
   Info,
-  Pencil,
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
@@ -648,7 +647,7 @@ export default function BudgetPage() {
   // groups never gets the onRename prop, so this handler is unreachable
   // from those rows. The server also enforces sourceKind="manual" so an
   // API client can't bypass the UI guard.
-  const handleRenameCategory = (categoryId: string, nextName: string) => {
+  const handleRenameMyBudgetCategory = (categoryId: string, nextName: string) => {
     updateCat.mutate(
       { id: categoryId, data: { name: nextName } },
       {
@@ -679,7 +678,7 @@ export default function BudgetPage() {
   // dedicated "position" field. The optimistic invalidate refreshes the
   // budget month query so the row appears in its new position on the
   // next render.
-  const handleMoveCategory = (
+  const handleMoveMyBudgetCategory = (
     orderedLines: { categoryId: string }[],
     categoryId: string,
     direction: "up" | "down",
@@ -1174,9 +1173,9 @@ export default function BudgetPage() {
                       onReassignTxn={handleReassignTxn}
                       allCategories={categories ?? []}
                       assigning={updateTx.isPending}
-                      onRename={handleRenameCategory}
+                      onRename={handleRenameMyBudgetCategory}
                       onMove={(catId, dir) =>
-                        handleMoveCategory(myBudgetGroup.lines, catId, dir)
+                        handleMoveMyBudgetCategory(myBudgetGroup.lines, catId, dir)
                       }
                       canMoveUp={idx > 0}
                       canMoveDown={idx < myBudgetGroup.lines.length - 1}
@@ -1588,7 +1587,6 @@ function BudgetLineRow({
   onReassignTxn,
   allCategories,
   assigning,
-  onRename,
   onMove,
   canMoveUp,
   canMoveDown,
@@ -1620,10 +1618,9 @@ function BudgetLineRow({
   ) => void;
   allCategories: { id: string; name: string }[];
   assigning: boolean;
-  // (#692) Optional rename + reorder hooks. Provided only by the
+  // (#692) Optional reorder hook. Provided only by the
   // "My budget" card so the standard groups (auto_bills / auto_debts)
   // never expose controls that the backend would reject anyway.
-  onRename?: (categoryId: string, nextName: string) => void;
   onMove?: (categoryId: string, direction: "up" | "down") => void;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
@@ -1883,7 +1880,7 @@ function BudgetLineRow({
                   Buttons are present on every non-Avalanche row so power
                   users can shuffle bill-backed envelopes too; they no-op
                   (disabled) at the top/bottom of the group. */}
-              {!isAvalanchePayment && (
+              {!isAvalanchePayment && !onMove && (
                 <>
                   <Button
                     variant="ghost"
