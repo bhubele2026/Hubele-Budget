@@ -65,3 +65,13 @@ PLAID_TARGET_ENV_LOWER="$(echo "$PLAID_TARGET_ENV" | tr '[:upper:]' '[:lower:]')
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -c "SET plaid.target_env = '${PLAID_TARGET_ENV_LOWER}';" \
   -f "$(dirname "$0")/remediate_plaid_env_mismatch.sql"
+
+# Task #706 — delete orphan duplicate plaid_items rows where a healthy
+# new link was spawned for the same institution that still has an older
+# broken-auth item (INVALID_ACCESS_TOKEN / ITEM_LOGIN_REQUIRED). The
+# duplicate returns balance but Plaid's transaction cursor lives on the
+# dead item, so transactions never land on the duplicate. Guarded so a
+# row is removed only when it has no cursor and no transactions.
+# Idempotent — no-op once duplicates are gone.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f "$(dirname "$0")/cleanup_orphan_duplicate_plaid_items.sql"

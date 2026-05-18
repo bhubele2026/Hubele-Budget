@@ -1715,7 +1715,6 @@ function BudgetLineRow({
   allCategories,
   assigning,
   onMove,
-  onRename,
   canMoveUp,
   canMoveDown,
   renaming,
@@ -1750,10 +1749,6 @@ function BudgetLineRow({
   // "My budget" card so the standard groups (auto_bills / auto_debts)
   // never expose controls that the backend would reject anyway.
   onMove?: (categoryId: string, direction: "up" | "down") => void;
-  // (#692/#701) Optional inline-rename hook. Same My-budget-only wiring
-  // as onMove — when omitted, the row stays in plain drill-down mode
-  // and the pencil/input are never rendered.
-  onRename?: (categoryId: string, nextName: string) => void;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   renaming?: boolean;

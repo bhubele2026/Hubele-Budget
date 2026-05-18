@@ -1,20 +1,32 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import {
   useCreatePlaidLinkToken,
   useExchangePlaidPublicToken,
   useGetPlaidEnvironment,
+  useListPlaidItems,
   getListPlaidItemsQueryKey,
   getListTransactionsQueryKey,
   getListPlaidLiabilityAccountsQueryKey,
   listPlaidLiabilityAccounts,
   listPlaidItems,
   type PlaidLiabilityAccount,
+  type PlaidItemDetail,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Plus, Loader2, CheckCircle2, AlertTriangle, X, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
@@ -24,6 +36,10 @@ import {
   clearPostLinkProgress,
   usePostLinkProgress,
 } from "@/components/post-link-progress";
+import {
+  PlaidReconnectButton,
+  isPlaidReauthCode,
+} from "@/components/plaid-reconnect-button";
 
 export const PLAID_LINK_TOKEN_STORAGE_KEY = "h2:plaid:link_token";
 export const PLAID_RETURN_TO_STORAGE_KEY = "h2:plaid:return_to";
@@ -129,6 +145,37 @@ export function PlaidLinkButton({
     PlaidLiabilityAccount[]
   >([]);
   const [postLinkOpen, setPostLinkOpen] = useState(false);
+  // (#706) Fresh-link guard. When the user clicks "Link a Bank or Card"
+  // while one of their already-linked items is in a reauth-pending state
+  // (most commonly INVALID_ACCESS_TOKEN after a token expired), we open
+  // a confirm dialog steering them into update mode for the dead item
+  // first. Spawning a second fresh link for the same institution is
+  // exactly what stranded the user's Chase transactions: the new item
+  // returned the balance but Plaid's transaction cursor lived on the
+  // dead one, so /transactions/sync returned zero added forever.
+  const [reauthGuardOpen, setReauthGuardOpen] = useState(false);
+  // (#706) `isFetched` gates the guard against the loading race: until
+  // /plaid/items has resolved at least once, `data` is undefined and
+  // `itemsNeedingReauth.length === 0`, so a fast click would otherwise
+  // sneak past the check and spawn the duplicate this guard exists to
+  // prevent. The Link button is disabled below until isFetched.
+  const { data: existingItems, isFetched: itemsFetched } = useListPlaidItems();
+  const itemsNeedingReauth: PlaidItemDetail[] = useMemo(
+    () =>
+      (existingItems ?? []).filter((it) =>
+        isPlaidReauthCode(it.lastSyncErrorCode),
+      ),
+    [existingItems],
+  );
+  // (#706) Once the user successfully reconnects from inside the dialog,
+  // the next /plaid/items refetch clears the reauth code and the row
+  // drops out of `itemsNeedingReauth`. Close the dialog at that point
+  // so the user isn't left staring at an empty list.
+  useEffect(() => {
+    if (reauthGuardOpen && itemsFetched && itemsNeedingReauth.length === 0) {
+      setReauthGuardOpen(false);
+    }
+  }, [reauthGuardOpen, itemsFetched, itemsNeedingReauth.length]);
   // (#368/#379) Live status for the post-link progress panel. State
   // lives in the shared store (see post-link-progress.tsx) so the Chase
   // and Amex pages can render an above-the-header banner that subscribes
@@ -150,7 +197,7 @@ export function PlaidLinkButton({
     };
   }, []);
 
-  const fetchToken = useCallback(() => {
+  const requestFreshLinkToken = useCallback(() => {
     createLinkToken.mutate(undefined, {
       onSuccess: (data) => setLinkToken(data.linkToken),
       onError: (err) => {
@@ -162,6 +209,22 @@ export function PlaidLinkButton({
       },
     });
   }, [createLinkToken, toast]);
+
+  // (#706) Intercept the fresh-link click when an existing item needs
+  // reauth — show the guard dialog so the user is steered into update
+  // mode for the dead item before spawning a duplicate.
+  const fetchToken = useCallback(() => {
+    if (itemsNeedingReauth.length > 0) {
+      setReauthGuardOpen(true);
+      return;
+    }
+    requestFreshLinkToken();
+  }, [itemsNeedingReauth.length, requestFreshLinkToken]);
+
+  const proceedWithFreshLink = useCallback(() => {
+    setReauthGuardOpen(false);
+    requestFreshLinkToken();
+  }, [requestFreshLinkToken]);
 
   const clearStoredLinkToken = useCallback(() => {
     try {
@@ -488,7 +551,7 @@ export function PlaidLinkButton({
     <>
       <Button
         onClick={fetchToken}
-        disabled={busy || notConfigured || hasConfigError}
+        disabled={busy || notConfigured || hasConfigError || !itemsFetched}
         title={disabledReason ?? undefined}
         data-testid="button-link-bank"
       >
@@ -516,6 +579,51 @@ export function PlaidLinkButton({
           accounts={postLinkAccounts}
         />
       )}
+      <AlertDialog
+        open={reauthGuardOpen}
+        onOpenChange={(v) => setReauthGuardOpen(v)}
+      >
+        <AlertDialogContent data-testid="dialog-reauth-guard">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              You already have a bank that needs reconnecting
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Linking a fresh copy of the same bank can leave transactions
+              stuck on the broken connection. Reconnect the existing one
+              below to bring its history back instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ul className="space-y-2 text-sm">
+            {itemsNeedingReauth.map((it) => (
+              <li
+                key={it.id}
+                className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+                data-testid={`row-reauth-guard-${it.id}`}
+              >
+                <span className="font-medium">
+                  {it.institutionName ?? "Your bank"}
+                </span>
+                <PlaidReconnectButton
+                  itemId={it.id}
+                  institutionName={it.institutionName}
+                />
+              </li>
+            ))}
+          </ul>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-reauth-guard-cancel">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={proceedWithFreshLink}
+              data-testid="button-reauth-guard-proceed"
+            >
+              Link a different bank anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
