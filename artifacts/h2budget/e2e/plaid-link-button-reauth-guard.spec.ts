@@ -136,4 +136,140 @@ test.describe("PlaidLinkButton — fresh-link guard (#706)", () => {
       .toBe(DEAD_CHASE_ITEM_ROW_ID);
     expect(freshLinkTokenCalled).toBe(false);
   });
+
+  test("reproduces the dead-Chase + orphan-Chase duplicate pair: the dashboard banner surfaces the dead item, and the Connect-a-bank guard still blocks a third duplicate from being minted", async ({
+    page,
+  }) => {
+    const { email, password } = await createTestUser(
+      "plaid-link-button-reauth-guard-dupe",
+      provisionedUserIds,
+    );
+
+    // The production scenario this task fixes: a stale Chase item is
+    // in INVALID_ACCESS_TOKEN AND a freshly-linked duplicate already
+    // exists for the same institution. Even with the duplicate present
+    // the guard must still steer the user toward update-mode on the
+    // dead item — and the dashboard banner must surface that dead item
+    // by name.
+    await page.route("**/api/plaid/items", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: DEAD_CHASE_ITEM_ROW_ID,
+            itemId: DEAD_CHASE_ITEM_EXTERNAL_ID,
+            institutionId: "ins_chase",
+            institutionName: "Chase",
+            institutionSlug: "chase",
+            lastSyncedAt: null,
+            lastSyncError:
+              "This bank's saved login is no longer valid — reconnect to bring in new transactions.",
+            lastSyncErrorCode: "INVALID_ACCESS_TOKEN",
+            stillPreparing: false,
+            accounts: [
+              {
+                id: "chase-acct-row-1",
+                accountId: "chase-checking-ext-dead",
+                name: "Chase Checking",
+                type: "depository",
+                subtype: "checking",
+              },
+            ],
+          },
+          {
+            id: "chase-orphan-row-1",
+            itemId: "item-chase-orphan-1",
+            institutionId: "ins_chase",
+            institutionName: "Chase",
+            institutionSlug: "chase",
+            lastSyncedAt: new Date().toISOString(),
+            lastSyncError: null,
+            lastSyncErrorCode: null,
+            stillPreparing: false,
+            accounts: [
+              {
+                id: "chase-acct-row-2",
+                accountId: "chase-checking-ext-orphan",
+                name: "Chase Checking",
+                type: "depository",
+                subtype: "checking",
+              },
+            ],
+          },
+        ]),
+      });
+    });
+
+    let freshLinkTokenCalled = false;
+    await page.route("**/api/plaid/link-token", async (route) => {
+      if (route.request().method() === "POST") {
+        freshLinkTokenCalled = true;
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ linkToken: "link-sandbox-mocked-fresh-2" }),
+        });
+        return;
+      }
+      await route.fallback();
+    });
+
+    let updateTokenItemId: string | null = null;
+    await page.route(
+      "**/api/plaid/link-token/update",
+      async (route) => {
+        const body = JSON.parse(route.request().postData() ?? "{}");
+        updateTokenItemId = body.itemId ?? null;
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ linkToken: "link-sandbox-mocked-update-2" }),
+        });
+      },
+    );
+
+    // Land on the dashboard — the banner is the primary surface for
+    // dead items, not a Settings-only detail. It must call out Chase
+    // by name and offer an inline Reconnect button targeting the
+    // dead item's row id.
+    await signInAndOpen(page, email, password, "/dashboard");
+    const banner = page.getByTestId("banner-plaid-reauth");
+    await expect(banner).toBeVisible({ timeout: 15_000 });
+    await expect(banner).toContainText("Chase");
+
+    // Now exercise the Connect-a-bank guard from Settings. Even with
+    // a healthy orphan-duplicate Chase item already in the list, the
+    // guard must still block a third fresh link and steer the user
+    // back to update-mode on the original dead item.
+    await page.goto("/settings");
+    const linkBtn = page.getByTestId("button-link-bank").first();
+    await expect(linkBtn).toBeVisible({ timeout: 15_000 });
+    await linkBtn.click();
+
+    const dialog = page.getByTestId("dialog-reauth-guard");
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByTestId(`row-reauth-guard-${DEAD_CHASE_ITEM_ROW_ID}`),
+    ).toBeVisible();
+    expect(freshLinkTokenCalled).toBe(false);
+
+    // "Link a different bank anyway" escape hatch must be present and
+    // explicit. We don't click it here — the point of this assertion
+    // is that the destructive path stays a deliberate, named choice.
+    await expect(
+      page.getByTestId("button-reauth-guard-proceed"),
+    ).toBeVisible();
+
+    // Reconnect via the in-dialog button → must call update mode with
+    // the DEAD item's row id, never the orphan's.
+    const reconnect = dialog
+      .getByTestId(`row-reauth-guard-${DEAD_CHASE_ITEM_ROW_ID}`)
+      .getByTestId(`button-plaid-reconnect-${DEAD_CHASE_ITEM_ROW_ID}`);
+    await reconnect.click();
+    await expect
+      .poll(() => updateTokenItemId, { timeout: 10_000 })
+      .toBe(DEAD_CHASE_ITEM_ROW_ID);
+    expect(freshLinkTokenCalled).toBe(false);
+  });
 });

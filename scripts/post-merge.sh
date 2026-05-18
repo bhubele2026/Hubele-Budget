@@ -66,12 +66,14 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -c "SET plaid.target_env = '${PLAID_TARGET_ENV_LOWER}';" \
   -f "$(dirname "$0")/remediate_plaid_env_mismatch.sql"
 
-# Task #706 — delete orphan duplicate plaid_items rows where a healthy
-# new link was spawned for the same institution that still has an older
-# broken-auth item (INVALID_ACCESS_TOKEN / ITEM_LOGIN_REQUIRED). The
-# duplicate returns balance but Plaid's transaction cursor lives on the
-# dead item, so transactions never land on the duplicate. Guarded so a
-# row is removed only when it has no cursor and no transactions.
-# Idempotent — no-op once duplicates are gone.
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f "$(dirname "$0")/cleanup_orphan_duplicate_plaid_items.sql"
+# Task #706 — orphan-duplicate cleanup is INTENTIONALLY not auto-run from
+# this script. The SQL (scripts/cleanup_orphan_duplicate_plaid_items.sql)
+# requires a `:'household_id'` psql variable and is meant to be invoked
+# manually by an operator AFTER the affected user has reconnected via
+# update mode, e.g.:
+#   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+#     -v household_id='<the-household-uuid>' \
+#     -f scripts/cleanup_orphan_duplicate_plaid_items.sql
+# Auto-running a hard delete across every household at every merge was
+# rejected in code review (#706) as an unacceptable blast radius for an
+# operationally-recoverable cleanup.

@@ -51,6 +51,7 @@ import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 import { useOpportunisticPlaidSync } from "@/hooks/use-opportunistic-plaid-sync";
 import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
+import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { PlaidExpiringSoonList } from "@/components/plaid-expiring-soon-list";
 
 import { SUB_BUCKETS, type SubBucket, useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
@@ -2197,6 +2198,15 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <DebtReauthBanner debts={debts} />
+      {/* (#706) Surface every Plaid item in INVALID_ACCESS_TOKEN /
+          ITEM_LOGIN_REQUIRED at the top of the dashboard with a
+          Reconnect CTA. Pairs with the fresh-link guard in
+          <PlaidLinkButton/>: if the user clicks Connect-a-bank
+          before reconnecting, the guard intercepts; the banner
+          here is the primary, always-visible surface for the same
+          dead items so the user doesn't have to go to Settings to
+          find them. */}
+      <PlaidReauthBanner />
       <PlaidExpiringSoonList />
       <DashboardSnapshotSection
         today={today}

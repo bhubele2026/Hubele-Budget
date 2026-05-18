@@ -5,7 +5,18 @@
 -- balance, but Plaid's transaction cursor lives on the original dead
 -- item, so /transactions/sync returns added=0 forever for the duplicate.
 --
+-- INVOCATION (manual; not wired into post-merge.sh — see review feedback):
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+--     -v household_id='<the-affected-household-uuid>' \
+--     -f scripts/cleanup_orphan_duplicate_plaid_items.sql
+--
+-- The `:'household_id'` variable is REQUIRED. Without it the script aborts
+-- — we deliberately refuse to run global cleanup across every household
+-- because a healthy newly-linked institution that hasn't synced its first
+-- transaction yet would otherwise be a valid candidate for deletion.
+--
 -- Safety guards — a candidate is deleted ONLY when:
+--   0. It belongs to the supplied household_id.
 --   1. A sibling plaid_item exists for the same household + institution
 --      slug whose last_sync_error_code is in the reauth set
 --      (INVALID_ACCESS_TOKEN, ITEM_LOGIN_REQUIRED). The dead item is
@@ -19,16 +30,27 @@
 --      they're duplicates without per-row inspection.
 --   4. None of the candidate's plaid_accounts own any transactions.
 --
--- Idempotent — once no row satisfies all four guards the script is a
+-- Idempotent — once no row satisfies all five guards the script is a
 -- no-op. Wrapped in a transaction so a partial accounts-delete can't
 -- leave dangling rows.
+
+\set ON_ERROR_STOP on
+
+-- Hard-stop if the operator forgot to pass -v household_id=...
+-- (psql substitutes the empty string when the var is unset).
+SELECT CASE
+  WHEN :'household_id' = '' OR :'household_id' = ':household_id'
+  THEN 1/0  -- intentionally explode with a clear divide-by-zero
+  ELSE 0
+END AS household_id_required;
 
 BEGIN;
 
 WITH dead_items AS (
   SELECT household_id, institution_slug, id
     FROM plaid_items
-   WHERE last_sync_error_code IN ('INVALID_ACCESS_TOKEN', 'ITEM_LOGIN_REQUIRED')
+   WHERE household_id = :'household_id'
+     AND last_sync_error_code IN ('INVALID_ACCESS_TOKEN', 'ITEM_LOGIN_REQUIRED')
 ),
 candidates AS (
   SELECT p.id, p.item_id, p.institution_name, p.institution_slug, p.household_id
@@ -37,7 +59,8 @@ candidates AS (
       ON d.household_id    = p.household_id
      AND d.institution_slug = p.institution_slug
      AND d.id <> p.id
-   WHERE (p.last_sync_error_code IS NULL OR p.last_sync_error_code = '')
+   WHERE p.household_id = :'household_id'
+     AND (p.last_sync_error_code IS NULL OR p.last_sync_error_code = '')
      AND (p.cursor IS NULL OR p.cursor = '')
      AND NOT EXISTS (
        SELECT 1
@@ -60,38 +83,40 @@ SELECT
 DELETE FROM plaid_accounts
  WHERE item_id IN (
    SELECT id FROM plaid_items p
-    WHERE EXISTS (
-      SELECT 1
-        FROM plaid_items dead
-       WHERE dead.household_id    = p.household_id
-         AND dead.institution_slug = p.institution_slug
-         AND dead.id <> p.id
-         AND dead.last_sync_error_code IN (
-           'INVALID_ACCESS_TOKEN', 'ITEM_LOGIN_REQUIRED'
-         )
-    )
-    AND (p.last_sync_error_code IS NULL OR p.last_sync_error_code = '')
-    AND (p.cursor IS NULL OR p.cursor = '')
-    AND NOT EXISTS (
-      SELECT 1
-        FROM transactions t
-        JOIN plaid_accounts pa
-          ON pa.account_id = t.plaid_account_id
-       WHERE pa.item_id = p.id
-    )
+    WHERE p.household_id = :'household_id'
+      AND EXISTS (
+        SELECT 1
+          FROM plaid_items dead
+         WHERE dead.household_id    = p.household_id
+           AND dead.institution_slug = p.institution_slug
+           AND dead.id <> p.id
+           AND dead.last_sync_error_code IN (
+             'INVALID_ACCESS_TOKEN', 'ITEM_LOGIN_REQUIRED'
+           )
+      )
+      AND (p.last_sync_error_code IS NULL OR p.last_sync_error_code = '')
+      AND (p.cursor IS NULL OR p.cursor = '')
+      AND NOT EXISTS (
+        SELECT 1
+          FROM transactions t
+          JOIN plaid_accounts pa
+            ON pa.account_id = t.plaid_account_id
+         WHERE pa.item_id = p.id
+      )
  );
 
 DELETE FROM plaid_items p
- WHERE EXISTS (
-   SELECT 1
-     FROM plaid_items dead
-    WHERE dead.household_id    = p.household_id
-      AND dead.institution_slug = p.institution_slug
-      AND dead.id <> p.id
-      AND dead.last_sync_error_code IN (
-        'INVALID_ACCESS_TOKEN', 'ITEM_LOGIN_REQUIRED'
-      )
- )
+ WHERE p.household_id = :'household_id'
+   AND EXISTS (
+     SELECT 1
+       FROM plaid_items dead
+      WHERE dead.household_id    = p.household_id
+        AND dead.institution_slug = p.institution_slug
+        AND dead.id <> p.id
+        AND dead.last_sync_error_code IN (
+          'INVALID_ACCESS_TOKEN', 'ITEM_LOGIN_REQUIRED'
+        )
+   )
    AND (p.last_sync_error_code IS NULL OR p.last_sync_error_code = '')
    AND (p.cursor IS NULL OR p.cursor = '')
    AND NOT EXISTS (
