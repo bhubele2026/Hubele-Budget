@@ -631,34 +631,47 @@ export default function BudgetPage() {
     );
   };
 
-  // (#698) Delete a "My budget" envelope, warning the user if it still has
-  // categorized transactions this month before they orphan them. The
-  // server-side DELETE is unconditional (it nulls out categoryId on linked
-  // transactions), so without this prompt a real spend would silently drop
-  // off the monthly roll-up. Empty envelopes use the same single-line
-  // "Delete this category?" prompt as the standard handler so the common
-  // case stays fast.
-  const handleDeleteMyBudgetCategory = (
-    id: string,
-    contributingTxns: Transaction[],
-  ) => {
-    const count = contributingTxns.length;
-    if (count > 0) {
-      const total = contributingTxns.reduce(
-        (s, t) => s + Math.abs(parseFloat(t.amount) || 0),
-        0,
-      );
-      const totalFmt = total.toLocaleString("en-US", {
-        style: "currency",
-        currency: "USD",
-      });
-      const msg =
-        `Delete this envelope?\n\n` +
-        `${count} transaction${count === 1 ? "" : "s"} totaling ${totalFmt} ` +
-        `this month will be unlinked and disappear from the monthly roll-up.`;
-      if (!confirm(msg)) return;
-    } else {
-      if (!confirm("Delete this category?")) return;
+  // (#698) Delete a "My budget" envelope with a tailored confirm when
+  // the envelope has already absorbed real spending this month. The
+  // default DELETE just removes the category row, which silently
+  // un-links every transaction pointing at it (categoryId becomes
+  // null) and drops them off the monthly roll-up. For empty envelopes
+  // we skip the prompt entirely — there's no destructive side effect
+  // to warn about. For non-empty ones we show the count and total
+  // about to be unlinked so the user can back out.
+  //
+  // The "actual" param comes from the row's already-loaded budget-month
+  // line and is the source of truth for "is this envelope empty?" — it
+  // sidesteps a race where allTxns (useListTransactions) is still
+  // loading and txnsByCategoryThisMonth would otherwise look empty.
+  // When the per-transaction list is also loaded we use it to fill in
+  // the exact count + signed total in the prompt; if it isn't, we fall
+  // back to a generic "transactions this month (~$total)" message
+  // sourced from the actual so the user is still warned, just with
+  // less specificity.
+  const handleDeleteMyBudgetCategory = (id: string, actual: string) => {
+    const actualNum = Math.abs(parseFloat(actual) || 0);
+    const txnsLoaded = !!allTxns;
+    const txns = txnsByCategoryThisMonth.get(id) ?? [];
+    const hasSpending = txns.length > 0 || actualNum > 0;
+    if (hasSpending) {
+      const message =
+        txnsLoaded && txns.length > 0
+          ? `Delete this envelope? ${txns.length} transaction${
+              txns.length === 1 ? "" : "s"
+            } this month (${formatCurrency(
+              txns
+                .reduce(
+                  (sum, t) => sum + Math.abs(parseFloat(t.amount) || 0),
+                  0,
+                )
+                .toFixed(2),
+            )}) will become uncategorized and drop off the monthly roll-up.`
+          : `Delete this envelope? ~${formatCurrency(
+              actualNum.toFixed(2),
+            )} of transactions this month will become uncategorized and drop off the monthly roll-up.`;
+      const ok = confirm(message);
+      if (!ok) return;
     }
     deleteCat.mutate(
       { id },
@@ -1268,11 +1281,8 @@ export default function BudgetPage() {
                       monthPinned={monthPinned}
                       monthStart={currentMonth}
                       onUpdatePlanned={handleUpdatePlanned}
-                      onDelete={(id) =>
-                        handleDeleteMyBudgetCategory(
-                          id,
-                          txnsByCategoryThisMonth.get(line.categoryId) ?? [],
-                        )
+                      onDelete={(catId) =>
+                        handleDeleteMyBudgetCategory(catId, line.actualAmount)
                       }
                       onTogglePin={handleTogglePinLine}
                       pinDisabled={pinLine.isPending}
@@ -1691,6 +1701,7 @@ function BudgetLineRow({
   monthStart,
   onUpdatePlanned,
   onDelete,
+  onRename,
   onMoveUp,
   onMoveDown,
   reorderDisabled,
@@ -1707,13 +1718,17 @@ function BudgetLineRow({
   canMoveUp,
   canMoveDown,
   renaming,
-  onRename,
 }: {
   line: BudgetLineWithActual;
   monthPinned: boolean;
   monthStart: string;
   onUpdatePlanned: (categoryId: string, amount: string) => void;
   onDelete: (id: string) => void;
+  // (#692) Optional inline-rename hook. Provided only by the "My
+  // budget" card; the bill-/debt-backed rows omit it so the pencil
+  // affordance never appears on rows the server would reject the
+  // rename for.
+  onRename?: (categoryId: string, nextName: string) => void;
   onMoveUp: (() => void) | null;
   onMoveDown: (() => void) | null;
   reorderDisabled: boolean;
@@ -1737,12 +1752,6 @@ function BudgetLineRow({
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   renaming?: boolean;
-  // (#705) Inline rename hook. Only the "My budget" card wires this up;
-  // bill-/debt-backed rows never receive it (the server rejects renames
-  // on those anyway). Listed in the type so that future refactors that
-  // drop the prop from BudgetLineRow's destructure list fail typecheck
-  // instead of crashing the page with `onRename is not defined`.
-  onRename?: (categoryId: string, nextName: string) => void;
 }) {
   // Task #692 — inline rename. The pencil icon next to the name flips
   // the row into edit mode; we save on blur/Enter and bail on Escape.
