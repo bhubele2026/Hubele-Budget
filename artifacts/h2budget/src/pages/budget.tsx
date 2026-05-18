@@ -584,34 +584,6 @@ export default function BudgetPage() {
     }
   };
 
-  // Task #692 — inline rename for any user-editable category. Trims
-  // whitespace, no-ops on unchanged names, and surfaces the API's
-  // 409 "name already in use" as a friendly toast so the user can
-  // pick a different label without losing their input (the row stays
-  // in edit mode if onError keeps it open at the call site).
-  const handleRenameCategory = async (
-    id: string,
-    nextName: string,
-    prevName: string,
-  ): Promise<boolean> => {
-    const trimmed = nextName.trim();
-    if (!trimmed || trimmed === prevName) return false;
-    try {
-      await updateCat.mutateAsync({ id, data: { name: trimmed } });
-      queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
-      invalidate();
-      toast({ title: "Renamed" });
-      return true;
-    } catch (e) {
-      toast({
-        title: "Couldn't rename",
-        description: (e as Error).message,
-        variant: "destructive",
-      });
-      return false;
-    }
-  };
-
   // Task #692 — swap a category's sortOrder with its neighbor inside
   // the same group. The server orders categories by sortOrder ASC then
   // name, so swapping the two persisted sortOrders is enough to flip
@@ -645,6 +617,49 @@ export default function BudgetPage() {
 
   const handleDeleteCategory = (id: string) => {
     if (!confirm("Delete this category?")) return;
+    deleteCat.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getListCategoriesQueryKey(),
+          });
+          invalidate();
+          toast({ title: "Category deleted" });
+        },
+      },
+    );
+  };
+
+  // (#698) Delete a "My budget" envelope, warning the user if it still has
+  // categorized transactions this month before they orphan them. The
+  // server-side DELETE is unconditional (it nulls out categoryId on linked
+  // transactions), so without this prompt a real spend would silently drop
+  // off the monthly roll-up. Empty envelopes use the same single-line
+  // "Delete this category?" prompt as the standard handler so the common
+  // case stays fast.
+  const handleDeleteMyBudgetCategory = (
+    id: string,
+    contributingTxns: Transaction[],
+  ) => {
+    const count = contributingTxns.length;
+    if (count > 0) {
+      const total = contributingTxns.reduce(
+        (s, t) => s + Math.abs(parseFloat(t.amount) || 0),
+        0,
+      );
+      const totalFmt = total.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+      });
+      const msg =
+        `Delete this envelope?\n\n` +
+        `${count} transaction${count === 1 ? "" : "s"} totaling ${totalFmt} ` +
+        `this month will be unlinked and disappear from the monthly roll-up.`;
+      if (!confirm(msg)) return;
+    } else {
+      if (!confirm("Delete this category?")) return;
+    }
     deleteCat.mutate(
       { id },
       {
@@ -1253,7 +1268,12 @@ export default function BudgetPage() {
                       monthPinned={monthPinned}
                       monthStart={currentMonth}
                       onUpdatePlanned={handleUpdatePlanned}
-                      onDelete={handleDeleteCategory}
+                      onDelete={(id) =>
+                        handleDeleteMyBudgetCategory(
+                          id,
+                          txnsByCategoryThisMonth.get(line.categoryId) ?? [],
+                        )
+                      }
                       onTogglePin={handleTogglePinLine}
                       pinDisabled={pinLine.isPending}
                       uncategorizedTxns={uncategorizedThisMonth}
@@ -1687,6 +1707,7 @@ function BudgetLineRow({
   canMoveUp,
   canMoveDown,
   renaming,
+  onRename,
 }: {
   line: BudgetLineWithActual;
   monthPinned: boolean;
@@ -1716,6 +1737,12 @@ function BudgetLineRow({
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   renaming?: boolean;
+  // (#705) Inline rename hook. Only the "My budget" card wires this up;
+  // bill-/debt-backed rows never receive it (the server rejects renames
+  // on those anyway). Listed in the type so that future refactors that
+  // drop the prop from BudgetLineRow's destructure list fail typecheck
+  // instead of crashing the page with `onRename is not defined`.
+  onRename?: (categoryId: string, nextName: string) => void;
 }) {
   // Task #692 — inline rename. The pencil icon next to the name flips
   // the row into edit mode; we save on blur/Enter and bail on Escape.

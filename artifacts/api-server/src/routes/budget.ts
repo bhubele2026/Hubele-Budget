@@ -27,8 +27,6 @@ import {
   PinBudgetLineBody,
   PinBudgetMonthBody,
   PinBudgetMonthParams,
-  UpdateCategoryBody,
-  UpdateCategoryParams,
   UpsertBudgetLineBody,
 } from "@workspace/api-zod";
 import {
@@ -1058,9 +1056,37 @@ router.patch(
       res.status(400).json({ error: body.error.message });
       return;
     }
+    const householdId = req.householdId!;
+    const [existing] = await db
+      .select()
+      .from(budgetCategoriesTable)
+      .where(
+        and(
+          eq(budgetCategoriesTable.id, params.data.id),
+          eq(budgetCategoriesTable.householdId, householdId),
+        ),
+      )
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "category not found" });
+      return;
+    }
     const data = body.data;
     const updates: Record<string, unknown> = {};
+    // (#692) Renames are restricted to sourceKind="manual" rows. The
+    // auto_bills / auto_debts categories are rebuilt from their backing
+    // recurring item / debt every time those change, so a rename here
+    // would silently get clobbered and confuse the user. The frontend
+    // already hides the rename affordance off those rows; this is the
+    // server-side belt-and-suspenders.
     if (typeof data.name === "string") {
+      if (existing.sourceKind !== "manual") {
+        res.status(400).json({
+          error:
+            "Only manual categories can be renamed — bill- and debt-backed envelopes are managed automatically.",
+        });
+        return;
+      }
       const trimmed = data.name.trim();
       if (!trimmed) {
         res.status(400).json({ error: "name cannot be blank" });
@@ -1072,29 +1098,35 @@ router.patch(
         });
         return;
       }
+      // (#701) Pre-check duplicates so we return a friendly 409 with the
+      // taken name in the message, instead of letting the (household_id,
+      // name) unique index throw a generic 500. The UI surfaces this
+      // verbatim as a destructive toast.
+      if (trimmed !== existing.name) {
+        const [dup] = await db
+          .select({ id: budgetCategoriesTable.id })
+          .from(budgetCategoriesTable)
+          .where(
+            and(
+              eq(budgetCategoriesTable.householdId, householdId),
+              eq(budgetCategoriesTable.name, trimmed),
+            ),
+          )
+          .limit(1);
+        if (dup && dup.id !== existing.id) {
+          res.status(409).json({
+            error: `A category named "${trimmed}" already exists.`,
+          });
+          return;
+        }
+      }
       updates.name = trimmed;
-    }
-    if (typeof data.groupName === "string") {
-      updates.groupName = data.groupName;
     }
     if (typeof data.sortOrder === "number") {
       updates.sortOrder = data.sortOrder;
     }
     if (Object.keys(updates).length === 0) {
-      const [cur] = await db
-        .select()
-        .from(budgetCategoriesTable)
-        .where(
-          and(
-            eq(budgetCategoriesTable.id, params.data.id),
-            eq(budgetCategoriesTable.householdId, req.householdId!),
-          ),
-        );
-      if (!cur) {
-        res.status(404).json({ error: "not found" });
-        return;
-      }
-      res.json(cur);
+      res.json(existing);
       return;
     }
     try {
@@ -1104,7 +1136,7 @@ router.patch(
         .where(
           and(
             eq(budgetCategoriesTable.id, params.data.id),
-            eq(budgetCategoriesTable.householdId, req.householdId!),
+            eq(budgetCategoriesTable.householdId, householdId),
           ),
         )
         .returning();
@@ -1114,12 +1146,12 @@ router.patch(
       }
       res.json(row);
     } catch (e) {
-      // Unique constraint on (householdId, name) — surface a 409 so the
-      // UI can tell the user "that name's already taken" instead of a
-      // generic 500.
+      // Race-condition fallback for the unique-name pre-check above.
       const msg = (e as Error).message ?? "";
-      if (/unique|duplicate/i.test(msg)) {
-        res.status(409).json({ error: "name already in use" });
+      if (/unique|duplicate/i.test(msg) && typeof updates.name === "string") {
+        res.status(409).json({
+          error: `A category named "${updates.name}" already exists.`,
+        });
         return;
       }
       throw e;
@@ -1145,99 +1177,6 @@ router.delete(
         ),
       );
     res.sendStatus(204);
-  },
-);
-
-// (#692) PATCH /budget/categories/:id — rename and/or reorder a manual
-// budget category (the "My budget" envelopes the user types in
-// themselves). We intentionally restrict edits to sourceKind="manual"
-// rows: auto_bills categories are recreated/renamed by the bill-rollup
-// every time recurring_items changes, and auto_debts categories are
-// keyed off the debt's name, so allowing renames there would silently
-// be overwritten and confuse the user. The route also blocks duplicate
-// names within a household to keep the category-name unique index from
-// throwing a 500 (the constraint is (household_id, name)).
-router.patch(
-  "/budget/categories/:id",
-  requireAuth,
-  async (req, res): Promise<void> => {
-    const params = UpdateCategoryParams.safeParse(req.params);
-    if (!params.success) {
-      res.status(400).json({ error: params.error.message });
-      return;
-    }
-    const body = UpdateCategoryBody.safeParse(req.body);
-    if (!body.success) {
-      res.status(400).json({ error: body.error.message });
-      return;
-    }
-    const householdId = req.householdId!;
-    const [existing] = await db
-      .select()
-      .from(budgetCategoriesTable)
-      .where(
-        and(
-          eq(budgetCategoriesTable.id, params.data.id),
-          eq(budgetCategoriesTable.householdId, householdId),
-        ),
-      )
-      .limit(1);
-    if (!existing) {
-      res.status(404).json({ error: "category not found" });
-      return;
-    }
-    if (existing.sourceKind !== "manual") {
-      res.status(400).json({
-        error:
-          "Only manual categories can be renamed or reordered — bill- and debt-backed envelopes are managed automatically.",
-      });
-      return;
-    }
-    const trimmedName =
-      typeof body.data.name === "string" ? body.data.name.trim() : undefined;
-    if (trimmedName !== undefined && trimmedName.length === 0) {
-      res.status(400).json({ error: "name cannot be empty" });
-      return;
-    }
-    // Pre-check duplicates so we return a friendly 409 instead of a 500
-    // from the (household_id, name) unique index.
-    if (trimmedName && trimmedName !== existing.name) {
-      const [dup] = await db
-        .select({ id: budgetCategoriesTable.id })
-        .from(budgetCategoriesTable)
-        .where(
-          and(
-            eq(budgetCategoriesTable.householdId, householdId),
-            eq(budgetCategoriesTable.name, trimmedName),
-          ),
-        )
-        .limit(1);
-      if (dup && dup.id !== existing.id) {
-        res.status(409).json({
-          error: `A category named "${trimmedName}" already exists.`,
-        });
-        return;
-      }
-    }
-    const updates: Partial<typeof budgetCategoriesTable.$inferInsert> = {};
-    if (trimmedName !== undefined) updates.name = trimmedName;
-    if (typeof body.data.sortOrder === "number")
-      updates.sortOrder = body.data.sortOrder;
-    if (Object.keys(updates).length === 0) {
-      res.status(200).json(existing);
-      return;
-    }
-    const [row] = await db
-      .update(budgetCategoriesTable)
-      .set(updates)
-      .where(
-        and(
-          eq(budgetCategoriesTable.id, params.data.id),
-          eq(budgetCategoriesTable.householdId, householdId),
-        ),
-      )
-      .returning();
-    res.status(200).json(row);
   },
 );
 

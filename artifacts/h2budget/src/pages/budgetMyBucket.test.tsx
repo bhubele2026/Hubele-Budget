@@ -51,6 +51,15 @@ const TEST_MONTH = "2026-05-01";
 
 let budgetMonth: BudgetMonthFixture | undefined = undefined;
 let categories: CategoryFixture[] = [];
+type TxnFixture = {
+  id: string;
+  amount: string;
+  categoryId: string | null;
+  isTransfer: boolean;
+  occurredOn: string;
+  description: string;
+};
+let listTxns: TxnFixture[] = [];
 
 const updateCategoryMock = vi.fn(
   async (_args: {
@@ -94,7 +103,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useSeedDefaultBudget: () => noopMutation,
   usePinBudgetMonth: () => noopMutation,
   usePinBudgetLine: () => noopMutation,
-  useListTransactions: () => ({ data: [] }),
+  useListTransactions: () => ({ data: listTxns }),
   useListMappingRules: () => ({ data: [] }),
   useUpdateTransaction: () => ({ mutateAsync: vi.fn(), isPending: false }),
   getGetBudgetMonthQueryKey: (m: string) => ["/api/budget/months", m],
@@ -173,6 +182,7 @@ beforeEach(() => {
   updateCategoryMock.mockClear();
   noopMutation.mutate.mockClear();
   budgetMonth = makeMyBudgetMonth();
+  listTxns = [];
   categories = [
     {
       id: "cat-gifts",
@@ -384,6 +394,79 @@ describe("Budget — My budget bucket rename + reorder (#692)", () => {
     expect(updateCategoryMock).toHaveBeenCalledWith({
       id: "cat-gifts",
       data: { sortOrder: 10000 },
+    });
+  });
+
+  // (#705) Regression test for the BudgetLineRow `onRename` prop wiring.
+  // The original bug was that a refactor dropped `onRename` from the
+  // BudgetLineRow destructure list while still passing it from the My
+  // budget card. That made `/budget` throw `onRename is not defined` on
+  // first render. Asserting that the inline rename input appears when
+  // the pencil button is clicked is enough to fail fast on any future
+  // regression that drops the prop again — the input only renders when
+  // `onRename` is wired up in the row's branch.
+  it("(#705) renders the rename input when the pencil is clicked — guards onRename prop wiring", async () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId("button-rename-cat-gifts"));
+    expect(
+      await screen.findByTestId("input-rename-cat-gifts"),
+    ).toBeTruthy();
+  });
+
+  // (#698) Confirm dialog branches for "My budget" envelope deletion.
+  // Empty envelopes use the plain "Delete this category?" prompt so the
+  // common case stays one click. Non-empty envelopes show a warning with
+  // the count and total amount about to be unlinked so the user knows
+  // their existing spending will drop off the monthly roll-up.
+  describe("(#698) delete confirm warns when the envelope still has spending", () => {
+    it("uses the short 'Delete this category?' prompt when the envelope has no transactions this month", () => {
+      const confirmSpy = vi
+        .spyOn(window, "confirm")
+        .mockImplementation(() => false);
+      renderPage();
+      fireEvent.click(screen.getByTestId("button-delete-cat-gifts"));
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(confirmSpy.mock.calls[0]![0]).toBe("Delete this category?");
+      confirmSpy.mockRestore();
+    });
+
+    it("shows the count + total amount in the prompt when the envelope has categorized transactions this month", () => {
+      // Seed two transactions in the current test month assigned to
+      // cat-gifts. The page indexes these via txnsByCategoryThisMonth
+      // and the My budget onDelete wrapper passes them to the delete
+      // handler so the prompt can warn the user before they orphan
+      // real spending.
+      listTxns = [
+        {
+          id: "tx-1",
+          amount: "30.00",
+          categoryId: "cat-gifts",
+          isTransfer: false,
+          occurredOn: `${TEST_MONTH.slice(0, 8)}05`,
+          description: "Gift store",
+        },
+        {
+          id: "tx-2",
+          amount: "20.00",
+          categoryId: "cat-gifts",
+          isTransfer: false,
+          occurredOn: `${TEST_MONTH.slice(0, 8)}10`,
+          description: "Gift store 2",
+        },
+      ];
+
+      const confirmSpy = vi
+        .spyOn(window, "confirm")
+        .mockImplementation(() => false);
+      renderPage();
+      fireEvent.click(screen.getByTestId("button-delete-cat-gifts"));
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      const msg = String(confirmSpy.mock.calls[0]![0] ?? "");
+      // Count + total surface in the prompt so the user can decide.
+      expect(msg).toContain("2 transactions");
+      expect(msg).toContain("$50.00");
+      expect(msg.toLowerCase()).toContain("unlinked");
+      confirmSpy.mockRestore();
     });
   });
 
