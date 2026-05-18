@@ -332,15 +332,29 @@ export function usePlaidSync() {
                     });
                     return ` through ${label}`;
                   })();
+                  // (#720) Surface when a previously-stuck bank caught up
+                  // via the /transactions/get gap-backfill fallback rather
+                  // than the normal cursor sync — the user has been
+                  // staring at "Added 0" for days on this exact item, so
+                  // the toast should explicitly tell them something
+                  // different happened this time.
+                  const viaGapBackfill = items.some(
+                    (r) =>
+                      (r as { deliveryMode?: string }).deliveryMode ===
+                      "gap-backfill",
+                  );
+                  const recoveryHint = viaGapBackfill
+                    ? " (via direct fetch)"
+                    : "";
                   const description = summary.totalAttributed
-                    ? `${parts.join(", ")}${throughHint}. Auto-categorized ${summary.totalAttributed} new ${
+                    ? `${parts.join(", ")}${throughHint}${recoveryHint}. Auto-categorized ${summary.totalAttributed} new ${
                         summary.totalAttributed === 1 ? "transaction" : "transactions"
                       }: ${summary.top
                         .map((r) => `${r.count} via '${r.pattern}'`)
                         .join(", ")}${summary.extraRules > 0 ? `, +${summary.extraRules} more` : ""}.`
-                    : `${parts.join(", ")}${throughHint}.`;
+                    : `${parts.join(", ")}${throughHint}${recoveryHint}.`;
                   toast({
-                    title: "Sync complete",
+                    title: viaGapBackfill ? "Caught up via direct fetch" : "Sync complete",
                     description,
                     action:
                       summary.totalAttributed && summary.ruleIds.length > 0 ? (

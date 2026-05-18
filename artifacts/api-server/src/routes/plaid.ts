@@ -852,7 +852,10 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     // (#665) `forceRefresh: true` so the very first sync after a fresh
     // link / relink asks Plaid to pull from the bank right now instead
     // of returning whatever Plaid happened to have cached pre-link.
-    await syncPlaidItemSerialized(req.userId!, item!.id, { forceRefresh: true });
+    await syncPlaidItemSerialized(req.userId!, item!.id, {
+      forceRefresh: true,
+      syncOrigin: "manual",
+    });
 
     // (#408) Heal-driven gap backfill on relink. The /exchange upsert
     // above proactively cleared any prior `lastSyncErrorCode` chip on
@@ -2233,6 +2236,7 @@ router.post(
       // cursor got stuck.
       const result = await syncPlaidItemSerialized(req.userId!, item.id, {
         forceRefresh: true,
+        syncOrigin: "manual",
       });
       res.json({
         ok: true,
@@ -2278,10 +2282,12 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
       ? [
           await syncPlaidItemSerialized(req.userId!, String(itemId), {
             forceRefresh,
+            syncOrigin: "manual",
           }),
         ]
       : await syncAllForUser(req.userId!, req.householdId!, {
           forceRefresh,
+          syncOrigin: "manual",
         });
     // (#651) The Amex page's "Refresh from Plaid" button calls this
     // endpoint expecting the live Plaid liability balance to update too

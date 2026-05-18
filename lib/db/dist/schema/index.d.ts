@@ -2391,6 +2391,23 @@ export declare const plaidItemsTable: import("drizzle-orm/pg-core").PgTableWithC
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        refreshProductDisabledAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "refresh_product_disabled_at";
+            tableName: "plaid_items";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         consentExpirationAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "consent_expiration_at";
             tableName: "plaid_items";

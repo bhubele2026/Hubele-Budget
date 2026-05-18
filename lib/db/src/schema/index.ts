@@ -375,6 +375,16 @@ export const plaidItemsTable = pgTable(
     lastSyncError: text("last_sync_error"),
     lastSyncErrorCode: text("last_sync_error_code"),
     stillPreparingSince: timestamp("still_preparing_since", { withTimezone: true }),
+    // (#720) Stamped when /transactions/refresh returns INVALID_PRODUCT
+    // (Plaid Dashboard doesn't have the transactions_refresh add-on
+    // enabled for this item's institution). When set <7 days ago we
+    // skip the refresh call entirely on subsequent syncs to stop the
+    // log spam and shave 100–300ms off each user-triggered sync click.
+    // Re-attempted once weekly in case the user later enables the add-
+    // on on the Plaid Dashboard.
+    refreshProductDisabledAt: timestamp("refresh_product_disabled_at", {
+      withTimezone: true,
+    }),
     consentExpirationAt: timestamp("consent_expiration_at", { withTimezone: true }),
     consentExpirationLastRefreshedAt: timestamp(
       "consent_expiration_last_refreshed_at",

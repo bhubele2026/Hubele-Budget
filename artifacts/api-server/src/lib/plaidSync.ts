@@ -163,6 +163,14 @@ export type SyncResult = {
   // sets this true since the attempt was made — the cursor sync that
   // followed proceeded with whatever Plaid had cached.
   refreshAttempted?: boolean;
+  // (#720) Which Plaid path delivered the rows this sync produced.
+  //   * "cursor"       — /transactions/sync returned the rows (normal path)
+  //   * "gap-backfill" — cursor came back empty/stale and the
+  //                      /transactions/get gap-backfill fallback landed
+  //                      one or more new rows. Toast surfaces this so
+  //                      the user can see *why* a previously-stuck
+  //                      Sync now caught up.
+  deliveryMode?: "cursor" | "gap-backfill";
 };
 
 type PlaidErrorBody = {
@@ -336,7 +344,10 @@ function plaidAmountToSigned(t: PlaidTxn): string {
 export async function syncPlaidItem(
   userId: string,
   itemRowId: string,
-  opts: { forceRefresh?: boolean } = {},
+  opts: {
+    forceRefresh?: boolean;
+    syncOrigin?: "manual" | "webhook" | "cron" | "internal";
+  } = {},
 ): Promise<SyncResult> {
   // (#665) `forceRefresh` triggers a `/transactions/refresh` call below
   // (right before the cursor sync loop) so Plaid re-fetches from the
@@ -344,6 +355,16 @@ export async function syncPlaidItem(
   // pass true; webhook/cron paths should leave it false to avoid
   // billing the premium endpoint on every coalesced sync.
   const forceRefresh = opts.forceRefresh === true;
+  // (#720) `syncOrigin` is the *real* user-initiated gate for the
+  // stale-cursor gap-backfill below. We can't reuse forceRefresh for
+  // that gate because the webhook `ITEM/LOGIN_REPAIRED` handler also
+  // passes forceRefresh:true (it wants the post-relink first sync to
+  // walk fresh data), and we must NOT have that webhook path
+  // additionally fall through to /transactions/get on an empty delta.
+  // Default to "webhook" so callers that haven't been audited stay on
+  // the conservative side and never accidentally trip the fallback.
+  const syncOrigin: "manual" | "webhook" | "cron" | "internal" =
+    opts.syncOrigin ?? "webhook";
   // (#671) Function-scoped so the failure-path delivery-metrics log
   // in the wrapping catch can still reference whether the refresh
   // fired and how many cursor walks burned before we threw.
@@ -629,7 +650,18 @@ export async function syncPlaidItem(
     // engaged when the caller passed `forceRefresh: true` so the
     // webhook coalescer / nightly cron don't spam the premium
     // endpoint and trip rate limits.
-    if (forceRefresh) {
+    // (#720) Skip the refresh call entirely when we already know this
+    // item's institution doesn't have the `transactions_refresh` add-on
+    // enabled on the Plaid Dashboard (returns INVALID_PRODUCT every
+    // time, costs 100–300ms per click, fills the log with noise, and
+    // never produces a single new row). Re-attempt once a week so the
+    // app naturally recovers if the user enables the add-on later.
+    const REFRESH_DISABLED_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
+    const refreshDisabledRecently =
+      !!item.refreshProductDisabledAt &&
+      Date.now() - new Date(item.refreshProductDisabledAt).getTime() <
+        REFRESH_DISABLED_RETRY_MS;
+    if (forceRefresh && !refreshDisabledRecently) {
       try {
         await plaid().transactionsRefresh({
           access_token: item.accessToken,
@@ -637,6 +669,20 @@ export async function syncPlaidItem(
         refreshSucceeded = true;
       } catch (refreshErr) {
         const refreshExtracted = extractPlaidError(refreshErr);
+        // (#720) When the institution simply doesn't have the
+        // transactions_refresh add-on, Plaid returns INVALID_PRODUCT.
+        // Stamp the item so subsequent syncs short-circuit above
+        // rather than retrying the same doomed call every click.
+        if (refreshExtracted.code === "INVALID_PRODUCT") {
+          try {
+            await db
+              .update(plaidItemsTable)
+              .set({ refreshProductDisabledAt: new Date() })
+              .where(eq(plaidItemsTable.id, itemRowId));
+          } catch {
+            // Best-effort — the gap-backfill fallback below still works.
+          }
+        }
         logger.warn(
           {
             userId,
@@ -1391,6 +1437,7 @@ export async function syncPlaidItem(
     // the full added total.
     let backfillAdded = 0;
     let backfillRange: { min: string; max: string } | null = null;
+    let deliveryMode: "cursor" | "gap-backfill" = "cursor";
     if (wasUnhealthy) {
       try {
         const bf = await runGapBackfillForItem(userId, itemRowId);
@@ -1402,6 +1449,100 @@ export async function syncPlaidItem(
           "[plaid-sync] gap backfill after heal failed (non-fatal)",
         );
       }
+    }
+    // (#720) Stale-cursor fallback. The cursor sync against the
+    // /transactions/sync endpoint only returns rows that Plaid's
+    // *background poll* has already ingested from the institution.
+    // For Chase that background poll routinely runs on a 24–72h
+    // cadence, so a perfectly healthy item with `transactions_refresh`
+    // disabled on the Dashboard can sit for two days returning empty
+    // cursor deltas while the bank itself has fresh activity to give
+    // up. Detect that exact state — user-initiated sync, cursor delta
+    // empty in every direction, max(occurred_on) for this item is
+    // >24h stale (or no Plaid rows on file yet) — and fall through to
+    // /transactions/get via runGapBackfillForItem. That endpoint is
+    // part of the base Transactions product (no add-on required) and
+    // its per-account window pull bypasses the stale poll entirely.
+    // Skipped when the wasUnhealthy branch above already fired the
+    // same backfill so we never double-call /transactions/get.
+    if (
+      syncOrigin === "manual" &&
+      !wasUnhealthy &&
+      added.length === 0 &&
+      modified.length === 0 &&
+      removed.length === 0
+    ) {
+      let lastBank: string | null = null;
+      try {
+        const [maxRow] = await db
+          .select({
+            occurredOn: sql<string | null>`max(${transactionsTable.occurredOn})`,
+          })
+          .from(transactionsTable)
+          .innerJoin(
+            plaidAccountsTable,
+            eq(plaidAccountsTable.accountId, transactionsTable.plaidAccountId),
+          )
+          .where(
+            and(
+              eq(transactionsTable.householdId, householdId),
+              eq(plaidAccountsTable.itemId, itemRowId),
+            ),
+          );
+        lastBank = (maxRow?.occurredOn as string | null) ?? null;
+      } catch {
+        // best-effort
+      }
+      const STALE_THRESHOLD_HOURS = 24;
+      const staleByDate =
+        !lastBank ||
+        (Date.now() - parseISO(lastBank).getTime()) / 3600000 >
+          STALE_THRESHOLD_HOURS;
+      if (staleByDate) {
+        logger.info(
+          {
+            userId,
+            itemRowId,
+            plaidItemIdExternal: item.itemId,
+            institutionName: item.institutionName,
+            lastBankOccurredOn: lastBank,
+          },
+          "[plaid-sync] stale cursor on user-initiated sync — falling back to /transactions/get gap-backfill",
+        );
+        try {
+          const bf = await runGapBackfillForItem(userId, itemRowId);
+          backfillAdded += bf.added;
+          if (bf.importedDateRange) {
+            backfillRange = backfillRange
+              ? {
+                  min:
+                    bf.importedDateRange.min < backfillRange.min
+                      ? bf.importedDateRange.min
+                      : backfillRange.min,
+                  max:
+                    bf.importedDateRange.max > backfillRange.max
+                      ? bf.importedDateRange.max
+                      : backfillRange.max,
+                }
+              : bf.importedDateRange;
+          }
+          if (bf.added > 0) deliveryMode = "gap-backfill";
+        } catch (e) {
+          logger.warn(
+            { userId, itemRowId, err: e },
+            "[plaid-sync] stale-cursor gap-backfill failed (non-fatal)",
+          );
+        }
+      }
+    }
+    // (#720) Promote backfill's freshest date into lastOccurredOn so
+    // the post-sync toast says "through May 18" instead of clinging to
+    // the stale max it computed from the empty cursor delta.
+    if (
+      backfillRange &&
+      (!lastOccurredOn || backfillRange.max > lastOccurredOn)
+    ) {
+      lastOccurredOn = backfillRange.max;
     }
     let mergedMin: string | null = insertedMinDate as string | null;
     let mergedMax: string | null = insertedMaxDate as string | null;
@@ -1442,6 +1583,7 @@ export async function syncPlaidItem(
         skippedPreCutoff: firstSyncSkipped,
         lastOccurredOn,
         wasUnhealthy,
+        deliveryMode,
       },
       "[plaid-sync] delivery metrics",
     );
@@ -1473,6 +1615,10 @@ export async function syncPlaidItem(
       // skips the destructive "Added 0" toast and offers a retry.
       // Same semantics as the PRODUCT_NOT_READY catch path.
       ...(pollRetriesExhaustedEmpty ? { stillPreparing: true } : {}),
+      // (#720) Surface which Plaid path produced these rows so the
+      // success toast can say "Caught up Chase via direct fetch" when
+      // the gap-backfill rescued a stuck cursor.
+      deliveryMode,
       // (#357) Mirror the structured fields onto the response so a
       // failed balance refresh on an otherwise-healthy /transactions/sync
       // still gives the client a real Plaid code + display message + kind
@@ -1744,7 +1890,10 @@ export async function pruneOrphanPlaidTransactionsForHousehold(
 export async function syncAllForUser(
   actorUserId: string,
   householdId: string,
-  opts: { forceRefresh?: boolean } = {},
+  opts: {
+    forceRefresh?: boolean;
+    syncOrigin?: "manual" | "webhook" | "cron" | "internal";
+  } = {},
 ): Promise<SyncResult[]> {
   // (#671 follow-up) Cull orphans BEFORE we fetch the new batch so the
   // first-sync merge inside `syncPlaidItem` doesn't have to compete
@@ -1766,7 +1915,10 @@ export async function syncAllForUser(
 }
 
 export async function syncAllForAllUsers(
-  opts: { forceRefresh?: boolean } = {},
+  opts: {
+    forceRefresh?: boolean;
+    syncOrigin?: "manual" | "webhook" | "cron" | "internal";
+  } = {},
 ): Promise<void> {
   // Use the linker's userId as the actor for audit purposes; the
   // sync itself derives household scope from item.householdId.
@@ -1811,7 +1963,10 @@ const itemSyncChain = new Map<string, Promise<unknown>>();
 export async function syncPlaidItemSerialized(
   userId: string,
   itemRowId: string,
-  opts: { forceRefresh?: boolean } = {},
+  opts: {
+    forceRefresh?: boolean;
+    syncOrigin?: "manual" | "webhook" | "cron" | "internal";
+  } = {},
 ): Promise<SyncResult> {
   const prior = itemSyncChain.get(itemRowId) ?? Promise.resolve();
   const next: Promise<SyncResult> = prior
@@ -2411,6 +2566,65 @@ export async function runGapBackfillForItem(
           notes: t.pending ? "[pending]" : null,
           forecastFlag: false,
         };
+        // (#720) Belt-and-suspenders ±2-day re-mint dedup. The
+        // unique constraint on `plaid_transaction_id` alone can't
+        // catch the case where Plaid re-mints a transaction_id for
+        // the same real posting (observed when a cursor reset or
+        // re-link forces Plaid to re-issue its internal id). Before
+        // we insert, look for an existing row with the same
+        // (plaid_account_id, amount, occurred_on ±2 days) and a
+        // *different* plaid_transaction_id; if found, treat the
+        // incoming row as a re-mint of that posting and UPDATE the
+        // existing row's identifier in place instead of inserting
+        // a duplicate. Logged at warn level so the audit trail keeps
+        // both ids for support diffing.
+        const remintLow = fmtISO(addDays(parseISO(t.date), -2));
+        const remintHigh = fmtISO(addDays(parseISO(t.date), 2));
+        const [remintMatch] = await db
+          .select({
+            id: transactionsTable.id,
+            oldPtid: transactionsTable.plaidTransactionId,
+          })
+          .from(transactionsTable)
+          .where(
+            and(
+              eq(transactionsTable.householdId, householdId),
+              eq(transactionsTable.plaidAccountId, t.account_id),
+              eq(transactionsTable.amount, signedAmount),
+              sql`${transactionsTable.occurredOn} >= ${remintLow}`,
+              sql`${transactionsTable.occurredOn} <= ${remintHigh}`,
+              sql`${transactionsTable.plaidTransactionId} is not null`,
+              sql`${transactionsTable.plaidTransactionId} <> ${t.transaction_id}`,
+            ),
+          )
+          .limit(1);
+        if (remintMatch) {
+          logger.warn(
+            {
+              householdId,
+              itemRowId,
+              externalAcctId,
+              oldPlaidTransactionId: remintMatch.oldPtid,
+              newPlaidTransactionId: t.transaction_id,
+              occurredOn: t.date,
+              amount: signedAmount,
+            },
+            "[plaid-backfill] re-mint detected — adopting new plaid_transaction_id on existing row instead of inserting",
+          );
+          await db
+            .update(transactionsTable)
+            .set({
+              plaidTransactionId: t.transaction_id,
+              occurredOn: t.date,
+              description,
+              amount: signedAmount,
+              pfcPrimary: values.pfcPrimary,
+              pfcDetailed: values.pfcDetailed,
+              notes: values.notes,
+            })
+            .where(eq(transactionsTable.id, remintMatch.id));
+          continue;
+        }
         // Idempotent insert — if cursor sync already pulled this
         // exact transaction_id, this becomes a no-op refresh of the
         // mutable fields and is NOT counted as a new add.
