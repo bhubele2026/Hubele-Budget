@@ -38,5 +38,7 @@ export type PlaidSyncResultItemsItem = {
     kind?: PlaidSyncResultItemsItemKind;
     /** @nullable */
     lastOccurredOn?: string | null;
+    /** @nullable */
+    refreshDisabledReason?: string | null;
 };
 //# sourceMappingURL=plaidSyncResultItemsItem.d.ts.map

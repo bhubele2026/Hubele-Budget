@@ -268,6 +268,84 @@ describe("(#665) /transactions/refresh on user-triggered Sync", () => {
     expect(result.refreshAttempted).toBe(false);
   });
 
+  // (#723) When Plaid responds INVALID_PRODUCT(transactions_refresh) —
+  // i.e. the Plaid client is not authorized for the
+  // `transactions_refresh` add-on (the real, persistent state of this
+  // app's prod client) — the SyncResult must surface a non-null
+  // `refreshDisabledReason` so the toast can swap the misleading
+  // "still preparing the initial batch" copy for honest "real-time
+  // refresh isn't enabled on this Plaid plan" copy. Before #723 the
+  // best-effort catch silently ate this error and the UI kept lying.
+  it("(#723) surfaces refreshDisabledReason when Plaid returns INVALID_PRODUCT(transactions_refresh)", async () => {
+    const { itemRowId, externalAcctId } = await seedHealthyChase();
+    refreshShouldThrow = Object.assign(new Error("INVALID_PRODUCT"), {
+      response: {
+        status: 400,
+        data: {
+          error_code: "INVALID_PRODUCT",
+          error_message:
+            "client is not authorized to access the following products: [\"transactions_refresh\"]",
+          display_message: null,
+          request_id: "req-invalid-product-1",
+        },
+      },
+    });
+    nextSyncResponse = {
+      added: [
+        {
+          transaction_id: "plaid-posted-after-invalid-product",
+          account_id: externalAcctId,
+          date: "2026-05-14",
+          amount: -200,
+          name: "Kwik Trip",
+        },
+      ],
+      modified: [],
+      removed: [],
+    };
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      forceRefresh: true,
+      syncOrigin: "manual",
+    });
+
+    expect(refreshCalls.length).toBe(1);
+    // Refresh failed but the cursor sync still proceeds — best-effort.
+    expect(syncCalls.length).toBe(1);
+    expect(result.error).toBeNull();
+    expect(result.refreshAttempted).toBe(true);
+    // The honest reason is surfaced for the UI to render.
+    expect(result.refreshDisabledReason).toMatch(/transactions_refresh/i);
+    // Persisted short-circuit stamp is set so subsequent syncs skip the
+    // doomed refresh call for ~7 days.
+    const [persisted] = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.id, itemRowId));
+    expect(persisted!.refreshProductDisabledAt).toBeInstanceOf(Date);
+  });
+
+  // (#723) The companion to the case above: once the
+  // `refreshProductDisabledAt` stamp is set, the next manual Sync
+  // should short-circuit the refresh call entirely AND still surface
+  // `refreshDisabledReason` so the toast stays honest on every
+  // subsequent click until Plaid enables the add-on.
+  it("(#723) skips the refresh call AND still sets refreshDisabledReason once short-circuit stamp is recent", async () => {
+    const { itemRowId } = await seedHealthyChase();
+    await db
+      .update(plaidItemsTable)
+      .set({ refreshProductDisabledAt: new Date() })
+      .where(eq(plaidItemsTable.id, itemRowId));
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      forceRefresh: true,
+      syncOrigin: "manual",
+    });
+    expect(refreshCalls.length).toBe(0);
+    expect(syncCalls.length).toBe(1);
+    expect(result.refreshDisabledReason).toMatch(/transactions_refresh/i);
+  });
+
   it("still completes sync when /transactions/refresh throws (best-effort)", async () => {
     const { itemRowId, externalAcctId } = await seedHealthyChase();
     refreshShouldThrow = Object.assign(new Error("PRODUCT_NOT_READY"), {

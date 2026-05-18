@@ -2665,6 +2665,7 @@ export const SyncPlaidTransactionsResponse = zod.object({
         ])
         .nullish(),
       lastOccurredOn: zod.string().nullish(),
+      refreshDisabledReason: zod.string().nullish(),
     }),
   ),
 });

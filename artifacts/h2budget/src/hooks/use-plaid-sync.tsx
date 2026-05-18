@@ -65,6 +65,15 @@ export type SyncTotals = {
   // tell the user when only historical rows came back. Null when no
   // item inserted anything.
   importedDateRange: { min: string; max: string } | null;
+  // (#723) Plain-English reason the `/transactions/refresh` path was a
+  // no-op on at least one item in this sync (currently only set when
+  // the Plaid client lacks the `transactions_refresh` add-on). When
+  // present the toast swaps the misleading "your bank is still
+  // preparing the initial batch" copy for honest copy that tells the
+  // user real-time refresh isn't enabled and that Plaid's ~6 h poll is
+  // the only source of new pending data. Null when every item refreshed
+  // cleanly or the refresh path wasn't attempted.
+  refreshDisabledReason: string | null;
   // (#402) Most recent occurredOn (YYYY-MM-DD) across rows touched by this
   // sync, taken as the max of each item's `lastOccurredOn`. The post-link
   // progress panel uses this — when the caller scoped the sync to a
@@ -84,8 +93,22 @@ const ZERO: SyncTotals = {
   stillPreparing: false,
   ruleAttribution: { totalAttributed: 0, top: [], extraRules: 0, ruleIds: [] },
   importedDateRange: null,
+  refreshDisabledReason: null,
   lastOccurredOn: null,
 };
+
+// (#723) Honest toast copy when no rows came back AND the server
+// surfaced `refreshDisabledReason` on at least one item — i.e. the
+// reason "Added 0" is not "your bank is still preparing", it's that
+// the live `/transactions/refresh` call was rejected because the
+// Plaid client lacks the `transactions_refresh` add-on. Without this,
+// the old "Try Sync again in a minute" copy lied to the user every
+// click on items like Chase (which only update from Plaid's scheduled
+// ~6 h poll) and trained them to keep mashing Sync expecting fresh
+// pending data that will never arrive on the next click.
+const REFRESH_DISABLED_TITLE = "No new transactions yet";
+const REFRESH_DISABLED_MESSAGE =
+  "Real-time refresh isn't enabled on this Plaid plan, so new pending charges only appear after Plaid's scheduled poll (every ~6 hours). Clicking Sync again right away won't surface anything new.";
 
 const STILL_PREPARING_MESSAGE =
   "Your bank is still preparing the initial batch — try Sync again in a minute.";
@@ -170,6 +193,16 @@ export function usePlaidSync() {
                     });
                   }
                   if (r.stillPreparing) acc.stillPreparing = true;
+                  // (#723) First non-empty refreshDisabledReason wins —
+                  // the toast only needs a single reason string to swap
+                  // to the honest copy; multiple items with the same
+                  // disabled add-on all share the same explanation.
+                  const itemRefreshDisabled = (
+                    r as { refreshDisabledReason?: string | null }
+                  ).refreshDisabledReason;
+                  if (itemRefreshDisabled && !acc.refreshDisabledReason) {
+                    acc.refreshDisabledReason = itemRefreshDisabled;
+                  }
                   if (r.importedDateRange) {
                     const { min, max } = r.importedDateRange;
                     if (aggMin === null || min < aggMin) aggMin = min;
@@ -204,6 +237,7 @@ export function usePlaidSync() {
                   stillPreparing: false,
                   ruleAttribution: ZERO.ruleAttribution,
                   importedDateRange: null,
+                  refreshDisabledReason: null,
                   lastOccurredOn: null,
                 },
               );
@@ -295,14 +329,33 @@ export function usePlaidSync() {
                     description: STILL_PREPARING_MESSAGE,
                   });
                 } else if (totals.added + totals.modified === 0) {
-                  // No PRODUCT_NOT_READY signal but also nothing new —
-                  // Plaid is silently in the still-preparing window or the
-                  // user is genuinely caught up. Same neutral message.
-                  toast({
-                    title: "No new transactions yet",
-                    description:
-                      "Your bank is still preparing the initial batch. Try Sync again in a minute.",
-                  });
+                  // (#723) Truth-in-toast. Before this branch, every
+                  // empty sync claimed "your bank is still preparing
+                  // the initial batch" — which was a lie on items
+                  // whose `/transactions/refresh` came back
+                  // INVALID_PRODUCT (transactions_refresh add-on not
+                  // enabled). On Chase the user clicked Sync ~40
+                  // times in a row chasing pending data Plaid was
+                  // never going to surface on the next click. When
+                  // the server flagged the refresh path as disabled,
+                  // tell the user the real reason instead of
+                  // suggesting they retry in a minute.
+                  if (totals.refreshDisabledReason) {
+                    toast({
+                      title: REFRESH_DISABLED_TITLE,
+                      description: REFRESH_DISABLED_MESSAGE,
+                    });
+                  } else {
+                    // No PRODUCT_NOT_READY signal but also nothing new —
+                    // Plaid is silently in the still-preparing window or
+                    // the user is genuinely caught up. Same neutral
+                    // message.
+                    toast({
+                      title: "No new transactions yet",
+                      description:
+                        "Your bank is still preparing the initial batch. Try Sync again in a minute.",
+                    });
+                  }
                 } else {
                   const parts: string[] = [];
                   if (totals.added > 0) parts.push(`Added ${totals.added}`);

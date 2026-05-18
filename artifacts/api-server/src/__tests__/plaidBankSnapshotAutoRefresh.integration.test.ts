@@ -191,7 +191,15 @@ describe("(#45) bank snapshot auto-refresh on hourly Plaid sync", () => {
     });
 
     const before = new Date();
-    const result = await syncPlaidItem(TEST_USER, itemRowId);
+    // (#723) Auto-balance is now gated to syncOrigin:"manual" (the
+    // user-clicked Sync button). Pass it explicitly here so the
+    // long-standing happy-path assertion below — that a Plaid balance
+    // call lands and rewrites the snapshot — continues to exercise
+    // the real production manual-sync path. Without this, the call is
+    // skipped (as it should be for cron/webhook callers).
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      syncOrigin: "manual",
+    });
 
     expect(result.error ?? null).toBeNull();
     expect(accountsBalanceGetCalls).toHaveLength(1);
@@ -229,7 +237,7 @@ describe("(#45) bank snapshot auto-refresh on hourly Plaid sync", () => {
       },
     });
 
-    await syncPlaidItem(TEST_USER, itemRowId);
+    await syncPlaidItem(TEST_USER, itemRowId, { syncOrigin: "manual" });
     const [settings] = await db
       .select()
       .from(forecastSettingsTable)
@@ -256,7 +264,9 @@ describe("(#45) bank snapshot auto-refresh on hourly Plaid sync", () => {
       throw new Error("should not be called for non-owning item");
     };
 
-    const result = await syncPlaidItem(TEST_USER, amexItemRowId);
+    const result = await syncPlaidItem(TEST_USER, amexItemRowId, {
+      syncOrigin: "manual",
+    });
     expect(result.error ?? null).toBeNull();
     expect(accountsBalanceGetCalls).toHaveLength(0);
 
@@ -274,7 +284,9 @@ describe("(#45) bank snapshot auto-refresh on hourly Plaid sync", () => {
     });
     // No forecast_settings row inserted.
 
-    const result = await syncPlaidItem(TEST_USER, itemRowId);
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      syncOrigin: "manual",
+    });
     expect(result.error ?? null).toBeNull();
     expect(accountsBalanceGetCalls).toHaveLength(0);
   });
@@ -305,7 +317,9 @@ describe("(#45) bank snapshot auto-refresh on hourly Plaid sync", () => {
     const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
     try {
-      const result = await syncPlaidItem(TEST_USER, itemRowId);
+      const result = await syncPlaidItem(TEST_USER, itemRowId, {
+        syncOrigin: "manual",
+      });
       // Sync still produced a result — the failed balance refresh is
       // surfaced via result.error and the persisted lastSyncError chip,
       // not by throwing or skipping the rest of the sync.
@@ -378,7 +392,9 @@ describe("(#45) bank snapshot auto-refresh on hourly Plaid sync", () => {
       },
     });
 
-    const result = await syncPlaidItem(TEST_USER, itemRowId);
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      syncOrigin: "manual",
+    });
     expect(result.error ?? null).toBeNull();
 
     const [item] = await db
@@ -389,7 +405,17 @@ describe("(#45) bank snapshot auto-refresh on hourly Plaid sync", () => {
     expect(item!.lastSyncErrorCode).toBeNull();
   });
 
-  it("end-to-end via syncAllForAllUsers (the cron entry point) refreshes the snapshot once per user", async () => {
+  // (#723) Inverted from its pre-#723 form. Before this commit, the
+  // hourly cron (syncAllForAllUsers) auto-fired /accounts/balance/get
+  // for every linked Plaid item that owned the bank snapshot — even
+  // though no one had clicked Sync. That auto-call billed Plaid on a
+  // schedule, contributed to the ~100/day balance-call count observed
+  // in prod, and routinely tripped the per-item BALANCE_LIMIT 429.
+  // The auto-refresh is now gated to syncOrigin:"manual". This test
+  // pins the new contract: the cron path NEVER calls
+  // accountsBalanceGet, and the persisted snapshot keeps its previous
+  // value/source until the user clicks Sync.
+  it("(#723) end-to-end via syncAllForAllUsers (cron) does NOT auto-refresh the snapshot anymore", async () => {
     const { plaidAccountRowId, externalAccountId } =
       await seedItemAndCheckingAccount({ institutionName: "Chase" });
     // Second item for the same user; should not double-call the balance
@@ -410,20 +436,66 @@ describe("(#45) bank snapshot auto-refresh on hourly Plaid sync", () => {
 
     await syncAllForAllUsers();
 
-    // syncAllForAllUsers walks every user's plaid_items in the test DB,
-    // so other parallel test files may leak unrelated balance calls into
-    // this counter. Scope the assertion to the Chase external account_id
-    // we own — and assert it was called EXACTLY once (no double-fire from
-    // the second Amex item belonging to the same user).
+    // (#723) Scope to the Chase external account_id we own (other test
+    // files may leak unrelated balance calls into the shared counter)
+    // and assert ZERO — the cron path is no longer allowed to bill
+    // Plaid for a balance refresh that the user didn't ask for.
     const callsForOurAccount = accountsBalanceGetCalls.filter(
       (c) => c.options?.account_ids?.[0] === externalAccountId,
     );
-    expect(callsForOurAccount).toHaveLength(1);
+    expect(callsForOurAccount).toHaveLength(0);
+    // Persisted snapshot stays at the seeded manual value — the cron
+    // run did not rewrite it.
     const [settings] = await db
       .select()
       .from(forecastSettingsTable)
       .where(eq(forecastSettingsTable.userId, TEST_USER));
-    expect(settings!.bankSnapshotBalance).toBe("9876.54");
-    expect(settings!.bankSnapshotSource).toBe("plaid");
+    expect(settings!.bankSnapshotBalance).toBe("1000.00");
+    expect(settings!.bankSnapshotSource).toBe("manual");
   });
+
+  // (#723) Direct regression for the gate itself: a sync triggered by
+  // the webhook coalescer / LOGIN_REPAIRED path / nightly cron (i.e.
+  // any non-manual syncOrigin) must NOT call accountsBalanceGet, even
+  // when every other precondition is satisfied (snapshot configured,
+  // owning item, healthy balance response staged). Before #723 every
+  // such sync auto-billed Plaid; after the gate, only the user-clicked
+  // Sync button does.
+  it.each(["webhook", "cron", "internal"] as const)(
+    "(#723) does NOT call accountsBalanceGet when syncOrigin=%s",
+    async (origin) => {
+      const { itemRowId, plaidAccountRowId, externalAccountId } =
+        await seedItemAndCheckingAccount({ institutionName: "Chase" });
+      await configureSnapshot(plaidAccountRowId, "Chase Checking");
+
+      // Stage a healthy balance response so a regression that drops the
+      // gate would *succeed* in calling Plaid — and trip the
+      // toHaveLength(0) assertion below. Without staging this, a
+      // regression could also pass by silently failing.
+      accountsBalanceGetMock = async () => ({
+        data: {
+          accounts: [
+            {
+              account_id: externalAccountId,
+              balances: { available: 7777.0, current: 7800.0 },
+            },
+          ],
+        },
+      });
+
+      const result = await syncPlaidItem(TEST_USER, itemRowId, {
+        syncOrigin: origin,
+      });
+      expect(result.error ?? null).toBeNull();
+      expect(accountsBalanceGetCalls).toHaveLength(0);
+
+      // Snapshot stays at the seeded manual value.
+      const [settings] = await db
+        .select()
+        .from(forecastSettingsTable)
+        .where(eq(forecastSettingsTable.userId, TEST_USER));
+      expect(settings!.bankSnapshotBalance).toBe("1000.00");
+      expect(settings!.bankSnapshotSource).toBe("manual");
+    },
+  );
 });

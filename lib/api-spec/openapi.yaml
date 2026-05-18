@@ -3601,6 +3601,17 @@ components:
               # another bank. Null when this run touched no rows or on
               # the failure / still-preparing branches.
               lastOccurredOn: { type: ["string", "null"] }
+              # (#723) Set when the `/transactions/refresh` call for this
+              # item was skipped or rejected because the Plaid client is
+              # not authorized for the `transactions_refresh` add-on
+              # (Plaid returns INVALID_PRODUCT). The frontend swaps the
+              # misleading "your bank is still preparing the initial
+              # batch" toast for honest copy explaining that real-time
+              # refresh isn't enabled on this Plaid plan, so Plaid's
+              # ~6 h scheduled poll is the only source of new pending
+              # data. Null when the refresh path either ran cleanly or
+              # wasn't attempted on this sync.
+              refreshDisabledReason: { type: ["string", "null"] }
     PlaidConsentRefreshItem:
       type: object
       required:

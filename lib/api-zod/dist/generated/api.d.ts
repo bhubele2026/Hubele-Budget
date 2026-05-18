@@ -6102,6 +6102,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         httpStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
         kind: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"reauth">, zod.ZodLiteral<"rate_limit">, zod.ZodLiteral<"institution_down">, zod.ZodLiteral<"transient">, zod.ZodLiteral<"unknown">, zod.ZodLiteral<null>]>>>;
         lastOccurredOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        refreshDisabledReason: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         itemId: string;
         added: number;
@@ -6128,6 +6129,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         plaidErrorCode?: string | null | undefined;
         plaidErrorMessage?: string | null | undefined;
         lastOccurredOn?: string | null | undefined;
+        refreshDisabledReason?: string | null | undefined;
     }, {
         itemId: string;
         added: number;
@@ -6154,6 +6156,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         plaidErrorCode?: string | null | undefined;
         plaidErrorMessage?: string | null | undefined;
         lastOccurredOn?: string | null | undefined;
+        refreshDisabledReason?: string | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     items: {
@@ -6182,6 +6185,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         plaidErrorCode?: string | null | undefined;
         plaidErrorMessage?: string | null | undefined;
         lastOccurredOn?: string | null | undefined;
+        refreshDisabledReason?: string | null | undefined;
     }[];
 }, {
     items: {
@@ -6210,6 +6214,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         plaidErrorCode?: string | null | undefined;
         plaidErrorMessage?: string | null | undefined;
         lastOccurredOn?: string | null | undefined;
+        refreshDisabledReason?: string | null | undefined;
     }[];
 }>;
 export declare const GetPlaidEnvironmentResponse: zod.ZodObject<{

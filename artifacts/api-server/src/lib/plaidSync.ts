@@ -163,6 +163,16 @@ export type SyncResult = {
   // sets this true since the attempt was made — the cursor sync that
   // followed proceeded with whatever Plaid had cached.
   refreshAttempted?: boolean;
+  // (#723) Set when this sync's `/transactions/refresh` call was
+  // skipped or rejected because the Plaid client isn't authorized for
+  // the `transactions_refresh` add-on (INVALID_PRODUCT, or the
+  // `refreshProductDisabledAt` short-circuit kicked in). The UI uses
+  // this to swap the misleading "your bank is still preparing the
+  // initial batch" toast for the honest "real-time refresh isn't
+  // enabled on your Plaid plan — Plaid's ~6 h scheduled poll is the
+  // only source of new pending data" copy. `null`/absent means the
+  // refresh path either ran cleanly or wasn't attempted on this sync.
+  refreshDisabledReason?: string | null;
   // (#720) Which Plaid path delivered the rows this sync produced.
   //   * "cursor"       — /transactions/sync returned the rows (normal path)
   //   * "gap-backfill" — cursor came back empty/stale and the
@@ -661,6 +671,17 @@ export async function syncPlaidItem(
       !!item.refreshProductDisabledAt &&
       Date.now() - new Date(item.refreshProductDisabledAt).getTime() <
         REFRESH_DISABLED_RETRY_MS;
+    // (#723) Captured for the SyncResult return so the UI can swap the
+    // misleading "your bank is still preparing the initial batch" toast
+    // for honest copy when the Plaid client lacks the
+    // `transactions_refresh` add-on. Set by either the once-a-week
+    // short-circuit below or the INVALID_PRODUCT catch on the live
+    // refresh call.
+    let refreshDisabledReason: string | null = null;
+    if (forceRefresh && refreshDisabledRecently) {
+      refreshDisabledReason =
+        "transactions_refresh add-on not enabled on this Plaid client";
+    }
     if (forceRefresh && !refreshDisabledRecently) {
       try {
         await plaid().transactionsRefresh({
@@ -681,6 +702,11 @@ export async function syncPlaidItem(
           refreshExtracted.code === "INVALID_PRODUCT" &&
           /transactions_refresh/i.test(refreshExtracted.message ?? "")
         ) {
+          // (#723) Surface the honest reason on this sync's result so
+          // the toast can stop lying. Set even on the first occurrence
+          // (before the persisted short-circuit kicks in).
+          refreshDisabledReason =
+            "transactions_refresh add-on not enabled on this Plaid client";
           try {
             await db
               .update(plaidItemsTable)
@@ -1366,7 +1392,17 @@ export async function syncPlaidItem(
     // per-item response carries the same enriched payload as the
     // /transactions/sync catch path below.
     let balanceErrorDetails: ExtractedPlaidError | null = null;
+    // (#723) Gate the auto-balance call to manual Sync clicks only.
+    // Plaid bills per `/accounts/balance/get`. Before this gate, every
+    // webhook (`SYNC_UPDATES_AVAILABLE`, `LOGIN_REPAIRED`, etc., several
+    // per item per day), the hourly cron, and the 2-second post-link
+    // debounce auto-fired a balance check — producing ~100 billed calls
+    // per day and routinely tripping Plaid's `BALANCE_LIMIT` 429. Only
+    // the user-clicked Sync path actually needs the live anchor refresh;
+    // the two user-tap balance routes in `routes/forecast.ts` are
+    // intentionally untouched.
     if (
+      syncOrigin === "manual" &&
       checkingPlaidAccountId &&
       forecastSettings?.bankSnapshotAccountId &&
       bankSnapshotBelongsToThisItem
@@ -1685,6 +1721,12 @@ export async function syncPlaidItem(
       // (#665) Echo whether we asked Plaid to re-fetch from the bank
       // before walking the cursor. True for user-triggered syncs.
       refreshAttempted: forceRefresh,
+      // (#723) Plain-English reason the refresh path was effectively a
+      // no-op (currently only set when the client lacks the
+      // `transactions_refresh` add-on). The UI swaps the misleading
+      // "still preparing the initial batch" toast for honest copy when
+      // this is set on any item in the response.
+      refreshDisabledReason,
       // (#671) Signal Layer-1 "Plaid hasn't ingested yet" so the UI
       // skips the destructive "Added 0" toast and offers a retry.
       // Same semantics as the PRODUCT_NOT_READY catch path.

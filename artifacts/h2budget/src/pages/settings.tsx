@@ -48,7 +48,11 @@ import { useToast } from "@/hooks/use-toast";
 import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus } from "lucide-react";
 import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
-import { formatPreparingElapsed, isPreparingStalled } from "@/lib/plaidPreparing";
+import {
+  formatPreparingElapsed,
+  formatRelativeTimeFromNow,
+  isPreparingStalled,
+} from "@/lib/plaidPreparing";
 import {
   formatConsentRefreshAge,
   isConsentRefreshStale,
@@ -773,9 +777,29 @@ export default function SettingsPage() {
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-muted-foreground">
+                      <div
+                        className="text-xs text-muted-foreground"
+                        data-testid={`text-last-synced-${item.id}`}
+                      >
                         {item.lastSyncedAt
-                          ? `Last synced ${new Date(item.lastSyncedAt).toLocaleString()}`
+                          ? (() => {
+                              // (#723) Append a scannable relative-time
+                              // hint ("· 4h ago") next to the absolute
+                              // timestamp so the user can tell at a
+                              // glance whether the bank tile is fresh —
+                              // without doing the date math themselves.
+                              // Plaid's data is the "as of" anchor; we
+                              // word it that way explicitly so the user
+                              // stops expecting every click on Sync to
+                              // produce instantly fresh pending data on
+                              // items whose institutions only update on
+                              // Plaid's ~6 h scheduled poll. Re-uses the
+                              // `nowTick` from the surrounding component
+                              // so the hint advances live without an
+                              // additional setInterval.
+                              const ts = new Date(item.lastSyncedAt);
+                              return `Plaid data as of ${ts.toLocaleString()} · ${formatRelativeTimeFromNow(ts, nowTick)}`;
+                            })()
                           : "Not yet synced"}
                       </div>
                       {/* (#258) Show when the disconnect-cutoff was last
