@@ -56,6 +56,7 @@ type SyncResp = {
 };
 
 let transactionsRefreshCalls = 0;
+let transactionsSyncCalls = 0;
 let transactionsSyncResponses: SyncResp[] = [];
 
 vi.mock("../lib/plaid", async () => {
@@ -75,6 +76,7 @@ vi.mock("../lib/plaid", async () => {
         // when has_more=false, so each "outer attempt" corresponds to
         // exactly one /transactions/sync call when no pagination is in
         // play).
+        transactionsSyncCalls++;
         const next = transactionsSyncResponses.shift();
         if (next) return { data: next };
         return {
@@ -130,6 +132,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await cleanup();
   transactionsRefreshCalls = 0;
+  transactionsSyncCalls = 0;
   transactionsSyncResponses = [];
 });
 
@@ -214,7 +217,15 @@ describe("(#671) poll-after-refresh in syncPlaidItem", () => {
     expect(rows[0]!.description).toBe("Test Pending Charge");
   });
 
-  it("does not retry when the first cursor walk already has data", async () => {
+  it("(#717) polls one extra empty drain after fresh data lands to confirm Plaid finished ingesting", async () => {
+    // Before #717 the sync broke on the first non-empty cursor walk,
+    // which on real Chase items routinely drained the *stale historical
+    // backlog* sitting in the cursor from before /transactions/refresh
+    // and stopped before the freshly ingested rows landed — exactly how
+    // a user's healthy item ended up with 48 April rows and zero of
+    // the May 14–18 transactions the refresh was asking for. The fix
+    // keeps polling until we see an empty drain (Plaid has clearly
+    // finished writing) once at least one row is in hand.
     const { itemRowId, externalAccountId } = await seedItem();
     transactionsSyncResponses.push(addedResp(externalAccountId));
 
@@ -223,8 +234,99 @@ describe("(#671) poll-after-refresh in syncPlaidItem", () => {
     });
 
     expect(result.added).toBe(1);
-    // Only one queued response was consumed; no follow-up walks fired.
+    expect(result.stillPreparing ?? false).toBe(false);
+    // The queued addedResp was consumed; one follow-up walk fired and
+    // hit the default-empty branch (no further queued responses), so
+    // the queue is still drained to zero. Sync then exits because the
+    // empty drain confirmed ingestion settled. Asserting the *call
+    // count* directly (not just queue length) pins the new contract:
+    // exactly TWO /transactions/sync calls — the first that returned
+    // the row, plus the confirm-settled empty drain.
     expect(transactionsSyncResponses.length).toBe(0);
+    expect(transactionsSyncCalls).toBe(2);
+  });
+
+  it("(#717) keeps draining stale historical rows until fresh post-refresh rows arrive", async () => {
+    // Reproduces the production Chase incident: attempt #1 drains
+    // historical April rows that were already sitting in the cursor,
+    // attempt #2 surfaces the freshly-refreshed May rows Plaid just
+    // ingested, attempt #3 confirms settled with an empty drain. All
+    // four rows must land in Postgres — never just the stale four.
+    const { itemRowId, externalAccountId } = await seedItem();
+    const staleApril: SyncResp = {
+      added: [
+        {
+          transaction_id: `txn-${randomUUID()}`,
+          account_id: externalAccountId,
+          amount: 11.11,
+          date: "2026-04-17",
+          pending: false,
+          name: "Stale April Charge A",
+        },
+        {
+          transaction_id: `txn-${randomUUID()}`,
+          account_id: externalAccountId,
+          amount: 22.22,
+          date: "2026-04-24",
+          pending: false,
+          name: "Stale April Charge B",
+        },
+      ],
+      modified: [],
+      removed: [],
+      next_cursor: "c-after-stale",
+      has_more: false,
+    };
+    const freshMay: SyncResp = {
+      added: [
+        {
+          transaction_id: `txn-${randomUUID()}`,
+          account_id: externalAccountId,
+          amount: 33.33,
+          date: "2026-05-15",
+          pending: true,
+          name: "Fresh May Pending A",
+        },
+        {
+          transaction_id: `txn-${randomUUID()}`,
+          account_id: externalAccountId,
+          amount: 44.44,
+          date: "2026-05-18",
+          pending: true,
+          name: "Fresh May Pending B",
+        },
+      ],
+      modified: [],
+      removed: [],
+      next_cursor: "c-after-fresh",
+      has_more: false,
+    };
+    transactionsSyncResponses.push(staleApril, freshMay);
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      forceRefresh: true,
+    });
+
+    expect(transactionsRefreshCalls).toBe(1);
+    expect(result.added).toBe(4);
+    expect(result.error ?? null).toBeNull();
+    expect(result.stillPreparing ?? false).toBe(false);
+    // Critically: the freshest row in the importedDateRange must be
+    // the fresh May row, not the stale April row. The old code returned
+    // 2026-04-24 here and shipped that to the toast.
+    expect(result.importedDateRange).toEqual({
+      min: "2026-04-17",
+      max: "2026-05-18",
+    });
+    expect(result.lastOccurredOn).toBe("2026-05-18");
+
+    const rows = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(rows).toHaveLength(4);
+    const dates = rows.map((r) => r.occurredOn).sort();
+    expect(dates).toEqual(["2026-04-17", "2026-04-24", "2026-05-15", "2026-05-18"]);
   });
 
   it("returns stillPreparing=true when refresh succeeded and the retry budget is exhausted with zero rows", async () => {

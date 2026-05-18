@@ -313,13 +313,32 @@ export function usePlaidSync() {
                   // touched rule ids in `?focus=` so the user can audit
                   // which rules silently grabbed the chunk of new rows.
                   const summary = totals.ruleAttribution;
+                  // (#717) Append the freshest occurredOn of the rows
+                  // that actually landed (e.g. "through May 18") so the
+                  // user can confirm at a glance whether the sync
+                  // caught up to the current week or stopped short on
+                  // a historical batch — the exact symptom that left a
+                  // healthy Chase item stuck in April for three days
+                  // without anyone realizing the toast was telling
+                  // half the truth.
+                  const throughHint = (() => {
+                    const maxDate = totals.importedDateRange?.max;
+                    if (!maxDate) return "";
+                    const parsed = new Date(`${maxDate}T00:00:00`);
+                    if (Number.isNaN(parsed.getTime())) return "";
+                    const label = parsed.toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                    });
+                    return ` through ${label}`;
+                  })();
                   const description = summary.totalAttributed
-                    ? `${parts.join(", ")}. Auto-categorized ${summary.totalAttributed} new ${
+                    ? `${parts.join(", ")}${throughHint}. Auto-categorized ${summary.totalAttributed} new ${
                         summary.totalAttributed === 1 ? "transaction" : "transactions"
                       }: ${summary.top
                         .map((r) => `${r.count} via '${r.pattern}'`)
                         .join(", ")}${summary.extraRules > 0 ? `, +${summary.extraRules} more` : ""}.`
-                    : `${parts.join(", ")}.`;
+                    : `${parts.join(", ")}${throughHint}.`;
                   toast({
                     title: "Sync complete",
                     description,

@@ -669,8 +669,8 @@ export async function syncPlaidItem(
     const pollAttemptsMax =
       refreshSucceeded
         ? Number.isFinite(pollAttemptsEnv) && pollAttemptsEnv > 0
-          ? Math.min(pollAttemptsEnv, 5)
-          : 3
+          ? Math.min(pollAttemptsEnv, 6)
+          : 4
         : 1;
     const pollDelaysEnv = process.env.PLAID_REFRESH_POLL_DELAYS_MS;
     const POLL_DELAYS_MS: number[] = (() => {
@@ -681,7 +681,14 @@ export async function syncPlaidItem(
           .filter((n) => Number.isFinite(n) && n >= 0);
         if (parsed.length > 0) return parsed;
       }
-      return [2500, 4000];
+      // (#717) Extended budget: the previous [2500, 4000] only spent
+      // 6.5s of wall time across 3 attempts. Production Chase items
+      // routinely take 8–15s after /transactions/refresh before fresh
+      // rows show up in Plaid's cursor, so the old budget was racing
+      // Plaid's ingestion and returning empty. The new 4-attempt
+      // schedule spends up to ~12s while still keeping the manual
+      // Sync click well under a 30s perceived ceiling.
+      return [2000, 4000, 6000];
     })();
     while (pollAttemptsUsed < pollAttemptsMax) {
       let walkAdded = 0;
@@ -704,7 +711,25 @@ export async function syncPlaidItem(
         hasMore = resp.data.has_more;
       }
       pollAttemptsUsed++;
-      if (walkAdded + walkModified > 0) break;
+      const drainEmpty = walkAdded + walkModified === 0;
+      // (#717) Stop polling only when the drain is empty AND either we
+      // already have data in hand (Plaid's ingestion has clearly
+      // settled — one extra empty drain confirms no more rows are
+      // about to land) or this is the cursor-only / refresh-failed
+      // path where the budget is 1 anyway. The previous condition
+      // broke on the *first* non-empty drain, which on healthy
+      // production items frequently drained the stale historical
+      // backlog left in the cursor from before the refresh, never
+      // giving Plaid time to surface the fresh rows the refresh was
+      // asking for. That is exactly how a real Chase item ended up
+      // with 48 inserts dated April 17–24 while never reaching the
+      // genuinely-missing May 14–18 transactions. Keep draining
+      // until either the cursor goes empty after we've already
+      // collected at least one row this run, or the budget runs
+      // out (latter sets stillPreparing below).
+      if (drainEmpty && (!refreshSucceeded || added.length + modified.length > 0)) {
+        break;
+      }
       if (pollAttemptsUsed >= pollAttemptsMax) break;
       const delayMs =
         POLL_DELAYS_MS[pollAttemptsUsed - 1] ??
