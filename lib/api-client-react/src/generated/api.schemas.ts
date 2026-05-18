@@ -2147,6 +2147,8 @@ export type PlaidSyncResultItemsItem = {
   lastOccurredOn?: string | null;
   /** @nullable */
   refreshDisabledReason?: string | null;
+  /** @nullable */
+  lastSyncedAt?: string | null;
 };
 
 export interface PlaidSyncResult {

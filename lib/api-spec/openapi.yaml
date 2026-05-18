@@ -3612,6 +3612,14 @@ components:
               # data. Null when the refresh path either ran cleanly or
               # wasn't attempted on this sync.
               refreshDisabledReason: { type: ["string", "null"] }
+              # (#723) ISO-8601 timestamp of the previous successful
+              # sync for this item (i.e. when Plaid last refreshed the
+              # data the user is currently looking at). Lets the honest
+              # refresh-disabled toast anchor staleness — "Data is
+              # current as of 4h ago" — so the user understands why
+              # clicking Sync again right now won't surface fresh
+              # pending charges. Null on the very first sync.
+              lastSyncedAt: { type: ["string", "null"] }
     PlaidConsentRefreshItem:
       type: object
       required:

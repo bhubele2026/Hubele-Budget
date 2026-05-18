@@ -13,6 +13,7 @@ import {
   type RuleAttributionSummary,
 } from "@/lib/rule-attribution-summary";
 import { dispatchPlaidReconnect } from "@/components/plaid-reconnect-listener";
+import { formatRelativeTimeFromNow } from "@/lib/plaidPreparing";
 
 /**
  * (#357) Per-item Plaid failure detail surfaced through the sync response.
@@ -74,6 +75,15 @@ export type SyncTotals = {
   // the only source of new pending data. Null when every item refreshed
   // cleanly or the refresh path wasn't attempted.
   refreshDisabledReason: string | null;
+  // (#723) ISO-8601 timestamp of the most recent prior sync among
+  // items in this response that surfaced `refreshDisabledReason` —
+  // i.e. "when was the data the user is staring at last refreshed
+  // by Plaid?" The honest refresh-disabled toast turns this into a
+  // relative anchor ("Data is current as of 4h ago") so the user
+  // can see at a glance why clicking Sync again right now won't
+  // surface anything new. Null when no refresh-disabled item carried
+  // a prior sync timestamp (e.g. very first sync after link).
+  refreshDisabledAsOf: string | null;
   // (#402) Most recent occurredOn (YYYY-MM-DD) across rows touched by this
   // sync, taken as the max of each item's `lastOccurredOn`. The post-link
   // progress panel uses this — when the caller scoped the sync to a
@@ -94,6 +104,7 @@ const ZERO: SyncTotals = {
   ruleAttribution: { totalAttributed: 0, top: [], extraRules: 0, ruleIds: [] },
   importedDateRange: null,
   refreshDisabledReason: null,
+  refreshDisabledAsOf: null,
   lastOccurredOn: null,
 };
 
@@ -203,6 +214,25 @@ export function usePlaidSync() {
                   if (itemRefreshDisabled && !acc.refreshDisabledReason) {
                     acc.refreshDisabledReason = itemRefreshDisabled;
                   }
+                  // (#723) Track the freshest prior sync timestamp
+                  // across refresh-disabled items so the toast can
+                  // anchor staleness ("Data is current as of 4h
+                  // ago"). Only consider items whose refresh path
+                  // was actually disabled — items that refreshed
+                  // cleanly aren't the ones the user is being
+                  // misled about.
+                  if (itemRefreshDisabled) {
+                    const itemLastSyncedAt = (
+                      r as { lastSyncedAt?: string | null }
+                    ).lastSyncedAt;
+                    if (
+                      itemLastSyncedAt &&
+                      (!acc.refreshDisabledAsOf ||
+                        itemLastSyncedAt > acc.refreshDisabledAsOf)
+                    ) {
+                      acc.refreshDisabledAsOf = itemLastSyncedAt;
+                    }
+                  }
                   if (r.importedDateRange) {
                     const { min, max } = r.importedDateRange;
                     if (aggMin === null || min < aggMin) aggMin = min;
@@ -238,6 +268,7 @@ export function usePlaidSync() {
                   ruleAttribution: ZERO.ruleAttribution,
                   importedDateRange: null,
                   refreshDisabledReason: null,
+                  refreshDisabledAsOf: null,
                   lastOccurredOn: null,
                 },
               );
@@ -341,9 +372,21 @@ export function usePlaidSync() {
                   // tell the user the real reason instead of
                   // suggesting they retry in a minute.
                   if (totals.refreshDisabledReason) {
+                    // (#723) Anchor staleness so the user knows when
+                    // the data they're looking at was last refreshed
+                    // by Plaid. Without this, the toast tells them
+                    // "Plaid polls every ~6h" but never tells them
+                    // *how recent* the current numbers are — leaving
+                    // them to guess whether to wait 10 minutes or 5
+                    // hours before re-trying.
+                    const asOfHint = totals.refreshDisabledAsOf
+                      ? ` Data is current as of ${formatRelativeTimeFromNow(
+                          totals.refreshDisabledAsOf,
+                        )}.`
+                      : "";
                     toast({
                       title: REFRESH_DISABLED_TITLE,
-                      description: REFRESH_DISABLED_MESSAGE,
+                      description: `${REFRESH_DISABLED_MESSAGE}${asOfHint}`,
                     });
                   } else {
                     // No PRODUCT_NOT_READY signal but also nothing new —

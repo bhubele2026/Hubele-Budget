@@ -173,6 +173,13 @@ export type SyncResult = {
   // only source of new pending data" copy. `null`/absent means the
   // refresh path either ran cleanly or wasn't attempted on this sync.
   refreshDisabledReason?: string | null;
+  // (#723) Prior `lastSyncedAt` (ISO-8601) — the timestamp of the
+  // sync run that wrote the data the user is currently looking at,
+  // not the timestamp of this run. Lets the honest refresh-disabled
+  // toast anchor staleness ("Data is current as of 4h ago") so the
+  // user can see at a glance why clicking Sync again won't surface
+  // anything new yet. Null on the first-ever sync for an item.
+  lastSyncedAt?: string | null;
   // (#720) Which Plaid path delivered the rows this sync produced.
   //   * "cursor"       — /transactions/sync returned the rows (normal path)
   //   * "gap-backfill" — cursor came back empty/stale and the
@@ -1727,6 +1734,14 @@ export async function syncPlaidItem(
       // "still preparing the initial batch" toast for honest copy when
       // this is set on any item in the response.
       refreshDisabledReason,
+      // (#723) Prior `lastSyncedAt` for this item (before this run
+      // overwrote it with `now`). Lets the honest refresh-disabled
+      // toast tell the user *when* the data they're looking at was
+      // last refreshed by Plaid — "Data is current as of 4h ago" —
+      // so they don't keep clicking Sync expecting fresher numbers.
+      lastSyncedAt: item.lastSyncedAt
+        ? new Date(item.lastSyncedAt).toISOString()
+        : null,
       // (#671) Signal Layer-1 "Plaid hasn't ingested yet" so the UI
       // skips the destructive "Added 0" toast and offers a retry.
       // Same semantics as the PRODUCT_NOT_READY catch path.
