@@ -673,11 +673,46 @@ export async function syncPlaidItem(
     // time, costs 100–300ms per click, fills the log with noise, and
     // never produces a single new row). Re-attempt once a week so the
     // app naturally recovers if the user enables the add-on later.
+    // (#727) Split the cooldown by intent. The 7-day window is right
+    // for background callers (webhook coalescer, nightly cron) — they
+    // aren't a human asking for fresh data and we don't want them to
+    // spam INVALID_PRODUCT. But a human-clicked Sync deserves a much
+    // shorter retry window: without it, the #725 self-heal can never
+    // fire (the stamp blocks the very call it depends on to clear
+    // itself), and a user whose Plaid client just got the add-on
+    // re-enabled is stuck waiting up to a week before Sync starts
+    // pulling live data. 1 hour still rate-limits spam clicks while
+    // letting the very next deliberate Sync trigger the live refresh
+    // and, on success, auto-clear the stamp.
     const REFRESH_DISABLED_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
+    const USER_REFRESH_DISABLED_RETRY_MS = 60 * 60 * 1000;
+    const refreshDisabledCooldownMs = forceRefresh
+      ? USER_REFRESH_DISABLED_RETRY_MS
+      : REFRESH_DISABLED_RETRY_MS;
     const refreshDisabledRecently =
       !!item.refreshProductDisabledAt &&
       Date.now() - new Date(item.refreshProductDisabledAt).getTime() <
-        REFRESH_DISABLED_RETRY_MS;
+        refreshDisabledCooldownMs;
+    // (#727) When a user-clicked Sync is about to retry through a
+    // stamp that the cron path would still skip, log it so we have
+    // observability that the self-heal path actually fired in prod.
+    if (
+      forceRefresh &&
+      !refreshDisabledRecently &&
+      item.refreshProductDisabledAt
+    ) {
+      logger.info(
+        {
+          userId,
+          itemRowId,
+          plaidItemIdExternal: item.itemId,
+          institutionName: item.institutionName,
+          refreshProductDisabledAt: item.refreshProductDisabledAt,
+          cooldownMs: refreshDisabledCooldownMs,
+        },
+        "[plaid-sync] user-initiated Sync retrying /transactions/refresh past prior INVALID_PRODUCT stamp — self-heal will clear it on success",
+      );
+    }
     // (#723) Captured for the SyncResult return so the UI can swap the
     // misleading "your bank is still preparing the initial batch" toast
     // for honest copy when the Plaid client lacks the
