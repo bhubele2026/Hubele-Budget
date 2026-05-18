@@ -1046,6 +1046,65 @@ export async function syncPlaidItem(
         }
       }
 
+      // (#720) Re-mint dedup on the cursor insert path. Mirror of the
+      // gap-backfill guard: when Plaid re-issues an internal
+      // transaction_id for the same real posting (observed after
+      // cursor resets and forced re-links), the unique constraint on
+      // plaid_transaction_id won't catch it — the new id is novel, so
+      // onConflictDoUpdate misses and we'd insert a duplicate.
+      // Look for an existing row on this account with the same amount
+      // and occurred_on ±2 days carrying a *different*
+      // plaid_transaction_id; if found, UPDATE in place and skip the
+      // insert. The cursor sync path needs this just as much as the
+      // backfill path — both can be the first to see the re-mint.
+      {
+        const remintLow = fmtISO(addDays(parseISO(t.date), -2));
+        const remintHigh = fmtISO(addDays(parseISO(t.date), 2));
+        const [remintMatch] = await db
+          .select({
+            id: transactionsTable.id,
+            oldPtid: transactionsTable.plaidTransactionId,
+          })
+          .from(transactionsTable)
+          .where(
+            and(
+              eq(transactionsTable.householdId, householdId),
+              eq(transactionsTable.plaidAccountId, t.account_id),
+              eq(transactionsTable.amount, signedAmount),
+              sql`${transactionsTable.occurredOn} >= ${remintLow}`,
+              sql`${transactionsTable.occurredOn} <= ${remintHigh}`,
+              sql`${transactionsTable.plaidTransactionId} is not null`,
+              sql`${transactionsTable.plaidTransactionId} <> ${t.transaction_id}`,
+            ),
+          )
+          .limit(1);
+        if (remintMatch) {
+          logger.warn(
+            {
+              householdId,
+              itemRowId,
+              externalAcctId: t.account_id,
+              oldPlaidTransactionId: remintMatch.oldPtid,
+              newPlaidTransactionId: t.transaction_id,
+              occurredOn: t.date,
+              amount: signedAmount,
+            },
+            "[plaid-sync] re-mint detected on cursor path — adopting new plaid_transaction_id on existing row instead of inserting",
+          );
+          await db
+            .update(transactionsTable)
+            .set({
+              plaidTransactionId: t.transaction_id,
+              occurredOn: t.date,
+              description,
+              amount: signedAmount,
+              notes: t.pending ? "[pending]" : null,
+            })
+            .where(eq(transactionsTable.id, remintMatch.id));
+          continue;
+        }
+      }
+
       const values = {
         // (#623 follow-up) Data-owner is the household owner, not the
         // actor that triggered this sync. Using the actor here was the
@@ -1510,7 +1569,14 @@ export async function syncPlaidItem(
           "[plaid-sync] stale cursor on user-initiated sync — falling back to /transactions/get gap-backfill",
         );
         try {
-          const bf = await runGapBackfillForItem(userId, itemRowId);
+          // (#720) overlapDays:1 so the window is
+          // (lastBankTxOn-1d, today]. Without overlap a pending→posted
+          // flip whose posted date equals lastBankTxOn would be
+          // excluded — the very class of bug the fallback exists to
+          // fix.
+          const bf = await runGapBackfillForItem(userId, itemRowId, {
+            overlapDays: 1,
+          });
           backfillAdded += bf.added;
           if (bf.importedDateRange) {
             backfillRange = backfillRange
@@ -2303,11 +2369,21 @@ export async function flagMalformedAccessTokens(): Promise<{
  *
  * Best-effort: any per-account or per-page failure is logged and the
  * scan continues — backfill must never poison the wrapping sync.
+ *
+ * `overlapDays` (default 0) extends the start of the window backwards
+ * by N days. The stale-cursor fallback passes 1 so the window becomes
+ * `(lastBankTxOn - 1 day, today]` — that overlap is what catches a
+ * pending→posted lifecycle flip that landed on the same date as the
+ * latest row already on file (without overlap we'd compute
+ * `start = lastBankTxOn + 1`, exclude that day from /transactions/get,
+ * and miss the posting that was previously pending). The upserts are
+ * idempotent on plaid_transaction_id, so revisiting overlap days is
+ * cheap and safe.
  */
 export async function runGapBackfillForItem(
   userId: string,
   itemRowId: string,
-  opts: { today?: Date } = {},
+  opts: { today?: Date; overlapDays?: number } = {},
 ): Promise<{
   added: number;
   importedDateRange: { min: string; max: string } | null;
@@ -2429,10 +2505,22 @@ export async function runGapBackfillForItem(
       .limit(1);
     const lastBankTxOn = latest?.occurredOn ?? null;
     let startStr: string | null = null;
+    // (#720) overlapDays widens the window backwards so a
+    // pending→posted lifecycle flip on `lastBankTxOn` itself isn't
+    // excluded by `addDay(...)`. Idempotent upsert on
+    // plaid_transaction_id makes the re-fetched day a no-op when no
+    // such flip happened.
+    const overlap = Math.max(0, opts.overlapDays ?? 0);
     if (lastBankTxOn) {
-      startStr = addDay(lastBankTxOn);
+      startStr =
+        overlap > 0
+          ? fmtISO(addDays(parseISO(lastBankTxOn), -overlap))
+          : addDay(lastBankTxOn);
     } else if (acct.importCutoffDate) {
-      startStr = addDay(acct.importCutoffDate);
+      startStr =
+        overlap > 0
+          ? fmtISO(addDays(parseISO(acct.importCutoffDate), -overlap))
+          : addDay(acct.importCutoffDate);
     }
     if (!startStr || startStr > todayStr) {
       perAccount.push({
