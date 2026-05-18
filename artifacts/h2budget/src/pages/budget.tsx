@@ -100,7 +100,24 @@ import {
   Info,
   ArrowUp,
   ArrowDown,
+  GripVertical,
 } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useToast } from "@/hooks/use-toast";
 import {
   Popover,
@@ -739,6 +756,62 @@ export default function BudgetPage() {
       });
   };
 
+  // Task #696 — drag-and-drop reorder. We keep the up/down buttons for
+  // keyboard / a11y / discoverability, and add a grip handle that drives
+  // a real dnd-kit sortable. The PointerSensor's 5px activation distance
+  // prevents accidental drags while clicking nearby controls; the
+  // TouchSensor's 150ms press-delay keeps touch scrolling from getting
+  // hijacked while still feeling responsive on mobile.
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 5 },
+    }),
+  );
+
+  // Persist a drag-end as normalized sortOrder values for the affected
+  // group. We rewrite every line in the group to a fresh 10-stride slot
+  // (10, 20, 30, …) so the new visual order survives a server reorder
+  // by-name tiebreak, and so ties from the seed (every row at 9999)
+  // get cleaned up the first time the user touches the group.
+  const handleDragReorder = async (
+    orderedLines: BudgetLineWithActual[],
+    event: DragEndEvent,
+  ) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const fromIdx = orderedLines.findIndex(
+      (l) => l.categoryId === active.id,
+    );
+    const toIdx = orderedLines.findIndex((l) => l.categoryId === over.id);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const reordered = arrayMove(orderedLines, fromIdx, toIdx);
+    try {
+      await Promise.all(
+        reordered.map((line, i) => {
+          const desired = (i + 1) * 10;
+          const cat = categories?.find((c) => c.id === line.categoryId);
+          if (cat && cat.sortOrder === desired) return Promise.resolve();
+          return updateCat.mutateAsync({
+            id: line.categoryId,
+            data: { sortOrder: desired },
+          });
+        }),
+      );
+      queryClient.invalidateQueries({
+        queryKey: getListCategoriesQueryKey(),
+      });
+      invalidate();
+    } catch (err) {
+      toast({
+        title: "Couldn't reorder",
+        description:
+          err instanceof Error ? err.message : "Could not reorder category",
+        variant: "destructive",
+      });
+    }
+  };
+
   const monthName = useMemo(() => {
     const d = new Date(currentMonth + "T00:00:00");
     return new Intl.DateTimeFormat("en-US", {
@@ -940,6 +1013,15 @@ export default function BudgetPage() {
                       <div className="col-span-2 text-right">Difference</div>
                       <div className="col-span-1 text-right">% Spent</div>
                     </div>
+                    <DndContext
+                      sensors={dragSensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={(e: DragEndEvent) => handleDragReorder(group.lines, e)}
+                    >
+                      <SortableContext
+                        items={group.lines.map((l) => l.categoryId)}
+                        strategy={verticalListSortingStrategy}
+                      >
                     <div className="divide-y divide-border">
                       {group.lines.length === 0 && (
                         <div className="px-4 py-6 text-sm text-muted-foreground italic">
@@ -960,7 +1042,6 @@ export default function BudgetPage() {
                             monthStart={currentMonth}
                             onUpdatePlanned={handleUpdatePlanned}
                             onDelete={handleDeleteCategory}
-                            onRename={handleRenameCategory}
                             onMoveUp={
                               prev
                                 ? () =>
@@ -1009,6 +1090,8 @@ export default function BudgetPage() {
                         );
                       })}
                     </div>
+                      </SortableContext>
+                    </DndContext>
 
                     <div className="p-3 border-t border-border bg-muted/10">
                       {addingFor === group.groupName ? (
@@ -1144,6 +1227,15 @@ export default function BudgetPage() {
                   <div className="col-span-2 text-right">Difference</div>
                   <div className="col-span-1 text-right">% Spent</div>
                 </div>
+                <DndContext
+                  sensors={dragSensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(e: DragEndEvent) => handleDragReorder(myBudgetGroup.lines, e)}
+                >
+                  <SortableContext
+                    items={myBudgetGroup.lines.map((l) => l.categoryId)}
+                    strategy={verticalListSortingStrategy}
+                  >
                 <div className="divide-y divide-border">
                   {myBudgetGroup.lines.length === 0 && (
                     <div
@@ -1173,6 +1265,9 @@ export default function BudgetPage() {
                       onReassignTxn={handleReassignTxn}
                       allCategories={categories ?? []}
                       assigning={updateTx.isPending}
+                      onMoveUp={null}
+                      onMoveDown={null}
+                      reorderDisabled={updateCat.isPending}
                       onRename={handleRenameMyBudgetCategory}
                       onMove={(catId, dir) =>
                         handleMoveMyBudgetCategory(myBudgetGroup.lines, catId, dir)
@@ -1183,6 +1278,8 @@ export default function BudgetPage() {
                     />
                   ))}
                 </div>
+                  </SortableContext>
+                </DndContext>
 
                 <div className="p-3 border-t border-border bg-muted/10">
                   {addingFor === myBudgetGroup.groupName ? (
@@ -1574,7 +1671,6 @@ function BudgetLineRow({
   monthStart,
   onUpdatePlanned,
   onDelete,
-  onRename,
   onMoveUp,
   onMoveDown,
   reorderDisabled,
@@ -1597,11 +1693,6 @@ function BudgetLineRow({
   monthStart: string;
   onUpdatePlanned: (categoryId: string, amount: string) => void;
   onDelete: (id: string) => void;
-  onRename: (
-    id: string,
-    nextName: string,
-    prevName: string,
-  ) => Promise<boolean>;
   onMoveUp: (() => void) | null;
   onMoveDown: (() => void) | null;
   reorderDisabled: boolean;
@@ -1679,6 +1770,31 @@ function BudgetLineRow({
   const isAvalanchePayment = line.categoryName === "Avalanche payment";
   const isReadOnly = sourceKind !== "manual";
 
+  // Task #696 — make the row a sortable item. The Avalanche row is
+  // system-managed (its position is decided by the Debts page), so we
+  // disable drag there. While dragging we lift the row above peers and
+  // dim it so the drop target is obvious. The drag handle below owns
+  // the listeners — pointer-down on the rest of the row (inputs,
+  // popover triggers, drill-down link) still behaves normally.
+  const {
+    attributes: dragAttributes,
+    listeners: dragListeners,
+    setNodeRef: setSortableRef,
+    transform: dragTransform,
+    transition: dragTransition,
+    isDragging,
+  } = useSortable({
+    id: line.categoryId,
+    disabled: isAvalanchePayment || reorderDisabled,
+  });
+  const sortableStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(dragTransform),
+    transition: dragTransition,
+    opacity: isDragging ? 0.5 : undefined,
+    zIndex: isDragging ? 10 : undefined,
+    position: isDragging ? "relative" : undefined,
+  };
+
   // Task #168 — pick the destination page for category drill-down based on
   // where this line's actuals actually came from. See
   // `pickCategoryDrillDownHref` above for the routing rule.
@@ -1694,6 +1810,8 @@ function BudgetLineRow({
 
   return (
     <div
+      ref={setSortableRef}
+      style={sortableStyle}
       className="group px-4 py-1.5 hover:bg-muted/10"
       data-testid={`row-budget-${line.categoryId}`}
     >
@@ -1876,6 +1994,27 @@ function BudgetLineRow({
             </Badge>
           ) : (
             <div className="ml-auto md:ml-0 flex items-center gap-1">
+              {/* Task #696 — drag handle. Present on every non-Avalanche
+                  row so power users can shuffle 10+ envelopes in one
+                  motion. Listeners live on this button only so other
+                  controls in the row (inputs, popovers, drill-down
+                  link) still respond to clicks/taps normally. Touch
+                  works via the page-level TouchSensor (150ms press to
+                  start a drag) which keeps mobile scrolling intact. */}
+              {!isAvalanchePayment && (
+                <button
+                  type="button"
+                  {...dragAttributes}
+                  {...dragListeners}
+                  className="h-6 w-6 inline-flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/40 cursor-grab active:cursor-grabbing touch-none transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                  disabled={reorderDisabled || renaming}
+                  title="Drag to reorder"
+                  aria-label="Drag to reorder"
+                  data-testid={`drag-handle-${line.categoryId}`}
+                >
+                  <GripVertical className="w-3 h-3" />
+                </button>
+              )}
               {/* Task #692 — reorder this category within its group.
                   Buttons are present on every non-Avalanche row so power
                   users can shuffle bill-backed envelopes too; they no-op
