@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   PlaidReconnectButton,
   isPlaidReauthCode,
+  isSyntheticPlaidItem,
   plaidReauthReason,
 } from "@/components/plaid-reconnect-button";
 import { formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
@@ -37,8 +38,15 @@ export type PlaidItemsReauthSummary = {
 export function findPlaidItemsNeedingReauth(
   items: PlaidItemDetail[] | null | undefined,
 ): PlaidItemsReauthSummary {
-  const affected = (items ?? []).filter((it) =>
-    isPlaidReauthCode(it.lastSyncErrorCode),
+  // (#710) Exclude synthetic seed rows (itemId starting with `seed-`,
+  // e.g. the April-2026 Chase placeholder) — they're never real Plaid
+  // connections, so Reconnect can't do anything for them. Without this
+  // filter the dashboard banner shouts "Chase needs reconnect" any time
+  // the env-mismatch remediation has stamped INVALID_ACCESS_TOKEN on
+  // the placeholder row, even when the user's real Chase item is
+  // healthy and syncing.
+  const affected = (items ?? []).filter(
+    (it) => isPlaidReauthCode(it.lastSyncErrorCode) && !isSyntheticPlaidItem(it),
   );
   // Stable, deterministic ordering so re-renders don't flicker between
   // candidates when several items are failing at once.

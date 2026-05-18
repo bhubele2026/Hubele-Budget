@@ -213,6 +213,51 @@ describe("(#217) findPlaidItemsNeedingReauth", () => {
     expect(findPlaidItemsNeedingReauth(null).worst).toBeNull();
     expect(findPlaidItemsNeedingReauth(undefined).items).toEqual([]);
   });
+
+  it("(#710) excludes synthetic seed rows whose itemId starts with 'seed-'", () => {
+    // The April-2026 Chase placeholder row (item_id seed-april-2026-chase)
+    // can carry INVALID_ACCESS_TOKEN after the env-mismatch remediation
+    // runs, but it's not a real Plaid link — Reconnect would no-op. The
+    // banner must skip it so a healthy real Chase doesn't visually look
+    // dead.
+    const summary = findPlaidItemsNeedingReauth([
+      makeItem({
+        id: "i-seed",
+        itemId: "seed-april-2026-chase",
+        institutionName: "Chase",
+        lastSyncErrorCode: "INVALID_ACCESS_TOKEN",
+      }),
+      makeItem({
+        id: "i-real",
+        itemId: "j5narRX-real-chase",
+        institutionName: "Chase",
+        lastSyncErrorCode: null,
+      }),
+    ]);
+    expect(summary.items).toEqual([]);
+    expect(summary.worst).toBeNull();
+  });
+
+  it("(#710) still surfaces a real reauth row when a synthetic seed is also present", () => {
+    // The synthetic-row filter must NOT swallow a legitimately broken
+    // real item that happens to share the dashboard with a seed row.
+    const summary = findPlaidItemsNeedingReauth([
+      makeItem({
+        id: "i-seed",
+        itemId: "seed-april-2026-chase",
+        institutionName: "Chase",
+        lastSyncErrorCode: "INVALID_ACCESS_TOKEN",
+      }),
+      makeItem({
+        id: "i-real",
+        itemId: "k40RwzVbb-real-amex",
+        institutionName: "American Express",
+        lastSyncErrorCode: "ITEM_LOGIN_REQUIRED",
+      }),
+    ]);
+    expect(summary.items).toHaveLength(1);
+    expect(summary.worst?.id).toBe("i-real");
+  });
 });
 
 describe("(#217) PlaidReauthBannerView", () => {

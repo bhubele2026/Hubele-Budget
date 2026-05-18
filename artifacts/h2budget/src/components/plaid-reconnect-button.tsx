@@ -39,6 +39,23 @@ export function isPlaidReauthCode(code: string | null | undefined): boolean {
   return PLAID_REAUTH_ERROR_CODES.has(code);
 }
 
+// (#710) Mirrors the server-side `isSyntheticPlaidItem` helper in
+// artifacts/api-server/src/lib/plaid.ts. Synthetic seed rows (e.g. the
+// April-2026 Chase placeholder inserted by aprilChaseSeed.ts) are not
+// real Plaid connections — they exist only to anchor the bank-snapshot
+// tile before the user has completed OAuth. Their itemId always starts
+// with `seed-`. We never want the reauth banner / Connect-a-bank guard
+// / sync popover to surface them as "needs reconnect", because there's
+// no Plaid Link update-mode flow that can heal a row Plaid has never
+// heard of (clicking Reconnect would silently no-op). Keep the prefix
+// in sync with SYNTHETIC_ITEM_ID in aprilChaseSeed.ts.
+export function isSyntheticPlaidItem(
+  item: { itemId?: string | null } | null | undefined,
+): boolean {
+  const id = item?.itemId ?? "";
+  return id.startsWith("seed-");
+}
+
 // (#228) Friendly per-code copy that the page-top reconnect banner, the
 // DebtReauthBanner, and the Settings "Needs reconnect" badge all share so
 // the user knows *why* the Plaid Link popup is about to ask for credentials

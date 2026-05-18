@@ -56,6 +56,10 @@ vi.mock("react-plaid-link", () => ({
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
+  // (#706/#710) plaid-link-button reads /plaid/items to gate the
+  // fresh-link guard dialog. Default to an empty list so the existing
+  // post-link-progress tests below don't trip the guard.
+  useListPlaidItems: () => ({ data: [], isFetched: true }),
   useCreatePlaidLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
   useExchangePlaidPublicToken: () => ({
     mutate: (

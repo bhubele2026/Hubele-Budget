@@ -46,6 +46,14 @@ BEGIN
       access_token IS NOT NULL
       AND access_token !~ ('^access-' || target_env || '-')
       AND access_token ~ '^access-(sandbox|development|production)-'
+      -- (#710) Skip synthetic seed rows (item_id `seed-…`, e.g. the
+      -- April-2026 Chase placeholder from aprilChaseSeed.ts). Their
+      -- access_token is a well-formed but fake `access-sandbox-seed-…`
+      -- string that intentionally fails the env check, but there's no
+      -- real Plaid item behind it — flagging it INVALID_ACCESS_TOKEN
+      -- just spawns a phantom "Chase needs reconnect" banner that no
+      -- Plaid update-mode flow can clear (Task #710).
+      AND item_id NOT LIKE 'seed-%'
       AND (
         last_sync_error_code IS DISTINCT FROM 'INVALID_ACCESS_TOKEN'
         OR last_sync_error IS DISTINCT FROM

@@ -39,6 +39,7 @@ import {
 import {
   PlaidReconnectButton,
   isPlaidReauthCode,
+  isSyntheticPlaidItem,
 } from "@/components/plaid-reconnect-button";
 
 export const PLAID_LINK_TOKEN_STORAGE_KEY = "h2:plaid:link_token";
@@ -162,8 +163,16 @@ export function PlaidLinkButton({
   const { data: existingItems, isFetched: itemsFetched } = useListPlaidItems();
   const itemsNeedingReauth: PlaidItemDetail[] = useMemo(
     () =>
-      (existingItems ?? []).filter((it) =>
-        isPlaidReauthCode(it.lastSyncErrorCode),
+      // (#710) Skip synthetic seed rows (itemId `seed-…`) — they're a
+      // server-side placeholder for the bank-snapshot tile, not a real
+      // Plaid link. They can carry INVALID_ACCESS_TOKEN when the
+      // env-mismatch remediation has stamped them, but there's no Plaid
+      // update-mode flow that can heal them, so they shouldn't trip the
+      // fresh-link guard dialog and steer the user toward a Reconnect
+      // popup that would no-op.
+      (existingItems ?? []).filter(
+        (it) =>
+          isPlaidReauthCode(it.lastSyncErrorCode) && !isSyntheticPlaidItem(it),
       ),
     [existingItems],
   );

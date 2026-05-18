@@ -46,6 +46,7 @@ import {
 import {
   PlaidReconnectButton,
   isPlaidReauthCode,
+  isSyntheticPlaidItem,
   plaidReauthReason,
 } from "@/components/plaid-reconnect-button";
 import { OwnerInvitationsSection } from "@/components/owner-invitations";
@@ -662,7 +663,12 @@ export default function SettingsPage() {
           {(plaidItems ?? []).map((item) => {
             const isSyncing = isSyncPending && syncingItemId === item.id;
             const isAnySyncing = isSyncPending;
-            const needsReconnect = isPlaidReauthCode(item.lastSyncErrorCode);
+            // (#710) Synthetic seed rows (item_id like 'seed-…') aren't real
+            // Plaid links — Reconnect would no-op. Hide the badge + CTA for
+            // them so the user isn't pushed to relink a placeholder.
+            const needsReconnect =
+              isPlaidReauthCode(item.lastSyncErrorCode) &&
+              !isSyntheticPlaidItem({ itemId: item.itemId });
             return (
               <div
                 key={item.id}
