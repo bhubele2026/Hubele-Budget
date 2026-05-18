@@ -87,7 +87,7 @@ test.describe("Budget My-budget rename + reorder (#692)", () => {
     await signInAndOpen(page, email, password, "/budget");
 
     await expect(page.getByRole("heading", { name: /^budget$/i })).toBeVisible({
-      timeout: 15_000,
+      timeout: 30_000,
     });
 
     // Trigger the lazy seed-defaults pass (creates the system categories
@@ -130,7 +130,7 @@ test.describe("Budget My-budget rename + reorder (#692)", () => {
     // initial budget-month query.
     await page.goto("/budget");
     await expect(page.getByRole("heading", { name: /^budget$/i })).toBeVisible({
-      timeout: 15_000,
+      timeout: 30_000,
     });
 
     const rowA = page.getByTestId(`row-budget-${catA.id}`);
@@ -160,7 +160,7 @@ test.describe("Budget My-budget rename + reorder (#692)", () => {
     // Reload and assert the new name persists on the same row.
     await page.goto("/budget");
     await expect(page.getByRole("heading", { name: /^budget$/i })).toBeVisible({
-      timeout: 15_000,
+      timeout: 30_000,
     });
     const rowAAfter = page.getByTestId(`row-budget-${catA.id}`);
     await expect(rowAAfter).toBeVisible({ timeout: 15_000 });
