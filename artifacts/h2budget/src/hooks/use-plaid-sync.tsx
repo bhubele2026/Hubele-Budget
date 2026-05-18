@@ -512,25 +512,46 @@ export function usePlaidSync() {
                         .map((r) => `${r.count} via '${r.pattern}'`)
                         .join(", ")}${summary.extraRules > 0 ? `, +${summary.extraRules} more` : ""}.`
                     : `${headline}${addedDescHint}${throughHint}${recoveryHint}.`;
+                  // (#728) Always give the user a path to the rows
+                  // that just landed. If any new rows were auto-attributed
+                  // by a mapping rule, the most useful destination is
+                  // the rules audit page (so the user can see which
+                  // rule grabbed them). Otherwise the rows were either
+                  // forecast-auto-matched and routed into the bucket
+                  // or sitting uncategorized — in both cases the
+                  // forecast page is the right place to land, because
+                  // the task explicitly requires a "View in forecast"
+                  // CTA so a fully-auto-matched sync doesn't leave the
+                  // user with no way to reach the new data.
+                  const hasRuleAttribution =
+                    !!summary.totalAttributed && summary.ruleIds.length > 0;
+                  const toastAction = hasRuleAttribution ? (
+                    <ToastAction
+                      altText="View matched rules"
+                      onClick={() =>
+                        navigate(
+                          `/mapping-rules?focus=${summary.ruleIds
+                            .map((id) => encodeURIComponent(id))
+                            .join(",")}`,
+                        )
+                      }
+                      data-testid="button-toast-view-matched-rules"
+                    >
+                      View
+                    </ToastAction>
+                  ) : totals.added > 0 ? (
+                    <ToastAction
+                      altText="View in forecast"
+                      onClick={() => navigate("/forecast")}
+                      data-testid="button-toast-view-in-forecast"
+                    >
+                      View in forecast
+                    </ToastAction>
+                  ) : undefined;
                   toast({
                     title: viaGapBackfill ? "Caught up via direct fetch" : "Sync complete",
                     description,
-                    action:
-                      summary.totalAttributed && summary.ruleIds.length > 0 ? (
-                        <ToastAction
-                          altText="View matched rules"
-                          onClick={() =>
-                            navigate(
-                              `/mapping-rules?focus=${summary.ruleIds
-                                .map((id) => encodeURIComponent(id))
-                                .join(",")}`,
-                            )
-                          }
-                          data-testid="button-toast-view-matched-rules"
-                        >
-                          View
-                        </ToastAction>
-                      ) : undefined,
+                    action: toastAction,
                   });
                 }
               }

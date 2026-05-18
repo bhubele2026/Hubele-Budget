@@ -2155,11 +2155,67 @@ export default function TransactionsPage() {
                             {formatTransactionSource(tx.source)}
                           </span>
                         </div>
-                        <div className="text-[11px] text-muted-foreground">
-                          {new Date(`${tx.occurredOn}T00:00:00`).toLocaleDateString(
-                            undefined,
-                            { month: "short", day: "numeric" },
-                          )}
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <span>
+                            {new Date(`${tx.occurredOn}T00:00:00`).toLocaleDateString(
+                              undefined,
+                              { month: "short", day: "numeric" },
+                            )}
+                          </span>
+                          {/* (#728) Pending rows are still subject to the
+                              forecast auto-matcher — without this badge
+                              the user can't tell whether a pending
+                              charge is already tracked against a
+                              forecast item or is a brand-new unplanned
+                              charge they need to react to. Mirrors the
+                              forecast-state chip rendered on posted
+                              rows below. */}
+                          {tx.forecastFlag && (() => {
+                            const r = resolutionByTxnId.get(tx.id);
+                            if (r?.status === "matched") {
+                              return (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] border-primary/30 text-primary bg-primary/10"
+                                  data-testid={`badge-forecast-state-${tx.id}`}
+                                  data-forecast-state="matched"
+                                >
+                                  <Inbox className="w-3 h-3 mr-1" /> Matched to forecast
+                                </Badge>
+                              );
+                            }
+                            if (
+                              r?.status === "ignored_unforecasted" ||
+                              r?.status === "unplanned"
+                            ) {
+                              return (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] border-slate-300 text-slate-700 bg-slate-50"
+                                  data-testid={`badge-forecast-state-${tx.id}`}
+                                  data-forecast-state="unplanned"
+                                >
+                                  <Inbox className="w-3 h-3 mr-1" /> Unplanned
+                                </Badge>
+                              );
+                            }
+                            return (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] border-amber-200 text-amber-800 bg-amber-50"
+                                data-testid={`badge-forecast-state-${tx.id}`}
+                                data-forecast-state="in-review-bucket"
+                              >
+                                <Inbox className="w-3 h-3 mr-1" /> In Review Bucket
+                              </Badge>
+                            );
+                          })()}
+                          <MatchedRuleChip
+                            categoryId={tx.categoryId}
+                            matchedRuleId={tx.matchedRuleId}
+                            rules={mappingRules}
+                            testIdSuffix={`pending-${tx.id}`}
+                          />
                         </div>
                       </div>
                     </div>

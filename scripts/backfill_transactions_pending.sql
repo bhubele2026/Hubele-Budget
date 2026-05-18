@@ -8,16 +8,26 @@
 -- carries the legacy marker. Plaid sync from #728 onward writes the
 -- boolean directly, so newly-inserted pending rows already have
 -- pending=true and notes IS NULL — those rows are skipped by the
--- `pending = FALSE` guard.
+-- `pending = FALSE` guard. Match is case-insensitive and substring
+-- (`ILIKE '%[pending]%'`) so any historical row that ended up with
+-- a user-typed prefix/suffix around the marker still gets migrated
+-- — the task narrative explicitly calls out this broader predicate
+-- to make sure no pending rows are left invisible after rollout.
 UPDATE transactions
 SET pending = TRUE
-WHERE notes = '[pending]'
+WHERE notes ILIKE '%[pending]%'
   AND pending = FALSE;
 
--- Step 2: strip the legacy marker from notes. Only touches rows whose
--- notes column is exactly the marker string (the historical write
--- pattern in plaidSync) so we never accidentally clobber a user-typed
--- note that happens to mention the word "pending".
+-- Step 2: strip the legacy marker from notes. We surgically remove
+-- only the `[pending]` token (case-insensitive) and collapse any
+-- whitespace it leaves behind, so a user-typed note like
+-- "[pending] reimburse from work" becomes "reimburse from work"
+-- instead of being nulled out wholesale. Rows whose notes was
+-- exactly the marker collapse to an empty string, which we then
+-- normalize to NULL so the field returns to clean free-text.
 UPDATE transactions
-SET notes = NULL
-WHERE notes = '[pending]';
+SET notes = NULLIF(
+  btrim(regexp_replace(notes, '\[pending\]', '', 'gi')),
+  ''
+)
+WHERE notes ILIKE '%[pending]%';
