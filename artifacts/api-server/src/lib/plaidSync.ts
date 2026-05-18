@@ -717,10 +717,25 @@ export async function syncPlaidItem(
               },
               "[plaid-sync] cleared stale refreshProductDisabledAt after successful /transactions/refresh",
             );
-          } catch {
+          } catch (clearErr) {
             // Best-effort — the refresh still ran, so the user's data
             // is fresh. The next successful refresh will retry the
-            // clear.
+            // clear. Log at warn so we have observability if this
+            // ever starts failing systematically (e.g. constraint
+            // change, transient DB pool exhaustion).
+            logger.warn(
+              {
+                userId,
+                itemRowId,
+                plaidItemIdExternal: item.itemId,
+                institutionName: item.institutionName,
+                err:
+                  clearErr instanceof Error
+                    ? clearErr.message
+                    : String(clearErr),
+              },
+              "[plaid-sync] failed to clear stale refreshProductDisabledAt after successful refresh (will retry on next sync)",
+            );
           }
         }
       } catch (refreshErr) {
