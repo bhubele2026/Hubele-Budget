@@ -43,4 +43,5 @@ export type PlaidSyncResultItemsItem = {
   refreshDisabledReason?: string | null;
   /** @nullable */
   lastSyncedAt?: string | null;
+  addedDescriptions?: string[];
 };

@@ -1657,7 +1657,7 @@ components:
 
     Transaction:
       type: object
-      required: [id, occurredOn, description, amount, forecastFlag, weeklyAllowance, monthlyAllowance, unplannedAllowance, reimbursable, reimbursed, reviewed, isTransfer, isTransferUserOverridden, isExternalCardPayment, source]
+      required: [id, occurredOn, description, amount, forecastFlag, weeklyAllowance, monthlyAllowance, unplannedAllowance, reimbursable, reimbursed, reviewed, isTransfer, isTransferUserOverridden, isExternalCardPayment, pending, source]
       properties:
         id: { type: string }
         occurredOn: { type: string }
@@ -1710,6 +1710,17 @@ components:
         plaidTransactionId: { type: ["string", "null"] }
         plaidAccountId: { type: ["string", "null"] }
         debtId: { type: ["string", "null"] }
+        pending:
+          type: boolean
+          description: |
+            (#728) True when Plaid reported this transaction as pending
+            on the most recent /transactions/sync. Replaces the legacy
+            `notes='[pending]'` string marker the sync used to write.
+            Drives the Transactions page "Pending" section (pending
+            rows pinned above the dated day-groups) and the "Pending"
+            badge on each row. Flips back to false on the
+            pending→posted lifecycle when Plaid surfaces the posted
+            twin as a `modified` row.
         matchedRuleId:
           type: ["string", "null"]
           description: |
@@ -3655,6 +3666,16 @@ components:
               # clicking Sync again right now won't surface fresh
               # pending charges. Null on the very first sync.
               lastSyncedAt: { type: ["string", "null"] }
+              # (#728) Top-N descriptions of rows this sync actually
+              # inserted (sourced from Plaid's `added` array only,
+              # capped server-side at 5). The post-sync toast renders
+              # a few names ("Added 3: VENMO, KROGER, +1 more")
+              # instead of a bare "Added 3" so the user can recognize
+              # what landed at a glance. Omitted (or empty) when this
+              # item added nothing.
+              addedDescriptions:
+                type: array
+                items: { type: string }
     PlaidConsentRefreshItem:
       type: object
       required:

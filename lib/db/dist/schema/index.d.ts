@@ -2129,6 +2129,23 @@ export declare const transactionsTable: import("drizzle-orm/pg-core").PgTableWit
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        pending: import("drizzle-orm/pg-core").PgColumn<{
+            name: "pending";
+            tableName: "transactions";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         debtId: import("drizzle-orm/pg-core").PgColumn<{
             name: "debt_id";
             tableName: "transactions";
@@ -2393,6 +2410,23 @@ export declare const plaidItemsTable: import("drizzle-orm/pg-core").PgTableWithC
         }, {}, {}>;
         refreshProductDisabledAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "refresh_product_disabled_at";
+            tableName: "plaid_items";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        refreshRateLimitedUntil: import("drizzle-orm/pg-core").PgColumn<{
+            name: "refresh_rate_limited_until";
             tableName: "plaid_items";
             dataType: "date";
             columnType: "PgTimestamp";
@@ -4664,6 +4698,7 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
     plaidTransactionId: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pfcPrimary: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pfcDetailed: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
+    pending: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
 }, {
     out: {};
     in: {};

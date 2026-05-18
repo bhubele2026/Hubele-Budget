@@ -662,9 +662,24 @@ export default function TransactionsPage() {
   // comparator used to compute the running balance. Without this,
   // Postgres returns same-day rows in an unspecified order and the
   // running balance values shown beside them appear non-monotonic.
+  // (#728) Split pending Plaid charges out of the dated day-groups
+  // and into a single pinned "Pending" group rendered above them.
+  // Pending rows occurredOn drifts (Plaid often stamps them as
+  // today even when they'll post earlier) and they vanish/re-key
+  // when Plaid surfaces the posted twin — so burying them inside
+  // their drifted day made it impossible to scan "what's still
+  // settling?" at a glance. Pinning them keeps the lifecycle
+  // explicit. Totals on monthly tiles still include these rows
+  // (they're real money) — only the visual grouping changes.
+  const pendingItems = useMemo(
+    () =>
+      filtered.filter((t) => t.pending).slice().sort(compareNewestFirst),
+    [filtered],
+  );
   const groups = useMemo(() => {
     const map = new Map<string, Transaction[]>();
     for (const t of filtered) {
+      if (t.pending) continue;
       const k = t.occurredOn.slice(0, 10);
       const arr = map.get(k);
       if (arr) arr.push(t);
@@ -2050,13 +2065,122 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {groups.length === 0 && (
+      {groups.length === 0 && pendingItems.length === 0 && (
         <Card>
           <CardContent className="p-8 text-center text-muted-foreground">
             No transactions match these filters.
           </CardContent>
         </Card>
       )}
+
+      {/* (#728) Pinned "Pending" section above the dated day-groups.
+          Renders the same row markup as the day-groups (reusing
+          DayGroup) so quick-categorize, the matched-rule chip, and
+          row selection work identically — only the header and
+          ordering change. dayKey is "pending" so the existing
+          selection / day-net handlers can address it the same way
+          as any other day-group. Hidden when no pending rows exist
+          so we don't render an empty header. */}
+      {pendingItems.length > 0 && (() => {
+        const items = pendingItems;
+        const ids = items.map((t) => t.id);
+        const allSelected = ids.every((id) => selected.has(id));
+        const someSelected =
+          !allSelected && ids.some((id) => selected.has(id));
+        const dayNet = items.reduce((s, t) => s + parseSigned(t.amount), 0);
+        const dayNetNode = (
+          <span
+            className={cn("tabular-nums", moneyColorClass(dayNet))}
+            data-testid="day-net-pending"
+          >
+            {dayNet > 0 ? `+${formatCurrency(dayNet)}` : formatCurrency(dayNet)}
+          </span>
+        );
+        return (
+          <DayGroup
+            key="pending"
+            dayKey="pending"
+            headerLabel="Pending"
+            todayBadgeLabel="Pending"
+            count={items.length}
+            isToday
+            todayAccent="amber"
+            selectionState={
+              allSelected ? true : someSelected ? "indeterminate" : false
+            }
+            onToggleAll={(on) => toggleDay(ids, on)}
+            totalNode={dayNetNode}
+          >
+            <div className="divide-y divide-border" data-testid="group-pending">
+              {items.map((tx) => {
+                const isIgnored =
+                  !!ignoreCatId && tx.categoryId === ignoreCatId;
+                return (
+                  <div
+                    key={tx.id}
+                    className={cn(
+                      "p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-muted/30 transition-colors",
+                      (tx.forecastFlag || isIgnored) && "opacity-60 bg-muted/20",
+                      focusTxId === tx.id &&
+                        "ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/30",
+                    )}
+                    data-testid={`row-tx-${tx.id}`}
+                    data-pending="true"
+                  >
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <Checkbox
+                        checked={selected.has(tx.id)}
+                        onCheckedChange={() => toggleOne(tx.id)}
+                        aria-label="Select"
+                        className="mt-1"
+                        data-testid={`select-${tx.id}`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+                          <span className="font-medium text-foreground truncate">
+                            {tx.description}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] font-normal border-amber-200 text-amber-700 bg-amber-50"
+                            data-testid={`badge-pending-${tx.id}`}
+                            title="Plaid reported this charge as pending — it will flip to posted automatically when the bank finalizes it."
+                          >
+                            Pending
+                          </Badge>
+                          <span
+                            className="text-[11px] text-muted-foreground/80"
+                            data-testid={`text-source-${tx.id}`}
+                          >
+                            {formatTransactionSource(tx.source)}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {new Date(`${tx.occurredOn}T00:00:00`).toLocaleDateString(
+                            undefined,
+                            { month: "short", day: "numeric" },
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "tabular-nums font-medium",
+                          moneyColorClass(parseSigned(tx.amount)),
+                        )}
+                        data-testid={`amount-${tx.id}`}
+                      >
+                        {formatCurrency(parseSigned(tx.amount))}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </DayGroup>
+        );
+      })()}
 
       {groups.map(([dayKey, items]) => {
         const ids = items.map((t) => t.id);

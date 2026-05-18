@@ -55,6 +55,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        pending: zod.ZodBoolean;
         matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
@@ -72,6 +73,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
         source: string;
+        pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
@@ -99,6 +101,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
         source: string;
+        pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
@@ -181,6 +184,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
         source: string;
+        pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
@@ -235,6 +239,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
         source: string;
+        pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
@@ -327,6 +332,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pending: zod.ZodBoolean;
     matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
@@ -344,6 +350,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
     source: string;
+    pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
@@ -371,6 +378,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
     source: string;
+    pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
@@ -409,6 +417,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pending: zod.ZodBoolean;
     matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
@@ -426,6 +435,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
     source: string;
+    pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
@@ -453,6 +463,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
     source: string;
+    pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
@@ -635,6 +646,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pending: zod.ZodBoolean;
     matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
@@ -652,6 +664,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
     source: string;
+    pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
@@ -679,6 +692,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
     source: string;
+    pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
@@ -875,6 +889,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pending: zod.ZodBoolean;
     matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
@@ -892,6 +907,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
     source: string;
+    pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
@@ -919,6 +935,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     isTransferUserOverridden: boolean;
     isExternalCardPayment: boolean;
     source: string;
+    pending: boolean;
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
@@ -4358,6 +4375,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         plaidTransactionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         plaidAccountId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         debtId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        pending: zod.ZodBoolean;
         matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
@@ -4375,6 +4393,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
         source: string;
+        pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
@@ -4402,6 +4421,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
         source: string;
+        pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
@@ -4624,19 +4644,19 @@ export declare const GetForecastResponse: zod.ZodObject<{
     }, "strip", zod.ZodTypeAny, {
         at: string;
         balance: string;
+        pending?: number | null | undefined;
         gap?: string | null | undefined;
         forecastEnd?: string | null | undefined;
         bankEnd?: string | null | undefined;
-        pending?: number | null | undefined;
         reconciled?: boolean | null | undefined;
         closedAt?: string | null | undefined;
     }, {
         at: string;
         balance: string;
+        pending?: number | null | undefined;
         gap?: string | null | undefined;
         forecastEnd?: string | null | undefined;
         bankEnd?: string | null | undefined;
-        pending?: number | null | undefined;
         reconciled?: boolean | null | undefined;
         closedAt?: string | null | undefined;
     }>>>;
@@ -4685,6 +4705,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
         source: string;
+        pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
@@ -4764,10 +4785,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
     monthSnapshots?: Record<string, {
         at: string;
         balance: string;
+        pending?: number | null | undefined;
         gap?: string | null | undefined;
         forecastEnd?: string | null | undefined;
         bankEnd?: string | null | undefined;
-        pending?: number | null | undefined;
         reconciled?: boolean | null | undefined;
         closedAt?: string | null | undefined;
     }> | undefined;
@@ -4804,6 +4825,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         isTransferUserOverridden: boolean;
         isExternalCardPayment: boolean;
         source: string;
+        pending: boolean;
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
@@ -4883,10 +4905,10 @@ export declare const GetForecastResponse: zod.ZodObject<{
     monthSnapshots?: Record<string, {
         at: string;
         balance: string;
+        pending?: number | null | undefined;
         gap?: string | null | undefined;
         forecastEnd?: string | null | undefined;
         bankEnd?: string | null | undefined;
-        pending?: number | null | undefined;
         reconciled?: boolean | null | undefined;
         closedAt?: string | null | undefined;
     }> | undefined;
@@ -5206,17 +5228,17 @@ export declare const CloseForecastMonthBody: zod.ZodObject<{
     reconciled: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
 }, "strip", zod.ZodTypeAny, {
     monthKey: string;
+    pending?: number | null | undefined;
     gap?: string | null | undefined;
     forecastEnd?: string | null | undefined;
     bankEnd?: string | null | undefined;
-    pending?: number | null | undefined;
     reconciled?: boolean | null | undefined;
 }, {
     monthKey: string;
+    pending?: number | null | undefined;
     gap?: string | null | undefined;
     forecastEnd?: string | null | undefined;
     bankEnd?: string | null | undefined;
-    pending?: number | null | undefined;
     reconciled?: boolean | null | undefined;
 }>;
 export declare const CloseForecastMonthResponse: zod.ZodObject<{
@@ -6244,6 +6266,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         lastOccurredOn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         refreshDisabledReason: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         lastSyncedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        addedDescriptions: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
     }, "strip", zod.ZodTypeAny, {
         itemId: string;
         added: number;
@@ -6272,6 +6295,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         plaidErrorMessage?: string | null | undefined;
         lastOccurredOn?: string | null | undefined;
         refreshDisabledReason?: string | null | undefined;
+        addedDescriptions?: string[] | undefined;
     }, {
         itemId: string;
         added: number;
@@ -6300,6 +6324,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         plaidErrorMessage?: string | null | undefined;
         lastOccurredOn?: string | null | undefined;
         refreshDisabledReason?: string | null | undefined;
+        addedDescriptions?: string[] | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     items: {
@@ -6330,6 +6355,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         plaidErrorMessage?: string | null | undefined;
         lastOccurredOn?: string | null | undefined;
         refreshDisabledReason?: string | null | undefined;
+        addedDescriptions?: string[] | undefined;
     }[];
 }, {
     items: {
@@ -6360,6 +6386,7 @@ export declare const SyncPlaidTransactionsResponse: zod.ZodObject<{
         plaidErrorMessage?: string | null | undefined;
         lastOccurredOn?: string | null | undefined;
         refreshDisabledReason?: string | null | undefined;
+        addedDescriptions?: string[] | undefined;
     }[];
 }>;
 export declare const GetPlaidEnvironmentResponse: zod.ZodObject<{

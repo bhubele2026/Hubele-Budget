@@ -188,6 +188,12 @@ export type SyncResult = {
   //                      the user can see *why* a previously-stuck
   //                      Sync now caught up.
   deliveryMode?: "cursor" | "gap-backfill";
+  // (#728) Top-N descriptions of rows this sync actually added (from
+  // Plaid's `added` array, capped at 5). The post-sync toast names a
+  // few rows so the user can recognize what landed — far more useful
+  // than the bare "Added N" count, which trained users to ignore the
+  // toast. Empty when the sync added nothing (cursor was caught up).
+  addedDescriptions?: string[];
 };
 
 type PlaidErrorBody = {
@@ -724,7 +730,29 @@ export async function syncPlaidItem(
       refreshDisabledReason =
         "transactions_refresh add-on not enabled on this Plaid client";
     }
-    if (forceRefresh && !refreshDisabledRecently) {
+    // (#728) Circuit-breaker: when Plaid returned TRANSACTIONS_LIMIT
+    // (HTTP 429) on a recent /transactions/refresh, we stamped
+    // `refresh_rate_limited_until = now()+1h` on the item. Until that
+    // stamp passes, every subsequent Sync click short-circuits the
+    // refresh call entirely — otherwise we'd burn the per-item quota
+    // on a doomed retry and the next legitimate refresh (e.g. after
+    // the cooldown clears) gets pushed even further out. Cleared on
+    // the next successful refresh (self-heal). Honors the same
+    // `forceRefresh` gate so background callers never accidentally
+    // bypass the breaker.
+    const rateLimitedUntilMs = item.refreshRateLimitedUntil
+      ? new Date(item.refreshRateLimitedUntil).getTime()
+      : null;
+    const refreshRateLimitedNow =
+      rateLimitedUntilMs != null && rateLimitedUntilMs > Date.now();
+    if (forceRefresh && refreshRateLimitedNow && !refreshDisabledReason) {
+      refreshDisabledReason = "rate_limited";
+    }
+    if (
+      forceRefresh &&
+      !refreshDisabledRecently &&
+      !refreshRateLimitedNow
+    ) {
       try {
         await plaid().transactionsRefresh({
           access_token: item.accessToken,
@@ -737,11 +765,20 @@ export async function syncPlaidItem(
         // SQL fix again the next time the add-on flips on (e.g. after
         // Plaid approves a product-add request mid-week, as just
         // happened on 2026-05-18).
-        if (item.refreshProductDisabledAt) {
+        // (#728) Self-heal: a successful refresh proves the per-item
+        // quota window has rolled over, so any prior TRANSACTIONS_LIMIT
+        // breaker stamp is stale. Clear it in the same UPDATE as the
+        // INVALID_PRODUCT stamp so we make one round-trip instead of
+        // two, and so partial clears can't leave the breaker engaged
+        // after a clean refresh.
+        if (item.refreshProductDisabledAt || item.refreshRateLimitedUntil) {
           try {
             await db
               .update(plaidItemsTable)
-              .set({ refreshProductDisabledAt: null })
+              .set({
+                refreshProductDisabledAt: null,
+                refreshRateLimitedUntil: null,
+              })
               .where(eq(plaidItemsTable.id, itemRowId));
             logger.info(
               {
@@ -783,6 +820,29 @@ export async function syncPlaidItem(
         // enabled" case so unrelated INVALID_PRODUCT errors (e.g. an
         // assets-only token someone routed here) don't get
         // misclassified as a permanently-disabled refresh.
+        // (#728) Plaid TRANSACTIONS_LIMIT (HTTP 429) means the per-item
+        // /transactions/refresh quota for this rolling window is
+        // exhausted. Engage the circuit-breaker: stamp
+        // `refresh_rate_limited_until = now()+1h` so subsequent Sync
+        // clicks short-circuit the refresh call (the cursor walk and
+        // gap-backfill below still run, so the user keeps seeing any
+        // newly-cached Plaid data). Surface "rate_limited" on this
+        // sync's result so the toast can swap to honest copy.
+        if (refreshExtracted.code === "TRANSACTIONS_LIMIT") {
+          refreshDisabledReason = "rate_limited";
+          try {
+            await db
+              .update(plaidItemsTable)
+              .set({
+                refreshRateLimitedUntil: new Date(Date.now() + 60 * 60 * 1000),
+              })
+              .where(eq(plaidItemsTable.id, itemRowId));
+          } catch {
+            // Best-effort — the in-memory `refreshDisabledReason`
+            // above still gets the honest toast to the user this
+            // click; the breaker just won't persist until next sync.
+          }
+        }
         if (
           refreshExtracted.code === "INVALID_PRODUCT" &&
           /transactions_refresh/i.test(refreshExtracted.message ?? "")
@@ -941,9 +1001,21 @@ export async function syncPlaidItem(
     // excluded — they don't represent new data Plaid handed us.
     let insertedMinDate: string | null = null;
     let insertedMaxDate: string | null = null;
+    // (#728) Top-N descriptions of the rows this sync actually added
+    // (added, not modified, not no-op upserts). Returned in
+    // SyncResult.addedDescriptions so the post-sync toast can name a
+    // few rows ("Added 3: VENMO, KROGER, +1 more") instead of just
+    // "Added 3" — the latter trains the user to ignore the toast.
+    // Capped at 5 entries so a huge import doesn't bloat the response.
+    const ADDED_DESCRIPTIONS_LIMIT = 5;
+    const addedDescriptions: string[] = [];
     const noteInsertedDate = (date: string): void => {
       if (insertedMinDate === null || date < insertedMinDate) insertedMinDate = date;
       if (insertedMaxDate === null || date > insertedMaxDate) insertedMaxDate = date;
+    };
+    const noteAddedDescription = (description: string): void => {
+      if (addedDescriptions.length >= ADDED_DESCRIPTIONS_LIMIT) return;
+      addedDescriptions.push(description);
     };
     for (const t of [...added, ...modified]) {
       const description = t.merchant_name || t.name || "(no description)";
@@ -1216,7 +1288,12 @@ export async function syncPlaidItem(
               occurredOn: t.date,
               description,
               amount: signedAmount,
-              notes: t.pending ? "[pending]" : null,
+              // (#728) Authoritative pending boolean replaces the old
+              // `notes='[pending]'` marker. The re-mint path is an
+              // in-place UPDATE so we ALWAYS write the current Plaid
+              // lifecycle state — including flipping the flag back to
+              // false on the pending→posted transition.
+              pending: !!t.pending,
             })
             .where(eq(transactionsTable.id, remintMatch.id));
           continue;
@@ -1248,10 +1325,17 @@ export async function syncPlaidItem(
         pfcPrimary: pfc?.primary ?? null,
         pfcDetailed: pfc?.detailed ?? null,
         debtId,
-        notes: t.pending ? "[pending]" : null,
+        // (#728) First-class pending boolean — see schema comment.
+        pending: !!t.pending,
         forecastFlag: isChecking && !cat.isTransfer,
       };
       noteInsertedDate(values.occurredOn);
+      // (#728) Only count rows from Plaid's `added` array — modified
+      // rows are lifecycle updates of rows we already inserted, and
+      // surfacing their names in the "Added N" toast would be a lie.
+      if (addedTxnIds.has(t.transaction_id)) {
+        noteAddedDescription(description);
+      }
       const [row] = await db
         .insert(transactionsTable)
         .values(values)
@@ -1269,7 +1353,13 @@ export async function syncPlaidItem(
             occurredAt: values.occurredAt,
             description: values.description,
             amount: values.amount,
-            notes: values.notes,
+            // (#728) Refresh the pending boolean on every upsert so the
+            // pending→posted lifecycle flip Plaid surfaces via a
+            // `modified` row actually lands in the DB (and the UI's
+            // Pending section empties out as charges post). Without
+            // this, a row inserted as pending would stay pending
+            // forever in the DB even after Plaid told us it posted.
+            pending: values.pending,
             // (#479) Honor the user's manual override of `isTransfer`. When
             // `is_transfer_user_overridden` is true on the existing row,
             // preserve its current value instead of letting the auto-
@@ -1828,6 +1918,10 @@ export async function syncPlaidItem(
       // success toast can say "Caught up Chase via direct fetch" when
       // the gap-backfill rescued a stuck cursor.
       deliveryMode,
+      // (#728) Names of the rows this sync added (capped at 5) so the
+      // success toast can read "Added 3: VENMO, KROGER, +1 more"
+      // rather than a bare "Added 3" count.
+      addedDescriptions,
       // (#357) Mirror the structured fields onto the response so a
       // failed balance refresh on an otherwise-healthy /transactions/sync
       // still gives the client a real Plaid code + display message + kind
@@ -2794,7 +2888,8 @@ export async function runGapBackfillForItem(
           pfcPrimary: pfc?.primary ?? null,
           pfcDetailed: pfc?.detailed ?? null,
           debtId,
-          notes: t.pending ? "[pending]" : null,
+          // (#728) First-class pending boolean — see schema comment.
+          pending: !!t.pending,
           forecastFlag: false,
         };
         // (#720) Belt-and-suspenders ±2-day re-mint dedup. The
@@ -2851,7 +2946,10 @@ export async function runGapBackfillForItem(
               amount: signedAmount,
               pfcPrimary: values.pfcPrimary,
               pfcDetailed: values.pfcDetailed,
-              notes: values.notes,
+              // (#728) Mirror the cursor re-mint path — adopt the
+              // current Plaid pending state on every in-place id
+              // re-mint so the pending→posted flip lands here too.
+              pending: values.pending,
             })
             .where(eq(transactionsTable.id, remintMatch.id));
           continue;
@@ -2878,7 +2976,11 @@ export async function runGapBackfillForItem(
               occurredOn: values.occurredOn,
               description: values.description,
               amount: values.amount,
-              notes: values.notes,
+              // (#728) Gap-backfill upsert mirrors the cursor-sync
+              // path — refresh the pending boolean so a row that
+              // first landed here as pending flips to posted when
+              // Plaid surfaces its posted twin on a later run.
+              pending: values.pending,
               // (#479) See twin onConflictDoUpdate above — the gap-backfill
               // path must honor the user's manual `isTransfer` override the
               // same way as the cursor sync path.

@@ -22,6 +22,8 @@ export function DayGroup({
   selectionState,
   onToggleAll,
   todayAccent = "blue",
+  headerLabel,
+  todayBadgeLabel = "Today",
   containerRef,
   children,
 }: {
@@ -31,16 +33,34 @@ export function DayGroup({
   totalNode: ReactNode;
   selectionState: boolean | "indeterminate";
   onToggleAll: (on: boolean) => void;
-  todayAccent?: "blue" | "emerald";
+  // (#728) Added "amber" for the pinned "Pending" pseudo-day-group on
+  // the Transactions page — pending charges are mid-lifecycle and
+  // should look distinct from the emerald "today" and blue
+  // per-account accents.
+  todayAccent?: "blue" | "emerald" | "amber";
+  // (#728) Override the date-style header for non-ISO group keys
+  // (e.g. the "Pending" pinned group). When omitted, we fall back
+  // to formatDayHeader(dayKey).
+  headerLabel?: string;
+  // (#728) Override the "Today" badge text for pseudo-day-groups
+  // that still want the accented header treatment ("Pending" reads
+  // better than "Today" on the rate-limited pinned section).
+  todayBadgeLabel?: string;
   containerRef?: (el: HTMLDivElement | null) => void;
   children: ReactNode;
 }) {
   const todayBorder =
-    todayAccent === "emerald" ? "border-emerald-300 bg-emerald-50/80" : "border-blue-300 bg-blue-50/80";
+    todayAccent === "emerald"
+      ? "border-emerald-300 bg-emerald-50/80"
+      : todayAccent === "amber"
+        ? "border-amber-300 bg-amber-50/80"
+        : "border-blue-300 bg-blue-50/80";
   const todayBadge =
     todayAccent === "emerald"
       ? "border-emerald-300 text-emerald-700 bg-emerald-50"
-      : "border-blue-300 text-blue-700 bg-blue-50";
+      : todayAccent === "amber"
+        ? "border-amber-300 text-amber-700 bg-amber-50"
+        : "border-blue-300 text-blue-700 bg-blue-50";
   return (
     <div ref={containerRef} className="space-y-2">
       <div
@@ -56,10 +76,12 @@ export function DayGroup({
             onCheckedChange={(v) => onToggleAll(!!v)}
             aria-label="Select day"
           />
-          <div className="font-semibold text-sm">{formatDayHeader(dayKey)}</div>
+          <div className="font-semibold text-sm">
+            {headerLabel ?? formatDayHeader(dayKey)}
+          </div>
           {isToday && (
             <Badge variant="outline" className={cn("text-[10px]", todayBadge)}>
-              Today
+              {todayBadgeLabel}
             </Badge>
           )}
           <Badge variant="secondary" className="text-[10px]">

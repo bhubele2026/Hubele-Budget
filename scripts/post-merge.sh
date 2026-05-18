@@ -54,6 +54,12 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f "$(dirname "$0")/migrate_debt_apr_to_decimal.sql"
 
+# Task #728 — Backfill transactions.pending from the legacy
+# notes='[pending]' marker and strip the marker out of notes.
+# Idempotent; no-op once converged.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f "$(dirname "$0")/backfill_transactions_pending.sql"
+
 # Task #654 — flag any plaid_items row whose stored access_token was
 # minted in a different Plaid environment than the live server (the
 # user's two Chase rows hit this exact case). Stamps lastSyncErrorCode

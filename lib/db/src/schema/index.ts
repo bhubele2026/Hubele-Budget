@@ -337,6 +337,15 @@ export const transactionsTable = pgTable(
     // classifier next refreshes them.
     pfcPrimary: text("pfc_primary"),
     pfcDetailed: text("pfc_detailed"),
+    // (#728) First-class boolean for Plaid pending/posted state. Replaces
+    // the legacy `notes='[pending]'` string marker the Plaid sync used to
+    // write — that marker collided with user-typed notes and forced the
+    // UI to do string sniffing to surface a Pending section. The column
+    // is backfilled from the old marker by
+    // `scripts/backfill_transactions_pending.sql` and the marker stripped
+    // from notes in the same pass. Plaid sync now writes the boolean and
+    // flips it back to false on the pending→posted modified path.
+    pending: boolean("pending").notNull().default(false),
     debtId: uuid("debt_id").references((): AnyPgColumn => debtsTable.id, {
       onDelete: "set null",
     }),
@@ -353,6 +362,11 @@ export const transactionsTable = pgTable(
       t.source,
     ),
     householdDebtIdx: index("transactions_household_debt_idx").on(t.householdId, t.debtId),
+    // (#728) Covers the "Pending" register query — list every pending
+    // row for an account, newest first — without touching the main
+    // table. Composite (plaid_account_id, pending) lets the planner
+    // narrow to a single account before applying the boolean filter.
+    pendingIdx: index("transactions_pending_idx").on(t.plaidAccountId, t.pending),
   }),
 );
 
@@ -383,6 +397,15 @@ export const plaidItemsTable = pgTable(
     // Re-attempted once weekly in case the user later enables the add-
     // on on the Plaid Dashboard.
     refreshProductDisabledAt: timestamp("refresh_product_disabled_at", {
+      withTimezone: true,
+    }),
+    // (#728) Circuit-breaker stamp for Plaid's TRANSACTIONS_LIMIT
+    // (HTTP 429) on /transactions/refresh. When set in the future,
+    // the sync hot path short-circuits the refresh call entirely so
+    // we don't burn the per-item quota on a doomed retry. Stamped
+    // `now() + 1h` on each TRANSACTIONS_LIMIT response and cleared
+    // on the next successful refresh (self-heal).
+    refreshRateLimitedUntil: timestamp("refresh_rate_limited_until", {
       withTimezone: true,
     }),
     consentExpirationAt: timestamp("consent_expiration_at", { withTimezone: true }),

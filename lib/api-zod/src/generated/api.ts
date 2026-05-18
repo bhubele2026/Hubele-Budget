@@ -74,6 +74,11 @@ export const GetDashboardResponse = zod.object({
       plaidTransactionId: zod.string().nullish(),
       plaidAccountId: zod.string().nullish(),
       debtId: zod.string().nullish(),
+      pending: zod
+        .boolean()
+        .describe(
+          '(#728) True when Plaid reported this transaction as pending\non the most recent \/transactions\/sync. Replaces the legacy\n`notes=\'[pending]\'` string marker the sync used to write.\nDrives the Transactions page \"Pending\" section (pending\nrows pinned above the dated day-groups) and the \"Pending\"\nbadge on each row. Flips back to false on the\npending→posted lifecycle when Plaid surfaces the posted\ntwin as a `modified` row.\n',
+        ),
       matchedRuleId: zod
         .string()
         .nullish()
@@ -164,6 +169,11 @@ export const ListTransactionsResponseItem = zod.object({
   plaidTransactionId: zod.string().nullish(),
   plaidAccountId: zod.string().nullish(),
   debtId: zod.string().nullish(),
+  pending: zod
+    .boolean()
+    .describe(
+      '(#728) True when Plaid reported this transaction as pending\non the most recent \/transactions\/sync. Replaces the legacy\n`notes=\'[pending]\'` string marker the sync used to write.\nDrives the Transactions page \"Pending\" section (pending\nrows pinned above the dated day-groups) and the \"Pending\"\nbadge on each row. Flips back to false on the\npending→posted lifecycle when Plaid surfaces the posted\ntwin as a `modified` row.\n',
+    ),
   matchedRuleId: zod
     .string()
     .nullish()
@@ -294,6 +304,11 @@ export const UpdateTransactionResponse = zod
     plaidTransactionId: zod.string().nullish(),
     plaidAccountId: zod.string().nullish(),
     debtId: zod.string().nullish(),
+    pending: zod
+      .boolean()
+      .describe(
+        '(#728) True when Plaid reported this transaction as pending\non the most recent \/transactions\/sync. Replaces the legacy\n`notes=\'[pending]\'` string marker the sync used to write.\nDrives the Transactions page \"Pending\" section (pending\nrows pinned above the dated day-groups) and the \"Pending\"\nbadge on each row. Flips back to false on the\npending→posted lifecycle when Plaid surfaces the posted\ntwin as a `modified` row.\n',
+      ),
     matchedRuleId: zod
       .string()
       .nullish()
@@ -468,6 +483,11 @@ export const ClearTransferOverrideResponse = zod.object({
   plaidTransactionId: zod.string().nullish(),
   plaidAccountId: zod.string().nullish(),
   debtId: zod.string().nullish(),
+  pending: zod
+    .boolean()
+    .describe(
+      '(#728) True when Plaid reported this transaction as pending\non the most recent \/transactions\/sync. Replaces the legacy\n`notes=\'[pending]\'` string marker the sync used to write.\nDrives the Transactions page \"Pending\" section (pending\nrows pinned above the dated day-groups) and the \"Pending\"\nbadge on each row. Flips back to false on the\npending→posted lifecycle when Plaid surfaces the posted\ntwin as a `modified` row.\n',
+    ),
   matchedRuleId: zod
     .string()
     .nullish()
@@ -2034,6 +2054,11 @@ export const GetForecastResponse = zod.object({
       plaidTransactionId: zod.string().nullish(),
       plaidAccountId: zod.string().nullish(),
       debtId: zod.string().nullish(),
+      pending: zod
+        .boolean()
+        .describe(
+          '(#728) True when Plaid reported this transaction as pending\non the most recent \/transactions\/sync. Replaces the legacy\n`notes=\'[pending]\'` string marker the sync used to write.\nDrives the Transactions page \"Pending\" section (pending\nrows pinned above the dated day-groups) and the \"Pending\"\nbadge on each row. Flips back to false on the\npending→posted lifecycle when Plaid surfaces the posted\ntwin as a `modified` row.\n',
+        ),
       matchedRuleId: zod
         .string()
         .nullish()
@@ -2723,6 +2748,7 @@ export const SyncPlaidTransactionsResponse = zod.object({
       lastOccurredOn: zod.string().nullish(),
       refreshDisabledReason: zod.string().nullish(),
       lastSyncedAt: zod.string().nullish(),
+      addedDescriptions: zod.array(zod.string()).optional(),
     }),
   ),
 });

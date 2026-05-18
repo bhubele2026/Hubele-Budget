@@ -66,6 +66,16 @@ the Amex page.
   plaidAccountId?: string | null;
   /** @nullable */
   debtId?: string | null;
+  /** (#728) True when Plaid reported this transaction as pending
+on the most recent /transactions/sync. Replaces the legacy
+`notes='[pending]'` string marker the sync used to write.
+Drives the Transactions page "Pending" section (pending
+rows pinned above the dated day-groups) and the "Pending"
+badge on each row. Flips back to false on the
+pending→posted lifecycle when Plaid surfaces the posted
+twin as a `modified` row.
+ */
+  pending: boolean;
   /**
    * Id of the mapping rule that auto-categorize would currently
 attribute for this row, or null when no rule matches (e.g. the

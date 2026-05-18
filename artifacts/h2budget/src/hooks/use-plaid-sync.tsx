@@ -84,6 +84,12 @@ export type SyncTotals = {
   // surface anything new. Null when no refresh-disabled item carried
   // a prior sync timestamp (e.g. very first sync after link).
   refreshDisabledAsOf: string | null;
+  // (#728) Top-N descriptions of rows this sync actually inserted
+  // (capped server-side at 5). Surfaced in the "Sync complete" toast
+  // as "Added 3: VENMO, KROGER, +1 more" so the user can recognize
+  // what landed instead of staring at a bare "Added 3" they'd learn
+  // to ignore. Empty when nothing was added.
+  addedDescriptions: string[];
   // (#402) Most recent occurredOn (YYYY-MM-DD) across rows touched by this
   // sync, taken as the max of each item's `lastOccurredOn`. The post-link
   // progress panel uses this — when the caller scoped the sync to a
@@ -105,6 +111,7 @@ const ZERO: SyncTotals = {
   importedDateRange: null,
   refreshDisabledReason: null,
   refreshDisabledAsOf: null,
+  addedDescriptions: [],
   lastOccurredOn: null,
 };
 
@@ -120,6 +127,20 @@ const ZERO: SyncTotals = {
 const REFRESH_DISABLED_TITLE = "No new transactions yet";
 const REFRESH_DISABLED_MESSAGE =
   "Real-time refresh isn't enabled on this Plaid plan, so new pending charges only appear after Plaid's scheduled poll (every ~6 hours). Clicking Sync again right away won't surface anything new.";
+
+// (#728) Twin of REFRESH_DISABLED_* but for the rate-limit circuit
+// breaker — Plaid returned TRANSACTIONS_LIMIT on /transactions/refresh
+// in the last hour and the server is short-circuiting refresh calls
+// to avoid burning the same 429 over and over while the bucket
+// refills. Different copy from the add-on-disabled branch because
+// the underlying cause (and the wait time) is different: this one
+// will heal itself on its own within the hour, whereas the add-on
+// branch is a structural plan limit that only Plaid's ~6 h poll
+// resolves. Without separate copy the user can't tell whether to
+// wait 15 minutes or 5 hours.
+const RATE_LIMITED_TITLE = "Sync rate-limited";
+const RATE_LIMITED_MESSAGE =
+  "Your bank hit Plaid's refresh limit. We'll skip live refresh for about an hour so the limit can reset — Plaid's scheduled poll still runs in the background, so new pending charges will land on their own.";
 
 const STILL_PREPARING_MESSAGE =
   "Your bank is still preparing the initial batch — try Sync again in a minute.";
@@ -233,6 +254,14 @@ export function usePlaidSync() {
                       acc.refreshDisabledAsOf = itemLastSyncedAt;
                     }
                   }
+                  // (#728) Concat each item's top-N added descriptions
+                  // and re-cap at 5 — so a sync that touches two banks
+                  // doesn't blow past the cap when the toast renders.
+                  const itemAddedDesc = r.addedDescriptions ?? [];
+                  for (const d of itemAddedDesc) {
+                    if (acc.addedDescriptions.length >= 5) break;
+                    acc.addedDescriptions.push(d);
+                  }
                   if (r.importedDateRange) {
                     const { min, max } = r.importedDateRange;
                     if (aggMin === null || min < aggMin) aggMin = min;
@@ -269,6 +298,7 @@ export function usePlaidSync() {
                   importedDateRange: null,
                   refreshDisabledReason: null,
                   refreshDisabledAsOf: null,
+                  addedDescriptions: [],
                   lastOccurredOn: null,
                 },
               );
@@ -384,9 +414,25 @@ export function usePlaidSync() {
                           totals.refreshDisabledAsOf,
                         )}.`
                       : "";
+                    // (#728) Split the honest-copy branch by reason so
+                    // the rate-limit circuit breaker (self-heals in ~1h)
+                    // doesn't share the misleading "Plaid plan doesn't
+                    // include the add-on" wording from the structural
+                    // INVALID_PRODUCT branch. The two have very
+                    // different remediations, so they deserve different
+                    // copy — anything else and the user can't tell
+                    // whether to wait 15 minutes or 5 hours.
+                    const isRateLimited =
+                      totals.refreshDisabledReason === "rate_limited";
                     toast({
-                      title: REFRESH_DISABLED_TITLE,
-                      description: `${REFRESH_DISABLED_MESSAGE}${asOfHint}`,
+                      title: isRateLimited
+                        ? RATE_LIMITED_TITLE
+                        : REFRESH_DISABLED_TITLE,
+                      description: `${
+                        isRateLimited
+                          ? RATE_LIMITED_MESSAGE
+                          : REFRESH_DISABLED_MESSAGE
+                      }${asOfHint}`,
                     });
                   } else {
                     // No PRODUCT_NOT_READY signal but also nothing new —
@@ -442,13 +488,30 @@ export function usePlaidSync() {
                   const recoveryHint = viaGapBackfill
                     ? " (via direct fetch)"
                     : "";
+                  // (#728) Name a few of the rows that landed so the
+                  // toast reads "Added 3: VENMO, KROGER, +1 more"
+                  // instead of just "Added 3". Server caps at 5
+                  // descriptions per sync; we render up to 3 + an
+                  // "+N more" remainder so the toast stays short
+                  // enough to scan at a glance.
+                  const addedDescHint = (() => {
+                    if (totals.added === 0) return "";
+                    const names = totals.addedDescriptions;
+                    if (!names || names.length === 0) return "";
+                    const shown = names.slice(0, 3);
+                    const remainder = totals.added - shown.length;
+                    const suffix =
+                      remainder > 0 ? `, +${remainder} more` : "";
+                    return ` (${shown.join(", ")}${suffix})`;
+                  })();
+                  const headline = parts.join(", ");
                   const description = summary.totalAttributed
-                    ? `${parts.join(", ")}${throughHint}${recoveryHint}. Auto-categorized ${summary.totalAttributed} new ${
+                    ? `${headline}${addedDescHint}${throughHint}${recoveryHint}. Auto-categorized ${summary.totalAttributed} new ${
                         summary.totalAttributed === 1 ? "transaction" : "transactions"
                       }: ${summary.top
                         .map((r) => `${r.count} via '${r.pattern}'`)
                         .join(", ")}${summary.extraRules > 0 ? `, +${summary.extraRules} more` : ""}.`
-                    : `${parts.join(", ")}${throughHint}${recoveryHint}.`;
+                    : `${headline}${addedDescHint}${throughHint}${recoveryHint}.`;
                   toast({
                     title: viaGapBackfill ? "Caught up via direct fetch" : "Sync complete",
                     description,

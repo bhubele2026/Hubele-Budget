@@ -20,6 +20,9 @@ const ZERO_TOTALS: SyncTotals = {
   stillPreparing: false,
   ruleAttribution: { totalAttributed: 0, top: [], extraRules: 0, ruleIds: [] },
   importedDateRange: null,
+  refreshDisabledReason: null,
+  refreshDisabledAsOf: null,
+  addedDescriptions: [],
   lastOccurredOn: null,
 };
 
