@@ -661,16 +661,19 @@ export async function syncPlaidItem(
     // sees "Added 0" and concludes the app is broken even though
     // the bank actually has fresh pending charges. To make a single
     // manual Sync click reliably land newly-authorized pending data,
-    // re-walk the cursor a couple of times with short backoffs when
+    // re-walk the cursor several times with short backoffs when
     // a refresh actually succeeded and the first walk came back
-    // empty. Budget is small (≈8s total) so user-facing latency
-    // stays bounded. Tunable via env for tests.
+    // empty (or returned only the stale historical batch already
+    // sitting in the cursor). Budget caps at ≈22s of waits across
+    // 6 attempts so user-facing latency stays bounded while still
+    // covering Plaid's documented 8–15s ingestion tail. Tunable
+    // via env for tests.
     const pollAttemptsEnv = Number(process.env.PLAID_REFRESH_POLL_ATTEMPTS);
     const pollAttemptsMax =
       refreshSucceeded
         ? Number.isFinite(pollAttemptsEnv) && pollAttemptsEnv > 0
           ? Math.min(pollAttemptsEnv, 6)
-          : 4
+          : 6
         : 1;
     const pollDelaysEnv = process.env.PLAID_REFRESH_POLL_DELAYS_MS;
     const POLL_DELAYS_MS: number[] = (() => {
@@ -681,14 +684,16 @@ export async function syncPlaidItem(
           .filter((n) => Number.isFinite(n) && n >= 0);
         if (parsed.length > 0) return parsed;
       }
-      // (#717) Extended budget: the previous [2500, 4000] only spent
-      // 6.5s of wall time across 3 attempts. Production Chase items
-      // routinely take 8–15s after /transactions/refresh before fresh
-      // rows show up in Plaid's cursor, so the old budget was racing
-      // Plaid's ingestion and returning empty. The new 4-attempt
-      // schedule spends up to ~12s while still keeping the manual
-      // Sync click well under a 30s perceived ceiling.
-      return [2000, 4000, 6000];
+      // (#717) Extended budget. The original [2500, 4000] across 3
+      // attempts spent only ~6.5s of wall time, which routinely beat
+      // Plaid's own /transactions/refresh ingestion (documented to
+      // tail out to 8–15s for Chase) and returned with the stale
+      // historical batch still being the only thing in the cursor.
+      // The new schedule spends up to ~22s of waits across a 6-
+      // attempt budget so the manual Sync click reliably waits long
+      // enough for the freshly-refreshed rows to land — while still
+      // staying inside a perceived <30s click→toast window.
+      return [1500, 2500, 4000, 6000, 8000];
     })();
     while (pollAttemptsUsed < pollAttemptsMax) {
       let walkAdded = 0;

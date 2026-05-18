@@ -246,6 +246,43 @@ describe("(#671) poll-after-refresh in syncPlaidItem", () => {
     expect(transactionsSyncCalls).toBe(2);
   });
 
+  it("(#717) waits out Plaid's full ~22s ingestion tail — rows landing only on a late attempt still arrive", async () => {
+    // Proves the extended poll budget is actually used. Queue four
+    // empty drains to simulate Plaid taking the full documented
+    // 8–15s ingestion window after /transactions/refresh, then a
+    // freshly-ingested row on the 5th attempt. The old 3-attempt
+    // budget would have given up at attempt 3, returned
+    // stillPreparing, and never seen this row at all.
+    const { itemRowId, externalAccountId } = await seedItem();
+    transactionsSyncResponses.push(
+      emptyResp(),
+      emptyResp(),
+      emptyResp(),
+      emptyResp(),
+      addedResp(externalAccountId),
+    );
+
+    const result = await syncPlaidItem(TEST_USER, itemRowId, {
+      forceRefresh: true,
+    });
+
+    expect(transactionsRefreshCalls).toBe(1);
+    expect(result.added).toBe(1);
+    expect(result.stillPreparing ?? false).toBe(false);
+    expect(result.error ?? null).toBeNull();
+    // 5 cursor walks to consume the queue (4 empty + the addedResp),
+    // then a 6th confirm-settled empty drain — exactly the 6-attempt
+    // budget the new default exposes.
+    expect(transactionsSyncCalls).toBe(6);
+
+    const rows = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.description).toBe("Test Pending Charge");
+  });
+
   it("(#717) keeps draining stale historical rows until fresh post-refresh rows arrive", async () => {
     // Reproduces the production Chase incident: attempt #1 drains
     // historical April rows that were already sitting in the cursor,
