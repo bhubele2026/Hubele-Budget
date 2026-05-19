@@ -263,7 +263,12 @@ describe("usePlaidSync — rule-attribution toast", () => {
     );
   });
 
-  it("omits the ToastAction when the sync produced no rule attributions", async () => {
+  it("falls back to the 'View in forecast' CTA when added rows have no rule attributions", async () => {
+    // (#728) When new rows landed but no mapping rule attributed
+    // them, the most useful destination is the forecast page — the
+    // rows were either auto-matched against a forecast item or are
+    // sitting uncategorized in the Review Bucket. Either way the
+    // user needs a path from the toast to the data.
     syncResponse = {
       items: [{ added: 2, modified: 0, removed: 0, error: null }],
     };
@@ -276,8 +281,11 @@ describe("usePlaidSync — rule-attribution toast", () => {
       description: string;
       action?: React.ReactElement;
     };
-    expect(arg.action).toBeUndefined();
     expect(arg.description).toBe("Added 2.");
+    expect(arg.action).toBeDefined();
+    render(<>{arg.action}</>);
+    fireEvent.click(screen.getByTestId("button-toast-view-in-forecast"));
+    expect(navigateFn).toHaveBeenCalledWith("/forecast");
   });
 });
 

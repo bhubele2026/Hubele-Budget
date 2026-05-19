@@ -500,7 +500,10 @@ describe("(#361) Plaid first-sync import cutoff", () => {
       (t) => t.plaidTransactionId === "plaid-pending-bypass",
     );
     expect(pending).toBeDefined();
-    expect(pending!.notes).toBe("[pending]");
+    // (#728) pending is now a real boolean column; the legacy
+    // notes='[pending]' marker is gone.
+    expect(pending!.pending).toBe(true);
+    expect(pending!.notes).toBeNull();
     // The skip is now observable on the per-item result.
     expect(result.skippedPreCutoff).toBe(1);
     // Manual seed row preserved untouched.
@@ -700,13 +703,15 @@ describe("(#361) Plaid first-sync import cutoff", () => {
     // skipped (gate still applies to non-pending).
     expect(plaidIds).toEqual(["plaid-pending-venmo", "plaid-posted-new"]);
 
-    // The pending row carries the "[pending]" notes marker so the
-    // pending→posted reconciliation later updates it in place.
+    // (#728) The pending row carries pending=true on the boolean
+    // column so the pending→posted reconciliation later updates it
+    // in place (the legacy notes='[pending]' marker is gone).
     const pending = txns.find(
       (t) => t.plaidTransactionId === "plaid-pending-venmo",
     );
     expect(pending).toBeDefined();
-    expect(pending!.notes).toBe("[pending]");
+    expect(pending!.pending).toBe(true);
+    expect(pending!.notes).toBeNull();
     expect(pending!.amount).toBe("-502.00");
 
     // Manual row preserved.
@@ -755,7 +760,9 @@ describe("(#361) Plaid first-sync import cutoff", () => {
         eq(transactionsTable.plaidTransactionId, "plaid-pending-then-posted"),
       );
     expect(txns).toHaveLength(1);
-    expect(txns[0]!.notes).toBe("[pending]");
+    // (#728) pending tracked via boolean column, not notes marker.
+    expect(txns[0]!.pending).toBe(true);
+    expect(txns[0]!.notes).toBeNull();
 
     // Plaid replays the same transaction_id as `modified`, now
     // posted. The cursor moves; gate doesn't re-engage on modified.
