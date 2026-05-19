@@ -179,7 +179,11 @@ describe("(#662) Plaid pending → posted lifecycle survives the first-sync cuto
       .where(eq(transactionsTable.userId, TEST_USER));
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0].plaidTransactionId).toBe("plaid-pending-life");
-    expect(afterFirst[0].notes).toBe("[pending]");
+    // (#728) pending is now a real boolean column; the legacy
+    // notes='[pending]' marker is gone and notes is left untouched
+    // for user-typed content.
+    expect(afterFirst[0].pending).toBe(true);
+    expect(afterFirst[0].notes).toBeNull();
     const originalRowId = afterFirst[0].id;
 
     // Second sync: Plaid sends the SAME transaction_id as a `modified`
@@ -210,7 +214,8 @@ describe("(#662) Plaid pending → posted lifecycle survives the first-sync cuto
     expect(afterSecond[0].id).toBe(originalRowId);
     expect(afterSecond[0].plaidTransactionId).toBe("plaid-pending-life");
     expect(afterSecond[0].occurredOn).toBe("2026-05-14");
-    // [pending] tag cleared once the row posts.
+    // (#728) pending boolean flips back to false once Plaid posts it.
+    expect(afterSecond[0].pending).toBe(false);
     expect(afterSecond[0].notes).toBeNull();
   });
 });
