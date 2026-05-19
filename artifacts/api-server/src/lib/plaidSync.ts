@@ -786,8 +786,12 @@ export async function syncPlaidItem(
                 itemRowId,
                 plaidItemIdExternal: item.itemId,
                 institutionName: item.institutionName,
+                clearedRefreshProductDisabledAt:
+                  !!item.refreshProductDisabledAt,
+                clearedRefreshRateLimitedUntil:
+                  !!item.refreshRateLimitedUntil,
               },
-              "[plaid-sync] cleared stale refreshProductDisabledAt after successful /transactions/refresh",
+              "[plaid-sync] cleared stale refreshProductDisabledAt / refreshRateLimitedUntil after successful /transactions/refresh",
             );
           } catch (clearErr) {
             // Best-effort — the refresh still ran, so the user's data

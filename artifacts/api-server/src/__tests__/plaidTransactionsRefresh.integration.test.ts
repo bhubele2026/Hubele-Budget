@@ -232,14 +232,17 @@ describe("(#665) /transactions/refresh on user-triggered Sync", () => {
     expect(body.items[0]!.refreshAttempted).toBe(true);
     expect(body.items[0]!.added).toBe(1);
 
-    // The pending row that flowed through must be persisted with the
-    // [pending] note marker — proving the end-to-end pipeline works.
+    // (#728) The pending row that flowed through must be persisted
+    // with pending=true on the new boolean column — proving the
+    // end-to-end pipeline writes the first-class field (the legacy
+    // notes='[pending]' marker is gone).
     const rows = await db
       .select()
       .from(transactionsTable)
       .where(eq(transactionsTable.userId, TEST_USER));
     expect(rows.length).toBe(1);
-    expect(rows[0]!.notes).toBe("[pending]");
+    expect(rows[0]!.pending).toBe(true);
+    expect(rows[0]!.notes).toBeNull();
   });
 
   it("does NOT call /transactions/refresh when body force=false (cheap-sync opt-out)", async () => {
