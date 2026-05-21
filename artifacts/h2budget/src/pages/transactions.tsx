@@ -2217,6 +2217,135 @@ export default function TransactionsPage() {
                             testIdSuffix={`pending-${tx.id}`}
                           />
                         </div>
+                        {/* (#740) Categorization affordances on pending
+                            rows. Mirrors the posted-row cluster below
+                            (lines 2312-2477) so the user can triage a
+                            pending charge into a bucket the moment it
+                            shows up instead of waiting days for Plaid
+                            to flip it to posted. PATCH endpoint already
+                            accepts categoryId / bucket flags / isTransfer
+                            on pending rows — this is a pure UI fill-in.
+                            Excludes the inline amount + date editors on
+                            purpose (those values are Plaid-controlled on
+                            pending rows and would silently get overwritten
+                            on the next sync). */}
+                        <div className="flex flex-wrap gap-1.5 items-center mt-1">
+                          {tx.categoryId && categoryById.get(tx.categoryId) && (
+                            <InlineCategoryPicker
+                              tx={tx}
+                              currentName={categoryById.get(tx.categoryId)!}
+                              categories={categories ?? []}
+                              onPick={(catId) => handleQuickCategorize(tx, catId)}
+                            />
+                          )}
+                          {!tx.categoryId && (
+                            <CategorizeChip
+                              tx={tx}
+                              categories={categories ?? []}
+                              onPick={(catId) => handleQuickCategorize(tx, catId)}
+                            />
+                          )}
+                          {!tx.isTransfer && tx.isTransferUserOverridden && (
+                            <Badge
+                              variant="outline"
+                              className="inline-flex items-center text-[11px] font-normal border-slate-200 text-slate-500 bg-slate-50/60"
+                              data-testid={`badge-transfer-overridden-cleared-${tx.id}`}
+                              title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
+                            >
+                              Manually set
+                            </Badge>
+                          )}
+                          {tx.isTransfer && (
+                            <Badge
+                              variant="outline"
+                              className="inline-flex items-center gap-1 text-xs border-slate-300 text-slate-700 bg-slate-50"
+                              data-testid={`badge-transfer-${tx.id}`}
+                              title={
+                                tx.isTransferUserOverridden
+                                  ? "Manually set — won't be re-flagged on the next sync"
+                                  : undefined
+                              }
+                            >
+                              Transfer
+                              {tx.isTransferUserOverridden && (
+                                <span
+                                  aria-hidden="true"
+                                  data-testid={`badge-transfer-overridden-${tx.id}`}
+                                  className="text-slate-500 -ml-0.5"
+                                >
+                                  *
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                aria-label="Clear Transfer flag"
+                                data-testid={`button-clear-transfer-${tx.id}`}
+                                className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-slate-200/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateTx.mutate(
+                                    { id: tx.id, data: { isTransfer: false } },
+                                    {
+                                      onSuccess: () => {
+                                        queryClient.invalidateQueries({
+                                          queryKey: getListTransactionsQueryKey(),
+                                        });
+                                        queryClient.invalidateQueries({
+                                          queryKey: getGetBudgetMonthQueryKey(
+                                            `${tx.occurredOn.slice(0, 7)}-01`,
+                                          ),
+                                        });
+                                        toast({ title: "Cleared Transfer flag" });
+                                      },
+                                    },
+                                  );
+                                }}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </Badge>
+                          )}
+                          <BucketBubbles
+                            flags={{
+                              weekly: !!tx.weeklyAllowance,
+                              monthly: !!tx.monthlyAllowance,
+                              unplanned: !!tx.unplannedAllowance,
+                              reimbursable: !!tx.reimbursable,
+                            }}
+                            onToggle={(bucket: BucketKey, next: boolean) => {
+                              const data: Record<string, boolean> = {};
+                              if (bucket === "weekly") data.weeklyAllowance = next;
+                              else if (bucket === "monthly") data.monthlyAllowance = next;
+                              else if (bucket === "unplanned") data.unplannedAllowance = next;
+                              else if (bucket === "reimbursable") data.reimbursable = next;
+                              updateTx.mutate(
+                                { id: tx.id, data },
+                                {
+                                  onSuccess: () => {
+                                    queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+                                  },
+                                  // (#642) Surface the server-side
+                                  // "transfer can't be tagged Unplanned"
+                                  // rejection as a short toast so the
+                                  // user understands why nothing happened
+                                  // when they click the UN bubble on a
+                                  // transfer-looking row.
+                                  onError: (e: unknown) => {
+                                    toast({
+                                      title: "Couldn't update bucket",
+                                      description:
+                                        (e as Error)?.message ??
+                                        "Please try again.",
+                                      variant: "destructive",
+                                    });
+                                  },
+                                },
+                              );
+                            }}
+                            disabled={updateTx.isPending}
+                          />
+                          {tx.reimbursed && <Badge variant="outline" className="text-xs border-green-200 text-green-700 bg-green-50">Reimbursed</Badge>}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
