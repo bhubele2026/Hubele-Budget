@@ -339,13 +339,16 @@ describe("(#732) vanished pending sweep", () => {
         plaidTransactionId: "plaid-still-bf",
         pending: true,
       },
-      // Out-of-window pending — older than startStr, must survive
-      // because Plaid wasn't asked about it.
+      // (#734) Older pending that Plaid is STILL reporting — must
+      // survive. After #734 the gap-backfill window is widened back
+      // to the oldest local pending, so this row is now inside the
+      // fetched window; what protects it from the sweep is Plaid
+      // re-emitting its id, not the window floor sitting above it.
       {
         userId: TEST_USER,
         householdId: TEST_HOUSEHOLD_ID,
         occurredOn: "2026-04-15",
-        description: "Old pending outside window",
+        description: "Old still-reported pending",
         amount: "-3.00",
         source: "plaid:amex",
         plaidAccountId: externalAcctId,
@@ -364,6 +367,85 @@ describe("(#732) vanished pending sweep", () => {
           name: "Still-pending charge",
           pending: true,
         },
+        {
+          transaction_id: "plaid-old-pending",
+          account_id: externalAcctId,
+          date: "2026-04-15",
+          amount: 3.0,
+          name: "Old still-reported pending",
+          pending: true,
+        },
+      ],
+      total_transactions: 2,
+    };
+
+    await runGapBackfillForItem(TEST_USER, itemRowId, {
+      today: new Date("2026-05-20T12:00:00Z"),
+      overlapDays: 1,
+    });
+
+    const rows = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    const ptids = rows.map((r) => r.plaidTransactionId).sort();
+    expect(ptids).toEqual(["plaid-old-pending", "plaid-still-bf"]);
+  });
+
+  it("(#734) gap-backfill: widens window to oldest local pending so a vanished pre-auth older than the newest local row is still swept", async () => {
+    // Regression for #734. The original window was anchored strictly
+    // at max(occurredOn) of all local Plaid rows for the account (with
+    // an optional 1-day overlap). The moment a newer pending lands
+    // locally, the floor jumps past every older still-pending row, so
+    // a vanished older pre-auth could never be reconciled via the
+    // gap-backfill path. After the fix, startStr is widened to
+    // min(startStr, oldestLocalPendingOn) so Plaid is asked about the
+    // full pending range.
+    const { itemRowId, externalAcctId } = await seedAmexItem();
+
+    await db.insert(transactionsTable).values([
+      // Vanishing OLD pending — older than the newest local row. With
+      // the pre-#734 window (anchored at 2026-05-18 - 1 day =
+      // 2026-05-17) this row at 2026-05-02 would fall outside the
+      // sweep window and survive forever.
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-02",
+        description: "Old vanishing pre-auth",
+        amount: "-44.00",
+        source: "plaid:amex",
+        plaidAccountId: externalAcctId,
+        plaidTransactionId: "plaid-old-vanish",
+        pending: true,
+      },
+      // Newer posted row that anchors max(occurredOn) and would
+      // otherwise pin the gap-backfill window past the old pending.
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-18",
+        description: "Recent posted charge",
+        amount: "-12.00",
+        source: "plaid:amex",
+        plaidAccountId: externalAcctId,
+        plaidTransactionId: "plaid-recent-posted",
+        pending: false,
+      },
+    ]);
+
+    // Plaid no longer reports the old pending. The recent posted row
+    // is re-emitted (idempotent upsert).
+    nextGetResponse = {
+      transactions: [
+        {
+          transaction_id: "plaid-recent-posted",
+          account_id: externalAcctId,
+          date: "2026-05-18",
+          amount: 12.0,
+          name: "Recent posted charge",
+          pending: false,
+        },
       ],
       total_transactions: 1,
     };
@@ -378,7 +460,7 @@ describe("(#732) vanished pending sweep", () => {
       .from(transactionsTable)
       .where(eq(transactionsTable.userId, TEST_USER));
     const ptids = rows.map((r) => r.plaidTransactionId).sort();
-    expect(ptids).toEqual(["plaid-old-pending", "plaid-still-bf"]);
+    expect(ptids).toEqual(["plaid-recent-posted"]);
   });
 
   it("gap-backfill: a thrown /transactions/get error does NOT wipe local pendings", async () => {

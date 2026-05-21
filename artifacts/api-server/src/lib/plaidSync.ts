@@ -2918,6 +2918,32 @@ export async function runGapBackfillForItem(
           ? fmtISO(addDays(parseISO(acct.importCutoffDate), -overlap))
           : addDay(acct.importCutoffDate);
     }
+    // (#734) Widen startStr backwards to also cover the oldest local
+    // pending for this account. Without this, the gap-backfill window
+    // is anchored at `max(occurredOn)` so any vanished pre-auth older
+    // than the most recent activity on the card escapes the
+    // vanished-pending sweep — the moment a newer pending lands
+    // locally the floor jumps past every older still-pending row.
+    // Asking Plaid about the full pending range keeps the sweep
+    // window's coverage matched to the cursor path's.
+    const [oldestPending] = await db
+      .select({ occurredOn: transactionsTable.occurredOn })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.householdId, householdId),
+          eq(transactionsTable.plaidAccountId, externalAcctId),
+          eq(transactionsTable.pending, true),
+        ),
+      )
+      .orderBy(sql`${transactionsTable.occurredOn} asc`)
+      .limit(1);
+    const oldestLocalPendingOn = oldestPending?.occurredOn ?? null;
+    if (oldestLocalPendingOn) {
+      if (!startStr || oldestLocalPendingOn < startStr) {
+        startStr = oldestLocalPendingOn;
+      }
+    }
     if (!startStr || startStr > todayStr) {
       perAccount.push({
         externalAcctId,
