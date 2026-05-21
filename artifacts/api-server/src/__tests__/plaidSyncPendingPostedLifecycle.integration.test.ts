@@ -218,4 +218,91 @@ describe("(#662) Plaid pending → posted lifecycle survives the first-sync cuto
     expect(afterSecond[0].pending).toBe(false);
     expect(afterSecond[0].notes).toBeNull();
   });
+
+  it("preserves user-set categorization (bucket, allowance flags, notes, reviewed) across the pending→posted flip", async () => {
+    const { itemRowId, externalAcctId } = await seedChaseRelinkScenario();
+
+    // First sync: Plaid surfaces a brand-new pending charge. The
+    // user opens it from the pinned Pending section and categorizes
+    // it BEFORE Plaid has posted it — exactly the workflow the user
+    // asked for ("let me categorize pending now and keep it when
+    // they post"). We simulate that by PATCH-equivalent direct
+    // updates of the row's user-editable columns.
+    nextSyncResponse = {
+      added: [
+        {
+          transaction_id: "plaid-pending-cat",
+          account_id: externalAcctId,
+          date: "2026-05-13",
+          amount: -42.5,
+          name: "Whole Foods (pending)",
+          pending: true,
+        },
+      ],
+      modified: [],
+      removed: [],
+    };
+    await syncPlaidItem(TEST_USER, itemRowId);
+
+    const [pendingRow] = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(pendingRow.pending).toBe(true);
+
+    // User categorizes the pending charge.
+    await db
+      .update(transactionsTable)
+      .set({
+        weeklyAllowance: true,
+        weeklyBucket: "groceries",
+        unplannedAllowance: false,
+        monthlyAllowance: false,
+        notes: "trip to whole foods — split with roommate",
+        reviewed: true,
+        reimbursable: true,
+      })
+      .where(eq(transactionsTable.id, pendingRow.id));
+
+    // Second sync: same transaction_id arrives as `modified` with
+    // pending=false. The onConflictDoUpdate SET block must NOT
+    // clobber the user's categorization — only Plaid-owned fields
+    // (date, name, amount, pending, pfc*) may change.
+    nextSyncResponse = {
+      added: [],
+      modified: [
+        {
+          transaction_id: "plaid-pending-cat",
+          account_id: externalAcctId,
+          date: "2026-05-14",
+          amount: -42.5,
+          name: "Whole Foods",
+          pending: false,
+        },
+      ],
+      removed: [],
+    };
+    await syncPlaidItem(TEST_USER, itemRowId);
+
+    const [postedRow] = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    // Same row updated in place — no duplicate.
+    expect(postedRow.id).toBe(pendingRow.id);
+    // Plaid-owned fields refreshed.
+    expect(postedRow.pending).toBe(false);
+    expect(postedRow.occurredOn).toBe("2026-05-14");
+    expect(postedRow.description).toBe("Whole Foods");
+    // User categorization survived intact.
+    expect(postedRow.weeklyAllowance).toBe(true);
+    expect(postedRow.weeklyBucket).toBe("groceries");
+    expect(postedRow.unplannedAllowance).toBe(false);
+    expect(postedRow.monthlyAllowance).toBe(false);
+    expect(postedRow.notes).toBe(
+      "trip to whole foods — split with roommate",
+    );
+    expect(postedRow.reviewed).toBe(true);
+    expect(postedRow.reimbursable).toBe(true);
+  });
 });
