@@ -88,6 +88,7 @@ import {
   forecastSettingsTable,
   plaidAccountsTable,
   plaidItemsTable,
+  plaidSyncAttemptsTable,
   recurringItemsTable,
   transactionsTable,
 } from "@workspace/db";
@@ -104,6 +105,9 @@ async function cleanup(): Promise<void> {
     .delete(transactionsTable)
     .where(eq(transactionsTable.userId, TEST_USER));
   await db.delete(debtsTable).where(eq(debtsTable.userId, TEST_USER));
+  await db
+    .delete(plaidSyncAttemptsTable)
+    .where(eq(plaidSyncAttemptsTable.userId, TEST_USER));
   await db
     .delete(plaidAccountsTable)
     .where(eq(plaidAccountsTable.userId, TEST_USER));
@@ -461,6 +465,128 @@ describe("(#732) vanished pending sweep", () => {
       .where(eq(transactionsTable.userId, TEST_USER));
     const ptids = rows.map((r) => r.plaidTransactionId).sort();
     expect(ptids).toEqual(["plaid-recent-posted"]);
+  });
+
+  it("(#733) gap-backfill: writes a single pending_cleanup audit row summarizing the dropped pre-auths, and nothing when the sweep is a no-op", async () => {
+    const { itemRowId, externalAcctId } = await seedAmexItem();
+
+    // Two vanishing pre-auths inside the [2026-05-15, today] window
+    // anchored by the still-pending charge below.
+    await db.insert(transactionsTable).values([
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-15",
+        description: "Metro pre-auth A",
+        amount: "-12.34",
+        source: "plaid:amex",
+        plaidAccountId: externalAcctId,
+        plaidTransactionId: "plaid-vanish-audit-a",
+        pending: true,
+      },
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-17",
+        description: "Metro pre-auth B",
+        amount: "-29.84",
+        source: "plaid:amex",
+        plaidAccountId: externalAcctId,
+        plaidTransactionId: "plaid-vanish-audit-b",
+        pending: true,
+      },
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-18",
+        description: "Still-pending charge",
+        amount: "-8.00",
+        source: "plaid:amex",
+        plaidAccountId: externalAcctId,
+        plaidTransactionId: "plaid-still-audit",
+        pending: true,
+      },
+    ]);
+
+    nextGetResponse = {
+      transactions: [
+        {
+          transaction_id: "plaid-still-audit",
+          account_id: externalAcctId,
+          date: "2026-05-18",
+          amount: 8.0,
+          name: "Still-pending charge",
+          pending: true,
+        },
+      ],
+      total_transactions: 1,
+    };
+
+    await runGapBackfillForItem(TEST_USER, itemRowId, {
+      today: new Date("2026-05-20T12:00:00Z"),
+      // Wider overlap so the [startStr, today] window reaches back to
+      // pick up both vanishing pre-auths (lastBankTxOn=2026-05-18).
+      overlapDays: 5,
+    });
+
+    const attempts = await db
+      .select()
+      .from(plaidSyncAttemptsTable)
+      .where(eq(plaidSyncAttemptsTable.userId, TEST_USER));
+    const cleanupRows = attempts.filter((a) => a.kind === "pending_cleanup");
+    expect(cleanupRows).toHaveLength(1);
+    const row = cleanupRows[0]!;
+    expect(row.success).toBe(true);
+    // Summary should call out count + account + total + date range so a
+    // user skimming Recent activity can see what was tidied at a glance.
+    expect(row.errorMessage).toContain("Cleared 2 dropped pending charges");
+    expect(row.errorMessage).toContain("Amex Gold");
+    expect(row.errorMessage).toContain("$42.18");
+    expect(row.errorMessage).toContain("2026-05-15");
+    expect(row.errorMessage).toContain("2026-05-17");
+
+    const details = row.cleanupDetails as {
+      accountName: string | null;
+      count: number;
+      totalAmount: string;
+      minOccurredOn: string;
+      maxOccurredOn: string;
+      items: Array<{
+        description: string | null;
+        amount: string;
+        occurredOn: string;
+        plaidTransactionId: string;
+      }>;
+    };
+    expect(details.accountName).toBe("Amex Gold");
+    expect(details.count).toBe(2);
+    expect(details.totalAmount).toBe("-42.18");
+    expect(details.minOccurredOn).toBe("2026-05-15");
+    expect(details.maxOccurredOn).toBe("2026-05-17");
+    const ptids = details.items.map((i) => i.plaidTransactionId).sort();
+    expect(ptids).toEqual(["plaid-vanish-audit-a", "plaid-vanish-audit-b"]);
+    // Per-deletion detail rows carry the fields the UI's "View details"
+    // expander renders verbatim.
+    const a = details.items.find(
+      (i) => i.plaidTransactionId === "plaid-vanish-audit-a",
+    )!;
+    expect(a.description).toBe("Metro pre-auth A");
+    expect(a.amount).toBe("-12.34");
+    expect(a.occurredOn).toBe("2026-05-15");
+
+    // No-op sweep: rerun with Plaid still reporting the still-pending
+    // charge and no other pendings to delete. Must NOT write another
+    // pending_cleanup row.
+    await runGapBackfillForItem(TEST_USER, itemRowId, {
+      today: new Date("2026-05-20T12:00:00Z"),
+      overlapDays: 1,
+    });
+    const afterNoop = await db
+      .select()
+      .from(plaidSyncAttemptsTable)
+      .where(eq(plaidSyncAttemptsTable.userId, TEST_USER));
+    const cleanupAfter = afterNoop.filter((a) => a.kind === "pending_cleanup");
+    expect(cleanupAfter).toHaveLength(1);
   });
 
   it("gap-backfill: a thrown /transactions/get error does NOT wipe local pendings", async () => {

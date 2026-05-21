@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { PlaidPendingCleanupDetails } from "./plaidPendingCleanupDetails";
 import type { PlaidSyncAttemptErrorKind } from "./plaidSyncAttemptErrorKind";
 import type { PlaidSyncAttemptKind } from "./plaidSyncAttemptKind";
 export interface PlaidSyncAttempt {
@@ -24,5 +25,6 @@ export interface PlaidSyncAttempt {
     httpStatus?: number | null;
     /** @nullable */
     errorKind?: PlaidSyncAttemptErrorKind;
+    cleanupDetails?: PlaidPendingCleanupDetails | null;
 }
 //# sourceMappingURL=plaidSyncAttempt.d.ts.map

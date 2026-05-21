@@ -510,6 +510,27 @@ export const plaidSyncAttemptsTable = pgTable(
     requestId: text("request_id"),
     httpStatus: integer("http_status"),
     errorKind: text("error_kind"),
+    // (#733) For kind="pending_cleanup" rows written by the vanished-
+    // pending sweep (#732): a JSONB blob describing what got swept.
+    // Shape:
+    //   {
+    //     accountName: string | null,
+    //     plaidAccountId: string,
+    //     count: number,
+    //     totalAmount: string,          // numeric serialized as text
+    //     minOccurredOn: string,        // YYYY-MM-DD
+    //     maxOccurredOn: string,        // YYYY-MM-DD
+    //     items: Array<{
+    //       description: string | null,
+    //       amount: string,
+    //       occurredOn: string,
+    //       plaidTransactionId: string,
+    //     }>
+    //   }
+    // Null for every other kind. Surfaced verbatim through the
+    // Settings → Recent activity expander so power users can audit
+    // exactly which pre-auths Plaid dropped this sync.
+    cleanupDetails: jsonb("cleanup_details"),
   },
   (t) => ({
     itemTimeIdx: index("plaid_sync_attempts_item_time_idx").on(

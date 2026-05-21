@@ -63,7 +63,90 @@ function kindLabel(k: string): string {
   if (k === "transactions") return "Transactions";
   if (k === "balance") return "Balance";
   if (k === "liabilities") return "Liabilities";
+  if (k === "pending_cleanup") return "Pending cleanup";
   return k;
+}
+
+// (#733) Inline expander for the per-deletion detail view on a
+// kind="pending_cleanup" Recent activity row. Quiet by default — the
+// row only shows the one-line summary; clicking "View details" opens
+// the table of dropped pre-auths (description, amount, date, plaid
+// transaction id) for power users who want to audit exactly what was
+// swept.
+function PendingCleanupDetail({
+  attemptId,
+  summary,
+  details,
+}: {
+  attemptId: string;
+  summary: string | null;
+  details: NonNullable<PlaidSyncAttempt["cleanupDetails"]>;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className="flex flex-col gap-1"
+      data-testid={`sync-attempt-cleanup-${attemptId}`}
+    >
+      <span
+        className="line-clamp-2"
+        data-testid={`sync-attempt-cleanup-summary-${attemptId}`}
+      >
+        {summary ?? `Cleared ${details.count} dropped pending charges.`}
+      </span>
+      <button
+        type="button"
+        className="inline-flex items-center gap-0.5 self-start text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+        onClick={() => setOpen((v) => !v)}
+        data-testid={`sync-attempt-cleanup-toggle-${attemptId}`}
+        aria-expanded={open}
+      >
+        {open ? (
+          <ChevronDown className="w-3 h-3" />
+        ) : (
+          <ChevronRight className="w-3 h-3" />
+        )}
+        {open ? "Hide details" : "View details"}
+      </button>
+      {open && (
+        <div
+          className="mt-1 rounded border border-border/60 bg-muted/30 overflow-hidden"
+          data-testid={`sync-attempt-cleanup-details-${attemptId}`}
+        >
+          <table className="w-full text-[11px]">
+            <thead className="bg-muted/50 text-muted-foreground">
+              <tr>
+                <th className="text-left font-medium px-2 py-1">Date</th>
+                <th className="text-left font-medium px-2 py-1">Description</th>
+                <th className="text-right font-medium px-2 py-1">Amount</th>
+                <th className="text-left font-medium px-2 py-1">Plaid id</th>
+              </tr>
+            </thead>
+            <tbody>
+              {details.items.map((it, i) => (
+                <tr
+                  key={`${it.plaidTransactionId}-${i}`}
+                  className="border-t border-border/60"
+                  data-testid={`sync-attempt-cleanup-item-${attemptId}-${i}`}
+                >
+                  <td className="px-2 py-1 whitespace-nowrap text-muted-foreground">
+                    {it.occurredOn}
+                  </td>
+                  <td className="px-2 py-1">{it.description ?? "—"}</td>
+                  <td className="px-2 py-1 text-right whitespace-nowrap font-mono">
+                    {it.amount}
+                  </td>
+                  <td className="px-2 py-1 font-mono text-muted-foreground/80 break-all">
+                    {it.plaidTransactionId}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function compareAttempts(
@@ -231,7 +314,14 @@ export function PlaidSyncHistory({
                     </td>
                     <td className="px-2 py-1.5">{kindLabel(a.kind)}</td>
                     <td className="px-2 py-1.5">
-                      {a.success ? (
+                      {a.kind === "pending_cleanup" ? (
+                        <span
+                          className="text-muted-foreground"
+                          data-testid={`sync-attempt-cleanup-status-${a.id}`}
+                        >
+                          Tidied up
+                        </span>
+                      ) : a.success ? (
                         <span className="text-emerald-700 dark:text-emerald-400">
                           OK
                         </span>
@@ -251,10 +341,20 @@ export function PlaidSyncHistory({
                         a.plaidDisplayMessage ?? a.errorMessage ?? undefined
                       }
                     >
-                      {/* (#357) Prefer Plaid's `display_message` (the
+                      {/* (#733) Vanished-pending sweep audit row gets
+                          its own renderer: a one-line summary plus an
+                          inline "View details" expander listing each
+                          dropped pre-auth. */}
+                      {a.kind === "pending_cleanup" && a.cleanupDetails ? (
+                        <PendingCleanupDetail
+                          attemptId={a.id}
+                          summary={a.errorMessage ?? null}
+                          details={a.cleanupDetails}
+                        />
+                      ) : /* (#357) Prefer Plaid's `display_message` (the
                           plain-English string Plaid recommends showing
-                          end-users), then fall back to error_message. */}
-                      {a.plaidDisplayMessage || a.errorMessage ? (
+                          end-users), then fall back to error_message. */
+                      a.plaidDisplayMessage || a.errorMessage ? (
                         <div className="flex flex-col gap-1">
                           <span
                             className="line-clamp-2"

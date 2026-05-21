@@ -25,7 +25,11 @@ import { expandItem, parseISO, addDays, fmtISO } from "./cashSignal";
 import { dedupeTransactionsForAccount } from "./dedupeTransactions";
 import { refreshAmexAnchor } from "./amexAnchor";
 import { logger } from "./logger";
-import { recordPlaidSyncAttempt } from "./plaidSyncAttempts";
+import {
+  recordPlaidSyncAttempt,
+  type PlaidPendingCleanupDetails,
+  type PlaidPendingCleanupItem,
+} from "./plaidSyncAttempts";
 import { PLAID_REAUTH_ERROR_CODES } from "./plaidReauthCodes";
 
 /**
@@ -399,6 +403,7 @@ function plaidAmountToSigned(t: PlaidTxn): string {
  */
 async function reconcileVanishedPendings(opts: {
   householdId: string;
+  userId: string;
   itemRowId: string;
   plaidAccountId: string;
   currentPendingIds: Set<string>;
@@ -407,6 +412,7 @@ async function reconcileVanishedPendings(opts: {
 }): Promise<number> {
   const {
     householdId,
+    userId,
     itemRowId,
     plaidAccountId,
     currentPendingIds,
@@ -451,6 +457,7 @@ async function reconcileVanishedPendings(opts: {
     .select({
       id: transactionsTable.id,
       plaidTransactionId: transactionsTable.plaidTransactionId,
+      description: transactionsTable.description,
       occurredOn: transactionsTable.occurredOn,
       amount: transactionsTable.amount,
     })
@@ -475,6 +482,67 @@ async function reconcileVanishedPendings(opts: {
         amount: d.amount,
       },
       "[plaid-sync] (#732) vanished pending swept — Plaid no longer reports this pending row",
+    );
+  }
+  // (#733) Audit row in Settings → Recent activity so users who
+  // notice a pre-auth disappear from their ledger have a breadcrumb
+  // explaining why. Best-effort: writing this row must never block
+  // or roll back the deletions that already succeeded above.
+  try {
+    const [acct] = await db
+      .select({ name: plaidAccountsTable.name })
+      .from(plaidAccountsTable)
+      .where(eq(plaidAccountsTable.accountId, plaidAccountId))
+      .limit(1);
+    const items: PlaidPendingCleanupItem[] = doomed.map((d) => ({
+      description: d.description ?? null,
+      amount: String(d.amount ?? "0"),
+      occurredOn: d.occurredOn,
+      plaidTransactionId: d.plaidTransactionId ?? "",
+    }));
+    // Sum the (negative-for-credit-card-charges) numeric strings as
+    // dollars-and-cents so the summary line shows the magnitude of
+    // dropped pre-auths without losing precision to FP rounding.
+    let totalCents = 0;
+    for (const it of items) {
+      const cents = Math.round(parseFloat(it.amount) * 100);
+      if (Number.isFinite(cents)) totalCents += cents;
+    }
+    const totalAmount = (totalCents / 100).toFixed(2);
+    const dates = items.map((i) => i.occurredOn).sort();
+    const cleanupDetails: PlaidPendingCleanupDetails = {
+      accountName: acct?.name ?? null,
+      plaidAccountId,
+      count: items.length,
+      totalAmount,
+      minOccurredOn: dates[0]!,
+      maxOccurredOn: dates[dates.length - 1]!,
+      items,
+    };
+    const accountLabel = acct?.name ?? "this account";
+    const dateRange =
+      cleanupDetails.minOccurredOn === cleanupDetails.maxOccurredOn
+        ? cleanupDetails.minOccurredOn
+        : `${cleanupDetails.minOccurredOn} – ${cleanupDetails.maxOccurredOn}`;
+    const noun =
+      items.length === 1 ? "dropped pending charge" : "dropped pending charges";
+    // Pre-auths on credit cards arrive as negative amounts; show the
+    // magnitude in the summary line so the user reads it as "we
+    // tidied $42.18 of charges" rather than the surprising "-$42.18".
+    const totalDisplay = Math.abs(totalCents / 100).toFixed(2);
+    const summary = `Cleared ${items.length} ${noun} from ${accountLabel} — totaling $${totalDisplay} (${dateRange}).`;
+    await recordPlaidSyncAttempt({
+      userId,
+      plaidItemId: itemRowId,
+      kind: "pending_cleanup",
+      success: true,
+      errorMessage: summary,
+      cleanupDetails,
+    });
+  } catch (auditErr) {
+    logger.warn(
+      { err: auditErr, householdId, itemRowId, plaidAccountId },
+      "[plaid-sync] (#733) failed to record vanished-pending cleanup audit row (deletions still applied)",
     );
   }
   return doomed.length;
@@ -3210,6 +3278,7 @@ export async function runGapBackfillForItem(
       try {
         await reconcileVanishedPendings({
           householdId,
+          userId,
           itemRowId,
           plaidAccountId: externalAcctId,
           currentPendingIds,

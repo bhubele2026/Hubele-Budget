@@ -13,4 +13,5 @@ export const PlaidSyncAttemptKind = {
   transactions: "transactions",
   balance: "balance",
   liabilities: "liabilities",
+  pending_cleanup: "pending_cleanup",
 } as const;

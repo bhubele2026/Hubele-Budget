@@ -1983,11 +1983,29 @@ export interface PlaidMalformedTokenSweepResult {
     flaggedItems: FlaggedMalformedItem[];
     alert: PlaidMalformedTokenSweepAlert | null;
 }
+export interface PlaidPendingCleanupItem {
+    /** @nullable */
+    description: string | null;
+    amount: string;
+    occurredOn: string;
+    plaidTransactionId: string;
+}
+export interface PlaidPendingCleanupDetails {
+    /** @nullable */
+    accountName: string | null;
+    plaidAccountId: string;
+    count: number;
+    totalAmount: string;
+    minOccurredOn: string;
+    maxOccurredOn: string;
+    items: PlaidPendingCleanupItem[];
+}
 export type PlaidSyncAttemptKind = (typeof PlaidSyncAttemptKind)[keyof typeof PlaidSyncAttemptKind];
 export declare const PlaidSyncAttemptKind: {
     readonly transactions: "transactions";
     readonly balance: "balance";
     readonly liabilities: "liabilities";
+    readonly pending_cleanup: "pending_cleanup";
 };
 /**
  * @nullable
@@ -2017,6 +2035,7 @@ export interface PlaidSyncAttempt {
     httpStatus?: number | null;
     /** @nullable */
     errorKind?: PlaidSyncAttemptErrorKind;
+    cleanupDetails?: PlaidPendingCleanupDetails | null;
 }
 export interface PlaidSyncAttemptsResult {
     attempts: PlaidSyncAttempt[];

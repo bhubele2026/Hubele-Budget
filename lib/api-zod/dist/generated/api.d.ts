@@ -5994,7 +5994,7 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
     attempts: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         attemptedAt: zod.ZodString;
-        kind: zod.ZodEnum<["transactions", "balance", "liabilities"]>;
+        kind: zod.ZodEnum<["transactions", "balance", "liabilities", "pending_cleanup"]>;
         success: zod.ZodBoolean;
         errorCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         errorMessage: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -6002,9 +6002,59 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         requestId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         httpStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
         errorKind: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"reauth">, zod.ZodLiteral<"rate_limit">, zod.ZodLiteral<"institution_down">, zod.ZodLiteral<"transient">, zod.ZodLiteral<"unknown">, zod.ZodLiteral<null>]>>>;
+        cleanupDetails: zod.ZodOptional<zod.ZodUnion<[zod.ZodObject<{
+            accountName: zod.ZodNullable<zod.ZodString>;
+            plaidAccountId: zod.ZodString;
+            count: zod.ZodNumber;
+            totalAmount: zod.ZodString;
+            minOccurredOn: zod.ZodString;
+            maxOccurredOn: zod.ZodString;
+            items: zod.ZodArray<zod.ZodObject<{
+                description: zod.ZodNullable<zod.ZodString>;
+                amount: zod.ZodString;
+                occurredOn: zod.ZodString;
+                plaidTransactionId: zod.ZodString;
+            }, "strip", zod.ZodTypeAny, {
+                occurredOn: string;
+                description: string | null;
+                amount: string;
+                plaidTransactionId: string;
+            }, {
+                occurredOn: string;
+                description: string | null;
+                amount: string;
+                plaidTransactionId: string;
+            }>, "many">;
+        }, "strip", zod.ZodTypeAny, {
+            plaidAccountId: string;
+            count: number;
+            accountName: string | null;
+            totalAmount: string;
+            minOccurredOn: string;
+            maxOccurredOn: string;
+            items: {
+                occurredOn: string;
+                description: string | null;
+                amount: string;
+                plaidTransactionId: string;
+            }[];
+        }, {
+            plaidAccountId: string;
+            count: number;
+            accountName: string | null;
+            totalAmount: string;
+            minOccurredOn: string;
+            maxOccurredOn: string;
+            items: {
+                occurredOn: string;
+                description: string | null;
+                amount: string;
+                plaidTransactionId: string;
+            }[];
+        }>, zod.ZodNull]>>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
-        kind: "balance" | "transactions" | "liabilities";
+        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup";
         attemptedAt: string;
         success: boolean;
         errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
@@ -6013,9 +6063,23 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         plaidDisplayMessage?: string | null | undefined;
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
+        cleanupDetails?: {
+            plaidAccountId: string;
+            count: number;
+            accountName: string | null;
+            totalAmount: string;
+            minOccurredOn: string;
+            maxOccurredOn: string;
+            items: {
+                occurredOn: string;
+                description: string | null;
+                amount: string;
+                plaidTransactionId: string;
+            }[];
+        } | null | undefined;
     }, {
         id: string;
-        kind: "balance" | "transactions" | "liabilities";
+        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup";
         attemptedAt: string;
         success: boolean;
         errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
@@ -6024,11 +6088,25 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         plaidDisplayMessage?: string | null | undefined;
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
+        cleanupDetails?: {
+            plaidAccountId: string;
+            count: number;
+            accountName: string | null;
+            totalAmount: string;
+            minOccurredOn: string;
+            maxOccurredOn: string;
+            items: {
+                occurredOn: string;
+                description: string | null;
+                amount: string;
+                plaidTransactionId: string;
+            }[];
+        } | null | undefined;
     }>, "many">;
 }, "strip", zod.ZodTypeAny, {
     attempts: {
         id: string;
-        kind: "balance" | "transactions" | "liabilities";
+        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup";
         attemptedAt: string;
         success: boolean;
         errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
@@ -6037,11 +6115,25 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         plaidDisplayMessage?: string | null | undefined;
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
+        cleanupDetails?: {
+            plaidAccountId: string;
+            count: number;
+            accountName: string | null;
+            totalAmount: string;
+            minOccurredOn: string;
+            maxOccurredOn: string;
+            items: {
+                occurredOn: string;
+                description: string | null;
+                amount: string;
+                plaidTransactionId: string;
+            }[];
+        } | null | undefined;
     }[];
 }, {
     attempts: {
         id: string;
-        kind: "balance" | "transactions" | "liabilities";
+        kind: "balance" | "transactions" | "liabilities" | "pending_cleanup";
         attemptedAt: string;
         success: boolean;
         errorKind?: "unknown" | "reauth" | "rate_limit" | "institution_down" | "transient" | null | undefined;
@@ -6050,6 +6142,20 @@ export declare const ListPlaidSyncAttemptsResponse: zod.ZodObject<{
         plaidDisplayMessage?: string | null | undefined;
         requestId?: string | null | undefined;
         httpStatus?: number | null | undefined;
+        cleanupDetails?: {
+            plaidAccountId: string;
+            count: number;
+            accountName: string | null;
+            totalAmount: string;
+            minOccurredOn: string;
+            maxOccurredOn: string;
+            items: {
+                occurredOn: string;
+                description: string | null;
+                amount: string;
+                plaidTransactionId: string;
+            }[];
+        } | null | undefined;
     }[];
 }>;
 /**

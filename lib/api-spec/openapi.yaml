@@ -3764,6 +3764,36 @@ components:
           oneOf:
             - { $ref: "#/components/schemas/PlaidMalformedTokenSweepAlert" }
             - type: "null"
+    PlaidPendingCleanupItem:
+      type: object
+      required: [description, amount, occurredOn, plaidTransactionId]
+      properties:
+        description: { type: ["string", "null"] }
+        amount: { type: string }
+        occurredOn: { type: string }
+        plaidTransactionId: { type: string }
+    PlaidPendingCleanupDetails:
+      type: object
+      required:
+        [
+          accountName,
+          plaidAccountId,
+          count,
+          totalAmount,
+          minOccurredOn,
+          maxOccurredOn,
+          items,
+        ]
+      properties:
+        accountName: { type: ["string", "null"] }
+        plaidAccountId: { type: string }
+        count: { type: integer }
+        totalAmount: { type: string }
+        minOccurredOn: { type: string }
+        maxOccurredOn: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlaidPendingCleanupItem" }
     PlaidSyncAttempt:
       type: object
       required: [id, attemptedAt, kind, success]
@@ -3772,18 +3802,27 @@ components:
         # ISO timestamp of when the attempt completed (success or fail).
         attemptedAt: { type: string }
         # Which Plaid product call this row records:
-        #   * "transactions" — /transactions/sync
-        #   * "balance"      — /accounts/balance/get (bank snapshot refresh)
-        #   * "liabilities"  — /liabilities/get / /accounts/get fallback
+        #   * "transactions"    — /transactions/sync
+        #   * "balance"         — /accounts/balance/get (bank snapshot refresh)
+        #   * "liabilities"     — /liabilities/get / /accounts/get fallback
+        #   * "pending_cleanup" — (#733) audit row for the vanished-pending
+        #                         sweep (#732). Always success=true with
+        #                         cleanupDetails populated; only written
+        #                         when one or more rows were actually
+        #                         deleted, never on empty sweeps.
         kind:
           type: string
-          enum: [transactions, balance, liabilities]
+          enum: [transactions, balance, liabilities, pending_cleanup]
         success: { type: boolean }
         # Plaid's structured `error_code` when success=false; null on
         # success or when Plaid did not return one.
         errorCode: { type: ["string", "null"] }
         # Human-readable message — Plaid's `error_message` when present,
         # otherwise the underlying error string. Null on success.
+        # (#733) For kind="pending_cleanup" this carries the quiet
+        # summary line ("Cleared 2 dropped pending charges from Amex
+        # Gold — totaling $42.18 (2026-05-15 – 2026-05-16).") even
+        # though success=true.
         errorMessage: { type: ["string", "null"] }
         # (#357) Enriched per-attempt failure metadata so Settings →
         # Recent activity can render exactly the same structured Plaid
@@ -3796,6 +3835,14 @@ components:
         errorKind:
           type: ["string", "null"]
           enum: [reauth, rate_limit, institution_down, transient, unknown, null]
+        # (#733) Per-deletion detail blob for kind="pending_cleanup"
+        # rows. Null for every other kind. Powers the "View details"
+        # expander on the Recent activity row so a power user can see
+        # exactly which pre-auths Plaid dropped this sync.
+        cleanupDetails:
+          oneOf:
+            - { $ref: "#/components/schemas/PlaidPendingCleanupDetails" }
+            - type: "null"
     PlaidSyncAttemptsResult:
       type: object
       required: [attempts]

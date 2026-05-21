@@ -18,7 +18,34 @@ export const PLAID_SYNC_ATTEMPT_KEEP_PER_ITEM = 50;
 // expander stays responsive even on a flaky bank.
 export const PLAID_SYNC_ATTEMPT_LIST_LIMIT = 20;
 
-export type PlaidSyncAttemptKind = "transactions" | "balance" | "liabilities";
+export type PlaidSyncAttemptKind =
+  | "transactions"
+  | "balance"
+  | "liabilities"
+  // (#733) Audit row written by the vanished-pending sweep (#732)
+  // whenever it actually deletes one or more dropped pre-auths.
+  // Always written with success=true and a populated cleanupDetails
+  // blob; never produced for empty sweeps.
+  | "pending_cleanup";
+
+// (#733) Shape of `cleanupDetails` rows persisted on a
+// kind="pending_cleanup" attempt. Mirrors the JSONB blob the schema
+// comment documents; kept here so the writer + reader stay in sync.
+export type PlaidPendingCleanupItem = {
+  description: string | null;
+  amount: string;
+  occurredOn: string;
+  plaidTransactionId: string;
+};
+export type PlaidPendingCleanupDetails = {
+  accountName: string | null;
+  plaidAccountId: string;
+  count: number;
+  totalAmount: string;
+  minOccurredOn: string;
+  maxOccurredOn: string;
+  items: PlaidPendingCleanupItem[];
+};
 
 /**
  * (#279) Append a single attempt row. Best-effort: if the insert
@@ -39,6 +66,9 @@ export async function recordPlaidSyncAttempt(opts: {
   requestId?: string | null;
   httpStatus?: number | null;
   errorKind?: string | null;
+  // (#733) Per-deletion detail blob — only set for kind="pending_cleanup"
+  // rows. See PlaidPendingCleanupDetails for the shape.
+  cleanupDetails?: PlaidPendingCleanupDetails | null;
 }): Promise<void> {
   try {
     await db.insert(plaidSyncAttemptsTable).values({
@@ -52,6 +82,7 @@ export async function recordPlaidSyncAttempt(opts: {
       requestId: opts.requestId ?? null,
       httpStatus: opts.httpStatus ?? null,
       errorKind: opts.errorKind ?? null,
+      cleanupDetails: opts.cleanupDetails ?? null,
     });
   } catch (err) {
     logger.warn(
@@ -112,6 +143,11 @@ export async function listRecentSyncAttempts(
     success: boolean;
     errorCode: string | null;
     errorMessage: string | null;
+    plaidDisplayMessage: string | null;
+    requestId: string | null;
+    httpStatus: number | null;
+    errorKind: string | null;
+    cleanupDetails: PlaidPendingCleanupDetails | null;
   }>
 > {
   const rows = await db
@@ -139,6 +175,10 @@ export async function listRecentSyncAttempts(
     requestId: r.requestId,
     httpStatus: r.httpStatus,
     errorKind: r.errorKind,
+    // (#733) Vanished-pending sweep audit blob. Null for every kind
+    // other than "pending_cleanup".
+    cleanupDetails:
+      (r.cleanupDetails as PlaidPendingCleanupDetails | null) ?? null,
   }));
 }
 

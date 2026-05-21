@@ -2604,7 +2604,12 @@ export const ListPlaidSyncAttemptsResponse = zod.object({
     zod.object({
       id: zod.string(),
       attemptedAt: zod.string(),
-      kind: zod.enum(["transactions", "balance", "liabilities"]),
+      kind: zod.enum([
+        "transactions",
+        "balance",
+        "liabilities",
+        "pending_cleanup",
+      ]),
       success: zod.boolean(),
       errorCode: zod.string().nullish(),
       errorMessage: zod.string().nullish(),
@@ -2621,6 +2626,27 @@ export const ListPlaidSyncAttemptsResponse = zod.object({
           zod.literal(null),
         ])
         .nullish(),
+      cleanupDetails: zod
+        .union([
+          zod.object({
+            accountName: zod.string().nullable(),
+            plaidAccountId: zod.string(),
+            count: zod.number(),
+            totalAmount: zod.string(),
+            minOccurredOn: zod.string(),
+            maxOccurredOn: zod.string(),
+            items: zod.array(
+              zod.object({
+                description: zod.string().nullable(),
+                amount: zod.string(),
+                occurredOn: zod.string(),
+                plaidTransactionId: zod.string(),
+              }),
+            ),
+          }),
+          zod.null(),
+        ])
+        .optional(),
     }),
   ),
 });

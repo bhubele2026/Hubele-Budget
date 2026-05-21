@@ -147,6 +147,8 @@ export * from "./plaidLinkToken";
 export * from "./plaidMalformedTokenSweepAlert";
 export * from "./plaidMalformedTokenSweepAlertChannel";
 export * from "./plaidMalformedTokenSweepResult";
+export * from "./plaidPendingCleanupDetails";
+export * from "./plaidPendingCleanupItem";
 export * from "./plaidSuggestedDebt";
 export * from "./plaidSyncAttempt";
 export * from "./plaidSyncAttemptErrorKind";
