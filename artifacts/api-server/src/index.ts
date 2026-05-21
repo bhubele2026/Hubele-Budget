@@ -15,6 +15,7 @@ import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
+import { runStartupPendingNotesBackfill } from "./lib/startupPendingNotesBackfill";
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,
@@ -138,6 +139,20 @@ app.listen(port, (err) => {
     })
     .catch((err) => {
       logger.error({ err }, "Startup card-payment reclassify failed");
+    });
+
+  // (#738) One-shot per-startup pass: apply the legacy
+  // `notes='[pending]'` marker cleanup to whatever DB the server is
+  // pointed at. This is the production-side counterpart to the
+  // dev-side `scripts/post-merge.sh` block (which only fires on task
+  // merge against the dev DB). Idempotent — converged DBs are a
+  // no-op. Best-effort: never blocks boot.
+  runStartupPendingNotesBackfill()
+    .then((summary) => {
+      logger.info(summary, "Startup pending-notes backfill complete");
+    })
+    .catch((err) => {
+      logger.error({ err }, "Startup pending-notes backfill failed");
     });
 
   if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
