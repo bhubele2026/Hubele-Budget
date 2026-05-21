@@ -364,6 +364,122 @@ function plaidAmountToSigned(t: PlaidTxn): string {
  * by actor — a household member must be able to sync items linked by
  * any other member of the same household.
  */
+/**
+ * (#732) Reconcile locally-stored pending Plaid rows for a single
+ * account against the set of pending `plaid_transaction_id`s Plaid
+ * actually surfaced in this sync's response. Any local pending row
+ * whose id is NOT in `currentPendingIds` and whose `occurred_on` falls
+ * inside the scoped window is treated as a vanished pre-authorization
+ * (e.g. Metro's pre-delivery hold) and deleted.
+ *
+ * Why this exists:
+ *   * Plaid's cursor `removed` event is not reliably emitted when an
+ *     authorization drops without ever posting under its own
+ *     transaction_id — the merchant just re-bills with a fresh id at
+ *     delivery time and the original hold silently disappears.
+ *   * Our /transactions/get gap-backfill path is insert/update only —
+ *     nothing in it has ever deleted rows that stopped appearing.
+ *
+ * Without this sweep, the orphaned pending stays on the ledger forever,
+ * inflating spend totals and the Amex anchor balance.
+ *
+ * Scope rules:
+ *   * Only `pending=true` rows tied to a Plaid account are eligible
+ *     (manual entries and posted Plaid rows are never touched).
+ *   * Bounded by `windowStart` (and optionally `windowEnd`) so a
+ *     pending we never asked Plaid about doesn't get swept.
+ *   * If Plaid returned no pendings AND no explicit `windowStart` is
+ *     supplied (cursor path with an empty pending delta), the floor is
+ *     computed from the oldest local pending — that's exactly the
+ *     "everything Plaid silently dropped" case.
+ *
+ * Before deleting transactions, we drop any `forecast_resolutions`
+ * rows that pointed at the doomed ids so we don't leave dangling
+ * matched-resolution rows behind.
+ */
+async function reconcileVanishedPendings(opts: {
+  householdId: string;
+  itemRowId: string;
+  plaidAccountId: string;
+  currentPendingIds: Set<string>;
+  windowStart: string | null;
+  windowEnd: string | null;
+}): Promise<number> {
+  const {
+    householdId,
+    itemRowId,
+    plaidAccountId,
+    currentPendingIds,
+    windowEnd,
+  } = opts;
+  let windowStart = opts.windowStart;
+  if (windowStart == null) {
+    const [oldest] = await db
+      .select({ occurredOn: transactionsTable.occurredOn })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.householdId, householdId),
+          eq(transactionsTable.plaidAccountId, plaidAccountId),
+          eq(transactionsTable.pending, true),
+        ),
+      )
+      .orderBy(sql`${transactionsTable.occurredOn} asc`)
+      .limit(1);
+    windowStart = oldest?.occurredOn ?? null;
+  }
+  if (windowStart == null) return 0;
+  const conditions = [
+    eq(transactionsTable.householdId, householdId),
+    eq(transactionsTable.plaidAccountId, plaidAccountId),
+    eq(transactionsTable.pending, true),
+    sql`${transactionsTable.plaidTransactionId} is not null`,
+    sql`${transactionsTable.occurredOn} >= ${windowStart}`,
+  ];
+  if (windowEnd) {
+    conditions.push(sql`${transactionsTable.occurredOn} <= ${windowEnd}`);
+  }
+  if (currentPendingIds.size > 0) {
+    conditions.push(
+      sql`${transactionsTable.plaidTransactionId} not in (${sql.join(
+        Array.from(currentPendingIds).map((id) => sql`${id}`),
+        sql`, `,
+      )})`,
+    );
+  }
+  const doomed = await db
+    .select({
+      id: transactionsTable.id,
+      plaidTransactionId: transactionsTable.plaidTransactionId,
+      occurredOn: transactionsTable.occurredOn,
+      amount: transactionsTable.amount,
+    })
+    .from(transactionsTable)
+    .where(and(...conditions));
+  if (doomed.length === 0) return 0;
+  const doomedIds = doomed.map((d) => d.id);
+  await db
+    .delete(forecastResolutionsTable)
+    .where(inArray(forecastResolutionsTable.matchedTxnId, doomedIds));
+  await db
+    .delete(transactionsTable)
+    .where(inArray(transactionsTable.id, doomedIds));
+  for (const d of doomed) {
+    logger.info(
+      {
+        householdId,
+        itemRowId,
+        plaidAccountId,
+        plaidTransactionId: d.plaidTransactionId,
+        occurredOn: d.occurredOn,
+        amount: d.amount,
+      },
+      "[plaid-sync] (#732) vanished pending swept — Plaid no longer reports this pending row",
+    );
+  }
+  return doomed.length;
+}
+
 export async function syncPlaidItem(
   userId: string,
   itemRowId: string,
@@ -1516,6 +1632,23 @@ export async function syncPlaidItem(
         );
     }
 
+    // (#732) NOTE: vanished-pending reconciliation deliberately does
+    // NOT run here on the cursor-sync delta. /transactions/sync is
+    // delta-based — it returns only transactions whose state has
+    // changed since the last cursor. An unchanged-but-still-in-flight
+    // pending will not appear in `added` or `modified` on a quiet
+    // cycle, so treating "id absent from this delta" as "vanished
+    // upstream" would falsely delete legitimate pendings. The
+    // authoritative sweep lives on the gap-backfill path below
+    // (`reconcileVanishedPendings` invoked from
+    // `runGapBackfillForItem`), which diffs against /transactions/get
+    // — that endpoint returns the full set of transactions in the
+    // queried window, so absence there is real. The stale-cursor
+    // fallback in this same function auto-fires gap-backfill on a
+    // user-initiated sync whose cursor delta is empty, which is
+    // exactly the "Metro pre-auth silently dropped without a removed
+    // event" lifecycle this task exists to clean up.
+
     await db
       .update(plaidItemsTable)
       .set({
@@ -1719,11 +1852,18 @@ export async function syncPlaidItem(
     let backfillAdded = 0;
     let backfillRange: { min: string; max: string } | null = null;
     let deliveryMode: "cursor" | "gap-backfill" = "cursor";
+    // (#732) Track whether any gap-backfill ran successfully so we can
+    // re-fire the Amex anchor refresh below — the gap-backfill path
+    // can delete vanished pendings, which moves the anchor balance,
+    // and the existing post-cursor refreshAmexAnchor above ran BEFORE
+    // those deletes.
+    let backfillRan = false;
     if (wasUnhealthy) {
       try {
         const bf = await runGapBackfillForItem(userId, itemRowId);
         backfillAdded = bf.added;
         backfillRange = bf.importedDateRange;
+        backfillRan = true;
       } catch (e) {
         logger.warn(
           { userId, itemRowId, err: e },
@@ -1801,6 +1941,7 @@ export async function syncPlaidItem(
             overlapDays: 1,
           });
           backfillAdded += bf.added;
+          backfillRan = true;
           if (bf.importedDateRange) {
             backfillRange = backfillRange
               ? {
@@ -1838,6 +1979,20 @@ export async function syncPlaidItem(
     if (backfillRange) {
       if (mergedMin === null || backfillRange.min < mergedMin) mergedMin = backfillRange.min;
       if (mergedMax === null || backfillRange.max > mergedMax) mergedMax = backfillRange.max;
+    }
+    // (#732) Re-fire the Amex anchor refresh AFTER any gap-backfill —
+    // the backfill's vanished-pending sweep can delete rows that
+    // contributed to the anchor balance, and the existing post-cursor
+    // refresh above ran before those deletes. Without this second
+    // call, a Metro pre-auth that vanishes via the gap-backfill path
+    // would clear from transactions but leave the Amex anchor inflated
+    // until the next sync.
+    if (slug === "amex" && backfillRan) {
+      try {
+        await refreshAmexAnchor(ownerUserId, db, { adopt: false });
+      } catch {
+        // Best-effort; the next sync's anchor refresh will catch up.
+      }
     }
     // (#671) Single structured delivery-metrics log line per successful
     // sync. Lets support correlate "where did my pending charge go?"
@@ -3013,6 +3168,33 @@ export async function runGapBackfillForItem(
           if (minDate === null || t.date < minDate) minDate = t.date;
           if (maxDate === null || t.date > maxDate) maxDate = t.date;
         }
+      }
+
+      // (#732) Vanished-pending sweep, scoped to the
+      // [startStr, todayStr] window we just fetched. Diff Plaid's
+      // returned pending ids against local pending rows for this
+      // account inside the same window; anything Plaid no longer
+      // surfaces is a dropped pre-auth. Runs INSIDE the try so a
+      // transient /transactions/get failure (caught below) never
+      // wipes local rows we couldn't re-verify.
+      const currentPendingIds = new Set<string>();
+      for (const t of all) {
+        if (t.pending) currentPendingIds.add(t.transaction_id);
+      }
+      try {
+        await reconcileVanishedPendings({
+          householdId,
+          itemRowId,
+          plaidAccountId: externalAcctId,
+          currentPendingIds,
+          windowStart: startStr,
+          windowEnd: todayStr,
+        });
+      } catch (sweepErr) {
+        logger.warn(
+          { userId, itemRowId, externalAcctId, err: sweepErr },
+          "[plaid-backfill] (#732) vanished-pending sweep failed (non-fatal)",
+        );
       }
     } catch (e) {
       logger.warn(
