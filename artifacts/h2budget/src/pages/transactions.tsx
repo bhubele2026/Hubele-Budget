@@ -82,7 +82,8 @@ import {
 import { isBankTxn } from "@/lib/forecastMatch";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
-import { BucketBubbles, type BucketFlags, type BucketKey } from "@/components/bucket-bubbles";
+import { type BucketKey } from "@/components/bucket-bubbles";
+import { TransactionRowChips } from "@/components/transaction-row-chips";
 import { chaseMonthTotals } from "@/lib/chaseScope";
 import { shouldShowManualPickerOption } from "@/lib/chasePickerOptions";
 import {
@@ -1587,149 +1588,64 @@ export default function TransactionsPage() {
     );
   }
 
-  // (#741) Shared row-chip cluster. The pending and posted day-group
-  // blocks below previously rendered near-identical JSX for the
-  // category picker, transfer pill, bucket bubbles, and reimbursed/
-  // manual badges — any edit to one block had to be mirrored in the
-  // other (the gap #740 fixed was exactly that drift). Funnel both
-  // blocks through this single helper so parity is the default; the
-  // only per-block differences (the matched-rule chip placement and
-  // the forecast-state badge styling/copy) are passed in as slots.
-  const renderRowChips = (
+  // (#741/#742) The shared row-chip cluster moved into
+  // `<TransactionRowChips />`. The pending and posted day-group blocks
+  // below funnel through it so the cluster stays in lockstep (the gap
+  // #740 fixed was exactly that drift). The mutation glue lives here as
+  // small callbacks so the component has no implicit dependency on this
+  // page's hooks / query keys / toast.
+  const handleClearTransfer = (tx: Transaction) => {
+    updateTx.mutate(
+      { id: tx.id, data: { isTransfer: false } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getListTransactionsQueryKey(),
+          });
+          queryClient.invalidateQueries({
+            queryKey: getGetBudgetMonthQueryKey(
+              `${tx.occurredOn.slice(0, 7)}-01`,
+            ),
+          });
+          toast({ title: "Cleared Transfer flag" });
+        },
+      },
+    );
+  };
+  const handleToggleBucket = (
     tx: Transaction,
-    opts?: {
-      matchedRuleChip?: React.ReactNode;
-      forecastStateBadge?: React.ReactNode;
-    },
-  ) => (
-    <>
-      {tx.categoryId && categoryById.get(tx.categoryId) && (
-        <InlineCategoryPicker
-          tx={tx}
-          currentName={categoryById.get(tx.categoryId)!}
-          categories={categories ?? []}
-          onPick={(catId) => handleQuickCategorize(tx, catId)}
-        />
-      )}
-      {opts?.matchedRuleChip}
-      {!tx.categoryId && (
-        <CategorizeChip
-          tx={tx}
-          categories={categories ?? []}
-          onPick={(catId) => handleQuickCategorize(tx, catId)}
-        />
-      )}
-      {!tx.isTransfer && tx.isTransferUserOverridden && (
-        <Badge
-          variant="outline"
-          className="inline-flex items-center text-[11px] font-normal border-slate-200 text-slate-500 bg-slate-50/60"
-          data-testid={`badge-transfer-overridden-cleared-${tx.id}`}
-          title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
-        >
-          Manually set
-        </Badge>
-      )}
-      {tx.isTransfer && (
-        <Badge
-          variant="outline"
-          className="inline-flex items-center gap-1 text-xs border-slate-300 text-slate-700 bg-slate-50"
-          data-testid={`badge-transfer-${tx.id}`}
-          title={
-            tx.isTransferUserOverridden
-              ? "Manually set — won't be re-flagged on the next sync"
-              : undefined
-          }
-        >
-          Transfer
-          {tx.isTransferUserOverridden && (
-            <span
-              aria-hidden="true"
-              data-testid={`badge-transfer-overridden-${tx.id}`}
-              className="text-slate-500 -ml-0.5"
-            >
-              *
-            </span>
-          )}
-          <button
-            type="button"
-            aria-label="Clear Transfer flag"
-            data-testid={`button-clear-transfer-${tx.id}`}
-            className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-slate-200/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-            onClick={(e) => {
-              e.stopPropagation();
-              updateTx.mutate(
-                { id: tx.id, data: { isTransfer: false } },
-                {
-                  onSuccess: () => {
-                    queryClient.invalidateQueries({
-                      queryKey: getListTransactionsQueryKey(),
-                    });
-                    queryClient.invalidateQueries({
-                      queryKey: getGetBudgetMonthQueryKey(
-                        `${tx.occurredOn.slice(0, 7)}-01`,
-                      ),
-                    });
-                    toast({ title: "Cleared Transfer flag" });
-                  },
-                },
-              );
-            }}
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </Badge>
-      )}
-      {opts?.forecastStateBadge}
-      <BucketBubbles
-        flags={{
-          weekly: !!tx.weeklyAllowance,
-          monthly: !!tx.monthlyAllowance,
-          unplanned: !!tx.unplannedAllowance,
-          reimbursable: !!tx.reimbursable,
-        }}
-        onToggle={(bucket: BucketKey, next: boolean) => {
-          const data: Record<string, boolean> = {};
-          if (bucket === "weekly") data.weeklyAllowance = next;
-          else if (bucket === "monthly") data.monthlyAllowance = next;
-          else if (bucket === "unplanned") data.unplannedAllowance = next;
-          else if (bucket === "reimbursable") data.reimbursable = next;
-          updateTx.mutate(
-            { id: tx.id, data },
-            {
-              onSuccess: () => {
-                queryClient.invalidateQueries({
-                  queryKey: getListTransactionsQueryKey(),
-                });
-              },
-              // (#642) Surface the server-side "transfer can't be
-              // tagged Unplanned" rejection as a short toast so the
-              // user understands why nothing happened when they click
-              // the UN bubble on a transfer-looking row. Same toast
-              // for any other rejection (e.g. transient network error)
-              // so we don't silently swallow failures.
-              onError: (e: unknown) => {
-                toast({
-                  title: "Couldn't update bucket",
-                  description:
-                    (e as Error)?.message ?? "Please try again.",
-                  variant: "destructive",
-                });
-              },
-            },
-          );
-        }}
-        disabled={updateTx.isPending}
-      />
-      {tx.reimbursed && (
-        <Badge
-          variant="outline"
-          className="text-xs border-green-200 text-green-700 bg-green-50"
-        >
-          Reimbursed
-        </Badge>
-      )}
-    </>
-  );
+    bucket: BucketKey,
+    next: boolean,
+  ) => {
+    const data: Record<string, boolean> = {};
+    if (bucket === "weekly") data.weeklyAllowance = next;
+    else if (bucket === "monthly") data.monthlyAllowance = next;
+    else if (bucket === "unplanned") data.unplannedAllowance = next;
+    else if (bucket === "reimbursable") data.reimbursable = next;
+    updateTx.mutate(
+      { id: tx.id, data },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getListTransactionsQueryKey(),
+          });
+        },
+        // (#642) Surface the server-side "transfer can't be
+        // tagged Unplanned" rejection as a short toast so the
+        // user understands why nothing happened when they click
+        // the UN bubble on a transfer-looking row. Same toast
+        // for any other rejection (e.g. transient network error)
+        // so we don't silently swallow failures.
+        onError: (e: unknown) => {
+          toast({
+            title: "Couldn't update bucket",
+            description: (e as Error)?.message ?? "Please try again.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
 
   const todayKey = ymd(new Date());
   // #103/#296 — Starting/Ending balance render whenever the
@@ -2361,9 +2277,9 @@ export default function TransactionsPage() {
                             testIdSuffix={`pending-${tx.id}`}
                           />
                         </div>
-                        {/* (#740/#741) Categorization affordances on
-                            pending rows. Shares the `renderRowChips`
-                            helper with the posted block below so any
+                        {/* (#740/#741/#742) Categorization affordances on
+                            pending rows. Shares the `<TransactionRowChips />`
+                            component with the posted block below so any
                             future tweak lands on both at once (the gap
                             #740 fixed was exactly this drift).
                             Excludes the inline amount + date editors on
@@ -2374,7 +2290,15 @@ export default function TransactionsPage() {
                             header row above instead of the cluster, so
                             they're not passed in here. */}
                         <div className="flex flex-wrap gap-1.5 items-center mt-1">
-                          {renderRowChips(tx)}
+                          <TransactionRowChips
+                            tx={tx}
+                            categories={categories ?? []}
+                            categoryById={categoryById}
+                            isPending={updateTx.isPending}
+                            onQuickCategorize={handleQuickCategorize}
+                            onClearTransfer={handleClearTransfer}
+                            onToggleBucket={handleToggleBucket}
+                          />
                         </div>
                       </div>
                     </div>
@@ -2468,8 +2392,8 @@ export default function TransactionsPage() {
                           {formatTransactionSource(tx.source)}
                         </span>
                       </div>
-                      {/* (#741) Shared cluster with the pending block
-                          above (see `renderRowChips`). The matched-rule
+                      {/* (#741/#742) Shared cluster with the pending block
+                          above (see `<TransactionRowChips />`). The matched-rule
                           chip is slotted in next to the category picker
                           and the forecast-state badge is slotted in
                           between the transfer pill and the bucket
@@ -2477,16 +2401,23 @@ export default function TransactionsPage() {
                           extras; everything else is identical to pending
                           by construction. */}
                       <div className="flex flex-wrap gap-1.5 items-center">
-                        {renderRowChips(tx, {
-                          matchedRuleChip: (
+                        <TransactionRowChips
+                          tx={tx}
+                          categories={categories ?? []}
+                          categoryById={categoryById}
+                          isPending={updateTx.isPending}
+                          onQuickCategorize={handleQuickCategorize}
+                          onClearTransfer={handleClearTransfer}
+                          onToggleBucket={handleToggleBucket}
+                          matchedRuleChip={
                             <MatchedRuleChip
                               categoryId={tx.categoryId}
                               matchedRuleId={tx.matchedRuleId}
                               rules={mappingRules}
                               testIdSuffix={tx.id}
                             />
-                          ),
-                          forecastStateBadge: tx.forecastFlag
+                          }
+                          forecastStateBadge={tx.forecastFlag
                             ? (() => {
                                 const r = resolutionByTxnId.get(tx.id);
                                 if (r?.status === "matched") {
@@ -2527,8 +2458,8 @@ export default function TransactionsPage() {
                                   </Badge>
                                 );
                               })()
-                            : null,
-                        })}
+                            : null}
+                        />
                       </div>
                     </div>
                   </div>
@@ -2612,136 +2543,6 @@ export default function TransactionsPage() {
         );
       })}
     </div>
-  );
-}
-
-// Keyword → list of category-name substrings to surface as suggestions when a
-// transaction is uncategorized. The first existing category whose name matches
-// any of the substrings (case-insensitive) wins. Designed to cover the
-// debt-bearing April Chase rows (Synchrony, Chase autopay, Upstart, Dept of
-// Education) plus a handful of common merchants.
-const SUGGESTION_RULES: { match: string[]; targets: string[] }[] = [
-  { match: ["synchrony"], targets: ["Synchrony", "Ashley", "Mattress", "PayPal Credit", "Misc / Buffer"] },
-  { match: ["upstart"], targets: ["Upstart", "Misc / Buffer"] },
-  { match: ["chase credit", "chase autopay"], targets: ["Chase Sapphire", "Chase Freedom", "Chase", "Misc / Buffer"] },
-  { match: ["dept education", "dept of ed", "nelnet"], targets: ["Student Loan", "Nelnet", "Dept of Ed", "Misc / Buffer"] },
-  { match: ["intuit"], targets: ["Intuit", "Misc / Buffer"] },
-  { match: ["affirm"], targets: ["Affirm", "Misc / Buffer"] },
-  { match: ["american express", "amex"], targets: ["American Express", "Amex", "Misc / Buffer"] },
-  { match: ["discover"], targets: ["Discover", "Misc / Buffer"] },
-  { match: ["capital one"], targets: ["Capital One", "Misc / Buffer"] },
-  { match: ["paymthly", "pypl paymthly", "paypal credit"], targets: ["PayPal Credit", "Synchrony", "Misc / Buffer"] },
-  { match: ["applecard", "apple card"], targets: ["Apple Card", "Misc / Buffer"] },
-  { match: ["credit one"], targets: ["Credit One", "Misc / Buffer"] },
-  { match: ["figure"], targets: ["Figure", "HELOC", "Misc / Buffer"] },
-  { match: ["uw credit union"], targets: ["Hannah", "Car Payments", "Misc / Buffer"] },
-  { match: ["toyota"], targets: ["Toyota", "Car Payments"] },
-  { match: ["lakeview"], targets: ["Mortgage", "Lakeview"] },
-  { match: ["madison gas", "city of madison"], targets: ["Utilities", "MGE"] },
-  { match: ["verizon"], targets: ["Phone", "Utilities", "Verizon"] },
-  { match: ["state farm"], targets: ["Insurance", "State Farm"] },
-  { match: ["trustage"], targets: ["Insurance", "TruStage"] },
-  { match: ["metro market", "costco", "walmart"], targets: ["Groceries", "Shopping"] },
-  { match: ["kwik trip"], targets: ["Gas", "Transportation"] },
-  { match: ["starbucks", "dunkin", "doordash", "mooyah"], targets: ["Dining", "Coffee", "Restaurants"] },
-  { match: ["paypal purchase", "stitchfix", "aldo", "shen zhen", "brghtwhl"], targets: ["Shopping"] },
-  { match: ["paramount", "adobe", "ancestry", "playstation", "nintendo"], targets: ["Subscriptions"] },
-];
-
-function suggestCategories(
-  description: string,
-  categories: { id: string; name: string }[],
-): { id: string; name: string }[] {
-  const hay = (description ?? "").toLowerCase();
-  const out: { id: string; name: string }[] = [];
-  const seen = new Set<string>();
-  for (const rule of SUGGESTION_RULES) {
-    if (!rule.match.some((m) => hay.includes(m))) continue;
-    for (const target of rule.targets) {
-      const needle = target.toLowerCase();
-      const hit = categories.find(
-        (c) => c.name.toLowerCase().includes(needle) && !seen.has(c.id),
-      );
-      if (hit) {
-        out.push(hit);
-        seen.add(hit.id);
-        if (out.length >= 3) return out;
-      }
-    }
-  }
-  return out;
-}
-
-/**
- * Task #451 — Inline category override surfaced on rows that already
- * have a category (whether assigned by a mapping rule or set manually).
- * The category badge itself acts as the picker trigger so changing the
- * category is one click instead of opening the pencil/edit dialog.
- * Picking a new category routes through the same `onPick` handler the
- * uncategorized-row `CategorizeChip` uses (`handleQuickCategorize`),
- * so the same PATCH flow, "Categorized" toast, ruleAction-aware undo,
- * and bulk-recategorize prompts all fire identically.
- */
-function InlineCategoryPicker({
-  tx,
-  currentName,
-  categories,
-  onPick,
-}: {
-  tx: Transaction;
-  currentName: string;
-  categories: { id: string; name: string }[];
-  onPick: (categoryId: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Badge
-          variant="outline"
-          role="button"
-          tabIndex={0}
-          className="cursor-pointer text-xs font-medium border-violet-200 text-violet-700 bg-violet-50 hover:bg-violet-100 transition-colors"
-          data-testid={`badge-category-${tx.id}`}
-          title="Change category"
-        >
-          {currentName}
-        </Badge>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search category…" />
-          <CommandList>
-            <CommandEmpty>No category</CommandEmpty>
-            <CommandGroup>
-              {categories.map((c) => (
-                <CommandItem
-                  key={c.id}
-                  value={c.name}
-                  onSelect={() => {
-                    setOpen(false);
-                    // Skip the no-op PATCH when the user picks the
-                    // category the row already has — avoids surfacing
-                    // a misleading "Categorized" toast and prevents
-                    // the server's mapping-rule auto-learn / repoint
-                    // side effects from firing on a same-category
-                    // selection.
-                    if (c.id === tx.categoryId) return;
-                    onPick(c.id);
-                  }}
-                  data-testid={`option-inline-category-${tx.id}-${c.id}`}
-                >
-                  {c.name}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-          <div className="border-t px-2 py-1.5 text-[11px] text-muted-foreground">
-            Picking a category will remember this merchant.
-          </div>
-        </Command>
-      </PopoverContent>
-    </Popover>
   );
 }
 
@@ -2958,125 +2759,6 @@ function InlineDateMover({
             </Button>
           </div>
         </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function CategorizeChip({
-  tx,
-  categories,
-  onPick,
-}: {
-  tx: Transaction;
-  categories: { id: string; name: string }[];
-  onPick: (categoryId: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const suggestions = useMemo(
-    () => suggestCategories(tx.description, categories),
-    [tx.description, categories],
-  );
-  const top = suggestions[0];
-  if (top) {
-    return (
-      <span className="inline-flex items-center gap-1">
-        <Badge
-          variant="outline"
-          className="cursor-pointer text-xs border-violet-300 text-violet-700 bg-violet-50 hover:bg-violet-100"
-          onClick={() => onPick(top.id)}
-          title="Categorize and remember this merchant"
-          data-testid={`badge-suggest-${tx.id}`}
-        >
-          <Wand2 className="w-3 h-3 mr-1" /> Categorize as {top.name}
-        </Badge>
-        <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
-            <Badge
-              variant="outline"
-              className="cursor-pointer text-xs border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
-              data-testid={`badge-uncategorized-${tx.id}`}
-            >
-              Other…
-            </Badge>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Search category…" />
-              <CommandList>
-                <CommandEmpty>No category</CommandEmpty>
-                {suggestions.length > 1 && (
-                  <CommandGroup heading="Suggested">
-                    {suggestions.slice(1).map((c) => (
-                      <CommandItem
-                        key={`s-${c.id}`}
-                        onSelect={() => {
-                          onPick(c.id);
-                          setOpen(false);
-                        }}
-                      >
-                        {c.name}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                )}
-                <CommandGroup heading="All categories">
-                  {categories.map((c) => (
-                    <CommandItem
-                      key={c.id}
-                      onSelect={() => {
-                        onPick(c.id);
-                        setOpen(false);
-                      }}
-                    >
-                      {c.name}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-              <div className="border-t px-2 py-1.5 text-[11px] text-muted-foreground">
-                Picking a category will remember this merchant.
-              </div>
-            </Command>
-          </PopoverContent>
-        </Popover>
-      </span>
-    );
-  }
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Badge
-          variant="outline"
-          className="cursor-pointer text-xs border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
-          data-testid={`badge-uncategorized-${tx.id}`}
-        >
-          <Wand2 className="w-3 h-3 mr-1" /> Categorize
-        </Badge>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search category…" />
-          <CommandList>
-            <CommandEmpty>No category</CommandEmpty>
-            <CommandGroup>
-              {categories.map((c) => (
-                <CommandItem
-                  key={c.id}
-                  onSelect={() => {
-                    onPick(c.id);
-                    setOpen(false);
-                  }}
-                >
-                  {c.name}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-          <div className="border-t px-2 py-1.5 text-[11px] text-muted-foreground">
-            Picking a category will remember this merchant.
-          </div>
-        </Command>
       </PopoverContent>
     </Popover>
   );
