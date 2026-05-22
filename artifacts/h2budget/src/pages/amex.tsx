@@ -2571,9 +2571,17 @@ function VirtualizedDayGroups<G>({
     };
   }, []);
 
+  // (#744) The 24px gap rendered between day-group wrappers below must
+  // be baked into both the estimate and the per-item measured size,
+  // otherwise `getTotalSize()` is strictly smaller than the actual
+  // scroll height and the virtualizer believes the user has reached
+  // the end of the list before the oldest day-groups (May 1–16 in the
+  // reported case) come into view, leaving the bottom of the month
+  // silently trimmed.
+  const ITEM_GAP_PX = 24;
   const virtualizer = useWindowVirtualizer({
     count: groups.length,
-    estimateSize: (i) => 64 + groups[i][1].length * 72,
+    estimateSize: (i) => 64 + groups[i][1].length * 72 + ITEM_GAP_PX,
     overscan: 4,
     scrollMargin,
   });
@@ -2606,19 +2614,26 @@ function VirtualizedDayGroups<G>({
   const sorted = Array.from(indices).sort((a, b) => a - b);
 
   return (
-    <div ref={parentRef} className="space-y-6">
+    <div ref={parentRef}>
       <div style={{ paddingTop, paddingBottom }}>
-        <div className="space-y-6">
-          {sorted.map((index) => (
-            <div
-              key={groups[index][0]}
-              data-index={index}
-              ref={virtualizer.measureElement}
-            >
-              {renderGroup(groups[index])}
-            </div>
-          ))}
-        </div>
+        {sorted.map((index) => (
+          <div
+            key={groups[index][0]}
+            data-index={index}
+            ref={virtualizer.measureElement}
+            // (#744) The inter-group gap is rendered as paddingBottom
+            // on the measured wrapper (rather than via `space-y-6` on
+            // the parent) so that `measureElement.getBoundingClientRect`
+            // includes it in the virtualizer's totalSize. Otherwise the
+            // accumulated gap height was not tracked and the bottom of
+            // the month silently dropped out of the rendered window.
+            style={{
+              paddingBottom: index < groups.length - 1 ? ITEM_GAP_PX : 0,
+            }}
+          >
+            {renderGroup(groups[index])}
+          </div>
+        ))}
       </div>
     </div>
   );
