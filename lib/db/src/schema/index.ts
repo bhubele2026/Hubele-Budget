@@ -820,3 +820,39 @@ export const weeklySettlementsTable = pgTable(
   }),
 );
 export type WeeklySettlement = typeof weeklySettlementsTable.$inferSelect;
+
+export const advisorAuditLogTable = pgTable(
+  "advisor_audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    // The signed-in user who was chatting when this tool ran.
+    actorUserId: text("actor_user_id").notNull(),
+    // Tool name as defined in the advisor tool catalog (e.g. "add_recurring_bill").
+    toolName: text("tool_name").notNull(),
+    // The arguments the model proposed, as JSON.
+    args: jsonb("args").notNull(),
+    // Lifecycle: 'proposed' (awaiting confirmation), 'auto_executed'
+    // (reversible write, ran immediately), 'confirmed' (user clicked
+    // confirm), 'cancelled' (user cancelled), 'executed' (succeeded),
+    // 'failed' (threw), 'undone' (reversed via undo).
+    status: text("status").notNull(),
+    // For undoable writes: a snapshot of the affected row(s) BEFORE the
+    // change, in whatever shape the tool's undo handler needs to reverse it.
+    // Null for read tools and destructive ops without undo.
+    beforeSnapshot: jsonb("before_snapshot"),
+    // Free-text error message when status='failed'.
+    errorMessage: text("error_message"),
+    // The chat message id this tool call was attached to (for UI correlation).
+    chatMessageId: text("chat_message_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    // Set when the user clicks undo. Used to gate "can still undo?" checks.
+    undoneAt: timestamp("undone_at", { withTimezone: true }),
+  },
+  (t) => ({
+    householdIdx: index("advisor_audit_log_household_idx").on(t.householdId, t.createdAt),
+    statusIdx: index("advisor_audit_log_status_idx").on(t.status),
+  }),
+);
