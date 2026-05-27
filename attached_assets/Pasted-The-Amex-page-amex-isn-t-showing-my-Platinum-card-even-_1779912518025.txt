@@ -1,0 +1,61 @@
+The Amex page (/amex) isn't showing my Platinum card even though it's heavily used. Before changing code, diagnose. Run these queries (using the Replit DB tool or a one-off Drizzle script in /tmp) and report the results:
+
+QUERY 1 — what Plaid items are linked and what their institution names / slugs are:
+
+SELECT
+  id,
+  item_id,
+  institution_name,
+  institution_slug,
+  created_at
+FROM plaid_items
+WHERE user_id = (SELECT owner_user_id FROM households WHERE id = $MY_HOUSEHOLD_ID)
+ORDER BY created_at DESC;
+
+(Replace $MY_HOUSEHOLD_ID by reading req.householdId from the most recent /forecast request or by hardcoding from logs.)
+
+QUERY 2 — what Plaid accounts exist on each of those items, and which ones look like Amex:
+
+SELECT
+  pa.id AS internal_id,
+  pa.account_id AS external_id,
+  pa.name,
+  pa.official_name,
+  pa.mask,
+  pi.institution_name,
+  pi.institution_slug,
+  (SELECT COUNT(*) FROM transactions t WHERE t.plaid_account_id = pa.account_id) AS txn_count,
+  (SELECT MAX(t.occurred_on) FROM transactions t WHERE t.plaid_account_id = pa.account_id) AS last_txn,
+  (SELECT t.source FROM transactions t WHERE t.plaid_account_id = pa.account_id ORDER BY t.occurred_on DESC LIMIT 1) AS recent_source
+FROM plaid_accounts pa
+JOIN plaid_items pi ON pi.id = pa.plaid_item_id
+WHERE pi.user_id = (SELECT owner_user_id FROM households WHERE id = $MY_HOUSEHOLD_ID)
+ORDER BY pi.institution_name, pa.name;
+
+QUERY 3 — show me distinct transaction sources for any account whose name OR official_name OR institution looks Platinum-ish:
+
+SELECT
+  t.source,
+  COUNT(*) AS cnt,
+  MIN(t.occurred_on) AS first_seen,
+  MAX(t.occurred_on) AS last_seen
+FROM transactions t
+JOIN plaid_accounts pa ON pa.account_id = t.plaid_account_id
+JOIN plaid_items pi ON pi.id = pa.plaid_item_id
+WHERE t.household_id = $MY_HOUSEHOLD_ID
+  AND (
+    LOWER(pa.name) LIKE '%platinum%'
+    OR LOWER(pa.official_name) LIKE '%platinum%'
+    OR LOWER(pi.institution_name) LIKE '%platinum%'
+  )
+GROUP BY t.source
+ORDER BY cnt DESC;
+
+Report the results of all three queries. The fix depends entirely on what these show:
+
+- If Platinum's institution_name doesn't contain "american express" or "amex", the SLUG_OVERRIDES needs widening.
+- If Platinum's transactions have source 'plaid:amex' but no chip renders, the page-side scoping or chip-derivation logic is wrong.
+- If Platinum's transactions exist but have NO plaid_account_id (NULL), then plaid_account_id wasn't backfilled for that item and that needs fixing on the sync side.
+- If Platinum's account row simply doesn't exist in plaid_accounts, the Plaid item was never properly synced.
+
+Once you've reported the results I'll tell you which fix to apply.
