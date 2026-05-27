@@ -33,6 +33,22 @@ import {
 import { PLAID_REAUTH_ERROR_CODES } from "./plaidReauthCodes";
 
 /**
+ * (#760, Phase A) Master kill-switch for the post-sync auto-match block
+ * that pairs newly-inserted checking transactions with planned recurring
+ * items and inserts `forecast_resolutions` rows with `status='matched'`
+ * on the user's behalf. Set to `false` so the workflow overhaul (manual
+ * Send-to-Review gate, lingering past-due plans, weekly Debrief) can land
+ * on top of an "every match is an explicit user click" baseline. The
+ * underlying matching logic is preserved verbatim behind this gate — a
+ * later phase may reintroduce it as an explicit user-toggled "AI auto-
+ * match" feature, at which point this becomes a per-household setting.
+ * Client-side suggestion engines (forecastMatch.ts: pickConfidentBank-
+ * Matches / suggestPlanMatchesForBank / rankPlansForBank) are intentionally
+ * unaffected — they only render "Match to…" options, never write.
+ */
+const AUTO_MATCH_ENABLED = false;
+
+/**
  * (#357) Categorical classification of a Plaid failure used by the frontend
  * to decide which CTA to surface (Reconnect vs. retry vs. wait). Computed
  * server-side so the toast/banner copy stays in sync across web and mobile
@@ -1617,7 +1633,27 @@ export async function syncPlaidItem(
 
     // Auto-match: for each new checking txn, find a planned recurring event
     // within ±3 days with the same sign and (within $1) amount, and mark it matched.
-    if (insertedCheckingTxns.length > 0) {
+    //
+    // (#760, Phase A) Gated behind the module-level `AUTO_MATCH_ENABLED`
+    // kill-switch. While disabled, the entire block — recurring-item
+    // lookup, event expansion, candidate scoring, and the
+    // `forecast_resolutions` insert — is skipped, and one info log per
+    // sync records the skip so production operators can see the gate
+    // running. The matching logic is preserved verbatim so a later phase
+    // can resurface it as an opt-in feature without rewriting it.
+    if (!AUTO_MATCH_ENABLED) {
+      if (insertedCheckingTxns.length > 0) {
+        logger.info(
+          {
+            householdId,
+            userId: ownerUserId,
+            itemRowId,
+            skippedCheckingTxnCount: insertedCheckingTxns.length,
+          },
+          "[plaid-sync] forecast auto-match skipped (AUTO_MATCH_ENABLED=false)",
+        );
+      }
+    } else if (insertedCheckingTxns.length > 0) {
       const recurring = await db
         .select()
         .from(recurringItemsTable)

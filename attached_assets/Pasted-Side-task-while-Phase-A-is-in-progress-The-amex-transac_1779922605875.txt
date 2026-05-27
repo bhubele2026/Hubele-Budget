@@ -1,0 +1,42 @@
+Side task while Phase A is in progress. The /amex transaction list cuts off mid-month when a single card chip is selected (Delta Gold or Platinum). "All cards" view shows everything, but clicking an individual chip clips the list to just the most recent few days. The bottom of the month is invisible to scroll.
+
+This is the same class of virtualizer-height bug referenced by the (#744) comment in artifacts/h2budget/src/pages/amex.tsx around line 2574. The estimateSize function around line 2584:
+
+  estimateSize: (i) => 64 + groups[i][1].length * 72 + ITEM_GAP_PX,
+
+is too low. When measured day-groups are much taller than estimated, getTotalSize() lags reality and the virtualizer stops short.
+
+CHANGE 1 — Make estimateSize conservative.
+
+  estimateSize: (i) => 96 + groups[i][1].length * 110 + ITEM_GAP_PX,
+
+(was 64 + 72*n, now 96 + 110*n — covers per-row category picker, member chips, bucket bubbles, running balance line).
+
+CHANGE 2 — Increase overscan.
+
+  overscan: 8,  // was 4
+
+CHANGE 3 — Force re-measure on data and filter changes.
+
+Add a useEffect that calls virtualizer.measure() whenever the underlying data set or filter changes:
+
+  useEffect(() => {
+    virtualizer.measure();
+  }, [monthScoped.length, filtered.length, cardFilter, selectedMonth]);
+
+Confirm .measure() is the right API for the installed version of @tanstack/react-virtual; if not, use whatever method triggers a full re-layout (e.g., _scrollToOffset, or invalidating the cache).
+
+CHANGE 4 — Make scrollMargin observer more sensitive.
+
+Around line 2557-2572, the ResizeObserver watches document.body. Also observe the list container itself, so layout shifts above the list (stats tiles changing height when chips re-filter, chart re-rendering) trigger re-measure:
+
+  ro.observe(document.body);
+  ro.observe(el);
+
+Acceptance:
+- Click Delta Gold → scroll back to first transaction of May, see all of them
+- Click Platinum → same
+- Click All cards → still works
+- Click each chip in turn — no card filter clips the list
+
+Run pnpm typecheck and pnpm test on h2budget. Quick fix — should be 10 minutes.
