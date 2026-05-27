@@ -22,3 +22,9 @@ title = "drag failure screenshot"
 id = "RlhjetWSdgeeBw-lrSn0z"
 uri = "file://artifacts/h2budget/test-results/transactions-chase-account-fa079-able-on-a-non-matching-mask/test-failed-1.png"
 type = "image"
+
+[[outputs]]
+id = "PENVJbfKxUWT071Ab8RbX"
+uri = "file://dist/h2budget-project.tar.gz"
+type = "unspecified"
+title = "H2 Family Budget — full source (tar.gz)"
