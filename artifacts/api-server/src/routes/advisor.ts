@@ -16,6 +16,11 @@ const router: IRouter = Router();
 
 // GET /api/advisor/nudge — cached (1h TTL) AI observation for the dashboard
 router.get("/advisor/nudge", requireAuth, async (req, res): Promise<void> => {
+  logger.info({
+    hasKey: !!process.env.ANTHROPIC_API_KEY,
+    keyLen: process.env.ANTHROPIC_API_KEY?.length ?? 0,
+    advisorEnabledFlag: process.env.ADVISOR_ENABLED ?? "(unset)",
+  }, "advisor: env check");
   if (!isAdvisorEnabled()) {
     res.json({ enabled: false });
     return;
