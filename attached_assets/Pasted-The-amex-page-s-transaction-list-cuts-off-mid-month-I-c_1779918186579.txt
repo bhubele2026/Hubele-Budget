@@ -1,0 +1,62 @@
+The /amex page's transaction list cuts off mid-month. I can only see the most recent 2-5 days even though "70 of 219 txns" is shown in the filter bar — scrolling hits an invisible floor. There's a comment in the code referencing (#744) which fixed this same class of bug once. It's regressed.
+
+The root cause is in artifacts/h2budget/src/pages/amex.tsx around line 2582:
+
+  const virtualizer = useWindowVirtualizer({
+    count: groups.length,
+    estimateSize: (i) => 64 + groups[i][1].length * 72 + ITEM_GAP_PX,
+    overscan: 4,
+    scrollMargin,
+  });
+
+estimateSize underestimates the height of day-groups that carry extra UI — especially the "today" group and any group with rows that have ExternalCardChip / BucketBubbles / pending-plaid banners. When real measured size is much larger than estimated, getTotalSize() lags and the virtualizer stops short of rendering the rest of the month.
+
+CHANGE 1 — Make estimateSize more conservative.
+
+Update the per-row estimate. The current estimate of 72px per transaction is too low for rows with the extra UI affordances. Update to:
+
+  estimateSize: (i) => 96 + groups[i][1].length * 110 + ITEM_GAP_PX,
+
+The 96px header (was 64) accounts for the day-group header + sticky day total chip. The 110px per row (was 72) is closer to the actual measured height of rows that include the running balance, category picker, member chip row, and bucket bubbles.
+
+This is a worst-case estimate. measureElement still applies the real size after first render, but a more conservative initial estimate prevents the early-truncation bug while React Query and the post-recovery sync settle.
+
+CHANGE 2 — Increase overscan.
+
+Change overscan from 4 to 8. This means the virtualizer keeps 8 day-groups rendered above and below the visible window instead of 4. With variable-height groups, more overscan means the measureElement pass corrects sizes earlier, before the user scrolls past them.
+
+  overscan: 8,
+
+CHANGE 3 — Force a re-measure when monthScoped changes.
+
+When the underlying data set changes (e.g. after the recovery just added 127 transactions), the virtualizer needs to invalidate any cached measurements. Add a useEffect that calls virtualizer.measure() whenever monthScoped.length or filtered.length changes:
+
+  useEffect(() => {
+    virtualizer.measure();
+  }, [monthScoped.length, filtered.length]);
+
+(Confirm that .measure() is the correct API on the virtualizer instance; if the package version uses a different method, use the equivalent that triggers a full re-layout.)
+
+CHANGE 4 — Sanity-check that scrollMargin is being remeasured after layout shifts.
+
+The ResizeObserver on line ~2565 observes document.body. That catches viewport resizes but NOT layout shifts caused by data arriving (the stats tiles re-render with new numbers, pushing the list down). Add the parentRef element itself to the observer, and re-run the measure when the layout above the list changes:
+
+  ro.observe(document.body);
+  ro.observe(el); // also observe the list container so its top position is re-measured when stuff above it changes height
+
+  // Plus: re-measure on next animation frame when the data first arrives,
+  // so the initial scrollMargin isn't taken from a half-rendered layout.
+
+Run pnpm typecheck on the h2budget package. Restart the dev server and test:
+
+- Open /amex on the current month with my Platinum card selected
+- Confirm I can scroll back to May 1 and every Platinum transaction is visible
+- "X of Y txns" counter should match the number of rows you can actually scroll through
+- Repeat for Blue Cash and Delta Gold once recovery completes
+
+If after these 4 changes the list still cuts off, capture and report:
+- groups.length
+- virtualizer.getTotalSize()
+- The sum of all measured heights from virtualizer.getVirtualItems()
+
+…and we'll have a clear next step.

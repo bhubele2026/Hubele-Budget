@@ -1,0 +1,40 @@
+Go with option C. Recover first using approach B (out-of-band script), then immediately apply approach A (routes/plaid.ts upsert fix). Don't wait between them — recovery first, then close the door.
+
+Two requirements on the recovery script:
+
+REQUIREMENT 1 — When you manually INSERT the Delta Gold plaid_accounts row, populate it as Plaid's API actually returns it: use Plaid's real account_id (not a placeholder), and copy name, official_name, mask, type, subtype from the same /accounts response. Treat the manual insert as if a clean sync had written it. That way, after approach A lands, the next sync's account_id lookup finds the row naturally and updates it in place — no special-case handling needed.
+
+REQUIREMENT 2 — After your dry-run count query in step 3, also run a spot-check returning 5 specific transactions that would move:
+
+  SELECT
+    t.occurred_on,
+    t.description,
+    t.amount,
+    t.plaid_account_id AS stored_account,
+    plaid_value.correct_account AS plaid_says
+  FROM transactions t
+  JOIN (VALUES ...) AS plaid_value(plaid_txn_id, correct_account)
+    ON plaid_value.plaid_txn_id = t.plaid_transaction_id
+  WHERE t.household_id = $MY_HOUSEHOLD_ID
+    AND t.plaid_account_id != plaid_value.correct_account
+  ORDER BY t.occurred_on DESC
+  LIMIT 5;
+
+Report BOTH the dry-run count AND the 5 sample rows. I'll eyeball whether they look like Delta Gold spending (airline charges, travel, SkyMiles purchases) before approving the UPDATE.
+
+Full execution sequence:
+
+1. Call Plaid /transactions/get (or sync) for the Amex item with a 24-month window. Build the plaid_transaction_id → correct account_id map.
+2. Manually INSERT the Delta Gold plaid_accounts row per REQUIREMENT 1. Confirm the row exists with the right account_id.
+3. Run the dry-run count query AND the 5-row spot-check. Report both. STOP.
+4. After I approve, wrap the UPDATE in a transaction. Print rows-affected. If matches dry-run count, COMMIT. If not, ROLLBACK and report.
+5. Run dedupeTransactionsForAccount on the newly-inserted Delta Gold plaid_account.id.
+6. Verify on /amex: 3 chips visible, each card's filter produces non-zero transactions, ending balances look right.
+
+Once recovery is verified clean, immediately do approach A:
+
+7. In artifacts/api-server/src/routes/plaid.ts around lines 720-790, tighten the account upsert dupe guard. Change the candidate match from "(householdId, mask)" to also consider name/official_name — same intent as the dedupe key fix that just landed in dedupePlaidAccounts.ts. Two cards with the same mask but different names should never claim each other's row at ingest.
+8. Add a unit test that ingests Delta Gold ··1009 when Platinum ··1009 already exists and asserts both rows survive with their correct account_ids.
+9. Run pnpm typecheck and pnpm test on api-server.
+
+Stop at step 3 and report. Stop at step 6 to confirm recovery before doing 7-9.
