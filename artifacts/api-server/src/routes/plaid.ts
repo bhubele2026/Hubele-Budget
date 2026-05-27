@@ -68,6 +68,10 @@ import {
   dedupePlaidAccountsForUser,
   markAutoDedupeRan,
 } from "../lib/dedupePlaidAccounts";
+import {
+  upsertPlaidAccountFromApi,
+  refreshPlaidAccountsForItem,
+} from "../lib/upsertPlaidAccount";
 import { cleanupMalformedTokenSiblings } from "../lib/plaidMalformedSiblingCleanup";
 import { debtsTable } from "@workspace/db";
 
@@ -719,133 +723,22 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
       );
     }
 
-    // Pull and persist accounts
+    // Pull and persist accounts via the shared upsert helper so the
+    // (#410 / #754) tiered (mask + name) candidate logic stays in one
+    // place — the same helper also powers /plaid/sync's pre-prune
+    // account refresh, which is what self-heals a previously-deleted
+    // row (e.g. the Amex Delta Gold ··1009 collision) without needing
+    // a manual re-link.
     try {
       const acctResp = await plaid().accountsGet({ access_token: accessToken });
       for (const a of acctResp.data.accounts) {
-        // (#410) Dupe guard: if the same physical account already exists
-        // for this user with the same `mask` — under either the new item
-        // (Plaid rotated `account_id` on a refresh) or under a *previous*
-        // item for the same institution (the user disconnected and
-        // re-linked, minting a brand-new `item_id`) — reuse the existing
-        // row instead of inserting a sibling. This is the primary
-        // real-world path that creates the duplicate Chase rows we saw.
-        if (a.mask) {
-          const candidates = await db
-            .select({
-              id: plaidAccountsTable.id,
-              accountId: plaidAccountsTable.accountId,
-              itemId: plaidAccountsTable.itemId,
-              name: plaidAccountsTable.name,
-              officialName: plaidAccountsTable.officialName,
-              institutionName: plaidItemsTable.institutionName,
-            })
-            .from(plaidAccountsTable)
-            .leftJoin(
-              plaidItemsTable,
-              eq(plaidAccountsTable.itemId, plaidItemsTable.id),
-            )
-            .where(
-              and(
-                eq(plaidAccountsTable.householdId, req.householdId!),
-                eq(plaidAccountsTable.mask, a.mask),
-              ),
-            );
-          // (#754) Tighten the dupe guard to also require an account-name
-          // match. Two physical cards can legitimately share a mask under
-          // the same institution (e.g. Amex Platinum Card® ··1009 and
-          // Amex Delta SkyMiles® Gold Card ··1009). Without this filter
-          // the second card's ingest claims the first card's row and
-          // silently overwrites its accountId/name — the same bug class
-          // that #754 fixed in dedupePlaidAccountsForUser. Mirror that
-          // key (case-insensitive, trimmed, fall back to officialName).
-          //
-          // Selection is strictly tiered to keep behavior deterministic
-          // when the candidate set is mixed (e.g. one legacy row with
-          // null name + one exact-name match). Picking the first row in
-          // DB-return order from a permissive union would be undefined
-          // and could route the upsert onto the legacy row instead of
-          // the obvious exact match.
-          //   Tier 1 (preferred): incoming name is non-empty AND a
-          //     candidate's normalized name equals it exactly.
-          //   Tier 2 (legacy fallback): no Tier 1 hits AND incoming has
-          //     a name — adopt only candidates whose name is empty
-          //     (rows that pre-date name capture).
-          //   Tier 3 (incoming has no name at all): allow every mask
-          //     match. We can't disambiguate further without a name,
-          //     and this preserves the legacy re-link path.
-          const incomingAcctName = (a.name ?? a.official_name ?? "")
-            .toLowerCase()
-            .trim();
-          const candidateName = (c: { name: string | null; officialName: string | null }) =>
-            (c.name ?? c.officialName ?? "").toLowerCase().trim();
-          let candidatesByName: typeof candidates;
-          if (incomingAcctName === "") {
-            candidatesByName = candidates;
-          } else {
-            const exact = candidates.filter(
-              (c) => candidateName(c) === incomingAcctName,
-            );
-            if (exact.length > 0) {
-              candidatesByName = exact;
-            } else {
-              candidatesByName = candidates.filter(
-                (c) => candidateName(c) === "",
-              );
-            }
-          }
-          // Prefer same-item match; otherwise match by institutionName so
-          // we collapse a re-link under a fresh item onto the existing row.
-          const targetInstitution = (
-            item!.institutionName ?? ""
-          ).toLowerCase();
-          const sameItem = candidatesByName.find((c) => c.itemId === item!.id);
-          const crossItem = candidatesByName.find(
-            (c) =>
-              c.itemId !== item!.id &&
-              (c.institutionName ?? "").toLowerCase() === targetInstitution &&
-              targetInstitution !== "",
-          );
-          const existing = sameItem ?? crossItem ?? null;
-          if (existing) {
-            await db
-              .update(plaidAccountsTable)
-              .set({
-                itemId: item!.id,
-                accountId: a.account_id,
-                name: a.name ?? null,
-                officialName: a.official_name ?? null,
-                type: a.type ?? null,
-                subtype: a.subtype ?? null,
-              })
-              .where(eq(plaidAccountsTable.id, existing.id));
-            continue;
-          }
-        }
-        await db
-          .insert(plaidAccountsTable)
-          .values({
-            userId: req.userId!,
-            householdId: req.householdId!,
-            itemId: item!.id,
-            accountId: a.account_id,
-            name: a.name ?? null,
-            officialName: a.official_name ?? null,
-            mask: a.mask ?? null,
-            type: a.type ?? null,
-            subtype: a.subtype ?? null,
-          })
-          .onConflictDoUpdate({
-            target: plaidAccountsTable.accountId,
-            set: {
-              itemId: item!.id,
-              name: a.name ?? null,
-              officialName: a.official_name ?? null,
-              mask: a.mask ?? null,
-              type: a.type ?? null,
-              subtype: a.subtype ?? null,
-            },
-          });
+        await upsertPlaidAccountFromApi({
+          householdId: req.householdId!,
+          userId: req.userId!,
+          itemRowId: item!.id,
+          institutionName: item!.institutionName ?? null,
+          account: a,
+        });
       }
     } catch (e) {
       // (#367) Unify Plaid log context: every line touching a Plaid
@@ -2392,6 +2285,51 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
     // ghost twins from the previously-deleted item survive and flood
     // the forecast review bucket with duplicates of every line the
     // relinked item brings back.
+    // (#754) Refresh the plaid_accounts directory from Plaid's truth
+    // BEFORE the orphan prune runs. If the old dedupePlaidAccountsForUser
+    // mask-collision bug previously deleted a row (e.g. Amex Delta
+    // SkyMiles Gold ··1009 colliding with Platinum ··1009), this
+    // recreates it via the shared upsert helper's tiered (mask + name)
+    // candidate match. Without this, the prune would see the deleted
+    // row's transactions as "orphans" (their plaid_account_id has no
+    // matching plaid_accounts row) and delete them too. Best-effort
+    // per item — a single account-refresh failure must not block the
+    // user-initiated sync.
+    const itemsToRefresh = itemId
+      ? await db
+          .select({ id: plaidItemsTable.id })
+          .from(plaidItemsTable)
+          .where(
+            and(
+              eq(plaidItemsTable.id, String(itemId)),
+              eq(plaidItemsTable.householdId, req.householdId!),
+            ),
+          )
+      : await db
+          .select({ id: plaidItemsTable.id })
+          .from(plaidItemsTable)
+          .where(eq(plaidItemsTable.householdId, req.householdId!));
+    for (const it of itemsToRefresh) {
+      const r = await refreshPlaidAccountsForItem({
+        userId: req.userId!,
+        itemRowId: it.id,
+        logger: req.log,
+      });
+      if (r.inserted > 0 || r.error) {
+        req.log.info(
+          {
+            plaidItemRowId: it.id,
+            upserted: r.upserted,
+            inserted: r.inserted,
+            updated: r.updated,
+            refreshError: r.error,
+          },
+          r.inserted > 0
+            ? "[plaid-sync] pre-prune account refresh re-materialized previously-missing plaid_accounts rows"
+            : "[plaid-sync] pre-prune account refresh skipped or partial",
+        );
+      }
+    }
     await pruneOrphanPlaidTransactionsForHousehold(req.householdId!);
     const results = itemId
       ? [
