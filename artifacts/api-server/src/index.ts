@@ -16,6 +16,7 @@ import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
 import { runStartupPendingNotesBackfill } from "./lib/startupPendingNotesBackfill";
+import "./lib/advisorReadTools";
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,
