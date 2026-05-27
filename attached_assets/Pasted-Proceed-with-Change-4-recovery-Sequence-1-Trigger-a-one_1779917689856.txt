@@ -1,0 +1,42 @@
+Proceed with Change 4 recovery. Sequence:
+
+1. Trigger a one-time Amex sync first (POST /api/plaid/items/$AMEX_ITEM_ID/sync or your existing sync route). This forces plaid_accounts to re-create Delta Gold as a distinct row. After it completes, verify with:
+
+   SELECT id, account_id, name, mask FROM plaid_accounts
+   WHERE item_id = (SELECT id FROM plaid_items WHERE institution_slug = 'amex' AND user_id = $OWNER_USER_ID);
+
+   Expect 3 rows now (Blue Cash, Platinum, Delta Gold) — confirm before continuing.
+
+2. Pull the FULL transaction list from Plaid for this item (use the existing sync client — Plaid /transactions/sync or /transactions/get with date_from set 24 months back). For each returned transaction, build a map of plaid_transaction_id → correct plaid_account_id from Plaid's response.
+
+3. DRY-RUN first. Print how many of my stored transactions would need their plaid_account_id rewritten:
+
+   SELECT
+     t.plaid_account_id AS stored_account,
+     plaid_value.correct_account AS plaid_says,
+     COUNT(*) AS txn_count
+   FROM transactions t
+   JOIN (VALUES ... pairs from step 2 ...) AS plaid_value(plaid_txn_id, correct_account)
+     ON plaid_value.plaid_txn_id = t.plaid_transaction_id
+   WHERE t.household_id = $MY_HOUSEHOLD_ID
+     AND t.plaid_account_id != plaid_value.correct_account
+   GROUP BY t.plaid_account_id, plaid_value.correct_account;
+
+   Expected output: rows showing "stored=Platinum's account_id, plaid_says=Delta Gold's account_id, count=~N" where N is roughly the number of Delta Gold transactions that were mis-merged. Report that count to me before executing the UPDATE.
+
+4. After I confirm the count looks right, execute:
+
+   UPDATE transactions t
+   SET plaid_account_id = plaid_value.correct_account
+   FROM (VALUES ...) AS plaid_value(plaid_txn_id, correct_account)
+   WHERE plaid_value.plaid_txn_id = t.plaid_transaction_id
+     AND t.household_id = $MY_HOUSEHOLD_ID
+     AND t.plaid_account_id != plaid_value.correct_account;
+
+   Wrap the UPDATE in a transaction. Print rows-affected. If it matches the dry-run count, COMMIT. If it doesn't match, ROLLBACK and report.
+
+5. After the UPDATE commits, also run dedupeTransactionsForAccount on the newly-recreated Delta Gold plaid_account.id to clean any incidental dupes introduced during the merge period.
+
+6. Verify on /amex: should see 3 chips (Blue Cash, Platinum, Delta Gold). Each chip filter should produce non-zero transactions. The ending balance on each card should now be correct (not double-counted).
+
+Stop at step 3 and wait for me to approve the count before proceeding.
