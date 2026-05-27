@@ -2303,6 +2303,12 @@ export default function AmexPage() {
         groups={groups}
         todayKey={todayKey}
         todayRef={todayRef}
+        // (#761) Stable signature of the filter identity. The virtualizer's
+        // per-row measurement cache must be reset whenever the underlying
+        // group set could change shape — switching between card chips with
+        // similar row counts (e.g. Delta Gold ↔ Platinum) used to leave
+        // stale heights in place and clip the bottom of the month.
+        measureKey={`${cardFilter}|${selectedMonth}`}
         renderGroup={([dayKey, items]) => {
         const dayTotal = items.reduce((s, t) => s + parseAbs(t.amount), 0);
         const ids = items.map((t) => t.id);
@@ -2795,11 +2801,19 @@ function VirtualizedDayGroups<G>({
   todayKey,
   todayRef,
   renderGroup,
+  measureKey,
 }: {
   groups: [string, G[]][];
   todayKey: string;
   todayRef: React.MutableRefObject<HTMLDivElement | null>;
   renderGroup: (entry: [string, G[]]) => React.ReactNode;
+  // (#761) Opaque signature of the upstream filter identity (card chip,
+  // selected month, etc). When this changes the virtualizer's per-row
+  // measurement cache must be invalidated even if `groups.length` and
+  // the total row count happen to match the previous filter, otherwise
+  // stale heights from the prior chip leave the bottom of the month
+  // clipped.
+  measureKey?: string;
 }) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -2855,7 +2869,7 @@ function VirtualizedDayGroups<G>({
   // silently trimmed.
   useEffect(() => {
     virtualizer.measure();
-  }, [virtualizer, groups.length, totalRowCount]);
+  }, [virtualizer, groups.length, totalRowCount, measureKey]);
 
   // After the data first arrives, re-read scrollMargin on the next
   // animation frame so we don't capture a half-rendered layout (the
@@ -2868,7 +2882,7 @@ function VirtualizedDayGroups<G>({
       setScrollMargin(rect.top + window.scrollY);
     });
     return () => cancelAnimationFrame(raf);
-  }, [groups.length, totalRowCount]);
+  }, [groups.length, totalRowCount, measureKey]);
 
   // Find the index of today's group so we can ensure it stays mounted
   // (the auto-scroll-to-today effect relies on its DOM ref).
