@@ -2634,6 +2634,7 @@ function VirtualizedDayGroups<G>({
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(document.body);
+    ro.observe(el);
     window.addEventListener("resize", measure);
     return () => {
       ro.disconnect();
@@ -2651,10 +2652,44 @@ function VirtualizedDayGroups<G>({
   const ITEM_GAP_PX = 24;
   const virtualizer = useWindowVirtualizer({
     count: groups.length,
-    estimateSize: (i) => 64 + groups[i][1].length * 72 + ITEM_GAP_PX,
-    overscan: 4,
+    // Conservative estimates so getTotalSize() doesn't undershoot before
+    // measureElement corrects each group. Day-group headers carry a
+    // sticky day-total chip + today header; rows can include running
+    // balance, category picker, member chips, and bucket bubbles.
+    estimateSize: (i) => 96 + groups[i][1].length * 110 + ITEM_GAP_PX,
+    overscan: 8,
     scrollMargin,
   });
+
+  // Sum of rows across all day-groups — proxy for the underlying
+  // monthScoped/filtered counts so we re-measure when transactions are
+  // added/removed mid-session (e.g. a recovery batch) or when the
+  // active filter changes.
+  const totalRowCount = useMemo(
+    () => groups.reduce((acc, [, rows]) => acc + rows.length, 0),
+    [groups],
+  );
+
+  // When the underlying data changes, invalidate the cached size
+  // estimates so the virtualizer re-measures from scratch instead of
+  // trusting stale heights that can leave the bottom of the month
+  // silently trimmed.
+  useEffect(() => {
+    virtualizer.measure();
+  }, [virtualizer, groups.length, totalRowCount]);
+
+  // After the data first arrives, re-read scrollMargin on the next
+  // animation frame so we don't capture a half-rendered layout (the
+  // stats tiles above the list often settle one frame later).
+  useEffect(() => {
+    const el = parentRef.current;
+    if (!el) return;
+    const raf = requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      setScrollMargin(rect.top + window.scrollY);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [groups.length, totalRowCount]);
 
   // Find the index of today's group so we can ensure it stays mounted
   // (the auto-scroll-to-today effect relies on its DOM ref).
