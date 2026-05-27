@@ -354,6 +354,7 @@ export async function createOrLinkDebtFromPlaidAccount(opts: {
 router.post("/plaid/link-token", requireAuth, async (req, res): Promise<void> => {
   try {
     const redirectUri = process.env.PLAID_REDIRECT_URI?.trim();
+    const webhookUrl = process.env.PLAID_WEBHOOK_URL?.trim();
     const resp = await plaid().linkTokenCreate({
       user: { client_user_id: req.userId! },
       client_name: "H2 Family Budget",
@@ -367,6 +368,14 @@ router.post("/plaid/link-token", requireAuth, async (req, res): Promise<void> =>
       country_codes: PLAID_COUNTRY_CODES,
       language: "en",
       ...(redirectUri ? { redirect_uri: redirectUri } : {}),
+      // (preflight) Register the webhook at link time so the item is
+      // born with a webhook URL on Plaid's side. Without this, /item/get
+      // reports webhook=null for every linked item and Plaid never
+      // notifies us of SYNC_UPDATES_AVAILABLE — sync requires a manual
+      // refresh. Conditional so dev environments that don't have a
+      // publicly reachable webhook URL don't accidentally point Plaid
+      // at production.
+      ...(webhookUrl ? { webhook: webhookUrl } : {}),
     });
     res.json({
       linkToken: resp.data.link_token,
@@ -462,6 +471,7 @@ router.post(
     }
     try {
       const redirectUri = process.env.PLAID_REDIRECT_URI?.trim();
+      const webhookUrl = process.env.PLAID_WEBHOOK_URL?.trim();
       const resp = await plaid().linkTokenCreate({
         user: { client_user_id: req.userId! },
         client_name: "H2 Family Budget",
@@ -470,6 +480,9 @@ router.post(
         country_codes: PLAID_COUNTRY_CODES,
         language: "en",
         ...(redirectUri ? { redirect_uri: redirectUri } : {}),
+        // (preflight) Keep the webhook fresh on update-mode re-links too,
+        // so re-authenticated items don't silently drop their webhook.
+        ...(webhookUrl ? { webhook: webhookUrl } : {}),
       });
       res.json({
         linkToken: resp.data.link_token,
