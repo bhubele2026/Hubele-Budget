@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -2240,5 +2240,66 @@ export declare const useSeedAprilChase: <TError = ErrorType<unknown>, TContext =
     mutation?: UseMutationOptions<Awaited<ReturnType<typeof seedAprilChase>>, TError, void, TContext>;
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof seedAprilChase>>, TError, void, TContext>;
+/**
+ * Returns a cached (1h TTL) AI-generated observation about the
+household's current financial state. The frontend renders this
+as a dismissible card on the Dashboard. When the advisor is
+disabled (no API key, ADVISOR_ENABLED=false, or no meaningful
+data yet), returns `enabled: false` and the UI hides itself.
+
+ * @summary Get a single proactive financial observation for the dashboard
+ */
+export declare const getGetAdvisorNudgeUrl: () => string;
+export declare const getAdvisorNudge: (options?: RequestInit) => Promise<AdvisorNudge>;
+export declare const getGetAdvisorNudgeQueryKey: () => readonly ["/api/advisor/nudge"];
+export declare const getGetAdvisorNudgeQueryOptions: <TData = Awaited<ReturnType<typeof getAdvisorNudge>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getAdvisorNudge>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getAdvisorNudge>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetAdvisorNudgeQueryResult = NonNullable<Awaited<ReturnType<typeof getAdvisorNudge>>>;
+export type GetAdvisorNudgeQueryError = ErrorType<void>;
+/**
+ * @summary Get a single proactive financial observation for the dashboard
+ */
+export declare function useGetAdvisorNudge<TData = Awaited<ReturnType<typeof getAdvisorNudge>>, TError = ErrorType<void>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getAdvisorNudge>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * Stateless chat endpoint. The client passes the full conversation
+history each turn; the server tacks on the latest message and
+calls the model. The server augments the system prompt with a
+live snapshot of the household's budget, cashflow, and debts.
+
+ * @summary Send a message to the AI budget advisor
+ */
+export declare const getPostAdvisorChatUrl: () => string;
+export declare const postAdvisorChat: (advisorChatRequest: AdvisorChatRequest, options?: RequestInit) => Promise<AdvisorChatResponse>;
+export declare const getPostAdvisorChatMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorChat>>, TError, {
+        data: BodyType<AdvisorChatRequest>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof postAdvisorChat>>, TError, {
+    data: BodyType<AdvisorChatRequest>;
+}, TContext>;
+export type PostAdvisorChatMutationResult = NonNullable<Awaited<ReturnType<typeof postAdvisorChat>>>;
+export type PostAdvisorChatMutationBody = BodyType<AdvisorChatRequest>;
+export type PostAdvisorChatMutationError = ErrorType<void>;
+/**
+ * @summary Send a message to the AI budget advisor
+ */
+export declare const usePostAdvisorChat: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorChat>>, TError, {
+        data: BodyType<AdvisorChatRequest>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof postAdvisorChat>>, TError, {
+    data: BodyType<AdvisorChatRequest>;
+}, TContext>;
 export {};
 //# sourceMappingURL=api.d.ts.map

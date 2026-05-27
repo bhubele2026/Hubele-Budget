@@ -1,0 +1,1 @@
+{"version":3,"file":"advisorChatRequest.d.ts","sourceRoot":"","sources":["../../../src/generated/types/advisorChatRequest.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,kBAAkB,EAAE,MAAM,sBAAsB,CAAC;AAE/D,MAAM,WAAW,kBAAkB;IACjC;;;OAGG;IACH,OAAO,EAAE,MAAM,CAAC;IAChB,mBAAmB;IACnB,OAAO,CAAC,EAAE,kBAAkB,EAAE,CAAC;CAChC"}

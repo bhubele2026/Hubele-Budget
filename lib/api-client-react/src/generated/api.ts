@@ -17,6 +17,9 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AdvisorChatRequest,
+  AdvisorChatResponse,
+  AdvisorNudge,
   AmexAnchor,
   AmexAnchorInput,
   AprilChaseSeedResult,
@@ -8071,4 +8074,176 @@ export const useSeedAprilChase = <
   TContext
 > => {
   return useMutation(getSeedAprilChaseMutationOptions(options));
+};
+
+/**
+ * Returns a cached (1h TTL) AI-generated observation about the
+household's current financial state. The frontend renders this
+as a dismissible card on the Dashboard. When the advisor is
+disabled (no API key, ADVISOR_ENABLED=false, or no meaningful
+data yet), returns `enabled: false` and the UI hides itself.
+
+ * @summary Get a single proactive financial observation for the dashboard
+ */
+export const getGetAdvisorNudgeUrl = () => {
+  return `/api/advisor/nudge`;
+};
+
+export const getAdvisorNudge = async (
+  options?: RequestInit,
+): Promise<AdvisorNudge> => {
+  return customFetch<AdvisorNudge>(getGetAdvisorNudgeUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAdvisorNudgeQueryKey = () => {
+  return [`/api/advisor/nudge`] as const;
+};
+
+export const getGetAdvisorNudgeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdvisorNudge>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdvisorNudge>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAdvisorNudgeQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdvisorNudge>>> = ({
+    signal,
+  }) => getAdvisorNudge({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdvisorNudge>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdvisorNudgeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdvisorNudge>>
+>;
+export type GetAdvisorNudgeQueryError = ErrorType<void>;
+
+/**
+ * @summary Get a single proactive financial observation for the dashboard
+ */
+
+export function useGetAdvisorNudge<
+  TData = Awaited<ReturnType<typeof getAdvisorNudge>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdvisorNudge>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdvisorNudgeQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Stateless chat endpoint. The client passes the full conversation
+history each turn; the server tacks on the latest message and
+calls the model. The server augments the system prompt with a
+live snapshot of the household's budget, cashflow, and debts.
+
+ * @summary Send a message to the AI budget advisor
+ */
+export const getPostAdvisorChatUrl = () => {
+  return `/api/advisor/chat`;
+};
+
+export const postAdvisorChat = async (
+  advisorChatRequest: AdvisorChatRequest,
+  options?: RequestInit,
+): Promise<AdvisorChatResponse> => {
+  return customFetch<AdvisorChatResponse>(getPostAdvisorChatUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(advisorChatRequest),
+  });
+};
+
+export const getPostAdvisorChatMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postAdvisorChat>>,
+    TError,
+    { data: BodyType<AdvisorChatRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof postAdvisorChat>>,
+  TError,
+  { data: BodyType<AdvisorChatRequest> },
+  TContext
+> => {
+  const mutationKey = ["postAdvisorChat"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof postAdvisorChat>>,
+    { data: BodyType<AdvisorChatRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return postAdvisorChat(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PostAdvisorChatMutationResult = NonNullable<
+  Awaited<ReturnType<typeof postAdvisorChat>>
+>;
+export type PostAdvisorChatMutationBody = BodyType<AdvisorChatRequest>;
+export type PostAdvisorChatMutationError = ErrorType<void>;
+
+/**
+ * @summary Send a message to the AI budget advisor
+ */
+export const usePostAdvisorChat = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postAdvisorChat>>,
+    TError,
+    { data: BodyType<AdvisorChatRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof postAdvisorChat>>,
+  TError,
+  { data: BodyType<AdvisorChatRequest> },
+  TContext
+> => {
+  return useMutation(getPostAdvisorChatMutationOptions(options));
 };

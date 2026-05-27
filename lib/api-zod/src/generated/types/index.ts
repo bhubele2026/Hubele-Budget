@@ -8,6 +8,14 @@
 
 export * from "./accountSnapshot";
 export * from "./accountSnapshotSource";
+export * from "./advisorChatMessage";
+export * from "./advisorChatMessageRole";
+export * from "./advisorChatRequest";
+export * from "./advisorChatResponse";
+export * from "./advisorChatResponseUsage";
+export * from "./advisorNudge";
+export * from "./advisorNudgeSeverity";
+export * from "./advisorNudgeSource";
 export * from "./amexAnchor";
 export * from "./amexAnchorInput";
 export * from "./amexAnchorSource";

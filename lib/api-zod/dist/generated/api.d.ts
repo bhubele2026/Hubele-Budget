@@ -7290,4 +7290,92 @@ export declare const SeedAprilChaseResponse: zod.ZodObject<{
     syntheticAccount: boolean;
     snapshotRepaired: boolean;
 }>;
+/**
+ * Returns a cached (1h TTL) AI-generated observation about the
+household's current financial state. The frontend renders this
+as a dismissible card on the Dashboard. When the advisor is
+disabled (no API key, ADVISOR_ENABLED=false, or no meaningful
+data yet), returns `enabled: false` and the UI hides itself.
+
+ * @summary Get a single proactive financial observation for the dashboard
+ */
+export declare const GetAdvisorNudgeResponse: zod.ZodObject<{
+    enabled: zod.ZodBoolean;
+    severity: zod.ZodOptional<zod.ZodEnum<["info", "warn", "alert"]>>;
+    message: zod.ZodOptional<zod.ZodString>;
+    source: zod.ZodOptional<zod.ZodEnum<["advisor", "empty"]>>;
+    generatedAt: zod.ZodOptional<zod.ZodDate>;
+}, "strip", zod.ZodTypeAny, {
+    enabled: boolean;
+    message?: string | undefined;
+    source?: "advisor" | "empty" | undefined;
+    severity?: "alert" | "info" | "warn" | undefined;
+    generatedAt?: Date | undefined;
+}, {
+    enabled: boolean;
+    message?: string | undefined;
+    source?: "advisor" | "empty" | undefined;
+    severity?: "alert" | "info" | "warn" | undefined;
+    generatedAt?: Date | undefined;
+}>;
+/**
+ * Stateless chat endpoint. The client passes the full conversation
+history each turn; the server tacks on the latest message and
+calls the model. The server augments the system prompt with a
+live snapshot of the household's budget, cashflow, and debts.
+
+ * @summary Send a message to the AI budget advisor
+ */
+export declare const postAdvisorChatBodyMessageMax = 4000;
+export declare const postAdvisorChatBodyHistoryMax = 24;
+export declare const PostAdvisorChatBody: zod.ZodObject<{
+    message: zod.ZodString;
+    history: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        role: zod.ZodEnum<["user", "assistant"]>;
+        content: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        role: "user" | "assistant";
+        content: string;
+    }, {
+        role: "user" | "assistant";
+        content: string;
+    }>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    message: string;
+    history?: {
+        role: "user" | "assistant";
+        content: string;
+    }[] | undefined;
+}, {
+    message: string;
+    history?: {
+        role: "user" | "assistant";
+        content: string;
+    }[] | undefined;
+}>;
+export declare const PostAdvisorChatResponse: zod.ZodObject<{
+    message: zod.ZodString;
+    usage: zod.ZodOptional<zod.ZodObject<{
+        inputTokens: zod.ZodOptional<zod.ZodNumber>;
+        outputTokens: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        inputTokens?: number | undefined;
+        outputTokens?: number | undefined;
+    }, {
+        inputTokens?: number | undefined;
+        outputTokens?: number | undefined;
+    }>>;
+}, "strip", zod.ZodTypeAny, {
+    message: string;
+    usage?: {
+        inputTokens?: number | undefined;
+        outputTokens?: number | undefined;
+    } | undefined;
+}, {
+    message: string;
+    usage?: {
+        inputTokens?: number | undefined;
+        outputTokens?: number | undefined;
+    } | undefined;
+}>;
 //# sourceMappingURL=api.d.ts.map
