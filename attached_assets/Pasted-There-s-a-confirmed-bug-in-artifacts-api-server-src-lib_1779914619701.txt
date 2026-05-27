@@ -1,0 +1,56 @@
+There's a confirmed bug in artifacts/api-server/src/lib/dedupePlaidAccounts.ts that collapses two real Amex cards into one when they share a mask. My Platinum Card and Delta SkyMiles Gold both end in 1009 — the dedupe key (institutionName, mask) treats them as duplicates and deletes Delta Gold's plaid_accounts row, rewriting its transactions to point at Platinum.
+
+CHANGE 1 — Tighten the dedupe key in artifacts/api-server/src/lib/dedupePlaidAccounts.ts.
+
+Find line ~130-135:
+
+  const key = `${(b.institutionName ?? "").toLowerCase()}|${b.acct.mask.toLowerCase()}`;
+
+Replace with a key that ALSO includes the account name. Two cards with the same institution and same mask but DIFFERENT names are not duplicates — they are genuinely different cards (Amex masks are only 4 digits but card numbers actually differ in earlier positions, so distinct products can collide on mask).
+
+  const acctName = (b.acct.name ?? b.acct.officialName ?? "").toLowerCase().trim();
+  const key = `${(b.institutionName ?? "").toLowerCase()}|${b.acct.mask.toLowerCase()}|${acctName}`;
+
+This means:
+- Re-link case (same institution, same mask, same name, different account_id) → still gets deduped. Good.
+- Same-mask-different-name case (Platinum 1009 vs Delta Gold 1009) → no longer collide. Fixed.
+- Same-name-different-mask → never collided. Unchanged.
+
+CHANGE 2 — Also tighten the trailing accountSnapshots backfill around line 425-444 in the same file.
+
+It does a similar mask-only fallback when the name is missing:
+
+  const entryMask = entry.mask?.toLowerCase() ?? null;
+  const entryName = (entry.name ?? "").toLowerCase();
+  ...
+  (r) => (r.mask ?? "").toLowerCase() === entryMask
+
+Make the matching prefer the (mask, name) pair when both are available, and only fall back to mask-only when no name is present on either side. The intent is the same as CHANGE 1 — don't conflate two real cards that happen to share a mask.
+
+CHANGE 3 — Add a regression test.
+
+In artifacts/api-server/src/__tests__/ (or wherever the existing dedupePlaidAccounts tests live, e.g. dedupePlaidAccountsAmex.integration.test.ts), add a test that:
+- Inserts a plaid_item with institution_name='American Express', institution_slug='amex'
+- Inserts TWO plaid_accounts on that item:
+  - Platinum Card®, mask='1009', distinct account_id
+  - Delta SkyMiles® Gold Card, mask='1009', distinct account_id
+- Inserts transactions tied to each account_id
+- Runs dedupePlaidAccountsForUser
+- Asserts: BOTH plaid_accounts rows still exist after dedupe (no collision)
+- Asserts: each card's transactions still point at the correct account_id
+
+CHANGE 4 — Recover the corrupted data.
+
+The fix above prevents future damage but my DB is already wrong: Delta Gold's row is deleted and its transactions point at Platinum's account_id. To recover:
+
+a) First, run the fix above (CHANGE 1-3) and deploy.
+
+b) Then run a fresh Plaid sync for the Amex item. The sync should re-create Delta Gold's plaid_accounts row (now distinct from Platinum thanks to the name in the dedupe key).
+
+c) Check whether the sync's transaction-import logic updates plaid_account_id for known plaid_transaction_ids (the stable Plaid txn id). Look in artifacts/api-server/src/lib/plaidSync.ts for how a returned transaction is matched against existing rows — specifically: does it check by plaid_transaction_id and update plaid_account_id if it differs? If yes, the historic Delta Gold transactions will naturally re-home themselves on the next full sync. If not, we need a separate one-shot reassignment script:
+
+  For each plaid_transaction_id Plaid returns on the next sync whose account_id ≠ the stored row's plaid_account_id, UPDATE transactions SET plaid_account_id = (the Plaid account_id from this sync) WHERE plaid_transaction_id = (matched id) AND household_id = $MY_HOUSEHOLD.
+
+Confirm which path applies and proceed accordingly. Report back before running the recovery so I can sanity-check the plan.
+
+Run pnpm typecheck and pnpm test on the api-server package after CHANGE 1-3. CHANGE 4 is a separate recovery step.

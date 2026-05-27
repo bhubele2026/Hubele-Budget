@@ -127,12 +127,24 @@ export async function dedupePlaidAccountsForUser(
       institutionName: r.institutionName,
     }));
 
-    // Group by (institution, mask). Skip rows missing a mask: we can't
-    // tell those apart safely, leave them as-is.
+    // Group by (institution, mask, accountName). Skip rows missing a
+    // mask: we can't tell those apart safely, leave them as-is.
+    //
+    // (#754) The key intentionally includes the account name. Amex
+    // masks are only 4 digits and two genuinely distinct products
+    // (e.g. Platinum Card® ··1009 and Delta SkyMiles® Gold ··1009)
+    // can collide on (institution, mask). Without the name they would
+    // be merged here and one card's transactions would be silently
+    // rewritten onto the other. The re-link case (same institution,
+    // same mask, same name, different external account_id) is still
+    // deduped correctly because both rows share the same name string.
     const groups = new Map<string, Bundle[]>();
     for (const b of all) {
       if (!b.acct.mask) continue;
-      const key = `${(b.institutionName ?? "").toLowerCase()}|${b.acct.mask.toLowerCase()}`;
+      const acctName = (b.acct.name ?? b.acct.officialName ?? "")
+        .toLowerCase()
+        .trim();
+      const key = `${(b.institutionName ?? "").toLowerCase()}|${b.acct.mask.toLowerCase()}|${acctName}`;
       const arr = groups.get(key);
       if (arr) arr.push(b);
       else groups.set(key, [b]);
@@ -410,6 +422,8 @@ export async function dedupePlaidAccountsForUser(
       .select({
         id: plaidAccountsTable.id,
         mask: plaidAccountsTable.mask,
+        name: plaidAccountsTable.name,
+        officialName: plaidAccountsTable.officialName,
         institutionName: plaidItemsTable.institutionName,
       })
       .from(plaidAccountsTable)
@@ -422,24 +436,38 @@ export async function dedupePlaidAccountsForUser(
     for (const orphanId of Object.keys(acctSnapshots)) {
       if (liveIds.has(orphanId)) continue;
       const entry = acctSnapshots[orphanId]!;
-      // Try to find a surviving row with the same mask. We don't have
-      // institutionName on the entry itself, so prefer rows whose
-      // institutionName loosely matches the entry's `name` (e.g. an
-      // entry name of "Chase Total Checking" matches a row whose
-      // institutionName is "Chase"); when no name is available, mask
-      // alone is the matcher.
+      // Try to find a surviving row with the same mask.
+      // (#754) Prefer the (mask, accountName) pair when BOTH the
+      // orphan entry and the candidate row carry a name — two cards
+      // can share a mask (e.g. Platinum ··1009 and Delta Gold ··1009)
+      // and conflating them here would re-create the bug we just
+      // fixed above. Fall back to mask + institution-name heuristic
+      // when no name is present on either side, and mask-only as the
+      // last resort.
       const entryMask = entry.mask?.toLowerCase() ?? null;
-      const entryName = (entry.name ?? "").toLowerCase();
+      const entryName = (entry.name ?? "").toLowerCase().trim();
       let salvageId: string | null = null;
       if (entryMask) {
         const candidates = liveRows.filter(
           (r) => (r.mask ?? "").toLowerCase() === entryMask,
         );
-        const byInstitution = candidates.find((r) => {
-          const inst = (r.institutionName ?? "").toLowerCase();
-          return inst.length > 0 && entryName.includes(inst);
-        });
-        salvageId = (byInstitution ?? candidates[0])?.id ?? null;
+        const byName =
+          entryName.length > 0
+            ? candidates.find((r) => {
+                const rowName = (r.name ?? r.officialName ?? "")
+                  .toLowerCase()
+                  .trim();
+                return rowName.length > 0 && rowName === entryName;
+              })
+            : undefined;
+        const byInstitution =
+          byName
+            ? undefined
+            : candidates.find((r) => {
+                const inst = (r.institutionName ?? "").toLowerCase();
+                return inst.length > 0 && entryName.includes(inst);
+              });
+        salvageId = (byName ?? byInstitution ?? candidates[0])?.id ?? null;
       }
       if (salvageId) {
         const winning = pickFresherSnapshot(acctSnapshots[salvageId], entry);

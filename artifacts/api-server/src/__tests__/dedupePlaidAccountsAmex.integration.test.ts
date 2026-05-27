@@ -393,6 +393,137 @@ describe("dedupePlaidAccountsForUser — Amex three-card scenario (#416)", () =>
     expect(Number(byId.get(d3!.id)!.balance)).toBeCloseTo(3000, 2);
   });
 
+  it("(#754) two genuinely different Amex cards sharing a mask are NOT collapsed: Platinum ··1009 and Delta Gold ··1009 both survive with their transactions intact", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const [item] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: `amex-mask-collision-${suffix}`,
+        accessToken: "test-no-access",
+        institutionName: "American Express",
+        institutionSlug: "amex",
+      })
+      .returning();
+
+    const [platinum] = await db
+      .insert(plaidAccountsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: item!.id,
+        accountId: `amex-platinum-${suffix}`,
+        name: "Platinum Card®",
+        officialName: "Platinum Card®",
+        mask: "1009",
+        type: "credit",
+        subtype: "credit card",
+      })
+      .returning();
+    const [deltaGold] = await db
+      .insert(plaidAccountsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: item!.id,
+        accountId: `amex-delta-gold-${suffix}`,
+        name: "Delta SkyMiles® Gold Card",
+        officialName: "Delta SkyMiles® Gold Card",
+        mask: "1009",
+        type: "credit",
+        subtype: "credit card",
+      })
+      .returning();
+
+    // Two transactions per card, distinguishable by their plaid txn id
+    // so we can assert each one stays homed on the right account.
+    await db.insert(transactionsTable).values([
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-20",
+        description: "Platinum charge A",
+        amount: "-12.50",
+        source: "plaid:amex",
+        plaidTransactionId: `pt-platinum-a-${suffix}`,
+        plaidAccountId: platinum!.accountId,
+      },
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-21",
+        description: "Platinum charge B",
+        amount: "-30.00",
+        source: "plaid:amex",
+        plaidTransactionId: `pt-platinum-b-${suffix}`,
+        plaidAccountId: platinum!.accountId,
+      },
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-22",
+        description: "Delta charge A",
+        amount: "-99.00",
+        source: "plaid:amex",
+        plaidTransactionId: `pt-delta-a-${suffix}`,
+        plaidAccountId: deltaGold!.accountId,
+      },
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-23",
+        description: "Delta charge B",
+        amount: "-45.00",
+        source: "plaid:amex",
+        plaidTransactionId: `pt-delta-b-${suffix}`,
+        plaidAccountId: deltaGold!.accountId,
+      },
+    ]);
+
+    try {
+      const report = await dedupePlaidAccountsForUser(TEST_USER);
+      // No groups of >1 should have been formed for ··1009 — the two
+      // distinct cards must end up in DIFFERENT groups thanks to the
+      // (institution, mask, name) key.
+      expect(report.duplicatesRemoved).toBe(0);
+
+      const accts = await db
+        .select()
+        .from(plaidAccountsTable)
+        .where(eq(plaidAccountsTable.userId, TEST_USER));
+      const oneOhNines = accts.filter((a) => a.mask === "1009");
+      expect(oneOhNines).toHaveLength(2);
+      const names = new Set(oneOhNines.map((a) => a.name));
+      expect(names).toEqual(
+        new Set(["Platinum Card®", "Delta SkyMiles® Gold Card"]),
+      );
+
+      // Both account rows still present by id.
+      const remainingIds = new Set(oneOhNines.map((a) => a.id));
+      expect(remainingIds.has(platinum!.id)).toBe(true);
+      expect(remainingIds.has(deltaGold!.id)).toBe(true);
+
+      // Transactions still point at the correct account_id.
+      const txns = await db
+        .select({
+          plaidTransactionId: transactionsTable.plaidTransactionId,
+          plaidAccountId: transactionsTable.plaidAccountId,
+        })
+        .from(transactionsTable)
+        .where(eq(transactionsTable.userId, TEST_USER));
+      const byPtId = new Map(
+        txns.map((t) => [t.plaidTransactionId ?? "", t.plaidAccountId] as const),
+      );
+      expect(byPtId.get(`pt-platinum-a-${suffix}`)).toBe(platinum!.accountId);
+      expect(byPtId.get(`pt-platinum-b-${suffix}`)).toBe(platinum!.accountId);
+      expect(byPtId.get(`pt-delta-a-${suffix}`)).toBe(deltaGold!.accountId);
+      expect(byPtId.get(`pt-delta-b-${suffix}`)).toBe(deltaGold!.accountId);
+    } finally {
+      await cleanup();
+    }
+  });
+
   it("is a no-op when the three Amex cards each have exactly one row", async () => {
     const otherUser = `${TEST_USER}-clean`;
     try {
