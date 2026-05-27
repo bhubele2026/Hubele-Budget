@@ -1,0 +1,85 @@
+Phase B of 6 in the workflow overhaul. Phase A is done — auto-match is gated off. This phase adds the manual gate: Chase transactions don't appear in Review until the user explicitly sends them.
+
+Goal: introduce a per-transaction "sent to review" state. Chase shows everything; Review only shows what's been explicitly sent. AI advisor can pre-categorize, but no Chase transaction crosses into Review until the user clicks a button.
+
+CHANGE 1 — Schema: add `sent_to_review_at` to the transactions table
+
+In lib/db/src/schema/index.ts, add a nullable timestamp column to transactionsTable:
+
+  sentToReviewAt: timestamp("sent_to_review_at", { withTimezone: true }),
+
+NULL means "not yet sent to review." A timestamp means "sent at this moment."
+
+Run pnpm --filter @workspace/db push.
+
+CHANGE 2 — Backfill grandfather rule
+
+Existing transactions that already have a forecast_resolutions row (matched, missed, dismissed, rescheduled) are "implicitly already reviewed" — they were processed under the old auto-match regime. Backfill sent_to_review_at = NOW() for them in a one-time migration so the user doesn't see thousands of historical transactions suddenly appear in the Review inbox.
+
+For transactions WITHOUT a resolution row but older than (say) 30 days, also backfill sent_to_review_at = NOW(). The cutoff prevents legacy data from cluttering Review while still letting recent (last 30 days) unreviewed transactions surface in the new workflow.
+
+Document the cutoff in a comment on the migration script so we remember why some historical transactions are pre-grandfathered.
+
+CHANGE 3 — Backend: filter Review by sent_to_review_at
+
+The Review tab on the Forecast page reads from the same /forecast endpoint. Add a filter so transactions WHERE sent_to_review_at IS NULL are excluded from the Review-relevant data set. They still appear in /chase (the source-of-truth view) and still count for /amex etc.
+
+Specifically: in artifacts/api-server/src/routes/forecast.ts where transactions are loaded for the Review pipeline (~line 368-379), filter to sent_to_review_at IS NOT NULL.
+
+CHANGE 4 — Backend: add POST /transactions/send-to-review
+
+A new endpoint that takes a list of transaction IDs and marks them sent. Body: { transactionIds: string[] }. Sets sent_to_review_at = NOW() for matching rows scoped to the household.
+
+Also add the inverse for safety: POST /transactions/unsend-from-review with the same payload, which clears sent_to_review_at back to NULL. Use case: the user accidentally clicks the button and wants to undo it within a few seconds.
+
+Both endpoints update OpenAPI spec and re-run orval codegen. Both should be rate-limited / batch-capable (handle up to 200 IDs in one call).
+
+CHANGE 5 — Frontend: Chase page gets per-row "Send to Review" affordance
+
+On the Chase page (artifacts/h2budget/src/pages/chase.tsx, look at the existing row UI), add a small button or icon per transaction. The button says "Send to Review" if sent_to_review_at IS NULL, or shows a subtle "✓ in review" badge if already sent.
+
+Bulk affordance: when one or more transactions are selected via the existing checkbox column, show a button at the top "Send N to Review" alongside the existing bulk actions. Clicking it batches the call.
+
+When a transaction is sent:
+- The button flips to "in review"
+- The transaction is NOT removed from the Chase page (Chase is always source-of-truth)
+- A toast appears with "Sent N transaction(s) to Review" and an "Undo" link (5-second window, calls unsend-from-review)
+
+CHANGE 6 — Frontend: Review badge counter reads only sent transactions
+
+In artifacts/h2budget/src/hooks/useReviewInboxCount.ts, the count should reflect what's currently in the Review inbox. After this phase, that means only sent_to_review_at IS NOT NULL transactions. Existing filter logic stays the same; just confirm the data source (which is /forecast) already excludes unsent transactions per CHANGE 3.
+
+The badge will probably drop significantly after deploy because of the grandfather rule — that's fine and intended.
+
+CHANGE 7 — Frontend: empty-state copy on Review tab
+
+When the Review tab is empty (no transactions sent yet), show a friendly empty state:
+
+  "Nothing to review yet."
+  "Open Chase → review categories → click 'Send to Review' when ready."
+  [button: Open Chase]
+
+Don't show this if there ARE transactions but they're all matched/missed/skipped — that's a different empty state that already exists.
+
+CHANGE 8 — Tests
+
+a) Integration test: simulate Plaid sync of 5 new Chase transactions. Confirm none auto-flow into Review until /transactions/send-to-review is called. After the call, confirm they appear.
+
+b) Integration test for the grandfather rule: pre-seed transactions older than 30 days, run the backfill migration, confirm they get sent_to_review_at populated.
+
+c) Integration test for unsend: send 3 transactions, then unsend 2, confirm only 1 remains in the review pipeline.
+
+d) E2E or component test for the Chase page button + toast undo flow.
+
+CHANGE 9 — Smoke test for me to run after deploy
+
+I'll do this manually:
+1. /chase shows transactions (some sent, some not)
+2. New transactions from a fresh Plaid sync appear on /chase with the "Send to Review" button (no auto-flow into Review)
+3. Click button on a single row → row updates, badge count goes up by 1
+4. Click toast Undo within 5 seconds → row reverts, badge drops
+5. Select multiple rows, bulk Send → badge jumps by N, single toast
+6. Open /forecast Review tab → only sent transactions appear
+7. Unsent transactions still appear correctly on /chase
+
+Run pnpm typecheck and pnpm test on both packages. Confirm clean. Report the count of historical transactions backfilled by the grandfather rule.
