@@ -39,6 +39,10 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
     input: TInput,
     ctx: ToolContext,
   ) => Promise<{ result: TOutput; beforeSnapshot?: unknown }>;
+  undoHandler?: (
+    beforeSnapshot: unknown,
+    ctx: ToolContext,
+  ) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,6 +60,10 @@ export function registerTool<TInput, TOutput>(def: ToolDefinition<TInput, TOutpu
 
 export function getRegisteredTools(): ToolDefinition<unknown, unknown>[] {
   return Array.from(registry.values());
+}
+
+export function getToolByName(name: string): ToolDefinition<unknown, unknown> | undefined {
+  return registry.get(name);
 }
 
 /**
@@ -153,6 +161,61 @@ export async function dispatchTool(
       .where(eq(advisorAuditLogTable.id, auditLogId!));
     return { ok: false, toolName, error: errMsg, auditLogId };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Undo
+// ---------------------------------------------------------------------------
+
+const UNDO_WINDOW_MS = 5 * 60 * 1000;
+
+export async function undoToolCall(
+  auditLogId: string,
+  ctx: ToolContext,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const [row] = await db
+    .select()
+    .from(advisorAuditLogTable)
+    .where(eq(advisorAuditLogTable.id, auditLogId));
+
+  if (!row) {
+    return { ok: false, error: "Audit log row not found" };
+  }
+  if (row.householdId !== ctx.householdId) {
+    return { ok: false, error: "Audit log row not found" };
+  }
+  if (row.status !== "executed") {
+    return { ok: false, error: "Tool call is not in an undoable state" };
+  }
+  if (row.undoneAt !== null) {
+    return { ok: false, error: "Tool call has already been undone" };
+  }
+  if (Date.now() - row.createdAt.getTime() > UNDO_WINDOW_MS) {
+    return { ok: false, error: "Undo window expired" };
+  }
+
+  const tool = getToolByName(row.toolName);
+  if (!tool || !tool.undoHandler) {
+    return { ok: false, error: "Tool not undoable" };
+  }
+
+  try {
+    await tool.undoHandler(row.beforeSnapshot, ctx);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    logger.error(
+      { err, auditLogId, toolName: row.toolName, householdId: ctx.householdId },
+      "advisor: undo handler failed",
+    );
+    return { ok: false, error: errMsg };
+  }
+
+  await db
+    .update(advisorAuditLogTable)
+    .set({ status: "undone", undoneAt: new Date() })
+    .where(eq(advisorAuditLogTable.id, auditLogId));
+
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------

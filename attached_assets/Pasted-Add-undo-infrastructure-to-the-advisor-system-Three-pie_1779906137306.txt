@@ -1,0 +1,72 @@
+Add undo infrastructure to the advisor system. Three pieces in this step.
+
+PIECE 1 — Update artifacts/api-server/src/lib/advisorTools.ts:
+
+a) Extend the ToolDefinition interface with an optional undoHandler:
+
+     undoHandler?: (
+       beforeSnapshot: unknown,
+       ctx: ToolContext,
+     ) => Promise<void>;
+
+b) Add an exported helper getToolByName(name: string): ToolDefinition<unknown, unknown> | undefined that returns registry.get(name).
+
+c) Add a new exported async function undoToolCall(auditLogId: string, ctx: ToolContext) that returns { ok: true } or { ok: false, error: string }. It must:
+   - Select the advisor_audit_log row by id
+   - Reject if row.householdId !== ctx.householdId (security)
+   - Reject if row.status !== "executed" (cannot undo proposed/cancelled/failed/already-undone rows)
+   - Reject if row.undoneAt is not null
+   - Reject if Date.now() - row.createdAt.getTime() > 5 * 60 * 1000 with error "Undo window expired"
+   - Look up the tool via getToolByName(row.toolName); reject with "Tool not undoable" if no undoHandler
+   - Wrap the undoHandler(row.beforeSnapshot, ctx) call in try/catch
+   - On success: update the audit log row to set status='undone' and undoneAt=new Date()
+   - On failure: leave the row alone and return { ok: false, error: <caught message> }
+
+Drizzle imports needed: eq from "drizzle-orm" (already used in the file), advisorAuditLogTable from "@workspace/db" (add to the existing import).
+
+PIECE 2 — Create artifacts/api-server/src/routes/advisorUndo.ts:
+
+import { Router, type IRouter } from "express";
+import { requireAuth } from "../middlewares/requireAuth";
+import { undoToolCall } from "../lib/advisorTools";
+import { logger } from "../lib/logger";
+
+const router: IRouter = Router();
+
+router.post("/advisor/undo/:auditLogId", requireAuth, async (req, res): Promise<void> => {
+  const { auditLogId } = req.params;
+  if (!auditLogId) {
+    res.status(400).json({ error: "auditLogId required" });
+    return;
+  }
+  const householdId = req.householdId!;
+  const householdOwnerId = req.householdOwnerId!;
+  const actorUserId = req.userId!;
+  try {
+    const result = await undoToolCall(auditLogId, {
+      householdId,
+      householdOwnerId,
+      actorUserId,
+    });
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err, auditLogId, householdId }, "advisor: undo failed");
+    res.status(500).json({ error: "Undo failed" });
+  }
+});
+
+export default router;
+
+PIECE 3 — Mount the new router in artifacts/api-server/src/routes/index.ts. Add the import alongside the others:
+
+   import advisorUndoRouter from "./advisorUndo";
+
+And add the router.use(...) call alongside the others:
+
+   router.use(advisorUndoRouter);
+
+After all three pieces, run pnpm typecheck on the api-server package. Confirm clean. Do NOT restart the dev server yet — the OpenAPI update comes next.
