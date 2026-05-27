@@ -88,12 +88,18 @@ router.post("/advisor/chat", requireAuth, async (req, res): Promise<void> => {
 
   const householdId = req.householdId!;
   const householdOwnerId = req.householdOwnerId!;
+  const actorUserId = req.userId!;
 
   try {
     const ctx = await buildHouseholdContext(householdId, householdOwnerId);
-    const result = await chat(ctx, history, message);
+    const result = await chat(ctx, history, message, {
+      householdId,
+      householdOwnerId,
+      actorUserId,
+    });
     res.json({
       message: result.message,
+      toolCalls: result.toolCalls,
       usage: {
         inputTokens: result.usage.inputTokens,
         outputTokens: result.usage.outputTokens,

@@ -9,6 +9,11 @@ import {
 } from "@workspace/db";
 import { computeCashSignal } from "./cashSignal";
 import { logger } from "./logger";
+import {
+  dispatchTool,
+  getAnthropicToolSpecs,
+  type ToolContext,
+} from "./advisorTools";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -440,15 +445,27 @@ export interface ChatHistoryEntry {
   content: string;
 }
 
+export interface ToolCallSummary {
+  name: string;
+  ok: boolean;
+  // Compact result summary for UI display. Full payload lives in audit log.
+  summary: string;
+  auditLogId?: string;
+}
+
 export interface ChatResult {
   message: string;
+  toolCalls: ToolCallSummary[];
   usage: { inputTokens: number; outputTokens: number };
 }
+
+const MAX_TOOL_TURNS = 6; // safety cap on agentic loops
 
 export async function chat(
   ctx: HouseholdContext,
   history: ChatHistoryEntry[],
   userMessage: string,
+  toolCtx: ToolContext,
 ): Promise<ChatResult> {
   const client = getClient();
   if (!client) throw new Error("Advisor not configured");
@@ -456,29 +473,103 @@ export async function chat(
   const trimmedHistory = history.slice(-MAX_HISTORY_TURNS);
   const systemPrompt = `${CHAT_SYSTEM_PROMPT}\n\n--- LIVE HOUSEHOLD SNAPSHOT ---\n${formatContextForPrompt(ctx)}\n--- END SNAPSHOT ---`;
 
-  const messages = [
+  // Build the running message list. Each tool-use round appends to this.
+  const messages: Array<{ role: "user" | "assistant"; content: any }> = [
     ...trimmedHistory.map((m) => ({ role: m.role, content: m.content })),
-    { role: "user" as const, content: userMessage },
+    { role: "user", content: userMessage },
   ];
 
-  const res = await client.messages.create({
-    model: getModel(),
-    max_tokens: MAX_OUTPUT_TOKENS_CHAT,
-    system: systemPrompt,
-    messages,
-  });
+  const tools = getAnthropicToolSpecs();
+  const toolCallSummaries: ToolCallSummary[] = [];
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let finalText = "";
 
-  const textBlock = res.content.find((c) => c.type === "text");
-  const message =
-    textBlock && textBlock.type === "text" ? textBlock.text : "(no response)";
+  for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
+    const res = await client.messages.create({
+      model: getModel(),
+      max_tokens: MAX_OUTPUT_TOKENS_CHAT,
+      system: systemPrompt,
+      tools: tools.length > 0 ? (tools as any) : undefined,
+      messages,
+    });
+
+    totalInputTokens += res.usage.input_tokens;
+    totalOutputTokens += res.usage.output_tokens;
+
+    // Collect any text the model emitted this turn.
+    const textBlocks = res.content.filter((c) => c.type === "text");
+    const turnText = textBlocks
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("");
+    if (turnText) finalText = turnText;
+
+    // If the model didn't request any tools, we're done.
+    if (res.stop_reason !== "tool_use") {
+      break;
+    }
+
+    // Append the assistant's tool-use turn to the message list verbatim.
+    messages.push({ role: "assistant", content: res.content });
+
+    // Execute every tool_use block in this assistant message and build
+    // the matching tool_result content array for the next user turn.
+    const toolUseBlocks = res.content.filter((c) => c.type === "tool_use");
+    const toolResultBlocks: Array<{
+      type: "tool_result";
+      tool_use_id: string;
+      content: string;
+      is_error?: boolean;
+    }> = [];
+
+    for (const block of toolUseBlocks) {
+      if (block.type !== "tool_use") continue;
+      const dispatch = await dispatchTool(block.name, block.input, toolCtx);
+
+      let summary: string;
+      if (dispatch.ok) {
+        summary = compactSummary(block.name, dispatch.result);
+        toolResultBlocks.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify(dispatch.result),
+        });
+      } else {
+        summary = dispatch.error ?? "Tool failed";
+        toolResultBlocks.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify({ error: dispatch.error }),
+          is_error: true,
+        });
+      }
+
+      toolCallSummaries.push({
+        name: block.name,
+        ok: dispatch.ok,
+        summary,
+        auditLogId: dispatch.auditLogId,
+      });
+    }
+
+    messages.push({ role: "user", content: toolResultBlocks });
+  }
 
   return {
-    message,
-    usage: {
-      inputTokens: res.usage.input_tokens,
-      outputTokens: res.usage.output_tokens,
-    },
+    message: finalText || "(no response)",
+    toolCalls: toolCallSummaries,
+    usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens },
   };
+}
+
+// Compact one-line summary of a tool result for the UI.
+function compactSummary(toolName: string, result: unknown): string {
+  if (toolName === "list_categories") {
+    const r = result as { count?: number };
+    return `Listed ${r?.count ?? 0} categories`;
+  }
+  // Fallback: generic
+  return `${toolName} executed`;
 }
 
 export interface NudgeResult {

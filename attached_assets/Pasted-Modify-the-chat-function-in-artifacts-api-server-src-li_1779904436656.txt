@@ -1,0 +1,154 @@
+Modify the chat() function in artifacts/api-server/src/lib/advisor.ts to support Anthropic's tool-use loop. The current implementation does a single messages.create() call and returns the text. We need it to:
+
+1. Pass the registered tools to the model via the tools parameter.
+2. If the model returns stop_reason="tool_use", execute each tool_use block via dispatchTool(), append the assistant message + tool_result blocks to the conversation, and call messages.create() again. Loop until the model returns stop_reason="end_turn" or we hit a safety cap.
+3. Return the final text PLUS a list of toolCalls made (name + result summary) so the frontend can show what the advisor did.
+
+Here is the replacement chat() function. Replace the existing one in advisor.ts:
+
+import {
+  dispatchTool,
+  getAnthropicToolSpecs,
+  type ToolContext,
+} from "./advisorTools";
+
+// (keep the existing imports above — Anthropic, drizzle, etc.)
+
+export interface ToolCallSummary {
+  name: string;
+  ok: boolean;
+  // Compact result summary for UI display. Full payload lives in audit log.
+  summary: string;
+  auditLogId?: string;
+}
+
+export interface ChatResult {
+  message: string;
+  toolCalls: ToolCallSummary[];
+  usage: { inputTokens: number; outputTokens: number };
+}
+
+const MAX_TOOL_TURNS = 6; // safety cap on agentic loops
+
+export async function chat(
+  ctx: HouseholdContext,
+  history: ChatHistoryEntry[],
+  userMessage: string,
+  toolCtx: ToolContext,
+): Promise<ChatResult> {
+  const client = getClient();
+  if (!client) throw new Error("Advisor not configured");
+
+  const trimmedHistory = history.slice(-MAX_HISTORY_TURNS);
+  const systemPrompt = `${CHAT_SYSTEM_PROMPT}\n\n--- LIVE HOUSEHOLD SNAPSHOT ---\n${formatContextForPrompt(ctx)}\n--- END SNAPSHOT ---`;
+
+  // Build the running message list. Each tool-use round appends to this.
+  const messages: Array<{ role: "user" | "assistant"; content: any }> = [
+    ...trimmedHistory.map((m) => ({ role: m.role, content: m.content })),
+    { role: "user", content: userMessage },
+  ];
+
+  const tools = getAnthropicToolSpecs();
+  const toolCallSummaries: ToolCallSummary[] = [];
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let finalText = "";
+
+  for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
+    const res = await client.messages.create({
+      model: getModel(),
+      max_tokens: MAX_OUTPUT_TOKENS_CHAT,
+      system: systemPrompt,
+      tools: tools.length > 0 ? tools : undefined,
+      messages,
+    });
+
+    totalInputTokens += res.usage.input_tokens;
+    totalOutputTokens += res.usage.output_tokens;
+
+    // Collect any text the model emitted this turn.
+    const textBlocks = res.content.filter((c) => c.type === "text");
+    const turnText = textBlocks
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("");
+    if (turnText) finalText = turnText;
+
+    // If the model didn't request any tools, we're done.
+    if (res.stop_reason !== "tool_use") {
+      break;
+    }
+
+    // Append the assistant's tool-use turn to the message list verbatim.
+    messages.push({ role: "assistant", content: res.content });
+
+    // Execute every tool_use block in this assistant message and build
+    // the matching tool_result content array for the next user turn.
+    const toolUseBlocks = res.content.filter((c) => c.type === "tool_use");
+    const toolResultBlocks: Array<{
+      type: "tool_result";
+      tool_use_id: string;
+      content: string;
+      is_error?: boolean;
+    }> = [];
+
+    for (const block of toolUseBlocks) {
+      if (block.type !== "tool_use") continue;
+      const dispatch = await dispatchTool(block.name, block.input, toolCtx);
+
+      let summary: string;
+      if (dispatch.ok) {
+        summary = compactSummary(block.name, dispatch.result);
+        toolResultBlocks.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify(dispatch.result),
+        });
+      } else {
+        summary = dispatch.error ?? "Tool failed";
+        toolResultBlocks.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify({ error: dispatch.error }),
+          is_error: true,
+        });
+      }
+
+      toolCallSummaries.push({
+        name: block.name,
+        ok: dispatch.ok,
+        summary,
+        auditLogId: dispatch.auditLogId,
+      });
+    }
+
+    messages.push({ role: "user", content: toolResultBlocks });
+  }
+
+  return {
+    message: finalText || "(no response)",
+    toolCalls: toolCallSummaries,
+    usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens },
+  };
+}
+
+// Compact one-line summary of a tool result for the UI.
+function compactSummary(toolName: string, result: unknown): string {
+  if (toolName === "list_categories") {
+    const r = result as { count?: number };
+    return `Listed ${r?.count ?? 0} categories`;
+  }
+  // Fallback: generic
+  return `${toolName} executed`;
+}
+
+After replacing the chat() function:
+
+1. Also update the call site in artifacts/api-server/src/routes/advisor.ts to pass the new ToolContext argument. The chat handler should construct it from req.householdId, req.householdOwnerId, and req.actualUserId (or req.userId — whichever the codebase prefers; check the other routes for the convention). It does NOT need a chatMessageId yet.
+
+2. The route should also include the toolCalls array in the response JSON so the frontend can display what tools were used.
+
+3. Run pnpm typecheck on the api-server package. Confirm no errors.
+
+4. Do not restart the dev server or test yet — frontend hasn't been updated to render toolCalls yet, but the backend should at least typecheck.
+
+Report back.
