@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import {
   postAdvisorChat,
+  postAdvisorUndo,
   useGetAdvisorNudge,
   type AdvisorChatMessage,
   type AdvisorToolCall,
@@ -31,9 +32,13 @@ interface DisplayedMessage {
   role: "user" | "assistant";
   content: string;
   toolCalls?: AdvisorToolCall[];
+  // For undo state, we need to know when the message was added so we can
+  // expire the Undo button after 5 minutes.
+  createdAt?: number;
 }
 
 const CLIENT_HISTORY_CAP = 12;
+const UNDO_WINDOW_MS = 5 * 60 * 1000;
 
 export function AdvisorChat() {
   const [open, setOpen] = useState(false);
@@ -50,14 +55,14 @@ export function AdvisorChat() {
       return postAdvisorChat({ message: vars.message, history: vars.history });
     },
     onSuccess: (res) => {
-      // TEMP DIAG
-      // eslint-disable-next-line no-console
-      console.log("[advisor-chat] mutation onSuccess res:", res);
-      // eslint-disable-next-line no-console
-      console.log("[advisor-chat] toolCalls from res:", res.toolCalls);
       setMessages((m) => [
         ...m,
-        { role: "assistant", content: res.message, toolCalls: res.toolCalls },
+        {
+          role: "assistant",
+          content: res.message,
+          toolCalls: res.toolCalls,
+          createdAt: Date.now(),
+        },
       ]);
     },
     onError: (err: unknown) => {
@@ -151,7 +156,13 @@ export function AdvisorChat() {
               </div>
             )}
             {messages.map((m, i) => (
-              <MessageBubble key={i} role={m.role} content={m.content} />
+              <MessageBubble
+                key={i}
+                role={m.role}
+                content={m.content}
+                toolCalls={m.toolCalls}
+                createdAt={m.createdAt}
+              />
             ))}
             {mutation.isPending && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -193,10 +204,10 @@ export function AdvisorChat() {
   );
 }
 
-function MessageBubble({ role, content, toolCalls }: DisplayedMessage) {
+function MessageBubble({ role, content, toolCalls, createdAt }: DisplayedMessage) {
   // TEMP DIAG
   // eslint-disable-next-line no-console
-  console.log("[advisor-chat] MessageBubble render", { role, toolCalls });
+  console.log("[bubble] role:", role, "toolCalls:", toolCalls);
   return (
     <div className={cn("flex flex-col", role === "user" ? "items-end" : "items-start")}>
       <div
@@ -210,9 +221,12 @@ function MessageBubble({ role, content, toolCalls }: DisplayedMessage) {
         {content}
       </div>
       {toolCalls && toolCalls.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-1.5 max-w-[85%]">
+        <div
+          className="flex flex-wrap gap-1.5 mt-1.5 max-w-[85%]"
+          data-testid="advisor-tool-pills"
+        >
           {toolCalls.map((tc, i) => (
-            <ToolCallPill key={i} call={tc} />
+            <ToolCallPill key={i} call={tc} messageCreatedAt={createdAt ?? Date.now()} />
           ))}
         </div>
       )}
@@ -220,12 +234,38 @@ function MessageBubble({ role, content, toolCalls }: DisplayedMessage) {
   );
 }
 
-function ToolCallPill({ call }: { call: AdvisorToolCall }) {
+function ToolCallPill({
+  call,
+  messageCreatedAt,
+}: {
+  call: AdvisorToolCall;
+  messageCreatedAt: number;
+}) {
+  const [undone, setUndone] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const undoMutation = useMutation({
+    mutationFn: async () => postAdvisorUndo(call.auditLogId!),
+    onSuccess: () => setUndone(true),
+  });
+
+  // Tick once a second so the undo button hides itself when the window closes.
+  useEffect(() => {
+    if (undone) return;
+    if (!call.auditLogId) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(id);
+  }, [undone, call.auditLogId]);
+
+  const inWindow = now - messageCreatedAt < UNDO_WINDOW_MS;
+  const canUndo = call.ok && !!call.auditLogId && inWindow && !undone;
+
   return (
     <div
       className={cn(
         "inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border",
-        call.ok
+        undone
+          ? "bg-muted text-muted-foreground border-muted line-through"
+          : call.ok
           ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300"
           : "bg-destructive/5 border-destructive/30 text-destructive",
       )}
@@ -234,6 +274,18 @@ function ToolCallPill({ call }: { call: AdvisorToolCall }) {
     >
       {call.ok ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
       <span>{call.summary}</span>
+      {canUndo && (
+        <button
+          type="button"
+          className="ml-1 underline underline-offset-2 hover:text-emerald-900 dark:hover:text-emerald-200 disabled:opacity-50"
+          disabled={undoMutation.isPending}
+          onClick={() => undoMutation.mutate()}
+          data-testid="advisor-tool-undo"
+        >
+          {undoMutation.isPending ? "undoing…" : "undo"}
+        </button>
+      )}
+      {undone && <span>(undone)</span>}
     </div>
   );
 }
