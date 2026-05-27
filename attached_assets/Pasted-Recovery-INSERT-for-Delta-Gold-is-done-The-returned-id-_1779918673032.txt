@@ -1,0 +1,23 @@
+Recovery INSERT for Delta Gold is done. The returned id is: [PASTE_THE_UUID]
+
+Resume the recovery and chain straight through to the long-term fixes. Don't wait for me between steps unless something fails.
+
+STEP 5 — Run dedupeTransactionsForAccount for the newly-inserted Delta Gold plaid_account.id to catch any incidental duplicates from the merge period.
+
+STEP 6 — I'll verify /amex visually after restart:
+  - 3 chips visible (All cards 3, Blue Cash, Platinum, Delta Gold)
+  - Clicking Delta Gold filters to ~224 transactions with non-zero balance
+  - Platinum chip shows clean Platinum-only totals (no merged Delta data)
+  - Ending balances on each card match what the Amex app shows
+
+STEP 7-9 — Apply the routes/plaid.ts upsert fix (the change you scoped earlier as "CHANGE A"). Tighten the (householdId, mask) candidate match around lines 720-790 to also consider name/officialName, matching the pattern in dedupePlaidAccounts.ts. Add a regression test that ingests two same-mask different-name cards and asserts both rows survive. Run pnpm typecheck and pnpm test on api-server.
+
+STEP 10 — Verify the Plaid webhook is registered and reaching us. This is required for the "set it and forget it" auto-sync to work. Without a registered webhook URL, Plaid never notifies the app when new Amex transactions are ready and I'd have to manually click "Refresh from Plaid" forever.
+
+  a) Tell me my Replit's current public URL (the one Plaid would POST to). The webhook endpoint is that URL + /api/plaid/webhook.
+  b) Check whether the webhook URL is set in my Plaid Dashboard. If you can't check directly, give me the exact URL to register and a one-line instruction on where in the Plaid Dashboard to paste it (Team Settings → Webhooks, or similar).
+  c) After it's registered, trigger a manual sync on the Amex item and confirm a "Plaid webhook received" log line appears in the server logs within 5 minutes. If it doesn't arrive, the webhook URL didn't take.
+
+STEP 11 — Confirm long-term auto-sync is healthy. After step 10 succeeds, briefly summarize: the webhook URL on file, when the most recent webhook hit logged, and whether scheduleSyncForItem is debouncing properly.
+
+Goal of all this: I need to do this ONCE. After we finish, every future Amex transaction should sync automatically without me touching the app. Report back when 5, 7-9, 10, 11 are all done — and flag anything that looks off in 10/11 explicitly rather than glossing over it.

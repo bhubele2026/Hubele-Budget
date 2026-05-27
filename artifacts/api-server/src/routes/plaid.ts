@@ -736,6 +736,8 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
               id: plaidAccountsTable.id,
               accountId: plaidAccountsTable.accountId,
               itemId: plaidAccountsTable.itemId,
+              name: plaidAccountsTable.name,
+              officialName: plaidAccountsTable.officialName,
               institutionName: plaidItemsTable.institutionName,
             })
             .from(plaidAccountsTable)
@@ -749,13 +751,56 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
                 eq(plaidAccountsTable.mask, a.mask),
               ),
             );
+          // (#754) Tighten the dupe guard to also require an account-name
+          // match. Two physical cards can legitimately share a mask under
+          // the same institution (e.g. Amex Platinum Card® ··1009 and
+          // Amex Delta SkyMiles® Gold Card ··1009). Without this filter
+          // the second card's ingest claims the first card's row and
+          // silently overwrites its accountId/name — the same bug class
+          // that #754 fixed in dedupePlaidAccountsForUser. Mirror that
+          // key (case-insensitive, trimmed, fall back to officialName).
+          //
+          // Selection is strictly tiered to keep behavior deterministic
+          // when the candidate set is mixed (e.g. one legacy row with
+          // null name + one exact-name match). Picking the first row in
+          // DB-return order from a permissive union would be undefined
+          // and could route the upsert onto the legacy row instead of
+          // the obvious exact match.
+          //   Tier 1 (preferred): incoming name is non-empty AND a
+          //     candidate's normalized name equals it exactly.
+          //   Tier 2 (legacy fallback): no Tier 1 hits AND incoming has
+          //     a name — adopt only candidates whose name is empty
+          //     (rows that pre-date name capture).
+          //   Tier 3 (incoming has no name at all): allow every mask
+          //     match. We can't disambiguate further without a name,
+          //     and this preserves the legacy re-link path.
+          const incomingAcctName = (a.name ?? a.official_name ?? "")
+            .toLowerCase()
+            .trim();
+          const candidateName = (c: { name: string | null; officialName: string | null }) =>
+            (c.name ?? c.officialName ?? "").toLowerCase().trim();
+          let candidatesByName: typeof candidates;
+          if (incomingAcctName === "") {
+            candidatesByName = candidates;
+          } else {
+            const exact = candidates.filter(
+              (c) => candidateName(c) === incomingAcctName,
+            );
+            if (exact.length > 0) {
+              candidatesByName = exact;
+            } else {
+              candidatesByName = candidates.filter(
+                (c) => candidateName(c) === "",
+              );
+            }
+          }
           // Prefer same-item match; otherwise match by institutionName so
           // we collapse a re-link under a fresh item onto the existing row.
           const targetInstitution = (
             item!.institutionName ?? ""
           ).toLowerCase();
-          const sameItem = candidates.find((c) => c.itemId === item!.id);
-          const crossItem = candidates.find(
+          const sameItem = candidatesByName.find((c) => c.itemId === item!.id);
+          const crossItem = candidatesByName.find(
             (c) =>
               c.itemId !== item!.id &&
               (c.institutionName ?? "").toLowerCase() === targetInstitution &&
