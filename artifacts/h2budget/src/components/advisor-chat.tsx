@@ -73,7 +73,8 @@ export function AdvisorChat() {
       {!open && (
         <Button
           onClick={() => setOpen(true)}
-          className="fixed bottom-4 right-4 md:bottom-6 md:right-6 h-12 w-12 rounded-full shadow-lg z-40"
+          style={{ position: "fixed", bottom: "1.5rem", right: "1.5rem", zIndex: 40 }}
+          className="h-12 w-12 rounded-full shadow-lg"
           aria-label="Open advisor"
           data-testid="advisor-launcher"
         >
@@ -83,9 +84,9 @@ export function AdvisorChat() {
 
       {open && (
         <Card
-          className="fixed z-40 shadow-2xl flex flex-col
-                     bottom-4 right-4 md:bottom-6 md:right-6
-                     w-[calc(100vw-2rem)] max-w-md
+          style={{ position: "fixed", bottom: "1.5rem", right: "1.5rem", zIndex: 40 }}
+          className="shadow-2xl flex flex-col
+                     w-[calc(100vw-3rem)] max-w-md
                      h-[min(70vh,640px)]"
           data-testid="advisor-panel"
         >
