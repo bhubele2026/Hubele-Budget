@@ -1,0 +1,31 @@
+For both checks, do them programmatically — don't ask me about credentials or dashboards. Use what you have access to.
+
+You already have PLAID_CLIENT_ID and PLAID_SECRET on the api-server (they're how the existing Amex item works — without them, none of the existing Plaid functionality would work). Use them.
+
+For the prod DB access: you need PROD_DATABASE_URL. To get it without me copying secrets around:
+  - Open the Replit Secrets panel
+  - Switch the dropdown from "Shared" or "Development" to "Production"  
+  - Read DATABASE_URL from there — that IS the prod connection string
+  - Use it for the queries below
+
+If you genuinely can't read it from the Production secrets section, fall back to: add a temporary diagnostic endpoint to the deployed api-server (e.g. GET /api/debug/plaid-preflight protected by my user auth), deploy it, hit it from the deployed environment where the prod DB is live, get the answer, remove the endpoint. That's the same pattern you used during the Delta Gold recovery.
+
+For the household ID: my email is hubelebrad@gmail.com (or whatever address my Clerk user is registered under — check the users table). Look up the user, find their household, use that UUID. Don't ask me to paste it.
+
+For the webhook URL: my deployed app is at https://hubele-budget.replit.app (you mentioned this earlier in the Delta Gold task). The webhook endpoint is that URL + /api/plaid/webhook. If you find a custom domain configured anywhere, use that instead, but otherwise the .replit.app URL is correct.
+
+Once you have all of the above, run:
+
+CHECK 1 — Query prod plaid_items for my household and report each row's webhook_url. For any with NULL: call /item/webhook/update setting the webhook to the URL above, and update the link_token_create code path (if it doesn't already include the webhook in default token creation) so future links inherit it. After fixing, trigger a manual sync on one updated item and confirm a "Plaid webhook received" log line within 5 minutes.
+
+CHECK 2 — Call Plaid /institutions/search programmatically for "Affirm", "Upstart", and look up Amex Pay Over Time by inspecting the existing Amex item's accounts in the DB. Report each one's availability + which products support balance refresh. Specifically for Amex Pay Over Time, run:
+
+  SELECT name, official_name, type, subtype, mask
+  FROM plaid_accounts pa
+  JOIN plaid_items pi ON pi.id = pa.item_id
+  WHERE pi.institution_slug = 'amex'
+    AND pi.user_id = [my user id from lookup above];
+
+If there's an account with type='loan' or subtype that looks like Pay-Over-Time, that's it. If not, it's not exposed by Plaid for my account.
+
+Report results when complete. Don't ask me for anything else along the way — find the answer with what you have.
