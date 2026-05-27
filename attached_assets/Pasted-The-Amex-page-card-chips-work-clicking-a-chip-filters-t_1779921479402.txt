@@ -1,0 +1,49 @@
+The Amex page card chips work — clicking a chip filters the transaction list correctly. But the Ending Balance tile is stuck on the combined all-cards balance (~$10k) regardless of which chip I click. It should switch to just the selected card's balance.
+
+The fix is in artifacts/h2budget/src/pages/amex.tsx around the endingBalance / resolvedAnchor logic (~line 615-715) and in @/lib/amexEndingBalance (makeAmexBalanceAtEndOf + resolveAmexDebt).
+
+CHANGE 1 — Thread cardFilter into the anchor resolution.
+
+resolveAmexDebt currently picks an anchor by matching Amex debts. When cardFilter !== "all", the anchor should resolve to the SPECIFIC card's linked debt (if any) — matched by debt.plaidAccountId pointing at the same Plaid account row that cardFilter identifies (external account_id).
+
+Update resolveAmexDebt to take an optional selectedCardExternalAccountId parameter. When provided:
+  - Look up the plaid_accounts row matching that external account_id
+  - Find the debt whose plaidAccountId equals that row's internal id
+  - Return that debt as the anchor source
+  - If no debt is linked to that card, return null (let the rest of the anchor fallback chain handle it — server-provided anchor, computed, etc.)
+
+When selectedCardExternalAccountId is undefined or "all", behavior is unchanged from today.
+
+CHANGE 2 — Thread cardFilter into makeAmexBalanceAtEndOf.
+
+The function currently walks wideAll (all Amex transactions) to roll forward from the anchor. When cardFilter !== "all", it should walk only transactions whose plaidAccountId === cardFilter. That way the running balance from the anchor → end-of-month reflects only that one card.
+
+Update makeAmexBalanceAtEndOf to take an optional selectedCardExternalAccountId. When provided, filter wideAll to just those transactions before computing balances. When "all" or undefined, use the full set.
+
+CHANGE 3 — In amex.tsx, pass cardFilter into both calls.
+
+The page already has cardFilter in state. Wire it through:
+  - In the useMemo that calls resolveAmexDebt, pass cardFilter (or undefined when cardFilter === "all")
+  - In the useMemo that calls makeAmexBalanceAtEndOf, do the same
+  - Both useMemos need to add cardFilter to their dependency arrays so they re-run when the user clicks a chip
+
+CHANGE 4 — Per-card anchor fallback handling.
+
+If a card has no linked debt (e.g. Delta Gold isn't linked to a debt row), the anchor resolution will return null for that card. In that case, fall back to:
+  a) Server-provided amexAnchorResp if it's per-card capable (check the existing /api/amex/anchor route — it may currently return a combined anchor)
+  b) Or compute the anchor from the most recent transaction's running balance for that card alone
+
+Don't crash or show "Not set" when a card has no debt — it's a normal state (Delta Gold may genuinely not be debt-tracked yet).
+
+CHANGE 5 — Trend chart should also scope to selected card.
+
+The "Ending Balance · Trailing 12 months" chart at the bottom of the page should show only the selected card's trend when a chip is active. Thread cardFilter through whatever feeds that chart's data series (it'll be either a useMemo over wideAll or a netChangeByMonth-style computation — find it and add the same filter).
+
+Acceptance:
+- Click Blue Cash: Ending Balance tile shows ~$449.98 (matches Amex app). Trend chart shows Blue Cash's history.
+- Click Platinum: Ending Balance shows ~$0 ("Payment not required") — Amex app shows $0.00 on it. Trend reflects Platinum only.
+- Click Delta Gold: Ending Balance shows ~$9,201 (matches Amex app). Trend reflects Delta Gold only.
+- Click "All cards": back to combined ~$10k.
+- Charges, Payments & Credits, Net Change — these already scope correctly per chip, so just confirm they still work after the changes.
+
+Run pnpm typecheck and pnpm test on h2budget. Confirm clean.

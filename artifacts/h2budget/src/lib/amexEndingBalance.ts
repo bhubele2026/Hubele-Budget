@@ -105,9 +105,42 @@ export function resolveAmexDebt<T extends AmexDebtLike>(args: {
   debts: ReadonlyArray<T> | null | undefined;
   amexPlaidAccountIds: ReadonlySet<string>;
   plaidItemsForScope: ReadonlyArray<AmexPlaidItemLike> | null | undefined;
+  // (#748) When the Amex page's card-filter pill is set to a specific
+  // card (i.e. NOT "All cards"), narrow the debt anchor to that one
+  // card's debts. `debts.plaid_account_id` is the *internal*
+  // `plaid_accounts.id` UUID (see lib/db/src/schema/index.ts), NOT the
+  // external Plaid `account_id` string that the chip's `value` holds —
+  // so the caller must translate the chip's external id via
+  // `plaidItemsForScope[].accounts[].accountId → .id` and pass the
+  // resulting internal UUID here. Returns `null` when the selected
+  // card has no linked debt so the page's anchor fallback chain can
+  // take over (server per-card anchor → computed-from-txns) instead
+  // of silently collapsing back onto the combined-Amex debt total.
+  selectedCardPlaidAccountRowId?: string | null;
 }): T | null {
-  const { debts, amexPlaidAccountIds, plaidItemsForScope } = args;
+  const {
+    debts,
+    amexPlaidAccountIds,
+    plaidItemsForScope,
+    selectedCardPlaidAccountRowId,
+  } = args;
   if (!debts || debts.length === 0) return null;
+  // (#748) Per-card short-circuit. We match `debt.plaidAccountId`
+  // (internal `plaid_accounts.id` UUID) against the caller-translated
+  // row id for the selected card. If no debt is linked to that card,
+  // we return null — do NOT fall through to the combined-Amex
+  // matchers below, otherwise we'd reintroduce the original bug
+  // (Blue Cash chip selected → tile shows combined Amex debt).
+  if (selectedCardPlaidAccountRowId) {
+    const perCard = debts.filter(
+      (d) =>
+        !!d.plaidAccountId &&
+        d.plaidAccountId === selectedCardPlaidAccountRowId &&
+        (d.type ?? "").toLowerCase() !== "loan" &&
+        !AMEX_LOAN_NAME_REGEX.test(d.name),
+    );
+    return perCard[0] ?? null;
+  }
   // (#689) Pre-filter out Amex installment / Pay-Over-Time / "Plan-It"
   // LOAN sub-accounts before any matching. These share the "Amex"
   // name and even the same Plaid login as the credit card, so without

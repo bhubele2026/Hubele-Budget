@@ -31,6 +31,18 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   const ownerId = req.householdOwnerId!;
   const householdId = req.householdId!;
+  // (#748) Optional `?accountId=<external Plaid account_id>` query
+  // param scopes resolution to a single physical Amex card. When
+  // provided, every downstream lookup (Plaid liability sum, debt-row
+  // lookup, computed-net aggregate) is restricted to that one account
+  // so the Amex page's per-card chip can show the right tile value
+  // for Blue Cash vs. Platinum vs. Delta Gold without the combined
+  // ~$10k roll-up bleeding through.
+  const scopedAccountIdRaw = req.query.accountId;
+  const scopedAccountId =
+    typeof scopedAccountIdRaw === "string" && scopedAccountIdRaw.length > 0
+      ? scopedAccountIdRaw
+      : null;
 
   // (#416) One-shot heal hook. Collapse any duplicate Amex
   // `plaid_accounts` rows the user accumulated from re-linking
@@ -129,7 +141,46 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
   for (const r of amexAcctRows) {
     if (r.accountId) amexPlaidAccountIdSet.add(r.accountId);
   }
-  const amexPlaidAccountIds = Array.from(amexPlaidAccountIdSet);
+  // (#748) Per-card scope filter. If the client passed
+  // `?accountId=...` we only proceed for that single card; if the
+  // requested card isn't in our Amex set we short-circuit to
+  // `missing` so the client renders the empty state instead of
+  // falling through to the global `settings.amexAnchor` fallback
+  // below (which would otherwise yield the combined value for an
+  // invalid per-card request).
+  let amexPlaidAccountIds: string[];
+  if (scopedAccountId) {
+    if (!amexPlaidAccountIdSet.has(scopedAccountId)) {
+      res.json({
+        amexEndingBalance: null,
+        asOf: new Date().toISOString(),
+        source: "missing" as const,
+      });
+      return;
+    }
+    amexPlaidAccountIds = [scopedAccountId];
+  } else {
+    amexPlaidAccountIds = Array.from(amexPlaidAccountIdSet);
+  }
+
+  // (#748) For per-card debt lookup we need the internal
+  // `plaid_accounts.id` UUID — `debts.plaid_account_id` is a UUID FK
+  // (lib/db/src/schema/index.ts), not the external Plaid `account_id`
+  // string. Resolve it once for the scoped card so the debt query
+  // below can be keyed correctly.
+  let scopedInternalPlaidAccountRowId: string | null = null;
+  if (scopedAccountId) {
+    const [row] = await db
+      .select({ id: plaidAccountsTable.id })
+      .from(plaidAccountsTable)
+      .where(
+        and(
+          eq(plaidAccountsTable.householdId, householdId),
+          eq(plaidAccountsTable.accountId, scopedAccountId),
+        ),
+      );
+    scopedInternalPlaidAccountRowId = row?.id ?? null;
+  }
 
   // (#416) Aggregate across every Amex debt row when the user has more
   // than one (one Plaid item with three physical cards yields three
@@ -141,22 +192,61 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     | { id: string; balance: string; updatedAt: Date | null }
     | undefined;
   let debtRows: { id: string; balance: string; updatedAt: Date | null }[] = [];
-  if (amexPlaidAccountIds.length > 0) {
-    debtRows = await db
-      .select({
-        id: debtsTable.id,
-        balance: debtsTable.balance,
-        updatedAt: debtsTable.updatedAt,
-      })
-      .from(debtsTable)
+  if (scopedAccountId) {
+    // (#748) Per-card path: key debts on the resolved internal UUID.
+    if (scopedInternalPlaidAccountRowId) {
+      debtRows = await db
+        .select({
+          id: debtsTable.id,
+          balance: debtsTable.balance,
+          updatedAt: debtsTable.updatedAt,
+        })
+        .from(debtsTable)
+        .where(
+          and(
+            eq(debtsTable.householdId, householdId),
+            eq(debtsTable.plaidAccountId, scopedInternalPlaidAccountRowId),
+          ),
+        );
+    }
+  } else if (amexPlaidAccountIds.length > 0) {
+    // Combined-Amex path: resolve every internal row id for the set
+    // of external Amex account_ids in scope, then match debts on
+    // those UUIDs. `debts.plaid_account_id` is a UUID FK to
+    // `plaid_accounts.id`, not the external string, so the prior
+    // `::text`-cast inArray could never match in practice.
+    const rowIds = await db
+      .select({ id: plaidAccountsTable.id })
+      .from(plaidAccountsTable)
       .where(
         and(
-          eq(debtsTable.householdId, householdId),
-          inArray(sql`${debtsTable.plaidAccountId}::text`, amexPlaidAccountIds),
+          eq(plaidAccountsTable.householdId, householdId),
+          inArray(plaidAccountsTable.accountId, amexPlaidAccountIds),
         ),
       );
+    const internalIds = rowIds.map((r) => r.id);
+    if (internalIds.length > 0) {
+      debtRows = await db
+        .select({
+          id: debtsTable.id,
+          balance: debtsTable.balance,
+          updatedAt: debtsTable.updatedAt,
+        })
+        .from(debtsTable)
+        .where(
+          and(
+            eq(debtsTable.householdId, householdId),
+            inArray(debtsTable.plaidAccountId, internalIds),
+          ),
+        );
+    }
   }
-  if (debtRows.length === 0) {
+  // (#748) When a card was specifically requested, do NOT fall back
+  // to the legacy name-regex matcher — that would re-aggregate every
+  // Amex debt and reintroduce the combined-tile bug for the per-card
+  // chip. Per-card resolution stays strict and lets the next fallback
+  // tier (computed-from-txns) take over instead.
+  if (debtRows.length === 0 && !scopedAccountId) {
     debtRows = await db
       .select({
         id: debtsTable.id,
@@ -286,7 +376,16 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  if (anchor && anchor.balance !== undefined && anchor.balance !== null) {
+  // (#748) Skip the global `settings.amexAnchor` fallback for per-
+  // card requests — that anchor is user-set across the combined Amex
+  // tile and would otherwise leak the combined balance back into a
+  // per-card request that has no debt + no Plaid liability.
+  if (
+    !scopedAccountId &&
+    anchor &&
+    anchor.balance !== undefined &&
+    anchor.balance !== null
+  ) {
     const n = Number(anchor.balance);
     if (Number.isFinite(n)) {
       res.json({
@@ -298,6 +397,10 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
+  // (#748) When a card was specifically requested, restrict the
+  // computed-from-txns net aggregate to that card's transactions so
+  // the per-card "Calculated" tile doesn't roll up every Amex card
+  // back into one number.
   const [agg] = await db
     .select({
       net: sql<string>`coalesce(sum(${transactionsTable.amount})::text, '0')`,
@@ -309,6 +412,9 @@ router.get("/amex/anchor", requireAuth, async (req, res): Promise<void> => {
       and(
         eq(transactionsTable.householdId, householdId),
         inArray(transactionsTable.source, [...AMEX_TXN_SOURCES]),
+        ...(scopedAccountId
+          ? [eq(transactionsTable.plaidAccountId, scopedAccountId)]
+          : []),
       ),
     );
 

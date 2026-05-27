@@ -345,6 +345,28 @@ export default function AmexPage() {
     queryFn: () => customFetch("/api/amex/anchor", { method: "GET" }),
     staleTime: 60_000,
   });
+  // (#748) Per-card anchor query. Only fires when the user picks a
+  // specific card chip — the combined `amexAnchorResp` above keeps
+  // powering "All cards". Cached under a separate queryKey per card so
+  // switching chips doesn't blow away the combined cache (or vice
+  // versa).
+  const {
+    data: amexAnchorPerCardResp,
+    fetchStatus: amexAnchorPerCardFetchStatus,
+  } = useQuery<{
+    amexEndingBalance: number | null;
+    asOf: string;
+    source: "debt" | "anchor" | "computed" | "plaid" | "missing";
+  }>({
+    queryKey: ["/api/amex/anchor", cardFilter],
+    queryFn: () =>
+      customFetch(
+        `/api/amex/anchor?accountId=${encodeURIComponent(cardFilter)}`,
+        { method: "GET" },
+      ),
+    enabled: cardFilter !== "all",
+    staleTime: 60_000,
+  });
   const updateTx = useUpdateTransaction();
   const bulkUpdateTx = useBulkUpdateTransactions();
   const buildRuleUndoAction = useRuleActionUndo();
@@ -652,14 +674,38 @@ export default function AmexPage() {
   // (#574) Anchor-debt resolution lives in `@/lib/amexEndingBalance` so
   // the dashboard's "Amex ending balance" tile uses the exact same logic
   // and the two surfaces can never drift on which debt(s) feed the anchor.
+  // (#748) Map the external Plaid `account_id` (chip value) → internal
+  // `plaid_accounts.id` UUID so the per-card debt lookup (which keys
+  // on the internal id; see schema/index.ts) can find the right debt.
+  const externalAccountIdToRowId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const item of plaidItemsForScope ?? []) {
+      for (const a of item.accounts ?? []) {
+        if (a.accountId && a.id) m.set(a.accountId, a.id);
+      }
+    }
+    return m;
+  }, [plaidItemsForScope]);
+  const selectedCardRowId = useMemo(
+    () =>
+      cardFilter === "all"
+        ? null
+        : (externalAccountIdToRowId.get(cardFilter) ?? null),
+    [cardFilter, externalAccountIdToRowId],
+  );
   const amexDebt = useMemo(
     () =>
       resolveAmexDebt({
         debts,
         amexPlaidAccountIds,
         plaidItemsForScope,
+        // (#748) When a specific card is selected, scope the debt
+        // anchor to that single card so the Ending Balance tile shows
+        // the right per-card value instead of falling back to the
+        // combined-Amex roll-up.
+        selectedCardPlaidAccountRowId: selectedCardRowId,
       }),
-    [debts, amexPlaidAccountIds, plaidItemsForScope],
+    [debts, amexPlaidAccountIds, plaidItemsForScope, selectedCardRowId],
   );
 
   // Resolve the anchor (balance + as-of timestamp) from either the linked
@@ -697,15 +743,18 @@ export default function AmexPage() {
   // through to the existing combined-anchor + combined-transactions
   // behavior so the prior roll-up view is preserved exactly.
   const cardScopedDebt = useMemo(() => {
-    if (cardFilter === "all") return null;
+    if (cardFilter === "all" || !selectedCardRowId) return null;
+    // (#748) Match the internal `plaid_accounts.id` UUID, not the
+    // external account_id chip value — see externalAccountIdToRowId.
     for (const d of debts ?? []) {
-      if (d.plaidAccountId && d.plaidAccountId === cardFilter) return d;
+      if (d.plaidAccountId && d.plaidAccountId === selectedCardRowId) return d;
     }
     return null;
-  }, [debts, cardFilter]);
+  }, [debts, cardFilter, selectedCardRowId]);
 
   const cardScopedAnchor = useMemo(() => {
     if (cardFilter === "all") return resolvedAnchor;
+    // Tier 1: per-card debt row (when the user has linked the card on /debts).
     if (cardScopedDebt) {
       const bal = parseSigned(cardScopedDebt.balance);
       if (Number.isFinite(bal)) {
@@ -719,11 +768,39 @@ export default function AmexPage() {
         };
       }
     }
-    // No per-card debt link — fall back to the combined anchor so the
-    // tile keeps showing something usable rather than collapsing to
-    // "Not set" the moment the user picks a card without a debt row.
-    return resolvedAnchor;
-  }, [cardFilter, cardScopedDebt, resolvedAnchor]);
+    // Tier 2: server-resolved per-card anchor (Plaid live liability or
+    // settings.amexAnchor or computed-from-txns scoped to this card).
+    // The /api/amex/anchor?accountId=... route does the heavy lifting
+    // so the client doesn't need to know about plaid_accounts.
+    if (
+      amexAnchorPerCardResp &&
+      amexAnchorPerCardResp.amexEndingBalance !== null &&
+      amexAnchorPerCardResp.source !== "missing"
+    ) {
+      return {
+        anchor: amexAnchorPerCardResp.amexEndingBalance,
+        resolvedSource:
+          amexAnchorPerCardResp.source === "debt"
+            ? ("anchor" as const)
+            : (amexAnchorPerCardResp.source as
+                | "anchor"
+                | "computed"
+                | "plaid"),
+        asOf: amexAnchorPerCardResp.asOf ?? null,
+      };
+    }
+    // Tier 3: no per-card anchor available. Anchor at $0 with no
+    // asOf so makeAmexBalanceAtEndOf becomes the running-sum of this
+    // card's transactions, surfaced under the "computed" footer
+    // ("Calculated"). This is the spec'd fallback for cards that
+    // genuinely have no debt link and no Plaid liability — never fall
+    // back to the combined anchor (that was the original bug).
+    return {
+      anchor: 0,
+      resolvedSource: "computed" as const,
+      asOf: null,
+    };
+  }, [cardFilter, cardScopedDebt, resolvedAnchor, amexAnchorPerCardResp]);
 
   const wideAllForBalance = useMemo(() => {
     if (cardFilter === "all") return wideAll;
@@ -771,6 +848,22 @@ export default function AmexPage() {
         asOf: null as string | null,
       };
     }
+    // (#748) When a card chip is active and the per-card anchor query
+    // is still in flight (first hit for that chip, no cached data),
+    // show the loading state instead of momentarily flashing the
+    // tier-3 $0 computed fallback while the network request resolves.
+    if (
+      cardFilter !== "all" &&
+      !cardScopedDebt &&
+      amexAnchorPerCardResp === undefined &&
+      amexAnchorPerCardFetchStatus === "fetching"
+    ) {
+      return {
+        value: null as number | null,
+        source: "loading" as const,
+        asOf: null as string | null,
+      };
+    }
     return {
       value: balanceAtEndOf(selectedMonth),
       source: cardScopedAnchor.resolvedSource,
@@ -782,6 +875,10 @@ export default function AmexPage() {
     amexAnchorLoading,
     amexAnchorFetchStatus,
     amexAnchorError,
+    amexAnchorPerCardResp,
+    amexAnchorPerCardFetchStatus,
+    cardFilter,
+    cardScopedDebt,
     balanceAtEndOf,
     selectedMonth,
   ]);
