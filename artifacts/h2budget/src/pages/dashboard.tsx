@@ -53,6 +53,7 @@ import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
 import { PlaidExpiringSoonList } from "@/components/plaid-expiring-soon-list";
+import { AdvisorNudge } from "@/components/advisor-nudge";
 
 import { SUB_BUCKETS, type SubBucket, useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import {
@@ -2208,6 +2209,7 @@ export default function DashboardPage() {
           find them. */}
       <PlaidReauthBanner />
       <PlaidExpiringSoonList />
+      <AdvisorNudge />
       <DashboardSnapshotSection
         today={today}
         totalDebt={data.totalDebt}
