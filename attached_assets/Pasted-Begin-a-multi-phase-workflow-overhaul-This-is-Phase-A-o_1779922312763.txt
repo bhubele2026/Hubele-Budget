@@ -1,0 +1,56 @@
+Begin a multi-phase workflow overhaul. This is Phase A of 6 (A, B, C, D, E, F). Each phase is independent — land this one cleanly before we move to B.
+
+Goal of Phase A: remove auto-matching of Chase transactions to planned forecast items. Going forward, NOTHING matches automatically. Every match is an explicit user action. This unblocks the rest of the overhaul (manual Send-to-Review gate, lingering past-due plans, weekly Debrief page, etc).
+
+CHANGE 1 — Identify and disable the auto-match path
+
+Search the api-server codebase for where incoming Chase transactions get matched to planned recurring items without user intervention. Likely locations:
+  - artifacts/api-server/src/lib/plaidSync.ts (during sync, possibly auto-resolves forecast items)
+  - artifacts/api-server/src/lib/forecastAutoMatch.ts or similar
+  - artifacts/api-server/src/routes/forecast.ts (POST endpoints that bulk-create resolutions)
+  - Anywhere forecast_resolutions rows are INSERTed with status='matched' WITHOUT an explicit user action triggering it
+
+For each auto-match path you find:
+  - Add a feature flag check: const AUTO_MATCH_ENABLED = false; (hardcoded for now, can become an env var or settings toggle later)
+  - When the flag is false, skip the auto-match block entirely
+  - Log a one-line note at info level when the skip happens, so we can verify it's running
+
+Important: DO NOT remove the auto-match CODE — wrap it in the flag. We may want to bring it back later as an explicit user-toggled "AI auto-match" feature in Phase D. Just gate it so it doesn't fire today.
+
+CHANGE 2 — Confirm the suggestion path stays intact
+
+The Forecast page already has a suggestion engine (pickConfidentBankMatches, suggestPlanMatchesForBank, rankPlansForBank in artifacts/h2budget/src/lib/forecastMatch.ts and related). These compute suggestions but do NOT auto-write — they show "Match to..." dropdowns to the user. DO NOT change any of this. It's the right pattern.
+
+The line between "suggestion shown" and "match committed" is the test. After your change:
+  - Suggestions still appear in the UI
+  - Clicking a suggestion still works
+  - But no resolution rows get created by background jobs, sync handlers, or any code path the user didn't directly trigger
+
+CHANGE 3 — Audit forecast_resolutions writes
+
+After CHANGE 1, search the codebase for every INSERT into forecastResolutionsTable. For each, confirm it has a clear user-action origin (POST /forecast/resolutions called from a button click, manual reschedule, etc). Report any INSERT path that doesn't have an obvious user-action trigger — those are likely auto-match holdovers we missed.
+
+CHANGE 4 — Grandfather existing data
+
+Existing forecast_resolutions rows in production stay as they are. We are NOT going back and unmatching things that were previously auto-matched. The cutoff is: new transactions arriving after this deploy will not auto-match. Old data is treated as "trusted history" — what's matched is matched.
+
+Don't write any data migration. Just deploy the flag-gated code.
+
+CHANGE 5 — Tests
+
+Add or update tests that:
+  - Run a simulated Plaid sync with new transactions that would have previously auto-matched. Assert: zero new forecast_resolutions rows created.
+  - Assert that suggestion functions (pickConfidentBankMatches etc) still produce the same output as before. The suggestion behavior MUST NOT change — only the act of committing matches without user input is disabled.
+
+CHANGE 6 — Smoke test instructions
+
+After deploy, I'll do this in my browser:
+  1. Open /chase, note current transaction list
+  2. Click Refresh from Plaid
+  3. After sync completes, refresh page
+  4. Open /forecast and check the Review tab
+  5. Expected: any new transactions appear as "Pending plan" / "Pending bank" — none as "matched" unless I explicitly matched them
+  6. Verify the existing "Match to..." dropdown still shows suggestions when I click it
+  7. Verify Match Confident button (if any) still works on explicit click
+
+Run pnpm typecheck and pnpm test on api-server and h2budget. Confirm clean. Report what auto-match paths you found and disabled before deploying.
