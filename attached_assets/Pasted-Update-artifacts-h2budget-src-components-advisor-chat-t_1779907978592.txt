@@ -1,0 +1,197 @@
+Update artifacts/h2budget/src/components/advisor-chat.tsx to render confirmation cards for destructive tool proposals.
+
+Current state: AdvisorToolCall now includes an optional proposal field {id, summary} when the model proposed a destructive action. We need to:
+1. Render a Confirm/Cancel card when a tool pill has a proposal
+2. Wire Confirm → POST /advisor/proposals/{id}/confirm and Cancel → /cancel
+3. After confirm succeeds, replace the proposal state with the resulting executed tool (with new auditLogId so Undo works on it)
+4. After cancel, mark the proposal cancelled in the UI
+
+PIECE 1 — Add postAdvisorProposalConfirm and postAdvisorProposalCancel to the existing @workspace/api-client-react imports.
+
+PIECE 2 — Replace the existing ToolCallPill component with one that handles both undo (existing) and proposal confirmation (new). Use this:
+
+const UNDO_WINDOW_MS = 5 * 60 * 1000;
+
+type LocalPillState =
+  | { kind: "pending_proposal" } // model proposed, awaiting user
+  | { kind: "confirming" }       // user clicked Confirm, in-flight
+  | { kind: "cancelling" }       // user clicked Cancel, in-flight
+  | { kind: "confirmed"; auditLogId?: string; executedSummary?: string } // after confirm succeeded
+  | { kind: "cancelled" }
+  | { kind: "expired" }          // 15 min passed without action
+  | { kind: "undone" }
+  | { kind: "idle" };            // non-proposal pill, default
+
+function ToolCallPill({
+  call,
+  messageCreatedAt,
+}: {
+  call: AdvisorToolCall;
+  messageCreatedAt: number;
+}) {
+  // Initial state: proposal → pending_proposal; else idle.
+  const initialState: LocalPillState = call.proposal
+    ? { kind: "pending_proposal" }
+    : { kind: "idle" };
+  const [state, setState] = useState<LocalPillState>(initialState);
+  const [now, setNow] = useState(() => Date.now());
+
+  // Effective auditLogId may come from the original call OR from a
+  // successful confirmation; resolve here so the undo button can use it.
+  const effectiveAuditLogId =
+    state.kind === "confirmed" ? state.auditLogId : call.auditLogId;
+  const effectiveSummary =
+    state.kind === "confirmed" && state.executedSummary
+      ? state.executedSummary
+      : call.summary;
+
+  const undoMutation = useMutation({
+    mutationFn: async () => {
+      if (!effectiveAuditLogId) throw new Error("No auditLogId");
+      return postAdvisorUndo(effectiveAuditLogId);
+    },
+    onSuccess: () => setState({ kind: "undone" }),
+  });
+
+  const confirmMutation = useMutation({
+    mutationFn: async () => {
+      if (!call.proposal) throw new Error("No proposal");
+      return postAdvisorProposalConfirm(call.proposal.id);
+    },
+    onMutate: () => setState({ kind: "confirming" }),
+    onSuccess: (res) => {
+      setState({
+        kind: "confirmed",
+        auditLogId: res.auditLogId,
+      });
+    },
+    onError: () => setState({ kind: "pending_proposal" }), // let user retry
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      if (!call.proposal) throw new Error("No proposal");
+      return postAdvisorProposalCancel(call.proposal.id);
+    },
+    onMutate: () => setState({ kind: "cancelling" }),
+    onSuccess: () => setState({ kind: "cancelled" }),
+    onError: () => setState({ kind: "pending_proposal" }),
+  });
+
+  // Tick once a second so the undo / proposal-expiry windows update live.
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Auto-expire pending proposals at the 15-minute server-side deadline.
+  // We use the message createdAt as the anchor since the proposal was
+  // created during the chat turn that produced this message.
+  const PROPOSAL_EXPIRY_MS = 15 * 60 * 1000;
+  useEffect(() => {
+    if (state.kind !== "pending_proposal") return;
+    if (now - messageCreatedAt > PROPOSAL_EXPIRY_MS) {
+      setState({ kind: "expired" });
+    }
+  }, [state.kind, now, messageCreatedAt]);
+
+  // ----- Render: pending proposal → confirmation card -----
+  if (state.kind === "pending_proposal" || state.kind === "confirming" || state.kind === "cancelling") {
+    return (
+      <div
+        className="w-full max-w-md p-3 rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100"
+        data-testid="advisor-proposal-card"
+      >
+        <div className="text-[11px] uppercase tracking-widest font-semibold mb-1">
+          Confirm action
+        </div>
+        <div className="text-sm leading-relaxed mb-3">
+          {call.proposal?.summary ?? call.summary}
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="px-3 py-1 text-xs rounded-md bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-50"
+            disabled={state.kind !== "pending_proposal"}
+            onClick={() => confirmMutation.mutate()}
+            data-testid="advisor-proposal-confirm"
+          >
+            {state.kind === "confirming" ? "Confirming…" : "Confirm"}
+          </button>
+          <button
+            type="button"
+            className="px-3 py-1 text-xs rounded-md border border-amber-700 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50"
+            disabled={state.kind !== "pending_proposal"}
+            onClick={() => cancelMutation.mutate()}
+            data-testid="advisor-proposal-cancel"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.kind === "cancelled") {
+    return (
+      <div
+        className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border bg-muted border-muted text-muted-foreground"
+        data-testid="advisor-tool-pill"
+      >
+        <X className="w-3 h-3" />
+        <span>Cancelled: {call.name}</span>
+      </div>
+    );
+  }
+  if (state.kind === "expired") {
+    return (
+      <div
+        className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border bg-muted border-muted text-muted-foreground"
+        data-testid="advisor-tool-pill"
+      >
+        <X className="w-3 h-3" />
+        <span>Expired: {call.name}</span>
+      </div>
+    );
+  }
+
+  // ----- Render: executed pill (idle or confirmed) with optional undo -----
+  const undone = state.kind === "undone";
+  const inUndoWindow = now - messageCreatedAt < UNDO_WINDOW_MS;
+  const canUndo = call.ok && !!effectiveAuditLogId && inUndoWindow && !undone;
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border",
+        undone
+          ? "bg-muted text-muted-foreground border-muted line-through"
+          : call.ok
+          ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300"
+          : "bg-destructive/5 border-destructive/30 text-destructive",
+      )}
+      title={call.name}
+      data-testid="advisor-tool-pill"
+    >
+      {call.ok ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+      <span>{effectiveSummary}</span>
+      {canUndo && (
+        <button
+          type="button"
+          className="ml-1 underline underline-offset-2 hover:text-emerald-900 dark:hover:text-emerald-200 disabled:opacity-50"
+          disabled={undoMutation.isPending}
+          onClick={() => undoMutation.mutate()}
+          data-testid="advisor-tool-undo"
+        >
+          {undoMutation.isPending ? "undoing…" : "undo"}
+        </button>
+      )}
+      {undone && <span>(undone)</span>}
+    </div>
+  );
+}
+
+PIECE 3 — Remove the diagnostic console.log inside MessageBubble that we left from the previous step. The pill bug is fixed; the log is no longer needed.
+
+PIECE 4 — Restart the dev server. Confirm both api-server and h2budget came back up cleanly.
+
+Report back.
