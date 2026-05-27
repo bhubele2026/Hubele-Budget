@@ -1,0 +1,662 @@
+import { z } from "zod";
+import { and, eq } from "drizzle-orm";
+import {
+  db,
+  budgetCategoriesTable,
+  recurringItemsTable,
+  transactionsTable,
+} from "@workspace/db";
+import { registerTool } from "./advisorTools";
+
+// ---------------------------------------------------------------------------
+// Shared helpers (duplicated from write tools so this file is independent)
+// ---------------------------------------------------------------------------
+
+async function resolveCategory(householdId: string, needle: string) {
+  const rows = await db
+    .select()
+    .from(budgetCategoriesTable)
+    .where(eq(budgetCategoriesTable.householdId, householdId));
+  const lower = needle.toLowerCase().trim();
+  const exact = rows.filter((r) => r.name.toLowerCase() === lower);
+  if (exact.length === 1) return exact[0];
+  const partial = rows.filter((r) => r.name.toLowerCase().includes(lower));
+  if (partial.length === 0) {
+    throw new Error(`No category matches "${needle}". Call list_categories to see options.`);
+  }
+  if (partial.length > 1) {
+    const names = partial.map((r) => r.name).slice(0, 8).join(", ");
+    throw new Error(
+      `Multiple categories match "${needle}": ${names}. Please use the exact category name.`,
+    );
+  }
+  return partial[0];
+}
+
+async function resolveRecurringItem(householdId: string, needle: string) {
+  const rows = await db
+    .select()
+    .from(recurringItemsTable)
+    .where(eq(recurringItemsTable.householdId, householdId));
+  const lower = needle.toLowerCase().trim();
+  const exact = rows.filter((r) => r.name.toLowerCase() === lower);
+  if (exact.length === 1) return exact[0];
+  const partial = rows.filter((r) => r.name.toLowerCase().includes(lower));
+  if (partial.length === 0) {
+    throw new Error(`No recurring item matches "${needle}".`);
+  }
+  if (partial.length > 1) {
+    const names = partial.map((r) => r.name).slice(0, 8).join(", ");
+    throw new Error(
+      `Multiple recurring items match "${needle}": ${names}. Please use the exact name.`,
+    );
+  }
+  return partial[0];
+}
+
+const FREQUENCIES = [
+  "weekly",
+  "biweekly",
+  "semimonthly",
+  "monthly",
+  "quarterly",
+  "annual",
+  "onetime",
+] as const;
+
+// Snapshot shapes for undo
+interface AddRecurringBillSnapshot {
+  kind: "add_recurring_bill";
+  recurringItemId: string;
+}
+
+interface DeleteRecurringBillSnapshot {
+  kind: "delete_recurring_bill";
+  recurringItemId: string;
+  previousActive: string;
+}
+
+interface UpdateRecurringScheduleSnapshot {
+  kind: "update_recurring_schedule";
+  recurringItemId: string;
+  previous: {
+    frequency: string;
+    dayOfMonth: number | null;
+    anchorDate: string | null;
+  };
+}
+
+interface AddOneTimeTransactionSnapshot {
+  kind: "add_one_time_transaction";
+  transactionId: string;
+}
+
+interface DeleteOneTimeTransactionSnapshot {
+  kind: "delete_one_time_transaction";
+  transaction: {
+    id: string;
+    userId: string;
+    householdId: string | null;
+    occurredOn: string;
+    description: string;
+    amount: string;
+    account: string | null;
+    categoryId: string | null;
+    source: string;
+    notes: string | null;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tool: add_recurring_bill
+// ---------------------------------------------------------------------------
+
+const addRecurringBillInput = z.object({
+  name: z.string().min(1).describe("Display name for the recurring item (e.g. 'Netflix', 'Rent', 'Brad paycheck')."),
+  amount: z.number().min(0).describe("Amount in dollars (always positive; sign is determined by kind)."),
+  kind: z.enum(["bill", "income"]).describe("'bill' for outflows, 'income' for paychecks/deposits."),
+  frequency: z.enum(FREQUENCIES).describe("How often this repeats."),
+  dayOfMonth: z
+    .number()
+    .int()
+    .min(1)
+    .max(31)
+    .optional()
+    .describe("For monthly frequency: day of month. Ignored for other frequencies."),
+  anchorDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .describe("ISO date (YYYY-MM-DD) used as the reference point for weekly/biweekly/semimonthly cadences. Required for those frequencies."),
+  categoryName: z.string().optional().describe("Category to associate with the bill (optional)."),
+});
+
+registerTool({
+  name: "add_recurring_bill",
+  description:
+    "Add a new recurring bill, subscription, or paycheck. Requires user confirmation. The bill becomes active immediately and starts projecting forward.",
+  riskTier: "destructive",
+  inputSchema: addRecurringBillInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", minLength: 1 },
+      amount: { type: "number", minimum: 0 },
+      kind: { type: "string", enum: ["bill", "income"] },
+      frequency: { type: "string", enum: [...FREQUENCIES] },
+      dayOfMonth: { type: "integer", minimum: 1, maximum: 31 },
+      anchorDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+      categoryName: { type: "string" },
+    },
+    required: ["name", "amount", "kind", "frequency"],
+    additionalProperties: false,
+  },
+  previewer: async (input, ctx) => {
+    let cadenceDetail: string = input.frequency;
+    if (input.frequency === "monthly" && input.dayOfMonth) {
+      cadenceDetail = `monthly on day ${input.dayOfMonth}`;
+    } else if (input.anchorDate) {
+      cadenceDetail = `${input.frequency} starting ${input.anchorDate}`;
+    }
+    let categoryPart = "";
+    if (input.categoryName) {
+      try {
+        const cat = await resolveCategory(ctx.householdId, input.categoryName);
+        categoryPart = `, category "${cat.name}"`;
+      } catch {
+        categoryPart = `, category "${input.categoryName}" (will resolve at confirm)`;
+      }
+    }
+    return `Add ${input.kind === "income" ? "income" : "bill"}: ${input.name} — $${input.amount.toFixed(2)} ${cadenceDetail}${categoryPart}`;
+  },
+  handler: async (input, ctx) => {
+    let categoryId: string | null = null;
+    if (input.categoryName) {
+      const cat = await resolveCategory(ctx.householdId, input.categoryName);
+      categoryId = cat.id;
+    }
+    // Sanity: weekly/biweekly/semimonthly without anchor will project from today.
+    // That's acceptable but worth a soft note in the result.
+    const [inserted] = await db
+      .insert(recurringItemsTable)
+      .values({
+        userId: ctx.actorUserId,
+        householdId: ctx.householdId,
+        name: input.name,
+        kind: input.kind,
+        amount: input.amount.toFixed(2),
+        frequency: input.frequency,
+        dayOfMonth: input.dayOfMonth ?? null,
+        anchorDate: input.anchorDate ?? null,
+        active: "true",
+        categoryId,
+      })
+      .returning();
+
+    const snapshot: AddRecurringBillSnapshot = {
+      kind: "add_recurring_bill",
+      recurringItemId: inserted.id,
+    };
+    return {
+      result: {
+        ok: true,
+        id: inserted.id,
+        name: inserted.name,
+        kind: inserted.kind,
+        amount: Number(inserted.amount),
+        frequency: inserted.frequency,
+        dayOfMonth: inserted.dayOfMonth,
+        anchorDate: inserted.anchorDate,
+        categoryId: inserted.categoryId,
+      },
+      beforeSnapshot: snapshot,
+    };
+  },
+  undoHandler: async (beforeSnapshot, ctx) => {
+    const snap = beforeSnapshot as AddRecurringBillSnapshot;
+    if (snap?.kind !== "add_recurring_bill") {
+      throw new Error("Snapshot shape mismatch");
+    }
+    // Soft-delete: set active='false' instead of dropping the row, so any
+    // already-projected forecast events stay attributable. The original
+    // "add" had no occurrences yet, so this restores the pre-add state
+    // from the user's perspective.
+    await db
+      .update(recurringItemsTable)
+      .set({ active: "false" })
+      .where(
+        and(
+          eq(recurringItemsTable.id, snap.recurringItemId),
+          eq(recurringItemsTable.householdId, ctx.householdId),
+        ),
+      );
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Tool: delete_recurring_bill
+// ---------------------------------------------------------------------------
+
+const deleteRecurringBillInput = z.object({
+  recurringItemName: z
+    .string()
+    .describe("Name of the recurring item to deactivate (case-insensitive substring)."),
+});
+
+registerTool({
+  name: "delete_recurring_bill",
+  description:
+    "Deactivate a recurring item so it stops projecting future occurrences. Soft-delete only — the row remains in the database, just marked inactive. Past transactions are not affected. Requires user confirmation. Undoable for 5 minutes.",
+  riskTier: "destructive",
+  inputSchema: deleteRecurringBillInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      recurringItemName: { type: "string" },
+    },
+    required: ["recurringItemName"],
+    additionalProperties: false,
+  },
+  previewer: async (input, ctx) => {
+    try {
+      const item = await resolveRecurringItem(ctx.householdId, input.recurringItemName);
+      return `Deactivate ${item.kind}: ${item.name} ($${Number(item.amount).toFixed(2)} ${item.frequency}). Past transactions are unaffected; future projections will stop.`;
+    } catch (err) {
+      return `Deactivate recurring item "${input.recurringItemName}" (will resolve at confirm)`;
+    }
+  },
+  handler: async (input, ctx) => {
+    const item = await resolveRecurringItem(ctx.householdId, input.recurringItemName);
+    if (item.active === "false") {
+      return {
+        result: {
+          ok: true,
+          changed: false,
+          message: `${item.name} was already inactive. No change.`,
+        },
+      };
+    }
+    await db
+      .update(recurringItemsTable)
+      .set({ active: "false" })
+      .where(eq(recurringItemsTable.id, item.id));
+
+    const snapshot: DeleteRecurringBillSnapshot = {
+      kind: "delete_recurring_bill",
+      recurringItemId: item.id,
+      previousActive: item.active,
+    };
+    return {
+      result: {
+        ok: true,
+        changed: true,
+        name: item.name,
+        kind: item.kind,
+        amount: Number(item.amount),
+        frequency: item.frequency,
+      },
+      beforeSnapshot: snapshot,
+    };
+  },
+  undoHandler: async (beforeSnapshot, ctx) => {
+    const snap = beforeSnapshot as DeleteRecurringBillSnapshot;
+    if (snap?.kind !== "delete_recurring_bill") {
+      throw new Error("Snapshot shape mismatch");
+    }
+    await db
+      .update(recurringItemsTable)
+      .set({ active: snap.previousActive })
+      .where(
+        and(
+          eq(recurringItemsTable.id, snap.recurringItemId),
+          eq(recurringItemsTable.householdId, ctx.householdId),
+        ),
+      );
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Tool: update_recurring_schedule
+// ---------------------------------------------------------------------------
+
+const updateRecurringScheduleInput = z.object({
+  recurringItemName: z.string().describe("Name of the recurring item."),
+  frequency: z
+    .enum(FREQUENCIES)
+    .optional()
+    .describe("New cadence. Omit to keep existing."),
+  dayOfMonth: z
+    .number()
+    .int()
+    .min(1)
+    .max(31)
+    .nullable()
+    .optional()
+    .describe("New day of month for monthly cadence. Pass null to clear."),
+  anchorDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional()
+    .describe("New anchor date for weekly/biweekly/etc cadences. Pass null to clear."),
+});
+
+registerTool({
+  name: "update_recurring_schedule",
+  description:
+    "Change the cadence, day-of-month, or anchor date of an existing recurring item without changing its amount. Requires user confirmation. Undoable for 5 minutes.",
+  riskTier: "destructive",
+  inputSchema: updateRecurringScheduleInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      recurringItemName: { type: "string" },
+      frequency: { type: "string", enum: [...FREQUENCIES] },
+      dayOfMonth: { type: ["integer", "null"], minimum: 1, maximum: 31 },
+      anchorDate: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+    },
+    required: ["recurringItemName"],
+    additionalProperties: false,
+  },
+  previewer: async (input, ctx) => {
+    try {
+      const item = await resolveRecurringItem(ctx.householdId, input.recurringItemName);
+      const parts: string[] = [];
+      if (input.frequency && input.frequency !== item.frequency) {
+        parts.push(`frequency ${item.frequency} → ${input.frequency}`);
+      }
+      if (input.dayOfMonth !== undefined && input.dayOfMonth !== item.dayOfMonth) {
+        parts.push(`day-of-month ${item.dayOfMonth ?? "(none)"} → ${input.dayOfMonth ?? "(none)"}`);
+      }
+      if (input.anchorDate !== undefined && input.anchorDate !== item.anchorDate) {
+        parts.push(`anchor ${item.anchorDate ?? "(none)"} → ${input.anchorDate ?? "(none)"}`);
+      }
+      if (parts.length === 0) return `${item.name}: no schedule changes (already matches request)`;
+      return `Update schedule for ${item.name}: ${parts.join(", ")}`;
+    } catch {
+      return `Update schedule for "${input.recurringItemName}" (will resolve at confirm)`;
+    }
+  },
+  handler: async (input, ctx) => {
+    const item = await resolveRecurringItem(ctx.householdId, input.recurringItemName);
+    const updates: Record<string, unknown> = {};
+    if (input.frequency !== undefined && input.frequency !== item.frequency) {
+      updates.frequency = input.frequency;
+    }
+    if (input.dayOfMonth !== undefined && input.dayOfMonth !== item.dayOfMonth) {
+      updates.dayOfMonth = input.dayOfMonth;
+    }
+    if (input.anchorDate !== undefined && input.anchorDate !== item.anchorDate) {
+      updates.anchorDate = input.anchorDate;
+    }
+    if (Object.keys(updates).length === 0) {
+      return {
+        result: {
+          ok: true,
+          changed: false,
+          message: `${item.name} already matched the requested schedule.`,
+        },
+      };
+    }
+    const snapshot: UpdateRecurringScheduleSnapshot = {
+      kind: "update_recurring_schedule",
+      recurringItemId: item.id,
+      previous: {
+        frequency: item.frequency,
+        dayOfMonth: item.dayOfMonth,
+        anchorDate: item.anchorDate,
+      },
+    };
+    await db
+      .update(recurringItemsTable)
+      .set(updates)
+      .where(eq(recurringItemsTable.id, item.id));
+    return {
+      result: {
+        ok: true,
+        changed: true,
+        name: item.name,
+        applied: updates,
+      },
+      beforeSnapshot: snapshot,
+    };
+  },
+  undoHandler: async (beforeSnapshot, ctx) => {
+    const snap = beforeSnapshot as UpdateRecurringScheduleSnapshot;
+    if (snap?.kind !== "update_recurring_schedule") {
+      throw new Error("Snapshot shape mismatch");
+    }
+    await db
+      .update(recurringItemsTable)
+      .set({
+        frequency: snap.previous.frequency,
+        dayOfMonth: snap.previous.dayOfMonth,
+        anchorDate: snap.previous.anchorDate,
+      })
+      .where(
+        and(
+          eq(recurringItemsTable.id, snap.recurringItemId),
+          eq(recurringItemsTable.householdId, ctx.householdId),
+        ),
+      );
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Tool: add_one_time_transaction
+// ---------------------------------------------------------------------------
+
+const addOneTimeTransactionInput = z.object({
+  description: z.string().min(1).describe("Transaction description (e.g. 'Cash deposit', 'Refund from Amazon')."),
+  amount: z
+    .number()
+    .describe("Signed amount: positive for deposits/income, negative for expenses. In dollars."),
+  occurredOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .describe("ISO date (YYYY-MM-DD) the transaction occurred on."),
+  categoryName: z.string().optional().describe("Optional category to assign."),
+  account: z
+    .string()
+    .optional()
+    .describe("Optional account label (e.g. 'Cash', 'Checking'). Falls back to 'manual' if omitted."),
+  notes: z.string().optional().describe("Optional free-text notes."),
+});
+
+registerTool({
+  name: "add_one_time_transaction",
+  description:
+    "Add a one-off transaction (deposit, refund, cash purchase, etc.) that isn't part of a Plaid sync. Use for ad-hoc entries. Requires user confirmation. Undoable for 5 minutes.",
+  riskTier: "destructive",
+  inputSchema: addOneTimeTransactionInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      description: { type: "string", minLength: 1 },
+      amount: { type: "number" },
+      occurredOn: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+      categoryName: { type: "string" },
+      account: { type: "string" },
+      notes: { type: "string" },
+    },
+    required: ["description", "amount", "occurredOn"],
+    additionalProperties: false,
+  },
+  previewer: async (input, ctx) => {
+    const direction = input.amount >= 0 ? "deposit/income" : "expense";
+    const sign = input.amount >= 0 ? "+" : "-";
+    let categoryPart = "";
+    if (input.categoryName) {
+      try {
+        const cat = await resolveCategory(ctx.householdId, input.categoryName);
+        categoryPart = `, category "${cat.name}"`;
+      } catch {
+        categoryPart = `, category "${input.categoryName}" (will resolve at confirm)`;
+      }
+    }
+    const accountPart = input.account ? `, account "${input.account}"` : "";
+    return `Add ${direction} ${sign}$${Math.abs(input.amount).toFixed(2)} on ${input.occurredOn}: "${input.description}"${categoryPart}${accountPart}`;
+  },
+  handler: async (input, ctx) => {
+    let categoryId: string | null = null;
+    if (input.categoryName) {
+      const cat = await resolveCategory(ctx.householdId, input.categoryName);
+      categoryId = cat.id;
+    }
+    const [inserted] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: ctx.actorUserId,
+        householdId: ctx.householdId,
+        occurredOn: input.occurredOn,
+        description: input.description,
+        amount: input.amount.toFixed(2),
+        account: input.account ?? null,
+        categoryId,
+        source: "manual",
+        notes: input.notes ?? null,
+      })
+      .returning();
+
+    const snapshot: AddOneTimeTransactionSnapshot = {
+      kind: "add_one_time_transaction",
+      transactionId: inserted.id,
+    };
+    return {
+      result: {
+        ok: true,
+        id: inserted.id,
+        description: inserted.description,
+        amount: Number(inserted.amount),
+        occurredOn: inserted.occurredOn,
+        categoryId: inserted.categoryId,
+      },
+      beforeSnapshot: snapshot,
+    };
+  },
+  undoHandler: async (beforeSnapshot, ctx) => {
+    const snap = beforeSnapshot as AddOneTimeTransactionSnapshot;
+    if (snap?.kind !== "add_one_time_transaction") {
+      throw new Error("Snapshot shape mismatch");
+    }
+    // Hard delete: the row was created by us in this tool call. We know
+    // there are no downstream references because it was just inserted.
+    await db
+      .delete(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.id, snap.transactionId),
+          eq(transactionsTable.householdId, ctx.householdId),
+        ),
+      );
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Tool: delete_one_time_transaction
+// ---------------------------------------------------------------------------
+
+const deleteOneTimeTransactionInput = z.object({
+  transactionId: z
+    .string()
+    .uuid()
+    .describe("UUID of the transaction to delete. Obtain from query_transactions or find_transactions_matching."),
+});
+
+registerTool({
+  name: "delete_one_time_transaction",
+  description:
+    "Hard-delete a manually-added transaction. REFUSES to delete Plaid-synced transactions — those must be deleted via the Plaid sync flow to avoid resurrection on next sync. Requires user confirmation. Undoable for 5 minutes (restores the row).",
+  riskTier: "destructive",
+  inputSchema: deleteOneTimeTransactionInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      transactionId: { type: "string", format: "uuid" },
+    },
+    required: ["transactionId"],
+    additionalProperties: false,
+  },
+  previewer: async (input, ctx) => {
+    const [t] = await db
+      .select()
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.id, input.transactionId),
+          eq(transactionsTable.householdId, ctx.householdId),
+        ),
+      );
+    if (!t) return `Delete transaction ${input.transactionId} (not found)`;
+    if (t.source !== "manual") {
+      return `Cannot delete ${t.source} transaction "${t.description}" — only manual entries can be deleted via this tool.`;
+    }
+    return `Delete transaction: "${t.description}" $${Number(t.amount).toFixed(2)} on ${t.occurredOn}`;
+  },
+  handler: async (input, ctx) => {
+    const [existing] = await db
+      .select()
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.id, input.transactionId),
+          eq(transactionsTable.householdId, ctx.householdId),
+        ),
+      );
+    if (!existing) {
+      throw new Error(`Transaction ${input.transactionId} not found in this household.`);
+    }
+    if (existing.source !== "manual") {
+      throw new Error(
+        `Refusing to delete: transaction source is "${existing.source}". Only manual entries can be deleted via this tool.`,
+      );
+    }
+    const snapshot: DeleteOneTimeTransactionSnapshot = {
+      kind: "delete_one_time_transaction",
+      transaction: {
+        id: existing.id,
+        userId: existing.userId,
+        householdId: existing.householdId,
+        occurredOn: existing.occurredOn,
+        description: existing.description,
+        amount: existing.amount,
+        account: existing.account,
+        categoryId: existing.categoryId,
+        source: existing.source,
+        notes: existing.notes,
+      },
+    };
+    await db.delete(transactionsTable).where(eq(transactionsTable.id, existing.id));
+    return {
+      result: {
+        ok: true,
+        deleted: {
+          description: existing.description,
+          amount: Number(existing.amount),
+          occurredOn: existing.occurredOn,
+        },
+      },
+      beforeSnapshot: snapshot,
+    };
+  },
+  undoHandler: async (beforeSnapshot, ctx) => {
+    const snap = beforeSnapshot as DeleteOneTimeTransactionSnapshot;
+    if (snap?.kind !== "delete_one_time_transaction") {
+      throw new Error("Snapshot shape mismatch");
+    }
+    // Re-insert with the original id so any potential references are
+    // preserved. Drizzle accepts explicit id on insert.
+    await db.insert(transactionsTable).values({
+      id: snap.transaction.id,
+      userId: snap.transaction.userId,
+      householdId: snap.transaction.householdId,
+      occurredOn: snap.transaction.occurredOn,
+      description: snap.transaction.description,
+      amount: snap.transaction.amount,
+      account: snap.transaction.account,
+      categoryId: snap.transaction.categoryId,
+      source: snap.transaction.source,
+      notes: snap.transaction.notes,
+    });
+  },
+});
