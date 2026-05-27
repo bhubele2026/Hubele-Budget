@@ -6,8 +6,11 @@ export const modules: ModuleMap = {
   "./components/mockups/budget-design-system/WarmBanking.tsx": () => import("../components/mockups/budget-design-system/WarmBanking.tsx"),
   "./components/mockups/h2-redesign/EditorialWarm.tsx": () => import("../components/mockups/h2-redesign/EditorialWarm.tsx"),
   "./components/mockups/h2-redesign/FintechDark.tsx": () => import("../components/mockups/h2-redesign/FintechDark.tsx"),
+  "./components/mockups/h2-redesign/FintechMinimal.tsx": () => import("../components/mockups/h2-redesign/FintechMinimal.tsx"),
   "./components/mockups/h2-redesign/GraphiteVault.tsx": () => import("../components/mockups/h2-redesign/GraphiteVault.tsx"),
   "./components/mockups/h2-redesign/ObsidianGlass.tsx": () => import("../components/mockups/h2-redesign/ObsidianGlass.tsx"),
   "./components/mockups/h2-redesign/QuietBank.tsx": () => import("../components/mockups/h2-redesign/QuietBank.tsx"),
-  "./components/mockups/h2-redesign/SteelAtelier.tsx": () => import("../components/mockups/h2-redesign/SteelAtelier.tsx")
+  "./components/mockups/h2-redesign/SlateProfessional.tsx": () => import("../components/mockups/h2-redesign/SlateProfessional.tsx"),
+  "./components/mockups/h2-redesign/SteelAtelier.tsx": () => import("../components/mockups/h2-redesign/SteelAtelier.tsx"),
+  "./components/mockups/h2-redesign/WarmPrivateBanking.tsx": () => import("../components/mockups/h2-redesign/WarmPrivateBanking.tsx")
 };
