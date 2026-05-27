@@ -7406,4 +7406,26 @@ export declare const PostAdvisorChatResponse: zod.ZodObject<{
         outputTokens?: number | undefined;
     } | undefined;
 }>;
+/**
+ * Undoes the effects of an advisor tool call within a 5-minute window
+of its execution. Only tools registered with an undoHandler are
+undoable. Household-scoped — a request can only undo tool calls
+attached to its own household's audit log.
+
+ * @summary Reverse a previously executed advisor tool call
+ */
+export declare const PostAdvisorUndoParams: zod.ZodObject<{
+    auditLogId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    auditLogId: string;
+}, {
+    auditLogId: string;
+}>;
+export declare const PostAdvisorUndoResponse: zod.ZodObject<{
+    ok: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    ok: boolean;
+}, {
+    ok: boolean;
+}>;
 //# sourceMappingURL=api.d.ts.map

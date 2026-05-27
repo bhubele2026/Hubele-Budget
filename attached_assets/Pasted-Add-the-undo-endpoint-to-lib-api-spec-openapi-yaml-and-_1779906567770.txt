@@ -1,0 +1,65 @@
+Add the undo endpoint to lib/api-spec/openapi.yaml and regenerate the client.
+
+PIECE 1 — Add this path entry under the existing paths: section. Good placement: right after the existing /advisor/chat block.
+
+  /advisor/undo/{auditLogId}:
+    post:
+      operationId: postAdvisorUndo
+      tags: [advisor]
+      summary: Reverse a previously executed advisor tool call
+      description: |
+        Undoes the effects of an advisor tool call within a 5-minute window
+        of its execution. Only tools registered with an undoHandler are
+        undoable. Household-scoped — a request can only undo tool calls
+        attached to its own household's audit log.
+      parameters:
+        - name: auditLogId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Undo succeeded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdvisorUndoResponse" }
+        "400":
+          description: |
+            Undo not possible: window expired, tool not undoable, already
+            undone, or not in 'executed' status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdvisorUndoErrorResponse" }
+        "401":
+          description: Unauthorized
+        "500":
+          description: Undo handler threw unexpectedly
+
+PIECE 2 — Add these two schemas under components.schemas:
+
+    AdvisorUndoResponse:
+      type: object
+      additionalProperties: false
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+
+    AdvisorUndoErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+
+PIECE 3 — Run codegen:
+
+  pnpm --filter @workspace/api-spec run codegen
+
+Confirm:
+- Codegen exits cleanly
+- postAdvisorUndo appears in lib/api-client-react/src/generated/api.ts
+- AdvisorUndoResponse type appears in lib/api-zod/src/generated/types/
+
+Do not restart the dev server.

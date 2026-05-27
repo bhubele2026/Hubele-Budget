@@ -20,6 +20,8 @@ import type {
   AdvisorChatRequest,
   AdvisorChatResponse,
   AdvisorNudge,
+  AdvisorUndoErrorResponse,
+  AdvisorUndoResponse,
   AmexAnchor,
   AmexAnchorInput,
   AprilChaseSeedResult,
@@ -8246,4 +8248,94 @@ export const usePostAdvisorChat = <
   TContext
 > => {
   return useMutation(getPostAdvisorChatMutationOptions(options));
+};
+
+/**
+ * Undoes the effects of an advisor tool call within a 5-minute window
+of its execution. Only tools registered with an undoHandler are
+undoable. Household-scoped — a request can only undo tool calls
+attached to its own household's audit log.
+
+ * @summary Reverse a previously executed advisor tool call
+ */
+export const getPostAdvisorUndoUrl = (auditLogId: string) => {
+  return `/api/advisor/undo/${auditLogId}`;
+};
+
+export const postAdvisorUndo = async (
+  auditLogId: string,
+  options?: RequestInit,
+): Promise<AdvisorUndoResponse> => {
+  return customFetch<AdvisorUndoResponse>(getPostAdvisorUndoUrl(auditLogId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getPostAdvisorUndoMutationOptions = <
+  TError = ErrorType<AdvisorUndoErrorResponse | void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postAdvisorUndo>>,
+    TError,
+    { auditLogId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof postAdvisorUndo>>,
+  TError,
+  { auditLogId: string },
+  TContext
+> => {
+  const mutationKey = ["postAdvisorUndo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof postAdvisorUndo>>,
+    { auditLogId: string }
+  > = (props) => {
+    const { auditLogId } = props ?? {};
+
+    return postAdvisorUndo(auditLogId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PostAdvisorUndoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof postAdvisorUndo>>
+>;
+
+export type PostAdvisorUndoMutationError =
+  ErrorType<AdvisorUndoErrorResponse | void>;
+
+/**
+ * @summary Reverse a previously executed advisor tool call
+ */
+export const usePostAdvisorUndo = <
+  TError = ErrorType<AdvisorUndoErrorResponse | void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postAdvisorUndo>>,
+    TError,
+    { auditLogId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof postAdvisorUndo>>,
+  TError,
+  { auditLogId: string },
+  TContext
+> => {
+  return useMutation(getPostAdvisorUndoMutationOptions(options));
 };

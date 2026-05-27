@@ -1696,6 +1696,39 @@ paths:
         "503":
           description: Advisor not configured on this server
 
+  /advisor/undo/{auditLogId}:
+    post:
+      operationId: postAdvisorUndo
+      tags: [advisor]
+      summary: Reverse a previously executed advisor tool call
+      description: |
+        Undoes the effects of an advisor tool call within a 5-minute window
+        of its execution. Only tools registered with an undoHandler are
+        undoable. Household-scoped — a request can only undo tool calls
+        attached to its own household's audit log.
+      parameters:
+        - name: auditLogId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Undo succeeded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdvisorUndoResponse" }
+        "400":
+          description: |
+            Undo not possible: window expired, tool not undoable, already
+            undone, or not in 'executed' status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdvisorUndoErrorResponse" }
+        "401":
+          description: Unauthorized
+        "500":
+          description: Undo handler threw unexpectedly
+
 components:
   schemas:
     HealthStatus:
@@ -4008,3 +4041,19 @@ components:
         auditLogId:
           type: string
           description: Reference to the advisor_audit_log row for this call.
+
+    AdvisorUndoResponse:
+      type: object
+      additionalProperties: false
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+
+    AdvisorUndoErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string

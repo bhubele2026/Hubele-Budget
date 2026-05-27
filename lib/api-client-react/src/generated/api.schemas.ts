@@ -2413,6 +2413,14 @@ export interface AdvisorChatResponse {
   usage?: AdvisorChatResponseUsage;
 }
 
+export interface AdvisorUndoResponse {
+  ok: boolean;
+}
+
+export interface AdvisorUndoErrorResponse {
+  error: string;
+}
+
 export type ListTransactionsParams = {
   from?: string;
   to?: string;

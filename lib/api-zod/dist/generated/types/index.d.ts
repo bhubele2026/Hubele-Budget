@@ -16,6 +16,8 @@ export * from "./advisorNudge";
 export * from "./advisorNudgeSeverity";
 export * from "./advisorNudgeSource";
 export * from "./advisorToolCall";
+export * from "./advisorUndoErrorResponse";
+export * from "./advisorUndoResponse";
 export * from "./amexAnchor";
 export * from "./amexAnchorInput";
 export * from "./amexAnchorSource";
