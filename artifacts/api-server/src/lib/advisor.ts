@@ -451,6 +451,7 @@ export interface ToolCallSummary {
   // Compact result summary for UI display. Full payload lives in audit log.
   summary: string;
   auditLogId?: string;
+  proposal?: { id: string; summary: string };
 }
 
 export interface ChatResult {
@@ -528,12 +529,27 @@ export async function chat(
 
       let summary: string;
       if (dispatch.ok) {
-        summary = compactSummary(block.name, dispatch.result);
-        toolResultBlocks.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: JSON.stringify(dispatch.result),
-        });
+        if (dispatch.proposal) {
+          summary = `Proposed: ${dispatch.proposal.summary}`;
+          // Tell the model the action is pending user confirmation so it
+          // doesn't assume the change has taken effect.
+          toolResultBlocks.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: JSON.stringify({
+              status: "pending_user_confirmation",
+              proposalId: dispatch.proposal.id,
+              summary: dispatch.proposal.summary,
+            }),
+          });
+        } else {
+          summary = compactSummary(block.name, dispatch.result);
+          toolResultBlocks.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: JSON.stringify(dispatch.result),
+          });
+        }
       } else {
         summary = dispatch.error ?? "Tool failed";
         toolResultBlocks.push({
@@ -549,6 +565,7 @@ export async function chat(
         ok: dispatch.ok,
         summary,
         auditLogId: dispatch.auditLogId,
+        proposal: dispatch.proposal,
       });
     }
 

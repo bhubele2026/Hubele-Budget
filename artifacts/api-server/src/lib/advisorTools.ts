@@ -4,6 +4,7 @@ import {
   db,
   budgetCategoriesTable,
   advisorAuditLogTable,
+  advisorProposalsTable,
 } from "@workspace/db";
 import { logger } from "./logger";
 
@@ -43,6 +44,13 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
     beforeSnapshot: unknown,
     ctx: ToolContext,
   ) => Promise<void>;
+  /**
+   * For destructive tools: generates the human-readable summary shown
+   * in the confirmation card before execution. Receives the validated
+   * input; should return a short description like "Add recurring bill:
+   * Netflix, $15.99/month, day 14, category Streaming".
+   */
+  previewer?: (input: TInput, ctx: ToolContext) => Promise<string> | string;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,7 +100,10 @@ export interface DispatchResult {
   result?: unknown;
   error?: string;
   auditLogId?: string;
+  proposal?: { id: string; summary: string };
 }
+
+const PROPOSAL_WINDOW_MS = 15 * 60 * 1000;
 
 export async function dispatchTool(
   toolName: string,
@@ -121,6 +132,39 @@ export async function dispatchTool(
       })
       .returning({ id: advisorAuditLogTable.id });
     return { ok: false, toolName, error: errMsg, auditLogId: row?.id };
+  }
+
+  // Destructive tools don't auto-execute. Instead we save a proposal
+  // row and return it; the UI shows a confirmation card, and the user's
+  // confirm click re-enters via confirmProposal() which calls the
+  // handler path below.
+  if (tool.riskTier === "destructive") {
+    let summary: string;
+    try {
+      summary = tool.previewer
+        ? await tool.previewer(parsed.data, ctx)
+        : JSON.stringify(parsed.data);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      return { ok: false, toolName, error: `Preview failed: ${errMsg}` };
+    }
+    const [proposalRow] = await db
+      .insert(advisorProposalsTable)
+      .values({
+        householdId: ctx.householdId,
+        actorUserId: ctx.actorUserId,
+        toolName,
+        args: parsed.data as any,
+        summary,
+        status: "pending",
+        chatMessageId: ctx.chatMessageId,
+      })
+      .returning({ id: advisorProposalsTable.id });
+    return {
+      ok: true,
+      toolName,
+      proposal: { id: proposalRow!.id, summary },
+    };
   }
 
   // Insert "proposed" / "auto_executed" row up front so we have an id to
@@ -161,6 +205,126 @@ export async function dispatchTool(
       .where(eq(advisorAuditLogTable.id, auditLogId!));
     return { ok: false, toolName, error: errMsg, auditLogId };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Proposals (destructive-tool confirmation flow)
+// ---------------------------------------------------------------------------
+
+export async function confirmProposal(
+  proposalId: string,
+  ctx: ToolContext,
+): Promise<DispatchResult> {
+  const [row] = await db
+    .select()
+    .from(advisorProposalsTable)
+    .where(eq(advisorProposalsTable.id, proposalId));
+
+  if (!row) {
+    return { ok: false, toolName: "", error: "Proposal not found" };
+  }
+  if (row.householdId !== ctx.householdId) {
+    return { ok: false, toolName: row.toolName, error: "Proposal not found" };
+  }
+  if (row.status !== "pending") {
+    return {
+      ok: false,
+      toolName: row.toolName,
+      error: `Proposal is ${row.status}, not pending`,
+    };
+  }
+  if (Date.now() - row.createdAt.getTime() > PROPOSAL_WINDOW_MS) {
+    await db
+      .update(advisorProposalsTable)
+      .set({ status: "expired", resolvedAt: new Date() })
+      .where(eq(advisorProposalsTable.id, proposalId));
+    return { ok: false, toolName: row.toolName, error: "Proposal expired" };
+  }
+
+  // Mark confirmed first so a double-click can't replay it.
+  await db
+    .update(advisorProposalsTable)
+    .set({ status: "confirmed", resolvedAt: new Date() })
+    .where(eq(advisorProposalsTable.id, proposalId));
+
+  // Re-dispatch via the normal handler path. We bypass the destructive
+  // gate by calling the tool's handler directly through the same dispatch
+  // machinery but with riskTier temporarily treated as reversible: simplest
+  // is to invoke the handler ourselves with full audit-log bookkeeping.
+  const tool = registry.get(row.toolName);
+  if (!tool) {
+    return { ok: false, toolName: row.toolName, error: `Unknown tool: ${row.toolName}` };
+  }
+  const parsed = tool.inputSchema.safeParse(row.args);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      toolName: row.toolName,
+      error: `Stored proposal args invalid: ${parsed.error.message}`,
+    };
+  }
+  const [logRow] = await db
+    .insert(advisorAuditLogTable)
+    .values({
+      householdId: ctx.householdId,
+      actorUserId: ctx.actorUserId,
+      toolName: row.toolName,
+      args: parsed.data as any,
+      status: "confirmed",
+      chatMessageId: row.chatMessageId,
+    })
+    .returning({ id: advisorAuditLogTable.id });
+  const auditLogId = logRow?.id;
+  try {
+    const { result, beforeSnapshot } = await tool.handler(parsed.data, ctx);
+    await db
+      .update(advisorAuditLogTable)
+      .set({
+        status: "executed",
+        beforeSnapshot: (beforeSnapshot ?? null) as any,
+      })
+      .where(eq(advisorAuditLogTable.id, auditLogId!));
+    return { ok: true, toolName: row.toolName, result, auditLogId };
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    logger.error(
+      { err, toolName: row.toolName, householdId: ctx.householdId, proposalId },
+      "advisor: confirmed proposal execution failed",
+    );
+    await db
+      .update(advisorAuditLogTable)
+      .set({ status: "failed", errorMessage: errMsg })
+      .where(eq(advisorAuditLogTable.id, auditLogId!));
+    return { ok: false, toolName: row.toolName, error: errMsg, auditLogId };
+  }
+}
+
+export async function cancelProposal(
+  proposalId: string,
+  ctx: ToolContext,
+): Promise<DispatchResult> {
+  const [row] = await db
+    .select()
+    .from(advisorProposalsTable)
+    .where(eq(advisorProposalsTable.id, proposalId));
+  if (!row) {
+    return { ok: false, toolName: "", error: "Proposal not found" };
+  }
+  if (row.householdId !== ctx.householdId) {
+    return { ok: false, toolName: row.toolName, error: "Proposal not found" };
+  }
+  if (row.status !== "pending") {
+    return {
+      ok: false,
+      toolName: row.toolName,
+      error: `Proposal is ${row.status}, not pending`,
+    };
+  }
+  await db
+    .update(advisorProposalsTable)
+    .set({ status: "cancelled", resolvedAt: new Date() })
+    .where(eq(advisorProposalsTable.id, proposalId));
+  return { ok: true, toolName: row.toolName };
 }
 
 // ---------------------------------------------------------------------------
