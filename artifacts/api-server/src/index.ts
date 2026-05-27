@@ -20,6 +20,9 @@ import "./lib/advisorReadTools";
 import "./lib/advisorWriteTools";
 import "./lib/advisorDestructiveTools";
 import "./lib/advisorMemoryTools";
+import "./lib/advisorMappingAndNotesTools";
+import "./lib/advisorDebtAndSnapshotTools";
+import "./lib/advisorCategoryTools";
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,
