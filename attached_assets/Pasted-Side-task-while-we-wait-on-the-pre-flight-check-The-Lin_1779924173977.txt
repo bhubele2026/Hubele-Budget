@@ -1,0 +1,23 @@
+Side task while we wait on the pre-flight check. The "Link" button on debt rows is broken.
+
+What I did: clicked "Link" next to "Chase Amazon Prime Visa" on the debts page.
+
+What I expected: a fresh Plaid Link flow opens, asks me to pick a bank, I search for Chase, log in, and link the Chase Amazon Prime Visa card to that debt row.
+
+What actually happened: Plaid opened a "Link Chase Ama..." dialog but it's pre-populated with my EXISTING saved Amex accounts (Blue Cash Preferred, Delta SkyMiles Gold, Platinum Card) — all from the wrong institution. Then a 2FA modal popped on top asking for a code sent to a phone ending in 0912 (that's my AMEX 2FA, not Chase). The Code input box is greyed out and I can't type into it, and the Continue button stays disabled. The whole flow is stuck.
+
+This is a per-debt-row Link broken state, not a Plaid issue. Investigate:
+
+1. Find the "Link" button handler on the debts page (artifacts/h2budget/src/pages/debts.tsx or wherever the row UI lives). Trace what it does when clicked.
+
+2. Most likely: instead of calling /link/token/create with a fresh public token (for a NEW institution link), it's reusing an existing item's access_token — probably the Amex one as the "default." That's why Plaid thinks I'm re-authing Amex.
+
+3. The correct flow per debt row should be: /link/token/create with no access_token (=> link a new institution), then on success, capture the resulting Plaid account_id, and bind that to the debt row's plaid_account_id column. NOT a re-auth of an existing item.
+
+4. Fix the handler so each row's Link button starts a fresh institution link, then upon successful linking, presents the user with the new institution's accounts and asks "Which of these matches this debt (Chase Amazon Prime Visa)?" so the user can pick.
+
+5. Also confirm: does the "Link another bank" button at the bottom of the dialog use the SAME (broken) flow, or a different one? If different, document why so we don't accidentally break it.
+
+6. Add a regression test: clicking Link on a debt row whose linked institution doesn't exist yet should open a fresh institution-search flow, NOT a re-auth of an existing item.
+
+Also, the modal-stuck-on-2FA

@@ -67,6 +67,8 @@ externalPort = 3000
 
 [userenv.shared]
 VITE_CLERK_PUBLISHABLE_KEY = "pk_test_Y2FsbS1sYWNld2luZy05Ny5jbGVyay5hY2NvdW50cy5kZXYk"
+PLAID_WEBHOOK_URL = "https://hubele-budget.replit.app/api/plaid/webhook"
+PLAID_OPTIONAL_PRODUCTS_CSV = "liabilities"
 
 [userenv.production]
 
