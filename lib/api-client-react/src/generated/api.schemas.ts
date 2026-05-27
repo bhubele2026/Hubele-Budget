@@ -69,6 +69,17 @@ false; toggled explicitly via the "Not in avalanche" chip on
 the Amex page.
  */
   isExternalCardPayment: boolean;
+  /**
+   * (#762 — Phase B) ISO8601 timestamp the user clicked "Send
+to Review" on this row, or null when the row has never been
+promoted into the Review workflow. The Chase / Amex
+source-of-truth views ignore this column entirely; only the
+Review pipeline on /forecast filters on it. Drives the "✓
+in review" badge and per-row affordance on the Chase page.
+
+   * @nullable
+   */
+  sentToReviewAt?: string | null;
   /** @nullable */
   notes?: string | null;
   source: string;
@@ -597,6 +608,32 @@ updated rows. Clients invalidate the corresponding budget
 month queries so per-line actuals refresh.
  */
   affectedMonths: string[];
+}
+
+export interface SendTransactionsToReviewInput {
+  /**
+   * Transaction ids to promote into (or revoke from) the
+Review workflow. Capped at 200 per request; a longer list
+is rejected with a 400 to keep the surface predictable —
+the bulk affordance on the Chase page is sized far below
+this cap. Ids outside the caller's household are silently
+ignored (they fall out of the household-scoped UPDATE
+filter, so the response's `updated` count reflects only
+rows actually touched).
+
+   * @maxItems 200
+   */
+  transactionIds: string[];
+}
+
+export interface SendTransactionsToReviewResult {
+  /** Number of transactions whose `sent_to_review_at` actually
+changed. Rows already in the desired state (sent vs. not
+sent) are silently skipped so a re-issue is safe and the
+5-second Undo affordance on the success toast can fire
+without double-counting.
+ */
+  updated: number;
 }
 
 export interface BulkSetForecastFlagInput {

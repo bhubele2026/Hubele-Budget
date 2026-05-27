@@ -52,6 +52,17 @@ export interface Transaction {
   the Amex page.
    */
     isExternalCardPayment: boolean;
+    /**
+     * (#762 — Phase B) ISO8601 timestamp the user clicked "Send
+  to Review" on this row, or null when the row has never been
+  promoted into the Review workflow. The Chase / Amex
+  source-of-truth views ignore this column entirely; only the
+  Review pipeline on /forecast filters on it. Drives the "✓
+  in review" badge and per-row affordance on the Chase page.
+  
+     * @nullable
+     */
+    sentToReviewAt?: string | null;
     /** @nullable */
     notes?: string | null;
     source: string;

@@ -191,6 +191,8 @@ export * from "./ruleActionKind";
 export * from "./ruleActionMatchType";
 export * from "./ruleAttribution";
 export * from "./seedDefaultBudgetResult";
+export * from "./sendTransactionsToReviewInput";
+export * from "./sendTransactionsToReviewResult";
 export * from "./setBankSnapshotInput";
 export * from "./settings";
 export * from "./settingsInput";

@@ -3314,27 +3314,65 @@ export default function ForecastPage({
       </div>
       </>)}
 
-      {mode === "review" && bankInbox.length === 0 && (
-        <Card
-          className="border-primary/30 bg-primary/5"
-          data-testid="review-empty-state"
-        >
-          <CardContent className="p-6 flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="w-4 h-4 text-primary" />
-              <span className="font-medium">All caught up — Review is empty.</span>
-              <span className="text-muted-foreground">
-                Send a Chase transaction to Forecast to start reviewing.
-              </span>
-            </div>
-            <Button asChild size="sm" variant="outline" className="h-8">
-              <Link href="/forecast" data-testid="link-back-to-forecast">
-                Back to Cash Forecast →
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      {mode === "review" && bankInbox.length === 0 && (() => {
+        // (#762 — Phase B) Two distinct empty states:
+        //   * "Nothing to review yet" — fires when the Review pipeline
+        //     has zero rows because the user has never used the
+        //     Send-to-Review affordance (register.allBank is empty —
+        //     the /forecast endpoint filters out `sent_to_review_at
+        //     IS NULL` rows, so an empty allBank means nothing has
+        //     been promoted). Points at the Chase page so the user
+        //     has a one-click path to start the workflow.
+        //   * "All caught up — Review is empty" — preserves the
+        //     pre-Phase-B copy for the case where rows HAVE been
+        //     promoted but the user has finished matching / marking
+        //     them all. Points back at the Cash Forecast tab.
+        const nothingSentYet = !register || register.allBank.length === 0;
+        if (nothingSentYet) {
+          return (
+            <Card
+              className="border-primary/30 bg-primary/5"
+              data-testid="review-empty-state-nothing-sent"
+            >
+              <CardContent className="p-6 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-primary" />
+                  <span className="font-medium">Nothing to review yet.</span>
+                  <span className="text-muted-foreground">
+                    Open Chase and send transactions to Review to start.
+                  </span>
+                </div>
+                <Button asChild size="sm" variant="outline" className="h-8">
+                  <Link href="/transactions" data-testid="link-open-chase">
+                    Open Chase →
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          );
+        }
+        return (
+          <Card
+            className="border-primary/30 bg-primary/5"
+            data-testid="review-empty-state"
+          >
+            <CardContent className="p-6 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle2 className="w-4 h-4 text-primary" />
+                <span className="font-medium">All caught up — Review is empty.</span>
+                <span className="text-muted-foreground">
+                  Send a Chase transaction to Forecast to start reviewing.
+                </span>
+              </div>
+              <Button asChild size="sm" variant="outline" className="h-8">
+                <Link href="/forecast" data-testid="link-back-to-forecast">
+                  Back to Cash Forecast →
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {mode === "overall" && bankInbox.length > 0 && (
         <Card

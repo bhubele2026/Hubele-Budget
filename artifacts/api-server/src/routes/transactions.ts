@@ -35,6 +35,8 @@ import {
   BulkSetForecastFlagBody,
   BulkUpdateTransactionsBody,
   bulkUpdateTransactionsBodyIdsMax,
+  SendTransactionsToReviewBody,
+  sendTransactionsToReviewBodyTransactionIdsMax,
 } from "@workspace/api-zod";
 
 void UpdateTransactionBody;
@@ -1212,6 +1214,83 @@ router.post(
     res.json({ updated: affectedIds.length, affectedIds });
   },
 );
+
+// (#762 — Phase B) Manual Send-to-Review gate. The Review pipeline on
+// /forecast now filters out any transaction whose `sent_to_review_at` is
+// NULL, so users have to explicitly promote a row from the Chase /
+// Amex page before it shows up in the Review tab. These two endpoints
+// flip the column on / off in bulk. We share one zod schema between
+// the send and unsend variants (only the column write differs) and
+// reuse the household-scoped UPDATE pattern from
+// bulk-set-forecast-flag above — ids belonging to other households
+// silently fall out of the WHERE filter and never contribute to the
+// `updated` count, so a hand-crafted payload can't reveal which ids
+// exist outside the caller's household. The 200-id cap is enforced
+// by the generated zod schema; longer requests get a 400 from the
+// safeParse branch before we touch the database.
+router.post(
+  "/transactions/send-to-review",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const parsed = SendTransactionsToReviewBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const { transactionIds } = parsed.data;
+    if (transactionIds.length === 0) {
+      res.json({ updated: 0 });
+      return;
+    }
+    // Only stamp rows that are still NULL so a re-issued request (e.g.
+    // a duplicate click) doesn't bump the timestamp forward and reset
+    // the bake clock for downstream analytics.
+    const updated = await db
+      .update(transactionsTable)
+      .set({ sentToReviewAt: sql`now()` })
+      .where(
+        and(
+          eq(transactionsTable.householdId, req.householdId!),
+          inArray(transactionsTable.id, transactionIds),
+          sql`${transactionsTable.sentToReviewAt} is null`,
+        ),
+      )
+      .returning({ id: transactionsTable.id });
+    res.json({ updated: updated.length });
+  },
+);
+
+router.post(
+  "/transactions/unsend-from-review",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const parsed = SendTransactionsToReviewBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const { transactionIds } = parsed.data;
+    if (transactionIds.length === 0) {
+      res.json({ updated: 0 });
+      return;
+    }
+    const updated = await db
+      .update(transactionsTable)
+      .set({ sentToReviewAt: null })
+      .where(
+        and(
+          eq(transactionsTable.householdId, req.householdId!),
+          inArray(transactionsTable.id, transactionIds),
+          sql`${transactionsTable.sentToReviewAt} is not null`,
+        ),
+      )
+      .returning({ id: transactionsTable.id });
+    res.json({ updated: updated.length });
+  },
+);
+// Silence unused-import lint for the 200 cap constant — it's exported
+// so tests and the client can assert against the same number.
+void sendTransactionsToReviewBodyTransactionIdsMax;
 
 // (#493) "Reset to auto" — clear the user-overridden flag on a single
 // transaction so the next Plaid sync / XLSX import / aprilChaseSeed pass

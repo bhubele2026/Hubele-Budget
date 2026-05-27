@@ -67,6 +67,12 @@ export const GetDashboardResponse = zod.object({
         .describe(
           '(#632 follow-up) User-set per-row flag marking a card payment\nas going to a card that is NOT in our debt avalanche (e.g. a\nspouse\'s external card). Excluded from avalanche actuals so\nit never inflates \"extra\" debt-payoff capacity. Defaults to\nfalse; toggled explicitly via the \"Not in avalanche\" chip on\nthe Amex page.\n',
         ),
+      sentToReviewAt: zod
+        .string()
+        .nullish()
+        .describe(
+          '(#762 — Phase B) ISO8601 timestamp the user clicked \"Send\nto Review\" on this row, or null when the row has never been\npromoted into the Review workflow. The Chase \/ Amex\nsource-of-truth views ignore this column entirely; only the\nReview pipeline on \/forecast filters on it. Drives the \"✓\nin review\" badge and per-row affordance on the Chase page.\n',
+        ),
       notes: zod.string().nullish(),
       source: zod.string(),
       member: zod.string().nullish(),
@@ -161,6 +167,12 @@ export const ListTransactionsResponseItem = zod.object({
     .boolean()
     .describe(
       '(#632 follow-up) User-set per-row flag marking a card payment\nas going to a card that is NOT in our debt avalanche (e.g. a\nspouse\'s external card). Excluded from avalanche actuals so\nit never inflates \"extra\" debt-payoff capacity. Defaults to\nfalse; toggled explicitly via the \"Not in avalanche\" chip on\nthe Amex page.\n',
+    ),
+  sentToReviewAt: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#762 — Phase B) ISO8601 timestamp the user clicked \"Send\nto Review\" on this row, or null when the row has never been\npromoted into the Review workflow. The Chase \/ Amex\nsource-of-truth views ignore this column entirely; only the\nReview pipeline on \/forecast filters on it. Drives the \"✓\nin review\" badge and per-row affordance on the Chase page.\n',
     ),
   notes: zod.string().nullish(),
   source: zod.string(),
@@ -296,6 +308,12 @@ export const UpdateTransactionResponse = zod
       .boolean()
       .describe(
         '(#632 follow-up) User-set per-row flag marking a card payment\nas going to a card that is NOT in our debt avalanche (e.g. a\nspouse\'s external card). Excluded from avalanche actuals so\nit never inflates \"extra\" debt-payoff capacity. Defaults to\nfalse; toggled explicitly via the \"Not in avalanche\" chip on\nthe Amex page.\n',
+      ),
+    sentToReviewAt: zod
+      .string()
+      .nullish()
+      .describe(
+        '(#762 — Phase B) ISO8601 timestamp the user clicked \"Send\nto Review\" on this row, or null when the row has never been\npromoted into the Review workflow. The Chase \/ Amex\nsource-of-truth views ignore this column entirely; only the\nReview pipeline on \/forecast filters on it. Drives the \"✓\nin review\" badge and per-row affordance on the Chase page.\n',
       ),
     notes: zod.string().nullish(),
     source: zod.string(),
@@ -475,6 +493,12 @@ export const ClearTransferOverrideResponse = zod.object({
     .boolean()
     .describe(
       '(#632 follow-up) User-set per-row flag marking a card payment\nas going to a card that is NOT in our debt avalanche (e.g. a\nspouse\'s external card). Excluded from avalanche actuals so\nit never inflates \"extra\" debt-payoff capacity. Defaults to\nfalse; toggled explicitly via the \"Not in avalanche\" chip on\nthe Amex page.\n',
+    ),
+  sentToReviewAt: zod
+    .string()
+    .nullish()
+    .describe(
+      '(#762 — Phase B) ISO8601 timestamp the user clicked \"Send\nto Review\" on this row, or null when the row has never been\npromoted into the Review workflow. The Chase \/ Amex\nsource-of-truth views ignore this column entirely; only the\nReview pipeline on \/forecast filters on it. Drives the \"✓\nin review\" badge and per-row affordance on the Chase page.\n',
     ),
   notes: zod.string().nullish(),
   source: zod.string(),
@@ -678,6 +702,61 @@ export const BulkUpdateTransactionsResponse = zod.object({
     .array(zod.string())
     .describe(
       "Distinct YYYY-MM-01 month-start strings spanning the\nupdated rows. Clients invalidate the corresponding budget\nmonth queries so per-line actuals refresh.\n",
+    ),
+});
+
+/**
+ * @summary (#762 — Phase B) Promote up to 200 transactions into the Review
+workflow by stamping `sent_to_review_at = NOW()`. The Chase /
+Amex / source-of-truth views are unaffected — only the Review
+pipeline on /forecast filters on the column. Rows already sent
+are silently skipped. Scoped to the caller's household so other
+households' ids are no-ops.
+
+ */
+export const sendTransactionsToReviewBodyTransactionIdsMax = 200;
+
+export const SendTransactionsToReviewBody = zod.object({
+  transactionIds: zod
+    .array(zod.string())
+    .max(sendTransactionsToReviewBodyTransactionIdsMax)
+    .describe(
+      "Transaction ids to promote into (or revoke from) the\nReview workflow. Capped at 200 per request; a longer list\nis rejected with a 400 to keep the surface predictable —\nthe bulk affordance on the Chase page is sized far below\nthis cap. Ids outside the caller's household are silently\nignored (they fall out of the household-scoped UPDATE\nfilter, so the response's `updated` count reflects only\nrows actually touched).\n",
+    ),
+});
+
+export const SendTransactionsToReviewResponse = zod.object({
+  updated: zod
+    .number()
+    .describe(
+      "Number of transactions whose `sent_to_review_at` actually\nchanged. Rows already in the desired state (sent vs. not\nsent) are silently skipped so a re-issue is safe and the\n5-second Undo affordance on the success toast can fire\nwithout double-counting.\n",
+    ),
+});
+
+/**
+ * @summary (#762 — Phase B) Reverse a Send-to-Review by clearing
+`sent_to_review_at = NULL` on up to 200 transactions. Used by
+the 5-second "Undo" affordance on the success toast and by the
+symmetric Review-tab "unsend" flow. Same household scoping and
+batch ceiling as /transactions/send-to-review.
+
+ */
+export const unsendTransactionsFromReviewBodyTransactionIdsMax = 200;
+
+export const UnsendTransactionsFromReviewBody = zod.object({
+  transactionIds: zod
+    .array(zod.string())
+    .max(unsendTransactionsFromReviewBodyTransactionIdsMax)
+    .describe(
+      "Transaction ids to promote into (or revoke from) the\nReview workflow. Capped at 200 per request; a longer list\nis rejected with a 400 to keep the surface predictable —\nthe bulk affordance on the Chase page is sized far below\nthis cap. Ids outside the caller's household are silently\nignored (they fall out of the household-scoped UPDATE\nfilter, so the response's `updated` count reflects only\nrows actually touched).\n",
+    ),
+});
+
+export const UnsendTransactionsFromReviewResponse = zod.object({
+  updated: zod
+    .number()
+    .describe(
+      "Number of transactions whose `sent_to_review_at` actually\nchanged. Rows already in the desired state (sent vs. not\nsent) are silently skipped so a re-issue is safe and the\n5-second Undo affordance on the success toast can fire\nwithout double-counting.\n",
     ),
 });
 
@@ -2046,6 +2125,12 @@ export const GetForecastResponse = zod.object({
         .boolean()
         .describe(
           '(#632 follow-up) User-set per-row flag marking a card payment\nas going to a card that is NOT in our debt avalanche (e.g. a\nspouse\'s external card). Excluded from avalanche actuals so\nit never inflates \"extra\" debt-payoff capacity. Defaults to\nfalse; toggled explicitly via the \"Not in avalanche\" chip on\nthe Amex page.\n',
+        ),
+      sentToReviewAt: zod
+        .string()
+        .nullish()
+        .describe(
+          '(#762 — Phase B) ISO8601 timestamp the user clicked \"Send\nto Review\" on this row, or null when the row has never been\npromoted into the Review workflow. The Chase \/ Amex\nsource-of-truth views ignore this column entirely; only the\nReview pipeline on \/forecast filters on it. Drives the \"✓\nin review\" badge and per-row affordance on the Chase page.\n',
         ),
       notes: zod.string().nullish(),
       source: zod.string(),

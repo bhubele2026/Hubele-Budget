@@ -86,6 +86,11 @@ vi.mock("@workspace/api-client-react", () => {
       },
     }),
     useBulkSetForecastFlag: () => noop,
+    // (#762 — Phase B) Manual Send-to-Review gate hooks consumed by
+    // the Chase page wiring. Header-collapse tests don't exercise
+    // them, so wired to no-ops.
+    useSendTransactionsToReview: () => noop,
+    useUnsendTransactionsFromReview: () => noop,
     useListPlaidItems: () => ({ data: [] }),
     getListTransactionsQueryKey: () => ["/api/transactions"],
     getGetForecastQueryKey: () => ["/api/forecast"],

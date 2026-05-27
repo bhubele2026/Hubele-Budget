@@ -115,6 +115,8 @@ import type {
   ReopenWeekParams,
   ReorderMappingRulesInput,
   SeedDefaultBudgetResult,
+  SendTransactionsToReviewInput,
+  SendTransactionsToReviewResult,
   SetBankSnapshotInput,
   Settings,
   SettingsInput,
@@ -1036,6 +1038,208 @@ export const useBulkUpdateTransactions = <
   TContext
 > => {
   return useMutation(getBulkUpdateTransactionsMutationOptions(options));
+};
+
+/**
+ * @summary (#762 — Phase B) Promote up to 200 transactions into the Review
+workflow by stamping `sent_to_review_at = NOW()`. The Chase /
+Amex / source-of-truth views are unaffected — only the Review
+pipeline on /forecast filters on the column. Rows already sent
+are silently skipped. Scoped to the caller's household so other
+households' ids are no-ops.
+
+ */
+export const getSendTransactionsToReviewUrl = () => {
+  return `/api/transactions/send-to-review`;
+};
+
+export const sendTransactionsToReview = async (
+  sendTransactionsToReviewInput: SendTransactionsToReviewInput,
+  options?: RequestInit,
+): Promise<SendTransactionsToReviewResult> => {
+  return customFetch<SendTransactionsToReviewResult>(
+    getSendTransactionsToReviewUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(sendTransactionsToReviewInput),
+    },
+  );
+};
+
+export const getSendTransactionsToReviewMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendTransactionsToReview>>,
+    TError,
+    { data: BodyType<SendTransactionsToReviewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendTransactionsToReview>>,
+  TError,
+  { data: BodyType<SendTransactionsToReviewInput> },
+  TContext
+> => {
+  const mutationKey = ["sendTransactionsToReview"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendTransactionsToReview>>,
+    { data: BodyType<SendTransactionsToReviewInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return sendTransactionsToReview(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendTransactionsToReviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendTransactionsToReview>>
+>;
+export type SendTransactionsToReviewMutationBody =
+  BodyType<SendTransactionsToReviewInput>;
+export type SendTransactionsToReviewMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (#762 — Phase B) Promote up to 200 transactions into the Review
+workflow by stamping `sent_to_review_at = NOW()`. The Chase /
+Amex / source-of-truth views are unaffected — only the Review
+pipeline on /forecast filters on the column. Rows already sent
+are silently skipped. Scoped to the caller's household so other
+households' ids are no-ops.
+
+ */
+export const useSendTransactionsToReview = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendTransactionsToReview>>,
+    TError,
+    { data: BodyType<SendTransactionsToReviewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendTransactionsToReview>>,
+  TError,
+  { data: BodyType<SendTransactionsToReviewInput> },
+  TContext
+> => {
+  return useMutation(getSendTransactionsToReviewMutationOptions(options));
+};
+
+/**
+ * @summary (#762 — Phase B) Reverse a Send-to-Review by clearing
+`sent_to_review_at = NULL` on up to 200 transactions. Used by
+the 5-second "Undo" affordance on the success toast and by the
+symmetric Review-tab "unsend" flow. Same household scoping and
+batch ceiling as /transactions/send-to-review.
+
+ */
+export const getUnsendTransactionsFromReviewUrl = () => {
+  return `/api/transactions/unsend-from-review`;
+};
+
+export const unsendTransactionsFromReview = async (
+  sendTransactionsToReviewInput: SendTransactionsToReviewInput,
+  options?: RequestInit,
+): Promise<SendTransactionsToReviewResult> => {
+  return customFetch<SendTransactionsToReviewResult>(
+    getUnsendTransactionsFromReviewUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(sendTransactionsToReviewInput),
+    },
+  );
+};
+
+export const getUnsendTransactionsFromReviewMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unsendTransactionsFromReview>>,
+    TError,
+    { data: BodyType<SendTransactionsToReviewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unsendTransactionsFromReview>>,
+  TError,
+  { data: BodyType<SendTransactionsToReviewInput> },
+  TContext
+> => {
+  const mutationKey = ["unsendTransactionsFromReview"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unsendTransactionsFromReview>>,
+    { data: BodyType<SendTransactionsToReviewInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return unsendTransactionsFromReview(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnsendTransactionsFromReviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unsendTransactionsFromReview>>
+>;
+export type UnsendTransactionsFromReviewMutationBody =
+  BodyType<SendTransactionsToReviewInput>;
+export type UnsendTransactionsFromReviewMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (#762 — Phase B) Reverse a Send-to-Review by clearing
+`sent_to_review_at = NULL` on up to 200 transactions. Used by
+the 5-second "Undo" affordance on the success toast and by the
+symmetric Review-tab "unsend" flow. Same household scoping and
+batch ceiling as /transactions/send-to-review.
+
+ */
+export const useUnsendTransactionsFromReview = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unsendTransactionsFromReview>>,
+    TError,
+    { data: BodyType<SendTransactionsToReviewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unsendTransactionsFromReview>>,
+  TError,
+  { data: BodyType<SendTransactionsToReviewInput> },
+  TContext
+> => {
+  return useMutation(getUnsendTransactionsFromReviewMutationOptions(options));
 };
 
 /**

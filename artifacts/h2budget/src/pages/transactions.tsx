@@ -12,6 +12,8 @@ import {
   useRefreshForecastBank,
   useSeedAprilChase,
   useBulkSetForecastFlag,
+  useSendTransactionsToReview,
+  useUnsendTransactionsFromReview,
   getListTransactionsQueryKey,
   getGetForecastQueryKey,
   getGetBudgetMonthQueryKey,
@@ -717,6 +719,12 @@ export default function TransactionsPage() {
   const clearTransferOverride = useClearTransferOverride();
   const deleteTx = useDeleteTransaction();
   const bulkSetForecastFlag = useBulkSetForecastFlag();
+  // (#762 — Phase B) Manual Send-to-Review gate mutations. The
+  // unsend variant backs both the symmetric "Unsend" affordance on
+  // an already-promoted row and the 5-second Undo on the bulk /
+  // per-row success toast.
+  const sendToReview = useSendTransactionsToReview();
+  const unsendFromReview = useUnsendTransactionsFromReview();
   const buildRuleUndoAction = useRuleActionUndo();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -1431,6 +1439,144 @@ export default function TransactionsPage() {
         },
       },
     );
+  };
+
+  // (#762 — Phase B) Manual Send-to-Review gate. Mirrors the
+  // bulkSetForecast / undoBulkForecast pair above. Toggling a row
+  // does NOT remove it from the Chase page — the source-of-truth list
+  // keeps showing every row, only the Review tab on /forecast filters
+  // on `sent_to_review_at`. Undo runs the inverse mutation against the
+  // ids the server actually touched, so a re-click of the toast within
+  // the 5-second window cleanly reverts the change even if the user
+  // has since manually toggled some rows back.
+  const undoReviewToggle = (affectedIds: string[], wasSend: boolean) => {
+    if (affectedIds.length === 0) return;
+    const mutation = wasSend ? unsendFromReview : sendToReview;
+    mutation.mutate(
+      { data: { transactionIds: affectedIds } },
+      {
+        onSuccess: (res) => {
+          queryClient.invalidateQueries({
+            queryKey: getListTransactionsQueryKey(),
+          });
+          queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+          toast({
+            title:
+              res.updated === 0
+                ? "Nothing to undo"
+                : `Restored ${res.updated} transaction${res.updated === 1 ? "" : "s"}`,
+          });
+        },
+        onError: (e) => {
+          toast({
+            title: "Couldn't undo",
+            description: (e as Error).message,
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
+  // Promote (or revoke) one row. Re-uses the bulk endpoint with a
+  // single id so the toast / Undo wiring is identical to the bulk
+  // path. Capped well below the 200-id server ceiling by construction.
+  const handleToggleReview = async (tx: Transaction) => {
+    const wasSend = tx.sentToReviewAt == null;
+    const mutation = wasSend ? sendToReview : unsendFromReview;
+    try {
+      const res = await mutation.mutateAsync({
+        data: { transactionIds: [tx.id] },
+      });
+      queryClient.invalidateQueries({
+        queryKey: getListTransactionsQueryKey(),
+      });
+      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+      if (res.updated === 0) {
+        toast({ title: wasSend ? "Already in review" : "Not in review" });
+        return;
+      }
+      toast({
+        title: wasSend ? "Sent to Review" : "Removed from Review",
+        action: (
+          <ToastAction
+            altText={wasSend ? "Undo send to Review" : "Undo unsend from Review"}
+            data-testid={
+              wasSend
+                ? `action-undo-send-review-${tx.id}`
+                : `action-undo-unsend-review-${tx.id}`
+            }
+            onClick={() => undoReviewToggle([tx.id], wasSend)}
+          >
+            Undo
+          </ToastAction>
+        ),
+      });
+    } catch (e) {
+      toast({
+        title: "Couldn't update Review status",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Bulk Send-to-Review. Only acts on currently-not-sent rows in the
+  // selection so a mixed selection (some already sent) doesn't churn
+  // the timestamp on the already-sent rows. The 200-id server cap is
+  // duplicated here as a guard rail; in practice the bulk-bar tops
+  // out far below that, but a hand-crafted multi-page selection
+  // could in theory bump against it.
+  const bulkSendToReview = async () => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const byId = new Map(filtered.map((t) => [t.id, t] as const));
+    const candidates = ids
+      .map((id) => byId.get(id))
+      .filter((t): t is Transaction => !!t && t.sentToReviewAt == null);
+    if (candidates.length === 0) {
+      toast({ title: "Selected items already in Review" });
+      return;
+    }
+    const capped = candidates.slice(0, 200);
+    const cappedOut = candidates.length - capped.length;
+    const targetIds = capped.map((t) => t.id);
+    try {
+      const res = await sendToReview.mutateAsync({
+        data: { transactionIds: targetIds },
+      });
+      queryClient.invalidateQueries({
+        queryKey: getListTransactionsQueryKey(),
+      });
+      queryClient.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+      clearSelection();
+      const suffix = cappedOut > 0 ? ` · capped ${cappedOut}` : "";
+      toast({
+        title: `Sent ${res.updated} to Review${suffix}`,
+        ...(res.updated > 0
+          ? {
+              action: (
+                <ToastAction
+                  altText="Undo bulk send to Review"
+                  data-testid="action-undo-bulk-send-review"
+                  onClick={() => undoReviewToggle(targetIds, true)}
+                >
+                  Undo
+                </ToastAction>
+              ),
+            }
+          : {}),
+      });
+    } catch (e) {
+      queryClient.invalidateQueries({
+        queryKey: getListTransactionsQueryKey(),
+      });
+      toast({
+        title: "Bulk send to Review failed",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
   };
 
   const bulkSetForecast = async (next: boolean) => {
@@ -2184,6 +2330,26 @@ export default function TransactionsPage() {
           >
             Remove from Forecast
           </Button>
+          {/* (#762 — Phase B) Bulk Send-to-Review. The label reports
+              only the count that will actually be promoted (rows
+              already in Review are filtered out by `bulkSendToReview`
+              before the request). */}
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => bulkSendToReview()}
+            disabled={sendToReview.isPending}
+            data-testid="bulk-send-review"
+          >
+            <Send className="w-3.5 h-3.5 mr-1.5" />
+            Send{(() => {
+              const n = Array.from(selected).filter((id) => {
+                const t = filtered.find((x) => x.id === id);
+                return t && t.sentToReviewAt == null;
+              }).length;
+              return n > 0 ? ` ${n}` : "";
+            })()} to Review
+          </Button>
           <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
             Clear
           </Button>
@@ -2377,6 +2543,41 @@ export default function TransactionsPage() {
                       >
                         {formatCurrency(parseSigned(tx.amount))}
                       </span>
+                      {/* (#762 — Phase B) Per-row Send-to-Review
+                          affordance on pending rows. Mirrors the
+                          posted-row affordance above — every Chase
+                          transaction (pending or posted) must surface
+                          either the "Send" button or the
+                          "✓ in review" badge so the user can promote
+                          a charge to the Review pipeline (or undo it)
+                          without waiting for it to flip to posted. */}
+                      {tx.sentToReviewAt ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleReview(tx)}
+                          disabled={unsendFromReview.isPending}
+                          title="Click to remove from Review"
+                          className="text-emerald-700 hover:text-emerald-800"
+                          data-testid={`badge-in-review-${tx.id}`}
+                          data-sent-to-review="true"
+                        >
+                          ✓ in review
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleReview(tx)}
+                          disabled={sendToReview.isPending}
+                          title="Send to Review"
+                          data-testid={`button-send-review-${tx.id}`}
+                          data-sent-to-review="false"
+                        >
+                          <Send className="w-3.5 h-3.5 mr-1.5" />
+                          Review
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
@@ -2585,6 +2786,41 @@ export default function TransactionsPage() {
                         >
                           <Send className="w-3.5 h-3.5 mr-1.5" />
                           Categorize first
+                        </Button>
+                      )}
+                      {/* (#762 — Phase B) Per-row Send-to-Review
+                          affordance. Visible on every Chase row
+                          regardless of forecast state (the Review
+                          gate is independent of forecast inclusion).
+                          When already sent we render a click-to-undo
+                          "✓ in review" badge so the user can flip it
+                          back from the same surface without waiting
+                          for the toast's 5-second window. */}
+                      {tx.sentToReviewAt ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleReview(tx)}
+                          disabled={unsendFromReview.isPending}
+                          title="Click to remove from Review"
+                          className="text-emerald-700 hover:text-emerald-800"
+                          data-testid={`badge-in-review-${tx.id}`}
+                          data-sent-to-review="true"
+                        >
+                          ✓ in review
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleReview(tx)}
+                          disabled={sendToReview.isPending}
+                          title="Send to Review"
+                          data-testid={`button-send-review-${tx.id}`}
+                          data-sent-to-review="false"
+                        >
+                          <Send className="w-3.5 h-3.5 mr-1.5" />
+                          Review
                         </Button>
                       )}
                       <Button

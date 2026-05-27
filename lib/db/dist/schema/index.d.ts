@@ -2146,6 +2146,23 @@ export declare const transactionsTable: import("drizzle-orm/pg-core").PgTableWit
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        sentToReviewAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "sent_to_review_at";
+            tableName: "transactions";
+            dataType: "string";
+            columnType: "PgTimestampString";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         debtId: import("drizzle-orm/pg-core").PgColumn<{
             name: "debt_id";
             tableName: "transactions";
@@ -4716,6 +4733,7 @@ export declare const insertTransactionSchema: import("zod/v4").ZodObject<{
     pfcPrimary: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pfcDetailed: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
     pending: import("zod/v4").ZodOptional<import("zod/v4").ZodBoolean>;
+    sentToReviewAt: import("zod/v4").ZodOptional<import("zod/v4").ZodNullable<import("zod/v4").ZodString>>;
 }, {
     out: {};
     in: {};

@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -302,6 +302,82 @@ export declare const useBulkUpdateTransactions: <TError = ErrorType<unknown>, TC
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof bulkUpdateTransactions>>, TError, {
     data: BodyType<BulkUpdateTransactionsInput>;
+}, TContext>;
+/**
+ * @summary (#762 — Phase B) Promote up to 200 transactions into the Review
+workflow by stamping `sent_to_review_at = NOW()`. The Chase /
+Amex / source-of-truth views are unaffected — only the Review
+pipeline on /forecast filters on the column. Rows already sent
+are silently skipped. Scoped to the caller's household so other
+households' ids are no-ops.
+
+ */
+export declare const getSendTransactionsToReviewUrl: () => string;
+export declare const sendTransactionsToReview: (sendTransactionsToReviewInput: SendTransactionsToReviewInput, options?: RequestInit) => Promise<SendTransactionsToReviewResult>;
+export declare const getSendTransactionsToReviewMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof sendTransactionsToReview>>, TError, {
+        data: BodyType<SendTransactionsToReviewInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof sendTransactionsToReview>>, TError, {
+    data: BodyType<SendTransactionsToReviewInput>;
+}, TContext>;
+export type SendTransactionsToReviewMutationResult = NonNullable<Awaited<ReturnType<typeof sendTransactionsToReview>>>;
+export type SendTransactionsToReviewMutationBody = BodyType<SendTransactionsToReviewInput>;
+export type SendTransactionsToReviewMutationError = ErrorType<unknown>;
+/**
+ * @summary (#762 — Phase B) Promote up to 200 transactions into the Review
+workflow by stamping `sent_to_review_at = NOW()`. The Chase /
+Amex / source-of-truth views are unaffected — only the Review
+pipeline on /forecast filters on the column. Rows already sent
+are silently skipped. Scoped to the caller's household so other
+households' ids are no-ops.
+
+ */
+export declare const useSendTransactionsToReview: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof sendTransactionsToReview>>, TError, {
+        data: BodyType<SendTransactionsToReviewInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof sendTransactionsToReview>>, TError, {
+    data: BodyType<SendTransactionsToReviewInput>;
+}, TContext>;
+/**
+ * @summary (#762 — Phase B) Reverse a Send-to-Review by clearing
+`sent_to_review_at = NULL` on up to 200 transactions. Used by
+the 5-second "Undo" affordance on the success toast and by the
+symmetric Review-tab "unsend" flow. Same household scoping and
+batch ceiling as /transactions/send-to-review.
+
+ */
+export declare const getUnsendTransactionsFromReviewUrl: () => string;
+export declare const unsendTransactionsFromReview: (sendTransactionsToReviewInput: SendTransactionsToReviewInput, options?: RequestInit) => Promise<SendTransactionsToReviewResult>;
+export declare const getUnsendTransactionsFromReviewMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof unsendTransactionsFromReview>>, TError, {
+        data: BodyType<SendTransactionsToReviewInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof unsendTransactionsFromReview>>, TError, {
+    data: BodyType<SendTransactionsToReviewInput>;
+}, TContext>;
+export type UnsendTransactionsFromReviewMutationResult = NonNullable<Awaited<ReturnType<typeof unsendTransactionsFromReview>>>;
+export type UnsendTransactionsFromReviewMutationBody = BodyType<SendTransactionsToReviewInput>;
+export type UnsendTransactionsFromReviewMutationError = ErrorType<unknown>;
+/**
+ * @summary (#762 — Phase B) Reverse a Send-to-Review by clearing
+`sent_to_review_at = NULL` on up to 200 transactions. Used by
+the 5-second "Undo" affordance on the success toast and by the
+symmetric Review-tab "unsend" flow. Same household scoping and
+batch ceiling as /transactions/send-to-review.
+
+ */
+export declare const useUnsendTransactionsFromReview: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof unsendTransactionsFromReview>>, TError, {
+        data: BodyType<SendTransactionsToReviewInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof unsendTransactionsFromReview>>, TError, {
+    data: BodyType<SendTransactionsToReviewInput>;
 }, TContext>;
 /**
  * @summary Bulk set the forecast_flag on a list of transactions to a target

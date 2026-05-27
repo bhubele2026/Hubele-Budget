@@ -240,6 +240,51 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BulkUpdateTransactionsResult" }
 
+  /transactions/send-to-review:
+    post:
+      operationId: sendTransactionsToReview
+      tags: [transactions]
+      summary: |
+        (#762 — Phase B) Promote up to 200 transactions into the Review
+        workflow by stamping `sent_to_review_at = NOW()`. The Chase /
+        Amex / source-of-truth views are unaffected — only the Review
+        pipeline on /forecast filters on the column. Rows already sent
+        are silently skipped. Scoped to the caller's household so other
+        households' ids are no-ops.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendTransactionsToReviewInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SendTransactionsToReviewResult" }
+
+  /transactions/unsend-from-review:
+    post:
+      operationId: unsendTransactionsFromReview
+      tags: [transactions]
+      summary: |
+        (#762 — Phase B) Reverse a Send-to-Review by clearing
+        `sent_to_review_at = NULL` on up to 200 transactions. Used by
+        the 5-second "Undo" affordance on the success toast and by the
+        symmetric Review-tab "unsend" flow. Same household scoping and
+        batch ceiling as /transactions/send-to-review.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendTransactionsToReviewInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SendTransactionsToReviewResult" }
+
   /transactions/bulk-set-forecast-flag:
     post:
       operationId: bulkSetForecastFlag
@@ -1841,6 +1886,15 @@ components:
             it never inflates "extra" debt-payoff capacity. Defaults to
             false; toggled explicitly via the "Not in avalanche" chip on
             the Amex page.
+        sentToReviewAt:
+          type: ["string", "null"]
+          description: |
+            (#762 — Phase B) ISO8601 timestamp the user clicked "Send
+            to Review" on this row, or null when the row has never been
+            promoted into the Review workflow. The Chase / Amex
+            source-of-truth views ignore this column entirely; only the
+            Review pipeline on /forecast filters on it. Drives the "✓
+            in review" badge and per-row affordance on the Chase page.
         notes: { type: ["string", "null"] }
         source: { type: string }
         member: { type: ["string", "null"] }
@@ -2280,6 +2334,37 @@ components:
         error:
           type: ["string", "null"]
           description: Short reason when `ok` is false (e.g. "not found").
+
+    SendTransactionsToReviewInput:
+      type: object
+      required: [transactionIds]
+      properties:
+        transactionIds:
+          type: array
+          maxItems: 200
+          description: |
+            Transaction ids to promote into (or revoke from) the
+            Review workflow. Capped at 200 per request; a longer list
+            is rejected with a 400 to keep the surface predictable —
+            the bulk affordance on the Chase page is sized far below
+            this cap. Ids outside the caller's household are silently
+            ignored (they fall out of the household-scoped UPDATE
+            filter, so the response's `updated` count reflects only
+            rows actually touched).
+          items: { type: string }
+
+    SendTransactionsToReviewResult:
+      type: object
+      required: [updated]
+      properties:
+        updated:
+          type: integer
+          description: |
+            Number of transactions whose `sent_to_review_at` actually
+            changed. Rows already in the desired state (sent vs. not
+            sent) are silently skipped so a re-issue is safe and the
+            5-second Undo affordance on the success toast can fire
+            without double-counting.
 
     BulkSetForecastFlagInput:
       type: object

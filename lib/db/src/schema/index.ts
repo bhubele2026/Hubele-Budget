@@ -346,6 +346,17 @@ export const transactionsTable = pgTable(
     // from notes in the same pass. Plaid sync now writes the boolean and
     // flips it back to false on the pending→posted modified path.
     pending: boolean("pending").notNull().default(false),
+    // (#762 — Phase B) Manual Send-to-Review gate. NULL = the row has
+    // not been promoted into the Review workflow yet; a timestamp = the
+    // moment the user clicked "Send to Review". Source-of-truth views
+    // (Chase / Amex) keep showing every row; only the Review pipeline
+    // on /forecast filters on this column. Backfill of historical rows
+    // is intentionally deferred to a follow-up grandfather task so the
+    // gate can be exercised in production in isolation first.
+    sentToReviewAt: timestamp("sent_to_review_at", {
+      withTimezone: true,
+      mode: "string",
+    }),
     debtId: uuid("debt_id").references((): AnyPgColumn => debtsTable.id, {
       onDelete: "set null",
     }),
