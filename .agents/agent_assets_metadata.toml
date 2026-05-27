@@ -34,3 +34,9 @@ id = "IJRGozrjCWjfAzchdkACq"
 uri = "file://.local/exports/amex.tar.gz"
 type = "unspecified"
 title = "amex.tsx (full Amex page source, 2,870 lines — gzipped)"
+
+[[outputs]]
+id = "5hHU_janj24k178LZVsR_"
+uri = "file://exports/debt-plaid-link-fix.tar.gz"
+type = "unspecified"
+title = "debt-plaid-link-fix.tar.gz (full updated source + test)"
