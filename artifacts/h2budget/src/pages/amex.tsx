@@ -663,6 +663,46 @@ export default function AmexPage() {
     return { anchor, resolvedSource, asOf };
   }, [amexDebt, amexAnchorResp]);
 
+  // (#748) When a single Amex card is selected via the pill row, scope
+  // both the anchor and the transaction series so the Ending Balance
+  // tile, the per-row running balance, and the 12-month trend chart
+  // all reflect just that card. When "All cards" is active, fall
+  // through to the existing combined-anchor + combined-transactions
+  // behavior so the prior roll-up view is preserved exactly.
+  const cardScopedDebt = useMemo(() => {
+    if (cardFilter === "all") return null;
+    for (const d of debts ?? []) {
+      if (d.plaidAccountId && d.plaidAccountId === cardFilter) return d;
+    }
+    return null;
+  }, [debts, cardFilter]);
+
+  const cardScopedAnchor = useMemo(() => {
+    if (cardFilter === "all") return resolvedAnchor;
+    if (cardScopedDebt) {
+      const bal = parseSigned(cardScopedDebt.balance);
+      if (Number.isFinite(bal)) {
+        return {
+          anchor: bal,
+          resolvedSource: "debt" as const,
+          asOf:
+            cardScopedDebt.lastBalanceUpdate ??
+            cardScopedDebt.plaidLastSyncedAt ??
+            null,
+        };
+      }
+    }
+    // No per-card debt link — fall back to the combined anchor so the
+    // tile keeps showing something usable rather than collapsing to
+    // "Not set" the moment the user picks a card without a debt row.
+    return resolvedAnchor;
+  }, [cardFilter, cardScopedDebt, resolvedAnchor]);
+
+  const wideAllForBalance = useMemo(() => {
+    if (cardFilter === "all") return wideAll;
+    return wideAll.filter((t) => (t.plaidAccountId ?? "") === cardFilter);
+  }, [wideAll, cardFilter]);
+
   // (#476) Pre-build the shared end-of-month balance closure once per
   // (anchor + transactions) change. Both the visible-month
   // `endingBalance` tile and the 12-point `balanceTrend` chart call
@@ -672,17 +712,22 @@ export default function AmexPage() {
     () =>
       makeAmexBalanceAtEndOf({
         anchor:
-          resolvedAnchor.anchor === null
+          cardScopedAnchor.anchor === null
             ? null
-            : { balance: resolvedAnchor.anchor, asOf: resolvedAnchor.asOf },
-        amexTransactions: wideAll,
+            : { balance: cardScopedAnchor.anchor, asOf: cardScopedAnchor.asOf },
+        amexTransactions: wideAllForBalance,
         fallbackMonth: currentMonth,
       }),
-    [resolvedAnchor.anchor, resolvedAnchor.asOf, wideAll, currentMonth],
+    [
+      cardScopedAnchor.anchor,
+      cardScopedAnchor.asOf,
+      wideAllForBalance,
+      currentMonth,
+    ],
   );
 
   const endingBalance = useMemo(() => {
-    if (resolvedAnchor.anchor === null) {
+    if (cardScopedAnchor.anchor === null) {
       // (#483) Treat the tile as "loading" only while the anchor query
       // is genuinely in flight (initial fetch with no cached data).
       // Once the response has landed (or errored out), fall through to
@@ -701,11 +746,11 @@ export default function AmexPage() {
     }
     return {
       value: balanceAtEndOf(selectedMonth),
-      source: resolvedAnchor.resolvedSource,
-      asOf: resolvedAnchor.asOf,
+      source: cardScopedAnchor.resolvedSource,
+      asOf: cardScopedAnchor.asOf,
     };
   }, [
-    resolvedAnchor,
+    cardScopedAnchor,
     amexAnchorResp,
     amexAnchorLoading,
     amexAnchorFetchStatus,
@@ -722,11 +767,16 @@ export default function AmexPage() {
   // displayed balances.
   const runningBalanceMap = useMemo(() => {
     if (endingBalance.value === null) return new Map<string, number>();
-    return computeRunningBalances(
-      sortNewestFirst(monthScoped),
-      endingBalance.value,
-    );
-  }, [monthScoped, endingBalance.value]);
+    // (#748) When a single card is selected, walk only that card's
+    // rows so the per-row "bal $X" matches the card-scoped ending
+    // balance shown in the tile. Falls through to all rows when
+    // cardFilter === "all" (current behavior).
+    const series =
+      cardFilter === "all"
+        ? monthScoped
+        : monthScoped.filter((t) => (t.plaidAccountId ?? "") === cardFilter);
+    return computeRunningBalances(sortNewestFirst(series), endingBalance.value);
+  }, [monthScoped, endingBalance.value, cardFilter]);
 
   const endingBalanceMeta = useMemo(() => {
     if (
@@ -792,7 +842,7 @@ export default function AmexPage() {
   // month's known Amex balance and rolled month-by-month using the same
   // shared helper that powers `endingBalance` above.
   const balanceTrend = useMemo<TrendPoint[]>(() => {
-    if (resolvedAnchor.anchor === null) return [];
+    if (cardScopedAnchor.anchor === null) return [];
     const points: TrendPoint[] = [];
     for (let i = 11; i >= 0; i--) {
       const mk = shiftMonth(selectedMonth, -i);
@@ -806,7 +856,7 @@ export default function AmexPage() {
       });
     }
     return points;
-  }, [resolvedAnchor.anchor, balanceAtEndOf, selectedMonth]);
+  }, [cardScopedAnchor.anchor, balanceAtEndOf, selectedMonth]);
 
   const knownPayers = useMemo(() => {
     const set = new Set<string>();
@@ -1501,6 +1551,49 @@ export default function AmexPage() {
           }
         />
 
+      {/* (#748) Promote the card switcher to a prominent segmented
+          pill row directly under the page title. Hidden when only a
+          single card is linked (no need for a one-pill selector). */}
+      {cardFilterOptions.length > 1 && (
+        <div
+          className="flex items-center gap-2 flex-wrap"
+          data-testid="amex-card-pills"
+          role="tablist"
+          aria-label="Amex card filter"
+        >
+          <Button
+            type="button"
+            size="sm"
+            variant={cardFilter === "all" ? "default" : "outline"}
+            className="h-8 rounded-full px-3"
+            onClick={() => setCardFilter("all")}
+            role="tab"
+            aria-selected={cardFilter === "all"}
+            data-testid="button-card-filter-all"
+          >
+            All cards
+            <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px]">
+              {cardFilterOptions.length}
+            </Badge>
+          </Button>
+          {cardFilterOptions.map((o) => (
+            <Button
+              key={o.value}
+              type="button"
+              size="sm"
+              variant={cardFilter === o.value ? "default" : "outline"}
+              className="h-8 rounded-full px-3"
+              onClick={() => setCardFilter(o.value)}
+              role="tab"
+              aria-selected={cardFilter === o.value}
+              data-testid={`button-card-filter-${o.value}`}
+            >
+              {o.label}
+            </Button>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center gap-3 flex-wrap">
         <div className="shrink-0">
           <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
@@ -1810,29 +1903,6 @@ export default function AmexPage() {
           onMemberFilterChange={setMemberFilter}
           extraFilters={
             <>
-              {cardFilterOptions.length > 0 && (
-                <div>
-                  <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
-                    Card
-                  </label>
-                  <Select value={cardFilter} onValueChange={setCardFilter}>
-                    <SelectTrigger
-                      className="h-9 w-48"
-                      data-testid="select-card"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All cards</SelectItem>
-                      {cardFilterOptions.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
               <div>
                 <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
                   Reviewed

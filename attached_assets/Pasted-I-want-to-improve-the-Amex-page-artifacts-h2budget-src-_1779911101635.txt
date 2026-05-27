@@ -1,0 +1,33 @@
+I want to improve the Amex page (artifacts/h2budget/src/pages/amex.tsx) so I can connect each Amex card separately and view them one at a time. The architecture already supports this — there's a cardFilter state and cardFilterOptions derived from Plaid accounts — but the UX makes it nearly invisible.
+
+The Connect a card button (PlaidLinkButton around line 1495) is already in the header, so card linking is fine.
+
+Three changes:
+
+CHANGE 1 — Promote the card switcher to a prominent segmented control at the top of the page.
+Currently lines 1813-1834 render the card selector as a tiny "Card" dropdown buried in the AccountFilterBar. Move it OUT of the filter bar and render it as a horizontal pill row directly under the page title (above the MonthNavigator row at line 1504), with one pill per card plus an "All cards" pill at the start. Keep the existing cardFilter state and setter; just change the rendering. Use the same shadcn Button + Badge styling the rest of the app uses (look at how SUB_BUCKETS are rendered on dashboard.tsx for a reference pattern).
+
+If only ONE Amex card is linked, hide the pill row entirely (no need for a one-pill selector).
+
+CHANGE 2 — Make the ending balance tile scope to the selected card.
+The endingBalance useMemo (line 684) currently uses balanceAtEndOf(selectedMonth) which is built from wideAll without card scoping. When cardFilter !== "all", the ending balance should compute only from transactions where plaidAccountId === cardFilter.
+
+The cleanest way: in the useMemo that derives `wideAll` (or wherever balanceAtEndOf is built — see makeAmexBalanceAtEndOf in @/lib/amexEndingBalance), thread the cardFilter through so the running balance is computed on the card-scoped subset.
+
+Also: when a specific card is selected, the anchor (resolvedAnchor) should also resolve per-card if possible. If the anchor comes from a Plaid debt link, find the debt whose plaidAccountId matches the selected cardFilter and use that debt's balance as the anchor. Fall back to the existing all-cards anchor logic when cardFilter === "all".
+
+CHANGE 3 — Make the trend chart scope to the selected card.
+The 12-month BalanceTrendChart at the bottom of the page currently shows total Amex balance over time. When a specific card is selected, the chart should show only that card's running balance series.
+
+This means the data feeding BalanceTrendChart needs to be derived from a card-scoped slice of wideAll (filter on plaidAccountId === cardFilter when cardFilter !== "all"), then walked through the same running-balance math.
+
+Acceptance:
+- New card chip row visible directly under "American Express" title when 2+ cards linked
+- Clicking a chip filters transactions, ending balance tile, charges/payments/netChange stats, AND trend chart all to that card
+- Clicking "All cards" returns to the current roll-up view
+- "Connect a card" button keeps working
+- Existing tests in pages/amex*.test.tsx still pass
+
+Don't touch the backend (routes/amex.ts) — this is a UI-only change. The transactions API already returns plaidAccountId on every row.
+
+Run pnpm typecheck and pnpm test on the h2budget package after, confirm clean.
