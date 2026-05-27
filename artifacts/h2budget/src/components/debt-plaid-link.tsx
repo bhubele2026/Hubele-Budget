@@ -25,7 +25,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link2, Unlink, RefreshCw, Loader2, AlertTriangle, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { PlaidLinkButton } from "@/components/plaid-link-button";
+import {
+  PlaidLinkButton,
+  PLAID_LINK_TOKEN_STORAGE_KEY,
+  PLAID_RETURN_TO_STORAGE_KEY,
+} from "@/components/plaid-link-button";
 import {
   PlaidReconnectButton,
   isPlaidReauthCode,
@@ -144,6 +148,121 @@ export function DebtPlaidSource({ debt }: { debt: Debt }) {
   );
 }
 
+// (#link-button-bug) Tokens we strip before comparing institution and debt
+// names — they appear in nearly every bank/card name and would create
+// spurious matches (e.g. a "Bank of America" institution false-matching a
+// "Chase Bank" debt on the shared "bank" token).
+const INSTITUTION_MATCH_STOP_WORDS = new Set<string>([
+  "the", "of", "and", "&", "a", "an",
+  "card", "cards", "bank", "banking", "credit", "debit",
+  "account", "accounts", "savings", "checking",
+]);
+
+// (#link-button-bug, follow-up from architect review) Minimal alias map
+// for high-frequency US banks whose colloquial name (what users type into
+// the debt label) differs from the formal institution name Plaid returns.
+// Each entry expands one alias into the set of tokens it should ALSO
+// match — bidirectionally — when checking institution overlap.
+//   "citi"   ↔ "citibank"
+//   "wf"     ↔ "wells fargo"
+//   "boa"    ↔ "bank of america"
+//   "amex"   ↔ "american express"
+//   "cap1"   ↔ "capital one"
+const INSTITUTION_ALIAS_EXPANSIONS: Record<string, string[]> = {
+  citi: ["citibank"],
+  citibank: ["citi"],
+  wf: ["wells", "fargo"],
+  wellsfargo: ["wells", "fargo"],
+  boa: ["bank", "america"],
+  bofa: ["bank", "america"],
+  amex: ["american", "express"],
+  cap1: ["capital", "one"],
+  capitalone: ["capital", "one"],
+};
+
+// (#link-button-bug, follow-up) Split a string into normalized tokens,
+// stripping stopwords. We split on whitespace, hyphens, underscores,
+// punctuation AND case boundaries — so "CapitalOne" and "WellsFargo"
+// (common in user-typed debt labels) tokenize to ["capital","one"] /
+// ["wells","fargo"] and reach the institution-name tokens.
+function tokenizeInstitutionName(s: string): string[] {
+  // We split TWO ways and union the tokens so neither path drops valid
+  // matches:
+  //   (1) plain split — preserves short acronyms like "BoA"/"BofA" so
+  //       the alias map can still expand them to ["bank","america"]
+  //   (2) case-boundary split — turns user-typed joined words like
+  //       "CapitalOne" / "WellsFargo" into ["capital","one"] /
+  //       ["wells","fargo"] so they match Plaid's spaced institution
+  //       name without needing alias entries.
+  const withCaseBreaks = s.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+  const splitOne = s
+    .toLowerCase()
+    .split(/[\s\-_,./]+/)
+    .filter((t) => t.length > 0 && !INSTITUTION_MATCH_STOP_WORDS.has(t));
+  const splitTwo = withCaseBreaks
+    .toLowerCase()
+    .split(/[\s\-_,./]+/)
+    .filter((t) => t.length > 0 && !INSTITUTION_MATCH_STOP_WORDS.has(t));
+  const out = new Set<string>([...splitOne, ...splitTwo]);
+  // Expand aliases. A single token like "citi" matches an institution
+  // tokenized as ["citibank"] only after we add "citibank" to the set.
+  for (const t of [...splitOne, ...splitTwo]) {
+    const aliases = INSTITUTION_ALIAS_EXPANSIONS[t];
+    if (aliases) for (const a of aliases) out.add(a);
+  }
+  return Array.from(out);
+}
+
+/**
+ * (#link-button-bug) True when an account's institution looks like a
+ * plausible match for a debt's name. Used by `PlaidAccountPicker` to
+ * filter the candidate list so a "Chase Amazon Prime Visa" debt doesn't
+ * surface the user's existing Amex card accounts as options.
+ *
+ * Match rule: any non-stop-word token from the institution name appears
+ * as a whole token in the debt name (case-insensitive), or the
+ * institution_slug appears as a whole token in the debt name. The slug
+ * fallback handles aliases like "amex" ↔ "American Express" without us
+ * having to hard-code a synonym list.
+ *
+ * Examples:
+ *   debt="Chase Amazon Prime Visa" + inst="Chase"            → true
+ *   debt="Chase Amazon Prime Visa" + inst="American Express" → false
+ *   debt="Amex Platinum"           + inst="American Express" → true (via slug "amex")
+ *   debt="Visa"                    + inst="Chase"            → false
+ */
+export function isInstitutionMatch(
+  debtName: string | null | undefined,
+  institutionName: string | null | undefined,
+  institutionSlug: string | null | undefined,
+): boolean {
+  if (!debtName) return false;
+  const debtTokens = new Set(tokenizeInstitutionName(debtName));
+  if (debtTokens.size === 0) return false;
+  const slug = (institutionSlug ?? "").trim().toLowerCase();
+  if (slug && debtTokens.has(slug)) return true;
+  if (institutionName) {
+    for (const t of tokenizeInstitutionName(institutionName)) {
+      if (debtTokens.has(t)) return true;
+    }
+  }
+  return false;
+}
+
+// (#link-button-bug) Wipe any stale Plaid link_token saved during a
+// prior OAuth round-trip. If we don't, opening the picker (which mounts
+// a fresh PlaidLinkButton at the bottom) can run alongside a stale token
+// in localStorage that PlaidOAuthPage / SDK state would otherwise resume,
+// surfacing the wrong institution's 2FA modal on top of our dialog.
+function clearStaleStoredPlaidLinkToken(): void {
+  try {
+    localStorage.removeItem(PLAID_LINK_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(PLAID_RETURN_TO_STORAGE_KEY);
+  } catch {
+    // ignore — storage may be unavailable
+  }
+}
+
 export function DebtPlaidActions({ debt }: { debt: Debt }) {
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
@@ -241,6 +360,10 @@ export function DebtPlaidActions({ debt }: { debt: Debt }) {
         size="sm"
         onClick={(e) => {
           e.stopPropagation();
+          // (#link-button-bug) Belt-and-braces: clear stale OAuth tokens
+          // before the picker dialog (and the PlaidLinkButton inside it)
+          // mounts, so a half-finished prior link can't bleed in.
+          clearStaleStoredPlaidLinkToken();
           setOpen(true);
         }}
         data-testid={`button-debt-link-plaid-${debt.id}`}
@@ -336,6 +459,40 @@ function PlaidAccountPicker({
     [accounts.data],
   );
 
+  // (#link-button-bug) Prefilter to accounts whose institution looks
+  // like a plausible match for this debt's name. Without this, a debt
+  // for "Chase Amazon Prime Visa" surfaces the user's existing Amex
+  // cards as candidates, which is at best confusing and at worst lets
+  // them mis-link the debt to the wrong account.
+  const matchedItems = useMemo(
+    () =>
+      items.filter((a) =>
+        isInstitutionMatch(
+          debt.name,
+          a.institutionName ?? null,
+          a.institutionSlug ?? null,
+        ),
+      ),
+    [items, debt.name],
+  );
+
+  // (#link-button-bug) Clear any stale Plaid link_token in localStorage
+  // when the picker opens, so the inner PlaidLinkButton starts from a
+  // clean slate. Mirrors the same wipe in DebtPlaidActions's Link click
+  // — both run because the dialog can also be opened by tests or
+  // re-mounted by parent re-renders without re-firing the click handler.
+  useEffect(() => {
+    if (open) clearStaleStoredPlaidLinkToken();
+  }, [open]);
+
+  // (#link-button-bug follow-up) Escape hatch toggle that lets the user
+  // bypass the institution prefilter from the no-matches empty state.
+  // Resets when the dialog closes so each open starts filtered.
+  const [showAllAccounts, setShowAllAccounts] = useState(false);
+  useEffect(() => {
+    if (!open) setShowAllAccounts(false);
+  }, [open]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -381,9 +538,44 @@ function PlaidAccountPicker({
               No linked Plaid accounts look like debts. Link a bank or card
               first.
             </div>
+          ) : matchedItems.length === 0 && !showAllAccounts ? (
+            // (#link-button-bug) Existing linked accounts are present
+            // but none match this debt's institution. Steer the user
+            // straight to "Link another institution" instead of showing
+            // unrelated cards (e.g. surfacing Amex cards for a Chase
+            // debt) which is what made the original flow look broken.
+            // (#link-button-bug follow-up from architect review) Keep
+            // an escape hatch — "Show all linked accounts anyway" — so
+            // a heuristic miss can never trap a user from mapping an
+            // existing account.
+            <div
+              className="py-6 px-3 text-center text-sm space-y-3 border rounded-md bg-muted/30"
+              data-testid={`text-debt-picker-no-matches-${debt.id}`}
+            >
+              <p className="text-muted-foreground">
+                None of your linked accounts look like {debt.name}. Link a new
+                bank or card to continue.
+              </p>
+              <div className="flex justify-center">
+                <PlaidLinkButton
+                  label={`Link a bank for ${debt.name}`}
+                  onLinked={() => {
+                    accounts.refetch();
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                className="text-xs underline text-muted-foreground hover:text-foreground"
+                onClick={() => setShowAllAccounts(true)}
+                data-testid={`button-debt-picker-show-all-${debt.id}`}
+              >
+                Show all {items.length} linked account{items.length === 1 ? "" : "s"} anyway
+              </button>
+            </div>
           ) : (
             <div className="max-h-80 overflow-y-auto border rounded-md divide-y">
-              {items.map((a) => {
+              {(showAllAccounts ? items : matchedItems).map((a) => {
                 const taken = a.linkedDebt && a.linkedDebt.id !== debt.id;
                 // (#44) Only offer "Add as new debt" when the account is
                 // unmatched. Already-linked accounts only get the
