@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Redirect } from "wouter";
 import { SignIn, SignUp, Show } from "@clerk/react";
 import { useCheckInvitation } from "@workspace/api-client-react";
-import { Mail } from "lucide-react";
+import { Mail, LineChart, Layers, ShieldCheck } from "lucide-react";
 import { H2Logo } from "@/components/h2-logo";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -38,17 +38,17 @@ function PendingInvitationCheck() {
 
   return (
     <div
-      className="bg-card rounded-2xl w-[440px] max-w-full overflow-hidden shadow-xl p-6 text-sm space-y-3"
+      className="bg-card border border-card-border rounded-2xl w-[440px] max-w-full overflow-hidden shadow-sm p-5 text-sm space-y-3"
       data-testid="card-pending-invite-check"
     >
-      <div className="flex items-start gap-2">
-        <Mail className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+      <div className="flex items-start gap-2.5">
+        <Mail className="w-4 h-4 mt-0.5 text-accent-foreground shrink-0" />
         <div>
-          <p className="font-semibold text-foreground">Were you invited?</p>
+          <p className="font-semibold text-foreground">Invited recently?</p>
           <p className="text-muted-foreground">
-            This app is invite-only. If you were invited, you must open the
-            link in your invitation email — signing in here won&apos;t work
-            until you accept the invite.
+            H2 Budget is invite-only. Open the link from your invitation
+            email to finish setting up your account — signing in here
+            won&apos;t work until the invite is accepted.
           </p>
         </div>
       </div>
@@ -68,7 +68,7 @@ function PendingInvitationCheck() {
           className="h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
           data-testid="button-check-invite"
         >
-          {checkInvitation.isPending ? "Checking..." : "Check"}
+          {checkInvitation.isPending ? "Checking…" : "Check"}
         </button>
       </form>
       {result.kind === "pending" && (
@@ -102,20 +102,131 @@ function PendingInvitationCheck() {
   );
 }
 
-function AuthBrandHeader() {
+function MarketingHero() {
   return (
     <div
-      className="flex flex-col items-center gap-3 mb-2 text-center"
+      className="hidden lg:flex flex-col justify-between h-full p-12 xl:p-16"
+      data-testid="auth-marketing-hero"
+    >
+      <div className="flex items-center gap-3">
+        <H2Logo className="w-9 h-9 rounded-md" />
+        <span className="text-base font-semibold tracking-tight text-foreground">
+          H2 Budget
+        </span>
+      </div>
+
+      <div className="space-y-6 max-w-md">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-foreground">
+          A household ledger, considered
+        </p>
+        <h1 className="text-4xl xl:text-5xl font-semibold tracking-tight text-foreground leading-[1.05]">
+          The quiet shape of your family&apos;s money.
+        </h1>
+        <p className="text-base text-muted-foreground leading-relaxed">
+          Connect every account, plan the month ahead, and watch the debt
+          payoff arc with the same calm precision a good ledger always
+          deserved.
+        </p>
+      </div>
+
+      <dl className="grid grid-cols-1 gap-4 max-w-md">
+        <HeroBullet
+          icon={<LineChart className="w-4 h-4" />}
+          title="Forecast, not guesswork"
+          body="Bills, paychecks, and bucket transfers projected out as a single running balance."
+        />
+        <HeroBullet
+          icon={<Layers className="w-4 h-4" />}
+          title="Buckets that actually balance"
+          body="Reimbursements, shared cards, and credit-card payments stay reconciled by design."
+        />
+        <HeroBullet
+          icon={<ShieldCheck className="w-4 h-4" />}
+          title="Invite-only by default"
+          body="Just your household. No public sign-ups, no shared workspaces."
+        />
+      </dl>
+    </div>
+  );
+}
+
+function HeroBullet({
+  icon,
+  title,
+  body,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="flex items-center justify-center w-7 h-7 rounded-md bg-accent text-accent-foreground shrink-0 mt-0.5">
+        {icon}
+      </span>
+      <div className="space-y-0.5">
+        <dt className="text-sm font-medium text-foreground">{title}</dt>
+        <dd className="text-sm text-muted-foreground leading-snug">{body}</dd>
+      </div>
+    </div>
+  );
+}
+
+function MobileBrandHeader() {
+  return (
+    <div
+      className="lg:hidden flex flex-col items-center gap-3 text-center"
       data-testid="auth-brand-header"
     >
-      <H2Logo className="w-12 h-12 rounded-lg" />
+      <H2Logo className="w-11 h-11 rounded-lg" />
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           H2 Budget
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Family finance, focused.
+        <p className="text-sm text-muted-foreground max-w-xs">
+          A considered household ledger — forecast, balance, and pay off
+          debt with intent.
         </p>
+      </div>
+    </div>
+  );
+}
+
+function AuthLayout({
+  intro,
+  children,
+}: {
+  intro: { eyebrow: string; title: string; body: string };
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto grid min-h-screen w-full max-w-[1280px] grid-cols-1 lg:grid-cols-[1.05fr_1fr]">
+        <MarketingHero />
+        <div className="flex flex-col items-center justify-center px-4 py-10 sm:px-8 lg:px-10 lg:py-12 gap-6 lg:border-l lg:border-border/60">
+          <MobileBrandHeader />
+          <div className="w-full max-w-[440px] space-y-2 lg:text-left text-center">
+            <p
+              className="hidden lg:block text-xs font-medium uppercase tracking-[0.18em] text-accent-foreground"
+              data-testid="auth-eyebrow"
+            >
+              {intro.eyebrow}
+            </p>
+            <h2
+              className="text-2xl lg:text-[28px] font-semibold tracking-tight text-foreground"
+              data-testid="auth-title"
+            >
+              {intro.title}
+            </h2>
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="auth-subtitle"
+            >
+              {intro.body}
+            </p>
+          </div>
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -123,15 +234,20 @@ function AuthBrandHeader() {
 
 export function SignInPage() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-5">
-      <AuthBrandHeader />
+    <AuthLayout
+      intro={{
+        eyebrow: "Welcome back",
+        title: "Sign in to your household",
+        body: "Pick up wherever you left off — the month, the buckets, and the running balance are right where you left them.",
+      }}
+    >
       <SignIn
         path={`${basePath}/sign-in`}
         routing="path"
         signUpUrl={`${basePath}/sign-up`}
       />
       <PendingInvitationCheck />
-    </div>
+    </AuthLayout>
   );
 }
 
@@ -170,8 +286,13 @@ export function SignUpPage() {
         <Redirect to="/dashboard" />
       </Show>
       <Show when="signed-out">
-        <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-5">
-          <AuthBrandHeader />
+        <AuthLayout
+          intro={{
+            eyebrow: "Accept your invitation",
+            title: "Finish setting up your account",
+            body: "You\u2019re a few details away from joining the household ledger.",
+          }}
+        >
           <SignUp
             path={`${basePath}/sign-up`}
             routing="path"
@@ -179,7 +300,7 @@ export function SignUpPage() {
             forceRedirectUrl={`${basePath}/dashboard`}
             fallbackRedirectUrl={`${basePath}/dashboard`}
           />
-        </div>
+        </AuthLayout>
       </Show>
     </>
   );
