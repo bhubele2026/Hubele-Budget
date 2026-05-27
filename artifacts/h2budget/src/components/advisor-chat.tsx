@@ -7,8 +7,9 @@ import {
   postAdvisorChat,
   useGetAdvisorNudge,
   type AdvisorChatMessage,
+  type AdvisorToolCall,
 } from "@workspace/api-client-react";
-import { X, Send, Loader2 } from "lucide-react";
+import { X, Send, Loader2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function AnthropicLogo({ className }: { className?: string }) {
@@ -29,6 +30,7 @@ function AnthropicLogo({ className }: { className?: string }) {
 interface DisplayedMessage {
   role: "user" | "assistant";
   content: string;
+  toolCalls?: AdvisorToolCall[];
 }
 
 const CLIENT_HISTORY_CAP = 12;
@@ -48,7 +50,10 @@ export function AdvisorChat() {
       return postAdvisorChat({ message: vars.message, history: vars.history });
     },
     onSuccess: (res) => {
-      setMessages((m) => [...m, { role: "assistant", content: res.message }]);
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: res.message, toolCalls: res.toolCalls },
+      ]);
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : "Something went wrong";
@@ -183,9 +188,9 @@ export function AdvisorChat() {
   );
 }
 
-function MessageBubble({ role, content }: DisplayedMessage) {
+function MessageBubble({ role, content, toolCalls }: DisplayedMessage) {
   return (
-    <div className={cn("flex", role === "user" ? "justify-end" : "justify-start")}>
+    <div className={cn("flex flex-col", role === "user" ? "items-end" : "items-start")}>
       <div
         className={cn(
           "max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap",
@@ -196,6 +201,31 @@ function MessageBubble({ role, content }: DisplayedMessage) {
       >
         {content}
       </div>
+      {toolCalls && toolCalls.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-1.5 max-w-[85%]">
+          {toolCalls.map((tc, i) => (
+            <ToolCallPill key={i} call={tc} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ToolCallPill({ call }: { call: AdvisorToolCall }) {
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border",
+        call.ok
+          ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300"
+          : "bg-destructive/5 border-destructive/30 text-destructive",
+      )}
+      title={call.name}
+      data-testid="advisor-tool-pill"
+    >
+      {call.ok ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+      <span>{call.summary}</span>
     </div>
   );
 }

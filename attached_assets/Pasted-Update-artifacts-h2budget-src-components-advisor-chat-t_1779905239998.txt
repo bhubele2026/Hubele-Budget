@@ -1,0 +1,74 @@
+Update artifacts/h2budget/src/components/advisor-chat.tsx to render the toolCalls array from the chat response.
+
+Three changes:
+
+1. Update the DisplayedMessage interface to optionally carry toolCalls:
+
+   interface DisplayedMessage {
+     role: "user" | "assistant";
+     content: string;
+     toolCalls?: AdvisorToolCall[];
+   }
+
+   And add AdvisorToolCall to the existing import line from @workspace/api-client-react.
+
+2. In the mutation's onSuccess handler, pass the toolCalls from the response onto the new assistant message:
+
+   onSuccess: (res) => {
+     setMessages((m) => [
+       ...m,
+       { role: "assistant", content: res.message, toolCalls: res.toolCalls },
+     ]);
+   },
+
+3. Update the MessageBubble component to render tool-call pills BELOW the message text when present. Each pill should show:
+   - A small check icon (lucide-react Check) when ok=true, an X (lucide-react X) when ok=false
+   - The summary text in a small pill style
+
+   Replace the existing MessageBubble with:
+
+   function MessageBubble({ role, content, toolCalls }: DisplayedMessage) {
+     return (
+       <div className={cn("flex flex-col", role === "user" ? "items-end" : "items-start")}>
+         <div
+           className={cn(
+             "max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap",
+             role === "user"
+               ? "bg-primary text-primary-foreground"
+               : "bg-muted text-foreground",
+           )}
+         >
+           {content}
+         </div>
+         {toolCalls && toolCalls.length > 0 && (
+           <div className="flex flex-wrap gap-1.5 mt-1.5 max-w-[85%]">
+             {toolCalls.map((tc, i) => (
+               <ToolCallPill key={i} call={tc} />
+             ))}
+           </div>
+         )}
+       </div>
+     );
+   }
+
+   function ToolCallPill({ call }: { call: AdvisorToolCall }) {
+     return (
+       <div
+         className={cn(
+           "inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border",
+           call.ok
+             ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300"
+             : "bg-destructive/5 border-destructive/30 text-destructive",
+         )}
+         title={call.name}
+         data-testid="advisor-tool-pill"
+       >
+         {call.ok ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+         <span>{call.summary}</span>
+       </div>
+     );
+   }
+
+   Note: this will need Check imported from lucide-react in addition to the existing imports (MessageSquare, X, Send, Loader2).
+
+After making the changes, run pnpm typecheck on the h2budget package. It should pass — AdvisorToolCall comes from the regenerated client. Don't restart the dev server yet.
