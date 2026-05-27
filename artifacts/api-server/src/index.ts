@@ -17,6 +17,7 @@ import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsR
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
 import { runStartupPendingNotesBackfill } from "./lib/startupPendingNotesBackfill";
 import "./lib/advisorReadTools";
+import "./lib/advisorWriteTools";
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,
