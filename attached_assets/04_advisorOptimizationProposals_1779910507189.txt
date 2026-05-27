@@ -1,0 +1,414 @@
+// Automated optimization proposals — the closer of Phase 4.
+//
+// Generates concrete, executable proposals that improve the household's
+// finances without being asked. Each proposal:
+//   - Names a specific tool the user can ask the advisor to run
+//   - Includes the exact arguments
+//   - Quantifies the dollar impact
+//   - Has a confidence score so the UI can suppress low-confidence ones
+//
+// Examples of what comes out:
+//   - "You have $400 of consistent monthly slack — recommend +$300/mo
+//     toward Chase Sapphire (the highest-APR debt)"
+//   - "Dining is $180 over budget on day 12 — recommend tightening to
+//     $X to stay under the cap for the rest of the month"
+//   - "Netflix charged $15.99 last month, $17.99 this month — looks
+//     like a price increase, recommend updating the recurring item"
+//
+// Proposals are deterministic — no AI call to generate. The advisor reads
+// them, references them, and (with user confirmation) can call the named
+// tool to execute. The dashboard nudge picks the single highest-confidence
+// proposal to surface proactively.
+//
+// Read-only on its own. Side-effects only happen when the user confirms
+// the proposed tool call through the existing tool-call flow.
+
+import { z } from "zod";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import {
+  db,
+  budgetCategoriesTable,
+  budgetLinesTable,
+  debtsTable,
+  recurringItemsTable,
+  transactionsTable,
+} from "@workspace/db";
+import { registerTool } from "./advisorTools";
+import { computeCashSignal } from "./cashSignal";
+import { buildHistoryBlock } from "./advisorHistoryContext";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface OptimizationProposal {
+  id: string;
+  // Confidence in [0..1]. 0.9+ = surface in dashboard; 0.7+ = include in
+  // panel; below = include only if user asks "any ideas".
+  confidence: number;
+  // Soft impact estimate in dollars/month. Optional — some proposals are
+  // qualitative (e.g. set up a goal).
+  monthlyImpact: number | null;
+  // Annual impact extrapolated from monthly when possible.
+  annualImpact: number | null;
+  category: "debt" | "budget" | "recurring" | "cashflow" | "savings";
+  title: string;
+  detail: string;
+  // The advisor tool the user can ask to run to apply this proposal.
+  // Empty if no auto-executable tool covers the suggestion.
+  suggestedTool?: {
+    name: string;
+    args: Record<string, unknown>;
+    // Human-readable phrasing the user (or advisor) can speak verbatim.
+    askPhrase: string;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Generators — each returns an array of proposals.
+// ---------------------------------------------------------------------------
+
+// 1) Cashflow slack -> avalanche extra payment
+async function debtAvalancheProposal(
+  householdId: string,
+  householdOwnerId: string,
+): Promise<OptimizationProposal[]> {
+  try {
+    const cs = await computeCashSignal(householdId, householdOwnerId, { horizonDays: 60 });
+    if (cs.status !== "ready") return [];
+    if (cs.maxSafeExtra < 100) return [];
+
+    const debts = await db
+      .select()
+      .from(debtsTable)
+      .where(and(eq(debtsTable.householdId, householdId), eq(debtsTable.status, "active")))
+      .orderBy(desc(debtsTable.apr));
+    const topApr = debts.find((d) => Number(d.balance) > 0);
+    if (!topApr) return [];
+
+    // Recommend ~75% of available headroom — keeps a safety margin.
+    const proposedExtra = Math.floor((cs.maxSafeExtra * 0.75) / 25) * 25;
+    if (proposedExtra < 50) return [];
+
+    const apr = Number(topApr.apr);
+    // Naive annual interest savings: extra payment * apr (assumes balance
+    // stays high enough to keep saving). Slightly understates true savings
+    // but is conservative.
+    const annualSavings = Math.round(proposedExtra * 12 * apr);
+
+    return [
+      {
+        id: `optim-avalanche-${topApr.id}`,
+        confidence: 0.88,
+        monthlyImpact: proposedExtra,
+        annualImpact: annualSavings,
+        category: "debt",
+        title: `Add $${proposedExtra}/mo to ${topApr.name}`,
+        detail: `Your cashflow projection shows ~$${cs.maxSafeExtra.toFixed(0)} of safe headroom and ${topApr.name} is your highest-APR debt (${(apr * 100).toFixed(2)}%). Putting $${proposedExtra}/mo extra here saves ~$${annualSavings}/yr in interest while keeping your $${cs.cashBuffer.toFixed(0)} buffer intact.`,
+        suggestedTool: undefined,
+      },
+    ];
+  } catch {
+    return [];
+  }
+}
+
+// 2) Budget pace overrun -> tighten remainder of month
+async function budgetTightenProposal(householdId: string): Promise<OptimizationProposal[]> {
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, "0")}-01`;
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysIntoMonth = now.getDate();
+  if (daysIntoMonth < 7 || daysIntoMonth > daysInMonth - 5) return [];
+
+  const lines = await db
+    .select({
+      categoryId: budgetLinesTable.categoryId,
+      planned: budgetLinesTable.plannedAmount,
+      name: budgetCategoriesTable.name,
+    })
+    .from(budgetLinesTable)
+    .innerJoin(
+      budgetCategoriesTable,
+      eq(budgetLinesTable.categoryId, budgetCategoriesTable.id),
+    )
+    .where(
+      and(
+        eq(budgetLinesTable.householdId, householdId),
+        eq(budgetLinesTable.monthStart, monthStart),
+      ),
+    );
+
+  const actualRows = await db
+    .select({
+      categoryId: transactionsTable.categoryId,
+      spent: sql<string>`coalesce(sum(case when ${transactionsTable.amount} < 0 then -${transactionsTable.amount} else 0 end)::text, '0')`,
+    })
+    .from(transactionsTable)
+    .where(
+      and(
+        eq(transactionsTable.householdId, householdId),
+        gte(transactionsTable.occurredOn, monthStart),
+        lt(transactionsTable.occurredOn, monthEnd),
+      ),
+    )
+    .groupBy(transactionsTable.categoryId);
+  const actualByCat = new Map<string, number>();
+  for (const r of actualRows) {
+    if (r.categoryId) actualByCat.set(r.categoryId, Number(r.spent));
+  }
+
+  const out: OptimizationProposal[] = [];
+  for (const line of lines) {
+    const planned = Number(line.planned) || 0;
+    const actual = actualByCat.get(line.categoryId) ?? 0;
+    if (planned <= 0) continue;
+    const paceProjection = (actual / daysIntoMonth) * daysInMonth;
+    if (paceProjection > planned * 1.2 && actual < planned) {
+      const remainingPlanned = planned - actual;
+      const daysLeft = daysInMonth - daysIntoMonth;
+      if (daysLeft <= 0) continue;
+      const dailyCap = remainingPlanned / daysLeft;
+      out.push({
+        id: `optim-budget-pace-${line.categoryId}`,
+        confidence: 0.7,
+        monthlyImpact: Math.round((paceProjection - planned) * 100) / 100,
+        annualImpact: null,
+        category: "budget",
+        title: `Cap ${line.name} at $${dailyCap.toFixed(2)}/day to stay under budget`,
+        detail: `You've spent $${actual.toFixed(2)} of $${planned.toFixed(2)} in ${line.name} on day ${daysIntoMonth}/${daysInMonth}. At current pace you'd land $${(paceProjection - planned).toFixed(0)} over. Holding to ~$${dailyCap.toFixed(2)}/day for the next ${daysLeft} days keeps it on track.`,
+        suggestedTool: undefined,
+      });
+    }
+  }
+  return out.slice(0, 2);
+}
+
+// 3) Recurring item amount drift (price-increase detection)
+async function recurringAmountDriftProposal(
+  householdId: string,
+): Promise<OptimizationProposal[]> {
+  const items = await db
+    .select()
+    .from(recurringItemsTable)
+    .where(
+      and(
+        eq(recurringItemsTable.householdId, householdId),
+        eq(recurringItemsTable.active, "true"),
+      ),
+    );
+  if (items.length === 0) return [];
+
+  // For each recurring item, look at recent transactions whose description
+  // contains the item name. If the most recent N charges are consistently
+  // a different amount than the recurring item's stored amount, suggest
+  // updating.
+  const proposals: OptimizationProposal[] = [];
+  const since = new Date();
+  since.setMonth(since.getMonth() - 4);
+  const sinceISO = `${since.getFullYear()}-${String(since.getMonth() + 1).padStart(2, "0")}-01`;
+
+  for (const item of items.slice(0, 30)) {
+    if (item.kind !== "bill") continue;
+    const stored = Number(item.amount);
+    if (stored <= 0) continue;
+    const rows = await db
+      .select({
+        amount: transactionsTable.amount,
+        date: transactionsTable.occurredOn,
+      })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.householdId, householdId),
+          sql`lower(${transactionsTable.description}) like lower(${"%" + item.name.slice(0, 20) + "%"})`,
+          gte(transactionsTable.occurredOn, sinceISO),
+        ),
+      )
+      .orderBy(desc(transactionsTable.occurredOn))
+      .limit(3);
+    if (rows.length < 2) continue;
+    const amounts = rows.map((r) => Math.abs(Number(r.amount)));
+    // Are the most recent charges consistent with each other but different from stored?
+    const avgRecent = amounts.reduce((s, v) => s + v, 0) / amounts.length;
+    const spread = Math.max(...amounts) - Math.min(...amounts);
+    if (spread > avgRecent * 0.15) continue; // too variable to be confident
+    const pctDelta = Math.abs(avgRecent - stored) / stored;
+    if (pctDelta < 0.05) continue; // <5% drift, probably noise
+    if (pctDelta > 0.5) continue; // >50% drift, probably wrong item
+    const monthlyImpact = (avgRecent - stored) *
+      (item.frequency === "monthly" ? 1 : item.frequency === "biweekly" ? 26 / 12 : 1);
+    proposals.push({
+      id: `optim-recurring-drift-${item.id}`,
+      confidence: 0.78,
+      monthlyImpact: Math.round(monthlyImpact * 100) / 100,
+      annualImpact: Math.round(monthlyImpact * 12 * 100) / 100,
+      category: "recurring",
+      title: `${item.name} actuals don't match stored amount`,
+      detail: `Stored as $${stored.toFixed(2)} but recent ${rows.length} charges averaged $${avgRecent.toFixed(2)} (last on ${rows[0]?.date}). Looks like a price change.`,
+      suggestedTool: {
+        name: "update_recurring_amount",
+        args: { recurringItemName: item.name, newAmount: Math.round(avgRecent * 100) / 100 },
+        askPhrase: `Update the ${item.name} recurring amount to $${avgRecent.toFixed(2)}`,
+      },
+    });
+  }
+  return proposals.slice(0, 3);
+}
+
+// 4) Stale bank snapshot
+async function staleBankSnapshotProposal(
+  householdId: string,
+  householdOwnerId: string,
+): Promise<OptimizationProposal[]> {
+  try {
+    const cs = await computeCashSignal(householdId, householdOwnerId, { horizonDays: 30 });
+    if (cs.status === "no_data" || !cs.snapshotAt) {
+      return [
+        {
+          id: "optim-snapshot-missing",
+          confidence: 0.95,
+          monthlyImpact: null,
+          annualImpact: null,
+          category: "cashflow",
+          title: "No bank snapshot set",
+          detail: "The 90-day cash forecast can't anchor without a current checking balance. Set one to enable accurate projections, avalanche-ready status, and forecast nudges.",
+          suggestedTool: undefined,
+        },
+      ];
+    }
+    const ageDays =
+      (Date.now() - new Date(cs.snapshotAt).getTime()) / (86400 * 1000);
+    if (ageDays < 14) return [];
+    return [
+      {
+        id: "optim-snapshot-stale",
+        confidence: ageDays > 30 ? 0.92 : 0.78,
+        monthlyImpact: null,
+        annualImpact: null,
+        category: "cashflow",
+        title: `Bank snapshot is ${Math.round(ageDays)} days old`,
+        detail: `Your cash projection anchors on a snapshot from ${cs.snapshotAt.slice(0, 10)}. The longer it sits, the more the forecast drifts from reality. Update it with your current checking balance.`,
+        suggestedTool: undefined,
+      },
+    ];
+  } catch {
+    return [];
+  }
+}
+
+// 5) Consistent positive net -> savings opportunity
+async function savingsOpportunityProposal(
+  householdId: string,
+): Promise<OptimizationProposal[]> {
+  const history = await buildHistoryBlock(householdId);
+  if (history.monthlyTotals.length < 3) return [];
+  const consistent = history.monthlyTotals.filter((m) => m.net > 0);
+  if (consistent.length < history.monthlyTotals.length * 0.6) return [];
+  const avgNet =
+    consistent.reduce((s, m) => s + m.net, 0) / consistent.length;
+  if (avgNet < 200) return [];
+  // Round down to a friendly increment
+  const suggested = Math.floor(avgNet * 0.5 / 50) * 50;
+  if (suggested < 100) return [];
+  return [
+    {
+      id: "optim-savings-pattern",
+      confidence: 0.82,
+      monthlyImpact: suggested,
+      annualImpact: suggested * 12,
+      category: "savings",
+      title: `Average net +$${Math.round(avgNet)}/mo — set aside $${suggested}?`,
+      detail: `Over the last ${history.monthlyTotals.length} months you've netted positive in ${consistent.length} of them, averaging $${Math.round(avgNet)}/mo. Automating a $${suggested}/mo savings move captures the slack before it gets absorbed by lifestyle creep.`,
+      suggestedTool: undefined,
+    },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Top-level builder
+// ---------------------------------------------------------------------------
+
+export async function buildOptimizationProposals(
+  householdId: string,
+  householdOwnerId: string,
+): Promise<OptimizationProposal[]> {
+  const results = await Promise.allSettled([
+    debtAvalancheProposal(householdId, householdOwnerId),
+    budgetTightenProposal(householdId),
+    recurringAmountDriftProposal(householdId),
+    staleBankSnapshotProposal(householdId, householdOwnerId),
+    savingsOpportunityProposal(householdId),
+  ]);
+  const all: OptimizationProposal[] = [];
+  for (const r of results) {
+    if (r.status === "fulfilled") all.push(...r.value);
+  }
+  // Sort by confidence descending, then by absolute monthly impact descending.
+  all.sort((a, b) => {
+    if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+    return Math.abs(b.monthlyImpact ?? 0) - Math.abs(a.monthlyImpact ?? 0);
+  });
+  return all.slice(0, 6);
+}
+
+// ---------------------------------------------------------------------------
+// Cache — 1 hour TTL since these are heavier to compute.
+// ---------------------------------------------------------------------------
+
+const PROPOSAL_CACHE_TTL_MS = 60 * 60 * 1000;
+const cache = new Map<string, { proposals: OptimizationProposal[]; generatedAt: number }>();
+
+export function getCachedProposals(householdId: string) {
+  const hit = cache.get(householdId);
+  if (!hit) return null;
+  if (Date.now() - hit.generatedAt > PROPOSAL_CACHE_TTL_MS) {
+    cache.delete(householdId);
+    return null;
+  }
+  return hit;
+}
+
+export function setCachedProposals(householdId: string, proposals: OptimizationProposal[]) {
+  const entry = { proposals, generatedAt: Date.now() };
+  cache.set(householdId, entry);
+  return entry;
+}
+
+// ---------------------------------------------------------------------------
+// Tool — gets the proposals so the advisor can read them aloud and offer
+// to apply the highest-confidence ones via existing tools.
+// ---------------------------------------------------------------------------
+
+const getProposalsInput = z.object({}).optional();
+
+registerTool({
+  name: "get_optimization_proposals",
+  description:
+    "Get the prioritized list of automated optimization proposals — concrete actions that would improve the household's finances based on the current snapshot. Each proposal has a confidence score and may name an advisor tool the user can ask to run. Use when the user asks for ideas, suggestions, 'what should I do', 'any wins available', etc.",
+  riskTier: "read",
+  inputSchema: getProposalsInput,
+  jsonSchema: { type: "object", properties: {}, additionalProperties: false },
+  handler: async (_input, ctx) => {
+    const cached = getCachedProposals(ctx.householdId);
+    if (cached) {
+      return {
+        result: {
+          count: cached.proposals.length,
+          generatedAt: new Date(cached.generatedAt).toISOString(),
+          proposals: cached.proposals,
+        },
+      };
+    }
+    const proposals = await buildOptimizationProposals(ctx.householdId, ctx.householdOwnerId);
+    const entry = setCachedProposals(ctx.householdId, proposals);
+    return {
+      result: {
+        count: proposals.length,
+        generatedAt: new Date(entry.generatedAt).toISOString(),
+        proposals,
+      },
+    };
+  },
+});

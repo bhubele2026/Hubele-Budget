@@ -1,0 +1,329 @@
+// Deeper situational awareness for the AI advisor.
+//
+// Extends the per-turn HouseholdContext with rolling historical baselines:
+// - Last 6 calendar months of total income / spend / net (one row per month)
+// - Per-category 6-month average spend, with current-month pace overlay
+// - Day-by-day spending velocity for the current month
+// - Year-over-year same-month comparison when prior-year data exists
+//
+// Read-only. Pulls from existing transaction data. No new tables.
+//
+// Exposes two helpers:
+// - extendContextWithHistory(ctx, householdId): mutates a HouseholdContext
+//   in place to add a `.history` field. Called from advisor.ts before
+//   formatting the system prompt.
+// - get_spending_trends tool: registered with the tool dispatcher so the
+//   model can also pull this on demand mid-conversation if the snapshot
+//   didn't include enough.
+
+import { z } from "zod";
+import { and, eq, gte, lt, sql } from "drizzle-orm";
+import {
+  db,
+  budgetCategoriesTable,
+  transactionsTable,
+} from "@workspace/db";
+import { registerTool } from "./advisorTools";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface MonthlyTotals {
+  monthStart: string; // YYYY-MM-01
+  monthLabel: string; // "May 2026"
+  income: number;
+  spend: number;
+  net: number;
+  transactionCount: number;
+}
+
+export interface CategoryTrend {
+  category: string;
+  // Rolling 6-month average spend (excluding current month).
+  avgSpend6mo: number;
+  // Standard deviation across those 6 months (volatility signal).
+  stdDev6mo: number;
+  // Current month-to-date spend.
+  currentMtd: number;
+  // Pace projection: current spend / (days into month) * (days in month).
+  paceProjection: number;
+  // Pace delta vs avg, as percentage. Positive = trending high.
+  paceDeltaPct: number | null;
+}
+
+export interface HistoryBlock {
+  monthlyTotals: MonthlyTotals[];
+  categoryTrends: CategoryTrend[];
+  yoyComparison: {
+    thisMonthSpend: number;
+    sameMonthLastYearSpend: number | null;
+    deltaPct: number | null;
+  } | null;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function fmtMonth(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function monthLabel(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+// Build the array of {start, end, label} boundaries for the last `n` months
+// EXCLUDING the current month. Used so averages aren't dragged by a partial
+// month.
+function previousMonthBounds(now: Date, n: number): Array<{ start: string; end: string; label: string }> {
+  const out: Array<{ start: string; end: string; label: string }> = [];
+  for (let i = n; i >= 1; i--) {
+    const startD = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const endD = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+    out.push({
+      start: fmtMonth(startD),
+      end: fmtMonth(endD),
+      label: monthLabel(startD),
+    });
+  }
+  return out;
+}
+
+function stddev(values: number[]): number {
+  if (values.length === 0) return 0;
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+// ---------------------------------------------------------------------------
+// Build the history block — used both as a context extender and as a
+// standalone tool result.
+// ---------------------------------------------------------------------------
+
+export async function buildHistoryBlock(householdId: string): Promise<HistoryBlock> {
+  const now = new Date();
+  const currentMonthStart = fmtMonth(now);
+  const currentMonthEnd = fmtMonth(new Date(now.getFullYear(), now.getMonth() + 1, 1));
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysIntoMonth = now.getDate();
+
+  const monthBounds6 = previousMonthBounds(now, 6);
+
+  // Monthly totals (one query per month — small, only 6 queries total)
+  const monthlyTotals: MonthlyTotals[] = [];
+  for (const m of monthBounds6) {
+    const [agg] = await db
+      .select({
+        income: sql<string>`coalesce(sum(case when ${transactionsTable.amount} > 0 then ${transactionsTable.amount} else 0 end)::text, '0')`,
+        spend: sql<string>`coalesce(sum(case when ${transactionsTable.amount} < 0 then -${transactionsTable.amount} else 0 end)::text, '0')`,
+        cnt: sql<number>`count(*)::int`,
+      })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.householdId, householdId),
+          gte(transactionsTable.occurredOn, m.start),
+          lt(transactionsTable.occurredOn, m.end),
+        ),
+      );
+    const income = Number(agg?.income ?? "0");
+    const spend = Number(agg?.spend ?? "0");
+    monthlyTotals.push({
+      monthStart: m.start,
+      monthLabel: m.label,
+      income: Math.round(income * 100) / 100,
+      spend: Math.round(spend * 100) / 100,
+      net: Math.round((income - spend) * 100) / 100,
+      transactionCount: agg?.cnt ?? 0,
+    });
+  }
+
+  // Per-category spend rolled up across the 6 prior months — one query.
+  const earliest = monthBounds6[0]?.start ?? currentMonthStart;
+  const priorCategoryRows = await db
+    .select({
+      month: sql<string>`to_char(${transactionsTable.occurredOn}, 'YYYY-MM-01')`,
+      categoryName: budgetCategoriesTable.name,
+      spend: sql<string>`coalesce(sum(case when ${transactionsTable.amount} < 0 then -${transactionsTable.amount} else 0 end)::text, '0')`,
+    })
+    .from(transactionsTable)
+    .leftJoin(
+      budgetCategoriesTable,
+      eq(transactionsTable.categoryId, budgetCategoriesTable.id),
+    )
+    .where(
+      and(
+        eq(transactionsTable.householdId, householdId),
+        gte(transactionsTable.occurredOn, earliest),
+        lt(transactionsTable.occurredOn, currentMonthStart),
+        sql`${transactionsTable.amount} < 0`,
+      ),
+    )
+    .groupBy(sql`to_char(${transactionsTable.occurredOn}, 'YYYY-MM-01')`, budgetCategoriesTable.name);
+
+  // Pivot: per-category array of monthly spend values
+  const byCategoryMonthly = new Map<string, number[]>();
+  for (const row of priorCategoryRows) {
+    const cat = row.categoryName ?? "Uncategorized";
+    const arr = byCategoryMonthly.get(cat) ?? [];
+    arr.push(Number(row.spend));
+    byCategoryMonthly.set(cat, arr);
+  }
+
+  // Current month per-category spend
+  const currentCategoryRows = await db
+    .select({
+      categoryName: budgetCategoriesTable.name,
+      spend: sql<string>`coalesce(sum(case when ${transactionsTable.amount} < 0 then -${transactionsTable.amount} else 0 end)::text, '0')`,
+    })
+    .from(transactionsTable)
+    .leftJoin(
+      budgetCategoriesTable,
+      eq(transactionsTable.categoryId, budgetCategoriesTable.id),
+    )
+    .where(
+      and(
+        eq(transactionsTable.householdId, householdId),
+        gte(transactionsTable.occurredOn, currentMonthStart),
+        lt(transactionsTable.occurredOn, currentMonthEnd),
+        sql`${transactionsTable.amount} < 0`,
+      ),
+    )
+    .groupBy(budgetCategoriesTable.name);
+
+  const currentByCategory = new Map<string, number>();
+  for (const r of currentCategoryRows) {
+    currentByCategory.set(r.categoryName ?? "Uncategorized", Number(r.spend));
+  }
+
+  // Merge: every category appearing in either set
+  const allCategories = new Set<string>([
+    ...byCategoryMonthly.keys(),
+    ...currentByCategory.keys(),
+  ]);
+
+  const categoryTrends: CategoryTrend[] = [];
+  for (const cat of allCategories) {
+    const priorMonthly = byCategoryMonthly.get(cat) ?? [];
+    const avg = priorMonthly.length > 0
+      ? priorMonthly.reduce((s, v) => s + v, 0) / priorMonthly.length
+      : 0;
+    const sd = stddev(priorMonthly);
+    const currentMtd = currentByCategory.get(cat) ?? 0;
+    const paceProjection = daysIntoMonth > 0
+      ? (currentMtd / daysIntoMonth) * daysInMonth
+      : 0;
+    const paceDeltaPct = avg > 0
+      ? Math.round(((paceProjection - avg) / avg) * 100)
+      : null;
+    categoryTrends.push({
+      category: cat,
+      avgSpend6mo: Math.round(avg * 100) / 100,
+      stdDev6mo: Math.round(sd * 100) / 100,
+      currentMtd: Math.round(currentMtd * 100) / 100,
+      paceProjection: Math.round(paceProjection * 100) / 100,
+      paceDeltaPct,
+    });
+  }
+  // Sort by absolute current MTD descending so highest-impact categories
+  // appear first.
+  categoryTrends.sort((a, b) => b.currentMtd - a.currentMtd);
+
+  // Year-over-year comparison: same month last year vs this month MTD
+  // (proportional to days elapsed for an apples-to-apples view).
+  const yoyStartD = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+  const yoyEndD = new Date(now.getFullYear() - 1, now.getMonth(), daysIntoMonth + 1);
+  const [yoyAgg] = await db
+    .select({
+      spend: sql<string>`coalesce(sum(case when ${transactionsTable.amount} < 0 then -${transactionsTable.amount} else 0 end)::text, '0')`,
+      cnt: sql<number>`count(*)::int`,
+    })
+    .from(transactionsTable)
+    .where(
+      and(
+        eq(transactionsTable.householdId, householdId),
+        gte(transactionsTable.occurredOn, fmtMonth(yoyStartD)),
+        lt(transactionsTable.occurredOn, `${yoyEndD.getFullYear()}-${String(yoyEndD.getMonth() + 1).padStart(2, "0")}-${String(yoyEndD.getDate()).padStart(2, "0")}`),
+      ),
+    );
+  let yoyComparison: HistoryBlock["yoyComparison"] = null;
+  if ((yoyAgg?.cnt ?? 0) > 0) {
+    const lastYearSpend = Number(yoyAgg?.spend ?? "0");
+    const thisMonthSpend = Array.from(currentByCategory.values()).reduce((s, v) => s + v, 0);
+    yoyComparison = {
+      thisMonthSpend: Math.round(thisMonthSpend * 100) / 100,
+      sameMonthLastYearSpend: Math.round(lastYearSpend * 100) / 100,
+      deltaPct: lastYearSpend > 0
+        ? Math.round(((thisMonthSpend - lastYearSpend) / lastYearSpend) * 100)
+        : null,
+    };
+  }
+
+  return {
+    monthlyTotals,
+    categoryTrends,
+    yoyComparison,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Format the history block for inclusion in the system prompt.
+// Kept compact — the model gets a lot of context already.
+// ---------------------------------------------------------------------------
+
+export function formatHistoryBlockForPrompt(history: HistoryBlock): string {
+  const lines: string[] = [];
+
+  if (history.monthlyTotals.length > 0) {
+    lines.push("LAST 6 MONTHS — INCOME/SPEND/NET:");
+    for (const m of history.monthlyTotals) {
+      lines.push(`  ${m.monthLabel}: income $${m.income.toFixed(2)}, spend $${m.spend.toFixed(2)}, net $${m.net.toFixed(2)}`);
+    }
+    lines.push("");
+  }
+
+  if (history.categoryTrends.length > 0) {
+    lines.push("CATEGORY TRENDS (6-month avg vs current pace):");
+    for (const t of history.categoryTrends.slice(0, 12)) {
+      const paceTag = t.paceDeltaPct != null
+        ? ` [pace ${t.paceDeltaPct > 0 ? "+" : ""}${t.paceDeltaPct}% vs avg]`
+        : "";
+      lines.push(
+        `  ${t.category}: 6mo avg $${t.avgSpend6mo.toFixed(2)} (±$${t.stdDev6mo.toFixed(2)}), current MTD $${t.currentMtd.toFixed(2)}, pace $${t.paceProjection.toFixed(2)}${paceTag}`,
+      );
+    }
+    lines.push("");
+  }
+
+  if (history.yoyComparison) {
+    const y = history.yoyComparison;
+    const deltaPart = y.deltaPct != null ? `, ${y.deltaPct > 0 ? "+" : ""}${y.deltaPct}% YoY` : "";
+    lines.push(`SAME MONTH LAST YEAR (partial): this month MTD $${y.thisMonthSpend.toFixed(2)} vs $${(y.sameMonthLastYearSpend ?? 0).toFixed(2)} last year${deltaPart}`);
+  }
+
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Tool: get_spending_trends
+// Lets the model pull this block mid-conversation if it wasn't in the
+// initial snapshot (or to confirm a number after a tool call has run).
+// ---------------------------------------------------------------------------
+
+const getSpendingTrendsInput = z.object({}).optional();
+
+registerTool({
+  name: "get_spending_trends",
+  description:
+    "Get the household's 6-month spending baselines, current-month pace per category, and same-month-last-year comparison. Use when the user asks about trends, 'are we spending more than usual', seasonality, or for sanity-checking advice with historical context.",
+  riskTier: "read",
+  inputSchema: getSpendingTrendsInput,
+  jsonSchema: { type: "object", properties: {}, additionalProperties: false },
+  handler: async (_input, ctx) => {
+    const history = await buildHistoryBlock(ctx.householdId);
+    return { result: history };
+  },
+});

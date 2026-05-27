@@ -1,0 +1,445 @@
+// Weekly insights for the AI advisor.
+//
+// Generates 3-5 prioritized, actionable observations about the household's
+// finances by combining: anomaly detection, cashflow projection, debt
+// state, budget-vs-actual, and recurring schedule scans.
+//
+// Two surfaces:
+// 1. A GET /api/advisor/insights endpoint (added in the wiring step that
+//    follows this file drop) returns the latest insights. Cached in-process
+//    for 30 minutes per household; recomputed on demand.
+// 2. A tool the model can call mid-conversation to ground its answer
+//    in the same insight set the panel shows.
+//
+// Insights are deterministic — no AI call to generate. The AI advisor
+// reads them, references them in chat, and explains them in plain language.
+//
+// Each insight has:
+//   - id: stable across runs for the same root condition (so the UI can
+//     persist "dismissed" state)
+//   - severity: info | warn | alert
+//   - category: which area it's about (spending, cashflow, debt, budget,
+//     recurring, opportunity)
+//   - title: short headline
+//   - detail: 1-3 sentence body
+//   - suggestion: optional next-action sentence (free-text, may include
+//     a tool name the user can ask the advisor to run)
+
+import { z } from "zod";
+import { and, eq, gte, lt, sql } from "drizzle-orm";
+import {
+  db,
+  budgetCategoriesTable,
+  budgetLinesTable,
+  debtsTable,
+  recurringItemsTable,
+  transactionsTable,
+} from "@workspace/db";
+import { registerTool } from "./advisorTools";
+import { computeAnomalies, computeUnusualTransactions } from "./advisorAnomalyDetection";
+import { computeCashSignal, expandItem } from "./cashSignal";
+import { buildHistoryBlock } from "./advisorHistoryContext";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface Insight {
+  id: string;
+  severity: "info" | "warn" | "alert";
+  category:
+    | "spending"
+    | "cashflow"
+    | "debt"
+    | "budget"
+    | "recurring"
+    | "opportunity";
+  title: string;
+  detail: string;
+  suggestion?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Generators — each returns an array of insights or an empty array.
+// Kept independent so failures in one don't kill the rest.
+// ---------------------------------------------------------------------------
+
+async function spendingAnomalyInsights(householdId: string): Promise<Insight[]> {
+  const anomalies = await computeAnomalies(householdId);
+  return anomalies.slice(0, 3).map((a) => ({
+    id: `spend-${a.category.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+    severity: a.severity,
+    category: "spending" as const,
+    title:
+      a.paceDeltaPct > 0
+        ? `${a.category} pacing ${a.paceDeltaPct}% above usual`
+        : `${a.category} pacing ${Math.abs(a.paceDeltaPct)}% below usual`,
+    detail: a.reason,
+    suggestion:
+      a.paceDeltaPct > 50
+        ? `Ask the advisor: "where am I overspending in ${a.category} this month?"`
+        : undefined,
+  }));
+}
+
+async function unusualTransactionInsights(householdId: string): Promise<Insight[]> {
+  const unusual = await computeUnusualTransactions(householdId);
+  return unusual.slice(0, 2).map((t) => ({
+    id: `txn-${t.transactionId}`,
+    severity: "info" as const,
+    category: "spending" as const,
+    title: `Unusual ${t.category ?? "uncategorized"} charge: $${Math.abs(t.amount).toFixed(2)}`,
+    detail: `${t.description} on ${t.date}. ${t.reason}`,
+    suggestion: undefined,
+  }));
+}
+
+async function cashflowInsights(
+  householdId: string,
+  householdOwnerId: string,
+): Promise<Insight[]> {
+  try {
+    const cs = await computeCashSignal(householdId, householdOwnerId, { horizonDays: 60 });
+    const out: Insight[] = [];
+    if (cs.status === "not_yet") {
+      out.push({
+        id: "cashflow-buffer-breach",
+        severity: "alert",
+        category: "cashflow",
+        title: `Projected to dip below cash buffer`,
+        detail: `Lowest projected balance is $${cs.lowestProjected.toFixed(2)}${
+          cs.lowestDate ? ` on ${cs.lowestDate}` : ""
+        }, below the $${cs.cashBuffer.toFixed(2)} target.`,
+        suggestion: 'Ask the advisor: "what can we cut or delay before the dip?"',
+      });
+    } else if (cs.status === "tight") {
+      out.push({
+        id: "cashflow-tight",
+        severity: "warn",
+        category: "cashflow",
+        title: "Cashflow margin is thin",
+        detail: `Lowest projected balance ($${cs.lowestProjected.toFixed(2)}) is within $200 of your $${cs.cashBuffer.toFixed(2)} buffer.`,
+        suggestion: undefined,
+      });
+    } else if (cs.status === "ready" && cs.maxSafeExtra > 100) {
+      out.push({
+        id: "cashflow-opportunity",
+        severity: "info",
+        category: "opportunity",
+        title: `~$${cs.maxSafeExtra.toFixed(0)} of cash headroom this cycle`,
+        detail: `Projection shows you can comfortably move up to $${cs.maxSafeExtra.toFixed(2)} extra toward debt or savings without breaking the buffer.`,
+        suggestion: 'Ask the advisor: "should I throw extra at the highest-APR debt?"',
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+async function debtInsights(householdId: string): Promise<Insight[]> {
+  const debts = await db
+    .select()
+    .from(debtsTable)
+    .where(and(eq(debtsTable.householdId, householdId), eq(debtsTable.status, "active")));
+
+  const out: Insight[] = [];
+  let topApr: typeof debts[number] | null = null;
+  let underwaterDebts: Array<{ name: string; balance: number; apr: number; minPayment: number }> = [];
+  for (const d of debts) {
+    const balance = Number(d.balance);
+    const apr = Number(d.apr);
+    const minP = Number(d.minPayment ?? "0");
+    if (balance <= 0) continue;
+    if (!topApr || apr > Number(topApr.apr)) topApr = d;
+    if (minP > 0) {
+      const monthlyInterest = (apr / 12) * balance;
+      if (minP <= monthlyInterest * 1.05) {
+        underwaterDebts.push({ name: d.name, balance, apr, minPayment: minP });
+      }
+    }
+  }
+  if (topApr) {
+    out.push({
+      id: `debt-top-apr-${topApr.id}`,
+      severity: "info",
+      category: "debt",
+      title: `${topApr.name} is your highest-APR debt`,
+      detail: `Balance $${Number(topApr.balance).toFixed(2)} at ${(Number(topApr.apr) * 100).toFixed(2)}% APR. Any extra payment dollar gets the most leverage here.`,
+      suggestion: undefined,
+    });
+  }
+  for (const u of underwaterDebts.slice(0, 2)) {
+    out.push({
+      id: `debt-underwater-${u.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      severity: "alert",
+      category: "debt",
+      title: `${u.name}: minimum payment barely covers interest`,
+      detail: `At $${u.minPayment.toFixed(2)}/mo and ${(u.apr * 100).toFixed(2)}% APR, the balance ($${u.balance.toFixed(2)}) will shrink very slowly — or not at all. Any extra principal here saves a lot over time.`,
+      suggestion: `Ask the advisor: "how much would I save adding $100/mo to ${u.name}?"`,
+    });
+  }
+  return out;
+}
+
+async function budgetInsights(householdId: string): Promise<Insight[]> {
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, "0")}-01`;
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysIntoMonth = now.getDate();
+
+  const lines = await db
+    .select({
+      categoryId: budgetLinesTable.categoryId,
+      planned: budgetLinesTable.plannedAmount,
+      name: budgetCategoriesTable.name,
+    })
+    .from(budgetLinesTable)
+    .innerJoin(
+      budgetCategoriesTable,
+      eq(budgetLinesTable.categoryId, budgetCategoriesTable.id),
+    )
+    .where(
+      and(
+        eq(budgetLinesTable.householdId, householdId),
+        eq(budgetLinesTable.monthStart, monthStart),
+      ),
+    );
+  if (lines.length === 0) return [];
+
+  const actualRows = await db
+    .select({
+      categoryId: transactionsTable.categoryId,
+      spent: sql<string>`coalesce(sum(case when ${transactionsTable.amount} < 0 then -${transactionsTable.amount} else 0 end)::text, '0')`,
+    })
+    .from(transactionsTable)
+    .where(
+      and(
+        eq(transactionsTable.householdId, householdId),
+        gte(transactionsTable.occurredOn, monthStart),
+        lt(transactionsTable.occurredOn, monthEnd),
+      ),
+    )
+    .groupBy(transactionsTable.categoryId);
+  const actualByCat = new Map<string, number>();
+  for (const r of actualRows) {
+    if (r.categoryId) actualByCat.set(r.categoryId, Number(r.spent));
+  }
+
+  const out: Insight[] = [];
+  for (const line of lines) {
+    const planned = Number(line.planned) || 0;
+    const actual = actualByCat.get(line.categoryId) ?? 0;
+    if (planned <= 0) continue;
+
+    const paceProjection = daysIntoMonth > 0 ? (actual / daysIntoMonth) * daysInMonth : 0;
+    if (actual > planned) {
+      // Already over budget.
+      out.push({
+        id: `budget-over-${line.categoryId}`,
+        severity: actual > planned * 1.5 ? "alert" : "warn",
+        category: "budget",
+        title: `${line.name} is over budget`,
+        detail: `Spent $${actual.toFixed(2)} of $${planned.toFixed(2)} planned (day ${daysIntoMonth}/${daysInMonth}).`,
+        suggestion: undefined,
+      });
+    } else if (paceProjection > planned * 1.15 && daysIntoMonth >= 7) {
+      // Tracking over.
+      out.push({
+        id: `budget-pace-${line.categoryId}`,
+        severity: "warn",
+        category: "budget",
+        title: `${line.name} pacing over budget`,
+        detail: `At day ${daysIntoMonth} you've spent $${actual.toFixed(2)} of $${planned.toFixed(2)} — projecting $${paceProjection.toFixed(2)} for the month.`,
+        suggestion: undefined,
+      });
+    }
+  }
+  // Cap to 3 budget insights so the panel stays focused.
+  return out.slice(0, 3);
+}
+
+async function recurringInsights(householdId: string): Promise<Insight[]> {
+  const items = await db
+    .select()
+    .from(recurringItemsTable)
+    .where(
+      and(
+        eq(recurringItemsTable.householdId, householdId),
+        eq(recurringItemsTable.active, "true"),
+      ),
+    );
+  if (items.length === 0) return [];
+
+  const today = new Date();
+  const from = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const to = new Date(from);
+  to.setDate(to.getDate() + 7);
+
+  type Ev = { date: string; amount: number; kind: "income" | "expense"; label: string };
+  const events: Ev[] = [];
+  for (const item of items) {
+    events.push(...(expandItem(item, from, to) as Ev[]));
+  }
+  if (events.length === 0) return [];
+
+  const sortedExpenses = events
+    .filter((e) => e.kind === "expense")
+    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+  const top = sortedExpenses[0];
+  if (!top) return [];
+  if (Math.abs(top.amount) < 200) return [];
+  return [
+    {
+      id: `recurring-7day-top-${top.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      severity: "info",
+      category: "recurring",
+      title: `Big bill in next 7 days: ${top.label} ($${Math.abs(top.amount).toFixed(2)})`,
+      detail: `Scheduled for ${top.date}.`,
+      suggestion: undefined,
+    },
+  ];
+}
+
+async function memoryAwareOpportunityInsights(
+  householdId: string,
+): Promise<Insight[]> {
+  // Lightweight: pull goal-tagged memories and surface a reminder.
+  // (Real "did you actually save" tracking comes later.)
+  // For now we just nudge the user about their stated goals if any.
+  try {
+    // Hoist the schema import via dynamic require to avoid a hard
+    // dependency cycle if memory tools weren't loaded.
+    const { advisorMemoryTable } = await import("@workspace/db");
+    const rows = await db
+      .select()
+      .from(advisorMemoryTable)
+      .where(eq(advisorMemoryTable.householdId, householdId));
+    const goals = rows.filter((r) => r.kind === "goal");
+    if (goals.length === 0) return [];
+    const g = goals[0];
+    return [
+      {
+        id: `goal-reminder-${g.id}`,
+        severity: "info",
+        category: "opportunity",
+        title: "Reminder: stated goal",
+        detail: g.content,
+        suggestion: 'Ask the advisor: "are we on track for this?"',
+      },
+    ];
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Top-level builder — runs all generators in parallel, dedupes by id,
+// caps to a sensible total, and sorts by severity.
+// ---------------------------------------------------------------------------
+
+export async function buildInsights(
+  householdId: string,
+  householdOwnerId: string,
+): Promise<Insight[]> {
+  const results = await Promise.allSettled([
+    spendingAnomalyInsights(householdId),
+    unusualTransactionInsights(householdId),
+    cashflowInsights(householdId, householdOwnerId),
+    debtInsights(householdId),
+    budgetInsights(householdId),
+    recurringInsights(householdId),
+    memoryAwareOpportunityInsights(householdId),
+  ]);
+  const all: Insight[] = [];
+  for (const r of results) {
+    if (r.status === "fulfilled") all.push(...r.value);
+  }
+  // Dedupe on id, preserve first occurrence (the order of generators above).
+  const seen = new Set<string>();
+  const deduped = all.filter((i) => {
+    if (seen.has(i.id)) return false;
+    seen.add(i.id);
+    return true;
+  });
+  // Sort: alert > warn > info; then preserve original order within group.
+  const sevWeight: Record<Insight["severity"], number> = { alert: 3, warn: 2, info: 1 };
+  deduped.sort((a, b) => sevWeight[b.severity] - sevWeight[a.severity]);
+  // Cap to 7. The UI panel can paginate further if you want.
+  return deduped.slice(0, 7);
+}
+
+// ---------------------------------------------------------------------------
+// In-process cache (30 minutes per household). Same caveat as nudge cache:
+// process-local. Acceptable for a single Replit instance.
+// ---------------------------------------------------------------------------
+
+const INSIGHTS_CACHE_TTL_MS = 30 * 60 * 1000;
+const insightsCache = new Map<string, { insights: Insight[]; generatedAt: number }>();
+
+export function getCachedInsights(
+  householdId: string,
+): { insights: Insight[]; generatedAt: number } | null {
+  const hit = insightsCache.get(householdId);
+  if (!hit) return null;
+  if (Date.now() - hit.generatedAt > INSIGHTS_CACHE_TTL_MS) {
+    insightsCache.delete(householdId);
+    return null;
+  }
+  return hit;
+}
+
+export function setCachedInsights(householdId: string, insights: Insight[]): {
+  insights: Insight[];
+  generatedAt: number;
+} {
+  const entry = { insights, generatedAt: Date.now() };
+  insightsCache.set(householdId, entry);
+  return entry;
+}
+
+export function clearInsightsCache(householdId?: string): void {
+  if (householdId) insightsCache.delete(householdId);
+  else insightsCache.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Tool — lets the model look at the same insight set the user sees.
+// ---------------------------------------------------------------------------
+
+const getInsightsInput = z.object({}).optional();
+
+registerTool({
+  name: "get_insights",
+  description:
+    "Get the prioritized list of weekly insights for this household — the same set shown to the user in the insights panel. Use to ground answers about 'what should I focus on this week' or 'anything I should know'. Cached for 30 minutes per household.",
+  riskTier: "read",
+  inputSchema: getInsightsInput,
+  jsonSchema: { type: "object", properties: {}, additionalProperties: false },
+  handler: async (_input, ctx) => {
+    const cached = getCachedInsights(ctx.householdId);
+    if (cached) {
+      return {
+        result: {
+          count: cached.insights.length,
+          generatedAt: new Date(cached.generatedAt).toISOString(),
+          insights: cached.insights,
+        },
+      };
+    }
+    const insights = await buildInsights(ctx.householdId, ctx.householdOwnerId);
+    const entry = setCachedInsights(ctx.householdId, insights);
+    return {
+      result: {
+        count: insights.length,
+        generatedAt: new Date(entry.generatedAt).toISOString(),
+        insights,
+      },
+    };
+  },
+});
+
+// Sanity: pull buildHistoryBlock into a no-op to silence the import-not-used
+// linter without changing import semantics (we may want it here later).
+void buildHistoryBlock;
