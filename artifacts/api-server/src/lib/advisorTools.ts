@@ -51,7 +51,7 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
 
 const registry = new Map<string, ToolDefinition<unknown, unknown>>();
 
-export function registerTool<TInput, TOutput>(def: ToolDefinition<TInput, TOutput>): void {
+export function registerTool<TInput>(def: ToolDefinition<TInput, unknown>): void {
   if (registry.has(def.name)) {
     throw new Error(`Duplicate tool registration: ${def.name}`);
   }
