@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -2331,6 +2331,66 @@ export declare const usePostAdvisorUndo: <TError = ErrorType<AdvisorUndoErrorRes
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof postAdvisorUndo>>, TError, {
     auditLogId: string;
+}, TContext>;
+/**
+ * Confirms a destructive tool proposal created during a chat turn.
+Re-runs the tool with the originally proposed arguments, writes
+an audit log row, and returns the execution result.
+
+ * @summary Confirm and execute a pending advisor proposal
+ */
+export declare const getPostAdvisorProposalConfirmUrl: (proposalId: string) => string;
+export declare const postAdvisorProposalConfirm: (proposalId: string, options?: RequestInit) => Promise<AdvisorProposalResolveResponse>;
+export declare const getPostAdvisorProposalConfirmMutationOptions: <TError = ErrorType<AdvisorProposalErrorResponse | void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorProposalConfirm>>, TError, {
+        proposalId: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof postAdvisorProposalConfirm>>, TError, {
+    proposalId: string;
+}, TContext>;
+export type PostAdvisorProposalConfirmMutationResult = NonNullable<Awaited<ReturnType<typeof postAdvisorProposalConfirm>>>;
+export type PostAdvisorProposalConfirmMutationError = ErrorType<AdvisorProposalErrorResponse | void>;
+/**
+ * @summary Confirm and execute a pending advisor proposal
+ */
+export declare const usePostAdvisorProposalConfirm: <TError = ErrorType<AdvisorProposalErrorResponse | void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorProposalConfirm>>, TError, {
+        proposalId: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof postAdvisorProposalConfirm>>, TError, {
+    proposalId: string;
+}, TContext>;
+/**
+ * Marks a destructive tool proposal as cancelled without executing
+it. Tools that were already cancelled or executed cannot be
+cancelled again.
+
+ * @summary Cancel a pending advisor proposal
+ */
+export declare const getPostAdvisorProposalCancelUrl: (proposalId: string) => string;
+export declare const postAdvisorProposalCancel: (proposalId: string, options?: RequestInit) => Promise<AdvisorProposalResolveResponse>;
+export declare const getPostAdvisorProposalCancelMutationOptions: <TError = ErrorType<AdvisorProposalErrorResponse | void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorProposalCancel>>, TError, {
+        proposalId: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof postAdvisorProposalCancel>>, TError, {
+    proposalId: string;
+}, TContext>;
+export type PostAdvisorProposalCancelMutationResult = NonNullable<Awaited<ReturnType<typeof postAdvisorProposalCancel>>>;
+export type PostAdvisorProposalCancelMutationError = ErrorType<AdvisorProposalErrorResponse | void>;
+/**
+ * @summary Cancel a pending advisor proposal
+ */
+export declare const usePostAdvisorProposalCancel: <TError = ErrorType<AdvisorProposalErrorResponse | void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof postAdvisorProposalCancel>>, TError, {
+        proposalId: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof postAdvisorProposalCancel>>, TError, {
+    proposalId: string;
 }, TContext>;
 export {};
 //# sourceMappingURL=api.d.ts.map

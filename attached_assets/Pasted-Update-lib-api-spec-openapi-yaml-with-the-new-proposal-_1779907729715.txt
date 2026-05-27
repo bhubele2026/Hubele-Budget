@@ -1,0 +1,113 @@
+Update lib/api-spec/openapi.yaml with the new proposal endpoints, plus extend AdvisorToolCall to carry the optional proposal field, then run codegen.
+
+PIECE 1 — Add these two path entries under the existing paths: section. Good placement: right after /advisor/undo/{auditLogId}:
+
+  /advisor/proposals/{proposalId}/confirm:
+    post:
+      operationId: postAdvisorProposalConfirm
+      tags: [advisor]
+      summary: Confirm and execute a pending advisor proposal
+      description: |
+        Confirms a destructive tool proposal created during a chat turn.
+        Re-runs the tool with the originally proposed arguments, writes
+        an audit log row, and returns the execution result.
+      parameters:
+        - name: proposalId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Proposal confirmed and executed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdvisorProposalResolveResponse" }
+        "400":
+          description: Proposal not in 'pending' state, expired, or execution failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdvisorProposalErrorResponse" }
+        "401":
+          description: Unauthorized
+
+  /advisor/proposals/{proposalId}/cancel:
+    post:
+      operationId: postAdvisorProposalCancel
+      tags: [advisor]
+      summary: Cancel a pending advisor proposal
+      description: |
+        Marks a destructive tool proposal as cancelled without executing
+        it. Tools that were already cancelled or executed cannot be
+        cancelled again.
+      parameters:
+        - name: proposalId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Proposal cancelled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdvisorProposalResolveResponse" }
+        "400":
+          description: Proposal not in 'pending' state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdvisorProposalErrorResponse" }
+        "401":
+          description: Unauthorized
+
+PIECE 2 — Add these schemas under components.schemas:
+
+    AdvisorProposal:
+      type: object
+      additionalProperties: false
+      required: [id, summary]
+      properties:
+        id:
+          type: string
+          description: Proposal id, used to confirm or cancel.
+        summary:
+          type: string
+          description: Human-readable preview of what the tool will do.
+
+    AdvisorProposalResolveResponse:
+      type: object
+      additionalProperties: false
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+        toolName:
+          type: string
+        auditLogId:
+          type: string
+
+    AdvisorProposalErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+
+PIECE 3 — Extend the existing AdvisorToolCall schema to include the new optional proposal field. Add this property alongside the existing ones (name, ok, summary, auditLogId):
+
+        proposal:
+          $ref: "#/components/schemas/AdvisorProposal"
+          description: |
+            Present only when the tool returned a destructive proposal
+            awaiting user confirmation. The frontend should render a
+            confirm/cancel card and call POST /advisor/proposals/{id}/confirm
+            or /cancel.
+
+PIECE 4 — Run codegen:
+  pnpm --filter @workspace/api-spec run codegen
+
+Confirm:
+- Codegen exits cleanly
+- postAdvisorProposalConfirm and postAdvisorProposalCancel appear in lib/api-client-react/src/generated/api.ts
+- AdvisorProposal type appears in lib/api-zod/src/generated/types/
+- AdvisorToolCall now has the optional proposal field
+- api-server ty

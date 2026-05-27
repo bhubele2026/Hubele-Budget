@@ -2127,6 +2127,12 @@ export type AdvisorChatResponseUsage = {
     inputTokens?: number;
     outputTokens?: number;
 };
+export interface AdvisorProposal {
+    /** Proposal id, used to confirm or cancel. */
+    id: string;
+    /** Human-readable preview of what the tool will do. */
+    summary: string;
+}
 export interface AdvisorToolCall {
     /** Tool name (e.g. "list_categories") */
     name: string;
@@ -2136,11 +2142,25 @@ export interface AdvisorToolCall {
     summary: string;
     /** Reference to the advisor_audit_log row for this call. */
     auditLogId?: string;
+    /** Present only when the tool returned a destructive proposal
+  awaiting user confirmation. The frontend should render a
+  confirm/cancel card and call POST /advisor/proposals/{id}/confirm
+  or /cancel.
+   */
+    proposal?: AdvisorProposal;
 }
 export interface AdvisorChatResponse {
     message: string;
     toolCalls: AdvisorToolCall[];
     usage?: AdvisorChatResponseUsage;
+}
+export interface AdvisorProposalResolveResponse {
+    ok: boolean;
+    toolName?: string;
+    auditLogId?: string;
+}
+export interface AdvisorProposalErrorResponse {
+    error: string;
 }
 export interface AdvisorUndoResponse {
     ok: boolean;

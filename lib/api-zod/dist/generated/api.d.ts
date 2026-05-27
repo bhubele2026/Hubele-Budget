@@ -7360,16 +7360,34 @@ export declare const PostAdvisorChatResponse: zod.ZodObject<{
         ok: zod.ZodBoolean;
         summary: zod.ZodString;
         auditLogId: zod.ZodOptional<zod.ZodString>;
+        proposal: zod.ZodOptional<zod.ZodObject<{
+            id: zod.ZodString;
+            summary: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            id: string;
+            summary: string;
+        }, {
+            id: string;
+            summary: string;
+        }>>;
     }, "strip", zod.ZodTypeAny, {
         name: string;
         ok: boolean;
         summary: string;
         auditLogId?: string | undefined;
+        proposal?: {
+            id: string;
+            summary: string;
+        } | undefined;
     }, {
         name: string;
         ok: boolean;
         summary: string;
         auditLogId?: string | undefined;
+        proposal?: {
+            id: string;
+            summary: string;
+        } | undefined;
     }>, "many">;
     usage: zod.ZodOptional<zod.ZodObject<{
         inputTokens: zod.ZodOptional<zod.ZodNumber>;
@@ -7388,6 +7406,10 @@ export declare const PostAdvisorChatResponse: zod.ZodObject<{
         ok: boolean;
         summary: string;
         auditLogId?: string | undefined;
+        proposal?: {
+            id: string;
+            summary: string;
+        } | undefined;
     }[];
     usage?: {
         inputTokens?: number | undefined;
@@ -7400,6 +7422,10 @@ export declare const PostAdvisorChatResponse: zod.ZodObject<{
         ok: boolean;
         summary: string;
         auditLogId?: string | undefined;
+        proposal?: {
+            id: string;
+            summary: string;
+        } | undefined;
     }[];
     usage?: {
         inputTokens?: number | undefined;
@@ -7427,5 +7453,59 @@ export declare const PostAdvisorUndoResponse: zod.ZodObject<{
     ok: boolean;
 }, {
     ok: boolean;
+}>;
+/**
+ * Confirms a destructive tool proposal created during a chat turn.
+Re-runs the tool with the originally proposed arguments, writes
+an audit log row, and returns the execution result.
+
+ * @summary Confirm and execute a pending advisor proposal
+ */
+export declare const PostAdvisorProposalConfirmParams: zod.ZodObject<{
+    proposalId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    proposalId: string;
+}, {
+    proposalId: string;
+}>;
+export declare const PostAdvisorProposalConfirmResponse: zod.ZodObject<{
+    ok: zod.ZodBoolean;
+    toolName: zod.ZodOptional<zod.ZodString>;
+    auditLogId: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    ok: boolean;
+    auditLogId?: string | undefined;
+    toolName?: string | undefined;
+}, {
+    ok: boolean;
+    auditLogId?: string | undefined;
+    toolName?: string | undefined;
+}>;
+/**
+ * Marks a destructive tool proposal as cancelled without executing
+it. Tools that were already cancelled or executed cannot be
+cancelled again.
+
+ * @summary Cancel a pending advisor proposal
+ */
+export declare const PostAdvisorProposalCancelParams: zod.ZodObject<{
+    proposalId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    proposalId: string;
+}, {
+    proposalId: string;
+}>;
+export declare const PostAdvisorProposalCancelResponse: zod.ZodObject<{
+    ok: zod.ZodBoolean;
+    toolName: zod.ZodOptional<zod.ZodString>;
+    auditLogId: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    ok: boolean;
+    auditLogId?: string | undefined;
+    toolName?: string | undefined;
+}, {
+    ok: boolean;
+    auditLogId?: string | undefined;
+    toolName?: string | undefined;
 }>;
 //# sourceMappingURL=api.d.ts.map

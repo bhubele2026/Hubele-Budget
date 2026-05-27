@@ -20,6 +20,8 @@ import type {
   AdvisorChatRequest,
   AdvisorChatResponse,
   AdvisorNudge,
+  AdvisorProposalErrorResponse,
+  AdvisorProposalResolveResponse,
   AdvisorUndoErrorResponse,
   AdvisorUndoResponse,
   AmexAnchor,
@@ -8338,4 +8340,188 @@ export const usePostAdvisorUndo = <
   TContext
 > => {
   return useMutation(getPostAdvisorUndoMutationOptions(options));
+};
+
+/**
+ * Confirms a destructive tool proposal created during a chat turn.
+Re-runs the tool with the originally proposed arguments, writes
+an audit log row, and returns the execution result.
+
+ * @summary Confirm and execute a pending advisor proposal
+ */
+export const getPostAdvisorProposalConfirmUrl = (proposalId: string) => {
+  return `/api/advisor/proposals/${proposalId}/confirm`;
+};
+
+export const postAdvisorProposalConfirm = async (
+  proposalId: string,
+  options?: RequestInit,
+): Promise<AdvisorProposalResolveResponse> => {
+  return customFetch<AdvisorProposalResolveResponse>(
+    getPostAdvisorProposalConfirmUrl(proposalId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getPostAdvisorProposalConfirmMutationOptions = <
+  TError = ErrorType<AdvisorProposalErrorResponse | void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postAdvisorProposalConfirm>>,
+    TError,
+    { proposalId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof postAdvisorProposalConfirm>>,
+  TError,
+  { proposalId: string },
+  TContext
+> => {
+  const mutationKey = ["postAdvisorProposalConfirm"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof postAdvisorProposalConfirm>>,
+    { proposalId: string }
+  > = (props) => {
+    const { proposalId } = props ?? {};
+
+    return postAdvisorProposalConfirm(proposalId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PostAdvisorProposalConfirmMutationResult = NonNullable<
+  Awaited<ReturnType<typeof postAdvisorProposalConfirm>>
+>;
+
+export type PostAdvisorProposalConfirmMutationError =
+  ErrorType<AdvisorProposalErrorResponse | void>;
+
+/**
+ * @summary Confirm and execute a pending advisor proposal
+ */
+export const usePostAdvisorProposalConfirm = <
+  TError = ErrorType<AdvisorProposalErrorResponse | void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postAdvisorProposalConfirm>>,
+    TError,
+    { proposalId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof postAdvisorProposalConfirm>>,
+  TError,
+  { proposalId: string },
+  TContext
+> => {
+  return useMutation(getPostAdvisorProposalConfirmMutationOptions(options));
+};
+
+/**
+ * Marks a destructive tool proposal as cancelled without executing
+it. Tools that were already cancelled or executed cannot be
+cancelled again.
+
+ * @summary Cancel a pending advisor proposal
+ */
+export const getPostAdvisorProposalCancelUrl = (proposalId: string) => {
+  return `/api/advisor/proposals/${proposalId}/cancel`;
+};
+
+export const postAdvisorProposalCancel = async (
+  proposalId: string,
+  options?: RequestInit,
+): Promise<AdvisorProposalResolveResponse> => {
+  return customFetch<AdvisorProposalResolveResponse>(
+    getPostAdvisorProposalCancelUrl(proposalId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getPostAdvisorProposalCancelMutationOptions = <
+  TError = ErrorType<AdvisorProposalErrorResponse | void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postAdvisorProposalCancel>>,
+    TError,
+    { proposalId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof postAdvisorProposalCancel>>,
+  TError,
+  { proposalId: string },
+  TContext
+> => {
+  const mutationKey = ["postAdvisorProposalCancel"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof postAdvisorProposalCancel>>,
+    { proposalId: string }
+  > = (props) => {
+    const { proposalId } = props ?? {};
+
+    return postAdvisorProposalCancel(proposalId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PostAdvisorProposalCancelMutationResult = NonNullable<
+  Awaited<ReturnType<typeof postAdvisorProposalCancel>>
+>;
+
+export type PostAdvisorProposalCancelMutationError =
+  ErrorType<AdvisorProposalErrorResponse | void>;
+
+/**
+ * @summary Cancel a pending advisor proposal
+ */
+export const usePostAdvisorProposalCancel = <
+  TError = ErrorType<AdvisorProposalErrorResponse | void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postAdvisorProposalCancel>>,
+    TError,
+    { proposalId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof postAdvisorProposalCancel>>,
+  TError,
+  { proposalId: string },
+  TContext
+> => {
+  return useMutation(getPostAdvisorProposalCancelMutationOptions(options));
 };

@@ -5,6 +5,7 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { AdvisorProposal } from "./advisorProposal";
 
 export interface AdvisorToolCall {
   /** Tool name (e.g. "list_categories") */
@@ -15,4 +16,10 @@ export interface AdvisorToolCall {
   summary: string;
   /** Reference to the advisor_audit_log row for this call. */
   auditLogId?: string;
+  /** Present only when the tool returned a destructive proposal
+awaiting user confirmation. The frontend should render a
+confirm/cancel card and call POST /advisor/proposals/{id}/confirm
+or /cancel.
+ */
+  proposal?: AdvisorProposal;
 }

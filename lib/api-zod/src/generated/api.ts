@@ -3128,6 +3128,17 @@ export const PostAdvisorChatResponse = zod.object({
         .string()
         .optional()
         .describe("Reference to the advisor_audit_log row for this call."),
+      proposal: zod
+        .object({
+          id: zod.string().describe("Proposal id, used to confirm or cancel."),
+          summary: zod
+            .string()
+            .describe("Human-readable preview of what the tool will do."),
+        })
+        .optional()
+        .describe(
+          "Present only when the tool returned a destructive proposal\nawaiting user confirmation. The frontend should render a\nconfirm\/cancel card and call POST \/advisor\/proposals\/{id}\/confirm\nor \/cancel.\n",
+        ),
     }),
   ),
   usage: zod
@@ -3152,4 +3163,38 @@ export const PostAdvisorUndoParams = zod.object({
 
 export const PostAdvisorUndoResponse = zod.object({
   ok: zod.boolean(),
+});
+
+/**
+ * Confirms a destructive tool proposal created during a chat turn.
+Re-runs the tool with the originally proposed arguments, writes
+an audit log row, and returns the execution result.
+
+ * @summary Confirm and execute a pending advisor proposal
+ */
+export const PostAdvisorProposalConfirmParams = zod.object({
+  proposalId: zod.coerce.string(),
+});
+
+export const PostAdvisorProposalConfirmResponse = zod.object({
+  ok: zod.boolean(),
+  toolName: zod.string().optional(),
+  auditLogId: zod.string().optional(),
+});
+
+/**
+ * Marks a destructive tool proposal as cancelled without executing
+it. Tools that were already cancelled or executed cannot be
+cancelled again.
+
+ * @summary Cancel a pending advisor proposal
+ */
+export const PostAdvisorProposalCancelParams = zod.object({
+  proposalId: zod.coerce.string(),
+});
+
+export const PostAdvisorProposalCancelResponse = zod.object({
+  ok: zod.boolean(),
+  toolName: zod.string().optional(),
+  auditLogId: zod.string().optional(),
 });
