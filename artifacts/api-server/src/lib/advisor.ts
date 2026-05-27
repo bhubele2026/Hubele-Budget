@@ -226,10 +226,10 @@ export async function buildHouseholdContext(
       horizonDays: 90,
     });
     cashSignal = {
-      bankToday: cs.bankToday,
-      lowestProjected: cs.lowestProjected,
+      bankToday: Number(cs.bankToday),
+      lowestProjected: Number(cs.lowestProjected),
       lowestDate: cs.lowestDate,
-      cashBuffer: cs.cashBuffer,
+      cashBuffer: Number(cs.cashBuffer),
       status: cs.status,
       horizonDays: cs.horizonDays,
     };
