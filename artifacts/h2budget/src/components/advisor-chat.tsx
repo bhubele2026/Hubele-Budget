@@ -8,8 +8,23 @@ import {
   useGetAdvisorNudge,
   type AdvisorChatMessage,
 } from "@workspace/api-client-react";
-import { MessageSquare, X, Send, Loader2 } from "lucide-react";
+import { X, Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function AnthropicLogo({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 92 65"
+      xmlns="http://www.w3.org/2000/svg"
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M66.04 0L92 65h-19.5l-5.3-13.92H40.5L35.21 65H15.7L41.66 0h24.39zm-11.5 35.99l-5.34-13.9-5.32 13.9h10.66z" />
+      <path d="M0 65L25.96 0h13.32L13.32 65H0z" />
+    </svg>
+  );
+}
 
 interface DisplayedMessage {
   role: "user" | "assistant";
@@ -78,7 +93,7 @@ export function AdvisorChat() {
           aria-label="Open advisor"
           data-testid="advisor-launcher"
         >
-          <MessageSquare className="w-5 h-5" />
+          <AnthropicLogo className="w-5 h-5" />
         </Button>
       )}
 
