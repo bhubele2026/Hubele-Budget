@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { expandItem, parseISO, fmtISO, addDays } from "./cashSignal";
+import {
+  expandItem,
+  parseISO,
+  fmtISO,
+  addDays,
+  nextBusinessDay,
+} from "./cashSignal";
 
 // Minimal stand-in for the recurring_items row shape — we only feed
 // `expandItem` the fields it actually reads.
@@ -33,6 +39,25 @@ describe("parseISO / fmtISO / addDays", () => {
 
   it("addDays correctly crosses a year boundary", () => {
     expect(fmtISO(addDays(parseISO("2026-12-30"), 5))).toBe("2027-01-04");
+  });
+});
+
+describe("nextBusinessDay (#751)", () => {
+  it("Wed → Thu (weekday to weekday)", () => {
+    // 2026-05-27 is a Wednesday.
+    expect(fmtISO(nextBusinessDay(parseISO("2026-05-27")))).toBe("2026-05-28");
+  });
+  it("Fri → Mon (skip weekend)", () => {
+    // 2026-05-29 is a Friday.
+    expect(fmtISO(nextBusinessDay(parseISO("2026-05-29")))).toBe("2026-06-01");
+  });
+  it("Sat → Mon", () => {
+    // 2026-05-30 is a Saturday.
+    expect(fmtISO(nextBusinessDay(parseISO("2026-05-30")))).toBe("2026-06-01");
+  });
+  it("Sun → Mon", () => {
+    // 2026-05-31 is a Sunday.
+    expect(fmtISO(nextBusinessDay(parseISO("2026-05-31")))).toBe("2026-06-01");
   });
 });
 

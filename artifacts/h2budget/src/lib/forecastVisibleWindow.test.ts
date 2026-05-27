@@ -48,10 +48,14 @@ describe("buildLineRegister visibleFromISO window", () => {
       visibleFromISO: "2026-05-01",
     });
 
-    // Visible rows exclude anything dated before 2026-05-01.
+    // Visible rows exclude prior-month BANK rows; past-due pending
+    // PLAN rows always stay visible (#751) so the 2026-04-20 plan
+    // row survives even though it sits before visibleFromISO.
     const rowDates = rows.map((r) => r.date).sort();
-    expect(rowDates).toEqual(["2026-05-18", "2026-05-20"]);
-    expect(rows.some((r) => r.date === "2026-04-20")).toBe(false);
+    expect(rowDates).toEqual(["2026-04-20", "2026-05-18", "2026-05-20"]);
+    expect(rows.some((r) => r.date === "2026-04-20" && r.kind === "plan")).toBe(
+      true,
+    );
     expect(rows.some((r) => r.date === "2026-04-25")).toBe(false);
 
     // The wider window still has the prior-month rows so the
@@ -123,7 +127,7 @@ describe("buildLineRegister visibleFromISO window", () => {
     expect(allBank).toHaveLength(4);
   });
 
-  it("with visibleFromISO equal to today, rows dated before today are excluded", () => {
+  it("with visibleFromISO equal to today, bank rows dated before today are excluded but past-due pending plans stay visible (#751)", () => {
     const events = [
       ev("rec-yesterday", "2026-05-14", -10, "yesterday bill"),
       ev("rec-today", "2026-05-15", -20, "today bill"),
@@ -140,9 +144,51 @@ describe("buildLineRegister visibleFromISO window", () => {
       visibleFromISO: "2026-05-15",
     });
     const dates = rows.map((r) => r.date).sort();
-    // 2026-05-14 rows are excluded; on/after today are kept.
-    expect(dates).toEqual(["2026-05-15", "2026-05-15", "2026-05-16"]);
-    expect(rows.some((r) => r.date === "2026-05-14")).toBe(false);
+    // Bank row dated 2026-05-14 is hidden by visibleFromISO; the
+    // 2026-05-14 PLAN row stays visible because it's a past-due
+    // pending plan (the user still needs to resolve it).
+    expect(dates).toEqual([
+      "2026-05-14",
+      "2026-05-15",
+      "2026-05-15",
+      "2026-05-16",
+    ]);
+    // The hidden one is the bank txn, not the plan.
+    expect(rows.some((r) => r.date === "2026-05-14" && r.kind === "bank")).toBe(
+      false,
+    );
+    expect(rows.some((r) => r.date === "2026-05-14" && r.kind === "plan")).toBe(
+      true,
+    );
+  });
+
+  it("past-due pending plans always show up in `rows` regardless of visibleFromISO; matched plans do not (#751)", () => {
+    const events = [
+      ev("rec-past-pending", "2026-05-15", -100, "past unmatched"),
+      ev("rec-past-matched", "2026-05-15", -200, "past matched"),
+      ev("rec-future", "2026-06-15", -300, "future"),
+    ];
+    const resolutions: Resolution[] = [
+      {
+        id: "res-1",
+        recurringItemId: "rec-past-matched",
+        occurrenceDate: "2026-05-15",
+        status: "matched",
+        matchedTxnId: "tx-match",
+      } as Resolution,
+    ];
+    const { rows } = buildLineRegister({
+      ...baseOpts,
+      events,
+      txns: [],
+      resolutions,
+      today: new Date("2026-05-27"),
+      visibleFromISO: "2026-05-27",
+    });
+    const planRows = rows.filter((r) => r.kind === "plan");
+    const labels = planRows.map((r) => (r as { label: string }).label).sort();
+    // Past unmatched stays; future stays; matched does not.
+    expect(labels).toEqual(["future", "past unmatched"]);
   });
 
   it("clamps visibleFromISO to fromISO when it is earlier than the window start", () => {

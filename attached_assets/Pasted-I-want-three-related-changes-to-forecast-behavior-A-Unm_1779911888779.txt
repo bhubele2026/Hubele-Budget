@@ -1,0 +1,115 @@
+I want three related changes to forecast behavior:
+
+(A) Unmatched past-due forecast plans stay visible in the Forecast and Review register indefinitely — until I explicitly match them or mark them missed/skipped/dismissed.
+
+(B) The drag-forward target in cashSignal.ts should be the next BUSINESS day, not calendar tomorrow.
+
+(C) The Review sidebar badge count should include past-due unresolved plans, not just unmatched bank transactions. Currently the badge underreports — it tells me "18 things to review" when there are actually 18 bank txns + N past-due plans hiding behind it.
+
+CHANGE 1 — Backend: next-business-day drag target in artifacts/api-server/src/lib/cashSignal.ts
+
+Add this helper near the other date helpers at the top of the file:
+
+  function nextBusinessDay(d: Date): Date {
+    let cur = addDays(d, 1);
+    while (cur.getDay() === 0 || cur.getDay() === 6) {
+      cur = addDays(cur, 1);
+    }
+    return cur;
+  }
+
+Find:
+  const dragTargetISO = fmtISO(addDays(todayDateOnly, 1));
+
+Replace with:
+  const dragTargetISO = fmtISO(nextBusinessDay(todayDateOnly));
+
+Do NOT change the dragCutoffISO logic — that's "what counts as past-due" and is separate.
+
+CHANGE 2 — Frontend: past-due unresolved plans always visible in artifacts/h2budget/src/lib/forecastMatch.ts
+
+In buildLineRegister, around line 250-262, replace the visiblePlan line with:
+
+  const visiblePlan = activePlan.filter((p) => {
+    const ms = parseISO(p.date);
+    if (ms > toMs) return false;
+    // Past-due unresolved plans always stay visible — they continue
+    // to affect the projected balance and the user must explicitly
+    // resolve them (match/miss/skip/dismiss) to remove them.
+    if (p.status === "pending_plan") return true;
+    return ms >= visibleFromMs;
+  });
+
+Leave the visibleBank filter alone.
+
+CHANGE 3 — Review badge counts past-due plans too
+
+Update artifacts/h2budget/src/hooks/useReviewInboxCount.ts to also count past-due unresolved plans.
+
+Current logic counts unmatched bank transactions in the current month. Extend it to ALSO count plans whose status would be "pending_plan" after buildLineRegister runs (i.e. plans whose date <= today AND have no resolution row marking them matched/missed/skipped/dismissed/rescheduled).
+
+The simplest implementation: reuse buildLineRegister so the count stays in sync with what's rendered. Pseudocode:
+
+  const checkingPlaidAccountIds = ... (existing)
+  const txns = filterForecastTxns(...) (existing)
+  const events = (data.events ?? []) as CashEvent[]
+  const resolutions = (data.resolutions ?? []) as Resolution[]
+  const today = new Date()
+  // Build with visibleFromISO=today so past-due plans get the
+  // "pending_plan" status treatment the UI uses.
+  const todayISO = `${today.getFullYear()}-${...}-${...}` (use the same fmtISO pattern)
+  const register = buildLineRegister({
+    events,
+    txns,
+    resolutions,
+    closedMonths: new Set(),
+    startBalance: 0, // unused for counting
+    fromISO: data.fromDate,
+    toISO: data.toDate,
+    today,
+    snapshotISO: data.bankSnapshot?.at?.slice(0, 10) ?? null,
+    visibleFromISO: todayISO,
+  })
+
+Then count:
+  - Unmatched bank txns in the current month (existing logic)
+  - PLUS: register.allPlan rows where status === "pending_plan" AND the date is on or before today (i.e. past-due, not future)
+
+Be careful: the existing logic only counts CURRENT-month bank txns. For past-due plans, do NOT restrict to current month — a plan due last month that still hasn't been resolved should also count. The whole point is they don't disappear.
+
+Add a comment explaining the dual count.
+
+CHANGE 4 — Tests
+
+a) artifacts/api-server/src/lib/cashSignal.test.ts (or create one if missing): pin the next-business-day helper:
+   - Wed → Thu
+   - Fri → Mon
+   - Sat → Mon
+   - Sun → Mon
+
+b) artifacts/h2budget/src/lib/forecastVisibleWindow.test.ts: add a test that:
+   - visibleFromISO = '2026-05-27'
+   - Pending plan dated '2026-05-15' (no resolution) — should be in `rows` with status === "pending_plan"
+   - Future plan dated '2026-06-15' — should be in `rows`
+   - Matched plan dated '2026-05-15' (resolution status='matched') — should NOT be in `rows`
+
+c) For the badge count change, find the existing test file for useReviewInboxCount (if any) and extend it. If none exists, add a focused test that asserts:
+   - 2 unmatched current-month bank txns → count = 2
+   - Add 1 past-due plan from last month with no resolution → count = 3
+   - Add 1 past-due plan with a "matched" resolution → count stays at 3
+   - Add 1 future plan → count stays at 3 (future plans don't count)
+
+CHANGE 5 — Spot-check the Review tab
+
+The Review tab uses the same buildLineRegister output as the Forecast tab. After CHANGE 2, past-due unresolved plans show on /forecast AND /review automatically. Please verify by running the app, going to /review, and confirming that a past-due fixture plan is visible in the list.
+
+Acceptance criteria:
+- A plan due 3 days ago that hasn't been matched stays visible on /forecast and /review until I match/miss/skip it.
+- The Review sidebar badge counter includes that plan (badge goes from N to N+1).
+- The drag-forward target in the chart points to the next weekday (Friday → Monday, weekday → tomorrow).
+- "Mark missed" or matching to a bank txn removes the row AND decrements the badge.
+- The "Pending plans dragging this day" banner in forecast.tsx (~line 2776) keeps working.
+
+Don't touch forecastFromDate's default behavior — the look-back panel is still useful for power users.
+
+Run pnpm typecheck and pnpm test on BOTH the api-server and h2budget packages. The existing tests should all still pass — past-due plans entering the visible set shouldn't break any reconcile-math test fixture. If a test fails because it hardcoded an expectation that today's "tomorrow" is a weekday and today happens to be Friday in the test, that's a test issue, not a code issue — adjust the fixture.

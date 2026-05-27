@@ -45,6 +45,17 @@ export function addDays(d: Date, n: number): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 }
 
+// (#751) Next business day (Mon-Fri). Used as the drag-forward target
+// for past-due pending plans so the projected dip lands on a real
+// posting day instead of a weekend. Saturday/Sunday roll to Monday.
+export function nextBusinessDay(d: Date): Date {
+  let cur = addDays(d, 1);
+  while (cur.getDay() === 0 || cur.getDay() === 6) {
+    cur = addDays(cur, 1);
+  }
+  return cur;
+}
+
 function addMonths(d: Date, n: number): Date {
   const target = new Date(d.getFullYear(), d.getMonth() + n, 1);
   const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
@@ -264,7 +275,9 @@ export async function computeCashSignal(
   // projection hops it onto tomorrow and keeps re-hopping it forward
   // every real-world day until the user marks it matched, missed,
   // skipped, or dismissed.
-  const dragTargetISO = fmtISO(addDays(todayDateOnly, 1));
+  // (#751) Drag target is the next BUSINESS day so a Friday past-due
+  // doesn't dump onto Saturday (no posting). Weekend rolls to Monday.
+  const dragTargetISO = fmtISO(nextBusinessDay(todayDateOnly));
   // Past-due cutoff: any pending plan whose effective date is on or
   // before MAX(snapshot, today) is considered past-due. We compare
   // against the later of the two so a snapshot dated yesterday and a

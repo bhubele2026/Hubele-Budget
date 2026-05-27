@@ -252,7 +252,17 @@ export function buildLineRegister(opts: {
     return ms >= visibleFromMs && ms <= toMs;
   };
   const visibleBank = activeBank.filter((b) => inVisibleWindow(b.date));
-  const visiblePlan = activePlan.filter((p) => inVisibleWindow(p.date));
+  // (#751) Past-due unresolved plans always stay visible — they keep
+  // moving the projected balance and the user must explicitly resolve
+  // them (match/miss/skip/dismiss) to clear them off the register.
+  // Future-dated plans (status === "future") still respect the
+  // visibleFromMs gate so the look-back window stays predictable.
+  const visiblePlan = activePlan.filter((p) => {
+    const ms = parseISO(p.date);
+    if (ms > toMs) return false;
+    if (p.status === "pending_plan") return true;
+    return ms >= visibleFromMs;
+  });
 
   const rows: LineRow[] = [];
   for (const b of visibleBank) {
