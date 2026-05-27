@@ -28,3 +28,9 @@ id = "PENVJbfKxUWT071Ab8RbX"
 uri = "file://dist/h2budget-project.tar.gz"
 type = "unspecified"
 title = "H2 Family Budget — full source (tar.gz)"
+
+[[outputs]]
+id = "IJRGozrjCWjfAzchdkACq"
+uri = "file://.local/exports/amex.tar.gz"
+type = "unspecified"
+title = "amex.tsx (full Amex page source, 2,870 lines — gzipped)"
