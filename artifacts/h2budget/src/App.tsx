@@ -66,6 +66,17 @@ const queryClient = new QueryClient({
   },
 });
 
+// (#755) Expose the React Query client on `window` so end-to-end tests can
+// simulate a mid-session recovery import (insert rows into the DB out-of-
+// band, then invalidate `/api/transactions` to force a fresh refetch) and
+// re-assert the virtualized Amex list still scrolls all the way to the
+// oldest day-group. This is a thin observability hook — the user can
+// already inspect their own cached query data via React Query DevTools, so
+// no new data is exposed.
+if (typeof window !== "undefined") {
+  (window as unknown as { __qc?: QueryClient }).__qc = queryClient;
+}
+
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
