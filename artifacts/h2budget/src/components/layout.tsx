@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { H2Logo } from "@/components/h2-logo";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { AdvisorChat } from "@/components/advisor-chat";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -92,7 +93,10 @@ function SidebarContents({
       </nav>
       <div className="p-4 border-t border-sidebar-border flex items-center justify-between">
         <span className="text-sm font-medium text-sidebar-foreground">Account</span>
-        <UserButton />
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          <UserButton />
+        </div>
       </div>
     </>
   );
@@ -142,7 +146,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         >
           {currentPageTitle}
         </div>
-        <div className="shrink-0">
+        <div className="shrink-0 flex items-center gap-1">
+          <ThemeToggle />
           <UserButton />
         </div>
       </header>

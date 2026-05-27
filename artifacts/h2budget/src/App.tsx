@@ -20,6 +20,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { PlaidReconnectListener } from "@/components/plaid-reconnect-listener";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
+import { ThemeProvider } from "@/hooks/use-theme";
 import { SignInPage, SignUpPage } from "./pages/auth";
 import DashboardPage from "./pages/dashboard";
 import ForecastPage from "./pages/forecast";
@@ -202,6 +203,7 @@ function ClerkProviderWithRoutes() {
     >
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
+        <ThemeProvider>
         <TooltipProvider>
           <Switch>
             <Route path="/" component={HomeRoute} />
@@ -216,6 +218,7 @@ function ClerkProviderWithRoutes() {
               "plaid:reconnect" event for a specific itemId. */}
           <PlaidReconnectListener />
         </TooltipProvider>
+        </ThemeProvider>
       </QueryClientProvider>
     </ClerkProvider>
   );
