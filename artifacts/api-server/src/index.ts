@@ -19,6 +19,7 @@ import { runStartupPendingNotesBackfill } from "./lib/startupPendingNotesBackfil
 import "./lib/advisorReadTools";
 import "./lib/advisorWriteTools";
 import "./lib/advisorDestructiveTools";
+import "./lib/advisorMemoryTools";
 
 // Plaid configuration validation:
 //   * In production (NODE_ENV=production) all three of PLAID_CLIENT_ID,

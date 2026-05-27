@@ -882,3 +882,28 @@ export const advisorProposalsTable = pgTable(
     householdIdx: index("advisor_proposals_household_idx").on(t.householdId, t.status),
   }),
 );
+
+export const advisorMemoryTable = pgTable(
+  "advisor_memory",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    // The Clerk userId who created this memory. Surfaced so we can show
+    // "Brad asked me to remember…" if useful, but reads aren't scoped by it.
+    actorUserId: text("actor_user_id").notNull(),
+    // The fact itself. Short — under 500 chars enforced at the tool layer.
+    content: text("content").notNull(),
+    // Soft category for organization: 'preference', 'recurring_event',
+    // 'goal', 'context', 'other'. Free-text, validated at tool layer.
+    kind: text("kind").notNull().default("context"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    // Optional expiration. If set and past, the memory loader skips it.
+    // Use for time-bound facts ("we're traveling Aug 15-22").
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+  },
+  (t) => ({
+    householdIdx: index("advisor_memory_household_idx").on(t.householdId, t.createdAt),
+  }),
+);
