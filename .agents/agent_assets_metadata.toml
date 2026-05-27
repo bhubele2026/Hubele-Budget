@@ -40,3 +40,9 @@ id = "5hHU_janj24k178LZVsR_"
 uri = "file://exports/debt-plaid-link-fix.tar.gz"
 type = "unspecified"
 title = "debt-plaid-link-fix.tar.gz (full updated source + test)"
+
+[[outputs]]
+id = "5uZXpN0K7Yazb-jhsMJGP"
+uri = "file://exports/h2budget-full-source.tar.gz"
+type = "unspecified"
+title = "h2budget-full-source.tar.gz (full pnpm monorepo, 54 MB, excludes node_modules / .git / build artifacts)"
