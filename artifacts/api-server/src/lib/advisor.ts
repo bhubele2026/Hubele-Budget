@@ -231,7 +231,7 @@ export async function buildHouseholdContext(
       lowestDate: cs.lowestDate,
       cashBuffer: Number(cs.cashBuffer),
       status: cs.status,
-      horizonDays: cs.horizonDays,
+      horizonDays: cs.horizonDays ?? 90,
     };
   } catch (err) {
     logger.warn({ err, householdId }, "advisor: cashSignal failed, omitting from context");
