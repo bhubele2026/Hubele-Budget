@@ -1628,7 +1628,7 @@ export default function AvalanchePage() {
                       type="monotone"
                       dataKey="interest"
                       name="Cumulative interest"
-                      stroke="hsl(0, 65%, 50%)"
+                      stroke="hsl(var(--negative))"
                       strokeWidth={2}
                       dot={false}
                     />

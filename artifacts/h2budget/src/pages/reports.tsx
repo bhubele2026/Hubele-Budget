@@ -287,10 +287,12 @@ function tooltipMoney(v: number | string) {
 }
 
 const tooltipStyle = {
-  background: "hsl(var(--background))",
-  border: "1px solid hsl(var(--border))",
+  background: "hsl(var(--card))",
+  border: "1px solid hsl(var(--card-border))",
+  color: "hsl(var(--card-foreground))",
   borderRadius: 8,
   fontSize: 12,
+  boxShadow: "var(--shadow-md)",
 };
 
 // --------------------------------------------------------------------------

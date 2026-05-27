@@ -2982,13 +2982,14 @@ export default function ForecastPage({
                     return (
                       <div
                         style={{
-                          background: "hsl(var(--background))",
-                          border: "1px solid hsl(var(--border))",
+                          background: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--card-border))",
+                          color: "hsl(var(--card-foreground))",
                           borderRadius: 6,
                           fontSize: 12,
                           padding: "8px 10px",
                           minWidth: 160,
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                          boxShadow: "var(--shadow-md)",
                         }}
                       >
                         <div style={{ fontWeight: 600 }}>

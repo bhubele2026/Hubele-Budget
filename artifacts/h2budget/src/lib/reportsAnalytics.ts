@@ -9,35 +9,38 @@ import type {
 } from "@workspace/api-client-react";
 import { simulate, type SimResult, type Strategy, type SimDebt } from "./avalanche";
 
-// H2 brand palette: orange + purple anchored, with semantic supports.
-// `emerald` is intentionally kept green because it is used as the
-// semantic "positive / net surplus" indicator, not as a brand color.
+// H2 chart palette: anchored to the Slate Professional design tokens
+// (--chart-1..5 + --positive/--negative/--warning) so charts re-tone
+// automatically when the global theme changes (e.g. light vs dark).
+// `emerald` keeps its semantic "positive / net surplus" meaning by
+// pointing at --positive, and `red` points at --negative.
 export const H2_PALETTE = {
-  primary: "hsl(22, 92%, 52%)",
-  primarySoft: "hsl(22, 90%, 70%)",
-  purple: "hsl(260, 55%, 62%)",
-  purpleSoft: "hsl(260, 60%, 78%)",
-  amber: "hsl(38, 88%, 56%)",
-  amberSoft: "hsl(38, 85%, 72%)",
-  red: "hsl(0, 65%, 52%)",
-  rose: "hsl(340, 60%, 55%)",
-  sky: "hsl(200, 65%, 50%)",
-  violet: "hsl(285, 50%, 58%)",
-  emerald: "hsl(150, 55%, 42%)",
-  slate: "hsl(220, 15%, 55%)",
+  primary: "hsl(var(--chart-1))",
+  primarySoft: "hsl(var(--chart-1) / 0.55)",
+  purple: "hsl(var(--chart-5))",
+  purpleSoft: "hsl(var(--chart-5) / 0.55)",
+  amber: "hsl(var(--chart-4))",
+  amberSoft: "hsl(var(--chart-4) / 0.55)",
+  warning: "hsl(var(--warning))",
+  red: "hsl(var(--negative))",
+  rose: "hsl(var(--negative) / 0.7)",
+  sky: "hsl(var(--chart-2))",
+  violet: "hsl(var(--chart-5))",
+  emerald: "hsl(var(--positive))",
+  slate: "hsl(var(--chart-3))",
 };
 
 export const CHART_SERIES: string[] = [
-  H2_PALETTE.primary,
-  H2_PALETTE.purple,
-  H2_PALETTE.amber,
-  H2_PALETTE.sky,
-  H2_PALETTE.violet,
-  H2_PALETTE.rose,
-  H2_PALETTE.primarySoft,
-  H2_PALETTE.purpleSoft,
-  H2_PALETTE.amberSoft,
-  H2_PALETTE.slate,
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-5))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--negative))",
+  "hsl(var(--chart-1) / 0.55)",
+  "hsl(var(--chart-5) / 0.55)",
+  "hsl(var(--chart-4) / 0.6)",
+  "hsl(var(--chart-3) / 0.7)",
 ];
 
 export function fmtISO(d: Date): string {

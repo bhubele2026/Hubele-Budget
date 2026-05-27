@@ -68,10 +68,12 @@ export function BalanceTrendChart({
               />
               <RechartsTooltip
                 contentStyle={{
-                  background: "hsl(var(--background))",
-                  border: "1px solid hsl(var(--border))",
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--card-border))",
+                  color: "hsl(var(--card-foreground))",
                   borderRadius: 6,
                   fontSize: 12,
+                  boxShadow: "var(--shadow-md)",
                 }}
                 labelFormatter={(_label: unknown, payload: any) => {
                   const p = payload?.[0]?.payload as
