@@ -3117,6 +3117,19 @@ export const PostAdvisorChatBody = zod.object({
 
 export const PostAdvisorChatResponse = zod.object({
   message: zod.string(),
+  toolCalls: zod.array(
+    zod.object({
+      name: zod.string().describe('Tool name (e.g. \"list_categories\")'),
+      ok: zod.boolean().describe("True if the tool executed without error."),
+      summary: zod
+        .string()
+        .describe("One-line summary suitable for inline UI display."),
+      auditLogId: zod
+        .string()
+        .optional()
+        .describe("Reference to the advisor_audit_log row for this call."),
+    }),
+  ),
   usage: zod
     .object({
       inputTokens: zod.number().optional(),

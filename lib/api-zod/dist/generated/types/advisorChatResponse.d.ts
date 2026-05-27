@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AdvisorChatResponseUsage } from "./advisorChatResponseUsage";
+import type { AdvisorToolCall } from "./advisorToolCall";
 export interface AdvisorChatResponse {
     message: string;
+    toolCalls: AdvisorToolCall[];
     usage?: AdvisorChatResponseUsage;
 }
 //# sourceMappingURL=advisorChatResponse.d.ts.map

@@ -3976,10 +3976,13 @@ components:
     AdvisorChatResponse:
       type: object
       additionalProperties: false
-      required: [message]
+      required: [message, toolCalls]
       properties:
         message:
           type: string
+        toolCalls:
+          type: array
+          items: { $ref: "#/components/schemas/AdvisorToolCall" }
         usage:
           type: object
           additionalProperties: false
@@ -3988,3 +3991,20 @@ components:
               type: integer
             outputTokens:
               type: integer
+    AdvisorToolCall:
+      type: object
+      additionalProperties: false
+      required: [name, ok, summary]
+      properties:
+        name:
+          type: string
+          description: Tool name (e.g. "list_categories")
+        ok:
+          type: boolean
+          description: True if the tool executed without error.
+        summary:
+          type: string
+          description: One-line summary suitable for inline UI display.
+        auditLogId:
+          type: string
+          description: Reference to the advisor_audit_log row for this call.

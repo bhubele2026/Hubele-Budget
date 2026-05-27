@@ -7355,6 +7355,22 @@ export declare const PostAdvisorChatBody: zod.ZodObject<{
 }>;
 export declare const PostAdvisorChatResponse: zod.ZodObject<{
     message: zod.ZodString;
+    toolCalls: zod.ZodArray<zod.ZodObject<{
+        name: zod.ZodString;
+        ok: zod.ZodBoolean;
+        summary: zod.ZodString;
+        auditLogId: zod.ZodOptional<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        name: string;
+        ok: boolean;
+        summary: string;
+        auditLogId?: string | undefined;
+    }, {
+        name: string;
+        ok: boolean;
+        summary: string;
+        auditLogId?: string | undefined;
+    }>, "many">;
     usage: zod.ZodOptional<zod.ZodObject<{
         inputTokens: zod.ZodOptional<zod.ZodNumber>;
         outputTokens: zod.ZodOptional<zod.ZodNumber>;
@@ -7367,12 +7383,24 @@ export declare const PostAdvisorChatResponse: zod.ZodObject<{
     }>>;
 }, "strip", zod.ZodTypeAny, {
     message: string;
+    toolCalls: {
+        name: string;
+        ok: boolean;
+        summary: string;
+        auditLogId?: string | undefined;
+    }[];
     usage?: {
         inputTokens?: number | undefined;
         outputTokens?: number | undefined;
     } | undefined;
 }, {
     message: string;
+    toolCalls: {
+        name: string;
+        ok: boolean;
+        summary: string;
+        auditLogId?: string | undefined;
+    }[];
     usage?: {
         inputTokens?: number | undefined;
         outputTokens?: number | undefined;

@@ -2127,8 +2127,19 @@ export type AdvisorChatResponseUsage = {
     inputTokens?: number;
     outputTokens?: number;
 };
+export interface AdvisorToolCall {
+    /** Tool name (e.g. "list_categories") */
+    name: string;
+    /** True if the tool executed without error. */
+    ok: boolean;
+    /** One-line summary suitable for inline UI display. */
+    summary: string;
+    /** Reference to the advisor_audit_log row for this call. */
+    auditLogId?: string;
+}
 export interface AdvisorChatResponse {
     message: string;
+    toolCalls: AdvisorToolCall[];
     usage?: AdvisorChatResponseUsage;
 }
 export type ListTransactionsParams = {
