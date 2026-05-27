@@ -50,6 +50,11 @@ export function AdvisorChat() {
       return postAdvisorChat({ message: vars.message, history: vars.history });
     },
     onSuccess: (res) => {
+      // TEMP DIAG
+      // eslint-disable-next-line no-console
+      console.log("[advisor-chat] mutation onSuccess res:", res);
+      // eslint-disable-next-line no-console
+      console.log("[advisor-chat] toolCalls from res:", res.toolCalls);
       setMessages((m) => [
         ...m,
         { role: "assistant", content: res.message, toolCalls: res.toolCalls },
@@ -189,6 +194,9 @@ export function AdvisorChat() {
 }
 
 function MessageBubble({ role, content, toolCalls }: DisplayedMessage) {
+  // TEMP DIAG
+  // eslint-disable-next-line no-console
+  console.log("[advisor-chat] MessageBubble render", { role, toolCalls });
   return (
     <div className={cn("flex flex-col", role === "user" ? "items-end" : "items-start")}>
       <div

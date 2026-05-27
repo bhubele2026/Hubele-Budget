@@ -97,6 +97,14 @@ router.post("/advisor/chat", requireAuth, async (req, res): Promise<void> => {
       householdOwnerId,
       actorUserId,
     });
+    logger.info(
+      {
+        householdId,
+        toolCallsLen: result.toolCalls.length,
+        firstToolCall: result.toolCalls[0] ?? null,
+      },
+      "advisor: chat returning toolCalls",
+    );
     res.json({
       message: result.message,
       toolCalls: result.toolCalls,
