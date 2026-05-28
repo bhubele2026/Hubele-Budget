@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
   customFetch,
@@ -1280,6 +1280,7 @@ function MonthlySnapshotTiles({
   amexEndingBalance,
   bankSnapshot,
   amexBankSnapshot,
+  amexExcludesDeltaGold,
 }: {
   state: MonthlySnapshotState;
   totalDebt: string;
@@ -1288,6 +1289,7 @@ function MonthlySnapshotTiles({
   amexEndingBalance: (monthStart: string) => number | null;
   bankSnapshot: { source: "manual" | "plaid"; at: string } | null;
   amexBankSnapshot: { source: "manual" | "plaid"; at: string } | null;
+  amexExcludesDeltaGold?: boolean;
 }) {
   const { monthStart, monthLabel, shortMonth, canPrev, canNext, stepMonth } =
     state;
@@ -1431,8 +1433,12 @@ function MonthlySnapshotTiles({
                   >
                     {formatCurrency(bal)}
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1">
+                  <div
+                    className="text-xs text-muted-foreground mt-1"
+                    data-testid="text-amex-ending-balance-subtitle"
+                  >
                     end of {shortMonth}
+                    {amexExcludesDeltaGold ? " · excludes Delta Gold" : ""}
                   </div>
                   {amexBankSnapshot && (
                     <div className="text-xs text-muted-foreground mt-0.5">
@@ -1635,6 +1641,7 @@ function DashboardSnapshotSection({
   amexEndingBalance,
   bankSnapshot,
   amexBankSnapshot,
+  amexExcludesDeltaGold,
 }: {
   today: Date;
   totalDebt: string;
@@ -1643,6 +1650,7 @@ function DashboardSnapshotSection({
   amexEndingBalance: (monthStart: string) => number | null;
   bankSnapshot: { source: "manual" | "plaid"; at: string } | null;
   amexBankSnapshot: { source: "manual" | "plaid"; at: string } | null;
+  amexExcludesDeltaGold?: boolean;
 }) {
   const state = useMonthlySnapshotState(today);
   return (
@@ -1656,6 +1664,7 @@ function DashboardSnapshotSection({
         amexEndingBalance={amexEndingBalance}
         bankSnapshot={bankSnapshot}
         amexBankSnapshot={amexBankSnapshot}
+        amexExcludesDeltaGold={amexExcludesDeltaGold}
       />
       <div className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 pt-4 md:pt-6 pb-4 bg-background border-b shadow-sm">
         <MonthVsPlanPanel state={state} today={today} />
@@ -2144,15 +2153,109 @@ export default function DashboardPage() {
     return { source, at };
   }, [amexResolvedAnchor, amexDebt, amexAnchorResp]);
   const amexFallbackMonth = useMemo(() => monthKeyOf(today), [today]);
+  // (#776) Identify the Delta SkyMiles Gold card so the dashboard tile
+  // can exclude its work-reimbursement-inflated balance from the
+  // headline "AMEX ENDING BALANCE" number. Mask `1009` is shared with
+  // Platinum, so match on the account name containing "Delta"
+  // (case-insensitive) plus the mask, scoped to the Plaid accounts
+  // currently feeding amex transactions. When we can't identify Delta
+  // Gold, fall back silently to the all-cards behavior.
+  const deltaGoldPlaidAccountId = useMemo<string | null>(() => {
+    for (const item of amexPlaidItemsForScope ?? []) {
+      for (const a of item.accounts ?? []) {
+        const id = a.accountId;
+        if (!id || !amexPlaidAccountIds.has(id)) continue;
+        const name = (a.name ?? a.officialName ?? "").toLowerCase();
+        const mask = (a.mask ?? "").trim();
+        if (name.includes("delta") && mask === "1009") return id;
+      }
+    }
+    return null;
+  }, [amexPlaidItemsForScope, amexPlaidAccountIds]);
+  const nonDeltaAmexAccountIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const id of amexPlaidAccountIds) {
+      if (id !== deltaGoldPlaidAccountId) ids.push(id);
+    }
+    ids.sort();
+    return ids;
+  }, [amexPlaidAccountIds, deltaGoldPlaidAccountId]);
+  // (#776) Per-card anchor calls for every Amex card *except* Delta
+  // Gold. Mirrors the Amex page's `amexAnchorPerCardResp` pattern
+  // (~line 353 of amex.tsx) — each card has its own cached query keyed
+  // by `["/api/amex/anchor", accountId]`, summed below into the
+  // dashboard-tile anchor. If any per-card call hasn't resolved (or
+  // returns `missing`), the tile falls back to using the combined
+  // anchor with Delta-Gold-excluded transactions; if Delta Gold itself
+  // can't be identified, the tile renders the original all-cards
+  // value so nothing breaks.
+  const amexPerCardAnchorQueries = useQueries({
+    queries: nonDeltaAmexAccountIds.map((id) => ({
+      queryKey: ["/api/amex/anchor", id],
+      queryFn: () =>
+        customFetch<{
+          amexEndingBalance: number | null;
+          asOf: string;
+          source: "debt" | "anchor" | "computed" | "plaid" | "missing";
+        }>(`/api/amex/anchor?accountId=${encodeURIComponent(id)}`, {
+          method: "GET",
+        }),
+      staleTime: 60_000,
+      enabled: !!deltaGoldPlaidAccountId,
+    })),
+  });
+  const amexExDeltaAnchor = useMemo(() => {
+    if (!deltaGoldPlaidAccountId) return null;
+    if (nonDeltaAmexAccountIds.length === 0) return null;
+    let total = 0;
+    let latest: string | null = null;
+    for (const q of amexPerCardAnchorQueries) {
+      const r = q.data;
+      if (!r) return null;
+      if (r.amexEndingBalance === null || r.source === "missing") return null;
+      total += r.amexEndingBalance;
+      if (r.asOf && (!latest || r.asOf > latest)) latest = r.asOf;
+    }
+    return { balance: total, asOf: latest };
+  }, [deltaGoldPlaidAccountId, nonDeltaAmexAccountIds, amexPerCardAnchorQueries]);
+  const amexTransactionsExDelta = useMemo(() => {
+    if (!deltaGoldPlaidAccountId) return amexTransactions;
+    return amexTransactions.filter(
+      (t) => t.plaidAccountId !== deltaGoldPlaidAccountId,
+    );
+  }, [amexTransactions, deltaGoldPlaidAccountId]);
   const amexEndingBalance = useMemo(() => {
-    return (monthStart: string): number | null =>
-      computeAmexEndOfMonthBalance({
+    return (monthStart: string): number | null => {
+      if (!deltaGoldPlaidAccountId) {
+        // Delta Gold not identifiable — keep original all-cards behavior.
+        return computeAmexEndOfMonthBalance({
+          monthStart,
+          anchor: amexResolvedAnchor,
+          amexTransactions,
+          fallbackMonth: amexFallbackMonth,
+        });
+      }
+      // Prefer summed per-card anchors so the headline doesn't include
+      // Delta Gold's balance. Fall back to the combined anchor with
+      // Delta-Gold-excluded transactions if any per-card call is
+      // unavailable — still an improvement over the all-cards number.
+      const anchor = amexExDeltaAnchor ?? amexResolvedAnchor;
+      return computeAmexEndOfMonthBalance({
         monthStart,
-        anchor: amexResolvedAnchor,
-        amexTransactions,
+        anchor,
+        amexTransactions: amexTransactionsExDelta,
         fallbackMonth: amexFallbackMonth,
       });
-  }, [amexResolvedAnchor, amexTransactions, amexFallbackMonth]);
+    };
+  }, [
+    deltaGoldPlaidAccountId,
+    amexResolvedAnchor,
+    amexExDeltaAnchor,
+    amexTransactions,
+    amexTransactionsExDelta,
+    amexFallbackMonth,
+  ]);
+  const amexExcludesDeltaGold = deltaGoldPlaidAccountId !== null;
   // All-time reimbursables — no date window, server filters by reimbursable=true.
   const { data: reimbTxns, isLoading: reimbLoading } = useListTransactions({
     reimbursable: true,
@@ -2222,6 +2325,7 @@ export default function DashboardPage() {
             : null
         }
         amexBankSnapshot={amexBankSnapshot}
+        amexExcludesDeltaGold={amexExcludesDeltaGold}
       />
 
       <DashboardMonthlyBuckets
