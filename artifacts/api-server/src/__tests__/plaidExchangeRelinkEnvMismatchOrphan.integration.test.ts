@@ -244,6 +244,91 @@ describe("(#659) /plaid/exchange auto-archives env-mismatched orphan rows on rel
     expect(itemsBody[0]!.institutionName).toBe("Chase");
   });
 
+  // (#790) Regression: when the env-mismatched / malformed-token
+  // sibling still has live data attached (transactions or linked
+  // debts), the cleanup MUST preserve the row instead of silently
+  // deleting it. The user heals it via the Reconnect button; data is
+  // never lost behind their back.
+  it("(#790) preserves a stale sibling that still has live transactions", async () => {
+    const orphanItemId = `chase-stale-${randomUUID().slice(0, 8)}`;
+    const [orphan] = await db
+      .insert(plaidItemsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        itemId: orphanItemId,
+        accessToken: `access-sandbox-${randomUUID()}`,
+        institutionId: "ins_chase",
+        institutionName: "Chase",
+        institutionSlug: "chase",
+      })
+      .returning();
+    // Seed a plaid_accounts row + a transaction whose
+    // plaid_account_id (text) matches the external account_id. This
+    // is exactly the shape of the production Chase checking row that
+    // task #790 documented.
+    const staleExternalAcctId = `chase-5526-stale-${randomUUID().slice(0, 8)}`;
+    await db.insert(plaidAccountsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      itemId: orphan!.id,
+      accountId: staleExternalAcctId,
+      name: "TOTAL CHECKING",
+      mask: "5526",
+      type: "depository",
+      subtype: "checking",
+    });
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      occurredOn: "2026-05-15",
+      description: "Pre-existing Chase checking txn",
+      amount: "-42.00",
+      account: "Chase",
+      source: "plaid:chase",
+      plaidAccountId: staleExternalAcctId,
+    });
+
+    nextExchangeItemId = `chase-item-fresh3-${randomUUID().slice(0, 8)}`;
+    nextExchangeAccessToken = `access-production-${randomUUID()}`;
+    nextAccounts = [
+      {
+        account_id: `chase-7844-fresh-${randomUUID().slice(0, 8)}`,
+        name: "Prime Visa",
+        type: "credit",
+        subtype: "credit card",
+        mask: "7844",
+      },
+    ];
+
+    const r = await fetch(`${baseUrl}/plaid/exchange`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        publicToken: "public-production-debt-relink",
+        institutionId: "ins_chase",
+        institutionName: "Chase",
+      }),
+    });
+    expect(r.status).toBe(200);
+
+    // Stale sibling must STILL exist — and its checking transaction
+    // must still be present. The new credit-card item is added
+    // alongside, not in place of, the prior checking item.
+    const items = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(eq(plaidItemsTable.userId, TEST_USER));
+    expect(items.find((it) => it.id === orphan!.id)).toBeDefined();
+    expect(items.find((it) => it.itemId === nextExchangeItemId)).toBeDefined();
+    const survivingTxns = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(survivingTxns).toHaveLength(1);
+    expect(survivingTxns[0]!.plaidAccountId).toBe(staleExternalAcctId);
+  });
+
   it("leaves a healthy sibling alone when only the orphan should be cleaned", async () => {
     // A user with the production scenario after relink: one healthy
     // production-token row already exists, AND the sandbox-prefixed
