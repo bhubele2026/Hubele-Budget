@@ -35,6 +35,13 @@ import { addDays, fmtISO, parseISO } from "../lib/cashSignal";
 const router: IRouter = Router();
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+// Hard floor: the user's budget began 2026-05-01 (a Friday). The
+// first full Sun–Sat week entirely on/after that date is 2026-05-03.
+// Every endpoint here clamps to this floor so pre-budget weeks never
+// surface in the Debrief UI, the sidebar awaiting-count, or any
+// future backfill.
+const DEBRIEF_FLOOR_WEEK_START = "2026-05-03";
+
 function isSunday(dateStr: string): boolean {
   return parseISO(dateStr).getDay() === 0;
 }
@@ -80,6 +87,13 @@ router.get("/debrief/weeks", requireAuth, async (req, res): Promise<void> => {
     to = currentWeekStart(now);
   } else {
     to = weekStartFor(to);
+  }
+  // Clamp to the budget-start floor — never enumerate or return
+  // weeks before the user's budget began.
+  if (from < DEBRIEF_FLOOR_WEEK_START) from = DEBRIEF_FLOOR_WEEK_START;
+  if (to < DEBRIEF_FLOOR_WEEK_START) {
+    res.json({ weeks: [] });
+    return;
   }
 
   // Pull all stored debrief rows in range.
@@ -257,6 +271,10 @@ router.post(
       res.status(400).json({ error: "weekStart must be a Sunday YYYY-MM-DD" });
       return;
     }
+    if (raw < DEBRIEF_FLOOR_WEEK_START) {
+      res.status(404).json({ error: "week is before the debrief floor" });
+      return;
+    }
     const weekStart = raw;
     const weekEnd = weekEndFor(weekStart);
     const now = new Date();
@@ -331,6 +349,10 @@ router.post(
       typeof req.params.weekStart === "string" ? req.params.weekStart : "";
     if (!ISO_DATE.test(raw) || !isSunday(raw)) {
       res.status(400).json({ error: "weekStart must be a Sunday YYYY-MM-DD" });
+      return;
+    }
+    if (raw < DEBRIEF_FLOOR_WEEK_START) {
+      res.status(404).json({ error: "week is before the debrief floor" });
       return;
     }
     const weekStart = raw;
