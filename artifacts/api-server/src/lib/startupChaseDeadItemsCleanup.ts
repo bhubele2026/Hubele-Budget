@@ -1,9 +1,11 @@
-import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 import {
   db,
   debtsTable,
+  forecastSettingsTable,
   plaidAccountsTable,
   plaidItemsTable,
+  transactionsTable,
 } from "@workspace/db";
 import {
   isAccessTokenForCurrentEnv,
@@ -141,7 +143,10 @@ export async function runStartupChaseDeadItemsCleanup(): Promise<StartupChaseCle
       // Account count — also feeds the per-item delete loop below so
       // we don't re-query.
       const accts = await db
-        .select({ id: plaidAccountsTable.id })
+        .select({
+          id: plaidAccountsTable.id,
+          accountId: plaidAccountsTable.accountId,
+        })
         .from(plaidAccountsTable)
         .where(
           and(
@@ -150,6 +155,9 @@ export async function runStartupChaseDeadItemsCleanup(): Promise<StartupChaseCle
           ),
         );
       const acctIds = accts.map((a) => a.id);
+      // transactions.plaid_account_id stores the EXTERNAL Plaid
+      // account_id (t.account_id), not the internal uuid — keep both.
+      const acctExternalIds = accts.map((a) => a.accountId);
       const noAccounts = acctIds.length === 0;
 
       const reasonParts: string[] = [];
@@ -248,6 +256,29 @@ export async function runStartupChaseDeadItemsCleanup(): Promise<StartupChaseCle
           )
           .returning({ id: debtsTable.id });
         debtsDownshifted = upd.length;
+        // Null out transaction + snapshot pointers BEFORE deleting the
+        // accounts so synced rows referencing these uuids do not become
+        // orphaned (invisible to scopeChaseTransactions' fallback).
+        if (acctExternalIds.length > 0) {
+          await db
+            .update(transactionsTable)
+            .set({ plaidAccountId: null })
+            .where(
+              and(
+                eq(transactionsTable.householdId, TARGET_HOUSEHOLD_ID),
+                inArray(transactionsTable.plaidAccountId, acctExternalIds),
+              ),
+            );
+        }
+        await db
+          .update(forecastSettingsTable)
+          .set({ bankSnapshotAccountId: null })
+          .where(
+            and(
+              eq(forecastSettingsTable.householdId, TARGET_HOUSEHOLD_ID),
+              inArray(forecastSettingsTable.bankSnapshotAccountId, acctIds),
+            ),
+          );
         await db
           .delete(plaidAccountsTable)
           .where(
@@ -341,6 +372,29 @@ export async function runStartupChaseDeadItemsCleanup(): Promise<StartupChaseCle
             inArray(debtsTable.plaidAccountId, orphanIds),
           ),
         );
+      const orphanExternalIds = orphans
+        .map((o) => o.accountId)
+        .filter((x): x is string => !!x);
+      if (orphanExternalIds.length > 0) {
+        await db
+          .update(transactionsTable)
+          .set({ plaidAccountId: null })
+          .where(
+            and(
+              eq(transactionsTable.householdId, TARGET_HOUSEHOLD_ID),
+              inArray(transactionsTable.plaidAccountId, orphanExternalIds),
+            ),
+          );
+      }
+      await db
+        .update(forecastSettingsTable)
+        .set({ bankSnapshotAccountId: null })
+        .where(
+          and(
+            eq(forecastSettingsTable.householdId, TARGET_HOUSEHOLD_ID),
+            inArray(forecastSettingsTable.bankSnapshotAccountId, orphanIds),
+          ),
+        );
       const deletedOrphans = await db
         .delete(plaidAccountsTable)
         .where(
@@ -362,6 +416,94 @@ export async function runStartupChaseDeadItemsCleanup(): Promise<StartupChaseCle
           })),
         },
         `[startup-chase-cleanup] deleted ${deletedOrphans.length} orphan plaid_accounts row(s) whose item_id no longer exists`,
+      );
+    }
+
+    // PART 1 (broad orphan-transaction repair): null out plaid_account_id
+    // on any transaction in this household whose pointer no longer
+    // resolves to an existing plaid_accounts row. This recovers rows
+    // synced via Plaid BEFORE a prior cleanup deleted their account —
+    // e.g. the May 14-28 Chase TOTAL CHECKING ··5526 transactions that
+    // went invisible because scopeChaseTransactions' fallback requires
+    // plaidAccountId IS NULL. Only the dangling pointer is touched;
+    // source/category/amount/date are left exactly as-is so the rows
+    // re-render through the isChaseFallbackSource path. Idempotent:
+    // converges to zero matches on subsequent boots.
+    const survivingAccts = await db
+      .select({
+        id: plaidAccountsTable.id,
+        accountId: plaidAccountsTable.accountId,
+      })
+      .from(plaidAccountsTable)
+      .where(eq(plaidAccountsTable.householdId, TARGET_HOUSEHOLD_ID));
+    // Internal uuids — for the forecast snapshot pointer (which stores
+    // plaid_accounts.id).
+    const survivingAcctIds = survivingAccts.map((r) => r.id);
+    // EXTERNAL Plaid account_ids — for the transaction pointer (which
+    // stores t.account_id). A transaction is orphaned only when its
+    // external account_id no longer matches ANY surviving account's
+    // external account_id, so this is the correct, safe predicate
+    // (matching scopeChaseTransactions' own external-id semantics).
+    const survivingAcctExternalIds = survivingAccts
+      .map((r) => r.accountId)
+      .filter((x): x is string => !!x);
+
+    const danglingTxnWhere =
+      survivingAcctExternalIds.length > 0
+        ? and(
+            eq(transactionsTable.householdId, TARGET_HOUSEHOLD_ID),
+            isNotNull(transactionsTable.plaidAccountId),
+            notInArray(
+              transactionsTable.plaidAccountId,
+              survivingAcctExternalIds,
+            ),
+          )
+        : and(
+            eq(transactionsTable.householdId, TARGET_HOUSEHOLD_ID),
+            isNotNull(transactionsTable.plaidAccountId),
+          );
+
+    const repairedTxns = await db
+      .update(transactionsTable)
+      .set({ plaidAccountId: null })
+      .where(danglingTxnWhere)
+      .returning({ id: transactionsTable.id });
+    if (repairedTxns.length > 0) {
+      logger.info(
+        {
+          householdId: TARGET_HOUSEHOLD_ID,
+          repaired: repairedTxns.length,
+        },
+        `[startup-chase-cleanup] nulled plaid_account_id on ${repairedTxns.length} orphaned transaction(s) so they re-render via the Chase fallback path`,
+      );
+    }
+
+    // PART 3 (forecast snapshot pointer): clear bankSnapshotAccountId if
+    // it still points at an account that no longer exists — kills the
+    // residual "Plaid · TOTAL CHECKING ··5526 · snapshot" caption.
+    const snapWhere =
+      survivingAcctIds.length > 0
+        ? and(
+            eq(forecastSettingsTable.householdId, TARGET_HOUSEHOLD_ID),
+            isNotNull(forecastSettingsTable.bankSnapshotAccountId),
+            notInArray(
+              forecastSettingsTable.bankSnapshotAccountId,
+              survivingAcctIds,
+            ),
+          )
+        : and(
+            eq(forecastSettingsTable.householdId, TARGET_HOUSEHOLD_ID),
+            isNotNull(forecastSettingsTable.bankSnapshotAccountId),
+          );
+    const repairedSnap = await db
+      .update(forecastSettingsTable)
+      .set({ bankSnapshotAccountId: null })
+      .where(snapWhere)
+      .returning({ userId: forecastSettingsTable.userId });
+    if (repairedSnap.length > 0) {
+      logger.info(
+        { householdId: TARGET_HOUSEHOLD_ID, repaired: repairedSnap.length },
+        `[startup-chase-cleanup] cleared dangling bank_snapshot_account_id on ${repairedSnap.length} forecast_settings row(s)`,
       );
     }
   } catch (err) {

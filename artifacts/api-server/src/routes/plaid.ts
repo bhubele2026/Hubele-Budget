@@ -5,6 +5,7 @@ import {
   plaidItemsTable,
   plaidAccountsTable,
   transactionsTable,
+  forecastSettingsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireOwner } from "../middlewares/requireOwner";
@@ -1459,7 +1460,10 @@ router.delete("/plaid/items/:id", requireAuth, async (req, res): Promise<void> =
   // itself is cleared automatically; we just need to flip Plaid-sourced
   // fields back to manual so they no longer display Plaid badges/timestamps.
   const itemAccounts = await db
-    .select({ id: plaidAccountsTable.id })
+    .select({
+      id: plaidAccountsTable.id,
+      accountId: plaidAccountsTable.accountId,
+    })
     .from(plaidAccountsTable)
     .where(
       and(
@@ -1468,6 +1472,11 @@ router.delete("/plaid/items/:id", requireAuth, async (req, res): Promise<void> =
       ),
     );
   const itemAcctIds = itemAccounts.map((a) => a.id);
+  // transactions.plaid_account_id stores the EXTERNAL Plaid account_id
+  // (t.account_id), not the internal plaid_accounts.id uuid — so the
+  // transaction null-out below must match on accountId, while debts /
+  // forecast snapshot reference the internal uuid.
+  const itemAcctExternalIds = itemAccounts.map((a) => a.accountId);
   if (itemAcctIds.length > 0) {
     await db
       .update(debtsTable)
@@ -1482,6 +1491,30 @@ router.delete("/plaid/items/:id", requireAuth, async (req, res): Promise<void> =
         and(
           eq(debtsTable.householdId, req.householdId!),
           inArray(debtsTable.plaidAccountId, itemAcctIds),
+        ),
+      );
+    // Null out transaction pointers BEFORE deleting the accounts so we
+    // never strand synced rows whose plaid_account_id references a
+    // now-deleted plaid_accounts uuid (those rows otherwise become
+    // invisible to scopeChaseTransactions' fallback filter).
+    if (itemAcctExternalIds.length > 0) {
+      await db
+        .update(transactionsTable)
+        .set({ plaidAccountId: null })
+        .where(
+          and(
+            eq(transactionsTable.householdId, req.householdId!),
+            inArray(transactionsTable.plaidAccountId, itemAcctExternalIds),
+          ),
+        );
+    }
+    await db
+      .update(forecastSettingsTable)
+      .set({ bankSnapshotAccountId: null })
+      .where(
+        and(
+          eq(forecastSettingsTable.householdId, req.householdId!),
+          inArray(forecastSettingsTable.bankSnapshotAccountId, itemAcctIds),
         ),
       );
   }
@@ -1937,7 +1970,10 @@ router.post(
         );
       }
       const itemAccounts = await db
-        .select({ id: plaidAccountsTable.id })
+        .select({
+          id: plaidAccountsTable.id,
+          accountId: plaidAccountsTable.accountId,
+        })
         .from(plaidAccountsTable)
         .where(
           and(
@@ -1946,6 +1982,7 @@ router.post(
           ),
         );
       const itemAcctIds = itemAccounts.map((a) => a.id);
+      const itemAcctExternalIds = itemAccounts.map((a) => a.accountId);
       if (itemAcctIds.length > 0) {
         await db
           .update(debtsTable)
@@ -1960,6 +1997,26 @@ router.post(
             and(
               eq(debtsTable.householdId, req.householdId!),
               inArray(debtsTable.plaidAccountId, itemAcctIds),
+            ),
+          );
+        if (itemAcctExternalIds.length > 0) {
+          await db
+            .update(transactionsTable)
+            .set({ plaidAccountId: null })
+            .where(
+              and(
+                eq(transactionsTable.householdId, req.householdId!),
+                inArray(transactionsTable.plaidAccountId, itemAcctExternalIds),
+              ),
+            );
+        }
+        await db
+          .update(forecastSettingsTable)
+          .set({ bankSnapshotAccountId: null })
+          .where(
+            and(
+              eq(forecastSettingsTable.householdId, req.householdId!),
+              inArray(forecastSettingsTable.bankSnapshotAccountId, itemAcctIds),
             ),
           );
       }
@@ -2684,9 +2741,17 @@ router.post(
     // Per-item dead-state check + per-account snapshot — done up-front
     // so we can return a clean report without partial deletes.
     const itemAcctMap = new Map<string, string[]>();
+    // Separate map of EXTERNAL Plaid account_ids per item — needed for
+    // the transactions null-out, since transactions.plaid_account_id
+    // stores t.account_id (external), not the internal uuid.
+    const itemAcctExternalMap = new Map<string, string[]>();
     if (items.length > 0) {
       const allAccts = await db
-        .select({ id: plaidAccountsTable.id, itemId: plaidAccountsTable.itemId })
+        .select({
+          id: plaidAccountsTable.id,
+          accountId: plaidAccountsTable.accountId,
+          itemId: plaidAccountsTable.itemId,
+        })
         .from(plaidAccountsTable)
         .where(
           and(
@@ -2701,6 +2766,9 @@ router.post(
         const arr = itemAcctMap.get(a.itemId) ?? [];
         arr.push(a.id);
         itemAcctMap.set(a.itemId, arr);
+        const ext = itemAcctExternalMap.get(a.itemId) ?? [];
+        ext.push(a.accountId);
+        itemAcctExternalMap.set(a.itemId, ext);
       }
     }
     const ineligible: { id: string; reason: string }[] = [];
@@ -2776,6 +2844,27 @@ router.post(
             and(
               eq(debtsTable.householdId, householdId),
               inArray(debtsTable.plaidAccountId, acctIds),
+            ),
+          );
+        const acctExternalIds = itemAcctExternalMap.get(it.id) ?? [];
+        if (acctExternalIds.length > 0) {
+          await db
+            .update(transactionsTable)
+            .set({ plaidAccountId: null })
+            .where(
+              and(
+                eq(transactionsTable.householdId, householdId),
+                inArray(transactionsTable.plaidAccountId, acctExternalIds),
+              ),
+            );
+        }
+        await db
+          .update(forecastSettingsTable)
+          .set({ bankSnapshotAccountId: null })
+          .where(
+            and(
+              eq(forecastSettingsTable.householdId, householdId),
+              inArray(forecastSettingsTable.bankSnapshotAccountId, acctIds),
             ),
           );
         await db
