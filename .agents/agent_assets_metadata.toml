@@ -69,4 +69,10 @@ title = "H2 Family Budget — full app source"
 id = "jUM-X7XntKEXFnm7v9PpH"
 uri = "file://.local/exports/plaid-code.md"
 type = "text"
-title = "Plaid components (current state)"
+title = "Plaid components (single markdown)"
+
+[[outputs]]
+id = "5sQ0AtLiMXQZ8vKhurOM1"
+uri = "file://.local/exports/plaid-code.tar.gz"
+type = "unspecified"
+title = "Plaid components (download)"
