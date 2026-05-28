@@ -2849,7 +2849,7 @@ function VirtualizedDayGroups<G>({
     // measureElement corrects each group. Day-group headers carry a
     // sticky day-total chip + today header; rows can include running
     // balance, category picker, member chips, and bucket bubbles.
-    estimateSize: (i) => 96 + groups[i][1].length * 110 + ITEM_GAP_PX,
+    estimateSize: (i) => 110 + groups[i][1].length * 140 + ITEM_GAP_PX,
     overscan: 8,
     scrollMargin,
   });
@@ -2869,7 +2869,28 @@ function VirtualizedDayGroups<G>({
   // silently trimmed.
   useEffect(() => {
     virtualizer.measure();
+    // (#767) Schedule a second pass on the next animation frame: the
+    // synchronous measure above runs before the new groups have
+    // attached their `measureElement` refs, so totalSize is still
+    // based on the conservative estimate. After the rAF the real
+    // heights are known and the bottom of the list stops clipping.
+    const raf = requestAnimationFrame(() => {
+      virtualizer.measure();
+    });
+    return () => cancelAnimationFrame(raf);
   }, [virtualizer, groups.length, totalRowCount, measureKey]);
+
+  // TEMPORARY: remove after cutoff verification — see task #767
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log("[amex-virt]", {
+      measureKey,
+      groupCount: groups.length,
+      totalRowCount,
+      totalSize: virtualizer.getTotalSize(),
+      virtualItems: virtualizer.getVirtualItems().length,
+    });
+  }, [measureKey, groups.length, totalRowCount]);
 
   // After the data first arrives, re-read scrollMargin on the next
   // animation frame so we don't capture a half-rendered layout (the
