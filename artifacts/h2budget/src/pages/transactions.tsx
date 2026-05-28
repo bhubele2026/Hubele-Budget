@@ -89,7 +89,6 @@ import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { type BucketKey } from "@/components/bucket-bubbles";
 import { TransactionRowChips } from "@/components/transaction-row-chips";
 import { chaseMonthTotals } from "@/lib/chaseScope";
-import { shouldShowManualPickerOption } from "@/lib/chasePickerOptions";
 import {
   makeChaseBalanceAtEndOf,
   scopeChaseTransactions,
@@ -313,10 +312,17 @@ export default function TransactionsPage() {
   const [selectedAccountKey, setSelectedAccountKey] = useState<string | null>(
     () => readInitialChaseAccount(),
   );
-  // The effective key falls back to the snapshot's account (or "manual"
-  // when there is no snapshot) so a fresh user with no preference still
-  // lands on the same account they would have seen before #103.
-  const defaultAccountKey = bankSnapshot?.accountId ?? "manual";
+  // The effective key falls back to the snapshot's account so a fresh
+  // user with no preference still lands on the same account they would
+  // have seen before #103. When the snapshot pointer is missing (e.g.
+  // after a Chase cleanup nulled it), fall through to the Chase Plaid
+  // checking account if one exists, and only land on "manual" when there
+  // are zero Plaid accounts at all.
+  const chaseAccount = (forecastData?.plaidCheckingAccounts ?? []).find((a) =>
+    (a.institutionName ?? "").toLowerCase().includes("chase"),
+  );
+  const defaultAccountKey =
+    bankSnapshot?.accountId ?? chaseAccount?.id ?? "manual";
   const effectiveAccountKey = selectedAccountKey ?? defaultAccountKey;
   const isManualAccount = effectiveAccountKey === "manual";
   const effectiveAccountInternalId = isManualAccount ? null : effectiveAccountKey;
@@ -462,6 +468,19 @@ export default function TransactionsPage() {
     const accounts = forecastData?.plaidCheckingAccounts;
     if (!accounts) return;
     if (!accounts.some((a) => a.id === selectedAccountKey)) {
+      setSelectedAccountKey(null);
+    }
+  }, [selectedAccountKey, forecastData?.plaidCheckingAccounts]);
+
+  // A legacy persisted "manual" selection (from URL/localStorage before
+  // the Manual pseudo-account was removed from the picker) would strand
+  // single-Plaid-account users on the Manual view with no dropdown to
+  // switch back. Clear it whenever at least one Plaid checking account
+  // exists so the default falls through to the snapshot / Chase account.
+  useEffect(() => {
+    if (selectedAccountKey !== "manual") return;
+    const accounts = forecastData?.plaidCheckingAccounts;
+    if (accounts && accounts.length >= 1) {
       setSelectedAccountKey(null);
     }
   }, [selectedAccountKey, forecastData?.plaidCheckingAccounts]);
@@ -2237,20 +2256,13 @@ export default function TransactionsPage() {
         )}
       </div>
       {(() => {
-        // (#360) Show the picker whenever there are 2+ effective views —
-        // either multiple Plaid checking accounts, or one Plaid checking
-        // account paired with a manual-entries pseudo-account. Without
-        // counting the manual option here, a single-Plaid-account user
-        // with manual rows could never switch to the Manual view.
+        // Only show the picker when there are 2+ real Plaid checking
+        // accounts (multi-checking households genuinely need to switch).
+        // A single Plaid account no longer pairs with a "Manual entries"
+        // pseudo-account — manual rows still render via the fallback path,
+        // so the extra option was pure clutter.
         const plaidCount = forecastData?.plaidCheckingAccounts?.length ?? 0;
-        const showsManual =
-          plaidCount >= 1 &&
-          shouldShowManualPickerOption({
-            transactions: transactions ?? [],
-            currentlySelected: isManualAccount,
-          });
-        const totalOptions = plaidCount + (showsManual ? 1 : 0);
-        return totalOptions > 1;
+        return plaidCount > 1;
       })() && (
         <div className="flex items-center gap-2" data-testid="chase-account-picker">
           <span className="text-xs text-muted-foreground">View account:</span>
@@ -2278,22 +2290,6 @@ export default function TransactionsPage() {
                   </SelectItem>
                 );
               })}
-              {/* (#412) Only render the "Manual entries" pseudo-account
-                  when the user actually has manual rows (no plaidAccountId)
-                  — otherwise it's pure clutter next to the real Chase row.
-                  Always keep it visible if it's the current selection so
-                  the trigger never goes blank. */}
-              {shouldShowManualPickerOption({
-                transactions: transactions ?? [],
-                currentlySelected: isManualAccount,
-              }) && (
-                <SelectItem
-                  value="manual"
-                  data-testid="option-chase-account-manual"
-                >
-                  Manual entries
-                </SelectItem>
-              )}
             </SelectContent>
           </Select>
         </div>

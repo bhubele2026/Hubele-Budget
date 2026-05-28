@@ -1,0 +1,66 @@
+Final fix. Two things broken after the cleanup, both with the same root cause: forecast_settings.bankSnapshotAccountId got nulled out by the orphan-pointer repair, and nothing repaired it. Add the snapshot-pointer repair to the startup cleanup, fix the default-account selection on the Chase page, and remove the dropdown when it's not adding value.
+
+ROOT CAUSE — confirmed by reading the code:
+
+1. artifacts/api-server/src/routes/forecast.ts line 916-918: isPrimary check is `!settings.bankSnapshotAccountId || settings.bankSnapshotAccountId === acct.id`. After cleanup nulled bankSnapshotAccountId, ANY refresh-from-plaid would re-point it — but the page never auto-fires that. So the snapshot pointer stays null and:
+
+2. artifacts/h2budget/src/pages/transactions.tsx line 319: `defaultAccountKey = bankSnapshot?.accountId ?? "manual"`. With bankSnapshot.accountId null, default falls to "manual". Page lands on Manual entries by default.
+
+3. artifacts/h2budget/src/lib/effectiveSnapshot.ts line 79-87: If you DO manually pick the Chase account, deriveEffectiveSnapshot returns null because (a) bankSnapshot is empty for that key, (b) accountSnapshots[chase.id] is empty (cleanup blew the per-account snapshot too — verify this), (c) no sibling rows, (d) fallback bankSnapshot.accountId is null. Tiles render "Unavailable".
+
+FIX — THREE PARTS:
+
+PART 1 — Server-side snapshot pointer repair in startupChaseDeadItemsCleanup.ts.
+
+After all the orphan-pointer cleanup is done, run one more repair: for TARGET_HOUSEHOLD, if forecast_settings.bankSnapshotAccountId IS NULL AND there is exactly one Chase plaid_account (institution_name ILIKE 'chase'), repoint:
+  UPDATE forecast_settings
+    SET bank_snapshot_account_id = <that chase plaid_accounts.id>,
+        bank_snapshot_name = <that account.name>,
+        bank_snapshot_mask = <that account.mask>,
+        bank_snapshot_source = 'plaid',
+        updated_at = NOW()
+    WHERE user_id = <owner>
+      AND bank_snapshot_account_id IS NULL;
+
+Leave bank_snapshot_balance and bank_snapshot_at alone — those will be filled on the next refresh-from-plaid or balance sync. The pointer is enough to make the page default to Chase.
+
+Idempotent: re-running converges to no-op once the pointer is set.
+
+PART 2 — Auto-pick Chase as the default account on the Chase page.
+
+In artifacts/h2budget/src/pages/transactions.tsx line 319, change defaultAccountKey logic:
+  // If a Chase Plaid checking account exists, default to it.
+  // Falling back to "manual" only when there are zero Plaid accounts.
+  const chaseAccount = (forecastData?.plaidCheckingAccounts ?? []).find(
+    (a) => (a.institutionName ?? "").toLowerCase().includes("chase")
+  );
+  const defaultAccountKey =
+    bankSnapshot?.accountId
+    ?? chaseAccount?.id
+    ?? "manual";
+
+This makes the page land on the Chase account even when the snapshot pointer is missing — the visible signal the user wants.
+
+PART 3 — Remove the View account dropdown when there is exactly one Plaid checking account.
+
+In artifacts/h2budget/src/pages/transactions.tsx around line 2244-2254, the dropdown visibility gate is `totalOptions > 1`. Tighten it: also exclude "Manual entries" from the option count unless the user is currently viewing manual rows.
+
+Specifically: drop the `shouldShowManualPickerOption` evaluation from the totalOptions count when it's only adding Manual as a secondary option. The dropdown should be hidden whenever there's a single real Plaid account.
+
+Don't change anything if there are 2+ Plaid checking accounts (multi-checking households still need the picker). Just clean up the single-account case.
+
+Also: drop the "Manual entries" SelectItem from the dropdown entirely. If someone has manual rows mixed with a Plaid account, the dropdown still shows the Plaid account; manual rows render in the fallback path. We do not need a separate "manual" view.
+
+VERIFY after publish:
+
+1. Re-query prod read-only:
+   - SELECT bank_snapshot_account_id, bank_snapshot_name, bank_snapshot_mask, bank_snapshot_source FROM forecast_settings WHERE user_id = (mine)
+   - Should now point at the Chase 5526 plaid_account row, not NULL
+
+2. On /chase after hard refresh:
+   - Page lands on Chase 5526 (no "Manual entries" default)
+   - View account dropdown is GONE (or shows just Chase)
+   - "Starting balance" and "Ending balance" tiles show real numbers (might be $2,000 / matching today; after clicking Refresh from Plaid they fully populate with month-anchored values)
+   - All 114 May transactions visible (the orphan fix already restored these — verify they're still there)
+
+Architect review, typecheck, publish. This is the final patch tonight.

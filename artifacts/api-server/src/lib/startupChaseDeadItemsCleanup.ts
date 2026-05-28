@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import {
   db,
   debtsTable,
@@ -505,6 +505,63 @@ export async function runStartupChaseDeadItemsCleanup(): Promise<StartupChaseCle
         { householdId: TARGET_HOUSEHOLD_ID, repaired: repairedSnap.length },
         `[startup-chase-cleanup] cleared dangling bank_snapshot_account_id on ${repairedSnap.length} forecast_settings row(s)`,
       );
+    }
+
+    // PART 1b (snapshot pointer RE-POINT): the orphan-pointer repair
+    // above (and prior boots) nulled bank_snapshot_account_id, and the
+    // page never auto-fires a refresh-from-plaid to re-point it — so the
+    // Chase page defaults to "Manual entries" and the balance tiles read
+    // "Unavailable". If the household now has exactly one surviving Chase
+    // plaid_account, re-point the snapshot at it so the page lands on
+    // Chase again. Balance / timestamp are intentionally left untouched —
+    // the next refresh-from-plaid or balance sync fills those in; the
+    // pointer alone is enough to fix the default view.
+    const chaseAccts = await db
+      .select({
+        id: plaidAccountsTable.id,
+        name: plaidAccountsTable.name,
+        mask: plaidAccountsTable.mask,
+      })
+      .from(plaidAccountsTable)
+      .innerJoin(
+        plaidItemsTable,
+        eq(plaidAccountsTable.itemId, plaidItemsTable.id),
+      )
+      .where(
+        and(
+          eq(plaidAccountsTable.householdId, TARGET_HOUSEHOLD_ID),
+          sql`lower(${plaidItemsTable.institutionName}) like '%chase%'`,
+        ),
+      );
+
+    if (chaseAccts.length === 1) {
+      const chase = chaseAccts[0]!;
+      const repointed = await db
+        .update(forecastSettingsTable)
+        .set({
+          bankSnapshotAccountId: chase.id,
+          bankSnapshotName: chase.name,
+          bankSnapshotMask: chase.mask,
+          bankSnapshotSource: "plaid",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(forecastSettingsTable.householdId, TARGET_HOUSEHOLD_ID),
+            isNull(forecastSettingsTable.bankSnapshotAccountId),
+          ),
+        )
+        .returning({ userId: forecastSettingsTable.userId });
+      if (repointed.length > 0) {
+        logger.info(
+          {
+            householdId: TARGET_HOUSEHOLD_ID,
+            chaseAccountId: chase.id,
+            repointed: repointed.length,
+          },
+          `[startup-chase-cleanup] re-pointed bank_snapshot_account_id at sole surviving Chase account on ${repointed.length} forecast_settings row(s)`,
+        );
+      }
     }
   } catch (err) {
     logger.error(
