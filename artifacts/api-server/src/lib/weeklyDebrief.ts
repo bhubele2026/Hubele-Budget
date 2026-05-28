@@ -7,6 +7,7 @@
 import { and, eq, gte, lte, or, sql, isNull, inArray } from "drizzle-orm";
 import {
   db,
+  budgetCategoriesTable,
   forecastResolutionsTable,
   forecastSettingsTable,
   plaidAccountsTable,
@@ -180,6 +181,9 @@ export async function computeWeekVariance(
   const incomePlansInPad = plansAll.filter(
     (p) => p.kind === "income" && !(p.forecastDate >= weekStart && p.forecastDate <= weekEnd),
   );
+  // Filtering of excluded-category plans happens after we load
+  // excludedCategoryIds below (depends on a DB query). See the
+  // re-assignments where bankTxns is built.
 
   // Owner for snapshot resolution. (We pull settings via householdId
   // → owner mapping below.)
@@ -231,7 +235,43 @@ export async function computeWeekVariance(
         ),
       ),
     );
-  const bankTxns = txnsAll.filter((t) => isBankRow(t.source, t.plaidAccountId));
+  const bankTxnsPreExclude = txnsAll.filter((t) =>
+    isBankRow(t.source, t.plaidAccountId),
+  );
+
+  // (#783) Exclude system-managed categories (Ignore / Transfer /
+  // Uncategorized — any row flagged exclude_from_budget) from the
+  // variance computation. These transactions and any recurring plans
+  // pointed at them should not affect actualIncome/actualExpenses,
+  // byCategory, unmatched plans, or unplanned-charge action panels.
+  // Categories are scoped by householdId (same as everything else
+  // here); a single input-side filter covers all downstream
+  // accumulators.
+  const excludedCatRows = await db
+    .select({ id: budgetCategoriesTable.id })
+    .from(budgetCategoriesTable)
+    .where(
+      and(
+        eq(budgetCategoriesTable.householdId, householdId),
+        eq(budgetCategoriesTable.excludeFromBudget, true),
+      ),
+    );
+  const excludedCategoryIds = new Set(excludedCatRows.map((r) => r.id));
+  const isExcludedTxn = (categoryId: string | null | undefined): boolean =>
+    !!categoryId && excludedCategoryIds.has(categoryId);
+
+  const bankTxns = bankTxnsPreExclude.filter((t) => !isExcludedTxn(t.categoryId));
+
+  // (#783) Defensively drop recurring-plan occurrences that point at
+  // an excluded system category so they never feed planItems /
+  // unmatchedPlans / byCategory. Mutate via reassignment so the rest
+  // of the function sees the filtered lists.
+  const plansInWeekFiltered = plansInWeek.filter(
+    (p) => !isExcludedTxn(p.categoryId),
+  );
+  const incomePlansInPadFiltered = incomePlansInPad.filter(
+    (p) => !isExcludedTxn(p.categoryId),
+  );
 
   // forecast_resolutions tied to plans in (or near) this week — we
   // need rescheduled-OUT rows too so we know not to count them as
@@ -277,7 +317,7 @@ export async function computeWeekVariance(
   let plannedIncome = 0;
   let plannedExpenses = 0;
 
-  for (const p of plansInWeek) {
+  for (const p of plansInWeekFiltered) {
     plannedIncome += p.kind === "income" ? p.forecastAmount : 0;
     plannedExpenses += p.kind === "expense" ? p.forecastAmount : 0;
 
@@ -420,7 +460,7 @@ export async function computeWeekVariance(
   // the ±7-day pad — if matched in this week, treat as on-time with
   // $0 variance and include in this week's plan list so the week
   // accounts for them.
-  for (const p of incomePlansInPad) {
+  for (const p of incomePlansInPadFiltered) {
     const hits = resolutionRows.filter(
       (r) =>
         r.status === "matched" &&
