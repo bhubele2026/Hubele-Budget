@@ -9,8 +9,6 @@ import {
   db,
   budgetCategoriesTable,
   forecastResolutionsTable,
-  forecastSettingsTable,
-  plaidAccountsTable,
   recurringItemsTable,
   transactionsTable,
   type DebriefActionsSummary,
@@ -60,47 +58,48 @@ export function planWeekKey(e: { date: string }): string {
 
 // -- isBankRow predicate ---------------------------------------------
 //
-// Lifted from routes/forecast.ts so the Debrief library can filter
-// bank-checking transactions without dragging the whole route module
-// in. Same semantic: a row counts as bank-checking iff its
-// plaid_account_id matches the configured checking account; manual
-// rows pass through unless they carry an explicit amex/plaid: source.
+// (#791) Previous semantics scoped the Debrief actuals to a single
+// "configured checking" Plaid account and hard-excluded any row
+// whose source was `amex` / `plaid:amex`. That made the Debrief
+// blind to legitimate categorized Amex spend — Income, Expenses and
+// every category bucket collapsed to $0 whenever Chase was missing
+// even though Amex had a full week of categorized transactions.
+//
+// New rule: a row is countable variance iff it is NOT flagged as a
+// pure transfer between the household's own accounts (see
+// `is_transfer` on the transactions table — this is the same flag
+// the rest of the app uses to keep card-payments / internal moves
+// out of allowance/budget math). Excluded-category filtering
+// (#783) still happens separately at the category layer.
+//
+// `loadConfiguredCheckingExternalId` is retained as a no-op stub
+// for backwards compatibility with the route caller; the value is
+// no longer consulted.
 
 export async function loadConfiguredCheckingExternalId(
   householdId: string,
   ownerUserId: string,
 ): Promise<string | null> {
-  const [settings] = await db
-    .select({
-      bankSnapshotAccountId: forecastSettingsTable.bankSnapshotAccountId,
-    })
-    .from(forecastSettingsTable)
-    .where(eq(forecastSettingsTable.userId, ownerUserId));
-  if (!settings?.bankSnapshotAccountId) return null;
-  const [acct] = await db
-    .select({ accountId: plaidAccountsTable.accountId })
-    .from(plaidAccountsTable)
-    .where(eq(plaidAccountsTable.id, settings.bankSnapshotAccountId));
-  // Suppress unused householdId warning — kept in the signature so
-  // future scoping (cross-household guard) doesn't change callers.
+  // No longer used by the Debrief variance computation (#791) — the
+  // bank-row predicate now accepts any non-transfer household row.
+  // Kept as a stub so callers (route post-lock-additions sweep) keep
+  // compiling without a churn diff; safe to delete once the route is
+  // migrated off of it.
   void householdId;
-  return acct?.accountId ?? null;
+  void ownerUserId;
+  return null;
 }
 
-export function makeIsBankRow(configuredCheckingExternalId: string | null) {
+export function makeIsBankRow(_configuredCheckingExternalId?: string | null) {
+  void _configuredCheckingExternalId;
   return function isBankRow(
-    source: string | null | undefined,
-    plaidAccountId: string | null | undefined,
+    _source: string | null | undefined,
+    _plaidAccountId: string | null | undefined,
+    isTransfer?: boolean | null | undefined,
   ): boolean {
-    if (plaidAccountId) {
-      return (
-        configuredCheckingExternalId !== null &&
-        plaidAccountId === configuredCheckingExternalId
-      );
-    }
-    const s = (source ?? "manual").toLowerCase();
-    if (s === "amex" || s === "plaid:amex") return false;
-    if (s.startsWith("plaid:")) return false;
+    // Pure transfers between the household's own accounts are not
+    // variance — same guard the allowance / forecast pages use.
+    if (isTransfer === true) return false;
     return true;
   };
 }
@@ -185,24 +184,10 @@ export async function computeWeekVariance(
   // excludedCategoryIds below (depends on a DB query). See the
   // re-assignments where bankTxns is built.
 
-  // Owner for snapshot resolution. (We pull settings via householdId
-  // → owner mapping below.)
-  // Owner-scoped settings: bank snapshot account points at the
-  // checking account we treat as canonical. We need the OWNER's user
-  // id; for the Debrief the simplest path is to read any settings row
-  // for this household — there's at most one (single-household per
-  // owner).
-  const settingsRow = (
-    await db
-      .select()
-      .from(forecastSettingsTable)
-  ).find((s) => s.householdId === householdId);
-  const ownerUserId = settingsRow?.userId ?? "";
-  const configuredCheckingExternalId = await loadConfiguredCheckingExternalId(
-    householdId,
-    ownerUserId,
-  );
-  const isBankRow = makeIsBankRow(configuredCheckingExternalId);
+  // (#791) Bank-row predicate no longer scoped to a single
+  // "configured checking" Plaid account — every household
+  // non-transfer row contributes to actuals.
+  const isBankRow = makeIsBankRow();
 
   // Transactions whose pending-date (or fallback occurredOn) falls in
   // the week. We need a wider SQL filter than just occurredOn because
@@ -236,7 +221,7 @@ export async function computeWeekVariance(
       ),
     );
   const bankTxnsPreExclude = txnsAll.filter((t) =>
-    isBankRow(t.source, t.plaidAccountId),
+    isBankRow(t.source, t.plaidAccountId, t.isTransfer),
   );
 
   // (#783) Exclude system-managed categories (Ignore / Transfer /
