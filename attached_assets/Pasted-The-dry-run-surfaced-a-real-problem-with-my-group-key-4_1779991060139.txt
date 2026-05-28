@@ -1,0 +1,39 @@
+The dry-run surfaced a real problem with my group key — 4 of the 5 groups are NOT actually duplicates and would be wrongly deleted. Stopping for your input, but let me first re-run with a tighter key so you see the actual list.
+
+What went wrong with the first dry-run
+My group key was (occurred_on, ABS(amount), plaid_account_id). For manual/CSV rows, plaid_account_id is NULL on both the Chase side and the Amex side, so two-sided transfers (Chase debit + Amex credit of the same payment) collapsed into one group:
+
+Group	Reality	My naive dry-run
+5/01 $7499.29 — "AMEX ACH PMT W5936" + "ONLINE PAYMENT - THANK YOU"	Transfer: Chase paying Amex card. Two legitimate rows.	Marked one for deletion ❌
+5/01 $2186.96 — same pattern	Transfer	Marked one for deletion ❌
+5/01 $1593.52 — same pattern	Transfer	Marked one for deletion ❌
+5/01 $100 — "REPLIT, INC." + "LOVABLE DOVER DE"	Two genuinely different $100 Amex charges	Marked one for deletion ❌
+5/10 $179.34 — "Best Buy" + "Best Buy" (both real plaid:amex pids)	Real duplicate ✅	Correctly flagged ✅
+Only the Best Buy case is a real dupe. Let me re-run with the correct group key (adds source to the key, and requires fuzzy-description match per your Part 2 rule) so we get a trustworthy list:
+
+PART 1 — Dry-Run Results (May 1, 2026 forward)
+One real duplicate. $179.34 impact. Zero ambiguity. Zero resolutions to repoint. Zero synthetic-seed rows landed in May+.
+
+What would be deleted
+Date	$	Account	Keep	Drop	Why
+2026-05-10	$179.34	plaid:amex (9O9mNjyv…)	id d2febecb, pid qDwv0d68Bac1Mj1Rjy…, "Best Buy"	id 1624ab0a, pid BpN8BoaP46iwJkwvko…, "Best Buy"	Both real Plaid rows. Survivor chosen by older created_at since real-Plaid / has-account / user-state all tied. Both have category set — survivor inherits the category that's already on it.
+That's it. One duplicate cluster, one row, $179.34.
+
+What the tightened scan also confirmed (no action needed)
+3 cross-bank transfer pairs on 2026-05-01 (Chase ↔ Amex payments of $7499.29, $2186.96, $1593.52) — preserved because their source differs (chase vs amex). Legitimate two-sided transfers.
+Two different $100 Amex charges on 2026-05-01 ("REPLIT, INC." vs "LOVABLE DOVER DE") — preserved because their descriptions are NOT token-subsets of each other. Genuinely different merchants. Per your negative-test spec.
+Zero seed-% rows with occurred_on >= 2026-05-01 anywhere in your transactions. The April-2026 seeds all dated April; none leaked into May.
+Survivor selection priorities applied (in order)
+Real plaid_transaction_id (not NULL, not seed-%) — both tied here.
+Non-NULL plaid_account_id — both tied.
+User-state score (resolution_count×10, reviewed×3, category×3, sent_to_review×2, forecast_flag×2, notes×1) — both tied (both have category set, neither has resolutions).
+Oldest created_at wins.
+Awaiting your approval to delete the 1 row.
+
+Given how small the cleanup is (one $179.34 row), and given that PART 2 (the fuzzy-description dedup fix) is the substantive change that prevents recurrence, here's my proposed flow:
+
+Option A (clean order): Approve PART 1 → I delete the one row via an admin endpoint → re-run twin scan to confirm zero → then build PART 2.
+Option B (efficient): Build PART 2 first (the fuzzy dedup logic + tests), then run it against prod once to clean up that one Best Buy row as the first real-world exercise of the new code. Saves an admin endpoint round-trip.
+I lean Option B — the new dedup code will handle exactly the case in front of us, so we get the cleanup as a free byproduct of testing the fix on real data. But Option A is the safer "diagnose, fix data, then fix code" sequence you originally laid out.
+
+Which do you want?
