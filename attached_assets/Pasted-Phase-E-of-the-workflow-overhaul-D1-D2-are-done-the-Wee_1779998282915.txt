@@ -1,0 +1,62 @@
+Phase E of the workflow overhaul. D1 + D2 are done — the Weekly Debrief works, the variance data is clean. Phase E adds AI advisor insight: when I lock a week, the advisor reads the variance and tells me what to learn from it, in plain language. File as a project task in the #766 format. Personal app — skip new tests, smoke test instead.
+
+DESIGN (locked):
+- Summary auto-generates ON LOCK (a 2-3 sentence digest appears on the locked week immediately).
+- Plus a "Dig deeper" button that opens the existing advisor chat pre-loaded with this week's variance context.
+- The summary is SAVED to the locked week (stored, not regenerated on every view) — it's a historical record and avoids re-calling the API each view.
+- The real value is CROSS-WEEK patterns: read the last several LOCKED weeks, not just the one being locked.
+
+STEP 1 — Schema: store the summary on the locked week.
+Add a column to weeklyDebriefsTable in lib/db/src/schema/index.ts:
+  advisorSummary: jsonb("advisor_summary").$type<DebriefAdvisorSummary>(),
+Type:
+  export interface DebriefAdvisorSummary {
+    generatedAt: string;           // ISO
+    headline: string;              // one-line takeaway, e.g. "Groceries over for the 3rd week running."
+    bullets: string[];             // 2-5 short observations
+    suggestions: Array<{           // optional actionable nudges
+      text: string;                // "PayPal Credit payment is unplanned every week — add it as recurring?"
+      toolHint?: string;           // optional advisor tool name the user could invoke
+    }>;
+  }
+Run pnpm --filter @workspace/db push.
+
+STEP 2 — Insight generator.
+Create artifacts/api-server/src/lib/debriefAdvisorSummary.ts. A function generateDebriefSummary(householdId, weekStart) that:
+  a) Loads the just-locked week's varianceSnapshot.
+  b) Loads the prior 4 LOCKED weeks' varianceSnapshots for cross-week patterns.
+  c) Computes deterministic observations FIRST (no AI needed — these are facts):
+     - Per-category overspend streaks: any expense category over planned in 2+ consecutive locked weeks.
+     - Income shortfalls: any income category that landed under planned, or $0 when planned > 0 (e.g. "Brad's paycheck planned $4,050, actual $0 — didn't land this week").
+     - Recurring unplanned charges: any unplanned txn whose description matches an unplanned txn in 2+ of the prior weeks → candidate for "make it recurring."
+     - Net accuracy: (1 - abs(actualNet - plannedNet)/abs(plannedNet)) * 100, and whether it's trending up or down vs prior weeks.
+     - Biggest single variance this week (category + dollar amount).
+  d) Feeds those deterministic facts to the Anthropic API (claude-sonnet, the SDK is already installed and used by the existing advisor) with a tight prompt: "Here are factual observations about this household's week vs their forecast. Write a 1-line headline, 2-5 plain-language bullets, and up to 2 actionable suggestions. Non-judgmental, concrete, no fluff. Don't invent numbers — only use the facts provided." Return structured JSON matching DebriefAdvisorSummary.
+  e) If the AI call fails, fall back to a deterministic template summary built from the facts (never block locking on an API failure).
+
+Reuse patterns from the existing advisor lib (advisor.ts / advisorInsights.ts) — same SDK, same key, same error handling.
+
+STEP 3 — Wire into the lock flow.
+In the POST /api/debrief/weeks/:weekStart/lock handler: after the week is successfully locked and varianceSnapshot saved, call generateDebriefSummary and store the result in the advisorSummary column. Do this synchronously if fast enough, or fire-and-forget with the summary populated on next fetch if the API call is slow — your call, but locking must NOT fail or hang if the AI is slow/down. The lock succeeds regardless; the summary is best-effort.
+
+STEP 4 — Frontend: show the summary on locked weeks.
+In debrief.tsx, the locked-week view (status === "locked"):
+  - Render an "Advisor takeaway" card above or beside the frozen variance snapshot.
+  - Show the headline (bold), the bullets (list), and suggestions (each with a subtle action style).
+  - If advisorSummary is null (older locked weeks before this feature, or generation failed), show a "Generate takeaway" button that calls a new POST /api/debrief/weeks/:weekStart/generate-summary endpoint to backfill it on demand.
+  - Add a "Dig deeper" button that opens the existing advisor chat (advisor-chat component) pre-loaded with a system message containing this week's variance context, so I can ask follow-ups like "why does groceries keep running over?"
+
+STEP 5 — Endpoint for on-demand generation.
+POST /api/debrief/weeks/:weekStart/generate-summary — regenerates and stores the summary for a locked week. Used by the "Generate takeaway" button and for re-generating if I want a fresh take. Household-scoped, 404 cross-household, 400 if the week isn't locked. Update OpenAPI + codegen.
+
+STEP 6 — Smoke test before marking complete:
+  1. Lock a fresh week → advisor takeaway card appears within a few seconds with a real headline + bullets referencing actual numbers from that week
+  2. The summary references REAL facts (e.g. if Groceries was over, it says so with the right dollar amount — not hallucinated numbers)
+  3. Lock a second week where a pattern exists (e.g. Groceries over again) → the summary mentions the streak ("2nd week running")
+  4. "Dig deeper" opens the chat with week context loaded — ask "why is groceries over?" and confirm it answers using this week's data
+  5. On an older locked week with no summary → "Generate takeaway" button works
+  6. Kill the network/API mid-lock (or simulate failure) → locking still succeeds, fallback template summary appears (never blocks the lock)
+
+Report each step. Confirm the AI uses real numbers, not invented ones (step 2 is the critical correctness check).
+
+OUT OF SCOPE: Phase F (locked-month chart snap). Don't chain to it.
