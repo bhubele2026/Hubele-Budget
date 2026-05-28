@@ -1,0 +1,24 @@
+Sidequest: remove all "pinned" state from my budget. I want budget amounts to come purely from recurring items (bills) for now. I'll add manual pins back later if needed. Right now I can't unpin from the UI — pinned lines stay pinned.
+
+DIAGNOSE briefly + fix:
+
+1. There are two layers of pinning:
+   - budget_months.pinned (whole-month override)
+   - budget_lines.pinned (per-line override)
+   The May 2026 auto-pin migration at routes/budget.ts:805-839 (task #115) pinned May 2026 at BOTH levels for several categories — that's why my budget looks pinned even though I didn't set it.
+
+2. The "won't let me unpin" symptom: confirm whether the month-level monthPinned flag overrides per-line unpin attempts. Specifically: when I click unpin on a line but budget_months.pinned is true for that month, does the response builder (~line 1990, plannedSourceKind logic) still resolve the line as "pinned" because of the month flag? Trace this for me — what's the actual override chain?
+
+3. CLEANUP — clear ALL pinned state for my household, across all months:
+   - UPDATE budget_lines SET pinned = false WHERE household_id = my household
+   - UPDATE budget_months SET pinned = false WHERE household_id = my household
+   - Do NOT delete the budget_lines rows themselves — just unset the pinned flag. The plannedAmount stays as last-known but should be recomputed from recurring items on next render.
+   - DRY-RUN first: report how many budget_lines rows would unset (count by month), how many budget_months rows would unset, and confirm none of them are about to be deleted — only the pinned flag flips.
+
+4. After cleanup, verify by reloading /budget: every category line should now derive its amount from the recurring items (bills) source, no "Pinned" badges anywhere, no month-level "Pinned" indicator.
+
+5. POSSIBLY ALSO needed (your call after diagnosis): if there's an auto-pin migration that re-runs on startup or after recurring-item edits, disable/gate it behind a feature flag so it doesn't re-pin everything when I edit a bill tomorrow. Confirm whether such a re-pin path exists and whether it'd undo my cleanup.
+
+6. Don't change the pinning FEATURE — the toggle in the UI should still work for the future. Just clear current state and prevent it from being silently re-applied.
+
+Run the dry-run, report counts, stop for my approval before flipping the flags. Then verify the /budget page shows clean post-cleanup.

@@ -1,0 +1,30 @@
+Side feature: the Dashboard "AMEX ENDING BALANCE" tile currently sums all 3 Amex cards. Exclude Delta SkyMiles Gold from that tile only — the Delta Gold card has a lot of work reimbursements that inflate my personal Amex liability number. Show only Blue Cash Preferred + Platinum on the dashboard tile.
+
+Important — this is a DASHBOARD TILE ONLY change. Do not touch:
+- The Amex page (/amex) itself — Delta Gold's chip, balance, and transactions stay fully visible there
+- Reimbursement tracking or any other Amex-derived numbers
+- The Forecast chart's Amex projections
+- Net May calculation
+
+CHANGE — in artifacts/h2budget/src/pages/dashboard.tsx around the amexEndingBalance useMemo (~line 2147):
+
+The Amex page already has per-card anchor resolution via amexAnchorPerCardResp (artifacts/h2budget/src/pages/amex.tsx ~line 353). Reuse that pattern on the dashboard:
+
+1. Identify the Delta Gold card by its plaid_account_id or mask. The Amex page distinguishes the 3 cards somehow — use the same identifier (probably mask = '1009' AND name LIKE '%Delta%' — be careful, Platinum also ends in 1009; need name to disambiguate).
+
+2. Compute the dashboard tile's amexEndingBalance as the sum of per-card balances EXCLUDING Delta Gold:
+   - Get the per-card balances (either via amexAnchorPerCardResp or by filtering amexTransactions to exclude Delta Gold and computing fresh)
+   - Sum: Blue Cash Preferred balance + Platinum balance
+   - This is the value the tile displays
+
+3. Update the tile's subtitle to clarify what it shows. Current subtitle says "end of May" — change to something like "end of May · excludes Delta Gold" or "Blue Cash + Platinum · end of May" so I remember why it's not the full Amex total. Keep it subtle, small text.
+
+4. Don't introduce a setting or toggle — it's a personal preference, hard-coded for now. If we later want a per-card include/exclude toggle, that's a different feature.
+
+VERIFY:
+- /dashboard AMEX ENDING BALANCE tile shows Blue Cash + Platinum only (smaller number than before)
+- /amex page is unchanged — all 3 cards still show in chip switcher with correct balances
+- Net May on the dashboard is unchanged (we're not touching that calculation)
+- The subtitle reflects the exclusion
+
+Run typecheck. This is small — should be ~20 lines of changes.

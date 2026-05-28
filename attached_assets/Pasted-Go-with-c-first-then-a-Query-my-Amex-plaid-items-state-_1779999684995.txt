@@ -1,0 +1,25 @@
+Go with (c) first, then (a). Query my Amex plaid_items state, then draft the fix based on what you find.
+
+Use the same prod-DB access path you've used before (the email is h2hubele@gmail.com, find my user, find my household, find my plaid_items). Report for ALL my Plaid items (Chase and Amex):
+  - institution_name
+  - lastSyncErrorCode (NULL, or what string?)
+  - pendingExpiration
+  - webhook URL (just to confirm those stayed set)
+  - sync_status / sync_cursor_status if those fields exist
+
+The critical question: is Amex flagged with ITEM_LOGIN_REQUIRED, USER_PERMISSION_REVOKED, PENDING_EXPIRATION, or any other error that would cause PlaidReconnectButton to render on the Avalanche page for my Amex debts? If yes, that's the bug we're chasing. If no, we need a different theory.
+
+Based on what you find:
+
+IF Amex IS in a reconnect-required state:
+Draft the fix as a task. The fix should be:
+  1. Make PlaidReconnectButton's open() require explicit user click. If it has ANY useEffect or auto-fetch logic that can fire on re-render, remove it. Open ONLY on direct onClick.
+  2. When PlaidAccountPicker opens, defensively unmount or disable any sibling PlaidReconnectButton instances on the same page — they shouldn't be racing for the SDK singleton while the user is doing a fresh CREATE flow.
+  3. If Amex genuinely needs reconnecting, surface it explicitly to me in the UI ("Amex needs to be reconnected — click here") rather than having reconnect buttons silently mounted next to unrelated debts.
+
+IF Amex is NOT in a reconnect-required state:
+Tell me what state it's in. Then we look at theory 2 (stale linkToken in component state from earlier in the session). DevTools trace would be the next step there.
+
+EITHER WAY, also confirm: does PlaidReconnectButton anywhere call open() inside a useEffect, or only inside an onClick handler? Read plaid-reconnect-button.tsx end-to-end and report any non-click triggers of open() or fetchToken().
+
+Diagnose and report. Don't ship the fix task yet — let me confirm the direction first based on your Amex item state finding.
