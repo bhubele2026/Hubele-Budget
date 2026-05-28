@@ -1,0 +1,20 @@
+Before building Phase E, I need the category variance numbers to be trustworthy and interpretable. Looking at a week's Category Variance table, two things are wrong:
+
+ISSUE 1 — "Uncategorized" appears 3 times as separate rows ($1,454.49, $1,100.00, $150.00).
+The render at debrief.tsx ~line 1066 does:
+  const name = b.categoryId ? (catNameById.get(b.categoryId) ?? "Uncategorized") : "Uncategorized";
+So three rows have real distinct categoryIds but their names aren't in catNameById — they fall back to "Uncategorized". Diagnose:
+  - Where does catNameById come from? (probably useListCategories or similar)
+  - Why are these 3 categoryIds missing from it? Are they categories that exist in transactions but were since deleted/archived? Are they from a different household scope? Are they budget_categories the list endpoint doesn't return?
+  - Fix so every categoryId in the byCategory data resolves to its real name. If a category was genuinely deleted, label it "Deleted category" or its last-known name, NOT a generic "Uncategorized" that collides with other rows.
+
+ISSUE 2 — The Planned column is $0.00 for most rows (Other Income, Misc/Buffer, Home Maintenance, Dining & Coffee, PayPal Credit, Childcare, Menards, Subscriptions all show $0 planned but real actuals).
+Explain where byCategory.plannedAmount comes from in computeWeekVariance:
+  - Is "planned" derived from recurring_items that fall in the week, from budget_lines for the month, or something else?
+  - For a category like "Dining & Coffee" showing $0 planned but $180.55 actual — is that because I have no recurring item / budget line for dining (so $0 planned is correct), OR because the planned-amount lookup is keyed wrong and missing real planned amounts?
+  - Show me, for ONE example category (Dining & Coffee), exactly what data computeWeekVariance looked at to decide planned=$0. Did it find zero recurring items tagged to that category for that week? Is dining a budget_line concept that isn't being read?
+
+ISSUE 3 — Sign/concept mixing (lower priority, flag for design):
+The table mixes income (Hannah's paycheck, Other Income), spending (Groceries, Dining, Utilities), and debt payments (PayPal Credit, Menards) in one flat list with one variance color scheme. "+$865 Hannah's paycheck" is GOOD (more income) but renders red same as "+$184 Utilities" which is BAD (overspend). Don't fix yet — just confirm whether byCategory distinguishes income vs expense vs debt categories, so we can decide in a follow-up whether to split the table or flip variance colors by category kind.
+
+For all three: DIAGNOSE and EXPLAIN first. Don't change code yet. I want to understand where each number originates before deciding what to fix. Report findings on all three.
