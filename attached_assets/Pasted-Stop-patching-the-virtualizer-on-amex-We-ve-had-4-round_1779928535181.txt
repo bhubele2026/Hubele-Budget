@@ -1,0 +1,33 @@
+Stop patching the virtualizer on /amex. We've had 4 rounds of attempted fixes and the list still cuts off mid-month. Screenshot: Delta Gold filter on May 2026, list starts at May 18, so May 1-17 AND May 19-31 are invisible.
+
+The virtualizer abstraction is the wrong tool for this page. MONTH_LIMIT is 1000 transactions, which means a max of ~30 day groups. We're virtualizing 30 DOM nodes. That's not a perf problem worth solving. It IS a bug problem we keep creating.
+
+DO THIS:
+
+1. Remove useWindowVirtualizer entirely from artifacts/h2budget/src/pages/amex.tsx.
+2. Replace the virtualized list with a plain rendering: groups.map(([dayKey, rows]) => renderGroup([dayKey, rows]))
+3. Remove all the supporting infrastructure: scrollMargin state, the ResizeObserver, the parentRef, the measureElement refs, the paddingTop/paddingBottom calculations, the indices logic, the totalRowCount/measureKey effects, the requestAnimationFrame remeasure pass. Remove the import of useWindowVirtualizer. Remove the ITEM_GAP_PX constant and use Tailwind space-y-6 (or whatever the original pattern was) on the parent container instead.
+4. Keep the day-group rendering logic exactly as it is. Only remove the virtualization layer wrapping it.
+5. Keep all the OTHER state (cardFilter, monthScoped, filtered, groups, etc) — those are correct and Phase D depends on them.
+6. Keep the existing scroll-to-today auto-scroll behavior if any — wire it to scroll the day's wrapper div into view via a ref, not via the virtualizer.
+
+After this change:
+
+- /amex Delta Gold + May 2026 shows ALL day groups from May 1 through May 31 that have Delta Gold transactions
+- All cards / Blue Cash / Platinum filters do the same
+- Scrolling reaches the top of the month (most recent) and the bottom (May 1)
+- No more "126 of 220 txns" with half the list missing
+
+Performance check: open DevTools, hit the page, confirm the page renders in under 200ms for the typical 30-day-group case. If somehow this becomes a real perf problem at 30 day groups, then the page has bigger issues than rendering choice.
+
+Run pnpm typecheck and pnpm test on h2budget. Existing virtualizer-specific tests can be deleted or marked .skip — they're testing a problem we no longer have.
+
+Smoke test BEFORE marking complete:
+1. /amex with All cards on May 2026 — see entire month
+2. Switch to Delta Gold chip — see entire month
+3. Switch to Platinum chip — see entire month
+4. Switch to Blue Cash chip — see entire month
+5. Switch months via the May '26 < > buttons — content updates, list reaches top and bottom
+6. Open browser DevTools, paste back the page-render time so we have a real number on the perf-vs-correctness tradeoff
+
+Report back when all 6 pass.
