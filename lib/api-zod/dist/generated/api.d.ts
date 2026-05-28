@@ -5698,10 +5698,10 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             amount: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "unplanned"]>;
+            status: zod.ZodEnum<["matched", "unplanned", "acknowledged_unplanned"]>;
             matchedRecurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -5710,7 +5710,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
         }, {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -5766,10 +5766,10 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             amount: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "unplanned"]>;
+            status: zod.ZodEnum<["matched", "unplanned", "acknowledged_unplanned"]>;
             matchedRecurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -5778,7 +5778,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
         }, {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -5806,7 +5806,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
         openItemsCount: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         transactions: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -5857,7 +5857,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unplannedTxns: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -5874,7 +5874,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
         }[];
     }, {
         transactions: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -5925,7 +5925,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unplannedTxns: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -5994,7 +5994,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
     weekEnd: string;
     varianceSnapshot: {
         transactions: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6045,7 +6045,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unplannedTxns: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6086,7 +6086,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
     weekEnd: string;
     varianceSnapshot: {
         transactions: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6137,7 +6137,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unplannedTxns: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6262,10 +6262,10 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             amount: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "unplanned"]>;
+            status: zod.ZodEnum<["matched", "unplanned", "acknowledged_unplanned"]>;
             matchedRecurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6274,7 +6274,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
         }, {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6330,10 +6330,10 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             amount: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "unplanned"]>;
+            status: zod.ZodEnum<["matched", "unplanned", "acknowledged_unplanned"]>;
             matchedRecurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6342,7 +6342,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
         }, {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6370,7 +6370,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
         openItemsCount: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         transactions: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6421,7 +6421,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unplannedTxns: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6438,7 +6438,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
         }[];
     }, {
         transactions: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6489,7 +6489,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unplannedTxns: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6558,7 +6558,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
     weekEnd: string;
     varianceSnapshot: {
         transactions: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6609,7 +6609,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unplannedTxns: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6650,7 +6650,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
     weekEnd: string;
     varianceSnapshot: {
         transactions: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6701,7 +6701,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unplannedTxns: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6833,10 +6833,10 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             amount: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "unplanned"]>;
+            status: zod.ZodEnum<["matched", "unplanned", "acknowledged_unplanned"]>;
             matchedRecurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6845,7 +6845,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
         }, {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6901,10 +6901,10 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             amount: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "unplanned"]>;
+            status: zod.ZodEnum<["matched", "unplanned", "acknowledged_unplanned"]>;
             matchedRecurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6913,7 +6913,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
         }, {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6941,7 +6941,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
         openItemsCount: zod.ZodNumber;
     }, "strip", zod.ZodTypeAny, {
         transactions: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -6992,7 +6992,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unplannedTxns: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -7009,7 +7009,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
         }[];
     }, {
         transactions: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -7060,7 +7060,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unplannedTxns: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -7129,7 +7129,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
     weekEnd: string;
     varianceSnapshot: {
         transactions: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -7180,7 +7180,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unplannedTxns: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -7221,7 +7221,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
     weekEnd: string;
     varianceSnapshot: {
         transactions: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;
@@ -7272,7 +7272,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unplannedTxns: {
-            status: "matched" | "unplanned";
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
             date: string;
             description: string;
             amount: string;

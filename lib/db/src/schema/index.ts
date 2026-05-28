@@ -895,7 +895,20 @@ export interface DebriefVarianceTxnItem {
   amount: string;
   categoryId: string | null;
   source: string | null;
-  status: "matched" | "unplanned";
+  // Outcome for this bank txn within this week:
+  //   * matched                — a forecast_resolution with status='matched'
+  //                              points at this txn. Counts toward planned
+  //                              spend; drops from openItems.
+  //   * acknowledged_unplanned — a forecast_resolution with status in
+  //                              ('ignored_unforecasted','unplanned') points
+  //                              at this txn (user clicked Accept Unplanned on
+  //                              the Debrief). Drops from openItems so the
+  //                              week can lock, but stays in unplannedTxns
+  //                              AND its dollars still count as unplanned
+  //                              variance — otherwise "variance accuracy"
+  //                              would silently erase real surprise spending.
+  //   * unplanned              — no resolution at all; still open.
+  status: "matched" | "unplanned" | "acknowledged_unplanned";
   // Set when the txn matched a planned recurring occurrence within
   // this week.
   matchedRecurringItemId: string | null;

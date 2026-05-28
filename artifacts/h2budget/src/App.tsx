@@ -32,6 +32,7 @@ import TransactionsPage from "./pages/transactions";
 import BillsPage from "./pages/bills";
 import BudgetPage from "./pages/budget";
 import MappingRulesPage from "./pages/mapping-rules";
+import DebriefPage from "./pages/debrief";
 import SettingsPage from "./pages/settings";
 import PlaidOAuthPage from "./pages/plaid-oauth";
 import NotFound from "./pages/not-found";
@@ -156,6 +157,8 @@ function ProtectedShell() {
             <Route path="/review">
               <ForecastPage mode="review" />
             </Route>
+            <Route path="/debrief" component={DebriefPage} />
+            <Route path="/debrief/:week" component={DebriefPage} />
             <Route path="/reports" component={ReportsPage} />
             <Route path="/transactions" component={TransactionsPage} />
             <Route path="/amex" component={AmexPage} />

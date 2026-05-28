@@ -12,4 +12,5 @@ export type WeeklyDebriefTxnItemStatus =
 export const WeeklyDebriefTxnItemStatus = {
   matched: "matched",
   unplanned: "unplanned",
+  acknowledged_unplanned: "acknowledged_unplanned",
 } as const;

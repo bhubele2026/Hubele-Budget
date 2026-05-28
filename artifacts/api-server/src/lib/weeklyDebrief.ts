@@ -430,15 +430,40 @@ export async function computeWeekVariance(
   }
 
   // -- Build txn rows -------------------------------------------------
-  // A txn is "matched" if any resolution.matchedTxnId === txn.id.
+  // Three states for a bank txn this week:
+  //   * matched                 — resolution.status='matched' + matchedTxnId.
+  //                                Counts toward planned spend; drops from open.
+  //   * acknowledged_unplanned  — resolution.status in
+  //                                ('ignored_unforecasted','unplanned') +
+  //                                matchedTxnId. User clicked Accept Unplanned
+  //                                in the Debrief — drops from open so the
+  //                                week can lock, but the dollars STAY counted
+  //                                as unplanned variance. Critical for honest
+  //                                "variance accuracy": acknowledging a
+  //                                surprise charge must not pretend you
+  //                                planned it.
+  //   * unplanned               — no resolution at all; still open.
   const matchedTxnSet = new Set(
     resolutionRows
-      .map((r) => r.matchedTxnId)
-      .filter((x): x is string => !!x),
+      .filter((r) => r.status === "matched" && !!r.matchedTxnId)
+      .map((r) => r.matchedTxnId as string),
+  );
+  const acknowledgedTxnSet = new Set(
+    resolutionRows
+      .filter(
+        (r) =>
+          (r.status === "ignored_unforecasted" || r.status === "unplanned") &&
+          !!r.matchedTxnId,
+      )
+      .map((r) => r.matchedTxnId as string),
   );
   const matchedRecurringByTxn = new Map<string, string>();
   for (const r of resolutionRows) {
-    if (r.matchedTxnId && r.recurringItemId) {
+    if (
+      r.status === "matched" &&
+      r.matchedTxnId &&
+      r.recurringItemId
+    ) {
       matchedRecurringByTxn.set(r.matchedTxnId, r.recurringItemId);
     }
   }
@@ -452,7 +477,10 @@ export async function computeWeekVariance(
     const dateStr = t.occurredAt ? t.occurredAt.slice(0, 10) : t.occurredOn;
     if (amt > 0) actualIncome += amt;
     else actualExpenses += Math.abs(amt);
-    const isMatched = matchedTxnSet.has(t.id);
+    let status: "matched" | "unplanned" | "acknowledged_unplanned";
+    if (matchedTxnSet.has(t.id)) status = "matched";
+    else if (acknowledgedTxnSet.has(t.id)) status = "acknowledged_unplanned";
+    else status = "unplanned";
     txnItems.push({
       txnId: t.id,
       date: dateStr,
@@ -460,7 +488,7 @@ export async function computeWeekVariance(
       amount: money(amt),
       categoryId: t.categoryId ?? null,
       source: t.source ?? null,
-      status: isMatched ? "matched" : "unplanned",
+      status,
       matchedRecurringItemId: matchedRecurringByTxn.get(t.id) ?? null,
     });
   }
@@ -496,9 +524,15 @@ export async function computeWeekVariance(
 
   // -- Open-items count ----------------------------------------------
   const unmatchedPlans = planItems.filter((p) => p.status === "unmatched");
-  // An unplanned bank txn is "open" until the user marks it reviewed.
-  const unplannedTxns = txnItems.filter((t) => t.status === "unplanned");
-  const openTxns = unplannedTxns.filter((t) => {
+  // The Debrief's "Unplanned Charges" section surfaces BOTH still-open
+  // unplanned txns AND those already acknowledged via Accept Unplanned
+  // (so the user can see what they previously accepted). Only the
+  // still-open ones gate locking.
+  const unplannedTxns = txnItems.filter(
+    (t) => t.status === "unplanned" || t.status === "acknowledged_unplanned",
+  );
+  const openTxns = txnItems.filter((t) => {
+    if (t.status !== "unplanned") return false;
     const txn = bankTxns.find((bt) => bt.id === t.txnId);
     return !(txn?.reviewed ?? false);
   });

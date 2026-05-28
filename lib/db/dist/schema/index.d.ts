@@ -4893,7 +4893,7 @@ export interface DebriefVarianceTxnItem {
     amount: string;
     categoryId: string | null;
     source: string | null;
-    status: "matched" | "unplanned";
+    status: "matched" | "unplanned" | "acknowledged_unplanned";
     matchedRecurringItemId: string | null;
 }
 export interface DebriefVarianceCategoryBucket {

@@ -1848,6 +1848,7 @@ export type WeeklyDebriefTxnItemStatus = (typeof WeeklyDebriefTxnItemStatus)[key
 export declare const WeeklyDebriefTxnItemStatus: {
     readonly matched: "matched";
     readonly unplanned: "unplanned";
+    readonly acknowledged_unplanned: "acknowledged_unplanned";
 };
 export interface WeeklyDebriefTxnItem {
     txnId: string;

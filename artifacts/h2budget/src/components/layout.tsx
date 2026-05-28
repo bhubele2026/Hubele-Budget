@@ -14,6 +14,7 @@ import {
   Flame,
   Menu,
   Inbox,
+  CalendarCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { H2Logo } from "@/components/h2-logo";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
+import { useDebriefAwaitingCount } from "@/hooks/useDebriefAwaitingCount";
 import { AdvisorChat } from "@/components/advisor-chat";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -28,6 +30,7 @@ const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Forecast", href: "/forecast", icon: TrendingUp },
   { name: "Review", href: "/review", icon: Inbox },
+  { name: "Debrief", href: "/debrief", icon: CalendarCheck },
   { name: "Chase", href: "/transactions", icon: Receipt },
   { name: "American Express", href: "/amex", icon: CreditCard },
   { name: "Debts", href: "/debts", icon: CreditCard },
@@ -47,6 +50,7 @@ function SidebarContents({
   onNavigate?: () => void;
 }) {
   const reviewCount = useReviewInboxCount();
+  const debriefCount = useDebriefAwaitingCount();
   return (
     <>
       <div className="px-5 py-4 border-b border-sidebar-border flex items-center gap-2.5">
@@ -63,7 +67,18 @@ function SidebarContents({
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = location.startsWith(item.href);
-          const showBadge = item.href === "/review" && reviewCount > 0;
+          const reviewBadge = item.href === "/review" && reviewCount > 0;
+          const debriefBadge = item.href === "/debrief" && debriefCount > 0;
+          const badgeCount = reviewBadge
+            ? reviewCount
+            : debriefBadge
+              ? debriefCount
+              : null;
+          const badgeTestId = reviewBadge
+            ? "badge-review-count"
+            : debriefBadge
+              ? "badge-debrief-count"
+              : undefined;
           return (
             <Link key={item.href} href={item.href}>
               <span
@@ -77,13 +92,13 @@ function SidebarContents({
               >
                 <item.icon className={cn("w-4 h-4", isActive && "text-sidebar-primary")} />
                 <span className="flex-1">{item.name}</span>
-                {showBadge && (
+                {badgeCount !== null && (
                   <Badge
                     variant="outline"
                     className="bg-amber-100 text-amber-900 border-amber-300 text-[10px] px-1.5 py-0 h-5 tabular-nums"
-                    data-testid="badge-review-count"
+                    data-testid={badgeTestId}
                   >
-                    {reviewCount}
+                    {badgeCount}
                   </Badge>
                 )}
               </span>

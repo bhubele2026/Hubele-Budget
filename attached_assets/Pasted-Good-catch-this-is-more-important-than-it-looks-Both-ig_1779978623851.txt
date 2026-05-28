@@ -1,0 +1,19 @@
+Good catch — this is more important than it looks. Both ignored_unforecasted and unplanned currently make the txn count as "matched/planned" in the snapshot, which erases the unplanned variance. That defeats the whole point of the Debrief — accepting an unplanned charge should ACKNOWLEDGE it (remove it from open items so I can lock the week) WITHOUT pretending I planned it. Otherwise my "variance accuracy" number lies to me.
+
+So we do the small backend tweak now — it's required for D2 to be honest, not out of scope:
+
+1. In computeWeekVariance (weeklyDebrief.ts ~433-463), change the "is this bank txn resolved?" logic so it distinguishes two cases:
+   - A resolution with matchedTxnId AND status='matched' → the txn matched a PLANNED item. Counts toward planned spend. Drops from openItems.
+   - A resolution with matchedTxnId AND status='ignored_unforecasted' (or 'unplanned') → the txn is ACKNOWLEDGED as unplanned. It drops from openItems (so I can lock the week) BUT it stays counted in the unplannedTransactions list and its dollars count as unplanned variance, NOT as planned spend.
+
+   The key: "acknowledged" and "matched to a plan" are different states. Only true plan-matches reduce the variance. Acknowledged-unplanned charges still show up as variance — they're real money I didn't forecast, and the whole point is to see them.
+
+2. For the resolution status literal on the "Accept unplanned" button, use ignored_unforecasted to stay consistent with the existing Forecast page. Don't invent a new one. Just make computeWeekVariance treat that status as "acknowledged but still unplanned variance" per step 1.
+
+3. Add the openItems logic: a bank txn is an open item if it has NO resolution at all. Once it has any resolution (matched OR ignored_unforecasted), it's no longer open — but its variance treatment differs per step 1.
+
+This keeps the forecast-accuracy number honest: accepting surprise charges acknowledges them without hiding them. That's the entire value of the Debrief.
+
+On Convert to recurring — your inline-dialog approach is good. ~95 lines of self-contained duplication beats forking or a navigation dance. Proceed that way.
+
+Flipping you to Build mode. Build steps 1-8 plus this computeWeekVariance tweak. Smoke test everything. In the smoke test, ADD a check: accept an unplanned charge on a test week, then confirm (a) it drops from open items, (b) it still appears in the unplanned list, (c) the variance still reflects its dollars. Report that result alongside the other 8 steps. Don't chain to Phase E.

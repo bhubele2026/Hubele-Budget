@@ -9,5 +9,6 @@ export type WeeklyDebriefTxnItemStatus = (typeof WeeklyDebriefTxnItemStatus)[key
 export declare const WeeklyDebriefTxnItemStatus: {
     readonly matched: "matched";
     readonly unplanned: "unplanned";
+    readonly acknowledged_unplanned: "acknowledged_unplanned";
 };
 //# sourceMappingURL=weeklyDebriefTxnItemStatus.d.ts.map

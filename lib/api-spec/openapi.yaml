@@ -3695,7 +3695,7 @@ components:
         amount: { type: string }
         categoryId: { type: string, nullable: true }
         source: { type: string, nullable: true }
-        status: { type: string, enum: [matched, unplanned] }
+        status: { type: string, enum: [matched, unplanned, acknowledged_unplanned] }
         matchedRecurringItemId: { type: string, nullable: true }
     WeeklyDebriefCategoryBucket:
       type: object
