@@ -1,0 +1,43 @@
+Phase D2 of the workflow overhaul. D1 is done — weekly_debriefs table exists with 14 backfilled awaiting_review weeks, computeWeekVariance works, the four /api/debrief endpoints are live. D2 builds the frontend Debrief page that uses them. File as a project task in the #766 format.
+
+PERSONAL APP — skip writing NEW unit/integration tests. Existing tests must stay green. Do a real smoke test before marking complete.
+
+LAYOUT (locked, do not re-litigate): one-week-at-a-time paginated view. Variance numbers up top, action panel grouped into collapsible sections, prev/next week navigation via a chip row. Monthly summary appears at the bottom once all weeks of a calendar month are locked.
+
+STEP 1 — Sidebar nav + badge
+Add "Debrief" to the sidebar in artifacts/h2budget/src/components/layout.tsx (calendar/checkmark icon). Badge showing count of weeks where status==='awaiting_review', same styling as the Review badge, hidden when 0. Create useDebriefAwaitingCount hook (mirror useReviewInboxCount) reading from GET /api/debrief/weeks.
+
+STEP 2 — Page at /debrief
+Create artifacts/h2budget/src/pages/debrief.tsx, wire into the router. Reads GET /api/debrief/weeks (week list) and GET /api/debrief/weeks/:weekStart (active week detail). Support /debrief?week=YYYY-MM-DD deep-link. Default to current in_progress week, or most-recent awaiting_review if none.
+
+STEP 3 — Layout top to bottom:
+a) Header: "Weekly Debrief" + active week's status badge.
+b) Week navigator chip row: each chip = date range + status badge + open-items count. Most recent on the right. Use the Amex/Chase chip-row visual pattern. Click to switch.
+c) Variance summary card: planned vs actual for income / spend / net, each with signed delta. From the GET response.
+d) Category variance table (collapsible, default open): Category | Planned | Actual | Variance (signed), sorted by abs(variance) desc. shadcn Table.
+e) Action panel — 3 collapsible sections, each with count badge:
+   - "Unmatched Plans": each row shows label, date, amount, category + 4 buttons: [Match to bank txn ▼] (searchable dropdown of unresolved bank txns this week → POST /api/forecast/resolutions matched), [Reschedule ▼] (Next week / In 2 weeks / In 3 weeks / Custom week date picker → existing reschedule endpoint with rescheduledTo = target week's Sunday), [Mark missed], [Skip].
+   - "Unplanned Charges": each unmatched bank txn shows description, pending date, amount, category + 2 buttons: [Accept unplanned] (POST resolution status unplanned), [Convert to recurring] (open existing Add Recurring dialog prefilled from txn, then mark resolved).
+   - "Pending Bank Transactions": Chase txns this week with sent_to_review_at IS NULL + 1 button [Send to Review] (existing POST /transactions/send-to-review).
+f) Lock button at bottom: disabled when openItems>0 ("X items still need a decision"), enabled at 0 ("Lock this week"). POST /api/debrief/weeks/:weekStart/lock. On success status flips to locked.
+g) Locked-week view: action panel hidden, frozen varianceSnapshot read-only, "Post-lock additions" section if any, Unlock button using D1's confirm pattern (check D1's spec for the exact param — confirm:true body or 409-retry).
+h) Monthly summary card at bottom, visible only when all weeks of a calendar month are locked: month label + "Reconciled", summed variances, "Variance accuracy: X%" = (1 - abs(totalVariance)/abs(totalPlanned)) * 100.
+
+STEP 4 — Empty states:
+a) No weeks at all: "No weekly debriefs yet..." + link to /chase.
+b) Current week, zero activity: "Nothing to review yet for this week..." + link to /chase.
+c) Locked week, no post-lock additions: just the read-only snapshot.
+
+STEP 5 — Smoke test before marking complete:
+1. /debrief loads, sidebar badge shows awaiting_review count (should be ~14)
+2. Click between weeks via chip row — content updates
+3. Expand Unmatched Plans on an early week (Feb/Mar, ~25 items) — items render with all 4 buttons
+4. Click Mark missed on one — item disappears, open count drops by 1
+5. Lock disabled with items remaining, enables at 0
+6. Lock a week — status flips, panel hides, snapshot read-only
+7. Unlock — confirm step appears, week reopens
+8. Eyeball the 2026-05-03..05-09 week (the 0-bank-txn one) — decide if it's a real quiet week or a Plaid sync gap, report what you see
+
+Report each step. Fix anything broken before marking complete.
+
+OUT OF SCOPE: AI variance summary (Phase E), locked-month chart snap (Phase F), new tests. STOP after smoke test — do not chain to E.
