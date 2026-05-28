@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Link } from "wouter";
 import {
   useListTransactions,
@@ -2299,16 +2298,8 @@ export default function AmexPage() {
           No transactions match these filters.
         </CardContent></Card>
       )}
-      <VirtualizedDayGroups
+      <DayGroupsList
         groups={groups}
-        todayKey={todayKey}
-        todayRef={todayRef}
-        // (#761) Stable signature of the filter identity. The virtualizer's
-        // per-row measurement cache must be reset whenever the underlying
-        // group set could change shape — switching between card chips with
-        // similar row counts (e.g. Delta Gold ↔ Platinum) used to leave
-        // stale heights in place and clip the bottom of the month.
-        measureKey={`${cardFilter}|${selectedMonth}`}
         renderGroup={([dayKey, items]) => {
         const dayTotal = items.reduce((s, t) => s + parseAbs(t.amount), 0);
         const ids = items.map((t) => t.id);
@@ -2790,158 +2781,29 @@ export default function AmexPage() {
   );
 }
 
-// (#485) Window-virtualized list of day groups. Renders only the
-// groups currently in the viewport (plus a small overscan), so the
-// Amex page stays smooth even when a month has hundreds of rows.
-// Uses padding spacers (instead of absolute positioning) so the
-// `position: sticky` day-header inside `DayGroup` continues to work
-// against the page scroll container.
-function VirtualizedDayGroups<G>({
+// (#772) Plain (non-virtualized) list of day groups. Earlier
+// revisions (#485/#744/#761/#767) wrapped this in a
+// `useWindowVirtualizer` to keep render cost down, but with
+// `MONTH_LIMIT = 1000` capping the page at ~30 day-group nodes the
+// perf headroom was never the bottleneck — every round of patches
+// produced a new "bottom of the month is clipped" bug because the
+// measured group heights kept diverging from the estimate. Render
+// them directly via `groups.map(...)` with a Tailwind `space-y-6`
+// gap and call it a day.
+function DayGroupsList<G>({
   groups,
-  todayKey,
-  todayRef,
   renderGroup,
-  measureKey,
 }: {
   groups: [string, G[]][];
-  todayKey: string;
-  todayRef: React.MutableRefObject<HTMLDivElement | null>;
   renderGroup: (entry: [string, G[]]) => React.ReactNode;
-  // (#761) Opaque signature of the upstream filter identity (card chip,
-  // selected month, etc). When this changes the virtualizer's per-row
-  // measurement cache must be invalidated even if `groups.length` and
-  // the total row count happen to match the previous filter, otherwise
-  // stale heights from the prior chip leave the bottom of the month
-  // clipped.
-  measureKey?: string;
 }) {
-  const parentRef = useRef<HTMLDivElement | null>(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-  useEffect(() => {
-    const el = parentRef.current;
-    if (!el) return;
-    const measure = () => {
-      const rect = el.getBoundingClientRect();
-      setScrollMargin(rect.top + window.scrollY);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(document.body);
-    ro.observe(el);
-    window.addEventListener("resize", measure);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, []);
-
-  // (#744) The 24px gap rendered between day-group wrappers below must
-  // be baked into both the estimate and the per-item measured size,
-  // otherwise `getTotalSize()` is strictly smaller than the actual
-  // scroll height and the virtualizer believes the user has reached
-  // the end of the list before the oldest day-groups (May 1–16 in the
-  // reported case) come into view, leaving the bottom of the month
-  // silently trimmed.
-  const ITEM_GAP_PX = 24;
-  const virtualizer = useWindowVirtualizer({
-    count: groups.length,
-    // Conservative estimates so getTotalSize() doesn't undershoot before
-    // measureElement corrects each group. Day-group headers carry a
-    // sticky day-total chip + today header; rows can include running
-    // balance, category picker, member chips, and bucket bubbles.
-    estimateSize: (i) => 110 + groups[i][1].length * 140 + ITEM_GAP_PX,
-    overscan: 8,
-    scrollMargin,
-  });
-
-  // Sum of rows across all day-groups — proxy for the underlying
-  // monthScoped/filtered counts so we re-measure when transactions are
-  // added/removed mid-session (e.g. a recovery batch) or when the
-  // active filter changes.
-  const totalRowCount = useMemo(
-    () => groups.reduce((acc, [, rows]) => acc + rows.length, 0),
-    [groups],
-  );
-
-  // When the underlying data changes, invalidate the cached size
-  // estimates so the virtualizer re-measures from scratch instead of
-  // trusting stale heights that can leave the bottom of the month
-  // silently trimmed.
-  useEffect(() => {
-    virtualizer.measure();
-    // (#767) Schedule a second pass on the next animation frame: the
-    // synchronous measure above runs before the new groups have
-    // attached their `measureElement` refs, so totalSize is still
-    // based on the conservative estimate. After the rAF the real
-    // heights are known and the bottom of the list stops clipping.
-    const raf = requestAnimationFrame(() => {
-      virtualizer.measure();
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [virtualizer, groups.length, totalRowCount, measureKey]);
-
-  // After the data first arrives, re-read scrollMargin on the next
-  // animation frame so we don't capture a half-rendered layout (the
-  // stats tiles above the list often settle one frame later).
-  useEffect(() => {
-    const el = parentRef.current;
-    if (!el) return;
-    const raf = requestAnimationFrame(() => {
-      const rect = el.getBoundingClientRect();
-      setScrollMargin(rect.top + window.scrollY);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [groups.length, totalRowCount, measureKey]);
-
-  // Find the index of today's group so we can ensure it stays mounted
-  // (the auto-scroll-to-today effect relies on its DOM ref).
-  const todayIdx = useMemo(
-    () => groups.findIndex(([k]) => k === todayKey),
-    [groups, todayKey],
-  );
-
-  const virtualItems = virtualizer.getVirtualItems();
-  const totalSize = virtualizer.getTotalSize();
-  // With useWindowVirtualizer + scrollMargin, virtualItems[i].start is an
-  // absolute offset against the document scroll position, not the parent
-  // container. We must subtract scrollMargin so the paddingTop spacer
-  // sits flush under the previous element instead of reserving a
-  // ~scrollMargin-sized empty gap above the first rendered day.
-  const paddingTop =
-    virtualItems.length > 0 ? virtualItems[0].start - scrollMargin : 0;
-  const paddingBottom =
-    virtualItems.length > 0
-      ? totalSize - (virtualItems[virtualItems.length - 1].end - scrollMargin)
-      : 0;
-
-  // Collect indices to render: the virtual window plus today (so the
-  // initial scroll-into-view always finds an element).
-  const indices = new Set(virtualItems.map((vi) => vi.index));
-  if (todayIdx >= 0) indices.add(todayIdx);
-  const sorted = Array.from(indices).sort((a, b) => a - b);
-
   return (
-    <div ref={parentRef}>
-      <div style={{ paddingTop, paddingBottom }}>
-        {sorted.map((index) => (
-          <div
-            key={groups[index][0]}
-            data-index={index}
-            ref={virtualizer.measureElement}
-            // (#744) The inter-group gap is rendered as paddingBottom
-            // on the measured wrapper (rather than via `space-y-6` on
-            // the parent) so that `measureElement.getBoundingClientRect`
-            // includes it in the virtualizer's totalSize. Otherwise the
-            // accumulated gap height was not tracked and the bottom of
-            // the month silently dropped out of the rendered window.
-            style={{
-              paddingBottom: index < groups.length - 1 ? ITEM_GAP_PX : 0,
-            }}
-          >
-            {renderGroup(groups[index])}
-          </div>
-        ))}
-      </div>
+    <div className="space-y-6">
+      {groups.map((entry) => (
+        <div key={entry[0]} data-day-group-key={entry[0]}>
+          {renderGroup(entry)}
+        </div>
+      ))}
     </div>
   );
 }
