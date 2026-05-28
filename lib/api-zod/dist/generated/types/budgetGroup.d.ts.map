@@ -1,1 +1,0 @@
-{"version":3,"file":"budgetGroup.d.ts","sourceRoot":"","sources":["../../../src/generated/types/budgetGroup.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,oBAAoB,EAAE,MAAM,wBAAwB,CAAC;AAEnE,MAAM,WAAW,WAAW;IAC1B,SAAS,EAAE,MAAM,CAAC;IAClB,YAAY,EAAE,MAAM,CAAC;IACrB,WAAW,EAAE,MAAM,CAAC;IACpB,KAAK,EAAE,oBAAoB,EAAE,CAAC;CAC/B"}

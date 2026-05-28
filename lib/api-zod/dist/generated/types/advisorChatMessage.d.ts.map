@@ -1,1 +1,0 @@
-{"version":3,"file":"advisorChatMessage.d.ts","sourceRoot":"","sources":["../../../src/generated/types/advisorChatMessage.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,sBAAsB,EAAE,MAAM,0BAA0B,CAAC;AAEvE,MAAM,WAAW,kBAAkB;IACjC,IAAI,EAAE,sBAAsB,CAAC;IAC7B,OAAO,EAAE,MAAM,CAAC;CACjB"}
