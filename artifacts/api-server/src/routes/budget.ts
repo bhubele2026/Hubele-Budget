@@ -1933,6 +1933,11 @@ router.get(
     const linesByCat = new Map(lines.map((l) => [l.categoryId, l]));
 
     const monthPinned = month?.pinned === true;
+    // Per-line `pinned` is authoritative: a month-level pin marks every
+    // auto line as pinned at pin time (see POST /budget/months/:m/pin),
+    // but a user can later flip a single line back to `pinned = false`
+    // to opt that one line back into live derivation while the rest of
+    // the month stays snapshotted. (task #780)
     const responseLines = cats.map((c) => {
       const line = linesByCat.get(c.id);
       const actualNum =
@@ -1953,8 +1958,7 @@ router.get(
       // can lock a snapshot value in either case.
       const isAuto = c.sourceKind !== "manual" || billBackedCatIds.has(c.id);
       const linePinned = line?.pinned === true;
-      const usePinnedLine =
-        isAuto && line !== undefined && (monthPinned || linePinned);
+      const usePinnedLine = isAuto && line !== undefined && linePinned;
       const plannedAmount = usePinnedLine
         ? line!.plannedAmount
         : isAuto && derived !== undefined
@@ -2253,15 +2257,23 @@ async function snapshotAutoLinesForMonth(
     .onConflictDoNothing();
 
   for (const [categoryId, planned] of autoPlannedByCat) {
+    // Overwrite plannedAmount on conflict so the snapshot reflects the
+    // live derivation at pin time, even if a carry-forward stub row was
+    // already created for this month (e.g. for bill-backed manual
+    // categories like Insurance, which the GET handler seeds via the
+    // manual carry-forward path). Without this update, pinning would
+    // freeze the carry-forward value instead of what the user actually
+    // sees on screen. (task #780)
     await db
       .insert(budgetLinesTable)
       .values({ userId, householdId, monthStart, categoryId, plannedAmount: planned })
-      .onConflictDoNothing({
+      .onConflictDoUpdate({
         target: [
           budgetLinesTable.householdId,
           budgetLinesTable.monthStart,
           budgetLinesTable.categoryId,
         ],
+        set: { plannedAmount: planned },
       });
   }
 }
@@ -2300,6 +2312,24 @@ router.post(
         set: { pinned },
       });
 
+    // Per-line `pinned` is now the source of truth in the response
+    // builder (task #780): mark every line in the month with the new
+    // pinned state, and the response gates by `isAuto` so manual
+    // non-bill-backed rows are unaffected on read. This deliberately
+    // covers bill-backed manual categories (e.g. Insurance = State Farm
+    // + TruStage), which the response treats as auto-derived even
+    // though their sourceKind is 'manual'. Pinning manual rows is a
+    // harmless no-op for the response builder.
+    await db
+      .update(budgetLinesTable)
+      .set({ pinned })
+      .where(
+        and(
+          eq(budgetLinesTable.householdId, householdId),
+          eq(budgetLinesTable.monthStart, monthStart),
+        ),
+      );
+
     const linesPinned = pinned
       ? (
           await db
@@ -2313,6 +2343,7 @@ router.post(
               and(
                 eq(budgetLinesTable.householdId, householdId),
                 eq(budgetLinesTable.monthStart, monthStart),
+                eq(budgetLinesTable.pinned, true),
                 inArray(budgetCategoriesTable.sourceKind, [
                   "auto_bills",
                   "auto_debts",
