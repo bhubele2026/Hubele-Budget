@@ -254,6 +254,157 @@ describe("dedupeTransactionsForAccount (#452)", () => {
     expect(remaining).toHaveLength(2);
   });
 
+  // (#800) Affirm-pattern positive: two rows on the same account/date/
+  // amount where one description is a token-subset of the other. The
+  // old exact-key dedupe missed these because "Affirm" and "AFFIRM.COM
+  // PAYME ... Merchant: Affirm" have different normalized descriptions.
+  it("collapses fuzzy-description duplicates: 'Affirm' + 'AFFIRM.COM PAYME ... Merchant: Affirm' same account/date/amount → one row, keeps real plaid id", async () => {
+    await cleanup();
+    const acct = await seedAccount();
+    // Older row: the real Plaid posting with the short merchant name.
+    const survivorId = await insertTxn(
+      {
+        plaidAccountId: acct,
+        occurredOn: "2026-05-10",
+        amount: "-66.93",
+        description: "Affirm",
+        plaidTransactionId: `pt-affirm-${randomUUID().slice(0, 8)}`,
+      },
+      new Date(Date.now() - 60_000),
+    );
+    // Newer row: the long bank-statement variant of the same posting.
+    const loserId = await insertTxn(
+      {
+        plaidAccountId: acct,
+        occurredOn: "2026-05-10",
+        amount: "-66.93",
+        description: "AFFIRM.COM PAYME AFFIRM.COM ST-J6L0K3Z3X2C4 WEB ID: 1800948598 Merchant: Affirm",
+      },
+      new Date(Date.now() - 1000),
+    );
+    const report = await dedupeTransactionsForAccount(TEST_USER, acct);
+    expect(report.groupsScanned).toBe(1);
+    expect(report.duplicatesRemoved).toBe(1);
+    const remaining = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe(survivorId);
+    expect(remaining[0].plaidTransactionId).toBeTruthy();
+    const [gone] = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.id, loserId));
+    expect(gone).toBeUndefined();
+  });
+
+  // (#800) Best Buy positive: two real-Plaid rows with identical
+  // descriptions, same account/date/amount, both already categorized.
+  // Survivor wins on tie via oldest createdAt and inherits the
+  // loser's plaid_transaction_id (so future syncs upsert in place).
+  it("collapses two real-Plaid Best Buy rows on the same account/date/amount; survivor = older createdAt, keeps category", async () => {
+    await cleanup();
+    const acct = await seedAccount();
+    const category = randomUUID();
+    const survivorId = await insertTxn(
+      {
+        plaidAccountId: acct,
+        occurredOn: "2026-05-10",
+        amount: "-179.34",
+        description: "Best Buy",
+        plaidTransactionId: `pt-bb-survivor-${randomUUID().slice(0, 8)}`,
+        source: "plaid:amex",
+        categoryId: category,
+      },
+      new Date(Date.now() - 60_000),
+    );
+    const loserId = await insertTxn(
+      {
+        plaidAccountId: acct,
+        occurredOn: "2026-05-10",
+        amount: "-179.34",
+        description: "Best Buy",
+        plaidTransactionId: `pt-bb-loser-${randomUUID().slice(0, 8)}`,
+        source: "plaid:amex",
+        categoryId: category,
+      },
+      new Date(Date.now() - 1000),
+    );
+    const report = await dedupeTransactionsForAccount(TEST_USER, acct);
+    expect(report.duplicatesRemoved).toBe(1);
+    const remaining = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe(survivorId);
+    expect(remaining[0].categoryId).toBe(category);
+    const [gone] = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.id, loserId));
+    expect(gone).toBeUndefined();
+  });
+
+  // (#800) Negative: same account/date/amount but genuinely different
+  // merchants. Neither description is a token-subset of the other, so
+  // the fuzzy clustering must keep them as two singletons.
+  it("does NOT collapse same-account/date/amount rows when descriptions are unrelated merchants ('REPLIT, INC.' vs 'LOVABLE DOVER DE')", async () => {
+    await cleanup();
+    const acct = await seedAccount();
+    await insertTxn({
+      plaidAccountId: acct,
+      occurredOn: "2026-05-01",
+      amount: "-100.00",
+      description: "REPLIT, INC. FOSTER CITY CA",
+      plaidTransactionId: `pt-replit-${randomUUID().slice(0, 8)}`,
+    });
+    await insertTxn({
+      plaidAccountId: acct,
+      occurredOn: "2026-05-01",
+      amount: "-100.00",
+      description: "LOVABLE DOVER DE",
+      plaidTransactionId: `pt-lovable-${randomUUID().slice(0, 8)}`,
+    });
+    const report = await dedupeTransactionsForAccount(TEST_USER, acct);
+    expect(report.duplicatesRemoved).toBe(0);
+    const remaining = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(remaining).toHaveLength(2);
+  });
+
+  // (#800) Negative: a Target charge and a Walmart charge that happen
+  // to share date+amount must never be merged — same per-account
+  // scope, no token overlap.
+  it("does NOT collapse different merchants Target vs Walmart on the same account/date/amount", async () => {
+    await cleanup();
+    const acct = await seedAccount();
+    await insertTxn({
+      plaidAccountId: acct,
+      occurredOn: "2026-05-12",
+      amount: "-47.21",
+      description: "TARGET STORE #1234",
+      plaidTransactionId: `pt-tgt-${randomUUID().slice(0, 8)}`,
+    });
+    await insertTxn({
+      plaidAccountId: acct,
+      occurredOn: "2026-05-12",
+      amount: "-47.21",
+      description: "WALMART SUPERCENTER",
+      plaidTransactionId: `pt-wmt-${randomUUID().slice(0, 8)}`,
+    });
+    const report = await dedupeTransactionsForAccount(TEST_USER, acct);
+    expect(report.duplicatesRemoved).toBe(0);
+    const remaining = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(remaining).toHaveLength(2);
+  });
+
   it("is idempotent: a second run on a clean account reports zero changes", async () => {
     await cleanup();
     const acct = await seedAccount();

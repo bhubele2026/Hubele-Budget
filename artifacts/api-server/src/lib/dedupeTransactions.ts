@@ -15,20 +15,79 @@ export type DedupeTxnReport = {
 type TxnRow = typeof transactionsTable.$inferSelect;
 
 /**
- * (#452) Normalize a description for the duplicate-detection key.
- * Lowercases, collapses runs of whitespace, and trims so that two rows
- * carrying "EXACT SCIENCES PAYMENT" and "exact sciences   payment"
- * group together. Pending/posted text noise (e.g. trailing "[pending]"
- * notes) lives in `notes`, not `description`, so the description alone
- * is a stable group key.
+ * (#452 / #800) Tokenize a description for fuzzy-equality matching.
+ *
+ * Lowercases, strips non-alphanumerics (so punctuation differences
+ * like commas, parentheses, hyphens don't fragment the token set),
+ * and splits on whitespace. The resulting unordered token set is
+ * compared subset-wise by `descriptionsFuzzyEqual` so a short
+ * merchant label ("Affirm") and the long bank-statement form
+ * ("AFFIRM.COM PAYME ... Merchant: Affirm") collapse to the same
+ * cluster within an exact (account, date, amount) match.
  */
-function normalizeDescription(s: string | null | undefined): string {
-  if (!s) return "";
-  return s.toLowerCase().replace(/\s+/g, " ").trim();
+function tokenize(s: string | null | undefined): Set<string> {
+  const norm = (s ?? "").toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+  return new Set(norm.split(/\s+/).filter(Boolean));
 }
 
-function groupKey(t: Pick<TxnRow, "occurredOn" | "amount" | "description">): string {
-  return `${t.occurredOn}|${t.amount}|${normalizeDescription(t.description)}`;
+/**
+ * (#800) Two descriptions are fuzzy-equal when one's token set is a
+ * subset of the other's. This is asymmetric-friendly: it lets the
+ * short merchant form ("Affirm") collapse with the long bank-statement
+ * form ("AFFIRM.COM PAYME ... Merchant: Affirm") but does NOT collapse
+ * two truly different merchants that happen to share an amount and
+ * date (e.g. "REPLIT, INC. FOSTER CITY CA" vs "LOVABLE DOVER DE" —
+ * neither's tokens are a subset of the other).
+ *
+ * Empty token sets only match other empty token sets. A real
+ * description must never collapse onto a row with no description; the
+ * loss of identifying text is too easy to mis-merge.
+ */
+function descriptionsFuzzyEqual(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  const A = tokenize(a);
+  const B = tokenize(b);
+  if (A.size === 0 || B.size === 0) return A.size === B.size;
+  const [small, big] = A.size <= B.size ? [A, B] : [B, A];
+  for (const t of small) if (!big.has(t)) return false;
+  return true;
+}
+
+/**
+ * (#800) Coarse group key — `(occurredOn, amount)` only. Within one
+ * `plaid_account_id` scope this is the universe of rows that could
+ * possibly represent the same posting; the description-fuzzy step
+ * below partitions it further into actual dupe clusters.
+ */
+function coarseKey(t: Pick<TxnRow, "occurredOn" | "amount">): string {
+  return `${t.occurredOn}|${t.amount}`;
+}
+
+/**
+ * (#800) Partition a coarse-keyed group into dupe clusters by
+ * description fuzzy-equality. A row joins an existing cluster only if
+ * it is fuzzy-equal with EVERY current member — guarantees the cluster
+ * is a clique under the subset relation, so we never chain unrelated
+ * descriptions through an intermediate row.
+ */
+function clusterByFuzzyDescription<T extends Pick<TxnRow, "description">>(
+  rows: T[],
+): T[][] {
+  const clusters: T[][] = [];
+  for (const r of rows) {
+    let placed = false;
+    for (const c of clusters) {
+      if (c.every((x) => descriptionsFuzzyEqual(x.description, r.description))) {
+        c.push(r);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) clusters.push([r]);
+  }
+  return clusters;
 }
 
 /**
@@ -143,15 +202,23 @@ export async function dedupeTransactionsForAccount(
       );
     if (rows.length < 2) return report;
 
-    const groups = new Map<string, TxnRow[]>();
+    // (#800) Two-step grouping: coarse-key by (occurredOn, amount),
+    // then split each coarse group into description-fuzzy clusters.
+    // Singletons aren't dupes; only clusters of size >= 2 are.
+    const coarseGroups = new Map<string, TxnRow[]>();
     for (const r of rows) {
-      const k = groupKey(r);
-      const arr = groups.get(k);
+      const k = coarseKey(r);
+      const arr = coarseGroups.get(k);
       if (arr) arr.push(r);
-      else groups.set(k, [r]);
+      else coarseGroups.set(k, [r]);
     }
-
-    const dupGroups = Array.from(groups.values()).filter((g) => g.length > 1);
+    const dupGroups: TxnRow[][] = [];
+    for (const cg of coarseGroups.values()) {
+      if (cg.length < 2) continue;
+      for (const cluster of clusterByFuzzyDescription(cg)) {
+        if (cluster.length > 1) dupGroups.push(cluster);
+      }
+    }
     if (dupGroups.length === 0) return report;
 
     // Look up forecast_resolutions matches for any candidate row in one
@@ -361,14 +428,26 @@ export async function dedupeTransactionsAcrossAccountsForUser(
     report.rowsScanned = rows.length;
     if (rows.length < 2) return report;
 
-    const groups = new Map<string, TxnRow[]>();
+    // (#800) Coarse-key by (bankFamily, occurredOn, amount), then split
+    // by description fuzzy-equality. Bank family stays in the key so
+    // chase-vs-amex transfer pairs on the same date+amount never even
+    // enter the same coarse group.
+    const coarseGroups = new Map<string, TxnRow[]>();
     for (const r of rows) {
       const fam = bankFamily(r.source);
       if (!fam) continue;
-      const k = `${fam}|${groupKey(r)}`;
-      const arr = groups.get(k);
+      const k = `${fam}|${coarseKey(r)}`;
+      const arr = coarseGroups.get(k);
       if (arr) arr.push(r);
-      else groups.set(k, [r]);
+      else coarseGroups.set(k, [r]);
+    }
+    const groups = new Map<string, TxnRow[]>();
+    let _clusterIdx = 0;
+    for (const [ck, cg] of coarseGroups) {
+      if (cg.length < 2) continue;
+      for (const cluster of clusterByFuzzyDescription(cg)) {
+        if (cluster.length > 1) groups.set(`${ck}#${_clusterIdx++}`, cluster);
+      }
     }
 
     // Only collapse groups where at least one row is on an orphan
@@ -539,6 +618,14 @@ export async function dedupeTransactionsAcrossAccountsForUser(
 export async function countDuplicateTransactionsForUser(
   userId: string,
 ): Promise<{ duplicateCount: number }> {
+  // (#800) Coarse key — (plaid_account_id, occurred_on, amount). This
+  // matches the new dedupe pass's coarse grouping; the per-row fuzzy
+  // description partitioning happens in JS during the real run. The
+  // badge count may very slightly over-count for legitimate same-day
+  // same-amount different-merchant pairs (e.g. "REPLIT, INC." +
+  // "LOVABLE DOVER DE"), which the fuzzy pass then correctly preserves;
+  // the badge eventually self-corrects once the user runs the cleanup
+  // (those non-dupe pairs stay, the count rebases on next probe).
   const probe = await db.execute<{ extras: number }>(sql`
     select coalesce(sum(c - 1), 0)::int as extras from (
       select count(*)::int as c
@@ -548,8 +635,7 @@ export async function countDuplicateTransactionsForUser(
       group by
         ${transactionsTable.plaidAccountId},
         ${transactionsTable.occurredOn},
-        ${transactionsTable.amount},
-        btrim(lower(regexp_replace(coalesce(${transactionsTable.description}, ''), '\s+', ' ', 'g')))
+        ${transactionsTable.amount}
       having count(*) > 1
     ) as g
   `);
@@ -577,6 +663,12 @@ export async function dedupeTransactionsForUser(
   // clean (the steady state after the one-time relink cleanup), this
   // returns zero and we skip the full per-account scan + transaction
   // entirely. A noisy user still pays the full cost on the next load.
+  // (#800) Coarse-key probe — (plaid_account_id, occurred_on, amount).
+  // Strictly more permissive than the old normalized-description key
+  // (catches both exact and fuzzy-description duplicates). When the
+  // probe fires positive, the full per-account scan applies the JS
+  // fuzzy-clustering and correctly skips coarse groups that aren't
+  // true dupes.
   const dupeProbe = await db.execute<{ dup_groups: number }>(sql`
     select count(*)::int as dup_groups from (
       select 1
@@ -586,8 +678,7 @@ export async function dedupeTransactionsForUser(
       group by
         ${transactionsTable.plaidAccountId},
         ${transactionsTable.occurredOn},
-        ${transactionsTable.amount},
-        btrim(lower(regexp_replace(coalesce(${transactionsTable.description}, ''), '\s+', ' ', 'g')))
+        ${transactionsTable.amount}
       having count(*) > 1
       limit 1
     ) as g

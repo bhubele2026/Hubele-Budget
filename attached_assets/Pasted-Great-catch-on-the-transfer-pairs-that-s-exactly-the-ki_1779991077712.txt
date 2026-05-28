@@ -1,0 +1,18 @@
+Great catch on the transfer pairs — that's exactly the kind of false-positive that would've corrupted real data. The tightened key (adding source + requiring fuzzy-description match) is right.
+
+Go with Option B. Build PART 2 (the fuzzy-description dedup fix + tests), then run it against prod once to clean up the one Best Buy duplicate as the first real exercise of the new code.
+
+Requirements for PART 2, locked in from what your dry-run proved:
+1. The merge group key must include source (so chase vs amex transfer pairs never collapse — you proved this is essential).
+2. Fuzzy-description match: collapse only when one description's tokens are a subset of the other's, within an exact (source, plaidAccountId, occurred_on, abs(amount)) match.
+3. The negative cases your scan already validated must stay protected — bake them into tests:
+   - Cross-bank transfer pairs (same date+amount, different source) → NOT collapsed
+   - Same date+amount+account but different merchants where neither description is a token-subset ("REPLIT, INC." vs "LOVABLE DOVER DE") → NOT collapsed
+   - The positive case: "Best Buy" + "Best Buy" same account/date/amount → collapsed, survivor = older created_at, inherits category
+   - The Affirm case: "Affirm" ⊂ "AFFIRM.COM PAYME Merchant: Affirm" → collapsed
+4. Wire it to run automatically after every Plaid sync going forward, so May+ stays clean without manual intervention.
+5. Survivor selection: the priority ladder you used (real-pid > non-null-account > user-state-score > oldest created_at) is correct — keep it. Never delete a row with a forecast_resolution without re-pointing the resolution to the survivor first.
+
+After building + testing, run it against prod once. Confirm: the one Best Buy duplicate ($179.34, 5/10) gets collapsed, survivor keeps its category, and a re-run of the May+ twin scan shows zero remaining duplicates.
+
+Then we're DONE with the dedup detour and moving to Phase E. Report when PART 2 is built, tested, and the prod run confirms zero May+ dupes.
