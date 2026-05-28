@@ -52,6 +52,7 @@ import {
   ChevronDown,
   ChevronUp,
   CreditCard,
+  Filter,
   RefreshCw,
   X,
   ExternalLink,
@@ -84,7 +85,7 @@ import {
 import {
   AccountPageHeader,
   AccountFilterBar,
-  BalanceTrendChart,
+  BalanceForecastTrendChart,
   DayGroup,
   MonthNavigator,
   StatChip,
@@ -95,7 +96,7 @@ import {
   monthFirstISO,
   monthLastISO,
   type MonthKey,
-  type TrendPoint,
+  type BalanceForecastPoint,
 } from "@/components/account-page";
 
 const AMEX_SOURCES = ["amex", "plaid:amex"];
@@ -244,6 +245,13 @@ export default function AmexPage() {
       window.localStorage.removeItem("amex.headerCollapsed");
     }
   }, [headerCollapsed]);
+
+  // (#787) Collapse the filter block by default on every visit. Lives in
+  // component state only — no persistence, so it always starts collapsed
+  // when the user lands on /amex. The existing headerCollapsed toggle
+  // hides the summary tile row AND the filter bar together; this filter-
+  // only toggle nests inside that and controls just the filter bar.
+  const [filtersCollapsed, setFiltersCollapsed] = useState<boolean>(true);
 
   const currentMonth = useMemo<MonthKey>(() => monthKeyOf(new Date()), []);
   // Task #168 — Budget page deep-links into the Amex page when a row's
@@ -961,25 +969,114 @@ export default function AmexPage() {
     return { sourceLabel, asOfLabel, relativeAsOf, footer, tooltip };
   }, [endingBalance, isAmexSyncing]);
 
-  // Trailing 12-month ending-balance series, anchored at the snapshot
-  // month's known Amex balance and rolled month-by-month using the same
-  // shared helper that powers `endingBalance` above.
-  const balanceTrend = useMemo<TrendPoint[]>(() => {
+  // (#787) Forward-looking ending-balance series. Replaces the
+  // trailing-12-months chart with a window that starts at today and
+  // runs ~12 months forward. Today carries the actual card balance
+  // (anchor + post-anchor net through today). Future weekly Sun–Sat
+  // buckets carry `actualFromToday` only when a post-today Plaid txn
+  // has already landed in that week — otherwise they're null so the
+  // chart renders as a single dot at today on day one and naturally
+  // grows as real balance data accumulates. No historical series and
+  // no forecast series (credit-card spend isn't reasonably
+  // forecastable). Reuses BalanceForecastTrendChart from #785, which
+  // auto-suppresses its forecast line/legend when no point carries a
+  // forecast value.
+  const todayISO = useMemo(() => {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  }, []);
+  const balanceForecastData = useMemo<BalanceForecastPoint[]>(() => {
     if (cardScopedAnchor.anchor === null) return [];
-    const points: TrendPoint[] = [];
-    for (let i = 11; i >= 0; i--) {
-      const mk = shiftMonth(selectedMonth, -i);
-      const d = new Date(mk.year, mk.month, 1);
-      points.push({
-        key: `${mk.year}-${mk.month}`,
-        label: d.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-        shortLabel: d.toLocaleDateString("en-US", { month: "short" }),
-        balance: balanceAtEndOf(mk) ?? 0,
-        isSelected: compareMonth(mk, selectedMonth) === 0,
-      });
+    const anchorBalance = cardScopedAnchor.anchor;
+    const anchorDay = (cardScopedAnchor.asOf ?? "").slice(0, 10);
+
+    const balanceAtEndOfDate = (isoDate: string): number => {
+      if (!anchorDay) return anchorBalance;
+      let delta = 0;
+      for (const t of wideAllForBalance) {
+        const day = t.occurredOn.slice(0, 10);
+        const amt = Number(t.amount) || 0;
+        if (day > anchorDay && day <= isoDate) delta += amt;
+        else if (day > isoDate && day <= anchorDay) delta -= amt;
+      }
+      return anchorBalance + delta;
+    };
+
+    const localISO = (d: Date): string =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    const now = new Date();
+    const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayISOStr = localISO(todayLocal);
+    const idealEnd = new Date(
+      now.getFullYear(),
+      now.getMonth() + 12,
+      now.getDate(),
+    );
+
+    // Latest landed actual date past today (rare: future-dated Plaid txns).
+    let latestActualISO = todayISOStr;
+    for (const t of wideAllForBalance) {
+      const d = t.occurredOn.slice(0, 10);
+      if (d > latestActualISO) latestActualISO = d;
     }
+
+    const points: BalanceForecastPoint[] = [];
+
+    // Today divergence point — single actual balance seed.
+    points.push({
+      date: todayISOStr,
+      historicalActual: null,
+      actualFromToday: balanceAtEndOfDate(todayISOStr),
+      forecastFromToday: null,
+    });
+
+    // Future weekly Sun–Sat buckets, starting at the Sunday AFTER
+    // today's week. Each bucket's data point is the Saturday ISO.
+    // Empty buckets carry `actualFromToday: null` so the x-axis still
+    // extends 12 months forward; the line only renders dots where
+    // real balance data exists.
+    const currentWeekSun = new Date(todayLocal);
+    currentWeekSun.setDate(currentWeekSun.getDate() - currentWeekSun.getDay());
+    const cur = new Date(currentWeekSun);
+    cur.setDate(cur.getDate() + 7);
+    while (cur <= idealEnd) {
+      const sat = new Date(cur);
+      sat.setDate(sat.getDate() + 6);
+      const satISO = localISO(sat);
+      const sunISO = localISO(cur);
+
+      let ac: number | null = null;
+      if (latestActualISO > todayISOStr && latestActualISO >= sunISO) {
+        const dISO = latestActualISO < satISO ? latestActualISO : satISO;
+        ac = balanceAtEndOfDate(dISO);
+      }
+
+      points.push({
+        date: satISO,
+        historicalActual: null,
+        actualFromToday: ac,
+        forecastFromToday: null,
+      });
+      cur.setDate(cur.getDate() + 7);
+    }
+
     return points;
-  }, [cardScopedAnchor.anchor, balanceAtEndOf, selectedMonth]);
+  }, [cardScopedAnchor.anchor, cardScopedAnchor.asOf, wideAllForBalance]);
+
+  const balanceForecastRangeLabel = useMemo(() => {
+    if (balanceForecastData.length === 0) return null;
+    const fmt = (iso: string) => {
+      const [y, m, d] = iso.split("-").map(Number);
+      return new Date(y, (m ?? 1) - 1, d ?? 1).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    };
+    const last = balanceForecastData[balanceForecastData.length - 1].date;
+    return `Today – ${fmt(last)}`;
+  }, [balanceForecastData]);
 
   const knownPayers = useMemo(() => {
     const set = new Set<string>();
@@ -2056,6 +2153,21 @@ export default function AmexPage() {
       </div>
 
         {!headerCollapsed && (
+        <div className="space-y-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={() => setFiltersCollapsed((v) => !v)}
+            aria-expanded={!filtersCollapsed}
+            aria-controls="amex-filter-collapsible"
+            data-testid="button-toggle-amex-filters"
+          >
+            <Filter className="h-3.5 w-3.5 mr-1.5" />
+            {filtersCollapsed ? "Show filters" : "Hide filters"}
+          </Button>
+          {!filtersCollapsed && (
         <AccountFilterBar
           search={search}
           onSearchChange={setSearch}
@@ -2121,14 +2233,16 @@ export default function AmexPage() {
             </div>
           }
         />
+          )}
+        </div>
         )}
       </div>
 
-      <BalanceTrendChart
-        caption="Ending balance · trailing 12 months"
-        data={balanceTrend}
-        color="hsl(var(--chart-1))"
-        valueLabel="Ending balance"
+      <BalanceForecastTrendChart
+        caption="Ending balance — trailing forward 12 months"
+        rangeLabel={balanceForecastRangeLabel ?? undefined}
+        data={balanceForecastData}
+        todayISO={todayISO}
       />
 
       {/* Bulk action bar */}

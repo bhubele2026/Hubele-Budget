@@ -190,6 +190,11 @@ export function BalanceForecastTrendChart({
           ? p.actualFromToday
           : null,
   }));
+  // (#787) Auto-suppress the forecast Line + its legend entry when no
+  // point carries a forecast value. Lets the Amex page reuse this
+  // multi-series chart with an actual-only forward series and still
+  // render as a single solid line with no orphaned "Forecast" legend.
+  const hasForecast = data.some((p) => p.forecastFromToday != null);
 
   return (
     <Card data-testid={testId}>
@@ -356,18 +361,20 @@ export function BalanceForecastTrendChart({
                 connectNulls
                 isAnimationActive={false}
               />
-              <Line
-                type="monotone"
-                dataKey="forecastFromToday"
-                name="Forecast"
-                stroke={dashedColor}
-                strokeWidth={2}
-                strokeDasharray="5 4"
-                dot={false}
-                activeDot={{ r: 4 }}
-                connectNulls
-                isAnimationActive={false}
-              />
+              {hasForecast && (
+                <Line
+                  type="monotone"
+                  dataKey="forecastFromToday"
+                  name="Forecast"
+                  stroke={dashedColor}
+                  strokeWidth={2}
+                  strokeDasharray="5 4"
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
         </div>
