@@ -1,0 +1,157 @@
+Phase D1 of the workflow overhaul — Weekly Debrief backend foundation. This is the first of two D-phases. D1 builds the data model, variance computation, and API. D2 (separate task next) builds the frontend page. File this as a project task in the same format as #760 and Phase B.
+
+CONTEXT — what the Debrief is
+
+A weekly ritual where the user reviews variance between forecasted plans and actual bank transactions for a Sunday-Saturday week. Each week is in one of three states: in_progress (current week), awaiting_review (past week, not locked), or locked (user has finalized it).
+
+Walking through a week, the user resolves every unresolved item (matches plans to bank txns, marks plans missed/reschedules to a future week, marks bank txns as unplanned or converts them to recurring). When all items are resolved, they click "Lock the week" which snapshots the variance summary into history.
+
+If the user is away for 3 weeks, they come back to 3 awaiting_review weeks queued up oldest-first.
+
+DESIGN DECISIONS (already locked, do not re-litigate)
+
+1. Week = Sunday through Saturday.
+2. A transaction's week is determined by its PENDING date (occurredAt timestamp), falling back to occurredOn date when occurredAt is null (manual entries, very old plaid rows). NOT the post date.
+3. Reschedule destination = user picks a specific future week from a dropdown. The frontend will offer "next week", "in 2 weeks", "in 3 weeks", "custom week" options. Backend stores the target as a date (Sunday of that week).
+4. Late Plaid transactions whose pending-date lands in a locked week appear in the locked week's "post-lock additions" section but do NOT reopen the week or alter the saved variance. They are visible-but-frozen relative to the lock.
+5. Income timing variance: when a planned income item lands within ±7 days of its forecast date, treat as "on time" (note the delay but $0 variance). When it lands outside that window OR fails to land entirely by week end, that's a real variance.
+
+STEP 1 — Schema
+
+Add to lib/db/src/schema/index.ts:
+
+  export const weeklyDebriefsTable = pgTable(
+    "weekly_debriefs",
+    {
+      id: uuid("id").primaryKey().defaultRandom(),
+      householdId: uuid("household_id")
+        .notNull()
+        .references(() => householdsTable.id, { onDelete: "cascade" }),
+      // Sunday of the week, YYYY-MM-DD. Unique per household.
+      weekStart: date("week_start").notNull(),
+      // Saturday of the week. Stored for query convenience.
+      weekEnd: date("week_end").notNull(),
+      // 'in_progress' | 'awaiting_review' | 'locked'
+      status: text("status").notNull().default("awaiting_review"),
+      lockedAt: timestamp("locked_at", { withTimezone: true }),
+      lockedByUserId: text("locked_by_user_id"),
+      // Snapshot of variance at lock time. JSON blob with the structure
+      // described in the variance computation step below. Null until locked.
+      varianceSnapshot: jsonb("variance_snapshot").$type<DebriefVarianceSnapshot>(),
+      // Snapshot of action_taken counts at lock time (matches, reschedules,
+      // missed, unplanned, etc) for historical accuracy metrics.
+      actionsSummary: jsonb("actions_summary").$type<DebriefActionsSummary>(),
+      createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+      updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    },
+    (t) => ({
+      householdWeekUq: uniqueIndex("weekly_debriefs_household_week_uq").on(t.householdId, t.weekStart),
+      householdStatusIdx: index("weekly_debriefs_household_status_idx").on(t.householdId, t.status),
+    }),
+  );
+
+  // Types for the JSONB columns (export from this file or a sibling).
+  export interface DebriefVarianceSnapshot {
+    plannedIncome: number;
+    actualIncome: number;
+    plannedSpend: number;
+    actualSpend: number;
+    plannedNet: number;
+    actualNet: number;
+    netVariance: number; // actualNet - plannedNet
+    byCategory: Array<{
+      categoryName: string;
+      planned: number;
+      actual: number;
+      variance: number;
+    }>;
+    unmatchedPlans: Array<{
+      planItemId: string;
+      planLabel: string;
+      planDate: string;
+      planAmount: number;
+      resolution: "matched" | "missed" | "rescheduled" | "skipped" | null;
+      rescheduledTo: string | null;
+    }>;
+    unplannedTransactions: Array<{
+      transactionId: string;
+      description: string;
+      pendingDate: string;
+      amount: number;
+      categoryName: string | null;
+      resolution: "accepted_unplanned" | "converted_to_recurring" | null;
+    }>;
+  }
+
+  export interface DebriefActionsSummary {
+    matched: number;
+    rescheduled: number;
+    missed: number;
+    skipped: number;
+    acceptedUnplanned: number;
+    convertedToRecurring: number;
+  }
+
+Run pnpm --filter @workspace/db push to create the table.
+
+STEP 2 — Variance computation library
+
+Create artifacts/api-server/src/lib/weeklyDebrief.ts with:
+
+a) Helper: weekStartFor(date): Date — given any date, returns the Sunday of that week.
+b) Helper: weekEndFor(date): Date — given any date, returns the Saturday.
+c) Helper: txnWeekKey(transaction): string — given a transaction row, returns its pending-date-based week's Sunday in YYYY-MM-DD. Uses occurredAt if present, falls back to occurredOn. Documented inline so the rule is preserved.
+d) Helper: planWeekKey(planEvent): string — given a CashEvent (planned occurrence), returns its scheduled-date-based week's Sunday.
+e) Main function: computeWeekVariance(householdId, weekStart) returns DebriefVarianceSnapshot. This pulls:
+   - All planned recurring events that fell in this week (using expandItem from existing forecast lib, scoped to weekStart..weekEnd).
+   - All bank transactions whose pending-date-derived week matches weekStart, sourced from checking only (use existing isBankRow logic from forecast.ts to filter).
+   - All forecast_resolutions tied to those plans.
+   - Computes per-category variance, unmatched plans, unplanned transactions.
+
+   For income items: if a plan's resolution is 'matched' to a bank txn whose pending date is within ±7 days of the plan date, treat as on-time (variance $0, but note the actual landing date for the snapshot). If matched outside that window, variance is the timing difference. If unmatched by week end, full plan amount becomes a miss.
+
+Tests:
+- Unit test computeWeekVariance with a fixture that has: 3 plans (2 matched on time, 1 reschuduled, 1 unmatched), 2 unplanned bank txns. Assert all variance numbers, byCategory breakdown, and lists.
+- Edge case: empty week (no plans, no txns) returns zero everything.
+- Edge case: a plan dated Sunday 2026-05-17 belongs to the May 17-23 week.
+- Edge case: a transaction with occurredAt=Saturday May 23 but occurredOn=Monday May 25 lands in the May 17-23 week (not May 24-30).
+
+STEP 3 — API endpoints
+
+Add four new endpoints to artifacts/api-server/src/routes/, conventionally in a new file weeklyDebrief.ts (mount in routes/index.ts). Update OpenAPI spec and run orval codegen.
+
+a) GET /api/debrief/weeks — returns the list of relevant weeks for the household, ordered most-recent-first. For each: weekStart, weekEnd, status (in_progress | awaiting_review | locked), lockedAt, openItemsCount (computed live for non-locked weeks), and brief variance summary (planned/actual net only). Default range = current week back to 12 weeks. Optional ?from=&to= ISO date params to widen.
+
+b) GET /api/debrief/weeks/:weekStart — returns the full DebriefVarianceSnapshot for that week. For non-locked weeks, recomputes live from current data. For locked weeks, returns the stored varianceSnapshot (frozen at lock time) PLUS a separate post_lock_additions array of transactions whose pending-date falls in this week but were synced after the lock.
+
+c) POST /api/debrief/weeks/:weekStart/lock — locks the week. Validates that openItemsCount is 0 (every plan resolved, every bank txn resolved). If not, returns 400 with the list of open items. If yes, computes the final variance snapshot, computes actionsSummary, sets status='locked', lockedAt=NOW(), lockedByUserId=actor, varianceSnapshot=computed, actionsSummary=computed. Returns the locked debrief row.
+
+d) POST /api/debrief/weeks/:weekStart/unlock — unlocks. Sets status='awaiting_review', clears lockedAt/lockedByUserId/varianceSnapshot/actionsSummary. Use case: user realizes they made a mistake and wants to re-walk a week. Same household scoping as lock.
+
+For all four endpoints: scope by req.householdId, return 404 for cross-household access attempts.
+
+STEP 4 — Backfill awaiting_review rows for historical weeks
+
+One-shot migration or job that, for the user's household, creates weekly_debriefs rows with status='awaiting_review' for every Sun-Sat week between (a) the earliest bank transaction's pending date and (b) the current week, EXCLUDING the current week itself. Skip weeks that have zero plans AND zero bank transactions (no point reviewing an empty week).
+
+Do this as a DRY-RUN first: report how many weeks would be created. Get my approval before executing.
+
+This is what populates the Debrief page when I open it for the first time.
+
+STEP 5 — Tests
+
+a) Integration test for GET /api/debrief/weeks — seed 4 weeks of mixed data, confirm correct status assignment and ordering.
+b) Integration test for lock validation — try to lock a week with open items, expect 400 with the list.
+c) Integration test for successful lock — lock a week, confirm varianceSnapshot is frozen, post-lock transactions added afterward don't change the snapshot.
+d) Integration test for post-lock additions — lock a week, sync a new transaction with a pending date inside that week, confirm GET /api/debrief/weeks/:weekStart returns it in post_lock_additions.
+
+STEP 6 — Run pnpm typecheck and pnpm test on both api-server and h2budget packages. Confirm clean.
+
+OUT OF SCOPE for D1 (these come in D2 or later):
+- The frontend Debrief page
+- The monthly summary view
+- AI advisor variance summary integration (that's Phase E)
+- Locked-week chart snapping to actual on /forecast (that's Phase F)
+- Auto-resolution helpers / suggestion engine for week-walks (deferred — user does it manually for now)
+
+STOP at STEP 4's dry-run and report counts before backfilling. Then proceed through STEP 5 and STEP 6 once I approve.
