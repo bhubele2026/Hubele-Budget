@@ -1,0 +1,26 @@
+The modal-uninteractable bug is NOT fixed. Capital One Link now shows a fresh CAPTCHA flow (good — the dead 15378f18 row issue you fixed worked at the routing layer), BUT the user still cannot interact with the modal contents. Clicking anywhere inside the modal shows a text cursor falling in random spots between elements — the CAPTCHA checkbox doesn't respond to clicks, the (earlier) Code input was greyed out and uninteractable.
+
+This is a click/focus event-handling bug — something in OUR app's DOM is sitting on top of or wrapping the Plaid SDK iframe and either stealing pointer events OR creating a focus trap that excludes the iframe.
+
+DIAGNOSE:
+
+1. The PlaidAccountPicker dialog (debt-plaid-link.tsx:385+) wraps everything in a shadcn Dialog. Check whether the Dialog component sets pointer-events on its overlay, or uses a focus-trap that excludes child iframes. Specifically: does Radix's Dialog primitive (which shadcn wraps) intercept clicks outside its content, and is the Plaid iframe being rendered as a sibling/portal that the Dialog considers "outside"?
+
+2. The Plaid SDK renders its modal as a separate fixed-position iframe at the document root (outside our React tree). When OUR Dialog is also open, both compete for focus and click events. Likely problem: our Dialog's modal=true behavior is trapping focus inside itself, and the Plaid iframe is technically outside.
+
+3. Check the z-index stacking: our Dialog's content vs the Plaid SDK iframe's z-index. If our Dialog overlay has a higher z-index, clicks on the Plaid modal hit our invisible overlay instead.
+
+4. Most importantly: when PlaidLinkButton.open() fires from INSIDE our PlaidAccountPicker dialog, we have nested modals — our Dialog containing a Plaid SDK iframe modal. That nesting is the problem class.
+
+FIX (suggested approach):
+When PlaidLinkButton.open() is called inside the picker, CLOSE OUR DIALOG FIRST, then open Plaid. The picker can re-open or stay closed after the Plaid flow completes (via onSuccess / onExit). This way Plaid's modal is the only one on screen.
+
+Concretely in debt-plaid-link.tsx PlaidAccountPicker:
+  - Add a state flag yieldingToPlaid
+  - When the user clicks "Link a Bank or Card" (the PlaidLinkButton trigger inside the picker), set yieldingToPlaid=true, which causes the Dialog to close (open={!yieldingToPlaid})
+  - Pass onSuccess and onExit handlers to PlaidLinkButton that reset yieldingToPlaid=false and trigger the right refresh/re-open behavior
+  - The Plaid iframe then has the entire viewport to itself, no competing focus trap
+
+Implement, deploy, and verify by clicking Link on Capital One Quicksilver — CAPTCHA checkbox should now be clickable, full Capital One login flow should work end-to-end.
+
+This is the real bug. The dead-row cleanup was a separate (also real) issue that's now fixed. This focus-trap issue is what's blocking actual linking.

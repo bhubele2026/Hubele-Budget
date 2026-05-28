@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { usePlaidLink } from "react-plaid-link";
 import {
   useCreatePlaidLinkToken,
@@ -108,6 +109,8 @@ export type PostLinkStatus = {
 export function PlaidLinkButton({
   onLinked,
   onImportReady,
+  onOpen: onOpenProp,
+  onExit: onExitProp,
   label,
   viewTransactionsPath = "/transactions",
   inlineProgress = true,
@@ -122,6 +125,23 @@ export function PlaidLinkButton({
    * empty-state pinned to the currently-selected month.
    */
   onImportReady?: (info: { added: number; modified: number }) => void;
+  /**
+   * (#804-followup) Fires the moment the Plaid SDK is about to open its
+   * iframe modal. Callers that render this button INSIDE another modal
+   * (e.g. the debt-link PlaidAccountPicker shadcn Dialog) use this hook
+   * to flip their own Dialog into non-modal mode, releasing Radix's
+   * FocusScope so the Plaid iframe at the document root can receive
+   * pointer and focus events. Without that, the user sees a CAPTCHA
+   * checkbox they can't click and a text input they can't focus.
+   */
+  onOpen?: () => void;
+  /**
+   * (#804-followup) Fires after the Plaid SDK closes its modal without
+   * a successful exchange (user dismissed, errored out, etc). Pairs
+   * with `onOpen` so a parent Dialog that yielded modality while Plaid
+   * was on screen can restore its own focus trap.
+   */
+  onExit?: () => void;
   label?: string;
   /**
    * (#402) Base path for the "View imported transactions" deep-link in
@@ -482,6 +502,14 @@ export function PlaidLinkButton({
             );
             setLinkToken(null);
             clearStoredLinkToken();
+            // (#804-followup) Restore our own AlertDialog's focus trap
+            // (and let the parent picker restore its own via onExitProp,
+            // which is wired into handleSdkExit too). The success path
+            // doesn't run through usePlaidLink.onExit, so we have to
+            // flip both flags here as well.
+            setYieldingToPlaid(false);
+            onExitPropRef.current?.();
+            openedTokenRef.current = null;
             onLinked?.();
 
             // (#44) Scope post-Link candidates to the just-linked item so
@@ -517,39 +545,97 @@ export function PlaidLinkButton({
     [exchange, qc, toast, clearStoredLinkToken, onLinked, pollAfterLink],
   );
 
+  // (#804-followup) Stable refs for the parent yield-callbacks. Putting
+  // these in the open() effect's dep array would re-run the effect every
+  // time the parent re-renders (handlers are recreated each render),
+  // which can double-fire open() for a single linkToken — architect
+  // review #1 flagged this. Refs let the effect call the latest handler
+  // without depending on its identity.
+  const onOpenPropRef = useRef(onOpenProp);
+  const onExitPropRef = useRef(onExitProp);
+  useEffect(() => {
+    onOpenPropRef.current = onOpenProp;
+    onExitPropRef.current = onExitProp;
+  });
+
+  // (#804-followup) Locally tracks whether the Plaid SDK iframe is on
+  // screen so our own reauth-guard AlertDialog (rendered below) can
+  // flip to non-modal alongside the parent picker. Without this the
+  // guard's Radix FocusScope re-introduces the same iframe-uninteractable
+  // bug for reconnect flows launched from the guard.
+  const [yieldingToPlaid, setYieldingToPlaid] = useState(false);
+
+  // (#804-followup) Dedup ref so a single linkToken never triggers two
+  // open() calls — architect review #2.
+  const openedTokenRef = useRef<string | null>(null);
+
   const { open, ready } = usePlaidLink({
     token: linkToken,
     onSuccess,
     onExit: () => {
       setLinkToken(null);
       clearStoredLinkToken();
+      openedTokenRef.current = null;
+      // (#804-followup) Restore our AlertDialog's focus trap and tell
+      // any parent Dialog (e.g. the debt-link picker) to restore its
+      // own. Fires for every user-driven dismissal (close, back, error).
+      setYieldingToPlaid(false);
+      onExitPropRef.current?.();
     },
   });
 
   useEffect(() => {
-    if (linkToken && ready) {
-      // (TEMP DIAG #804-followup) Identify which Plaid open() trigger
-      // actually fires when the broken Capital One modal appears.
-      // Remove once root cause is confirmed.
-      // eslint-disable-next-line no-console
-      console.log(
-        "[plaid-diag] PlaidLinkButton.open()",
-        { tokenPrefix: linkToken.slice(0, 24), ts: Date.now() },
+    if (!linkToken || !ready) return;
+    if (openedTokenRef.current === linkToken) return;
+    openedTokenRef.current = linkToken;
+
+    // Stash the active link_token (and where to return to) before
+    // opening Link, so OAuth bounce-back can resume the handshake.
+    try {
+      localStorage.setItem(PLAID_LINK_TOKEN_STORAGE_KEY, linkToken);
+      localStorage.setItem(
+        PLAID_RETURN_TO_STORAGE_KEY,
+        window.location.pathname + window.location.search,
       );
-      // Stash the active link_token (and where to return to) before
-      // opening Link, so OAuth bounce-back can resume the handshake.
-      try {
-        localStorage.setItem(PLAID_LINK_TOKEN_STORAGE_KEY, linkToken);
-        localStorage.setItem(
-          PLAID_RETURN_TO_STORAGE_KEY,
-          window.location.pathname + window.location.search,
-        );
-      } catch {
-        // ignore — non-OAuth banks still work without storage
-      }
-      open();
+    } catch {
+      // ignore — non-OAuth banks still work without storage
     }
+
+    // (#804-followup) Architect review #1: make the modality release
+    // deterministic. flushSync commits the parent state update (and our
+    // local one) synchronously, so Radix's Dialog/AlertDialog re-renders
+    // with modal=false and tears down its FocusScope BEFORE we call
+    // open(). The RAF then defers open() to the next frame so any
+    // useEffect-based Radix cleanup also has a tick to run.
+    flushSync(() => {
+      setYieldingToPlaid(true);
+      onOpenPropRef.current?.();
+    });
+    requestAnimationFrame(() => open());
   }, [linkToken, ready, open]);
+
+  // (#804-followup) Reconnect button handlers used inside our own
+  // reauth-guard AlertDialog. Mirror the same yield-before-open pattern
+  // so the guard's nested modal doesn't re-trap focus when the
+  // reconnect flow opens Plaid in update mode.
+  const handleNestedReconnectOpen = useCallback(() => {
+    // (#804-followup) Radix AlertDialog is hard-wired modal=true (no
+    // `modal` prop), so we can't just release its FocusScope the way
+    // the picker Dialog does. Instead we close the guard entirely the
+    // moment the reconnect flow opens Plaid — the user already made
+    // their pick by clicking Reconnect, and re-showing the guard
+    // afterwards adds no value. flushSync + RAF (in the child's open
+    // effect) still ensures Radix tears down before Plaid opens.
+    flushSync(() => {
+      setYieldingToPlaid(true);
+      setReauthGuardOpen(false);
+      onOpenPropRef.current?.();
+    });
+  }, []);
+  const handleNestedReconnectExit = useCallback(() => {
+    setYieldingToPlaid(false);
+    onExitPropRef.current?.();
+  }, []);
 
   const busy = createLinkToken.isPending || exchange.isPending;
   // Disable Link Bank when the API reports Plaid isn't configured (or the
@@ -597,7 +683,7 @@ export function PlaidLinkButton({
         />
       )}
       <AlertDialog
-        open={reauthGuardOpen}
+        open={reauthGuardOpen && !yieldingToPlaid}
         onOpenChange={(v) => setReauthGuardOpen(v)}
       >
         <AlertDialogContent data-testid="dialog-reauth-guard">
@@ -624,6 +710,8 @@ export function PlaidLinkButton({
                 <PlaidReconnectButton
                   itemId={it.id}
                   institutionName={it.institutionName}
+                  onOpen={handleNestedReconnectOpen}
+                  onExit={handleNestedReconnectExit}
                 />
               </li>
             ))}

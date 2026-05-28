@@ -1,0 +1,49 @@
+New feature on the Chase page chart ("CHECKING BALANCE · TRAILING 12 MONTHS"). This replaces the old Phase F scope — simpler and more useful.
+
+DESIGN:
+- The chart window changes: from "trailing 12 months" to "May 2026 (or current month start, whichever is later) through 12 months forward."
+- Pre-today: single line, same as today's checking-balance line. Historical data only — no forecast retroactively, the data isn't reliable enough.
+- Today and beyond: TWO lines diverging from today's actual balance:
+  * Actual line — extends forward day by day as new Plaid balance points arrive. Starts only at today's balance and grows daily.
+  * Forecast line — projects from today's balance using the existing forecast engine (cashSignal.ts / the same projection logic /forecast uses), bucketed weekly (Sun-Sat), through 12 months from today.
+- Both lines share the same starting point (today's actual balance), so visually it's a single historical line through today, which splits into two from today forward.
+- Resolution: weekly Sun-Sat buckets for both the forecast line and (the chart points of) the actual line. Daily resolution would be too noisy on a 12-month window.
+
+NOT in scope: anything locked-week or Debrief-related on this chart. The Debrief variance lives on /debrief; this chart is a separate at-a-glance "are we on track?" view.
+
+IMPLEMENTATION:
+
+1. In artifacts/h2budget/src/pages/transactions.tsx (the Chase page), find the existing CHECKING BALANCE chart component. Identify its data source — currently aggregating transactions into monthly balance points trailing 12 months.
+
+2. Change the time window:
+   - Start = max(2026-05-01, current month start). My budget began May 1; don't show pre-May noise.
+   - End = today + 12 months forward (rolling).
+
+3. Build three data series:
+   - historicalActual: weekly Sun-Sat balance points from window start through today's week. Existing chase ending balance logic should work — just bucket weekly instead of monthly and bound to the new window.
+   - forecastFromToday: starting at today's balance, project weekly forward using the same forecast engine /forecast uses (cashSignal.ts or the projection helpers the Forecast page calls). 12 months of weekly points forward.
+   - actualFromToday: starts with today's balance only. As future days pass, new Plaid syncs add points. For now this is essentially "today's point" plus any post-today balance data that exists.
+
+4. Render in the chart (recharts):
+   - One <Line> for historicalActual (current solid styling — keep the existing color/look)
+   - One <Line> for forecastFromToday with distinct styling — dashed, lighter color, suggest a blue/grey to read as "projection"
+   - One <Line> for actualFromToday with the SAME styling as historicalActual but only rendering from today's point forward (so visually it appears as the historical line "continuing" into the future as days pass)
+   - Today's date should be visually marked — a vertical reference line or shaded background change so the user knows where actual ends and forecast begins
+
+5. Legend: "Actual" (solid) and "Forecast" (dashed). Don't split historical and actualFromToday in the legend — they're the same conceptual line ("what really happened / is happening").
+
+6. Tooltip on hover: for any point on or after today, show both forecast value AND actual value (if known) with the delta. For pre-today points, just show the actual value.
+
+7. The chart title and subtitle update to reflect the new window. Suggest: "CHECKING BALANCE — actual vs forecast" with subtitle "May 2026 — [12 months from today]".
+
+VERIFY:
+- Chart starts at May 2026, not Jun 2025
+- Pre-today: single line, same shape as before
+- From today: two lines split — solid actual (just today's point right now) and dashed forecast extending weekly through ~May 2027
+- Today's vertical line/marker is visible
+- Hovering a future-date point shows the forecast value
+- After a week passes (next Plaid sync drops new balance data), the actual line extends one more weekly point and you can visually see whether it's tracking forecast or diverging
+
+OUT OF SCOPE: changing the Forecast page chart, or any Debrief-related behavior. Just the Chase page chart.
+
+Skip new tests (personal app), smoke test before marking complete. Run typecheck.

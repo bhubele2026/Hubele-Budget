@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { usePlaidLink } from "react-plaid-link";
 import {
   useCreatePlaidUpdateLinkToken,
@@ -173,10 +174,26 @@ export function PlaidReconnectButton({
   itemId,
   institutionName,
   size = "sm",
+  onOpen,
+  onExit,
 }: {
   itemId: string;
   institutionName?: string | null;
   size?: "default" | "sm" | "lg" | "icon";
+  /**
+   * (#804-followup) Fires the moment the Plaid SDK is about to open its
+   * iframe modal. Parent components that render this button inside a
+   * Radix Dialog/AlertDialog use this hook to flip their modal into
+   * non-modal mode, releasing the FocusScope so the Plaid iframe can
+   * receive pointer/focus events. Standalone callers (debt row,
+   * settings) can omit it.
+   */
+  onOpen?: () => void;
+  /**
+   * (#804-followup) Pairs with `onOpen` — fires when the Plaid SDK
+   * closes so the parent can restore its focus trap.
+   */
+  onExit?: () => void;
 }) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   // (#367) When /plaid/link-token/update returns 409 + action:"relink"
@@ -253,6 +270,14 @@ export function PlaidReconnectButton({
     setLinkToken(null);
     const wasFresh = freshMode;
     setFreshMode(false);
+    // (#804-followup, architect round 2) Plaid SDK does NOT fire its
+    // onExit handler after a successful link, so without this the
+    // parent yield state (e.g. PlaidLinkButton's `yieldingToPlaid`)
+    // would stay stuck `true` after a successful nested reconnect,
+    // leaving the parent modal in a non-restored state. Reset the
+    // dedup ref too so a future reconnect attempt can fire open().
+    openedTokenRef.current = null;
+    onExitRef.current?.();
     if (cancelledRef.current) return;
     // (#367) When this is the fresh-link fallback path (409 → relink),
     // the public_token has to be exchanged for a new access_token via
@@ -330,34 +355,45 @@ export function PlaidReconnectButton({
     }
   }, [institutionName, itemId, qc, runSync, toast, freshMode, exchange]);
 
+  // (#804-followup) Stable refs for parent yield-callbacks — same
+  // pattern as PlaidLinkButton. Keeps the open() effect off the
+  // callbacks' identity so a parent re-render can't double-fire open().
+  const onOpenRef = useRef(onOpen);
+  const onExitRef = useRef(onExit);
+  useEffect(() => {
+    onOpenRef.current = onOpen;
+    onExitRef.current = onExit;
+  });
+
+  // (#804-followup) Dedup so a single linkToken triggers at most one
+  // open() — guards against architect-flagged double-fire when parent
+  // state churn re-runs this effect.
+  const openedTokenRef = useRef<string | null>(null);
+
   const { open, ready } = usePlaidLink({
     token: linkToken,
     onSuccess,
     onExit: () => {
       setLinkToken(null);
       setFreshMode(false);
+      openedTokenRef.current = null;
+      // (#804-followup) Restore any parent modal's focus trap.
+      onExitRef.current?.();
     },
   });
 
   useEffect(() => {
-    if (linkToken && ready) {
-      // (TEMP DIAG #804-followup) Identify which Plaid open() trigger
-      // actually fires when the broken Capital One modal appears.
-      // Remove once root cause is confirmed.
-      // eslint-disable-next-line no-console
-      console.log(
-        "[plaid-diag] PlaidReconnectButton.open()",
-        {
-          itemId,
-          institutionName,
-          freshMode,
-          tokenPrefix: linkToken.slice(0, 24),
-          ts: Date.now(),
-        },
-      );
-      open();
-    }
-  }, [linkToken, ready, open, itemId, institutionName, freshMode]);
+    if (!linkToken || !ready) return;
+    if (openedTokenRef.current === linkToken) return;
+    openedTokenRef.current = linkToken;
+    // (#804-followup) flushSync the parent yield-flip so Radix tears
+    // down its FocusScope BEFORE Plaid opens; RAF defers open() one
+    // frame so any useEffect-based cleanup also has a tick.
+    flushSync(() => {
+      onOpenRef.current?.();
+    });
+    requestAnimationFrame(() => open());
+  }, [linkToken, ready, open]);
 
   const busy =
     createUpdateLinkToken.isPending ||

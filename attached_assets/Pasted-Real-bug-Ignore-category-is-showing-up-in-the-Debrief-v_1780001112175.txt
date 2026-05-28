@@ -1,0 +1,34 @@
+Real bug — "Ignore" category is showing up in the Debrief variance table with $3,897.73 of actual. "Ignore" is a system-managed budget category (excludeFromBudget=true) — same as "Transfer" and "Uncategorized". It exists specifically so transactions tagged Ignore don't count anywhere: credit card payments, internal transfers, anything that would double-count or pollute reports.
+
+ROOT CAUSE: computeWeekVariance in artifacts/api-server/src/lib/weeklyDebrief.ts does ZERO filtering on excludeFromBudget. Bank transactions tagged "Ignore" (or "Transfer" or "Uncategorized") are accumulating into actualIncome / actualExpenses / byCategory buckets / unplannedTransactions / openItems. That means:
+  - The "Ignore" row appears in the byCategory table (the $3,897.73 you see)
+  - Total actual spend is inflated by every ignored transaction
+  - Net variance is wrong
+  - Unplanned charges count includes ignored ones (you might be locking weeks with phantom open items)
+
+The existing helper at artifacts/api-server/src/lib/excludedCategory.ts already has isExcludedCategory() — the same flag the rest of the app uses to know "this category is system-managed, don't count it."
+
+FIX in weeklyDebrief.ts:
+
+1. Before the bank-txn loop (around line 507), build a Set of excludedCategoryIds for the household:
+   - Query budgetCategoriesTable WHERE householdId=X AND excludeFromBudget=true
+   - Set contains the ids for Ignore, Transfer, and Uncategorized for this household
+
+2. In the bank-txn loop at line 507+: BEFORE accumulating into actualIncome / actualExpenses or pushing to txnItems / byCategory, skip the transaction entirely if t.categoryId is in excludedCategoryIds. Just continue — these transactions don't exist for variance purposes.
+
+3. Same filter applies to the planItems side (plan occurrences): around the recurring-item iteration, skip any plan whose categoryId is in excludedCategoryIds. (Probably not an issue — recurring items shouldn't be tagged to Ignore — but defensive.)
+
+4. The byCategory aggregation needs to drop excluded categories too. Either filter the input rows (recommended — single filter at the top) or filter the output buckets. Single filter at the input is cleaner.
+
+5. The unmatched-plans, unplanned-transactions, post-lock-additions arrays — all need to exclude these too. The single early-skip in the loops will cover most cases naturally, but verify.
+
+VERIFY after fix:
+- Reload /debrief on May 17-23 week → "Ignore" row no longer appears in Category Variance table
+- Total actual spend for that week drops by exactly the amount that used to be tagged to Ignore
+- Net variance number changes accordingly (smaller deficit, since ignored "spend" was inflating it)
+- No transactions tagged Ignore appear in any action panel section (Unmatched Plans / Unplanned Charges / Pending Bank Txns)
+- Run the same check on Transfer and Uncategorized — they should also disappear from variance reports if any txns are tagged to them. The two genuine "Uncategorized" orphan rows we identified earlier ($1,454.49 and $1,100.00) should also vanish from the variance table if their underlying categories are flagged excludeFromBudget (verify whether they are — those orphans pointed at deleted category ids, so the answer depends on whether the orphan ids had the flag at the time they were deleted).
+
+Skip new tests (personal app). Smoke test the above. Report what changed in the variance numbers — I want to see the before/after for that specific week.
+
+Side note: while you're in there, check if Phase E's deterministic-fact extractor (debriefAdvisorSummary.ts) also needs this filter. If the advisor sees Ignore in byCategory it would generate insights like "Ignore was over by $3,897" which is nonsense. The filter on byCategory should fix it automatically since the advisor reads the snapshot, but confirm.

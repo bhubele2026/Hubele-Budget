@@ -493,8 +493,32 @@ function PlaidAccountPicker({
     if (!open) setShowAllAccounts(false);
   }, [open]);
 
+  // (#804-followup) Plaid SDK renders its Link modal as an iframe at
+  // the document root, OUTSIDE our React tree. While our shadcn Dialog
+  // is `modal={true}` (the default), Radix's FocusScope traps focus
+  // inside DialogContent and applies aria-hidden to siblings — which
+  // makes Plaid's CAPTCHA checkbox unclickable and text inputs
+  // unfocusable. Flip the picker Dialog to non-modal whenever the
+  // inner PlaidLinkButton is about to open Plaid, and restore the trap
+  // when Plaid closes (success OR exit). Resets defensively when the
+  // picker itself closes so a new open() starts in the trapped state.
+  const [yieldingToPlaid, setYieldingToPlaid] = useState(false);
+  useEffect(() => {
+    if (!open) setYieldingToPlaid(false);
+  }, [open]);
+  const handlePlaidLinked = () => {
+    setYieldingToPlaid(false);
+    accounts.refetch();
+  };
+  const handlePlaidOpen = () => setYieldingToPlaid(true);
+  const handlePlaidExit = () => setYieldingToPlaid(false);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      modal={!yieldingToPlaid}
+    >
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Link {debt.name} to Plaid</DialogTitle>
@@ -559,9 +583,9 @@ function PlaidAccountPicker({
               <div className="flex justify-center">
                 <PlaidLinkButton
                   label={`Link a bank for ${debt.name}`}
-                  onLinked={() => {
-                    accounts.refetch();
-                  }}
+                  onLinked={handlePlaidLinked}
+                  onOpen={handlePlaidOpen}
+                  onExit={handlePlaidExit}
                 />
               </div>
               <button
@@ -659,9 +683,9 @@ function PlaidAccountPicker({
             </p>
             <PlaidLinkButton
               label="Link another institution"
-              onLinked={() => {
-                accounts.refetch();
-              }}
+              onLinked={handlePlaidLinked}
+              onOpen={handlePlaidOpen}
+              onExit={handlePlaidExit}
             />
           </div>
         </div>
