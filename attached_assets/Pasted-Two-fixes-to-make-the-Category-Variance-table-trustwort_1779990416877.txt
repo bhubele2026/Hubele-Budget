@@ -1,0 +1,27 @@
+Two fixes to make the Category Variance table trustworthy before we build the AI advisor on top of it.
+
+FIX 1 — Two orphan "Uncategorized" rows ($1,454.49 and $1,100.00).
+These are transactions whose category_id points at a UUID not in my household's budget_categories (likely from household resets during earlier Plaid work). DIAGNOSE FIRST:
+
+  - Find the distinct category_ids that the Category Variance "Uncategorized" buckets are aggregating (the non-null ones that don't resolve to a name). There should be ~2.
+  - For each, query budget_categories WHERE id = that uuid (across ALL households, not just mine) and report: does the row exist? If yes, what household_id and name? If no row at all, it's truly orphaned.
+  - Also report how many of my transactions point at each orphan id, and a few sample descriptions/amounts so I can recognize what they are.
+
+  Report findings. Then based on what we find, the fix is one of:
+    (a) orphan id resolves to a real category in MY household that the picker excluded → re-point isn't needed, just fix the name resolution
+    (b) orphan id is a deleted/cross-household category → re-tag those transactions to a correct category (I'll tell you which once I see the sample descriptions), OR null them out so they show as true "Uncategorized"
+  Don't fix yet — report the diagnosis and the sample transactions so I can decide where they should go.
+
+FIX 2 — Income variance renders with wrong sign/color.
+In the Category Variance table, income categories (Other Income +$1,465, Hannah's paycheck +$865) render RED like overspending, but MORE income is GOOD and should be GREEN. The variance color logic treats all "+" as bad.
+
+  - The category's kind ('income' | 'expense') is available via budget_categories.kind, which useListCategories already returns to the frontend.
+  - Fix the color logic in the Category Variance table render (debrief.tsx, the byCategory table ~line 1066-1085):
+    * For expense categories: positive variance (spent more than planned) = RED, negative (spent less) = GREEN. (current behavior, keep)
+    * For income categories: positive variance (earned more than planned) = GREEN, negative (earned less) = RED. (flip it)
+  - To know each row's kind, join b.categoryId → the category's kind from useListCategories. For the null/uncategorized bucket with no kind, default to expense coloring.
+  - Optional but nice: add a small "income" vs "expense" visual indicator or group the table into Income / Expense sections. Your call if it's cheap; if not, just fix the colors.
+
+  This matters because Phase E (the AI advisor) will read these variance numbers — if income variance has the wrong sign meaning, the advisor will tell me earning more money is a problem.
+
+For FIX 1: diagnose and report, don't change. For FIX 2: go ahead and implement the color fix. Run typecheck. Report FIX 1 findings + confirm FIX 2 shipped.

@@ -299,6 +299,18 @@ function DebriefPageActive({
     (categories ?? []).forEach((c) => m.set(c.id, c.name));
     return m;
   }, [categories]);
+  // For the Category Variance table's color logic: income variance
+  // colors must flip (more income = good = green, less = red), while
+  // expense variance keeps the default (over = red, under = green).
+  // Buckets whose categoryId isn't in this map (null or orphan) fall
+  // back to expense semantics.
+  const catKindById = useMemo(() => {
+    const m = new Map<string, "income" | "expense">();
+    (categories ?? []).forEach((c) =>
+      m.set(c.id, c.kind === "income" ? "income" : "expense"),
+    );
+    return m;
+  }, [categories]);
 
   // ----- Mutations ---------------------------------------------------
   const upsertResolution = useUpsertForecastResolution();
@@ -648,6 +660,7 @@ function DebriefPageActive({
               <CategoryVarianceTable
                 buckets={snapshot.byCategory}
                 catNameById={catNameById}
+                catKindById={catKindById}
               />
 
               {!isLocked && (
@@ -1021,9 +1034,11 @@ function VarianceSummaryCard({ snapshot }: { snapshot: NonNullable<WeeklyDebrief
 function CategoryVarianceTable({
   buckets,
   catNameById,
+  catKindById,
 }: {
   buckets: WeeklyDebriefCategoryBucket[];
   catNameById: Map<string, string>;
+  catKindById: Map<string, "income" | "expense">;
 }) {
   const [open, setOpen] = useState(true);
   const sorted = useMemo(
@@ -1065,16 +1080,40 @@ function CategoryVarianceTable({
                   {sorted.map((b, i) => {
                     const name = b.categoryId ? (catNameById.get(b.categoryId) ?? "Uncategorized") : "Uncategorized";
                     const v = Number(b.varianceAmount);
+                    // Income: positive variance (earned more) = green;
+                    // negative (earned less) = red. Expense: keep the
+                    // default — positive (overspent) = red, negative
+                    // (underspent) = green. Unknown/null categoryId
+                    // defaults to expense semantics.
+                    const kind = b.categoryId
+                      ? (catKindById.get(b.categoryId) ?? "expense")
+                      : "expense";
+                    const goodColor = "text-emerald-700";
+                    const badColor = "text-red-600";
+                    const varianceColor =
+                      v === 0
+                        ? ""
+                        : kind === "income"
+                          ? v > 0
+                            ? goodColor
+                            : badColor
+                          : v > 0
+                            ? badColor
+                            : goodColor;
                     return (
                       <TableRow key={(b.categoryId ?? "_") + i}>
-                        <TableCell className="font-medium">{name}</TableCell>
+                        <TableCell className="font-medium">
+                          {name}
+                          {kind === "income" && (
+                            <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                              income
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right tabular-nums">{money(b.plannedAmount)}</TableCell>
                         <TableCell className="text-right tabular-nums">{money(b.actualAmount)}</TableCell>
                         <TableCell
-                          className={cn(
-                            "text-right tabular-nums",
-                            v > 0 ? "text-red-600" : v < 0 ? "text-emerald-700" : "",
-                          )}
+                          className={cn("text-right tabular-nums", varianceColor)}
                         >
                           {money(v, { signed: true })}
                         </TableCell>
