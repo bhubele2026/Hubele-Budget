@@ -2880,18 +2880,6 @@ function VirtualizedDayGroups<G>({
     return () => cancelAnimationFrame(raf);
   }, [virtualizer, groups.length, totalRowCount, measureKey]);
 
-  // TEMPORARY: remove after cutoff verification — see task #767
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log("[amex-virt]", {
-      measureKey,
-      groupCount: groups.length,
-      totalRowCount,
-      totalSize: virtualizer.getTotalSize(),
-      virtualItems: virtualizer.getVirtualItems().length,
-    });
-  }, [measureKey, groups.length, totalRowCount]);
-
   // After the data first arrives, re-read scrollMargin on the next
   // animation frame so we don't capture a half-rendered layout (the
   // stats tiles above the list often settle one frame later).
