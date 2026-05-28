@@ -5658,14 +5658,14 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             forecastDate: zod.ZodString;
             forecastAmount: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "unmatched"]>;
+            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "missed", "skipped", "unmatched"]>;
             matchedTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             matchedDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             matchedAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             rescheduledTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             varianceAmount: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -5678,7 +5678,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             matchedDate?: string | null | undefined;
             matchedAmount?: string | null | undefined;
         }, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -5726,14 +5726,14 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             forecastDate: zod.ZodString;
             forecastAmount: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "unmatched"]>;
+            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "missed", "skipped", "unmatched"]>;
             matchedTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             matchedDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             matchedAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             rescheduledTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             varianceAmount: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -5746,7 +5746,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             matchedDate?: string | null | undefined;
             matchedAmount?: string | null | undefined;
         }, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -5829,7 +5829,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             actualExpenses: string;
         };
         plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -5843,7 +5843,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -5897,7 +5897,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             actualExpenses: string;
         };
         plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -5911,7 +5911,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6017,7 +6017,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             actualExpenses: string;
         };
         plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6031,7 +6031,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6109,7 +6109,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             actualExpenses: string;
         };
         plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6123,7 +6123,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6222,14 +6222,14 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             forecastDate: zod.ZodString;
             forecastAmount: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "unmatched"]>;
+            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "missed", "skipped", "unmatched"]>;
             matchedTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             matchedDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             matchedAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             rescheduledTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             varianceAmount: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6242,7 +6242,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             matchedDate?: string | null | undefined;
             matchedAmount?: string | null | undefined;
         }, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6290,14 +6290,14 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             forecastDate: zod.ZodString;
             forecastAmount: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "unmatched"]>;
+            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "missed", "skipped", "unmatched"]>;
             matchedTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             matchedDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             matchedAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             rescheduledTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             varianceAmount: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6310,7 +6310,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             matchedDate?: string | null | undefined;
             matchedAmount?: string | null | undefined;
         }, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6393,7 +6393,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             actualExpenses: string;
         };
         plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6407,7 +6407,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6461,7 +6461,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             actualExpenses: string;
         };
         plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6475,7 +6475,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6581,7 +6581,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             actualExpenses: string;
         };
         plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6595,7 +6595,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6673,7 +6673,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             actualExpenses: string;
         };
         plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6687,7 +6687,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6793,14 +6793,14 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             forecastDate: zod.ZodString;
             forecastAmount: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "unmatched"]>;
+            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "missed", "skipped", "unmatched"]>;
             matchedTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             matchedDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             matchedAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             rescheduledTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             varianceAmount: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6813,7 +6813,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             matchedDate?: string | null | undefined;
             matchedAmount?: string | null | undefined;
         }, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6861,14 +6861,14 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             forecastDate: zod.ZodString;
             forecastAmount: zod.ZodString;
             categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
-            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "unmatched"]>;
+            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "missed", "skipped", "unmatched"]>;
             matchedTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             matchedDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             matchedAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             rescheduledTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             varianceAmount: zod.ZodString;
         }, "strip", zod.ZodTypeAny, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6881,7 +6881,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             matchedDate?: string | null | undefined;
             matchedAmount?: string | null | undefined;
         }, {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6964,7 +6964,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             actualExpenses: string;
         };
         plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -6978,7 +6978,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -7032,7 +7032,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             actualExpenses: string;
         };
         plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -7046,7 +7046,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -7152,7 +7152,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             actualExpenses: string;
         };
         plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -7166,7 +7166,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -7244,7 +7244,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             actualExpenses: string;
         };
         plans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -7258,7 +7258,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             matchedAmount?: string | null | undefined;
         }[];
         unmatchedPlans: {
-            status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
             name: string;
             kind: "income" | "expense";
             forecastDate: string;
@@ -8479,12 +8479,12 @@ export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
         error: zod.ZodNullable<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         error: string | null;
-        channel: "email" | "log" | "skipped";
+        channel: "skipped" | "email" | "log";
         reason: string | null;
         recipient: string | null;
     }, {
         error: string | null;
-        channel: "email" | "log" | "skipped";
+        channel: "skipped" | "email" | "log";
         reason: string | null;
         recipient: string | null;
     }>, zod.ZodNull]>;
@@ -8498,7 +8498,7 @@ export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
     }[];
     alert: {
         error: string | null;
-        channel: "email" | "log" | "skipped";
+        channel: "skipped" | "email" | "log";
         reason: string | null;
         recipient: string | null;
     } | null;
@@ -8512,7 +8512,7 @@ export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
     }[];
     alert: {
         error: string | null;
-        channel: "email" | "log" | "skipped";
+        channel: "skipped" | "email" | "log";
         reason: string | null;
         recipient: string | null;
     } | null;

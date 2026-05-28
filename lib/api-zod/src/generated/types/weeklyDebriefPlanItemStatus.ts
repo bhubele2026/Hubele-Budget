@@ -13,5 +13,7 @@ export const WeeklyDebriefPlanItemStatus = {
   matched: "matched",
   matched_on_time: "matched_on_time",
   rescheduled: "rescheduled",
+  missed: "missed",
+  skipped: "skipped",
   unmatched: "unmatched",
 } as const;

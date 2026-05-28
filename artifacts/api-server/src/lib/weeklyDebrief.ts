@@ -285,6 +285,9 @@ export async function computeWeekVariance(
     const rs = resByKey.get(k) ?? [];
     const matched = rs.find((r) => r.status === "matched");
     const rescheduled = rs.find((r) => r.status === "rescheduled");
+    const missedOrSkipped = rs.find(
+      (r) => r.status === "missed" || r.status === "skipped",
+    );
 
     if (matched && matched.matchedTxnId) {
       const txn = matchedTxnById.get(matched.matchedTxnId);
@@ -325,6 +328,35 @@ export async function computeWeekVariance(
           ? weekStartFor(rescheduled.rescheduledTo)
           : null,
         varianceAmount: money(0),
+      });
+      continue;
+    }
+    if (missedOrSkipped) {
+      // missed: user confirms the planned event did not happen. Keep
+      //         planned-totals contribution (already added above) and
+      //         render varianceAmount = -forecastAmount so the week's
+      //         net variance reflects the un-spent / un-received amount.
+      // skipped: user is dismissing this occurrence entirely (e.g.
+      //         duplicate, retired). Keep planned-totals contribution
+      //         consistent with rescheduled (zero variance — user said
+      //         "don't count this against me"). For an expense this
+      //         under-reports actual spend honestly because nothing
+      //         hit the bank for it.
+      planItems.push({
+        recurringItemId: p.recurringItemId,
+        name: p.name,
+        kind: p.kind,
+        forecastDate: p.forecastDate,
+        forecastAmount: money(p.forecastAmount),
+        categoryId: p.categoryId,
+        status: missedOrSkipped.status as "missed" | "skipped",
+        matchedTxnId: null,
+        matchedDate: null,
+        matchedAmount: null,
+        rescheduledTo: null,
+        varianceAmount: money(
+          missedOrSkipped.status === "missed" ? -p.forecastAmount : 0,
+        ),
       });
       continue;
     }

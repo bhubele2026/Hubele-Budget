@@ -1,0 +1,24 @@
+The Debrief action buttons fire and the POST succeeds (success toast appears), and the frontend invalidation looks correct — getGetWeeklyDebriefQueryKey(activeWeekStart) matches useGetWeeklyDebrief(activeWeekStart). But after clicking "Missed" on a plan, the row stays in the list, the count stays at 2, and "2 items still need a decision" doesn't decrement.
+
+Since the frontend invalidation is correct and the POST succeeds, the bug is almost certainly in the BACKEND: the resolution row gets written, but computeWeekVariance doesn't recognize it as resolving that plan when it recomputes. Diagnose:
+
+1. The Missed handler POSTs { recurringItemId: plan.recurringItemId, occurrenceDate: plan.forecastDate, status: "missed" }. Confirm what plan.forecastDate actually contains (is it "2026-05-04" date-only, or a full ISO timestamp, or something with a timezone offset?).
+
+2. In computeWeekVariance (weeklyDebrief.ts), find where it matches resolution rows back to planned events. It almost certainly keys on (recurringItemId, occurrenceDate). Confirm:
+   - What format is occurrenceDate stored as in the forecast_resolutions table (date column? text? timestamp?)
+   - What format does the expanded plan event's date use when computeWeekVariance builds the "is this plan resolved?" lookup
+   - Do those two formats EXACTLY match? A plan event dated "2026-05-04" won't match a resolution row whose occurrence_date round-tripped to "2026-05-03T19:00:00-05:00" or "2026-05-04T00:00:00.000Z" depending on timezone handling.
+
+3. Most likely fix: normalize both sides to date-only YYYY-MM-DD before comparing. The plan's forecastDate and the resolution's occurrenceDate need to be compared as plain date strings, not timestamps.
+
+4. Confirm by querying: after I click Missed on the May 4 "Weekly Dining" plan, run against the DB:
+   SELECT recurring_item_id, occurrence_date, status FROM forecast_resolutions
+   WHERE recurring_item_id = '<the dining plan recurring_item_id>'
+   ORDER BY created_at DESC LIMIT 3;
+   — and tell me the exact occurrence_date value stored vs what plan.forecastDate sent. If they differ by format or timezone, that's the bug.
+
+5. Also check: does the resolution upsert have a unique constraint on (recurring_item_id, occurrence_date)? If occurrenceDate format drifts between the auto-match era and now, you could be writing a NEW row each click instead of resolving the intended occurrence.
+
+Fix whichever mismatch you find. Then verify: click Missed → row disappears, count decrements, and when all items resolved the Lock button enables.
+
+This is likely a date-format/timezone mismatch between what the frontend sends as occurrenceDate and what computeWeekVariance expects. Don't rewrite the invalidation — that part's correct.

@@ -10,6 +10,8 @@ export declare const WeeklyDebriefPlanItemStatus: {
     readonly matched: "matched";
     readonly matched_on_time: "matched_on_time";
     readonly rescheduled: "rescheduled";
+    readonly missed: "missed";
+    readonly skipped: "skipped";
     readonly unmatched: "unmatched";
 };
 //# sourceMappingURL=weeklyDebriefPlanItemStatus.d.ts.map

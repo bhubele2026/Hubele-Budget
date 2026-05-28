@@ -3679,7 +3679,7 @@ components:
         categoryId: { type: string, nullable: true }
         status:
           type: string
-          enum: [matched, matched_on_time, rescheduled, unmatched]
+          enum: [matched, matched_on_time, rescheduled, missed, skipped, unmatched]
         matchedTxnId: { type: string, nullable: true }
         matchedDate: { type: string, nullable: true }
         matchedAmount: { type: string, nullable: true }
