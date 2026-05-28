@@ -1,0 +1,28 @@
+Change of plan — I don't care about April or earlier. Pre-May-1 is scaffolding/noise (my budget began May 1). I only care that May 1, 2026 forward is correct and stays correct. Get this done efficiently, in two parts:
+
+PART 1 — Clean up the duplicates from May 1, 2026 forward.
+
+1. Run the twin scan from your earlier diagnosis but SCOPED to occurred_on >= '2026-05-01' for my household. Report: twin groups, participating rows, likely-dupe count, dollar inflation — May-forward only.
+
+2. For each May+ twin group, delete the duplicate rows keeping the best survivor per this priority:
+   - Prefer a row with a REAL plaid_transaction_id (not NULL, not 'seed-%')
+   - Among real-Plaid rows, prefer the one with a non-NULL plaid_account_id
+   - Prefer the row carrying user-set state (reviewed flag, category_id set, sent_to_review_at set, any forecast_resolution pointing at it) — never delete a row that has a resolution attached without re-pointing it to the survivor first
+   - Tiebreak: keep oldest created_at
+   - Also delete any 'seed-april%' or other synthetic rows that landed with a May+ occurred_on
+
+   DRY-RUN first: show me the count of rows that would be deleted, total $ impact, and any group where the survivor choice is ambiguous (e.g. two real-Plaid rows with different descriptions on same date+amount+account). STOP for my approval before deleting.
+
+PART 2 — Stop it from happening again, May-forward.
+
+The root cause: three writers (manual/CSV, synthetic seed, real Plaid) create rows for the same payment with different descriptions, so dedup's exact-description key misses them. Fix the dedup so future syncs collapse these:
+
+   - In dedupeTransactions.ts, add a fuzzy-description merge within an (plaidAccountId, occurred_on, abs(amount)) group: treat two rows as the same payment if one description's tokens are a subset of the other's (e.g. "Affirm" ⊂ "AFFIRM.COM PAYME ... Merchant: Affirm"). Same survivor-selection priority as Part 1.
+   - Make this run automatically after every Plaid sync (it may already be wired into the sync path — confirm and ensure the fuzzy pass is included).
+   - Add a guard: the fuzzy merge only applies when amount AND date AND account match exactly — only the description is allowed to differ. This prevents collapsing legitimate same-day same-amount-but-different-merchant transactions.
+
+   Add a focused test: two rows, same account/date/amount, descriptions "Affirm" and "AFFIRM.COM PAYME Merchant: Affirm" → dedup collapses to one, keeping the real-Plaid-id row. And a negative test: two rows same date/amount/account but genuinely different merchants ("Target" vs "Walmart") → NOT collapsed.
+
+Do PART 1 dry-run first, report, stop for approval. Then after dedup, do PART 2. After both, re-run the May+ twin scan and confirm zero remaining dupes.
+
+Don't touch pre-May-1 data at all — leave it as-is, it's noise I don't care about.
