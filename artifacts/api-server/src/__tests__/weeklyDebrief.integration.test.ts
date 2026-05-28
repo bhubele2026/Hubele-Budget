@@ -300,7 +300,11 @@ async function startServer(): Promise<{ baseUrl: string; server: Server }> {
       log?: { warn: (...args: unknown[]) => void };
     };
     const r = req as LogReq;
-    if (!r.log) r.log = { warn: () => {} };
+    if (!r.log) {
+      // The route only calls `req.log.warn(...)`; full pino Logger shape
+      // isn't needed at runtime, so a minimal mock cast through unknown.
+      r.log = { warn: () => {} } as unknown as LogReq["log"];
+    }
     next();
   });
   app.use((req, _res, next) => {

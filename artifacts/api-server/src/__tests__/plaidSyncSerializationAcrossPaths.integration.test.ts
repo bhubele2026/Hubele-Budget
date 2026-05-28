@@ -255,7 +255,6 @@ async function seedItem(opts: {
     userId: opts.ownerUserId,
     householdId: TEST_HOUSEHOLD_ID,
     itemId: item!.id,
-    accessToken,
     accountId: `acct-${randomUUID()}`,
     name: "Chase Checking",
     mask: "1234",

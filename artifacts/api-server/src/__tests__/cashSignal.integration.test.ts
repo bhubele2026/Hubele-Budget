@@ -392,11 +392,11 @@ describe("computeCashSignal — snapshot anchoring", () => {
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       name: "Capital One Platinum",
-      kind: "credit_card",
+      type: "credit_card",
       balance: "1000",
       minPayment: "38",
       dueDay: 10,
-      active: "true",
+      status: "active",
     });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
@@ -433,11 +433,11 @@ describe("computeCashSignal — snapshot anchoring", () => {
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       name: "Capital One Platinum",
-      kind: "credit_card",
+      type: "credit_card",
       balance: "1000",
       minPayment: "38",
       dueDay: 25, // post-snapshot, so debt-min isn't the noise here
-      active: "true",
+      status: "active",
     });
     await db.insert(avalancheSettingsTable).values({
       userId: TEST_USER,
@@ -475,11 +475,11 @@ describe("computeCashSignal — snapshot anchoring", () => {
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       name: "Edge Card",
-      kind: "credit_card",
+      type: "credit_card",
       balance: "500",
       minPayment: "38",
       dueDay: 14,
-      active: "true",
+      status: "active",
     });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
@@ -1490,11 +1490,11 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       name: "Mattress Firm / Synchrony Home",
-      kind: "credit_card",
+      type: "credit_card",
       balance: "1500",
       minPayment: "33",
       dueDay: 15,
-      active: "true",
+      status: "active",
     });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {

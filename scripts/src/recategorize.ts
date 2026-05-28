@@ -37,6 +37,7 @@ import { and, eq, gte, isNull, lte } from "drizzle-orm";
 import {
   budgetCategoriesTable,
   db,
+  householdMembersTable,
   upsertMappingRule,
   pool,
   transactionsTable,
@@ -117,6 +118,23 @@ async function main() {
   console.log(`Window:   ${args.from} .. ${args.to}`);
   console.log(`Source:   ${args.source}`);
   console.log(`Priority: ${args.priority}\n`);
+
+  // Resolve the user's household. `mapping_rules` is now household-scoped
+  // (matching the rest of the schema), so the upsert below needs both
+  // ids. Every signed-in user is a member of exactly one household.
+  const member = await db
+    .select({ householdId: householdMembersTable.householdId })
+    .from(householdMembersTable)
+    .where(eq(householdMembersTable.userId, args.userId))
+    .limit(1);
+  if (member.length === 0) {
+    console.error(
+      `No household_members row for user ${args.userId}. Aborting.`,
+    );
+    process.exit(1);
+  }
+  const householdId = member[0].householdId;
+  console.log(`Household: ${householdId}\n`);
 
   // Resolve category names → ids.
   const cats = await db
@@ -406,6 +424,7 @@ async function main() {
     for (const r of ruleSeeds) {
       const result = await upsertMappingRule(tx, {
         userId: args.userId,
+        householdId,
         pattern: r.pattern,
         matchType: r.matchType,
         categoryId: r.categoryId,
