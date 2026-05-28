@@ -1,0 +1,39 @@
+URGENT — read-only diagnosis, do NOT write anything.
+
+My /chase (transactions) page is now showing zero transactions. Earlier today there were hundreds (May 1-28, real Chase Plaid data). Need to know: are the transactions DELETED from the database, or just NOT VISIBLE on the page?
+
+Query 1 — raw count:
+  SELECT COUNT(*) FROM transactions WHERE household_id = 'a7182af8-49f0-48f3-920e-f916c7eab872';
+  Report the number.
+
+Query 2 — by source breakdown:
+  SELECT source, COUNT(*), MIN(occurred_on), MAX(occurred_on), SUM(ABS(amount::numeric)) as total_abs
+  FROM transactions
+  WHERE household_id = 'a7182af8-49f0-48f3-920e-f916c7eab872'
+  GROUP BY source
+  ORDER BY COUNT(*) DESC;
+
+Query 3 — Chase-specific:
+  SELECT COUNT(*), MIN(occurred_on), MAX(occurred_on)
+  FROM transactions
+  WHERE household_id = 'a7182af8-49f0-48f3-920e-f916c7eab872'
+    AND (source = 'chase' OR source = 'plaid:chase' OR source LIKE '%chase%');
+
+Query 4 — current plaid_items state:
+  SELECT id, institution_name, item_id, last_sync_error_code, last_sync_error, created_at, last_synced_at, COALESCE(sync_mode, 'full') as sync_mode
+  FROM plaid_items
+  WHERE household_id = 'a7182af8-49f0-48f3-920e-f916c7eab872'
+  ORDER BY created_at DESC;
+
+Query 5 — plaid_accounts state:
+  SELECT pa.id, pa.item_id, pa.name, pa.mask, pa.type, pa.subtype, pi.institution_name
+  FROM plaid_accounts pa
+  LEFT JOIN plaid_items pi ON pi.id = pa.item_id
+  WHERE pa.household_id = 'a7182af8-49f0-48f3-920e-f916c7eab872';
+
+Query 6 — anything DELETE or large UPDATE on transactions table in the last 6 hours? Check pg_stat, query history, or any admin endpoint hits. Specifically: were any transactions deleted? Were any plaid_account_id values UPDATEd from one value to another (which could orphan rows from the Chase scope filter)?
+
+Query 7 — the Chase scope filter on the frontend:
+  The /chase page filters transactions using scopeChaseTransactions() in artifacts/h2budget/src/lib/chaseScope.ts. Read that function and tell me what it filters on. Specifically: does it filter by source LIKE 'chase%', by a specific plaid_account_id, or by the institution_name on the linked plaid_account? If the filter looks for a specific plaid_account_id and that ID was changed/deleted, the data exists but won't render.
+
+REPORT all 7. Do not take any corrective action. I need to see whether the data is in the database first.
