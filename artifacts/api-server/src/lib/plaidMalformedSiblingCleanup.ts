@@ -1,10 +1,9 @@
-import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, or, type SQL } from "drizzle-orm";
 import {
   db,
   debtsTable,
   plaidAccountsTable,
   plaidItemsTable,
-  transactionsTable,
 } from "@workspace/db";
 import { isAccessTokenForCurrentEnv, isSyntheticPlaidItem } from "./plaid";
 import { logger as defaultLogger } from "./logger";
@@ -118,7 +117,7 @@ export async function cleanupMalformedTokenSiblings(opts: {
     if (isAccessTokenForCurrentEnv(stale.accessToken)) continue;
 
     const staleAccts = await dbc
-      .select({ id: plaidAccountsTable.id, accountId: plaidAccountsTable.accountId })
+      .select({ id: plaidAccountsTable.id })
       .from(plaidAccountsTable)
       .where(
         and(
@@ -127,74 +126,6 @@ export async function cleanupMalformedTokenSiblings(opts: {
         ),
       );
     const staleAcctIds = staleAccts.map((a) => a.id);
-    const staleExternalAcctIds = staleAccts
-      .map((a) => a.accountId)
-      .filter((x): x is string => typeof x === "string" && x.length > 0);
-
-    // (#790) Live-attachment guard. Before destructively deleting an
-    // env-mismatched / malformed-token sibling, refuse to do so if it
-    // still has real user data attached:
-    //   - any transactions whose `plaid_account_id` (external Plaid
-    //     account_id text) matches one of this item's accounts, OR
-    //   - any debts whose `plaid_account_id` (uuid FK) matches one of
-    //     this item's accounts.
-    //
-    // Production incident on household a7182af8-… (task #790): when
-    // the user added a Chase credit card via debt-plaid-link, the
-    // exchange handler's sibling cleanup would have swept the
-    // pre-existing Chase checking item along with its plaid_accounts
-    // row — orphaning every checking transaction (transactions store
-    // the *external* plaid_account_id text, which then has no row to
-    // resolve in plaid_accounts and disappears from the Chase page
-    // picker). Leaving the row in place is strictly better than
-    // silently nuking it: the user can heal it via the Reconnect
-    // button (which mints a fresh access_token and self-heals the
-    // chip), and no transaction / debt is lost in the meantime.
-    let liveTxnCount = 0;
-    if (staleExternalAcctIds.length > 0) {
-      const [{ cnt }] = await dbc
-        .select({ cnt: sql<number>`count(*)::int` })
-        .from(transactionsTable)
-        .where(
-          and(
-            eq(transactionsTable.userId, userId),
-            inArray(
-              transactionsTable.plaidAccountId,
-              staleExternalAcctIds,
-            ),
-          ),
-        );
-      liveTxnCount = Number(cnt ?? 0);
-    }
-    let liveDebtCount = 0;
-    if (staleAcctIds.length > 0) {
-      const [{ cnt }] = await dbc
-        .select({ cnt: sql<number>`count(*)::int` })
-        .from(debtsTable)
-        .where(
-          and(
-            eq(debtsTable.userId, userId),
-            inArray(debtsTable.plaidAccountId, staleAcctIds),
-          ),
-        );
-      liveDebtCount = Number(cnt ?? 0);
-    }
-    if (liveTxnCount > 0 || liveDebtCount > 0) {
-      log.warn(
-        {
-          userId,
-          householdId: householdId ?? null,
-          survivorItemRowId,
-          preservedItemRowId: stale.id,
-          preservedPlaidItemIdExternal: stale.itemId,
-          institutionName: stale.institutionName,
-          liveTxnCount,
-          liveDebtCount,
-        },
-        "[plaid-malformed-sibling] preserved stale unusable-token row because it still has live transactions or debts — user must reconnect it explicitly",
-      );
-      continue;
-    }
     if (staleAcctIds.length > 0) {
       await dbc
         .update(debtsTable)

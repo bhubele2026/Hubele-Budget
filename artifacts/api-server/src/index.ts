@@ -15,8 +15,6 @@ import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
-import { runStartupChaseDeadItemsCleanup } from "./lib/startupChaseDeadItemsCleanup";
-import { runStartupOrphanTransactionRepair } from "./lib/startupOrphanTransactionRepair";
 import { runStartupPendingNotesBackfill } from "./lib/startupPendingNotesBackfill";
 import "./lib/advisorReadTools";
 import "./lib/advisorWriteTools";
@@ -162,44 +160,6 @@ app.listen(port, (err) => {
     })
     .catch((err) => {
       logger.error({ err }, "Startup pending-notes backfill failed");
-    });
-
-  // (#chase-restore) One-shot, idempotent: delete the dead Chase
-  // plaid_items for the affected household (seed-april synthetic +
-  // OAuth-invalidated production item). Authenticated cleanup
-  // endpoint can't be invoked server-side (Clerk session required),
-  // so this runs the exact same delete sequence at boot. Converges
-  // to a zero-row no-op once both items are gone.
-  runStartupChaseDeadItemsCleanup()
-    .then((summary) => {
-      logger.info(summary, "Startup Chase dead-items cleanup complete");
-    })
-    .catch((err) => {
-      logger.error({ err }, "Startup Chase dead-items cleanup failed");
-    });
-
-  // (#796) One-shot, idempotent: repair households whose Plaid item was
-  // destructively wiped before the #790 live-attachment guard. Reports
-  // orphaned transactions (plaid_account_id with no surviving
-  // plaid_accounts row) per household and best-effort re-points the
-  // debt-linked subset onto the household's current account. Runs AFTER
-  // the Chase dead-items cleanup so its own (canonical-household) null-out
-  // has already settled, and converges to a no-op once healed.
-  // Best-effort: never blocks boot.
-  runStartupOrphanTransactionRepair()
-    .then((summary) => {
-      logger.info(
-        {
-          scannedOrphans: summary.scannedOrphans,
-          repointed: summary.repointed,
-          affectedHouseholds: summary.households.length,
-          residualHouseholds: summary.residualHouseholds.length,
-        },
-        "Startup orphan-transaction repair complete",
-      );
-    })
-    .catch((err) => {
-      logger.error({ err }, "Startup orphan-transaction repair failed");
     });
 
   if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {

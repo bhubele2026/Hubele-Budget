@@ -11,12 +11,5 @@ export interface PlaidExchangeInput {
     institutionId?: string | null;
     /** @nullable */
     institutionName?: string | null;
-    /** (#dup-link) Opt out of the duplicate-institution guard. When
-  omitted/false, /plaid/exchange refuses with 409
-  `add_account_existing` if the household already has a healthy
-  plaid_item for this institution. Set true to allow a genuinely
-  separate second login (e.g. two distinct Chase logins).
-   */
-    force?: boolean;
 }
 //# sourceMappingURL=plaidExchangeInput.d.ts.map

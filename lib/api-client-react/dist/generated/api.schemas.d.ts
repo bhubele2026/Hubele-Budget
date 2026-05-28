@@ -2025,47 +2025,6 @@ export interface PlaidExchangeInput {
     institutionId?: string | null;
     /** @nullable */
     institutionName?: string | null;
-    /** (#dup-link) Opt out of the duplicate-institution guard. When
-  omitted/false, /plaid/exchange refuses with 409
-  `add_account_existing` if the household already has a healthy
-  plaid_item for this institution. Set true to allow a genuinely
-  separate second login (e.g. two distinct Chase logins).
-   */
-    force?: boolean;
-}
-export interface CleanupDeadPlaidItemsInput {
-    /** Internal plaid_items row ids (UUIDs) to delete. Every id must
-  belong to the caller's household and must be in a "dead"
-  state (synthetic seed, malformed/env-mismatched access_token,
-  or empty shell with zero plaid_accounts attached) UNLESS it
-  is also listed in forceDetachAccountsForItemIds.
-   */
-    itemIds: string[];
-    /** (#chase-restore) Strict subset of itemIds for which the
-  dead-state guard is bypassed. Use ONLY when the bank has
-  invalidated the OAuth grant on its side (Plaid surfaces this
-  as "user's OAuth connection to this institution has been
-  invalidated"); update mode cannot recover those, but the
-  item still has parseable token + attached accounts. Any id
-  here that is not also in itemIds is ignored — it never
-  widens the deletion scope.
-   */
-    forceDetachAccountsForItemIds?: string[];
-}
-export type CleanupDeadPlaidItemsResultDeletedItem = {
-    id: string;
-    itemIdExternal: string;
-    accountsDetached: number;
-    forceDetached?: boolean;
-};
-export type CleanupDeadPlaidItemsResultForceDetachAuditPlannedItem = {
-    id: string;
-    accountsToDetach: number;
-};
-export interface CleanupDeadPlaidItemsResult {
-    totalDeleted: number;
-    deleted: CleanupDeadPlaidItemsResultDeletedItem[];
-    forceDetachAuditPlanned?: CleanupDeadPlaidItemsResultForceDetachAuditPlannedItem[];
 }
 export interface PlaidAccount {
     id: string;

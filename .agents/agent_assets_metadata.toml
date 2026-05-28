@@ -64,33 +64,3 @@ id = "7N2XgpCJHCHl8KNSnpCKV"
 uri = "file://exports/h2budget-full-app.tar.gz"
 type = "unspecified"
 title = "H2 Family Budget — full app source"
-
-[[outputs]]
-id = "jUM-X7XntKEXFnm7v9PpH"
-uri = "file://.local/exports/plaid-code.md"
-type = "text"
-title = "Plaid components (single markdown)"
-
-[[outputs]]
-id = "5sQ0AtLiMXQZ8vKhurOM1"
-uri = "file://.local/exports/plaid-code.tar.gz"
-type = "unspecified"
-title = "Plaid components (download)"
-
-[[outputs]]
-id = "k49Y7ErL0nrKIouFlk9cG"
-uri = "file://.local/exports/prod-plaid-code.tar.gz"
-type = "unspecified"
-title = "Plaid components — PROD (live, commit adc780c9)"
-
-[[outputs]]
-id = "7AQcsw6sHxogMy80hfBn7"
-uri = "file://.local/exports/h2budget-prod-src.tar.gz"
-type = "unspecified"
-title = "Full app source — PROD (commit adc780c9, ~2.4MB, assets excluded)"
-
-[[outputs]]
-id = "KeZE0ECJSd3V5b2Q-GRee"
-uri = "file://h2budget-app-code.tar.gz"
-type = "unspecified"
-title = "H2 Family Budget — full app code (latest)"

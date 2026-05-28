@@ -89,6 +89,7 @@ import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { type BucketKey } from "@/components/bucket-bubbles";
 import { TransactionRowChips } from "@/components/transaction-row-chips";
 import { chaseMonthTotals } from "@/lib/chaseScope";
+import { shouldShowManualPickerOption } from "@/lib/chasePickerOptions";
 import {
   makeChaseBalanceAtEndOf,
   scopeChaseTransactions,
@@ -117,7 +118,7 @@ import { SyncButton } from "@/components/sync-button";
 import {
   AccountPageHeader,
   AccountFilterBar,
-  BalanceForecastTrendChart,
+  BalanceTrendChart,
   DayGroup,
   MonthNavigator,
   StatChip,
@@ -127,7 +128,7 @@ import {
   compareMonth,
   shiftMonth,
   type MonthKey,
-  type BalanceForecastPoint,
+  type TrendPoint,
 } from "@/components/account-page";
 
 const formSchema = z.object({
@@ -215,22 +216,6 @@ function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-// (#785) Local-date helpers that avoid the UTC drift `toISOString()`
-// introduces. The Chase chart walks weekly buckets across a year-long
-// window, so a midnight TZ shift would land bucket boundaries on the
-// wrong calendar day in non-UTC environments.
-function localISO(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-}
-
-function parseLocalISO(iso: string): Date {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, (m ?? 1) - 1, d ?? 1);
-}
-
 // #103 — persisted chase-page account picker. Stored under a stable key
 // so it survives reloads / browser restarts even when the user clears
 // the URL. URL takes precedence so shareable links still win.
@@ -312,17 +297,10 @@ export default function TransactionsPage() {
   const [selectedAccountKey, setSelectedAccountKey] = useState<string | null>(
     () => readInitialChaseAccount(),
   );
-  // The effective key falls back to the snapshot's account so a fresh
-  // user with no preference still lands on the same account they would
-  // have seen before #103. When the snapshot pointer is missing (e.g.
-  // after a Chase cleanup nulled it), fall through to the Chase Plaid
-  // checking account if one exists, and only land on "manual" when there
-  // are zero Plaid accounts at all.
-  const chaseAccount = (forecastData?.plaidCheckingAccounts ?? []).find((a) =>
-    (a.institutionName ?? "").toLowerCase().includes("chase"),
-  );
-  const defaultAccountKey =
-    bankSnapshot?.accountId ?? chaseAccount?.id ?? "manual";
+  // The effective key falls back to the snapshot's account (or "manual"
+  // when there is no snapshot) so a fresh user with no preference still
+  // lands on the same account they would have seen before #103.
+  const defaultAccountKey = bankSnapshot?.accountId ?? "manual";
   const effectiveAccountKey = selectedAccountKey ?? defaultAccountKey;
   const isManualAccount = effectiveAccountKey === "manual";
   const effectiveAccountInternalId = isManualAccount ? null : effectiveAccountKey;
@@ -468,19 +446,6 @@ export default function TransactionsPage() {
     const accounts = forecastData?.plaidCheckingAccounts;
     if (!accounts) return;
     if (!accounts.some((a) => a.id === selectedAccountKey)) {
-      setSelectedAccountKey(null);
-    }
-  }, [selectedAccountKey, forecastData?.plaidCheckingAccounts]);
-
-  // A legacy persisted "manual" selection (from URL/localStorage before
-  // the Manual pseudo-account was removed from the picker) would strand
-  // single-Plaid-account users on the Manual view with no dropdown to
-  // switch back. Clear it whenever at least one Plaid checking account
-  // exists so the default falls through to the snapshot / Chase account.
-  useEffect(() => {
-    if (selectedAccountKey !== "manual") return;
-    const accounts = forecastData?.plaidCheckingAccounts;
-    if (accounts && accounts.length >= 1) {
       setSelectedAccountKey(null);
     }
   }, [selectedAccountKey, forecastData?.plaidCheckingAccounts]);
@@ -689,190 +654,22 @@ export default function TransactionsPage() {
     [balanceAtEndOf, selectedMonth],
   );
 
-  // (#785) Forward-looking "actual vs forecast" chart series. Replaces
-  // the trailing-12-months bar chart with a window that starts at
-  // max(May 2026, current month start) and runs through min(today + 12
-  // months, last server-projected day). We deliberately TRIM the window
-  // to the real forecast horizon rather than extending the last
-  // projected balance flat — a flat line beyond the projection is
-  // misleading; honest truncation says "this is as far out as the
-  // server actually projects" (~90 days by default `daysAhead`, so
-  // expect the chart to land closer to 3 months than 12 until the
-  // horizon is lengthened separately).
-  //
-  // Weekly Sun–Sat buckets. Historical weeks (Saturday strictly
-  // before today) carry only `historicalActual`. Today is its own
-  // divergence point with the seed values for both series. Future
-  // weeks carry `forecastFromToday` (latest available cashSignal.daily
-  // entry within [sun, sat]) plus, when a future-dated Plaid txn has
-  // already landed in that week, an `actualFromToday` point computed
-  // the same way as the rest of the Chase page
-  // (snapshot + post-snapshot net through that date).
-  const balanceForecastData = useMemo<BalanceForecastPoint[]>(() => {
+  const balanceTrend = useMemo<TrendPoint[]>(() => {
     if (!effectiveSnapshot) return [];
-
-    const anchorBalance = Number(effectiveSnapshot.balance) || 0;
-    const anchorDay = effectiveSnapshot.at.slice(0, 10);
-
-    // Same end-of-day balance math the server uses in
-    // /forecast lockedWeeks.actualPoints: snapshot + Σ(post-snapshot
-    // through date) − Σ(post-date through snapshot). Date-keyed sibling
-    // of `makeChaseBalanceAtEndOf`'s monthly bucket math.
-    const balanceAtEndOfDate = (isoDate: string): number => {
-      const d = isoDate.slice(0, 10);
-      let delta = 0;
-      for (const t of chaseTransactions) {
-        const day = t.occurredOn.slice(0, 10);
-        const amt = Number(t.amount) || 0;
-        if (day > anchorDay && day <= d) delta += amt;
-        else if (day > d && day <= anchorDay) delta -= amt;
-      }
-      return anchorBalance + delta;
-    };
-
-    const today = new Date();
-    const todayLocal = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate(),
-    );
-    const todayISO = localISO(todayLocal);
-
-    const may2026 = new Date(2026, 4, 1);
-    const currentMonthStart = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      1,
-    );
-    const windowStart = may2026 > currentMonthStart ? may2026 : currentMonthStart;
-
-    const idealEnd = new Date(
-      today.getFullYear(),
-      today.getMonth() + 12,
-      today.getDate(),
-    );
-
-    const dailyForecast = forecastData?.cashSignal?.daily ?? [];
-    const lastForecastISO =
-      dailyForecast.length > 0
-        ? dailyForecast[dailyForecast.length - 1].date
-        : todayISO;
-    const lastForecastDate = parseLocalISO(lastForecastISO);
-    const idealEndISO = localISO(idealEnd);
-    const windowEnd =
-      idealEnd < lastForecastDate ? idealEnd : lastForecastDate;
-    const windowEndISO =
-      idealEndISO < lastForecastISO ? idealEndISO : lastForecastISO;
-
-    const forecastByDate = new Map<string, number>();
-    for (const p of dailyForecast) {
-      forecastByDate.set(p.date, Number(p.balance) || 0);
-    }
-
-    // Latest landed actual data point — today, unless a Plaid txn has
-    // already posted with a date past today (rare but possible).
-    let latestActualISO = todayISO;
-    for (const t of chaseTransactions) {
-      const d = t.occurredOn.slice(0, 10);
-      if (d > latestActualISO) latestActualISO = d;
-    }
-
-    const points: BalanceForecastPoint[] = [];
-
-    // Walk weeks from the first Sunday on/before windowStart.
-    const firstSun = new Date(windowStart);
-    firstSun.setDate(firstSun.getDate() - firstSun.getDay());
-    const cur = new Date(firstSun);
-
-    // Historical bucket: Saturday strictly before today.
-    while (true) {
-      const sat = new Date(cur);
-      sat.setDate(sat.getDate() + 6);
-      if (sat >= todayLocal) break;
-      const satISO = localISO(sat);
+    const points: TrendPoint[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const mk = shiftMonth(selectedMonth, -i);
+      const d = new Date(mk.year, mk.month, 1);
       points.push({
-        date: satISO,
-        historicalActual: balanceAtEndOfDate(satISO),
-        actualFromToday: null,
-        forecastFromToday: null,
+        key: `${mk.year}-${mk.month}`,
+        label: d.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+        shortLabel: d.toLocaleDateString("en-US", { month: "short" }),
+        balance: balanceAtEndOf(mk) ?? 0,
+        isSelected: compareMonth(mk, selectedMonth) === 0,
       });
-      cur.setDate(cur.getDate() + 7);
     }
-
-    // Today divergence point — both series share today's actual
-    // balance as their starting value so the solid and dashed lines
-    // diverge from one common point.
-    const todayActual = balanceAtEndOfDate(todayISO);
-    points.push({
-      date: todayISO,
-      historicalActual: null,
-      actualFromToday: todayActual,
-      forecastFromToday: todayActual,
-    });
-
-    // Future weekly buckets — advance to the Sunday AFTER today's
-    // week and bucket through windowEnd.
-    cur.setDate(cur.getDate() + 7);
-    while (cur <= windowEnd) {
-      const sat = new Date(cur);
-      sat.setDate(sat.getDate() + 6);
-      const satISO = localISO(sat);
-      const sunISO = localISO(cur);
-
-      // Pick the latest forecast point inside [sunISO, min(satISO,
-      // windowEndISO)]. If none, the line trims here.
-      const weekEndISO = satISO < windowEndISO ? satISO : windowEndISO;
-      let fc: number | null = null;
-      const probe = parseLocalISO(weekEndISO);
-      while (true) {
-        const pISO = localISO(probe);
-        if (pISO < sunISO) break;
-        if (forecastByDate.has(pISO)) {
-          fc = forecastByDate.get(pISO) ?? null;
-          break;
-        }
-        probe.setDate(probe.getDate() - 1);
-      }
-
-      // Actual for a future bucket: only when a real post-today txn
-      // already landed in or before this week. Pin the date to
-      // min(latestActualISO, satISO) so we don't fabricate a flat
-      // extrapolation.
-      let ac: number | null = null;
-      if (latestActualISO > todayISO && latestActualISO >= sunISO) {
-        const dISO =
-          latestActualISO < satISO ? latestActualISO : satISO;
-        ac = balanceAtEndOfDate(dISO);
-      }
-
-      if (fc === null && ac === null) break;
-      points.push({
-        date: satISO,
-        historicalActual: null,
-        actualFromToday: ac,
-        forecastFromToday: fc,
-      });
-      cur.setDate(cur.getDate() + 7);
-    }
-
     return points;
-  }, [effectiveSnapshot, chaseTransactions, forecastData?.cashSignal?.daily]);
-
-  const balanceForecastRangeLabel = useMemo(() => {
-    if (balanceForecastData.length === 0) return null;
-    const first = parseLocalISO(balanceForecastData[0].date);
-    const last = parseLocalISO(
-      balanceForecastData[balanceForecastData.length - 1].date,
-    );
-    const fmt = (d: Date) =>
-      d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
-    return `${fmt(first)} – ${fmt(last)}`;
-  }, [balanceForecastData]);
-
-  const todayISO = useMemo(() => {
-    const t = new Date();
-    return localISO(new Date(t.getFullYear(), t.getMonth(), t.getDate()));
-  }, []);
+  }, [effectiveSnapshot, balanceAtEndOf, selectedMonth]);
 
   // Anchor every same-day balance assignment to the canonical
   // newest-first comparator (occurredOn DESC, occurredAt DESC nulls
@@ -2256,13 +2053,20 @@ export default function TransactionsPage() {
         )}
       </div>
       {(() => {
-        // Only show the picker when there are 2+ real Plaid checking
-        // accounts (multi-checking households genuinely need to switch).
-        // A single Plaid account no longer pairs with a "Manual entries"
-        // pseudo-account — manual rows still render via the fallback path,
-        // so the extra option was pure clutter.
+        // (#360) Show the picker whenever there are 2+ effective views —
+        // either multiple Plaid checking accounts, or one Plaid checking
+        // account paired with a manual-entries pseudo-account. Without
+        // counting the manual option here, a single-Plaid-account user
+        // with manual rows could never switch to the Manual view.
         const plaidCount = forecastData?.plaidCheckingAccounts?.length ?? 0;
-        return plaidCount > 1;
+        const showsManual =
+          plaidCount >= 1 &&
+          shouldShowManualPickerOption({
+            transactions: transactions ?? [],
+            currentlySelected: isManualAccount,
+          });
+        const totalOptions = plaidCount + (showsManual ? 1 : 0);
+        return totalOptions > 1;
       })() && (
         <div className="flex items-center gap-2" data-testid="chase-account-picker">
           <span className="text-xs text-muted-foreground">View account:</span>
@@ -2290,6 +2094,22 @@ export default function TransactionsPage() {
                   </SelectItem>
                 );
               })}
+              {/* (#412) Only render the "Manual entries" pseudo-account
+                  when the user actually has manual rows (no plaidAccountId)
+                  — otherwise it's pure clutter next to the real Chase row.
+                  Always keep it visible if it's the current selection so
+                  the trigger never goes blank. */}
+              {shouldShowManualPickerOption({
+                transactions: transactions ?? [],
+                currentlySelected: isManualAccount,
+              }) && (
+                <SelectItem
+                  value="manual"
+                  data-testid="option-chase-account-manual"
+                >
+                  Manual entries
+                </SelectItem>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -2321,11 +2141,11 @@ export default function TransactionsPage() {
       )}
       </div>
 
-      <BalanceForecastTrendChart
-        caption="Checking balance — actual vs forecast"
-        rangeLabel={balanceForecastRangeLabel ?? undefined}
-        data={balanceForecastData}
-        todayISO={todayISO}
+      <BalanceTrendChart
+        caption="Checking balance · trailing 12 months"
+        data={balanceTrend}
+        color="hsl(var(--chart-1))"
+        valueLabel="Ending balance"
       />
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

@@ -25,6 +25,7 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   computeWeekVariance,
+  loadConfiguredCheckingExternalId,
   makeIsBankRow,
   summarizeActions,
   weekEndFor,
@@ -193,9 +194,9 @@ router.get(
       // Late-syncing rows that landed in this week AFTER lockedAt:
       // surface separately, do NOT mutate the stored snapshot.
       const lockedAtIso = row.lockedAt.toISOString();
-      // (#791) Post-lock additions mirror the same Debrief
-      // bank-row rule: any household non-transfer row qualifies.
-      const isBankRow = makeIsBankRow();
+      const ownerSettingsCheckingExternal =
+        await loadConfiguredCheckingExternalId(householdId, req.householdOwnerId!);
+      const isBankRow = makeIsBankRow(ownerSettingsCheckingExternal);
       const lateRows = await db
         .select()
         .from(transactionsTable)
@@ -224,7 +225,7 @@ router.get(
           ),
         );
       const postLockAdditions = lateRows
-        .filter((t) => isBankRow(t.source, t.plaidAccountId, t.isTransfer))
+        .filter((t) => isBankRow(t.source, t.plaidAccountId))
         .map((t) => ({
           txnId: t.id,
           date: t.occurredAt ? t.occurredAt.slice(0, 10) : t.occurredOn,
