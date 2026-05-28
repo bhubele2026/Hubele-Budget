@@ -11,6 +11,7 @@ import {
   plaidItemsTable,
   plaidAccountsTable,
   avalancheSettingsTable,
+  weeklyDebriefsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -18,6 +19,7 @@ import {
   expandItem,
   fmtISO,
   addDays,
+  parseISO,
   type CashEvent,
 } from "../lib/cashSignal";
 import {
@@ -425,12 +427,156 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     .from(forecastClosedMonthsTable)
     .where(eq(forecastClosedMonthsTable.householdId, householdId));
 
-  const cashSignal = await computeCashSignal(householdId, ownerUserId);
+  // (#804 — Phase F) Load locked weekly_debriefs once so we can both
+  // (a) hand them to computeCashSignal to freeze the forecast curve
+  // over locked dates, and (b) emit a `lockedWeeks[]` array with each
+  // locked week's daily ACTUAL checking balance for the chart overlay.
+  const lockedDebriefRows = await db
+    .select({
+      weekStart: weeklyDebriefsTable.weekStart,
+      weekEnd: weeklyDebriefsTable.weekEnd,
+      varianceSnapshot: weeklyDebriefsTable.varianceSnapshot,
+    })
+    .from(weeklyDebriefsTable)
+    .where(
+      and(
+        eq(weeklyDebriefsTable.householdId, householdId),
+        eq(weeklyDebriefsTable.status, "locked"),
+      ),
+    );
+  const lockedWeekInputs = lockedDebriefRows.flatMap((r) =>
+    r.varianceSnapshot
+      ? [{
+          weekStart: r.weekStart,
+          weekEnd: r.weekEnd,
+          varianceSnapshot: r.varianceSnapshot,
+        }]
+      : [],
+  );
+
+  const cashSignal = await computeCashSignal(householdId, ownerUserId, {
+    lockedWeeks: lockedWeekInputs,
+  });
   const plaidCheckingAccounts = await listCheckingAccounts(
     userId,
     householdId,
     ownerUserId,
   );
+
+  // Build daily actual checking balance for each locked week. We walk
+  // the bank snapshot forward/backward using bank-row checking txns so
+  // each day's point reflects the real end-of-day balance the user
+  // would have seen. No snapshot ⇒ empty actualPoints (chart simply
+  // doesn't render the overlay for that week).
+  const lockedWeeks: Array<{
+    weekStart: string;
+    weekEnd: string;
+    actualPoints: Array<{ date: string; balance: string }>;
+  }> = [];
+  if (lockedWeekInputs.length > 0) {
+    const snapshotBalance =
+      settings.bankSnapshotBalance != null
+        ? Number(settings.bankSnapshotBalance)
+        : null;
+    const snapshotAt = settings.bankSnapshotAt
+      ? fmtISO(settings.bankSnapshotAt)
+      : null;
+    // Resolve the configured checking account's external Plaid id so
+    // we can scope txns the same way cashSignal does (isBankRow).
+    let configuredCheckingExternalId: string | null = null;
+    if (settings.bankSnapshotAccountId) {
+      const [acct] = await db
+        .select({ accountId: plaidAccountsTable.accountId })
+        .from(plaidAccountsTable)
+        .where(eq(plaidAccountsTable.id, settings.bankSnapshotAccountId));
+      configuredCheckingExternalId = acct?.accountId ?? null;
+    }
+    const isBankRow = (source: string | null, plaidAccountId: string | null) => {
+      if (plaidAccountId) {
+        return (
+          configuredCheckingExternalId !== null &&
+          plaidAccountId === configuredCheckingExternalId
+        );
+      }
+      const s = (source ?? "").toLowerCase();
+      if (s === "amex" || s.startsWith("plaid:")) return false;
+      return true;
+    };
+
+    // Determine the txn date range we need: from earliest locked-week
+    // start to latest locked-week end, plus the snapshot date (since
+    // pre-snapshot dates require subtracting txns that fall between
+    // them and the snapshot).
+    let minISO: string | null = null;
+    let maxISO: string | null = null;
+    for (const lw of lockedWeekInputs) {
+      if (!minISO || lw.weekStart < minISO) minISO = lw.weekStart;
+      if (!maxISO || lw.weekEnd > maxISO) maxISO = lw.weekEnd;
+    }
+    if (snapshotAt) {
+      if (!minISO || snapshotAt < minISO) minISO = snapshotAt;
+      if (!maxISO || snapshotAt > maxISO) maxISO = snapshotAt;
+    }
+    let actualTxns: Array<{
+      occurredOn: string;
+      amount: string;
+      source: string | null;
+      plaidAccountId: string | null;
+    }> = [];
+    if (snapshotBalance != null && snapshotAt && minISO && maxISO) {
+      const rows = await db
+        .select({
+          occurredOn: transactionsTable.occurredOn,
+          amount: transactionsTable.amount,
+          source: transactionsTable.source,
+          plaidAccountId: transactionsTable.plaidAccountId,
+        })
+        .from(transactionsTable)
+        .where(
+          and(
+            eq(transactionsTable.householdId, householdId),
+            gte(transactionsTable.occurredOn, minISO),
+            lte(transactionsTable.occurredOn, maxISO),
+          ),
+        );
+      actualTxns = rows.filter((r) => isBankRow(r.source, r.plaidAccountId));
+    }
+
+    for (const lw of lockedWeekInputs) {
+      const actualPoints: Array<{ date: string; balance: string }> = [];
+      if (snapshotBalance != null && snapshotAt) {
+        // Use the cashSignal date helpers (local-date based) so
+        // fmtISO/addDays don't drift the day in non-UTC server TZs.
+        let cur = parseISO(lw.weekStart);
+        const end = parseISO(lw.weekEnd);
+        while (cur <= end) {
+          const dISO = fmtISO(cur);
+          // balance(d) = snapshot + Σ(txn.occurredOn > snapshot AND <= d)
+          //                       − Σ(txn.occurredOn > d AND <= snapshot)
+          let delta = 0;
+          for (const t of actualTxns) {
+            const on = t.occurredOn;
+            if (on > snapshotAt && on <= dISO) {
+              delta += Number(t.amount) || 0;
+            } else if (on > dISO && on <= snapshotAt) {
+              delta -= Number(t.amount) || 0;
+            }
+          }
+          const bal = snapshotBalance + delta;
+          actualPoints.push({
+            date: dISO,
+            balance: (Math.round(bal * 100) / 100).toFixed(2),
+          });
+          cur = addDays(cur, 1);
+        }
+      }
+      lockedWeeks.push({
+        weekStart: lw.weekStart,
+        weekEnd: lw.weekEnd,
+        actualPoints,
+      });
+    }
+  }
 
   res.json({
     fromDate: fromISO,
@@ -445,6 +591,7 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
     plaidCheckingAccounts,
     monthSnapshots: settings.monthSnapshots ?? {},
     accountSnapshots: settings.accountSnapshots ?? {},
+    lockedWeeks,
   });
 });
 

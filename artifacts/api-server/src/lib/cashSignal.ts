@@ -8,6 +8,7 @@ import {
   forecastSettingsTable,
   plaidAccountsTable,
   avalancheSettingsTable,
+  weeklyDebriefsTable,
 } from "@workspace/db";
 
 type Cadence =
@@ -238,10 +239,23 @@ function r2(n: number): string {
  *   - Post-snapshot planned events project forward on their own date and
  *     drag the line until the user matches/misses/skips them.
  */
+// (#804 — Phase F) Frozen locked-week input. Callers may pre-load the
+// locked weekly_debriefs rows and pass them in to avoid a second DB
+// round-trip; if omitted, computeCashSignal loads them itself.
+export interface LockedWeekInput {
+  weekStart: string;
+  weekEnd: string;
+  varianceSnapshot: import("@workspace/db").DebriefVarianceSnapshot;
+}
+
 export async function computeCashSignal(
   householdId: string,
   ownerUserId: string,
-  opts: { horizonDays?: number; fromDate?: string } = {},
+  opts: {
+    horizonDays?: number;
+    fromDate?: string;
+    lockedWeeks?: LockedWeekInput[];
+  } = {},
 ): Promise<CashSignal> {
   const [settings] = await db
     .select()
@@ -337,6 +351,78 @@ export async function computeCashSignal(
       linkedRecurringByDebt.set(r.debtId, r);
     }
   }
+  // (#804 — Phase F) Load locked weeks (or use caller-provided list) so
+  // we can freeze the forecast line over those date ranges. The frozen
+  // forecast uses each week's varianceSnapshot.plans verbatim — that
+  // means editing a recurring item afterwards CANNOT shift the forecast
+  // curve for a week the user already locked. Otherwise "we planned X,
+  // got Y" becomes a lie the moment the user tweaks a recurring amount.
+  let lockedWeeksList: LockedWeekInput[];
+  if (opts.lockedWeeks) {
+    lockedWeeksList = opts.lockedWeeks;
+  } else {
+    const lockedRows = await db
+      .select({
+        weekStart: weeklyDebriefsTable.weekStart,
+        weekEnd: weeklyDebriefsTable.weekEnd,
+        varianceSnapshot: weeklyDebriefsTable.varianceSnapshot,
+      })
+      .from(weeklyDebriefsTable)
+      .where(
+        and(
+          eq(weeklyDebriefsTable.householdId, householdId),
+          eq(weeklyDebriefsTable.status, "locked"),
+        ),
+      );
+    lockedWeeksList = lockedRows.flatMap((r) =>
+      r.varianceSnapshot
+        ? [{
+            weekStart: r.weekStart,
+            weekEnd: r.weekEnd,
+            varianceSnapshot: r.varianceSnapshot,
+          }]
+        : [],
+    );
+  }
+  const lockedDateSet = new Set<string>();
+  for (const lw of lockedWeeksList) {
+    let cur = parseISO(lw.weekStart);
+    const end = parseISO(lw.weekEnd);
+    while (cur <= end) {
+      lockedDateSet.add(fmtISO(cur));
+      cur = addDays(cur, 1);
+    }
+  }
+  // Frozen plan items injected later (after the events->items loop).
+  // IMPORTANT: only include plans whose date is strictly AFTER the
+  // anchor (snapshot date, or today when there's no snapshot). The
+  // snapshot already reflects every dollar that landed on or before
+  // it; re-adding a pre-snapshot frozen plan would double-count
+  // against `startBalanceAtAnchor` during the roll-forward to
+  // `startingBalance` and skew the entire chart downstream.
+  const frozenLockedItems: Array<{ date: string; amount: number; matched: boolean }> = [];
+  for (const lw of lockedWeeksList) {
+    for (const p of lw.varianceSnapshot.plans ?? []) {
+      // Only count plans whose original forecast date falls inside the
+      // locked week. Plans rescheduled INTO this week belong to their
+      // source week's frozen curve and shouldn't double-count here.
+      if (p.forecastDate < lw.weekStart || p.forecastDate > lw.weekEnd) continue;
+      if (p.status === "skipped") continue;
+      // Drop pre-snapshot frozen plans — see comment above. This also
+      // implicitly drops any locked week that's entirely historical,
+      // which is the common case for older weeks.
+      if (p.forecastDate <= anchorISO) continue;
+      const amt = Number(p.forecastAmount);
+      if (!Number.isFinite(amt)) continue;
+      const signed = p.kind === "income" ? amt : -amt;
+      frozenLockedItems.push({
+        date: p.forecastDate,
+        amount: signed,
+        matched: false,
+      });
+    }
+  }
+
   const events: CashEvent[] = [];
   for (const item of recurring) events.push(...expandItem(item, expandStart, to));
   // (#687) Synthetic events (debt minimums for debts WITHOUT a linked
@@ -553,6 +639,11 @@ export async function computeCashSignal(
     const rawEffectiveDate = rescheduledByKey.get(origKey) ?? ev.date;
     const matched = matchedPlanKeys.has(origKey);
     if (matched) continue;
+    // (#804 — Phase F) Drop live plan expansions that fall inside a
+    // locked week — the frozen plans pushed in via frozenLockedItems
+    // already represent them, and we don't want a post-lock recurring
+    // edit to retroactively move the forecast curve over locked dates.
+    if (lockedDateSet.has(rawEffectiveDate)) continue;
     // (#480) Skipped occurrences must NOT contribute to the projection
     // (chart line, lowest, ending balance, expenseEvents markers).
     if (skippedPlanKeys.has(origKey)) continue;
@@ -633,12 +724,20 @@ export async function computeCashSignal(
   }
   for (const t of txns) {
     if (t.occurredOn <= anchorISO) continue;
+    // (#804 — Phase F) Real bank txns that posted INSIDE a locked week
+    // would double-count against the frozen plans (which already
+    // captured the planned dollars at lock time). The actual line
+    // overlay communicates reality to the user; the forecast line
+    // stays frozen.
+    if (lockedDateSet.has(t.occurredOn)) continue;
     items.push({
       date: t.occurredOn,
       amount: Number(t.amount) || 0,
       matched: matchedTxnIds.has(t.id),
     });
   }
+  // (#804 — Phase F) Inject frozen plan items from locked weeks.
+  for (const fi of frozenLockedItems) items.push(fi);
   items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   // Roll the balance forward from anchor up to (but not including) fromDate

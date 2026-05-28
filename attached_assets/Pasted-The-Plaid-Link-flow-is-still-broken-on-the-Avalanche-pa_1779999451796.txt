@@ -1,0 +1,27 @@
+The Plaid Link flow is still broken on the Avalanche page (and probably the Debts page too — same component). I clicked Link on Capital One Quicksilver, and Plaid's 2FA modal opened asking for a code sent to phone ending in 0912 — that's my AMEX 2FA number, not Capital One's. The Code input is greyed out and Continue is disabled. Whole flow stuck.
+
+The localStorage clear at debt-plaid-link.tsx:257-264 IS firing on click (verified at lines 366 and 485). So the stale-localStorage theory is wrong. The bug is different.
+
+DIAGNOSE — there's another Plaid SDK mount happening in parallel that's trying to resume an Amex session. Find it:
+
+1. Search the codebase for every place that calls Plaid.create / usePlaidLink / openPlaidLink / link_token / mints a link token. There may be multiple components mounting Plaid Link simultaneously:
+   - PlaidLinkButton inside PlaidAccountPicker (the intended one for this click)
+   - A reconnect button somewhere that auto-opens on certain item states
+   - PlaidOAuthPage that may auto-resume an OAuth flow on mount
+   - The advisor chat or another page that may have stale Plaid state from a prior session
+
+2. Check the items table in prod: are any of my Plaid items in a state that triggers an "auto-reconnect" prompt the moment any Plaid component mounts? Particularly: does my Amex item have last_sync_error_code or pending_expiration set, which would cause some PlaidReconnectButton to auto-fire when the Avalanche page renders DebtPlaidActions for any debt? Report what you find.
+
+3. Check if PlaidOAuthPage or any equivalent reads window.location.hash or query params on every mount and re-initializes a Plaid SDK flow. If a prior Amex OAuth flow left residue in the URL, every Plaid mount might be picking it up.
+
+4. The picker dialog itself — when it opens, does it instantiate ONE Plaid Link instance for "link another bank" OR does it instantiate one PER account it shows (one per linked card)? If it's instantiating multiple Plaid Link buttons (one per existing account for re-auth purposes), one of them may be auto-mounting in update mode for Amex.
+
+5. Open the browser DevTools network tab during a fresh Capital One Quicksilver Link click. Tell me which Plaid endpoints get called and in what order:
+   - /link/token/create — should fire ONCE for a new institution link
+   - /link/token/update — if this fires, that's the bug — it means an existing item is being re-authed
+   - /item/get — for which item ids
+   The smoking gun: if /link/token/update fires with an Amex item_id when I clicked Link on a Capital One debt, that's exactly where the wrong-institution-2FA comes from.
+
+DIAGNOSE FIRST, report findings on all 5. Don't fix yet — I want to know which of the parallel Plaid mounts is causing it before we touch anything, because each potential fix has different side effects (e.g. disabling reconnect prompts has UX consequences).
+
+Specifically I need to know: when I click Link on a fresh institution (Capital One), is Plaid SDK getting steered into UPDATE mode for an existing item (Amex)? That's the core question.

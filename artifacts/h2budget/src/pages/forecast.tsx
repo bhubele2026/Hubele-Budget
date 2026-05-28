@@ -40,6 +40,8 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
+  Line,
+  Legend,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -2381,12 +2383,36 @@ export default function ForecastPage({
   const proj = cashProjection;
   const endingNum = proj?.endingBalance ? Number(proj.endingBalance) : NaN;
   const lowestNum = proj?.lowestProjected ? Number(proj.lowestProjected) : NaN;
+  // (#804 — Phase F) Flatten locked-week actual points into a
+  // date→balance map so we can overlay an "actual" series on the
+  // forecast chart for any week the user has locked. Forecast curve
+  // itself is already frozen server-side for these dates (cashSignal
+  // substitutes varianceSnapshot.plans for live recurring expansion),
+  // so the two lines together honestly show "what we planned" vs.
+  // "what really happened" without retroactively shifting when
+  // recurring items get edited later.
+  const lockedActualByDate = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const lw of data?.lockedWeeks ?? []) {
+      for (const p of lw.actualPoints ?? []) {
+        const n = Number(p.balance);
+        if (Number.isFinite(n)) m.set(p.date, n);
+      }
+    }
+    return m;
+  }, [data?.lockedWeeks]);
+  const hasLockedActual = lockedActualByDate.size > 0;
   const dailySeries = (proj?.daily ?? [])
-    .map((d: { date: string; balance: string | number }) => ({
-      date: shortDate(d.date),
-      rawDate: d.date,
-      balance: Number(d.balance),
-    }))
+    .map((d: { date: string; balance: string | number }) => {
+      const rawDate = d.date;
+      const actual = lockedActualByDate.get(rawDate);
+      return {
+        date: shortDate(rawDate),
+        rawDate,
+        balance: Number(d.balance),
+        actual: actual != null && Number.isFinite(actual) ? actual : null,
+      };
+    })
     .filter((d) => Number.isFinite(d.balance));
   const cashBufferNum = proj?.cashBuffer ? Number(proj.cashBuffer) : NaN;
   const lowestPoint = (() => {
@@ -2970,10 +2996,21 @@ export default function ForecastPage({
                       | {
                           rawDate?: string;
                           balance?: number;
+                          actual?: number | null;
                         }
                       | undefined;
                     const rawDate = p?.rawDate;
                     const balance = Number(p?.balance);
+                    // (#804 — Phase F) When this day falls inside a
+                    // locked week the bundle ships an `actual` balance
+                    // — show forecast / actual / Δ side-by-side so the
+                    // user can see how reality came in relative to the
+                    // frozen plan.
+                    const actualRaw = p?.actual;
+                    const hasActual =
+                      actualRaw != null && Number.isFinite(Number(actualRaw));
+                    const actualNum = hasActual ? Number(actualRaw) : NaN;
+                    const deltaNum = hasActual ? actualNum - balance : NaN;
                     const marker = rawDate ? bigBillByDate.get(rawDate) : undefined;
                     const dayEvents = rawDate ? eventsByDate.get(rawDate) : undefined;
                     const dayTotal = dayEvents
@@ -2996,13 +3033,51 @@ export default function ForecastPage({
                           {rawDate ? formatDate(rawDate) : ""}
                         </div>
                         <div style={{ marginTop: 2 }}>
-                          Balance:{" "}
+                          {hasActual ? "Forecast:" : "Balance:"}{" "}
                           <span style={{ fontVariantNumeric: "tabular-nums" }}>
                             {Number.isFinite(balance)
                               ? formatCurrency(balance)
                               : "—"}
                           </span>
                         </div>
+                        {hasActual && (
+                          <>
+                            <div
+                              style={{ marginTop: 2 }}
+                              data-testid={`tooltip-actual-${rawDate}`}
+                            >
+                              Actual:{" "}
+                              <span
+                                style={{
+                                  fontVariantNumeric: "tabular-nums",
+                                  color: "hsl(var(--chart-3))",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {formatCurrency(actualNum)}
+                              </span>
+                            </div>
+                            <div
+                              style={{ marginTop: 2 }}
+                              data-testid={`tooltip-delta-${rawDate}`}
+                            >
+                              Δ:{" "}
+                              <span
+                                style={{
+                                  fontVariantNumeric: "tabular-nums",
+                                  color:
+                                    deltaNum >= 0
+                                      ? "hsl(var(--chart-3))"
+                                      : "hsl(var(--destructive))",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {deltaNum >= 0 ? "+" : ""}
+                                {formatCurrency(deltaNum)}
+                              </span>
+                            </div>
+                          </>
+                        )}
                         {dayEvents && dayEvents.length > 0 && rawDate && (() => {
                           // (#650) Split this day's events into two
                           // groups so the "dragging" section only lists
@@ -3158,15 +3233,41 @@ export default function ForecastPage({
                     );
                   }}
                 />
+                {hasLockedActual && (
+                  <Legend
+                    verticalAlign="top"
+                    height={24}
+                    iconType="plainline"
+                    wrapperStyle={{ fontSize: 11 }}
+                  />
+                )}
                 <Area
                   type="monotone"
                   dataKey="balance"
                   stroke="hsl(var(--chart-1))"
                   strokeWidth={2}
                   fill="url(#projectedBalanceGrad)"
-                  name="Projected balance"
+                  name="Forecast"
                   isAnimationActive={false}
                 />
+                {/* (#804 — Phase F) Actual checking balance overlay for
+                    weeks the user has locked. `connectNulls=false` so
+                    the line only draws across locked-week dates and
+                    doesn't visually imply data we don't have for
+                    unlocked windows. */}
+                {hasLockedActual && (
+                  <Line
+                    type="monotone"
+                    dataKey="actual"
+                    stroke="hsl(var(--chart-3))"
+                    strokeWidth={2.5}
+                    dot={false}
+                    connectNulls={false}
+                    name="Actual (locked)"
+                    isAnimationActive={false}
+                    data-testid="line-actual-locked"
+                  />
+                )}
                 {Number.isFinite(cashBufferNum) && (
                   <ReferenceLine
                     y={cashBufferNum}

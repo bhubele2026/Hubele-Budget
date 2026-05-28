@@ -3589,6 +3589,33 @@ components:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/AccountSnapshot"
+        lockedWeeks:
+          type: array
+          description: |
+            (#804 — Phase F) Per locked weekly_debrief, the daily ACTUAL
+            checking balance for that week. The /forecast chart overlays
+            these points on the projected balance area so the user can
+            see forecast vs. reality for any week they've locked. The
+            forecast curve itself is frozen over these date ranges
+            (driven by each week's varianceSnapshot.plans), so editing a
+            recurring item after locking cannot retroactively shift the
+            forecast for a locked week.
+          items:
+            $ref: "#/components/schemas/LockedWeekActual"
+    LockedWeekActual:
+      type: object
+      required: [weekStart, weekEnd, actualPoints]
+      properties:
+        weekStart: { type: string }
+        weekEnd: { type: string }
+        actualPoints:
+          type: array
+          items:
+            type: object
+            required: [date, balance]
+            properties:
+              date: { type: string }
+              balance: { type: string }
     MonthSnapshot:
       type: object
       required: [balance, at]

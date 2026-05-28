@@ -1,0 +1,65 @@
+Phase F of the workflow overhaul — the final phase. When weeks in the Weekly Debrief get locked, the /forecast chart should overlay the actual line on top of the original forecast for those locked periods. Partial-snap enabled: a partially locked month shows actual for the locked weeks and forecast for the rest, growing as more weeks lock. File as a project task in the #766 format. Personal app — smoke test instead of new tests.
+
+DESIGN (locked):
+- Chart shows TWO lines for any locked period: the original forecast line (unchanged) AND a new "actual" overlay line built from real bank balance data for the dates that fall inside locked weeks.
+- Partial-snap YES — actuals appear progressively as each week locks. If only Week 1 of May is locked, only the May 1-9 portion has actual; the rest of May is forecast-only.
+- The actual line is visually distinct from forecast (solid vs dashed, different color, or both) — clearly readable as "this is what really happened" vs "this is what we projected."
+
+STEP 1 — Backend: emit a per-locked-week actual balance series.
+
+The forecast endpoint already returns monthSnapshots and closedMonths. Extend it to also return a lockedWeeks array driven by weekly_debriefs:
+
+  lockedWeeks: Array<{
+    weekStart: string;          // YYYY-MM-DD, Sunday
+    weekEnd: string;            // YYYY-MM-DD, Saturday
+    // Daily actual checking-balance points across this locked week.
+    // One point per day from weekStart through weekEnd inclusive.
+    actualPoints: Array<{
+      date: string;             // YYYY-MM-DD
+      balance: number;          // actual end-of-day checking balance
+    }>;
+  }>
+
+In artifacts/api-server/src/routes/forecast.ts (~line 441 where closedMonths/monthSnapshots are assembled), query weekly_debriefs WHERE status='locked' AND householdId=req.householdId. For each locked week, compute the actual daily checking balance from the existing transactions data (reuse the makeChaseBalanceAtEndOf pattern already used for the Chase page's running balance — should be in artifacts/h2budget/src/lib/chaseEndingBalance.ts and/or its api-side equivalent). The daily series is the canonical "what really happened" for the chart.
+
+Update the OpenAPI spec and run orval codegen.
+
+STEP 2 — Frontend: render the actual overlay on the chart.
+
+In artifacts/h2budget/src/pages/forecast.tsx (the chart component, look for where the forecast line is rendered with recharts):
+  - Read lockedWeeks from the forecast endpoint response (same data hook already in use).
+  - Flatten lockedWeeks[].actualPoints into a single chronological series.
+  - Add a SECOND <Line> to the existing chart with this actual data. Style: solid line in a distinct color (suggest emerald/green to convey "this is real") vs the forecast's existing styling. Slightly thicker stroke than the forecast line so it reads as the "primary" truth for those dates.
+  - Make sure the line only renders for dates inside locked weeks — gaps for unlocked dates are correct and expected.
+  - Update the chart legend to include the new "Actual (locked)" entry.
+
+If the chart's x-axis is bucketed (e.g. monthly buckets), keep daily resolution for actual within those buckets. If recharts can't easily do "actual on daily, forecast on monthly," then keep them both daily for the affected range. Don't overcomplicate.
+
+STEP 3 — Make sure locked weeks freeze their forecast curve too.
+
+When weeks lock, the forecast values for those dates shouldn't move based on later-edited recurring items. The varianceSnapshot is already frozen in the weekly_debriefs row, so use it: when reading the forecast line for dates inside a locked week, prefer the varianceSnapshot's planned data over a live recompute. Subtle but important — without this, editing a recurring item retroactively shifts the forecast curve for a locked week, which would distort the "we forecasted X, got Y" comparison.
+
+Concrete implementation: when assembling the chart data, for any date inside a locked week, use the planned values from that week's varianceSnapshot (plannedIncome, plannedExpenses) to compute the forecast point. For unlocked dates, use the existing live forecast recompute. This is a smaller change than it sounds — just a lookup branch in the chart-data builder.
+
+STEP 4 — Visual polish.
+- Lock icon or subtle "Locked" badge over the locked portions of the chart x-axis (optional, only if cheap).
+- Hover tooltip on a locked-period point shows BOTH forecast and actual values plus the delta ("Forecast $4,050, Actual $3,830, Δ -$220").
+- Don't add new colors arbitrarily — pick from the existing palette to match the rest of the app.
+
+STEP 5 — Smoke test before marking complete:
+  1. With no locked weeks: chart looks unchanged (only forecast line, no actual overlay). Confirm no regression.
+  2. Lock May 17-23 week → reload /forecast → an actual line appears spanning only May 17-23, distinct from forecast line. Other dates are forecast-only.
+  3. Lock May 10-16 too → actual line now spans May 10-23, with a gap before May 10 and after May 23.
+  4. Hover a locked-period point → tooltip shows both forecast and actual values and the delta.
+  5. Unlock May 17-23 → actual overlay for that range disappears, chart goes back to forecast-only there.
+  6. Edit a recurring item that affected a locked week (e.g. bump Weekly Dining to $200) → the forecast line for that locked week DOES NOT move (frozen from varianceSnapshot). The forecast line for unlocked weeks DOES update.
+  7. Existing chart features (Look Back, month filter, projected end balance) still work normally.
+
+Report each step. Step 6 is the correctness-critical check: locked-week forecast must be frozen, otherwise the variance becomes a lie.
+
+OUT OF SCOPE — and this is it, the workflow overhaul is complete after F:
+- New chart types or major redesigns (stay within the existing recharts setup)
+- Mobile responsive tweaks (keep current behavior)
+- The "any other place a forecast/actual comparison would be nice" — that's future work
+
+Run typecheck. Report smoke test results when done. This closes the workflow overhaul (Phases A through F).

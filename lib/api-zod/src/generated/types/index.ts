@@ -133,6 +133,8 @@ export * from "./listPlaidLiabilityAccountsParams";
 export * from "./listTransactionsParams";
 export * from "./listWeeklyDebriefsParams";
 export * from "./listWeeklySettlementsParams";
+export * from "./lockedWeekActual";
+export * from "./lockedWeekActualActualPointsItem";
 export * from "./mappingRule";
 export * from "./mappingRuleInput";
 export * from "./mappingRulePatternRecategorizePreview";

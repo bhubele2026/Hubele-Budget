@@ -12,6 +12,7 @@ import type { ForecastBundleMonthSnapshots } from "./forecastBundleMonthSnapshot
 import type { ForecastEvent } from "./forecastEvent";
 import type { ForecastResolution } from "./forecastResolution";
 import type { ForecastSettings } from "./forecastSettings";
+import type { LockedWeekActual } from "./lockedWeekActual";
 import type { PlaidCheckingAccount } from "./plaidCheckingAccount";
 import type { Transaction } from "./transaction";
 export interface ForecastBundle {
@@ -27,5 +28,15 @@ export interface ForecastBundle {
     plaidCheckingAccounts: PlaidCheckingAccount[];
     monthSnapshots?: ForecastBundleMonthSnapshots;
     accountSnapshots?: ForecastBundleAccountSnapshots;
+    /** (#804 — Phase F) Per locked weekly_debrief, the daily ACTUAL
+  checking balance for that week. The /forecast chart overlays
+  these points on the projected balance area so the user can
+  see forecast vs. reality for any week they've locked. The
+  forecast curve itself is frozen over these date ranges
+  (driven by each week's varianceSnapshot.plans), so editing a
+  recurring item after locking cannot retroactively shift the
+  forecast for a locked week.
+   */
+    lockedWeeks?: LockedWeekActual[];
 }
 //# sourceMappingURL=forecastBundle.d.ts.map

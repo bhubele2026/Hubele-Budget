@@ -1951,6 +1951,17 @@ export interface AccountSnapshot {
 
 export type ForecastBundleAccountSnapshots = { [key: string]: AccountSnapshot };
 
+export type LockedWeekActualActualPointsItem = {
+  date: string;
+  balance: string;
+};
+
+export interface LockedWeekActual {
+  weekStart: string;
+  weekEnd: string;
+  actualPoints: LockedWeekActualActualPointsItem[];
+}
+
 export interface ForecastBundle {
   fromDate: string;
   toDate: string;
@@ -1964,6 +1975,16 @@ export interface ForecastBundle {
   plaidCheckingAccounts: PlaidCheckingAccount[];
   monthSnapshots?: ForecastBundleMonthSnapshots;
   accountSnapshots?: ForecastBundleAccountSnapshots;
+  /** (#804 — Phase F) Per locked weekly_debrief, the daily ACTUAL
+checking balance for that week. The /forecast chart overlays
+these points on the projected balance area so the user can
+see forecast vs. reality for any week they've locked. The
+forecast curve itself is frozen over these date ranges
+(driven by each week's varianceSnapshot.plans), so editing a
+recurring item after locking cannot retroactively shift the
+forecast for a locked week.
+ */
+  lockedWeeks?: LockedWeekActual[];
 }
 
 export interface SetBankSnapshotInput {

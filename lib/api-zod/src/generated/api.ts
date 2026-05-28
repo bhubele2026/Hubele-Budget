@@ -2270,6 +2270,23 @@ export const GetForecastResponse = zod.object({
       }),
     )
     .optional(),
+  lockedWeeks: zod
+    .array(
+      zod.object({
+        weekStart: zod.string(),
+        weekEnd: zod.string(),
+        actualPoints: zod.array(
+          zod.object({
+            date: zod.string(),
+            balance: zod.string(),
+          }),
+        ),
+      }),
+    )
+    .optional()
+    .describe(
+      "(#804 — Phase F) Per locked weekly_debrief, the daily ACTUAL\nchecking balance for that week. The \/forecast chart overlays\nthese points on the projected balance area so the user can\nsee forecast vs. reality for any week they've locked. The\nforecast curve itself is frozen over these date ranges\n(driven by each week's varianceSnapshot.plans), so editing a\nrecurring item after locking cannot retroactively shift the\nforecast for a locked week.\n",
+    ),
 });
 
 export const GetForecastSettingsResponse = zod.object({

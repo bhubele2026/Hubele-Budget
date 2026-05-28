@@ -4746,6 +4746,34 @@ export declare const GetForecastResponse: zod.ZodObject<{
         name?: string | null | undefined;
         mask?: string | null | undefined;
     }>>>;
+    lockedWeeks: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        weekStart: zod.ZodString;
+        weekEnd: zod.ZodString;
+        actualPoints: zod.ZodArray<zod.ZodObject<{
+            date: zod.ZodString;
+            balance: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            balance: string;
+        }, {
+            date: string;
+            balance: string;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        weekStart: string;
+        weekEnd: string;
+        actualPoints: {
+            date: string;
+            balance: string;
+        }[];
+    }, {
+        weekStart: string;
+        weekEnd: string;
+        actualPoints: {
+            date: string;
+            balance: string;
+        }[];
+    }>, "many">>;
 }, "strip", zod.ZodTypeAny, {
     fromDate: string;
     toDate: string;
@@ -4867,6 +4895,14 @@ export declare const GetForecastResponse: zod.ZodObject<{
         name?: string | null | undefined;
         mask?: string | null | undefined;
     }> | undefined;
+    lockedWeeks?: {
+        weekStart: string;
+        weekEnd: string;
+        actualPoints: {
+            date: string;
+            balance: string;
+        }[];
+    }[] | undefined;
 }, {
     fromDate: string;
     toDate: string;
@@ -4988,6 +5024,14 @@ export declare const GetForecastResponse: zod.ZodObject<{
         name?: string | null | undefined;
         mask?: string | null | undefined;
     }> | undefined;
+    lockedWeeks?: {
+        weekStart: string;
+        weekEnd: string;
+        actualPoints: {
+            date: string;
+            balance: string;
+        }[];
+    }[] | undefined;
 }>;
 export declare const GetForecastSettingsResponse: zod.ZodObject<{
     daysAhead: zod.ZodNumber;
