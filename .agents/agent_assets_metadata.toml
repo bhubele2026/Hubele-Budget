@@ -46,3 +46,9 @@ id = "5uZXpN0K7Yazb-jhsMJGP"
 uri = "file://exports/h2budget-full-source.tar.gz"
 type = "unspecified"
 title = "h2budget-full-source.tar.gz (full pnpm monorepo, 54 MB, excludes node_modules / .git / build artifacts)"
+
+[[outputs]]
+id = "TZaYOYmn5odfjkoQ49OC3"
+uri = "file://.local/exports/debrief.tar.gz"
+type = "unspecified"
+title = "debrief.tar.gz — debrief.tsx + useDebriefAwaitingCount.ts + layout.tsx"
