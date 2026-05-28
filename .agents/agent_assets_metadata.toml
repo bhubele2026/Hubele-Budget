@@ -58,3 +58,9 @@ id = "7NtOrVT95lvAhtdUJr2Sz"
 uri = "file://exports/phase-e-802-advisor-takeaway.tar.gz"
 type = "unspecified"
 title = "Phase E (#802) — Advisor Takeaway code bundle"
+
+[[outputs]]
+id = "7N2XgpCJHCHl8KNSnpCKV"
+uri = "file://exports/h2budget-full-app.tar.gz"
+type = "unspecified"
+title = "H2 Family Budget — full app source"
