@@ -41,7 +41,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -988,10 +990,10 @@ export default function BillsPage() {
                         — None —
                       </SelectItem>
                       {Array.from(grouped.entries()).map(([groupName, cats]) => (
-                        <div key={groupName}>
-                          <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <SelectGroup key={groupName}>
+                          <SelectLabel className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
                             {groupName}
-                          </div>
+                          </SelectLabel>
                           {cats.map((c) => (
                             <SelectItem
                               key={c.id}
@@ -1001,7 +1003,7 @@ export default function BillsPage() {
                               {c.name}
                             </SelectItem>
                           ))}
-                        </div>
+                        </SelectGroup>
                       ))}
                     </SelectContent>
                   </Select>
