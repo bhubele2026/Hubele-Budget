@@ -982,7 +982,7 @@ export default function BillsPage() {
                     >
                       <SelectValue placeholder="— None —" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-72">
                       <SelectItem
                         value={NO_CATEGORY}
                         data-testid="select-category-none"
