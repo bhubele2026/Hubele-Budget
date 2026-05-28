@@ -1,8 +1,14 @@
 export { AccountPageHeader } from "./account-page-header";
 export { AccountFilterBar } from "./account-filter-bar";
 export type { SourceOption } from "./account-filter-bar";
-export { BalanceTrendChart } from "./balance-trend-chart";
-export type { TrendPoint } from "./balance-trend-chart";
+export {
+  BalanceTrendChart,
+  BalanceForecastTrendChart,
+} from "./balance-trend-chart";
+export type {
+  TrendPoint,
+  BalanceForecastPoint,
+} from "./balance-trend-chart";
 export { DayGroup, formatDayHeader } from "./day-group";
 export {
   MonthNavigator,
