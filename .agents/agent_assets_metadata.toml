@@ -64,3 +64,9 @@ id = "7N2XgpCJHCHl8KNSnpCKV"
 uri = "file://exports/h2budget-full-app.tar.gz"
 type = "unspecified"
 title = "H2 Family Budget — full app source"
+
+[[outputs]]
+id = "jUM-X7XntKEXFnm7v9PpH"
+uri = "file://.local/exports/plaid-code.md"
+type = "text"
+title = "Plaid components (current state)"
