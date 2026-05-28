@@ -2602,8 +2602,8 @@ export default function TransactionsPage() {
           </span>
         );
         return (
+          <div key={dayKey} data-day-group-key={dayKey}>
           <DayGroup
-            key={dayKey}
             dayKey={dayKey}
             count={items.length}
             isToday={isToday}
@@ -2841,6 +2841,7 @@ export default function TransactionsPage() {
               })}
             </div>
           </DayGroup>
+          </div>
         );
       })}
     </div>
