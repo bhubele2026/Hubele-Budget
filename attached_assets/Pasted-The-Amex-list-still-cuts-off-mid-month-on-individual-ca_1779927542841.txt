@@ -1,0 +1,54 @@
+The Amex list still cuts off mid-month on individual card chips. Just tested with Delta Gold (May 2026, 126 txns): list ends at May 12. May 1-11 (~50 transactions worth) are not reachable by scrolling.
+
+Task #761's measure() call on filter change isn't enough — the actual measured heights of day groups are much bigger than the (96 + 110*n) estimate, and the virtualizer's getTotalSize() under-reports until measurement catches up. The bottom of the list gets clipped during that window.
+
+CHANGE 1 — Bump estimateSize substantially higher.
+
+The current estimate is 96 + (n * 110) + ITEM_GAP_PX. From the screenshot, single rows render with category picker + bucket bubbles + running balance + Plaid account name and look closer to 130-150px tall. A 5-row day group is well over 800px. Update to:
+
+  estimateSize: (i) => 110 + groups[i][1].length * 140 + ITEM_GAP_PX,
+
+Overestimating is safe (virtualizer trims via measureElement). Under-estimating clips. We want to lean toward over.
+
+CHANGE 2 — Add a one-frame post-mount remeasure pass.
+
+After the initial render of a filter change, the cached size estimates are still from the previous filter's groups. The virtualizer.measure() invalidation only kicks in if React has time. Force a second pass via requestAnimationFrame:
+
+  useEffect(() => {
+    virtualizer.measure();
+    const raf = requestAnimationFrame(() => {
+      virtualizer.measure();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [virtualizer, groups.length, totalRowCount, measureKey]);
+
+The second measure() runs one frame later, after the new groups have actually rendered with their measureElement refs attached. That's when the real heights become known.
+
+CHANGE 3 — Diagnostic logging (temporary, remove after verification).
+
+Add a single console.log in the virtualizer setup that fires whenever measureKey changes:
+
+  useEffect(() => {
+    console.log("[amex-virt]", {
+      measureKey,
+      groupCount: groups.length,
+      totalRowCount,
+      totalSize: virtualizer.getTotalSize(),
+      virtualItems: virtualizer.getVirtualItems().length,
+    });
+  }, [measureKey, groups.length, totalRowCount]);
+
+This will help confirm what totalSize the virtualizer thinks the list is vs what it should be. Brad can paste me the log values from the browser console for the cutoff case so we can verify the fix actually moved the needle. Remove this log after we confirm the bottom of the list reaches.
+
+CHANGE 4 — If CHANGES 1+2+3 still don't fix it, fall back to non-virtualized rendering for the Amex page.
+
+The Amex page maxes out at 1000 transactions per month (MONTH_LIMIT). That's ~30 day groups. Rendering 30 DOM nodes is not a performance crisis — virtualization here is a "nice to have," not a "must have." If two attempts don't fix this cleanly, just remove useWindowVirtualizer and render groups directly. The bug has cost more time than rendering 30 day-groups would.
+
+ACCEPTANCE:
+- Open /amex on May 2026 with Delta Gold chip
+- Scroll down: can reach Friday May 1, 2026 (or whatever the earliest May day is)
+- Same for Platinum chip
+- Same for "All cards" — verify the fix doesn't break the all-cards view
+- Paste me Brad's console log from CHANGE 3 with totalSize vs visible
+
+Run pnpm typecheck and pnpm test on h2budget.
