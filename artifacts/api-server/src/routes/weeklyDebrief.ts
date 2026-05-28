@@ -13,7 +13,7 @@
 // enough to silently wipe it.
 
 import { Router, type IRouter } from "express";
-import { and, eq, gte, lt, lte, or, isNull, sql, asc } from "drizzle-orm";
+import { and, eq, gte, lte, or, isNull, sql, asc } from "drizzle-orm";
 import {
   db,
   weeklyDebriefsTable,
@@ -409,33 +409,6 @@ router.post(
       status: row.status as WeekStatus,
       lockedAt: null,
       lockedByUserId: null,
-    });
-  },
-);
-
-// One-shot cleanup endpoint. Deletes pre-floor weekly_debriefs rows
-// for the caller's household only. Idempotent: returns the list of
-// week_starts it deleted (empty array if there's nothing to clean).
-// TODO(remove-after-prod-cleanup): delete this route once the prod
-// pre-cutoff backfill rows are gone.
-router.post(
-  "/debrief/admin/purge-pre-floor",
-  requireAuth,
-  async (req, res): Promise<void> => {
-    const householdId = req.householdId!;
-    const deleted = await db
-      .delete(weeklyDebriefsTable)
-      .where(
-        and(
-          eq(weeklyDebriefsTable.householdId, householdId),
-          lt(weeklyDebriefsTable.weekStart, DEBRIEF_FLOOR_WEEK_START),
-        ),
-      )
-      .returning({ weekStart: weeklyDebriefsTable.weekStart });
-    res.json({
-      floor: DEBRIEF_FLOOR_WEEK_START,
-      deletedCount: deleted.length,
-      deletedWeekStarts: deleted.map((r) => r.weekStart).sort(),
     });
   },
 );
