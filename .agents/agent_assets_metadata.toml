@@ -52,3 +52,9 @@ id = "TZaYOYmn5odfjkoQ49OC3"
 uri = "file://.local/exports/debrief.tar.gz"
 type = "unspecified"
 title = "debrief.tar.gz — debrief.tsx + useDebriefAwaitingCount.ts + layout.tsx"
+
+[[outputs]]
+id = "7NtOrVT95lvAhtdUJr2Sz"
+uri = "file://exports/phase-e-802-advisor-takeaway.tar.gz"
+type = "unspecified"
+title = "Phase E (#802) — Advisor Takeaway code bundle"
