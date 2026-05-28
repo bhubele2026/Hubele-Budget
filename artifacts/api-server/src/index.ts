@@ -15,6 +15,7 @@ import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
+import { runStartupChaseDeadItemsCleanup } from "./lib/startupChaseDeadItemsCleanup";
 import { runStartupPendingNotesBackfill } from "./lib/startupPendingNotesBackfill";
 import "./lib/advisorReadTools";
 import "./lib/advisorWriteTools";
@@ -160,6 +161,20 @@ app.listen(port, (err) => {
     })
     .catch((err) => {
       logger.error({ err }, "Startup pending-notes backfill failed");
+    });
+
+  // (#chase-restore) One-shot, idempotent: delete the dead Chase
+  // plaid_items for the affected household (seed-april synthetic +
+  // OAuth-invalidated production item). Authenticated cleanup
+  // endpoint can't be invoked server-side (Clerk session required),
+  // so this runs the exact same delete sequence at boot. Converges
+  // to a zero-row no-op once both items are gone.
+  runStartupChaseDeadItemsCleanup()
+    .then((summary) => {
+      logger.info(summary, "Startup Chase dead-items cleanup complete");
+    })
+    .catch((err) => {
+      logger.error({ err }, "Startup Chase dead-items cleanup failed");
     });
 
   if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
