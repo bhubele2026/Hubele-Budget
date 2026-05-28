@@ -22,7 +22,6 @@ import advisorRouter from "./advisor";
 import advisorUndoRouter from "./advisorUndo";
 import advisorProposalsRouter from "./advisorProposals";
 import weeklyDebriefRouter from "./weeklyDebrief";
-import adminBackfillWeeklyDebriefsRouter from "./adminBackfillWeeklyDebriefs";
 
 const router: IRouter = Router();
 
@@ -49,6 +48,5 @@ router.use(advisorRouter);
 router.use(advisorUndoRouter);
 router.use(advisorProposalsRouter);
 router.use(weeklyDebriefRouter);
-router.use(adminBackfillWeeklyDebriefsRouter);
 
 export default router;

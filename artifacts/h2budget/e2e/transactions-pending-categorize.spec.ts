@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { eq } from "drizzle-orm";
 import {
   db,
-  categoriesTable,
+  budgetCategoriesTable,
   transactionsTable,
 } from "@workspace/db";
 import {
@@ -111,9 +111,9 @@ test.describe("Pending-row categorize affordances on /transactions (#740)", () =
     let allCategories: Array<{ id: string; name: string }> = [];
     while (Date.now() < deadline) {
       allCategories = await db
-        .select({ id: categoriesTable.id, name: categoriesTable.name })
-        .from(categoriesTable)
-        .where(eq(categoriesTable.userId, userId));
+        .select({ id: budgetCategoriesTable.id, name: budgetCategoriesTable.name })
+        .from(budgetCategoriesTable)
+        .where(eq(budgetCategoriesTable.userId, userId));
       if (allCategories.length > 0) break;
       await new Promise((r) => setTimeout(r, 250));
     }
