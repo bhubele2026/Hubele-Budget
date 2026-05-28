@@ -69,6 +69,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -1031,6 +1036,95 @@ function VarianceSummaryCard({ snapshot }: { snapshot: NonNullable<WeeklyDebrief
   );
 }
 
+// (#801) Drill-down popover for a single Planned or Actual cell in the
+// Category Variance table. Click on a non-zero amount opens a list of
+// the line items that compose it. The cell shows zero amounts as
+// plain text (not clickable) — there is nothing to drill into.
+function VarianceCellPopover({
+  kind,
+  categoryName,
+  amount,
+  plannedItems,
+  actualTxns,
+}: {
+  kind: "planned" | "actual";
+  categoryName: string;
+  amount: string;
+  plannedItems?: NonNullable<WeeklyDebriefCategoryBucket["plannedItems"]>;
+  actualTxns?: NonNullable<WeeklyDebriefCategoryBucket["actualTxns"]>;
+}) {
+  const num = Number(amount);
+  const hasItems =
+    kind === "planned"
+      ? (plannedItems?.length ?? 0) > 0
+      : (actualTxns?.length ?? 0) > 0;
+  const clickable = num !== 0 && hasItems;
+  if (!clickable) {
+    return <div className="px-4 py-2">{money(amount)}</div>;
+  }
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="w-full px-4 py-2 text-right tabular-nums cursor-pointer hover:underline underline-offset-2 focus:outline-none focus:underline"
+          data-testid={`variance-cell-${kind}-${categoryName.replace(/\s+/g, "-").toLowerCase()}`}
+        >
+          {money(amount)}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0">
+        <div className="border-b px-3 py-2">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            {kind === "planned" ? "Planned" : "Actual"}
+          </div>
+          <div className="text-sm font-medium">{categoryName}</div>
+        </div>
+        <div className="max-h-64 overflow-y-auto py-1">
+          {kind === "planned"
+            ? plannedItems!.map((p, i) => (
+                <div
+                  key={(p.recurringItemId ?? "") + i}
+                  className="flex items-baseline justify-between gap-3 px-3 py-1.5 text-sm"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{p.name}</div>
+                    <div className="text-[11px] text-muted-foreground">{p.forecastDate}</div>
+                  </div>
+                  <div className="tabular-nums whitespace-nowrap">{money(p.amount)}</div>
+                </div>
+              ))
+            : actualTxns!.map((t, i) => (
+                <div
+                  key={t.txnId + i}
+                  className="flex items-baseline justify-between gap-3 px-3 py-1.5 text-sm"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{t.description}</div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <span>{t.date}</span>
+                      {!t.matchedToPlan && (
+                        <Badge variant="secondary" className="h-4 px-1 text-[9px] uppercase">
+                          unplanned
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="tabular-nums whitespace-nowrap">
+                    {money(Math.abs(t.amount), { signed: false })}
+                  </div>
+                </div>
+              ))}
+        </div>
+        <div className="flex items-center justify-between border-t px-3 py-2 text-sm">
+          <span className="text-muted-foreground">Total</span>
+          <span className="font-medium tabular-nums">{money(amount)}</span>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function CategoryVarianceTable({
   buckets,
   catNameById,
@@ -1110,8 +1204,22 @@ function CategoryVarianceTable({
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">{money(b.plannedAmount)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{money(b.actualAmount)}</TableCell>
+                        <TableCell className="text-right tabular-nums p-0">
+                          <VarianceCellPopover
+                            kind="planned"
+                            categoryName={name}
+                            amount={b.plannedAmount}
+                            plannedItems={b.plannedItems ?? []}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums p-0">
+                          <VarianceCellPopover
+                            kind="actual"
+                            categoryName={name}
+                            amount={b.actualAmount}
+                            actualTxns={b.actualTxns ?? []}
+                          />
+                        </TableCell>
                         <TableCell
                           className={cn("text-right tabular-nums", varianceColor)}
                         >

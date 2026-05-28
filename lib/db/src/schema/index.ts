@@ -926,6 +926,33 @@ export interface DebriefVarianceTxnItem {
   matchedRecurringItemId: string | null;
 }
 
+// (#801) Drill-down line items behind a category's planned/actual
+// dollars. The variance table cells are clickable in the UI; these
+// arrays are what the popovers render. INVARIANT: the sum of
+// `plannedItems[].amount` equals `Number(plannedAmount)`; the sum of
+// `Math.abs(actualTxns[].amount)` equals `Number(actualAmount)`. The
+// weeklyDebrief aggregation enforces this by populating these arrays
+// from the same loop that computes the totals.
+export interface DebriefCategoryPlannedItem {
+  recurringItemId: string | null;
+  name: string;
+  // Absolute forecast dollars for this single occurrence.
+  amount: number;
+  // YYYY-MM-DD — the schedule's original forecast date.
+  forecastDate: string;
+}
+export interface DebriefCategoryActualTxn {
+  txnId: string;
+  description: string;
+  // Signed dollars (matches transactions table convention).
+  amount: number;
+  // Pending date (occurredAt slice), falling back to occurredOn.
+  date: string;
+  // True when this txn has a forecast_resolutions row with
+  // status='matched' for the current week — i.e. it filled a plan.
+  // False for unplanned and acknowledged_unplanned bank txns.
+  matchedToPlan: boolean;
+}
 export interface DebriefVarianceCategoryBucket {
   categoryId: string | null;
   // Absolute planned + actual dollars (always positive numerics).
@@ -933,6 +960,9 @@ export interface DebriefVarianceCategoryBucket {
   actualAmount: string;
   // Signed (actual - planned). Positive = overspent vs. plan.
   varianceAmount: string;
+  // (#801) Drill-down rows. Invariant noted on the item types above.
+  plannedItems: DebriefCategoryPlannedItem[];
+  actualTxns: DebriefCategoryActualTxn[];
 }
 
 export interface DebriefVarianceSnapshot {

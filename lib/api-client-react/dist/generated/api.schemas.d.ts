@@ -1862,11 +1862,26 @@ export interface WeeklyDebriefTxnItem {
     status: WeeklyDebriefTxnItemStatus;
     matchedRecurringItemId?: string | null;
 }
+export interface WeeklyDebriefCategoryPlannedItem {
+    recurringItemId?: string | null;
+    name: string;
+    amount: number;
+    forecastDate: string;
+}
+export interface WeeklyDebriefCategoryActualTxn {
+    txnId: string;
+    description: string;
+    amount: number;
+    date: string;
+    matchedToPlan: boolean;
+}
 export interface WeeklyDebriefCategoryBucket {
     categoryId?: string | null;
     plannedAmount: string;
     actualAmount: string;
     varianceAmount: string;
+    plannedItems: WeeklyDebriefCategoryPlannedItem[];
+    actualTxns: WeeklyDebriefCategoryActualTxn[];
 }
 export interface WeeklyDebriefSnapshot {
     weekStart: string;

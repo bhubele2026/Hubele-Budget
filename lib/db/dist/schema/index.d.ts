@@ -4896,11 +4896,26 @@ export interface DebriefVarianceTxnItem {
     status: "matched" | "unplanned" | "acknowledged_unplanned";
     matchedRecurringItemId: string | null;
 }
+export interface DebriefCategoryPlannedItem {
+    recurringItemId: string | null;
+    name: string;
+    amount: number;
+    forecastDate: string;
+}
+export interface DebriefCategoryActualTxn {
+    txnId: string;
+    description: string;
+    amount: number;
+    date: string;
+    matchedToPlan: boolean;
+}
 export interface DebriefVarianceCategoryBucket {
     categoryId: string | null;
     plannedAmount: string;
     actualAmount: string;
     varianceAmount: string;
+    plannedItems: DebriefCategoryPlannedItem[];
+    actualTxns: DebriefCategoryActualTxn[];
 }
 export interface DebriefVarianceSnapshot {
     weekStart: string;

@@ -526,20 +526,52 @@ export async function computeWeekVariance(
   }
 
   // -- By-category breakdown -----------------------------------------
-  type Acc = { planned: number; actual: number };
+  // (#801) Each bucket carries drill-down arrays so the UI can show
+  // "what makes up this number?" popovers. Aggregated in the same
+  // loop as the totals so the invariant holds:
+  //   sum(plannedItems[].amount)      === Number(plannedAmount)
+  //   sum(abs(actualTxns[].amount))   === Number(actualAmount)
+  type Acc = {
+    planned: number;
+    actual: number;
+    plannedItems: DebriefVarianceCategoryBucket["plannedItems"];
+    actualTxns: DebriefVarianceCategoryBucket["actualTxns"];
+  };
   const cat = new Map<string | null, Acc>();
-  const bump = (key: string | null, planned: number, actual: number) => {
-    const cur = cat.get(key) ?? { planned: 0, actual: 0 };
-    cur.planned += planned;
-    cur.actual += actual;
-    cat.set(key, cur);
+  const ensure = (key: string | null): Acc => {
+    let cur = cat.get(key);
+    if (!cur) {
+      cur = { planned: 0, actual: 0, plannedItems: [], actualTxns: [] };
+      cat.set(key, cur);
+    }
+    return cur;
   };
   for (const p of planItems) {
-    bump(p.categoryId, Number(p.forecastAmount), 0);
+    // Skip plans that won't be counted against the planned total
+    // (matched_on_time income is $0 variance but still IS a planned
+    // dollar; rescheduled-out and skipped shouldn't count).
+    if (p.status === "rescheduled" || p.status === "skipped") continue;
+    const acc = ensure(p.categoryId);
+    const amt = Number(p.forecastAmount);
+    acc.planned += amt;
+    acc.plannedItems.push({
+      recurringItemId: p.recurringItemId,
+      name: p.name,
+      amount: amt,
+      forecastDate: p.forecastDate,
+    });
   }
   for (const t of txnItems) {
-    const absAmt = abs(t.amount);
-    bump(t.categoryId, 0, absAmt);
+    const acc = ensure(t.categoryId);
+    const signed = Number(t.amount);
+    acc.actual += Math.abs(signed);
+    acc.actualTxns.push({
+      txnId: t.txnId,
+      description: t.description,
+      amount: signed,
+      date: t.date,
+      matchedToPlan: t.status === "matched",
+    });
   }
   const byCategory: DebriefVarianceCategoryBucket[] = [];
   for (const [categoryId, acc] of cat.entries()) {
@@ -548,6 +580,8 @@ export async function computeWeekVariance(
       plannedAmount: money(acc.planned),
       actualAmount: money(acc.actual),
       varianceAmount: money(acc.actual - acc.planned),
+      plannedItems: acc.plannedItems,
+      actualTxns: acc.actualTxns,
     });
   }
   byCategory.sort((a, b) =>

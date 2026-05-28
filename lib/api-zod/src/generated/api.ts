@@ -2627,6 +2627,23 @@ export const GetWeeklyDebriefResponse = zod.object({
           plannedAmount: zod.string(),
           actualAmount: zod.string(),
           varianceAmount: zod.string(),
+          plannedItems: zod.array(
+            zod.object({
+              recurringItemId: zod.string().nullish(),
+              name: zod.string(),
+              amount: zod.number(),
+              forecastDate: zod.string(),
+            }),
+          ),
+          actualTxns: zod.array(
+            zod.object({
+              txnId: zod.string(),
+              description: zod.string(),
+              amount: zod.number(),
+              date: zod.string(),
+              matchedToPlan: zod.boolean(),
+            }),
+          ),
         }),
       ),
       openItemsCount: zod.number(),
@@ -2755,6 +2772,23 @@ export const LockWeeklyDebriefResponse = zod.object({
           plannedAmount: zod.string(),
           actualAmount: zod.string(),
           varianceAmount: zod.string(),
+          plannedItems: zod.array(
+            zod.object({
+              recurringItemId: zod.string().nullish(),
+              name: zod.string(),
+              amount: zod.number(),
+              forecastDate: zod.string(),
+            }),
+          ),
+          actualTxns: zod.array(
+            zod.object({
+              txnId: zod.string(),
+              description: zod.string(),
+              amount: zod.number(),
+              date: zod.string(),
+              matchedToPlan: zod.boolean(),
+            }),
+          ),
         }),
       ),
       openItemsCount: zod.number(),
@@ -2887,6 +2921,23 @@ export const UnlockWeeklyDebriefResponse = zod.object({
           plannedAmount: zod.string(),
           actualAmount: zod.string(),
           varianceAmount: zod.string(),
+          plannedItems: zod.array(
+            zod.object({
+              recurringItemId: zod.string().nullish(),
+              name: zod.string(),
+              amount: zod.number(),
+              forecastDate: zod.string(),
+            }),
+          ),
+          actualTxns: zod.array(
+            zod.object({
+              txnId: zod.string(),
+              description: zod.string(),
+              amount: zod.number(),
+              date: zod.string(),
+              matchedToPlan: zod.boolean(),
+            }),
+          ),
         }),
       ),
       openItemsCount: zod.number(),

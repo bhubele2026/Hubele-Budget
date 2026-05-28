@@ -1,0 +1,43 @@
+Feature: make the Category Variance numbers clickable. Clicking a Planned or Actual amount opens a popover showing the individual line items that make up that number. This is the whole point of the variance table — I see "Groceries actual $848.95" and I want to click it and see the 4 transactions behind it.
+
+PART 1 — Backend: include line-item breakdown in each category bucket.
+
+In weeklyDebrief.ts, the byCategory buckets currently carry only { categoryId, plannedAmount, actualAmount, varianceAmount }. Extend each bucket with two arrays:
+
+  plannedItems: Array<{
+    recurringItemId: string | null;
+    name: string;          // e.g. "Weekly Groceries"
+    amount: number;        // the forecast amount for this occurrence
+    forecastDate: string;  // YYYY-MM-DD
+  }>;
+  actualTxns: Array<{
+    txnId: string;
+    description: string;
+    amount: number;        // signed
+    date: string;          // pending date (occurredAt fallback occurredOn), YYYY-MM-DD
+    matchedToPlan: boolean; // did this txn match a planned item, or is it unplanned?
+  }>;
+
+Populate them in the same aggregation loop that already computes plannedAmount/actualAmount — you're already iterating the plan occurrences and transactions per category, just collect them into these arrays instead of only summing. The sum of plannedItems[].amount must equal plannedAmount; the sum of actualTxns[].amount (abs) must equal actualAmount. Add a cheap assertion or comment noting that invariant.
+
+Update the OpenAPI spec for the bucket shape + run orval codegen.
+
+PART 2 — Frontend: clickable amounts with popover.
+
+In debrief.tsx Category Variance table (~line 1066-1085):
+  - Make the Planned cell and Actual cell clickable (cursor-pointer, subtle hover underline) when the value is non-zero.
+  - Clicking Planned opens a popover (shadcn Popover or Dialog) listing that bucket's plannedItems: each row = name + forecastDate + amount. Header "Planned: [Category]". Footer shows the total matching plannedAmount.
+  - Clicking Actual opens a popover listing actualTxns: each row = description + date + signed amount, with a small badge if matchedToPlan is false ("unplanned"). Header "Actual: [Category]". Footer shows total matching actualAmount.
+  - If a cell is $0.00, don't make it clickable (nothing to show).
+  - Popover should be scrollable if there are many items (max-height with overflow).
+  - Keep it lightweight — this is a read-only drill-down, no actions inside the popover.
+
+PART 3 — Verify:
+  - Click Groceries actual ($848.95 in my current week) → popover lists the transactions summing to $848.95
+  - Click Groceries planned ($300) → popover shows the Weekly Groceries plan occurrence(s) summing to $300
+  - Click a $0 cell → nothing happens (not clickable)
+  - The sum shown in each popover footer matches the cell value exactly
+
+Skip new tests (personal app), but do the 4-point verification above before marking complete. Run typecheck.
+
+Report when shipped + the verification results.

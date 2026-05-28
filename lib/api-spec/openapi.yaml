@@ -3697,14 +3697,37 @@ components:
         source: { type: string, nullable: true }
         status: { type: string, enum: [matched, unplanned, acknowledged_unplanned] }
         matchedRecurringItemId: { type: string, nullable: true }
+    WeeklyDebriefCategoryPlannedItem:
+      type: object
+      required: [name, amount, forecastDate]
+      properties:
+        recurringItemId: { type: string, nullable: true }
+        name: { type: string }
+        amount: { type: number }
+        forecastDate: { type: string }
+    WeeklyDebriefCategoryActualTxn:
+      type: object
+      required: [txnId, description, amount, date, matchedToPlan]
+      properties:
+        txnId: { type: string }
+        description: { type: string }
+        amount: { type: number }
+        date: { type: string }
+        matchedToPlan: { type: boolean }
     WeeklyDebriefCategoryBucket:
       type: object
-      required: [plannedAmount, actualAmount, varianceAmount]
+      required: [plannedAmount, actualAmount, varianceAmount, plannedItems, actualTxns]
       properties:
         categoryId: { type: string, nullable: true }
         plannedAmount: { type: string }
         actualAmount: { type: string }
         varianceAmount: { type: string }
+        plannedItems:
+          type: array
+          items: { $ref: "#/components/schemas/WeeklyDebriefCategoryPlannedItem" }
+        actualTxns:
+          type: array
+          items: { $ref: "#/components/schemas/WeeklyDebriefCategoryActualTxn" }
     WeeklyDebriefSnapshot:
       type: object
       required:

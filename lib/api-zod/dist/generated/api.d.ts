@@ -5792,15 +5792,76 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: zod.ZodString;
             actualAmount: zod.ZodString;
             varianceAmount: zod.ZodString;
+            plannedItems: zod.ZodArray<zod.ZodObject<{
+                recurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+                name: zod.ZodString;
+                amount: zod.ZodNumber;
+                forecastDate: zod.ZodString;
+            }, "strip", zod.ZodTypeAny, {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }, {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }>, "many">;
+            actualTxns: zod.ZodArray<zod.ZodObject<{
+                txnId: zod.ZodString;
+                description: zod.ZodString;
+                amount: zod.ZodNumber;
+                date: zod.ZodString;
+                matchedToPlan: zod.ZodBoolean;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }, {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }>, "many">;
         }, "strip", zod.ZodTypeAny, {
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }, {
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }>, "many">;
         openItemsCount: zod.ZodNumber;
@@ -5870,6 +5931,19 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }[];
     }, {
@@ -5938,6 +6012,19 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }[];
     }>>;
@@ -6058,6 +6145,19 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }[];
     } | null;
@@ -6150,6 +6250,19 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }[];
     } | null;
@@ -6356,15 +6469,76 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: zod.ZodString;
             actualAmount: zod.ZodString;
             varianceAmount: zod.ZodString;
+            plannedItems: zod.ZodArray<zod.ZodObject<{
+                recurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+                name: zod.ZodString;
+                amount: zod.ZodNumber;
+                forecastDate: zod.ZodString;
+            }, "strip", zod.ZodTypeAny, {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }, {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }>, "many">;
+            actualTxns: zod.ZodArray<zod.ZodObject<{
+                txnId: zod.ZodString;
+                description: zod.ZodString;
+                amount: zod.ZodNumber;
+                date: zod.ZodString;
+                matchedToPlan: zod.ZodBoolean;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }, {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }>, "many">;
         }, "strip", zod.ZodTypeAny, {
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }, {
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }>, "many">;
         openItemsCount: zod.ZodNumber;
@@ -6434,6 +6608,19 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }[];
     }, {
@@ -6502,6 +6689,19 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }[];
     }>>;
@@ -6622,6 +6822,19 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }[];
     } | null;
@@ -6714,6 +6927,19 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }[];
     } | null;
@@ -6927,15 +7153,76 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: zod.ZodString;
             actualAmount: zod.ZodString;
             varianceAmount: zod.ZodString;
+            plannedItems: zod.ZodArray<zod.ZodObject<{
+                recurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+                name: zod.ZodString;
+                amount: zod.ZodNumber;
+                forecastDate: zod.ZodString;
+            }, "strip", zod.ZodTypeAny, {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }, {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }>, "many">;
+            actualTxns: zod.ZodArray<zod.ZodObject<{
+                txnId: zod.ZodString;
+                description: zod.ZodString;
+                amount: zod.ZodNumber;
+                date: zod.ZodString;
+                matchedToPlan: zod.ZodBoolean;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }, {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }>, "many">;
         }, "strip", zod.ZodTypeAny, {
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }, {
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }>, "many">;
         openItemsCount: zod.ZodNumber;
@@ -7005,6 +7292,19 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }[];
     }, {
@@ -7073,6 +7373,19 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }[];
     }>>;
@@ -7193,6 +7506,19 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }[];
     } | null;
@@ -7285,6 +7611,19 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             plannedAmount: string;
             actualAmount: string;
             varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
             categoryId?: string | null | undefined;
         }[];
     } | null;

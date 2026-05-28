@@ -5,10 +5,14 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { WeeklyDebriefCategoryActualTxn } from "./weeklyDebriefCategoryActualTxn";
+import type { WeeklyDebriefCategoryPlannedItem } from "./weeklyDebriefCategoryPlannedItem";
 
 export interface WeeklyDebriefCategoryBucket {
   categoryId?: string | null;
   plannedAmount: string;
   actualAmount: string;
   varianceAmount: string;
+  plannedItems: WeeklyDebriefCategoryPlannedItem[];
+  actualTxns: WeeklyDebriefCategoryActualTxn[];
 }
