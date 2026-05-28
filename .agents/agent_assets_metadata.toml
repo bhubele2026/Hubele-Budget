@@ -76,3 +76,9 @@ id = "5sQ0AtLiMXQZ8vKhurOM1"
 uri = "file://.local/exports/plaid-code.tar.gz"
 type = "unspecified"
 title = "Plaid components (download)"
+
+[[outputs]]
+id = "k49Y7ErL0nrKIouFlk9cG"
+uri = "file://.local/exports/prod-plaid-code.tar.gz"
+type = "unspecified"
+title = "Plaid components — PROD (live, commit adc780c9)"
