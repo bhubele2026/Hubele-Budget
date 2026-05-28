@@ -1,0 +1,17 @@
+The bigger finding in your FIX 1 diagnosis is the Plaid duplication: every Synchrony / Affirm / Apple Card payment appears TWICE (short merchant name + long bank-statement string, same date and amount). This inflates Chase money-out, forecast projections, the Debrief variance, and the cash signal — all 2x for these payments. This is a correctness bug and takes priority over the orphan tagging (no point tagging orphans to the right category if the amount is still doubled).
+
+Before fixing, DIAGNOSE the dedup gap:
+
+1. Pull a few example duplicate pairs (the Affirm ones are cleanest). For one pair, show me both rows' full fields: id, plaid_transaction_id, description, amount, occurred_on, occurred_at, source, plaid_account_id, pending. I want to see WHAT differs between the "duplicate" and the "original" beyond the description string.
+
+2. Key question: do the two rows have DIFFERENT plaid_transaction_id values, or the same one? 
+   - If same plaid_transaction_id → the upsert is creating dupes instead of updating, a real bug in the sync path.
+   - If different plaid_transaction_id → Plaid itself is returning the txn twice (e.g. once as pending, once as posted) and our dedup logic isn't collapsing pending→posted transitions.
+
+3. Check the existing dedup logic — there's a dedupeTransactions.ts in the codebase (it was referenced as out-of-scope in the Phase A auto-match work). Does it run on these? Why isn't it catching the merchant-name-variant duplicates? What's its matching key — exact description, or (date + amount + account)?
+
+4. Are these duplicates specific to the Synchrony/Affirm/Apple Card payments, or is it broader? Run a household-wide check: how many transactions have a "twin" (same occurred_on + same abs(amount) + same plaid_account_id, different id)? Report the count and total dollar impact so I know how widespread this is.
+
+DIAGNOSE ONLY. Report findings on all 4. Once I see whether it's a pending/posted issue, a same-id upsert bug, or a dedup-key gap, I'll tell you how to fix it. Do NOT delete any transactions yet — deleting the wrong side of a pending/posted pair could lose the canonical row.
+
+Separately: hold the orphan re-tagging (FIX 1) until after dedup is fixed — tagging doubled transactions just doubles them in the right category.
