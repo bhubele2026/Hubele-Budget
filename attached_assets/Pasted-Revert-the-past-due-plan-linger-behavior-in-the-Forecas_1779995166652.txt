@@ -1,0 +1,33 @@
+Revert the past-due-plan-linger behavior in the Forecast Plan register. The Debrief is now my reconciliation tool — the Forecast page should be purely "what's coming," today forward. Stop showing stale past-due plans (March/April zombies are surfacing because old resolutions don't key-match anymore, and the linger rule resurfaces them).
+
+CHANGE — in artifacts/h2budget/src/lib/forecastMatch.ts, the visiblePlan filter (~lines 260-265, the #751 block):
+
+Current:
+  const visiblePlan = activePlan.filter((p) => {
+    const ms = parseISO(p.date);
+    if (ms > toMs) return false;
+    if (p.status === "pending_plan") return true;   // ← linger rule, remove this
+    return ms >= visibleFromMs;
+  });
+
+Replace with the simple window filter (same as visibleBank uses):
+  const visiblePlan = activePlan.filter((p) => inVisibleWindow(p.date));
+
+So plans now respect visibleFromMs..toMs just like bank rows. With visibleFromISO defaulting to today (forecastFromDate), the register shows today forward — no pre-today zombies. The "Look Back" control still works for anyone who wants to see history (it sets visibleFromISO earlier).
+
+Update the #751 comment to reflect the reversal — note that past-due reconciliation now lives in the Debrief, and the Forecast register is forward-looking from visibleFromISO.
+
+ALSO check two related spots that the #751 linger work touched, and revert them to match:
+
+1. cashSignal.ts — there was a "drag past-due plans to next business day" change tied to this. Search for nextBusinessDay / dragTargetISO / past-due drag-forward logic. If the chart projection is still dragging stale pre-today plans forward, that's the same zombie problem in the chart math. Decision: the cash projection should still account for genuinely-near-future plans, but should NOT drag plans from weeks/months ago. Cap the drag-forward so it only applies to plans within the current forecast window (from visibleFromISO/today), not arbitrarily old ones. If this is hard to scope cleanly, simplest: only drag plans dated within the last 7 days; anything older is assumed handled in the Debrief and excluded from the projection. Tell me what you find and what you changed.
+
+2. useReviewInboxCount.ts — the #751 work may have made the Review badge count past-due plans. If the badge is counting March/April zombies, that's why it might read high. Confirm what it counts now and whether it's pulling stale pre-today plans. The badge should reflect the current review workload, not ancient unresolved plans.
+
+VERIFY:
+  - Open /forecast — Plan register shows only today-forward plans (no Mar 31 / Apr 1 / Apr 2 zombies)
+  - The "Planned forecast items" list starts at today or later
+  - "Look Back" control still lets me see earlier dates if I want
+  - The Review badge count reflects current workload, not ancient plans
+  - The forecast chart projection doesn't spike from dragging old plans forward
+
+Run typecheck. This is mostly a revert + scoping the related cashSignal/badge logic. Report what you found in the two related spots and what you changed.

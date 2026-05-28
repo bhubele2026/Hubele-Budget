@@ -284,6 +284,15 @@ export async function computeCashSignal(
   // pending plan dated today both qualify.
   const dragCutoffISO =
     snapshotISO && snapshotISO > todayISO ? snapshotISO : todayISO;
+  // (#803) Cap how far back the drag-forward reaches. Plans older
+  // than DRAG_LOOKBACK_DAYS before today are NOT dragged forward —
+  // they're zombies (the user forgot, the schedule drifted, the
+  // mapping rule is stale) and reconciliation for them now lives in
+  // the Weekly Debrief, not the cash projection. Without this cap
+  // the chart spikes downward every time an ancient unresolved plan
+  // gets carried onto today+1.
+  const DRAG_LOOKBACK_DAYS = 14;
+  const dragFloorISO = fmtISO(addDays(todayDateOnly, -DRAG_LOOKBACK_DAYS));
   // The drag is applied unconditionally — independent of the chart
   // window. Window placement is handled by the normal roll-forward /
   // daily-projection logic downstream: if today+1 falls inside the
@@ -588,6 +597,10 @@ export async function computeCashSignal(
     // by hopping onto it, and it must not land on day-0 either, or
     // day-0 would exceed the bank snapshot.
     if (rawEffectiveDate <= dragCutoffISO) {
+      // (#803) Drop drag-forward for ancient past-due plans — see
+      // dragFloorISO above. They're reconciled in the Debrief, not
+      // here. Income was already dropped just below.
+      if (rawEffectiveDate < dragFloorISO) continue;
       if (ev.amount < 0) {
         items.push({ date: dragTargetISO, amount: ev.amount, matched: false });
         expenseEvents.push({

@@ -252,17 +252,16 @@ export function buildLineRegister(opts: {
     return ms >= visibleFromMs && ms <= toMs;
   };
   const visibleBank = activeBank.filter((b) => inVisibleWindow(b.date));
-  // (#751) Past-due unresolved plans always stay visible — they keep
-  // moving the projected balance and the user must explicitly resolve
-  // them (match/miss/skip/dismiss) to clear them off the register.
-  // Future-dated plans (status === "future") still respect the
-  // visibleFromMs gate so the look-back window stays predictable.
-  const visiblePlan = activePlan.filter((p) => {
-    const ms = parseISO(p.date);
-    if (ms > toMs) return false;
-    if (p.status === "pending_plan") return true;
-    return ms >= visibleFromMs;
-  });
+  // (#751 — REVERTED in #803) The original #751 linger rule kept
+  // every pending past-due plan visible forever so the user had to
+  // explicitly resolve each one. With the Weekly Debrief now the
+  // authoritative reconciliation surface, the Forecast register has
+  // gone back to being a forward-looking "what's coming" view —
+  // pre-visibleFromMs plans (typically pre-today) drop off the
+  // register and live in the Debrief instead. The "Look Back"
+  // control still lets the user pull `visibleFromMs` earlier on
+  // demand.
+  const visiblePlan = activePlan.filter((p) => inVisibleWindow(p.date));
 
   const rows: LineRow[] = [];
   for (const b of visibleBank) {
