@@ -1,0 +1,35 @@
+EMERGENCY. Restore my Chase. Read the facts and just fix it. Do not ask me to debug, do not ask me to provide credentials, do not ask me to click anything. Use every prod-access path you've used in this project.
+
+FACTS:
+- I added a Chase credit card (Chase Amazon Prime Visa) as a debt via the debt-plaid-link flow
+- Linking that broke my existing Chase checking connection
+- Reconnect button does not work — clicking it many times changes nothing
+- My Chase checking shows ENDING BALANCE $2,000 alive but 0 transactions
+- 12-month checking balance chart shows continuous data — balance history is intact
+- Banner says "Chase and 1 more bank need reconnecting" persistently
+
+MY HOUSEHOLD: a7182af8-49f0-48f3-920e-f916c7eab872 (h2hubele@gmail.com)
+
+DO THIS, AGENTICALLY, WITHOUT ASKING ME:
+
+1. Get prod DB access using whatever path works (Production secrets scope, admin endpoint deploy, whatever — you've done this many times before in this project: weekly_debriefs backfill, dedup work, pinned-rows cleanup, orphan-category diagnosis, plaid_items lookups). DO NOT ask me to add credentials.
+
+2. Determine what happened to my Chase data. Specifically:
+   - Are my Chase transactions deleted from the database, OR orphaned by an account_id change?
+   - When did this happen? What task or operation caused it?
+   - Why does the reconnect button fail? Is the access_token corrupted, did a new plaid_item replace the old one, is there a unique constraint conflict, what?
+
+3. RESTORE my Chase data. Whatever it takes:
+   - If transactions exist but are orphaned: re-point them to the current Chase plaid_account_id
+   - If transactions were deleted: re-pull from Plaid /transactions/sync going back as far as Plaid allows (typically 24 months) after fixing the auth
+   - If the reconnect is broken because of a bad item state: delete the broken plaid_item row and force a fresh link flow
+
+4. Fix the root cause so this can't happen again. The debt-plaid-link flow broke my existing checking connection — that's a real bug. Identify it and fix it before any other debt linking happens.
+
+5. Report when you're done. Tell me:
+   - What the actual cause was
+   - How many transactions were recovered (or how many days of history Plaid could re-pull)
+   - What the root cause fix was
+   - Whether my categorizations, sent-to-review flags, and forecast resolutions survived
+
+If at any step you need to make a judgment call between options, just pick the safest one and document what you did. Don't ask me. I'm trusting you to handle this.
