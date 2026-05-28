@@ -1302,6 +1302,21 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/WeeklyDebriefDetail" }
+  /debrief/weeks/{weekStart}/generate-summary:
+    post:
+      operationId: generateWeeklyDebriefSummary
+      tags: [debrief]
+      parameters:
+        - in: path
+          name: weekStart
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklyDebriefDetail" }
   /debrief/weeks/{weekStart}/unlock:
     post:
       operationId: unlockWeeklyDebrief
@@ -3762,6 +3777,27 @@ components:
           type: array
           items: { $ref: "#/components/schemas/WeeklyDebriefCategoryBucket" }
         openItemsCount: { type: integer }
+    WeeklyDebriefAdvisorSuggestion:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string }
+        toolHint: { type: string }
+    WeeklyDebriefAdvisorSummary:
+      type: object
+      required: [generatedAt, headline, bullets, suggestions, source]
+      properties:
+        generatedAt: { type: string }
+        headline: { type: string }
+        bullets:
+          type: array
+          items: { type: string }
+        suggestions:
+          type: array
+          items: { $ref: "#/components/schemas/WeeklyDebriefAdvisorSuggestion" }
+        source:
+          type: string
+          enum: [ai, fallback]
     WeeklyDebriefActionsSummary:
       type: object
       required:
@@ -3832,6 +3868,10 @@ components:
         actionsSummary:
           allOf:
             - { $ref: "#/components/schemas/WeeklyDebriefActionsSummary" }
+          nullable: true
+        advisorSummary:
+          allOf:
+            - { $ref: "#/components/schemas/WeeklyDebriefAdvisorSummary" }
           nullable: true
         postLockAdditions:
           type: array

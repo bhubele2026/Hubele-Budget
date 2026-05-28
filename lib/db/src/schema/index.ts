@@ -1007,6 +1007,32 @@ export interface DebriefActionsSummary {
   convertedToRecurringCount: number;
 }
 
+// (#802 — Phase E) Advisor takeaway saved alongside the locked
+// week. Generated once at lock time (or on-demand via the
+// generate-summary endpoint) and stored — never recomputed on every
+// view. `generatedAt` lets the UI show "Generated <relative time>"
+// and lets us tell deterministic-fallback summaries apart from
+// fresh LLM-authored ones via `source`.
+export interface DebriefAdvisorSuggestion {
+  text: string;
+  // Optional advisor-tool name the user could invoke from the chat
+  // (e.g. "create_recurring_item"). Pure hint — UI may ignore.
+  toolHint?: string;
+}
+export interface DebriefAdvisorSummary {
+  generatedAt: string; // ISO-8601
+  // One-line plain-language takeaway. Bold in the UI.
+  headline: string;
+  // 2-5 short observations. Each one stands alone.
+  bullets: string[];
+  // Up to 2 actionable nudges; may be empty.
+  suggestions: DebriefAdvisorSuggestion[];
+  // "ai" when authored by Anthropic, "fallback" when the
+  // deterministic template fired because the API was down/slow.
+  // The UI can show a subtle indicator on fallback summaries.
+  source: "ai" | "fallback";
+}
+
 export const weeklyDebriefsTable = pgTable(
   "weekly_debriefs",
   {
@@ -1021,6 +1047,7 @@ export const weeklyDebriefsTable = pgTable(
     lockedByUserId: text("locked_by_user_id"),
     varianceSnapshot: jsonb("variance_snapshot").$type<DebriefVarianceSnapshot>(),
     actionsSummary: jsonb("actions_summary").$type<DebriefActionsSummary>(),
+    advisorSummary: jsonb("advisor_summary").$type<DebriefAdvisorSummary>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
