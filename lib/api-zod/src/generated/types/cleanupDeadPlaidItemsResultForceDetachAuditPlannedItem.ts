@@ -6,9 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CleanupDeadPlaidItemsResultDeletedItem = {
+export type CleanupDeadPlaidItemsResultForceDetachAuditPlannedItem = {
   id: string;
-  itemIdExternal: string;
-  accountsDetached: number;
-  forceDetached?: boolean;
+  accountsToDetach: number;
 };

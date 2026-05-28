@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CleanupDeadPlaidItemsResultDeletedItem } from "./cleanupDeadPlaidItemsResultDeletedItem";
+import type { CleanupDeadPlaidItemsResultForceDetachAuditPlannedItem } from "./cleanupDeadPlaidItemsResultForceDetachAuditPlannedItem";
 
 export interface CleanupDeadPlaidItemsResult {
   totalDeleted: number;
   deleted: CleanupDeadPlaidItemsResultDeletedItem[];
+  forceDetachAuditPlanned?: CleanupDeadPlaidItemsResultForceDetachAuditPlannedItem[];
 }

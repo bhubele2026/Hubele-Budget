@@ -81,6 +81,7 @@ export * from "./checkInvitationResult";
 export * from "./cleanupDeadPlaidItemsInput";
 export * from "./cleanupDeadPlaidItemsResult";
 export * from "./cleanupDeadPlaidItemsResultDeletedItem";
+export * from "./cleanupDeadPlaidItemsResultForceDetachAuditPlannedItem";
 export * from "./cleanupNonProdPlaidItems200";
 export * from "./closeForecastMonthBody";
 export * from "./createDebtFromPlaidAccount409";

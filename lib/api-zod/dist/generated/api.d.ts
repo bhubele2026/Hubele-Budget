@@ -8654,35 +8654,66 @@ ineligible or out-of-household.
  */
 export declare const CleanupDeadPlaidItemsBody: zod.ZodObject<{
     itemIds: zod.ZodArray<zod.ZodString, "many">;
+    forceDetachAccountsForItemIds: zod.ZodOptional<zod.ZodArray<zod.ZodString, "many">>;
 }, "strip", zod.ZodTypeAny, {
     itemIds: string[];
+    forceDetachAccountsForItemIds?: string[] | undefined;
 }, {
     itemIds: string[];
+    forceDetachAccountsForItemIds?: string[] | undefined;
 }>;
 export declare const CleanupDeadPlaidItemsResponse: zod.ZodObject<{
     totalDeleted: zod.ZodNumber;
     deleted: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
         itemIdExternal: zod.ZodString;
+        accountsDetached: zod.ZodNumber;
+        forceDetached: zod.ZodOptional<zod.ZodBoolean>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         itemIdExternal: string;
+        accountsDetached: number;
+        forceDetached?: boolean | undefined;
     }, {
         id: string;
         itemIdExternal: string;
+        accountsDetached: number;
+        forceDetached?: boolean | undefined;
     }>, "many">;
+    forceDetachAuditPlanned: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        accountsToDetach: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        accountsToDetach: number;
+    }, {
+        id: string;
+        accountsToDetach: number;
+    }>, "many">>;
 }, "strip", zod.ZodTypeAny, {
     totalDeleted: number;
     deleted: {
         id: string;
         itemIdExternal: string;
+        accountsDetached: number;
+        forceDetached?: boolean | undefined;
     }[];
+    forceDetachAuditPlanned?: {
+        id: string;
+        accountsToDetach: number;
+    }[] | undefined;
 }, {
     totalDeleted: number;
     deleted: {
         id: string;
         itemIdExternal: string;
+        accountsDetached: number;
+        forceDetached?: boolean | undefined;
     }[];
+    forceDetachAuditPlanned?: {
+        id: string;
+        accountsToDetach: number;
+    }[] | undefined;
 }>;
 export declare const ExchangePlaidPublicTokenBody: zod.ZodObject<{
     publicToken: zod.ZodString;

@@ -2628,7 +2628,10 @@ router.post(
   "/plaid/admin/cleanup-dead-items",
   requireAuth,
   async (req, res): Promise<void> => {
-    const raw = (req.body ?? {}) as { itemIds?: unknown };
+    const raw = (req.body ?? {}) as {
+      itemIds?: unknown;
+      forceDetachAccountsForItemIds?: unknown;
+    };
     const itemIds = Array.isArray(raw.itemIds)
       ? raw.itemIds.filter((v): v is string => typeof v === "string" && v.length > 0)
       : [];
@@ -2636,6 +2639,23 @@ router.post(
       res.status(400).json({ error: "itemIds is required (non-empty string[])" });
       return;
     }
+    // (#chase-restore) Explicit per-item override for the OAuth-invalidated
+    // case: when the bank has nuked the consent on its side (Plaid surfaces
+    // this as "user's OAuth connection to this institution has been
+    // invalidated"), the item still has attached accounts but is
+    // permanently unrecoverable — update mode cannot fix it. Caller opts
+    // in by listing those specific item ids in this set; ids in the set
+    // bypass the dead-state guard. Strict subset of `itemIds` — any
+    // override id not also in the batch is ignored (and intentionally
+    // does NOT widen the deletion scope).
+    const forceDetachSet = new Set(
+      Array.isArray(raw.forceDetachAccountsForItemIds)
+        ? raw.forceDetachAccountsForItemIds.filter(
+            (v): v is string =>
+              typeof v === "string" && v.length > 0 && itemIds.includes(v),
+          )
+        : [],
+    );
     const householdId = req.householdId!;
     const items = await db
       .select()
@@ -2684,6 +2704,7 @@ router.post(
       }
     }
     const ineligible: { id: string; reason: string }[] = [];
+    const forceDetachAudit: { id: string; accountsToDetach: number }[] = [];
     for (const it of items) {
       const isSynthetic = isSyntheticPlaidItem(it);
       const tokenMalformed = !isValidPlaidAccessToken(it.accessToken);
@@ -2691,11 +2712,23 @@ router.post(
       const noAccounts = (itemAcctMap.get(it.id) ?? []).length === 0;
       const dead = isSynthetic || tokenMalformed || tokenEnvMismatch || noAccounts;
       if (!dead) {
-        ineligible.push({
-          id: it.id,
-          reason:
-            "item is healthy and has attached accounts — use DELETE /plaid/items/:id instead",
-        });
+        if (forceDetachSet.has(it.id)) {
+          // Caller explicitly acknowledged that this item is dead at
+          // the OAuth layer even though its access_token still parses
+          // and it has accounts attached. Record the override in the
+          // response so support can see it was an intentional act and
+          // not a missing-guard bug.
+          forceDetachAudit.push({
+            id: it.id,
+            accountsToDetach: (itemAcctMap.get(it.id) ?? []).length,
+          });
+        } else {
+          ineligible.push({
+            id: it.id,
+            reason:
+              "item is healthy and has attached accounts — use DELETE /plaid/items/:id instead, or pass forceDetachAccountsForItemIds with this id if the bank's OAuth grant is dead",
+          });
+        }
       }
     }
     if (ineligible.length > 0) {
@@ -2708,7 +2741,12 @@ router.post(
     // Execute deletes. Mirrors the per-item DELETE route's order:
     // upstream itemRemove (skipped if token is malformed/env-mismatched),
     // reset debt source flags, delete plaid_accounts, delete plaid_items.
-    const deleted: { id: string; itemIdExternal: string }[] = [];
+    const deleted: {
+      id: string;
+      itemIdExternal: string;
+      forceDetached?: boolean;
+      accountsDetached: number;
+    }[] = [];
     for (const it of items) {
       const tokenUsable =
         isValidPlaidAccessToken(it.accessToken) &&
@@ -2757,7 +2795,13 @@ router.post(
             eq(plaidItemsTable.householdId, householdId),
           ),
         );
-      deleted.push({ id: it.id, itemIdExternal: it.itemId });
+      const wasForceDetached = forceDetachSet.has(it.id);
+      deleted.push({
+        id: it.id,
+        itemIdExternal: it.itemId,
+        accountsDetached: acctIds.length,
+        ...(wasForceDetached ? { forceDetached: true } : {}),
+      });
       req.log.info(
         {
           householdId,
@@ -2767,11 +2811,18 @@ router.post(
           institutionName: it.institutionName,
           institutionId: it.institutionId,
           accountsDeleted: acctIds.length,
+          forceDetached: wasForceDetached,
         },
-        "[plaid-admin-cleanup] deleted dead plaid_item",
+        wasForceDetached
+          ? "[plaid-admin-cleanup] (#chase-restore) force-detached and deleted dead-OAuth plaid_item"
+          : "[plaid-admin-cleanup] deleted dead plaid_item",
       );
     }
-    res.json({ deleted, totalDeleted: deleted.length });
+    res.json({
+      deleted,
+      totalDeleted: deleted.length,
+      forceDetachAuditPlanned: forceDetachAudit,
+    });
   },
 );
 

@@ -8,5 +8,7 @@
 export type CleanupDeadPlaidItemsResultDeletedItem = {
     id: string;
     itemIdExternal: string;
+    accountsDetached: number;
+    forceDetached?: boolean;
 };
 //# sourceMappingURL=cleanupDeadPlaidItemsResultDeletedItem.d.ts.map

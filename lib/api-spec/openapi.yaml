@@ -4033,7 +4033,20 @@ components:
             Internal plaid_items row ids (UUIDs) to delete. Every id must
             belong to the caller's household and must be in a "dead"
             state (synthetic seed, malformed/env-mismatched access_token,
-            or empty shell with zero plaid_accounts attached).
+            or empty shell with zero plaid_accounts attached) UNLESS it
+            is also listed in forceDetachAccountsForItemIds.
+        forceDetachAccountsForItemIds:
+          type: array
+          items: { type: string }
+          description: |
+            (#chase-restore) Strict subset of itemIds for which the
+            dead-state guard is bypassed. Use ONLY when the bank has
+            invalidated the OAuth grant on its side (Plaid surfaces this
+            as "user's OAuth connection to this institution has been
+            invalidated"); update mode cannot recover those, but the
+            item still has parseable token + attached accounts. Any id
+            here that is not also in itemIds is ignored — it never
+            widens the deletion scope.
     CleanupDeadPlaidItemsResult:
       type: object
       required: [deleted, totalDeleted]
@@ -4043,10 +4056,20 @@ components:
           type: array
           items:
             type: object
-            required: [id, itemIdExternal]
+            required: [id, itemIdExternal, accountsDetached]
             properties:
               id: { type: string }
               itemIdExternal: { type: string }
+              accountsDetached: { type: integer }
+              forceDetached: { type: boolean }
+        forceDetachAuditPlanned:
+          type: array
+          items:
+            type: object
+            required: [id, accountsToDetach]
+            properties:
+              id: { type: string }
+              accountsToDetach: { type: integer }
     PlaidAccount:
       type: object
       required: [id, accountId]

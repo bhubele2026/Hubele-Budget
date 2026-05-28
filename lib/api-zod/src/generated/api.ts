@@ -3243,7 +3243,13 @@ export const CleanupDeadPlaidItemsBody = zod.object({
   itemIds: zod
     .array(zod.string())
     .describe(
-      'Internal plaid_items row ids (UUIDs) to delete. Every id must\nbelong to the caller\'s household and must be in a \"dead\"\nstate (synthetic seed, malformed\/env-mismatched access_token,\nor empty shell with zero plaid_accounts attached).\n',
+      'Internal plaid_items row ids (UUIDs) to delete. Every id must\nbelong to the caller\'s household and must be in a \"dead\"\nstate (synthetic seed, malformed\/env-mismatched access_token,\nor empty shell with zero plaid_accounts attached) UNLESS it\nis also listed in forceDetachAccountsForItemIds.\n',
+    ),
+  forceDetachAccountsForItemIds: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      '(#chase-restore) Strict subset of itemIds for which the\ndead-state guard is bypassed. Use ONLY when the bank has\ninvalidated the OAuth grant on its side (Plaid surfaces this\nas \"user\'s OAuth connection to this institution has been\ninvalidated\"); update mode cannot recover those, but the\nitem still has parseable token + attached accounts. Any id\nhere that is not also in itemIds is ignored — it never\nwidens the deletion scope.\n',
     ),
 });
 
@@ -3253,8 +3259,18 @@ export const CleanupDeadPlaidItemsResponse = zod.object({
     zod.object({
       id: zod.string(),
       itemIdExternal: zod.string(),
+      accountsDetached: zod.number(),
+      forceDetached: zod.boolean().optional(),
     }),
   ),
+  forceDetachAuditPlanned: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountsToDetach: zod.number(),
+      }),
+    )
+    .optional(),
 });
 
 export const ExchangePlaidPublicTokenBody = zod.object({
