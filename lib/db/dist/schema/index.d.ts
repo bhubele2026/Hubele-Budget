@@ -4879,7 +4879,7 @@ export interface DebriefVariancePlanItem {
     forecastDate: string;
     forecastAmount: string;
     categoryId: string | null;
-    status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+    status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
     matchedTxnId: string | null;
     matchedDate: string | null;
     matchedAmount: string | null;

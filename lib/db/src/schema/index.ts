@@ -871,8 +871,20 @@ export interface DebriefVariancePlanItem {
   //   * matched_on_time — income plan matched within ±7 days (income
   //                        timing rule). $0 variance.
   //   * rescheduled     — pushed to a future week.
+  //   * missed          — user confirmed the planned event didn't happen.
+  //                        Variance = -forecastAmount (the un-spent /
+  //                        un-received dollars still show up in the
+  //                        week's net variance).
+  //   * skipped         — user dismissed the occurrence (duplicate,
+  //                        retired). $0 variance.
   //   * unmatched       — week ended with no resolution.
-  status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+  status:
+    | "matched"
+    | "matched_on_time"
+    | "rescheduled"
+    | "missed"
+    | "skipped"
+    | "unmatched";
   matchedTxnId: string | null;
   matchedDate: string | null;
   matchedAmount: string | null;
