@@ -340,8 +340,24 @@ export function PlaidReconnectButton({
   });
 
   useEffect(() => {
-    if (linkToken && ready) open();
-  }, [linkToken, ready, open]);
+    if (linkToken && ready) {
+      // (TEMP DIAG #804-followup) Identify which Plaid open() trigger
+      // actually fires when the broken Capital One modal appears.
+      // Remove once root cause is confirmed.
+      // eslint-disable-next-line no-console
+      console.log(
+        "[plaid-diag] PlaidReconnectButton.open()",
+        {
+          itemId,
+          institutionName,
+          freshMode,
+          tokenPrefix: linkToken.slice(0, 24),
+          ts: Date.now(),
+        },
+      );
+      open();
+    }
+  }, [linkToken, ready, open, itemId, institutionName, freshMode]);
 
   const busy =
     createUpdateLinkToken.isPending ||

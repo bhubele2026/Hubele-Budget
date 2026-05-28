@@ -528,6 +528,14 @@ export function PlaidLinkButton({
 
   useEffect(() => {
     if (linkToken && ready) {
+      // (TEMP DIAG #804-followup) Identify which Plaid open() trigger
+      // actually fires when the broken Capital One modal appears.
+      // Remove once root cause is confirmed.
+      // eslint-disable-next-line no-console
+      console.log(
+        "[plaid-diag] PlaidLinkButton.open()",
+        { tokenPrefix: linkToken.slice(0, 24), ts: Date.now() },
+      );
       // Stash the active link_token (and where to return to) before
       // opening Link, so OAuth bounce-back can resume the handshake.
       try {

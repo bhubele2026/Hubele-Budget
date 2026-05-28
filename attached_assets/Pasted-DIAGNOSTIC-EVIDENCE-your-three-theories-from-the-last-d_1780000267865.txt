@@ -1,0 +1,25 @@
+DIAGNOSTIC EVIDENCE — your three theories from the last diagnosis can now be narrowed:
+
+1. Confirmed the "0912" is NOT specifically Amex — it's my personal phone number, on file with multiple banks including Capital One. So the assumption that "0912 = Amex 2FA prompt" was wrong. The modal asking for 0912 may be a legitimate Capital One 2FA prompt — but the modal itself is BROKEN (Code input is greyed/uninteractable, Continue is disabled, can't enter anything).
+
+2. DevTools Network trace during a fresh click on Link (Capital One Quicksilver): only link-initialize.js fired (Plaid's SDK JS loading). NO /api/plaid/link-token call. NO /api/plaid/link-token/update call. Zero token requests from our backend during the click that produced the broken modal.
+
+3. Hard refresh (Ctrl+Shift+R) doesn't fix it. Reproduces in Incognito with cleared state. So this is NOT browser session residue.
+
+NEW DIAGNOSIS NEEDED. Given (2) — no token request fired — the only ways the Plaid SDK can show a modal at all are:
+   a) PlaidLinkButton mounted with a linkToken already in component state from an earlier mount/render, and open() fires on a re-render without re-fetching
+   b) The Plaid SDK is opening on stale internal state from a previous session that survived the refresh (extremely rare — Plaid normally clears this)
+   c) Some other Plaid mount is the actual one opening (your theory 3 from before — the synthetic Chase seed reconnect button slipping through isSyntheticPlaidItem filter)
+
+For (a): re-read PlaidLinkButton (plaid-link-button.tsx around line 520) and PlaidAccountPicker (debt-plaid-link.tsx around 385-560). Does PlaidLinkButton EVER hold a linkToken across renders? Does it auto-open on mount if a token is present? If yes, that's the bug — the SDK is opening with a stale or wrongly-scoped token from a prior mount, and the user's click is just rendering a component that already has its token cached. The lack of a /link-token network call confirms this — the token is being reused, not fetched.
+
+For (c): verify isSyntheticPlaidItem actually filters the synthetic Chase seed item from DebtPlaidActions. Specifically: does the Avalanche page render a PlaidReconnectButton for any debt linked to the seed-april-2026-chase item? If isSyntheticPlaidItem isn't being called at the right layer, the seed Chase reconnect button could be mounted, and clicking ANYWHERE that opens a Plaid SDK instance could trigger the seed's stuck-token modal.
+
+Read both code paths, report:
+  - Does PlaidLinkButton cache linkToken across mounts/renders?
+  - Does any debt on my Avalanche page render a PlaidReconnectButton tied to the synthetic Chase seed item?
+  - What's the actual identity of the modal that's appearing? Add temporary console.log statements inside PlaidLinkButton's open() trigger and PlaidReconnectButton's open() trigger so the next time I click Link, we can see in the console which component's open() actually fired. That tells us definitively which mount is opening the modal.
+
+Diagnose first. Don't ship a fix until we know which component is opening the modal. Once you know, fix that specific path.
+
+Also: the synthetic Chase seed item (INVALID_ACCESS_TOKEN, never synced) is causing problems even when filtered. Worth just deleting the row entirely — there's no reason to keep a seed item that hasn't been used since the April backfill. Confirm whether deleting it is safe (no real transactions pointing at it, no debts linked) and if so just remove it. That eliminates an entire class of "what if the filter is wrong" risk.

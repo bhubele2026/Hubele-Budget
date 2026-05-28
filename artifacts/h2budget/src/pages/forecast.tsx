@@ -2363,6 +2363,29 @@ export default function ForecastPage({
     });
   };
 
+  // (#804 — Phase F) Flatten locked-week actual points into a
+  // date→balance map so we can overlay an "actual" series on the
+  // forecast chart for any week the user has locked. Forecast curve
+  // itself is already frozen server-side for these dates (cashSignal
+  // substitutes varianceSnapshot.plans for live recurring expansion),
+  // so the two lines together honestly show "what we planned" vs.
+  // "what really happened" without retroactively shifting when
+  // recurring items get edited later.
+  // NOTE: must be declared BEFORE the loading early-return below so
+  // the hook count is stable across the !data render and the loaded
+  // render — otherwise React throws "Rendered more hooks than during
+  // the previous render" once `data` arrives.
+  const lockedActualByDate = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const lw of data?.lockedWeeks ?? []) {
+      for (const p of lw.actualPoints ?? []) {
+        const n = Number(p.balance);
+        if (Number.isFinite(n)) m.set(p.date, n);
+      }
+    }
+    return m;
+  }, [data?.lockedWeeks]);
+
   // Gate on data only — global keepPreviousData keeps the previous
   // month's forecast visible during refetches so we never flash a
   // skeleton after the first load.
@@ -2383,24 +2406,6 @@ export default function ForecastPage({
   const proj = cashProjection;
   const endingNum = proj?.endingBalance ? Number(proj.endingBalance) : NaN;
   const lowestNum = proj?.lowestProjected ? Number(proj.lowestProjected) : NaN;
-  // (#804 — Phase F) Flatten locked-week actual points into a
-  // date→balance map so we can overlay an "actual" series on the
-  // forecast chart for any week the user has locked. Forecast curve
-  // itself is already frozen server-side for these dates (cashSignal
-  // substitutes varianceSnapshot.plans for live recurring expansion),
-  // so the two lines together honestly show "what we planned" vs.
-  // "what really happened" without retroactively shifting when
-  // recurring items get edited later.
-  const lockedActualByDate = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const lw of data?.lockedWeeks ?? []) {
-      for (const p of lw.actualPoints ?? []) {
-        const n = Number(p.balance);
-        if (Number.isFinite(n)) m.set(p.date, n);
-      }
-    }
-    return m;
-  }, [data?.lockedWeeks]);
   const hasLockedActual = lockedActualByDate.size > 0;
   const dailySeries = (proj?.daily ?? [])
     .map((d: { date: string; balance: string | number }) => {
