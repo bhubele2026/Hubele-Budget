@@ -1742,6 +1742,26 @@ export declare const useLockWeeklyDebrief: <TError = ErrorType<unknown>, TContex
 }) => UseMutationResult<Awaited<ReturnType<typeof lockWeeklyDebrief>>, TError, {
     weekStart: string;
 }, TContext>;
+export declare const getGenerateWeeklyDebriefSummaryUrl: (weekStart: string) => string;
+export declare const generateWeeklyDebriefSummary: (weekStart: string, options?: RequestInit) => Promise<WeeklyDebriefDetail>;
+export declare const getGenerateWeeklyDebriefSummaryMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>, TError, {
+        weekStart: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>, TError, {
+    weekStart: string;
+}, TContext>;
+export type GenerateWeeklyDebriefSummaryMutationResult = NonNullable<Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>>;
+export type GenerateWeeklyDebriefSummaryMutationError = ErrorType<unknown>;
+export declare const useGenerateWeeklyDebriefSummary: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>, TError, {
+        weekStart: string;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>, TError, {
+    weekStart: string;
+}, TContext>;
 export declare const getUnlockWeeklyDebriefUrl: (weekStart: string) => string;
 export declare const unlockWeeklyDebrief: (weekStart: string, unlockWeeklyDebriefBody: UnlockWeeklyDebriefBody, options?: RequestInit) => Promise<WeeklyDebriefDetail>;
 export declare const getUnlockWeeklyDebriefMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {

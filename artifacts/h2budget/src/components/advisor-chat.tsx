@@ -14,6 +14,7 @@ import {
 } from "@workspace/api-client-react";
 import { X, Send, Loader2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { subscribeOpenWithContext } from "@/lib/advisorChatBridge";
 
 function AnthropicLogo({ className }: { className?: string }) {
   return (
@@ -46,6 +47,12 @@ export function AdvisorChat() {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<DisplayedMessage[]>([]);
+  // (#802 — Phase E) Context block prepended to the NEXT user
+  // message we send. Set when another part of the app opened the
+  // chat with `openAdvisorChatWithContext` (e.g. "Dig deeper" on the
+  // Weekly Debrief). Cleared after the first send so it doesn't
+  // contaminate every subsequent turn.
+  const [pendingContext, setPendingContext] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -85,19 +92,40 @@ export function AdvisorChat() {
     if (open) inputRef.current?.focus();
   }, [open]);
 
+  // (#802 — Phase E) Listen for external "open the chat with this
+  // context" requests. Opens the panel, stages the context block,
+  // and pre-fills the composer so the user can edit-and-send.
+  useEffect(() => {
+    return subscribeOpenWithContext((ctx) => {
+      setOpen(true);
+      if (ctx.contextBlock) setPendingContext(ctx.contextBlock);
+      if (ctx.prompt) setDraft(ctx.prompt);
+      // Focus runs in the next tick once the panel mounts.
+      setTimeout(() => inputRef.current?.focus(), 0);
+    });
+  }, []);
+
   if (!nudge?.enabled) return null;
 
   const send = () => {
     const text = draft.trim();
     if (!text || mutation.isPending) return;
+    // If a context block was staged (Dig deeper from the debrief),
+    // prepend it once to the OUTGOING message only. We still show
+    // the user's plain text in the bubble so the transcript stays
+    // readable; the model sees both.
+    const outgoing = pendingContext
+      ? `Context:\n${pendingContext}\n\nQuestion: ${text}`
+      : text;
     const next: DisplayedMessage[] = [...messages, { role: "user", content: text }];
     setMessages(next);
     setDraft("");
+    setPendingContext(null);
     const history: AdvisorChatMessage[] = messages.slice(-CLIENT_HISTORY_CAP).map((m) => ({
       role: m.role,
       content: m.content,
     }));
-    mutation.mutate({ message: text, history });
+    mutation.mutate({ message: outgoing, history });
   };
 
   return (

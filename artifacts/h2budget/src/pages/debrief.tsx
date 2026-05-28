@@ -13,12 +13,14 @@ import {
   X,
   Plus,
   Send,
+  Loader2,
 } from "lucide-react";
 import {
   useListWeeklyDebriefs,
   useGetWeeklyDebrief,
   useLockWeeklyDebrief,
   useUnlockWeeklyDebrief,
+  useGenerateWeeklyDebriefSummary,
   useUpsertForecastResolution,
   useCreateRecurringItem,
   useSendTransactionsToReview,
@@ -38,7 +40,10 @@ import type {
   WeeklyDebriefPlanItem,
   WeeklyDebriefTxnItem,
   WeeklyDebriefCategoryBucket,
+  WeeklyDebriefAdvisorSummary,
 } from "@workspace/api-client-react";
+import { openAdvisorChatWithContext } from "@/lib/advisorChatBridge";
+import { Sparkles, MessageSquare } from "lucide-react";
 import type { RecurringItemInput } from "@workspace/api-zod";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -662,6 +667,14 @@ function DebriefPageActive({
           ) : (
             <>
               <VarianceSummaryCard snapshot={snapshot} />
+
+              {isLocked && (
+                <AdvisorTakeawayCard
+                  weekStart={activeWeekStart}
+                  summary={detail.advisorSummary ?? null}
+                />
+              )}
+
               <CategoryVarianceTable
                 buckets={snapshot.byCategory}
                 catNameById={catNameById}
@@ -1730,6 +1743,169 @@ function PostLockAdditionsCard({
           These transactions arrived after the week was locked. They aren't in
           the frozen snapshot — unlock and re-lock to fold them in.
         </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// =====================================================================
+// (#802 — Phase E) Advisor takeaway card — locked-week-only
+// =====================================================================
+
+function AdvisorTakeawayCard({
+  weekStart,
+  summary,
+}: {
+  weekStart: string;
+  summary: WeeklyDebriefAdvisorSummary | null;
+}) {
+  const queryClient = useQueryClient();
+  const generate = useGenerateWeeklyDebriefSummary();
+  const { toast } = useToast();
+
+  const handleGenerate = (label: string) => {
+    generate.mutate(
+      { weekStart },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getGetWeeklyDebriefQueryKey(weekStart),
+          });
+          toast({ title: label });
+        },
+        onError: (err) =>
+          toast({
+            title: "Couldn't generate takeaway",
+            description: (err as Error).message,
+            variant: "destructive",
+          }),
+      },
+    );
+  };
+
+  const openChat = () => {
+    // Bake the summary into a context block + a starter prompt so the
+    // chat sees the actual numbers without needing a dedicated tool.
+    const contextLines = summary
+      ? [
+          `Locked week of ${weekStart}.`,
+          `Headline: ${summary.headline}`,
+          ...summary.bullets.map((b) => `- ${b}`),
+        ].join("\n")
+      : `Locked week of ${weekStart}. (No advisor summary stored.)`;
+    openAdvisorChatWithContext({
+      weekStart,
+      contextBlock: contextLines,
+      prompt: "Help me dig deeper into this week — what should I focus on?",
+    });
+  };
+
+  // -- Empty state: older locked week with no summary --
+  if (!summary) {
+    return (
+      <Card data-testid="card-advisor-takeaway">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary" />
+            Advisor takeaway
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            No takeaway saved for this week yet.
+          </p>
+          <Button
+            size="sm"
+            onClick={() => handleGenerate("Takeaway generated")}
+            disabled={generate.isPending}
+            data-testid="button-advisor-generate"
+          >
+            {generate.isPending ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                Generating…
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                Generate takeaway
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const isFallback = summary.source === "fallback";
+  return (
+    <Card data-testid="card-advisor-takeaway">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary" />
+            Advisor takeaway
+            {isFallback && (
+              <Badge variant="outline" className="text-[10px] font-normal">
+                template
+              </Badge>
+            )}
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleGenerate("Fresh takeaway generated")}
+            disabled={generate.isPending}
+            data-testid="button-advisor-regenerate"
+            title="Regenerate takeaway"
+          >
+            {generate.isPending ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <RefreshCcw className="w-3.5 h-3.5" />
+            )}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm font-semibold leading-snug" data-testid="text-advisor-headline">
+          {summary.headline}
+        </p>
+        {summary.bullets.length > 0 && (
+          <ul className="text-sm space-y-1 list-disc pl-5 text-foreground/90">
+            {summary.bullets.map((b, i) => (
+              <li key={i} data-testid={`text-advisor-bullet-${i}`}>{b}</li>
+            ))}
+          </ul>
+        )}
+        {summary.suggestions.length > 0 && (
+          <div className="border-t pt-3 space-y-1.5">
+            {summary.suggestions.map((s, i) => (
+              <div
+                key={i}
+                className="text-sm flex items-start gap-2 text-foreground/90"
+                data-testid={`text-advisor-suggestion-${i}`}
+              >
+                <span className="text-primary mt-0.5">→</span>
+                <span>{s.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-xs text-muted-foreground">
+            Generated {new Date(summary.generatedAt).toLocaleString()}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={openChat}
+            data-testid="button-advisor-dig-deeper"
+          >
+            <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
+            Dig deeper
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

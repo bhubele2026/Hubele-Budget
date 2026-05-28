@@ -6050,6 +6050,40 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
     }>>>;
+    advisorSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
+        generatedAt: zod.ZodString;
+        headline: zod.ZodString;
+        bullets: zod.ZodArray<zod.ZodString, "many">;
+        suggestions: zod.ZodArray<zod.ZodObject<{
+            text: zod.ZodString;
+            toolHint: zod.ZodOptional<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            text: string;
+            toolHint?: string | undefined;
+        }, {
+            text: string;
+            toolHint?: string | undefined;
+        }>, "many">;
+        source: zod.ZodEnum<["ai", "fallback"]>;
+    }, "strip", zod.ZodTypeAny, {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
+    }, {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
+    }>>>;
     postLockAdditions: zod.ZodArray<zod.ZodObject<{
         txnId: zod.ZodString;
         date: zod.ZodString;
@@ -6180,6 +6214,16 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
     } | null | undefined;
+    advisorSummary?: {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
+    } | null | undefined;
 }, {
     status: "in_progress" | "awaiting_review" | "locked";
     weekStart: string;
@@ -6284,6 +6328,16 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
         unmatchedCount: number;
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
+    } | null | undefined;
+    advisorSummary?: {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
     } | null | undefined;
 }>;
 export declare const LockWeeklyDebriefParams: zod.ZodObject<{
@@ -6727,6 +6781,40 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
     }>>>;
+    advisorSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
+        generatedAt: zod.ZodString;
+        headline: zod.ZodString;
+        bullets: zod.ZodArray<zod.ZodString, "many">;
+        suggestions: zod.ZodArray<zod.ZodObject<{
+            text: zod.ZodString;
+            toolHint: zod.ZodOptional<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            text: string;
+            toolHint?: string | undefined;
+        }, {
+            text: string;
+            toolHint?: string | undefined;
+        }>, "many">;
+        source: zod.ZodEnum<["ai", "fallback"]>;
+    }, "strip", zod.ZodTypeAny, {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
+    }, {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
+    }>>>;
     postLockAdditions: zod.ZodArray<zod.ZodObject<{
         txnId: zod.ZodString;
         date: zod.ZodString;
@@ -6857,6 +6945,16 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
     } | null | undefined;
+    advisorSummary?: {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
+    } | null | undefined;
 }, {
     status: "in_progress" | "awaiting_review" | "locked";
     weekStart: string;
@@ -6961,6 +7059,747 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
         unmatchedCount: number;
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
+    } | null | undefined;
+    advisorSummary?: {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
+    } | null | undefined;
+}>;
+export declare const GenerateWeeklyDebriefSummaryParams: zod.ZodObject<{
+    weekStart: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    weekStart: string;
+}, {
+    weekStart: string;
+}>;
+export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
+    weekStart: zod.ZodString;
+    weekEnd: zod.ZodString;
+    status: zod.ZodEnum<["in_progress", "awaiting_review", "locked"]>;
+    lockedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lockedByUserId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    varianceSnapshot: zod.ZodNullable<zod.ZodObject<{
+        weekStart: zod.ZodString;
+        weekEnd: zod.ZodString;
+        computedAt: zod.ZodString;
+        totals: zod.ZodObject<{
+            plannedIncome: zod.ZodString;
+            actualIncome: zod.ZodString;
+            plannedExpenses: zod.ZodString;
+            actualExpenses: zod.ZodString;
+            plannedNet: zod.ZodString;
+            actualNet: zod.ZodString;
+            varianceNet: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            plannedIncome: string;
+            plannedExpenses: string;
+            plannedNet: string;
+            actualNet: string;
+            varianceNet: string;
+            actualIncome: string;
+            actualExpenses: string;
+        }, {
+            plannedIncome: string;
+            plannedExpenses: string;
+            plannedNet: string;
+            actualNet: string;
+            varianceNet: string;
+            actualIncome: string;
+            actualExpenses: string;
+        }>;
+        plans: zod.ZodArray<zod.ZodObject<{
+            recurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            name: zod.ZodString;
+            kind: zod.ZodEnum<["income", "expense"]>;
+            forecastDate: zod.ZodString;
+            forecastAmount: zod.ZodString;
+            categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "missed", "skipped", "unmatched"]>;
+            matchedTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            matchedDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            matchedAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            rescheduledTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            varianceAmount: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
+            name: string;
+            kind: "income" | "expense";
+            forecastDate: string;
+            forecastAmount: string;
+            varianceAmount: string;
+            categoryId?: string | null | undefined;
+            recurringItemId?: string | null | undefined;
+            matchedTxnId?: string | null | undefined;
+            rescheduledTo?: string | null | undefined;
+            matchedDate?: string | null | undefined;
+            matchedAmount?: string | null | undefined;
+        }, {
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
+            name: string;
+            kind: "income" | "expense";
+            forecastDate: string;
+            forecastAmount: string;
+            varianceAmount: string;
+            categoryId?: string | null | undefined;
+            recurringItemId?: string | null | undefined;
+            matchedTxnId?: string | null | undefined;
+            rescheduledTo?: string | null | undefined;
+            matchedDate?: string | null | undefined;
+            matchedAmount?: string | null | undefined;
+        }>, "many">;
+        transactions: zod.ZodArray<zod.ZodObject<{
+            txnId: zod.ZodString;
+            date: zod.ZodString;
+            description: zod.ZodString;
+            amount: zod.ZodString;
+            categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            status: zod.ZodEnum<["matched", "unplanned", "acknowledged_unplanned"]>;
+            matchedRecurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        }, "strip", zod.ZodTypeAny, {
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
+            date: string;
+            description: string;
+            amount: string;
+            txnId: string;
+            categoryId?: string | null | undefined;
+            source?: string | null | undefined;
+            matchedRecurringItemId?: string | null | undefined;
+        }, {
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
+            date: string;
+            description: string;
+            amount: string;
+            txnId: string;
+            categoryId?: string | null | undefined;
+            source?: string | null | undefined;
+            matchedRecurringItemId?: string | null | undefined;
+        }>, "many">;
+        unmatchedPlans: zod.ZodArray<zod.ZodObject<{
+            recurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            name: zod.ZodString;
+            kind: zod.ZodEnum<["income", "expense"]>;
+            forecastDate: zod.ZodString;
+            forecastAmount: zod.ZodString;
+            categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            status: zod.ZodEnum<["matched", "matched_on_time", "rescheduled", "missed", "skipped", "unmatched"]>;
+            matchedTxnId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            matchedDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            matchedAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            rescheduledTo: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            varianceAmount: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
+            name: string;
+            kind: "income" | "expense";
+            forecastDate: string;
+            forecastAmount: string;
+            varianceAmount: string;
+            categoryId?: string | null | undefined;
+            recurringItemId?: string | null | undefined;
+            matchedTxnId?: string | null | undefined;
+            rescheduledTo?: string | null | undefined;
+            matchedDate?: string | null | undefined;
+            matchedAmount?: string | null | undefined;
+        }, {
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
+            name: string;
+            kind: "income" | "expense";
+            forecastDate: string;
+            forecastAmount: string;
+            varianceAmount: string;
+            categoryId?: string | null | undefined;
+            recurringItemId?: string | null | undefined;
+            matchedTxnId?: string | null | undefined;
+            rescheduledTo?: string | null | undefined;
+            matchedDate?: string | null | undefined;
+            matchedAmount?: string | null | undefined;
+        }>, "many">;
+        unplannedTxns: zod.ZodArray<zod.ZodObject<{
+            txnId: zod.ZodString;
+            date: zod.ZodString;
+            description: zod.ZodString;
+            amount: zod.ZodString;
+            categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            status: zod.ZodEnum<["matched", "unplanned", "acknowledged_unplanned"]>;
+            matchedRecurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        }, "strip", zod.ZodTypeAny, {
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
+            date: string;
+            description: string;
+            amount: string;
+            txnId: string;
+            categoryId?: string | null | undefined;
+            source?: string | null | undefined;
+            matchedRecurringItemId?: string | null | undefined;
+        }, {
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
+            date: string;
+            description: string;
+            amount: string;
+            txnId: string;
+            categoryId?: string | null | undefined;
+            source?: string | null | undefined;
+            matchedRecurringItemId?: string | null | undefined;
+        }>, "many">;
+        byCategory: zod.ZodArray<zod.ZodObject<{
+            categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+            plannedAmount: zod.ZodString;
+            actualAmount: zod.ZodString;
+            varianceAmount: zod.ZodString;
+            plannedItems: zod.ZodArray<zod.ZodObject<{
+                recurringItemId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+                name: zod.ZodString;
+                amount: zod.ZodNumber;
+                forecastDate: zod.ZodString;
+            }, "strip", zod.ZodTypeAny, {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }, {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }>, "many">;
+            actualTxns: zod.ZodArray<zod.ZodObject<{
+                txnId: zod.ZodString;
+                description: zod.ZodString;
+                amount: zod.ZodNumber;
+                date: zod.ZodString;
+                matchedToPlan: zod.ZodBoolean;
+            }, "strip", zod.ZodTypeAny, {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }, {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }>, "many">;
+        }, "strip", zod.ZodTypeAny, {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }, {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }>, "many">;
+        openItemsCount: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        transactions: {
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
+            date: string;
+            description: string;
+            amount: string;
+            txnId: string;
+            categoryId?: string | null | undefined;
+            source?: string | null | undefined;
+            matchedRecurringItemId?: string | null | undefined;
+        }[];
+        weekStart: string;
+        weekEnd: string;
+        openItemsCount: number;
+        computedAt: string;
+        totals: {
+            plannedIncome: string;
+            plannedExpenses: string;
+            plannedNet: string;
+            actualNet: string;
+            varianceNet: string;
+            actualIncome: string;
+            actualExpenses: string;
+        };
+        plans: {
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
+            name: string;
+            kind: "income" | "expense";
+            forecastDate: string;
+            forecastAmount: string;
+            varianceAmount: string;
+            categoryId?: string | null | undefined;
+            recurringItemId?: string | null | undefined;
+            matchedTxnId?: string | null | undefined;
+            rescheduledTo?: string | null | undefined;
+            matchedDate?: string | null | undefined;
+            matchedAmount?: string | null | undefined;
+        }[];
+        unmatchedPlans: {
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
+            name: string;
+            kind: "income" | "expense";
+            forecastDate: string;
+            forecastAmount: string;
+            varianceAmount: string;
+            categoryId?: string | null | undefined;
+            recurringItemId?: string | null | undefined;
+            matchedTxnId?: string | null | undefined;
+            rescheduledTo?: string | null | undefined;
+            matchedDate?: string | null | undefined;
+            matchedAmount?: string | null | undefined;
+        }[];
+        unplannedTxns: {
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
+            date: string;
+            description: string;
+            amount: string;
+            txnId: string;
+            categoryId?: string | null | undefined;
+            source?: string | null | undefined;
+            matchedRecurringItemId?: string | null | undefined;
+        }[];
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
+    }, {
+        transactions: {
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
+            date: string;
+            description: string;
+            amount: string;
+            txnId: string;
+            categoryId?: string | null | undefined;
+            source?: string | null | undefined;
+            matchedRecurringItemId?: string | null | undefined;
+        }[];
+        weekStart: string;
+        weekEnd: string;
+        openItemsCount: number;
+        computedAt: string;
+        totals: {
+            plannedIncome: string;
+            plannedExpenses: string;
+            plannedNet: string;
+            actualNet: string;
+            varianceNet: string;
+            actualIncome: string;
+            actualExpenses: string;
+        };
+        plans: {
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
+            name: string;
+            kind: "income" | "expense";
+            forecastDate: string;
+            forecastAmount: string;
+            varianceAmount: string;
+            categoryId?: string | null | undefined;
+            recurringItemId?: string | null | undefined;
+            matchedTxnId?: string | null | undefined;
+            rescheduledTo?: string | null | undefined;
+            matchedDate?: string | null | undefined;
+            matchedAmount?: string | null | undefined;
+        }[];
+        unmatchedPlans: {
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
+            name: string;
+            kind: "income" | "expense";
+            forecastDate: string;
+            forecastAmount: string;
+            varianceAmount: string;
+            categoryId?: string | null | undefined;
+            recurringItemId?: string | null | undefined;
+            matchedTxnId?: string | null | undefined;
+            rescheduledTo?: string | null | undefined;
+            matchedDate?: string | null | undefined;
+            matchedAmount?: string | null | undefined;
+        }[];
+        unplannedTxns: {
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
+            date: string;
+            description: string;
+            amount: string;
+            txnId: string;
+            categoryId?: string | null | undefined;
+            source?: string | null | undefined;
+            matchedRecurringItemId?: string | null | undefined;
+        }[];
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
+    }>>;
+    actionsSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
+        matchedCount: zod.ZodNumber;
+        rescheduledCount: zod.ZodNumber;
+        missedCount: zod.ZodNumber;
+        unmatchedCount: zod.ZodNumber;
+        unplannedAcceptedCount: zod.ZodNumber;
+        convertedToRecurringCount: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        matchedCount: number;
+        rescheduledCount: number;
+        missedCount: number;
+        unmatchedCount: number;
+        unplannedAcceptedCount: number;
+        convertedToRecurringCount: number;
+    }, {
+        matchedCount: number;
+        rescheduledCount: number;
+        missedCount: number;
+        unmatchedCount: number;
+        unplannedAcceptedCount: number;
+        convertedToRecurringCount: number;
+    }>>>;
+    advisorSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
+        generatedAt: zod.ZodString;
+        headline: zod.ZodString;
+        bullets: zod.ZodArray<zod.ZodString, "many">;
+        suggestions: zod.ZodArray<zod.ZodObject<{
+            text: zod.ZodString;
+            toolHint: zod.ZodOptional<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            text: string;
+            toolHint?: string | undefined;
+        }, {
+            text: string;
+            toolHint?: string | undefined;
+        }>, "many">;
+        source: zod.ZodEnum<["ai", "fallback"]>;
+    }, "strip", zod.ZodTypeAny, {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
+    }, {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
+    }>>>;
+    postLockAdditions: zod.ZodArray<zod.ZodObject<{
+        txnId: zod.ZodString;
+        date: zod.ZodString;
+        description: zod.ZodString;
+        amount: zod.ZodString;
+        categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        syncedAt: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        description: string;
+        amount: string;
+        txnId: string;
+        syncedAt: string;
+        categoryId?: string | null | undefined;
+        source?: string | null | undefined;
+    }, {
+        date: string;
+        description: string;
+        amount: string;
+        txnId: string;
+        syncedAt: string;
+        categoryId?: string | null | undefined;
+        source?: string | null | undefined;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    status: "in_progress" | "awaiting_review" | "locked";
+    weekStart: string;
+    weekEnd: string;
+    varianceSnapshot: {
+        transactions: {
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
+            date: string;
+            description: string;
+            amount: string;
+            txnId: string;
+            categoryId?: string | null | undefined;
+            source?: string | null | undefined;
+            matchedRecurringItemId?: string | null | undefined;
+        }[];
+        weekStart: string;
+        weekEnd: string;
+        openItemsCount: number;
+        computedAt: string;
+        totals: {
+            plannedIncome: string;
+            plannedExpenses: string;
+            plannedNet: string;
+            actualNet: string;
+            varianceNet: string;
+            actualIncome: string;
+            actualExpenses: string;
+        };
+        plans: {
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
+            name: string;
+            kind: "income" | "expense";
+            forecastDate: string;
+            forecastAmount: string;
+            varianceAmount: string;
+            categoryId?: string | null | undefined;
+            recurringItemId?: string | null | undefined;
+            matchedTxnId?: string | null | undefined;
+            rescheduledTo?: string | null | undefined;
+            matchedDate?: string | null | undefined;
+            matchedAmount?: string | null | undefined;
+        }[];
+        unmatchedPlans: {
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
+            name: string;
+            kind: "income" | "expense";
+            forecastDate: string;
+            forecastAmount: string;
+            varianceAmount: string;
+            categoryId?: string | null | undefined;
+            recurringItemId?: string | null | undefined;
+            matchedTxnId?: string | null | undefined;
+            rescheduledTo?: string | null | undefined;
+            matchedDate?: string | null | undefined;
+            matchedAmount?: string | null | undefined;
+        }[];
+        unplannedTxns: {
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
+            date: string;
+            description: string;
+            amount: string;
+            txnId: string;
+            categoryId?: string | null | undefined;
+            source?: string | null | undefined;
+            matchedRecurringItemId?: string | null | undefined;
+        }[];
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
+    } | null;
+    postLockAdditions: {
+        date: string;
+        description: string;
+        amount: string;
+        txnId: string;
+        syncedAt: string;
+        categoryId?: string | null | undefined;
+        source?: string | null | undefined;
+    }[];
+    lockedAt?: string | null | undefined;
+    lockedByUserId?: string | null | undefined;
+    actionsSummary?: {
+        matchedCount: number;
+        rescheduledCount: number;
+        missedCount: number;
+        unmatchedCount: number;
+        unplannedAcceptedCount: number;
+        convertedToRecurringCount: number;
+    } | null | undefined;
+    advisorSummary?: {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
+    } | null | undefined;
+}, {
+    status: "in_progress" | "awaiting_review" | "locked";
+    weekStart: string;
+    weekEnd: string;
+    varianceSnapshot: {
+        transactions: {
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
+            date: string;
+            description: string;
+            amount: string;
+            txnId: string;
+            categoryId?: string | null | undefined;
+            source?: string | null | undefined;
+            matchedRecurringItemId?: string | null | undefined;
+        }[];
+        weekStart: string;
+        weekEnd: string;
+        openItemsCount: number;
+        computedAt: string;
+        totals: {
+            plannedIncome: string;
+            plannedExpenses: string;
+            plannedNet: string;
+            actualNet: string;
+            varianceNet: string;
+            actualIncome: string;
+            actualExpenses: string;
+        };
+        plans: {
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
+            name: string;
+            kind: "income" | "expense";
+            forecastDate: string;
+            forecastAmount: string;
+            varianceAmount: string;
+            categoryId?: string | null | undefined;
+            recurringItemId?: string | null | undefined;
+            matchedTxnId?: string | null | undefined;
+            rescheduledTo?: string | null | undefined;
+            matchedDate?: string | null | undefined;
+            matchedAmount?: string | null | undefined;
+        }[];
+        unmatchedPlans: {
+            status: "matched" | "matched_on_time" | "rescheduled" | "missed" | "skipped" | "unmatched";
+            name: string;
+            kind: "income" | "expense";
+            forecastDate: string;
+            forecastAmount: string;
+            varianceAmount: string;
+            categoryId?: string | null | undefined;
+            recurringItemId?: string | null | undefined;
+            matchedTxnId?: string | null | undefined;
+            rescheduledTo?: string | null | undefined;
+            matchedDate?: string | null | undefined;
+            matchedAmount?: string | null | undefined;
+        }[];
+        unplannedTxns: {
+            status: "matched" | "unplanned" | "acknowledged_unplanned";
+            date: string;
+            description: string;
+            amount: string;
+            txnId: string;
+            categoryId?: string | null | undefined;
+            source?: string | null | undefined;
+            matchedRecurringItemId?: string | null | undefined;
+        }[];
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
+    } | null;
+    postLockAdditions: {
+        date: string;
+        description: string;
+        amount: string;
+        txnId: string;
+        syncedAt: string;
+        categoryId?: string | null | undefined;
+        source?: string | null | undefined;
+    }[];
+    lockedAt?: string | null | undefined;
+    lockedByUserId?: string | null | undefined;
+    actionsSummary?: {
+        matchedCount: number;
+        rescheduledCount: number;
+        missedCount: number;
+        unmatchedCount: number;
+        unplannedAcceptedCount: number;
+        convertedToRecurringCount: number;
+    } | null | undefined;
+    advisorSummary?: {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
     } | null | undefined;
 }>;
 export declare const UnlockWeeklyDebriefParams: zod.ZodObject<{
@@ -7411,6 +8250,40 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
     }>>>;
+    advisorSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
+        generatedAt: zod.ZodString;
+        headline: zod.ZodString;
+        bullets: zod.ZodArray<zod.ZodString, "many">;
+        suggestions: zod.ZodArray<zod.ZodObject<{
+            text: zod.ZodString;
+            toolHint: zod.ZodOptional<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            text: string;
+            toolHint?: string | undefined;
+        }, {
+            text: string;
+            toolHint?: string | undefined;
+        }>, "many">;
+        source: zod.ZodEnum<["ai", "fallback"]>;
+    }, "strip", zod.ZodTypeAny, {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
+    }, {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
+    }>>>;
     postLockAdditions: zod.ZodArray<zod.ZodObject<{
         txnId: zod.ZodString;
         date: zod.ZodString;
@@ -7541,6 +8414,16 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
     } | null | undefined;
+    advisorSummary?: {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
+    } | null | undefined;
 }, {
     status: "in_progress" | "awaiting_review" | "locked";
     weekStart: string;
@@ -7645,6 +8528,16 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
         unmatchedCount: number;
         unplannedAcceptedCount: number;
         convertedToRecurringCount: number;
+    } | null | undefined;
+    advisorSummary?: {
+        source: "ai" | "fallback";
+        generatedAt: string;
+        headline: string;
+        bullets: string[];
+        suggestions: {
+            text: string;
+            toolHint?: string | undefined;
+        }[];
     } | null | undefined;
 }>;
 export declare const CreatePlaidLinkTokenResponse: zod.ZodObject<{
@@ -9496,14 +10389,14 @@ export declare const GetAdvisorNudgeResponse: zod.ZodObject<{
     enabled: boolean;
     message?: string | undefined;
     source?: "advisor" | "empty" | undefined;
-    severity?: "alert" | "info" | "warn" | undefined;
     generatedAt?: Date | undefined;
+    severity?: "alert" | "info" | "warn" | undefined;
 }, {
     enabled: boolean;
     message?: string | undefined;
     source?: "advisor" | "empty" | undefined;
-    severity?: "alert" | "info" | "warn" | undefined;
     generatedAt?: Date | undefined;
+    severity?: "alert" | "info" | "warn" | undefined;
 }>;
 /**
  * Stateless chat endpoint. The client passes the full conversation

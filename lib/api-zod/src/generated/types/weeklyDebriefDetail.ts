@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { WeeklyDebriefActionsSummary } from "./weeklyDebriefActionsSummary";
+import type { WeeklyDebriefAdvisorSummary } from "./weeklyDebriefAdvisorSummary";
 import type { WeeklyDebriefDetailStatus } from "./weeklyDebriefDetailStatus";
 import type { WeeklyDebriefPostLockAddition } from "./weeklyDebriefPostLockAddition";
 import type { WeeklyDebriefSnapshot } from "./weeklyDebriefSnapshot";
@@ -18,5 +19,6 @@ export interface WeeklyDebriefDetail {
   lockedByUserId?: string | null;
   varianceSnapshot: WeeklyDebriefSnapshot | null;
   actionsSummary?: WeeklyDebriefActionsSummary | null;
+  advisorSummary?: WeeklyDebriefAdvisorSummary | null;
   postLockAdditions: WeeklyDebriefPostLockAddition[];
 }

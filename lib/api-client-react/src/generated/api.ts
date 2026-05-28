@@ -6442,6 +6442,87 @@ export const useLockWeeklyDebrief = <
   return useMutation(getLockWeeklyDebriefMutationOptions(options));
 };
 
+export const getGenerateWeeklyDebriefSummaryUrl = (weekStart: string) => {
+  return `/api/debrief/weeks/${weekStart}/generate-summary`;
+};
+
+export const generateWeeklyDebriefSummary = async (
+  weekStart: string,
+  options?: RequestInit,
+): Promise<WeeklyDebriefDetail> => {
+  return customFetch<WeeklyDebriefDetail>(
+    getGenerateWeeklyDebriefSummaryUrl(weekStart),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getGenerateWeeklyDebriefSummaryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>,
+    TError,
+    { weekStart: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>,
+  TError,
+  { weekStart: string },
+  TContext
+> => {
+  const mutationKey = ["generateWeeklyDebriefSummary"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>,
+    { weekStart: string }
+  > = (props) => {
+    const { weekStart } = props ?? {};
+
+    return generateWeeklyDebriefSummary(weekStart, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateWeeklyDebriefSummaryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>
+>;
+
+export type GenerateWeeklyDebriefSummaryMutationError = ErrorType<unknown>;
+
+export const useGenerateWeeklyDebriefSummary = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>,
+    TError,
+    { weekStart: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateWeeklyDebriefSummary>>,
+  TError,
+  { weekStart: string },
+  TContext
+> => {
+  return useMutation(getGenerateWeeklyDebriefSummaryMutationOptions(options));
+};
+
 export const getUnlockWeeklyDebriefUrl = (weekStart: string) => {
   return `/api/debrief/weeks/${weekStart}/unlock`;
 };

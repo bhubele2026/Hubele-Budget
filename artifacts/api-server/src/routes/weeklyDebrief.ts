@@ -20,6 +20,7 @@ import {
   transactionsTable,
   recurringItemsTable,
   type DebriefVarianceSnapshot,
+  type DebriefAdvisorSummary,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -31,6 +32,8 @@ import {
   weekStartFor,
 } from "../lib/weeklyDebrief";
 import { addDays, fmtISO, parseISO } from "../lib/cashSignal";
+import { generateDebriefSummary } from "../lib/debriefAdvisorSummary";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -240,6 +243,7 @@ router.get(
         lockedByUserId: row.lockedByUserId,
         varianceSnapshot: row.varianceSnapshot,
         actionsSummary: row.actionsSummary,
+        advisorSummary: row.advisorSummary ?? null,
         postLockAdditions,
       });
       return;
@@ -254,6 +258,7 @@ router.get(
       lockedByUserId: null,
       varianceSnapshot: snapshot,
       actionsSummary: null,
+      advisorSummary: null,
       postLockAdditions: [],
     });
   },
@@ -328,6 +333,36 @@ router.post(
         },
       })
       .returning();
+
+    // (#802 — Phase E) Generate advisor takeaway. The generator has
+    // its own 12s timeout + deterministic fallback so this NEVER
+    // throws or hangs the lock — worst case the user gets a
+    // template-built summary they can re-generate on demand.
+    let advisorSummary: DebriefAdvisorSummary | null = null;
+    try {
+      advisorSummary = await generateDebriefSummary({
+        householdId,
+        weekStart,
+        currentSnapshot: snapshot,
+      });
+      await db
+        .update(weeklyDebriefsTable)
+        .set({ advisorSummary, updatedAt: new Date() })
+        .where(
+          and(
+            eq(weeklyDebriefsTable.householdId, householdId),
+            eq(weeklyDebriefsTable.weekStart, weekStart),
+          ),
+        );
+    } catch (err) {
+      // Defensive — generator should already swallow its own errors,
+      // but never let an advisor problem break the lock contract.
+      logger.error(
+        { err: err instanceof Error ? err.message : String(err), weekStart },
+        "lockWeeklyDebrief: advisor summary unexpectedly failed",
+      );
+    }
+
     res.json({
       weekStart: row.weekStart,
       weekEnd: row.weekEnd,
@@ -336,6 +371,72 @@ router.post(
       lockedByUserId: row.lockedByUserId,
       varianceSnapshot: row.varianceSnapshot,
       actionsSummary: row.actionsSummary,
+      advisorSummary,
+      postLockAdditions: [],
+    });
+  },
+);
+
+// (#802 — Phase E) On-demand summary (re)generation for a locked
+// week. Used by the "Generate takeaway" button on older locked
+// weeks (no summary yet) and by anyone who wants a fresh take.
+router.post(
+  "/debrief/weeks/:weekStart/generate-summary",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const householdId = req.householdId!;
+    const raw: string =
+      typeof req.params.weekStart === "string" ? req.params.weekStart : "";
+    if (!ISO_DATE.test(raw) || !isSunday(raw)) {
+      res.status(400).json({ error: "weekStart must be a Sunday YYYY-MM-DD" });
+      return;
+    }
+    const weekStart = raw;
+    const [row] = await db
+      .select()
+      .from(weeklyDebriefsTable)
+      .where(
+        and(
+          eq(weeklyDebriefsTable.householdId, householdId),
+          eq(weeklyDebriefsTable.weekStart, weekStart),
+        ),
+      );
+    if (!row) {
+      res.status(404).json({ error: "Week not found" });
+      return;
+    }
+    if (row.status !== "locked" || !row.varianceSnapshot) {
+      res
+        .status(400)
+        .json({ error: "Week must be locked before generating a summary" });
+      return;
+    }
+
+    const advisorSummary = await generateDebriefSummary({
+      householdId,
+      weekStart,
+      currentSnapshot: row.varianceSnapshot,
+    });
+    await db
+      .update(weeklyDebriefsTable)
+      .set({ advisorSummary, updatedAt: new Date() })
+      .where(
+        and(
+          eq(weeklyDebriefsTable.householdId, householdId),
+          eq(weeklyDebriefsTable.weekStart, weekStart),
+        ),
+      );
+
+    res.json({
+      weekStart: row.weekStart,
+      weekEnd: row.weekEnd,
+      status: row.status as WeekStatus,
+      lockedAt: row.lockedAt?.toISOString() ?? null,
+      lockedByUserId: row.lockedByUserId,
+      varianceSnapshot: row.varianceSnapshot,
+      actionsSummary: row.actionsSummary,
+      advisorSummary,
+      postLockAdditions: [],
     });
   },
 );

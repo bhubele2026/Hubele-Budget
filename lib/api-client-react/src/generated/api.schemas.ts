@@ -2128,6 +2128,27 @@ export interface WeeklyDebriefSnapshot {
   openItemsCount: number;
 }
 
+export interface WeeklyDebriefAdvisorSuggestion {
+  text: string;
+  toolHint?: string;
+}
+
+export type WeeklyDebriefAdvisorSummarySource =
+  (typeof WeeklyDebriefAdvisorSummarySource)[keyof typeof WeeklyDebriefAdvisorSummarySource];
+
+export const WeeklyDebriefAdvisorSummarySource = {
+  ai: "ai",
+  fallback: "fallback",
+} as const;
+
+export interface WeeklyDebriefAdvisorSummary {
+  generatedAt: string;
+  headline: string;
+  bullets: string[];
+  suggestions: WeeklyDebriefAdvisorSuggestion[];
+  source: WeeklyDebriefAdvisorSummarySource;
+}
+
 export interface WeeklyDebriefActionsSummary {
   matchedCount: number;
   rescheduledCount: number;
@@ -2192,6 +2213,7 @@ export interface WeeklyDebriefDetail {
   lockedByUserId?: string | null;
   varianceSnapshot: WeeklyDebriefSnapshot | null;
   actionsSummary?: WeeklyDebriefActionsSummary | null;
+  advisorSummary?: WeeklyDebriefAdvisorSummary | null;
   postLockAdditions: WeeklyDebriefPostLockAddition[];
 }
 

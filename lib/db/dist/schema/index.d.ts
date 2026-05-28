@@ -4945,6 +4945,17 @@ export interface DebriefActionsSummary {
     unplannedAcceptedCount: number;
     convertedToRecurringCount: number;
 }
+export interface DebriefAdvisorSuggestion {
+    text: string;
+    toolHint?: string;
+}
+export interface DebriefAdvisorSummary {
+    generatedAt: string;
+    headline: string;
+    bullets: string[];
+    suggestions: DebriefAdvisorSuggestion[];
+    source: "ai" | "fallback";
+}
 export declare const weeklyDebriefsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "weekly_debriefs";
     schema: undefined;
@@ -5105,6 +5116,25 @@ export declare const weeklyDebriefsTable: import("drizzle-orm/pg-core").PgTableW
             generated: undefined;
         }, {}, {
             $type: DebriefActionsSummary;
+        }>;
+        advisorSummary: import("drizzle-orm/pg-core").PgColumn<{
+            name: "advisor_summary";
+            tableName: "weekly_debriefs";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: DebriefAdvisorSummary;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: DebriefAdvisorSummary;
         }>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
