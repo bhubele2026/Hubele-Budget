@@ -88,3 +88,9 @@ id = "7AQcsw6sHxogMy80hfBn7"
 uri = "file://.local/exports/h2budget-prod-src.tar.gz"
 type = "unspecified"
 title = "Full app source — PROD (commit adc780c9, ~2.4MB, assets excluded)"
+
+[[outputs]]
+id = "KeZE0ECJSd3V5b2Q-GRee"
+uri = "file://h2budget-app-code.tar.gz"
+type = "unspecified"
+title = "H2 Family Budget — full app code (2.3 MB)"
