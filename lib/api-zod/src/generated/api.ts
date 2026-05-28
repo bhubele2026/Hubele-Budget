@@ -2505,6 +2505,404 @@ export const ReopenWeekQueryParams = zod.object({
   weekStart: zod.coerce.string(),
 });
 
+export const ListWeeklyDebriefsQueryParams = zod.object({
+  from: zod.coerce.string().optional(),
+  to: zod.coerce.string().optional(),
+});
+
+export const ListWeeklyDebriefsResponse = zod.object({
+  weeks: zod.array(
+    zod.object({
+      weekStart: zod.string(),
+      weekEnd: zod.string(),
+      status: zod.enum(["in_progress", "awaiting_review", "locked"]),
+      openItemsCount: zod.number(),
+      netSummary: zod.object({
+        plannedNet: zod.string(),
+        actualNet: zod.string(),
+        varianceNet: zod.string(),
+      }),
+      lockedAt: zod.string().nullish(),
+    }),
+  ),
+});
+
+export const GetWeeklyDebriefParams = zod.object({
+  weekStart: zod.coerce.string(),
+});
+
+export const GetWeeklyDebriefResponse = zod.object({
+  weekStart: zod.string(),
+  weekEnd: zod.string(),
+  status: zod.enum(["in_progress", "awaiting_review", "locked"]),
+  lockedAt: zod.string().nullish(),
+  lockedByUserId: zod.string().nullish(),
+  varianceSnapshot: zod
+    .object({
+      weekStart: zod.string(),
+      weekEnd: zod.string(),
+      computedAt: zod.string(),
+      totals: zod.object({
+        plannedIncome: zod.string(),
+        actualIncome: zod.string(),
+        plannedExpenses: zod.string(),
+        actualExpenses: zod.string(),
+        plannedNet: zod.string(),
+        actualNet: zod.string(),
+        varianceNet: zod.string(),
+      }),
+      plans: zod.array(
+        zod.object({
+          recurringItemId: zod.string().nullish(),
+          name: zod.string(),
+          kind: zod.enum(["income", "expense"]),
+          forecastDate: zod.string(),
+          forecastAmount: zod.string(),
+          categoryId: zod.string().nullish(),
+          status: zod.enum([
+            "matched",
+            "matched_on_time",
+            "rescheduled",
+            "unmatched",
+          ]),
+          matchedTxnId: zod.string().nullish(),
+          matchedDate: zod.string().nullish(),
+          matchedAmount: zod.string().nullish(),
+          rescheduledTo: zod.string().nullish(),
+          varianceAmount: zod.string(),
+        }),
+      ),
+      transactions: zod.array(
+        zod.object({
+          txnId: zod.string(),
+          date: zod.string(),
+          description: zod.string(),
+          amount: zod.string(),
+          categoryId: zod.string().nullish(),
+          source: zod.string().nullish(),
+          status: zod.enum(["matched", "unplanned"]),
+          matchedRecurringItemId: zod.string().nullish(),
+        }),
+      ),
+      unmatchedPlans: zod.array(
+        zod.object({
+          recurringItemId: zod.string().nullish(),
+          name: zod.string(),
+          kind: zod.enum(["income", "expense"]),
+          forecastDate: zod.string(),
+          forecastAmount: zod.string(),
+          categoryId: zod.string().nullish(),
+          status: zod.enum([
+            "matched",
+            "matched_on_time",
+            "rescheduled",
+            "unmatched",
+          ]),
+          matchedTxnId: zod.string().nullish(),
+          matchedDate: zod.string().nullish(),
+          matchedAmount: zod.string().nullish(),
+          rescheduledTo: zod.string().nullish(),
+          varianceAmount: zod.string(),
+        }),
+      ),
+      unplannedTxns: zod.array(
+        zod.object({
+          txnId: zod.string(),
+          date: zod.string(),
+          description: zod.string(),
+          amount: zod.string(),
+          categoryId: zod.string().nullish(),
+          source: zod.string().nullish(),
+          status: zod.enum(["matched", "unplanned"]),
+          matchedRecurringItemId: zod.string().nullish(),
+        }),
+      ),
+      byCategory: zod.array(
+        zod.object({
+          categoryId: zod.string().nullish(),
+          plannedAmount: zod.string(),
+          actualAmount: zod.string(),
+          varianceAmount: zod.string(),
+        }),
+      ),
+      openItemsCount: zod.number(),
+    })
+    .nullable(),
+  actionsSummary: zod
+    .object({
+      matchedCount: zod.number(),
+      rescheduledCount: zod.number(),
+      missedCount: zod.number(),
+      unmatchedCount: zod.number(),
+      unplannedAcceptedCount: zod.number(),
+      convertedToRecurringCount: zod.number(),
+    })
+    .nullish(),
+  postLockAdditions: zod.array(
+    zod.object({
+      txnId: zod.string(),
+      date: zod.string(),
+      description: zod.string(),
+      amount: zod.string(),
+      categoryId: zod.string().nullish(),
+      source: zod.string().nullish(),
+      syncedAt: zod.string(),
+    }),
+  ),
+});
+
+export const LockWeeklyDebriefParams = zod.object({
+  weekStart: zod.coerce.string(),
+});
+
+export const LockWeeklyDebriefResponse = zod.object({
+  weekStart: zod.string(),
+  weekEnd: zod.string(),
+  status: zod.enum(["in_progress", "awaiting_review", "locked"]),
+  lockedAt: zod.string().nullish(),
+  lockedByUserId: zod.string().nullish(),
+  varianceSnapshot: zod
+    .object({
+      weekStart: zod.string(),
+      weekEnd: zod.string(),
+      computedAt: zod.string(),
+      totals: zod.object({
+        plannedIncome: zod.string(),
+        actualIncome: zod.string(),
+        plannedExpenses: zod.string(),
+        actualExpenses: zod.string(),
+        plannedNet: zod.string(),
+        actualNet: zod.string(),
+        varianceNet: zod.string(),
+      }),
+      plans: zod.array(
+        zod.object({
+          recurringItemId: zod.string().nullish(),
+          name: zod.string(),
+          kind: zod.enum(["income", "expense"]),
+          forecastDate: zod.string(),
+          forecastAmount: zod.string(),
+          categoryId: zod.string().nullish(),
+          status: zod.enum([
+            "matched",
+            "matched_on_time",
+            "rescheduled",
+            "unmatched",
+          ]),
+          matchedTxnId: zod.string().nullish(),
+          matchedDate: zod.string().nullish(),
+          matchedAmount: zod.string().nullish(),
+          rescheduledTo: zod.string().nullish(),
+          varianceAmount: zod.string(),
+        }),
+      ),
+      transactions: zod.array(
+        zod.object({
+          txnId: zod.string(),
+          date: zod.string(),
+          description: zod.string(),
+          amount: zod.string(),
+          categoryId: zod.string().nullish(),
+          source: zod.string().nullish(),
+          status: zod.enum(["matched", "unplanned"]),
+          matchedRecurringItemId: zod.string().nullish(),
+        }),
+      ),
+      unmatchedPlans: zod.array(
+        zod.object({
+          recurringItemId: zod.string().nullish(),
+          name: zod.string(),
+          kind: zod.enum(["income", "expense"]),
+          forecastDate: zod.string(),
+          forecastAmount: zod.string(),
+          categoryId: zod.string().nullish(),
+          status: zod.enum([
+            "matched",
+            "matched_on_time",
+            "rescheduled",
+            "unmatched",
+          ]),
+          matchedTxnId: zod.string().nullish(),
+          matchedDate: zod.string().nullish(),
+          matchedAmount: zod.string().nullish(),
+          rescheduledTo: zod.string().nullish(),
+          varianceAmount: zod.string(),
+        }),
+      ),
+      unplannedTxns: zod.array(
+        zod.object({
+          txnId: zod.string(),
+          date: zod.string(),
+          description: zod.string(),
+          amount: zod.string(),
+          categoryId: zod.string().nullish(),
+          source: zod.string().nullish(),
+          status: zod.enum(["matched", "unplanned"]),
+          matchedRecurringItemId: zod.string().nullish(),
+        }),
+      ),
+      byCategory: zod.array(
+        zod.object({
+          categoryId: zod.string().nullish(),
+          plannedAmount: zod.string(),
+          actualAmount: zod.string(),
+          varianceAmount: zod.string(),
+        }),
+      ),
+      openItemsCount: zod.number(),
+    })
+    .nullable(),
+  actionsSummary: zod
+    .object({
+      matchedCount: zod.number(),
+      rescheduledCount: zod.number(),
+      missedCount: zod.number(),
+      unmatchedCount: zod.number(),
+      unplannedAcceptedCount: zod.number(),
+      convertedToRecurringCount: zod.number(),
+    })
+    .nullish(),
+  postLockAdditions: zod.array(
+    zod.object({
+      txnId: zod.string(),
+      date: zod.string(),
+      description: zod.string(),
+      amount: zod.string(),
+      categoryId: zod.string().nullish(),
+      source: zod.string().nullish(),
+      syncedAt: zod.string(),
+    }),
+  ),
+});
+
+export const UnlockWeeklyDebriefParams = zod.object({
+  weekStart: zod.coerce.string(),
+});
+
+export const UnlockWeeklyDebriefBody = zod.object({
+  confirm: zod.boolean(),
+});
+
+export const UnlockWeeklyDebriefResponse = zod.object({
+  weekStart: zod.string(),
+  weekEnd: zod.string(),
+  status: zod.enum(["in_progress", "awaiting_review", "locked"]),
+  lockedAt: zod.string().nullish(),
+  lockedByUserId: zod.string().nullish(),
+  varianceSnapshot: zod
+    .object({
+      weekStart: zod.string(),
+      weekEnd: zod.string(),
+      computedAt: zod.string(),
+      totals: zod.object({
+        plannedIncome: zod.string(),
+        actualIncome: zod.string(),
+        plannedExpenses: zod.string(),
+        actualExpenses: zod.string(),
+        plannedNet: zod.string(),
+        actualNet: zod.string(),
+        varianceNet: zod.string(),
+      }),
+      plans: zod.array(
+        zod.object({
+          recurringItemId: zod.string().nullish(),
+          name: zod.string(),
+          kind: zod.enum(["income", "expense"]),
+          forecastDate: zod.string(),
+          forecastAmount: zod.string(),
+          categoryId: zod.string().nullish(),
+          status: zod.enum([
+            "matched",
+            "matched_on_time",
+            "rescheduled",
+            "unmatched",
+          ]),
+          matchedTxnId: zod.string().nullish(),
+          matchedDate: zod.string().nullish(),
+          matchedAmount: zod.string().nullish(),
+          rescheduledTo: zod.string().nullish(),
+          varianceAmount: zod.string(),
+        }),
+      ),
+      transactions: zod.array(
+        zod.object({
+          txnId: zod.string(),
+          date: zod.string(),
+          description: zod.string(),
+          amount: zod.string(),
+          categoryId: zod.string().nullish(),
+          source: zod.string().nullish(),
+          status: zod.enum(["matched", "unplanned"]),
+          matchedRecurringItemId: zod.string().nullish(),
+        }),
+      ),
+      unmatchedPlans: zod.array(
+        zod.object({
+          recurringItemId: zod.string().nullish(),
+          name: zod.string(),
+          kind: zod.enum(["income", "expense"]),
+          forecastDate: zod.string(),
+          forecastAmount: zod.string(),
+          categoryId: zod.string().nullish(),
+          status: zod.enum([
+            "matched",
+            "matched_on_time",
+            "rescheduled",
+            "unmatched",
+          ]),
+          matchedTxnId: zod.string().nullish(),
+          matchedDate: zod.string().nullish(),
+          matchedAmount: zod.string().nullish(),
+          rescheduledTo: zod.string().nullish(),
+          varianceAmount: zod.string(),
+        }),
+      ),
+      unplannedTxns: zod.array(
+        zod.object({
+          txnId: zod.string(),
+          date: zod.string(),
+          description: zod.string(),
+          amount: zod.string(),
+          categoryId: zod.string().nullish(),
+          source: zod.string().nullish(),
+          status: zod.enum(["matched", "unplanned"]),
+          matchedRecurringItemId: zod.string().nullish(),
+        }),
+      ),
+      byCategory: zod.array(
+        zod.object({
+          categoryId: zod.string().nullish(),
+          plannedAmount: zod.string(),
+          actualAmount: zod.string(),
+          varianceAmount: zod.string(),
+        }),
+      ),
+      openItemsCount: zod.number(),
+    })
+    .nullable(),
+  actionsSummary: zod
+    .object({
+      matchedCount: zod.number(),
+      rescheduledCount: zod.number(),
+      missedCount: zod.number(),
+      unmatchedCount: zod.number(),
+      unplannedAcceptedCount: zod.number(),
+      convertedToRecurringCount: zod.number(),
+    })
+    .nullish(),
+  postLockAdditions: zod.array(
+    zod.object({
+      txnId: zod.string(),
+      date: zod.string(),
+      description: zod.string(),
+      amount: zod.string(),
+      categoryId: zod.string().nullish(),
+      source: zod.string().nullish(),
+      syncedAt: zod.string(),
+    }),
+  ),
+});
+
 export const CreatePlaidLinkTokenResponse = zod.object({
   linkToken: zod.string(),
   expiration: zod.string(),

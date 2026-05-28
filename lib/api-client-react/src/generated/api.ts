@@ -84,6 +84,7 @@ import type {
   ListDashboardBudgetsParams,
   ListPlaidLiabilityAccountsParams,
   ListTransactionsParams,
+  ListWeeklyDebriefsParams,
   ListWeeklySettlementsParams,
   MappingRule,
   MappingRuleInput,
@@ -127,9 +128,12 @@ import type {
   TransactionInput,
   UncategorizeByIdsInput,
   UncategorizeByIdsResult,
+  UnlockWeeklyDebriefBody,
   UpdatePlaidImportCutoffDate200,
   UpdatePlaidImportCutoffDateBody,
   UpdateTransactionResponse,
+  WeeklyDebriefDetail,
+  WeeklyDebriefList,
   WeeklySettlement,
   WeeklySettlementInput,
 } from "./api.schemas";
@@ -6186,6 +6190,340 @@ export const useReopenWeek = <
   TContext
 > => {
   return useMutation(getReopenWeekMutationOptions(options));
+};
+
+export const getListWeeklyDebriefsUrl = (params?: ListWeeklyDebriefsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/debrief/weeks?${stringifiedParams}`
+    : `/api/debrief/weeks`;
+};
+
+export const listWeeklyDebriefs = async (
+  params?: ListWeeklyDebriefsParams,
+  options?: RequestInit,
+): Promise<WeeklyDebriefList> => {
+  return customFetch<WeeklyDebriefList>(getListWeeklyDebriefsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListWeeklyDebriefsQueryKey = (
+  params?: ListWeeklyDebriefsParams,
+) => {
+  return [`/api/debrief/weeks`, ...(params ? [params] : [])] as const;
+};
+
+export const getListWeeklyDebriefsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listWeeklyDebriefs>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListWeeklyDebriefsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listWeeklyDebriefs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListWeeklyDebriefsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listWeeklyDebriefs>>
+  > = ({ signal }) => listWeeklyDebriefs(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listWeeklyDebriefs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListWeeklyDebriefsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listWeeklyDebriefs>>
+>;
+export type ListWeeklyDebriefsQueryError = ErrorType<unknown>;
+
+export function useListWeeklyDebriefs<
+  TData = Awaited<ReturnType<typeof listWeeklyDebriefs>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListWeeklyDebriefsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listWeeklyDebriefs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListWeeklyDebriefsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getGetWeeklyDebriefUrl = (weekStart: string) => {
+  return `/api/debrief/weeks/${weekStart}`;
+};
+
+export const getWeeklyDebrief = async (
+  weekStart: string,
+  options?: RequestInit,
+): Promise<WeeklyDebriefDetail> => {
+  return customFetch<WeeklyDebriefDetail>(getGetWeeklyDebriefUrl(weekStart), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetWeeklyDebriefQueryKey = (weekStart: string) => {
+  return [`/api/debrief/weeks/${weekStart}`] as const;
+};
+
+export const getGetWeeklyDebriefQueryOptions = <
+  TData = Awaited<ReturnType<typeof getWeeklyDebrief>>,
+  TError = ErrorType<unknown>,
+>(
+  weekStart: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWeeklyDebrief>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetWeeklyDebriefQueryKey(weekStart);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getWeeklyDebrief>>
+  > = ({ signal }) =>
+    getWeeklyDebrief(weekStart, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!weekStart,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getWeeklyDebrief>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetWeeklyDebriefQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getWeeklyDebrief>>
+>;
+export type GetWeeklyDebriefQueryError = ErrorType<unknown>;
+
+export function useGetWeeklyDebrief<
+  TData = Awaited<ReturnType<typeof getWeeklyDebrief>>,
+  TError = ErrorType<unknown>,
+>(
+  weekStart: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWeeklyDebrief>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetWeeklyDebriefQueryOptions(weekStart, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getLockWeeklyDebriefUrl = (weekStart: string) => {
+  return `/api/debrief/weeks/${weekStart}/lock`;
+};
+
+export const lockWeeklyDebrief = async (
+  weekStart: string,
+  options?: RequestInit,
+): Promise<WeeklyDebriefDetail> => {
+  return customFetch<WeeklyDebriefDetail>(getLockWeeklyDebriefUrl(weekStart), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getLockWeeklyDebriefMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof lockWeeklyDebrief>>,
+    TError,
+    { weekStart: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof lockWeeklyDebrief>>,
+  TError,
+  { weekStart: string },
+  TContext
+> => {
+  const mutationKey = ["lockWeeklyDebrief"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof lockWeeklyDebrief>>,
+    { weekStart: string }
+  > = (props) => {
+    const { weekStart } = props ?? {};
+
+    return lockWeeklyDebrief(weekStart, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LockWeeklyDebriefMutationResult = NonNullable<
+  Awaited<ReturnType<typeof lockWeeklyDebrief>>
+>;
+
+export type LockWeeklyDebriefMutationError = ErrorType<unknown>;
+
+export const useLockWeeklyDebrief = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof lockWeeklyDebrief>>,
+    TError,
+    { weekStart: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof lockWeeklyDebrief>>,
+  TError,
+  { weekStart: string },
+  TContext
+> => {
+  return useMutation(getLockWeeklyDebriefMutationOptions(options));
+};
+
+export const getUnlockWeeklyDebriefUrl = (weekStart: string) => {
+  return `/api/debrief/weeks/${weekStart}/unlock`;
+};
+
+export const unlockWeeklyDebrief = async (
+  weekStart: string,
+  unlockWeeklyDebriefBody: UnlockWeeklyDebriefBody,
+  options?: RequestInit,
+): Promise<WeeklyDebriefDetail> => {
+  return customFetch<WeeklyDebriefDetail>(
+    getUnlockWeeklyDebriefUrl(weekStart),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(unlockWeeklyDebriefBody),
+    },
+  );
+};
+
+export const getUnlockWeeklyDebriefMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlockWeeklyDebrief>>,
+    TError,
+    { weekStart: string; data: BodyType<UnlockWeeklyDebriefBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unlockWeeklyDebrief>>,
+  TError,
+  { weekStart: string; data: BodyType<UnlockWeeklyDebriefBody> },
+  TContext
+> => {
+  const mutationKey = ["unlockWeeklyDebrief"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unlockWeeklyDebrief>>,
+    { weekStart: string; data: BodyType<UnlockWeeklyDebriefBody> }
+  > = (props) => {
+    const { weekStart, data } = props ?? {};
+
+    return unlockWeeklyDebrief(weekStart, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnlockWeeklyDebriefMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unlockWeeklyDebrief>>
+>;
+export type UnlockWeeklyDebriefMutationBody = BodyType<UnlockWeeklyDebriefBody>;
+export type UnlockWeeklyDebriefMutationError = ErrorType<unknown>;
+
+export const useUnlockWeeklyDebrief = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlockWeeklyDebrief>>,
+    TError,
+    { weekStart: string; data: BodyType<UnlockWeeklyDebriefBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unlockWeeklyDebrief>>,
+  TError,
+  { weekStart: string; data: BodyType<UnlockWeeklyDebriefBody> },
+  TContext
+> => {
+  return useMutation(getUnlockWeeklyDebriefMutationOptions(options));
 };
 
 export const getCreatePlaidLinkTokenUrl = () => {

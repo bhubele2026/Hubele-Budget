@@ -23,6 +23,7 @@ tags:
   - name: invitations
   - name: members
   - name: advisor
+  - name: debrief
 paths:
   /healthz:
     get:
@@ -1253,6 +1254,78 @@ paths:
           schema: { type: string }
       responses:
         "204": { description: Reopened }
+
+  /debrief/weeks:
+    get:
+      operationId: listWeeklyDebriefs
+      tags: [debrief]
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string }
+        - in: query
+          name: to
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklyDebriefList" }
+  /debrief/weeks/{weekStart}:
+    get:
+      operationId: getWeeklyDebrief
+      tags: [debrief]
+      parameters:
+        - in: path
+          name: weekStart
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklyDebriefDetail" }
+  /debrief/weeks/{weekStart}/lock:
+    post:
+      operationId: lockWeeklyDebrief
+      tags: [debrief]
+      parameters:
+        - in: path
+          name: weekStart
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklyDebriefDetail" }
+  /debrief/weeks/{weekStart}/unlock:
+    post:
+      operationId: unlockWeeklyDebrief
+      tags: [debrief]
+      parameters:
+        - in: path
+          name: weekStart
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm: { type: boolean }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeeklyDebriefDetail" }
 
   /plaid/link-token:
     post:
@@ -3575,6 +3648,171 @@ components:
         bucket: { type: string }
         periodKey: { type: string }
         amount: { type: string }
+
+    WeeklyDebriefTotals:
+      type: object
+      required:
+        - plannedIncome
+        - actualIncome
+        - plannedExpenses
+        - actualExpenses
+        - plannedNet
+        - actualNet
+        - varianceNet
+      properties:
+        plannedIncome: { type: string }
+        actualIncome: { type: string }
+        plannedExpenses: { type: string }
+        actualExpenses: { type: string }
+        plannedNet: { type: string }
+        actualNet: { type: string }
+        varianceNet: { type: string }
+    WeeklyDebriefPlanItem:
+      type: object
+      required: [name, kind, forecastDate, forecastAmount, status, varianceAmount]
+      properties:
+        recurringItemId: { type: string, nullable: true }
+        name: { type: string }
+        kind: { type: string, enum: [income, expense] }
+        forecastDate: { type: string }
+        forecastAmount: { type: string }
+        categoryId: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [matched, matched_on_time, rescheduled, unmatched]
+        matchedTxnId: { type: string, nullable: true }
+        matchedDate: { type: string, nullable: true }
+        matchedAmount: { type: string, nullable: true }
+        rescheduledTo: { type: string, nullable: true }
+        varianceAmount: { type: string }
+    WeeklyDebriefTxnItem:
+      type: object
+      required: [txnId, date, description, amount, status]
+      properties:
+        txnId: { type: string }
+        date: { type: string }
+        description: { type: string }
+        amount: { type: string }
+        categoryId: { type: string, nullable: true }
+        source: { type: string, nullable: true }
+        status: { type: string, enum: [matched, unplanned] }
+        matchedRecurringItemId: { type: string, nullable: true }
+    WeeklyDebriefCategoryBucket:
+      type: object
+      required: [plannedAmount, actualAmount, varianceAmount]
+      properties:
+        categoryId: { type: string, nullable: true }
+        plannedAmount: { type: string }
+        actualAmount: { type: string }
+        varianceAmount: { type: string }
+    WeeklyDebriefSnapshot:
+      type: object
+      required:
+        - weekStart
+        - weekEnd
+        - computedAt
+        - totals
+        - plans
+        - transactions
+        - unmatchedPlans
+        - unplannedTxns
+        - byCategory
+        - openItemsCount
+      properties:
+        weekStart: { type: string }
+        weekEnd: { type: string }
+        computedAt: { type: string }
+        totals: { $ref: "#/components/schemas/WeeklyDebriefTotals" }
+        plans:
+          type: array
+          items: { $ref: "#/components/schemas/WeeklyDebriefPlanItem" }
+        transactions:
+          type: array
+          items: { $ref: "#/components/schemas/WeeklyDebriefTxnItem" }
+        unmatchedPlans:
+          type: array
+          items: { $ref: "#/components/schemas/WeeklyDebriefPlanItem" }
+        unplannedTxns:
+          type: array
+          items: { $ref: "#/components/schemas/WeeklyDebriefTxnItem" }
+        byCategory:
+          type: array
+          items: { $ref: "#/components/schemas/WeeklyDebriefCategoryBucket" }
+        openItemsCount: { type: integer }
+    WeeklyDebriefActionsSummary:
+      type: object
+      required:
+        - matchedCount
+        - rescheduledCount
+        - missedCount
+        - unmatchedCount
+        - unplannedAcceptedCount
+        - convertedToRecurringCount
+      properties:
+        matchedCount: { type: integer }
+        rescheduledCount: { type: integer }
+        missedCount: { type: integer }
+        unmatchedCount: { type: integer }
+        unplannedAcceptedCount: { type: integer }
+        convertedToRecurringCount: { type: integer }
+    WeeklyDebriefPostLockAddition:
+      type: object
+      required: [txnId, date, description, amount, syncedAt]
+      properties:
+        txnId: { type: string }
+        date: { type: string }
+        description: { type: string }
+        amount: { type: string }
+        categoryId: { type: string, nullable: true }
+        source: { type: string, nullable: true }
+        syncedAt: { type: string }
+    WeeklyDebriefListItem:
+      type: object
+      required: [weekStart, weekEnd, status, openItemsCount, netSummary]
+      properties:
+        weekStart: { type: string }
+        weekEnd: { type: string }
+        status:
+          type: string
+          enum: [in_progress, awaiting_review, locked]
+        openItemsCount: { type: integer }
+        netSummary:
+          type: object
+          required: [plannedNet, actualNet, varianceNet]
+          properties:
+            plannedNet: { type: string }
+            actualNet: { type: string }
+            varianceNet: { type: string }
+        lockedAt: { type: string, nullable: true }
+    WeeklyDebriefList:
+      type: object
+      required: [weeks]
+      properties:
+        weeks:
+          type: array
+          items: { $ref: "#/components/schemas/WeeklyDebriefListItem" }
+    WeeklyDebriefDetail:
+      type: object
+      required: [weekStart, weekEnd, status, varianceSnapshot, postLockAdditions]
+      properties:
+        weekStart: { type: string }
+        weekEnd: { type: string }
+        status:
+          type: string
+          enum: [in_progress, awaiting_review, locked]
+        lockedAt: { type: string, nullable: true }
+        lockedByUserId: { type: string, nullable: true }
+        varianceSnapshot:
+          allOf:
+            - { $ref: "#/components/schemas/WeeklyDebriefSnapshot" }
+          nullable: true
+        actionsSummary:
+          allOf:
+            - { $ref: "#/components/schemas/WeeklyDebriefActionsSummary" }
+          nullable: true
+        postLockAdditions:
+          type: array
+          items: { $ref: "#/components/schemas/WeeklyDebriefPostLockAddition" }
 
     WeeklySettlement:
       type: object

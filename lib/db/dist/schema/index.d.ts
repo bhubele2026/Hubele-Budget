@@ -4872,6 +4872,263 @@ export declare const weeklySettlementsTable: import("drizzle-orm/pg-core").PgTab
     dialect: "pg";
 }>;
 export type WeeklySettlement = typeof weeklySettlementsTable.$inferSelect;
+export interface DebriefVariancePlanItem {
+    recurringItemId: string | null;
+    name: string;
+    kind: "income" | "expense";
+    forecastDate: string;
+    forecastAmount: string;
+    categoryId: string | null;
+    status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+    matchedTxnId: string | null;
+    matchedDate: string | null;
+    matchedAmount: string | null;
+    rescheduledTo: string | null;
+    varianceAmount: string;
+}
+export interface DebriefVarianceTxnItem {
+    txnId: string;
+    date: string;
+    description: string;
+    amount: string;
+    categoryId: string | null;
+    source: string | null;
+    status: "matched" | "unplanned";
+    matchedRecurringItemId: string | null;
+}
+export interface DebriefVarianceCategoryBucket {
+    categoryId: string | null;
+    plannedAmount: string;
+    actualAmount: string;
+    varianceAmount: string;
+}
+export interface DebriefVarianceSnapshot {
+    weekStart: string;
+    weekEnd: string;
+    computedAt: string;
+    totals: {
+        plannedIncome: string;
+        actualIncome: string;
+        plannedExpenses: string;
+        actualExpenses: string;
+        plannedNet: string;
+        actualNet: string;
+        varianceNet: string;
+    };
+    plans: DebriefVariancePlanItem[];
+    transactions: DebriefVarianceTxnItem[];
+    unmatchedPlans: DebriefVariancePlanItem[];
+    unplannedTxns: DebriefVarianceTxnItem[];
+    byCategory: DebriefVarianceCategoryBucket[];
+    openItemsCount: number;
+}
+export interface DebriefActionsSummary {
+    matchedCount: number;
+    rescheduledCount: number;
+    missedCount: number;
+    unmatchedCount: number;
+    unplannedAcceptedCount: number;
+    convertedToRecurringCount: number;
+}
+export declare const weeklyDebriefsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "weekly_debriefs";
+    schema: undefined;
+    columns: {
+        id: import("drizzle-orm/pg-core").PgColumn<{
+            name: "id";
+            tableName: "weekly_debriefs";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        householdId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "household_id";
+            tableName: "weekly_debriefs";
+            dataType: "string";
+            columnType: "PgUUID";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        weekStart: import("drizzle-orm/pg-core").PgColumn<{
+            name: "week_start";
+            tableName: "weekly_debriefs";
+            dataType: "string";
+            columnType: "PgDateString";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        weekEnd: import("drizzle-orm/pg-core").PgColumn<{
+            name: "week_end";
+            tableName: "weekly_debriefs";
+            dataType: "string";
+            columnType: "PgDateString";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        status: import("drizzle-orm/pg-core").PgColumn<{
+            name: "status";
+            tableName: "weekly_debriefs";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        lockedAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "locked_at";
+            tableName: "weekly_debriefs";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        lockedByUserId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "locked_by_user_id";
+            tableName: "weekly_debriefs";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        varianceSnapshot: import("drizzle-orm/pg-core").PgColumn<{
+            name: "variance_snapshot";
+            tableName: "weekly_debriefs";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: DebriefVarianceSnapshot;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: DebriefVarianceSnapshot;
+        }>;
+        actionsSummary: import("drizzle-orm/pg-core").PgColumn<{
+            name: "actions_summary";
+            tableName: "weekly_debriefs";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: DebriefActionsSummary;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: DebriefActionsSummary;
+        }>;
+        createdAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "created_at";
+            tableName: "weekly_debriefs";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        updatedAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "updated_at";
+            tableName: "weekly_debriefs";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+    };
+    dialect: "pg";
+}>;
+export type WeeklyDebrief = typeof weeklyDebriefsTable.$inferSelect;
 export declare const advisorAuditLogTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "advisor_audit_log";
     schema: undefined;

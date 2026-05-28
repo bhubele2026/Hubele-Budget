@@ -832,6 +832,156 @@ export const weeklySettlementsTable = pgTable(
 );
 export type WeeklySettlement = typeof weeklySettlementsTable.$inferSelect;
 
+// (#766 — Phase D1) Weekly Debrief data model.
+//
+// One row per (household, weekStart). `status` lifecycle:
+//   * `in_progress`     — the current Sun–Sat week. Live recompute only;
+//                          no row is required (callers can synthesize the
+//                          status on the fly), but the row may exist if
+//                          the user has already touched the week.
+//   * `awaiting_review` — past Sun–Sat week, not yet locked. Snapshot
+//                          recomputes on every read.
+//   * `locked`          — finalized. `varianceSnapshot` + `actionsSummary`
+//                          are frozen; late Plaid txns appear separately
+//                          via `post_lock_additions` at read time but do
+//                          NOT mutate the saved snapshot.
+//
+// `varianceSnapshot` and `actionsSummary` are JSONB so the shapes can
+// evolve without a schema migration. Both interfaces below are the
+// source of truth — keep route handlers, library code, and any
+// historical migration aligned with them.
+
+export interface DebriefVariancePlanItem {
+  // The recurring item this plan came from. May be null only for
+  // synthetic series (debt-mins / avalanche extras) — D1 ignores
+  // those, but the type leaves room for future expansion.
+  recurringItemId: string | null;
+  name: string;
+  kind: "income" | "expense";
+  // Original forecasted date (YYYY-MM-DD) as the recurring schedule
+  // emitted it. May fall outside the week when the plan was
+  // rescheduled INTO this week from elsewhere.
+  forecastDate: string;
+  // Absolute dollar amount as a numeric string (matches the rest of
+  // the codebase's money shape).
+  forecastAmount: string;
+  categoryId: string | null;
+  // Resolution outcome for this occurrence within this week.
+  //   * matched         — a bank txn was matched on its forecast date.
+  //   * matched_on_time — income plan matched within ±7 days (income
+  //                        timing rule). $0 variance.
+  //   * rescheduled     — pushed to a future week.
+  //   * unmatched       — week ended with no resolution.
+  status: "matched" | "matched_on_time" | "rescheduled" | "unmatched";
+  matchedTxnId: string | null;
+  matchedDate: string | null;
+  matchedAmount: string | null;
+  // Sunday YYYY-MM-DD of the target week when status === 'rescheduled'.
+  rescheduledTo: string | null;
+  // Signed dollars: actual - planned (sign follows kind). Zero when
+  // status is matched_on_time per design decision #5.
+  varianceAmount: string;
+}
+
+export interface DebriefVarianceTxnItem {
+  txnId: string;
+  // Pending date (YYYY-MM-DD slice of occurredAt), falling back to
+  // occurredOn when occurredAt is null. This is the week-assignment
+  // date — NOT the post date.
+  date: string;
+  description: string;
+  // Signed dollars. Negative = expense, positive = income (matches
+  // the transactions table convention).
+  amount: string;
+  categoryId: string | null;
+  source: string | null;
+  status: "matched" | "unplanned";
+  // Set when the txn matched a planned recurring occurrence within
+  // this week.
+  matchedRecurringItemId: string | null;
+}
+
+export interface DebriefVarianceCategoryBucket {
+  categoryId: string | null;
+  // Absolute planned + actual dollars (always positive numerics).
+  plannedAmount: string;
+  actualAmount: string;
+  // Signed (actual - planned). Positive = overspent vs. plan.
+  varianceAmount: string;
+}
+
+export interface DebriefVarianceSnapshot {
+  weekStart: string;
+  weekEnd: string;
+  // ISO-8601 timestamp the snapshot was computed.
+  computedAt: string;
+  totals: {
+    plannedIncome: string;
+    actualIncome: string;
+    plannedExpenses: string;
+    actualExpenses: string;
+    plannedNet: string;
+    actualNet: string;
+    varianceNet: string;
+  };
+  plans: DebriefVariancePlanItem[];
+  transactions: DebriefVarianceTxnItem[];
+  // Convenience subsets, also present in `plans` / `transactions`.
+  unmatchedPlans: DebriefVariancePlanItem[];
+  unplannedTxns: DebriefVarianceTxnItem[];
+  byCategory: DebriefVarianceCategoryBucket[];
+  // Total plans + txns awaiting user action (used to gate lock).
+  openItemsCount: number;
+}
+
+export interface DebriefActionsSummary {
+  matchedCount: number;
+  rescheduledCount: number;
+  // Plans the user explicitly marked as missed (status='missed' on
+  // forecast_resolutions) — counted separately from unmatchedCount,
+  // which means "no resolution at all".
+  missedCount: number;
+  unmatchedCount: number;
+  // Bank txns the user reviewed/accepted as unplanned within the
+  // week-walk (proxied via transactions.reviewed = true and no
+  // matching resolution).
+  unplannedAcceptedCount: number;
+  // Reserved for the D2 "Convert to recurring" affordance. D1 leaves
+  // it at 0 — the column is here so the snapshot shape is stable
+  // across phases.
+  convertedToRecurringCount: number;
+}
+
+export const weeklyDebriefsTable = pgTable(
+  "weekly_debriefs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    weekStart: date("week_start").notNull(),
+    weekEnd: date("week_end").notNull(),
+    status: text("status").notNull().default("awaiting_review"),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedByUserId: text("locked_by_user_id"),
+    varianceSnapshot: jsonb("variance_snapshot").$type<DebriefVarianceSnapshot>(),
+    actionsSummary: jsonb("actions_summary").$type<DebriefActionsSummary>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    householdWeekUq: uniqueIndex("weekly_debriefs_household_week_uq").on(
+      t.householdId,
+      t.weekStart,
+    ),
+    householdStatusIdx: index("weekly_debriefs_household_status_idx").on(
+      t.householdId,
+      t.status,
+    ),
+  }),
+);
+export type WeeklyDebrief = typeof weeklyDebriefsTable.$inferSelect;
+
 export const advisorAuditLogTable = pgTable(
   "advisor_audit_log",
   {

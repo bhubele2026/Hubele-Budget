@@ -2026,6 +2026,155 @@ export interface DashboardBudgetInput {
   amount: string;
 }
 
+export interface WeeklyDebriefTotals {
+  plannedIncome: string;
+  actualIncome: string;
+  plannedExpenses: string;
+  actualExpenses: string;
+  plannedNet: string;
+  actualNet: string;
+  varianceNet: string;
+}
+
+export type WeeklyDebriefPlanItemKind =
+  (typeof WeeklyDebriefPlanItemKind)[keyof typeof WeeklyDebriefPlanItemKind];
+
+export const WeeklyDebriefPlanItemKind = {
+  income: "income",
+  expense: "expense",
+} as const;
+
+export type WeeklyDebriefPlanItemStatus =
+  (typeof WeeklyDebriefPlanItemStatus)[keyof typeof WeeklyDebriefPlanItemStatus];
+
+export const WeeklyDebriefPlanItemStatus = {
+  matched: "matched",
+  matched_on_time: "matched_on_time",
+  rescheduled: "rescheduled",
+  unmatched: "unmatched",
+} as const;
+
+export interface WeeklyDebriefPlanItem {
+  recurringItemId?: string | null;
+  name: string;
+  kind: WeeklyDebriefPlanItemKind;
+  forecastDate: string;
+  forecastAmount: string;
+  categoryId?: string | null;
+  status: WeeklyDebriefPlanItemStatus;
+  matchedTxnId?: string | null;
+  matchedDate?: string | null;
+  matchedAmount?: string | null;
+  rescheduledTo?: string | null;
+  varianceAmount: string;
+}
+
+export type WeeklyDebriefTxnItemStatus =
+  (typeof WeeklyDebriefTxnItemStatus)[keyof typeof WeeklyDebriefTxnItemStatus];
+
+export const WeeklyDebriefTxnItemStatus = {
+  matched: "matched",
+  unplanned: "unplanned",
+} as const;
+
+export interface WeeklyDebriefTxnItem {
+  txnId: string;
+  date: string;
+  description: string;
+  amount: string;
+  categoryId?: string | null;
+  source?: string | null;
+  status: WeeklyDebriefTxnItemStatus;
+  matchedRecurringItemId?: string | null;
+}
+
+export interface WeeklyDebriefCategoryBucket {
+  categoryId?: string | null;
+  plannedAmount: string;
+  actualAmount: string;
+  varianceAmount: string;
+}
+
+export interface WeeklyDebriefSnapshot {
+  weekStart: string;
+  weekEnd: string;
+  computedAt: string;
+  totals: WeeklyDebriefTotals;
+  plans: WeeklyDebriefPlanItem[];
+  transactions: WeeklyDebriefTxnItem[];
+  unmatchedPlans: WeeklyDebriefPlanItem[];
+  unplannedTxns: WeeklyDebriefTxnItem[];
+  byCategory: WeeklyDebriefCategoryBucket[];
+  openItemsCount: number;
+}
+
+export interface WeeklyDebriefActionsSummary {
+  matchedCount: number;
+  rescheduledCount: number;
+  missedCount: number;
+  unmatchedCount: number;
+  unplannedAcceptedCount: number;
+  convertedToRecurringCount: number;
+}
+
+export interface WeeklyDebriefPostLockAddition {
+  txnId: string;
+  date: string;
+  description: string;
+  amount: string;
+  categoryId?: string | null;
+  source?: string | null;
+  syncedAt: string;
+}
+
+export type WeeklyDebriefListItemStatus =
+  (typeof WeeklyDebriefListItemStatus)[keyof typeof WeeklyDebriefListItemStatus];
+
+export const WeeklyDebriefListItemStatus = {
+  in_progress: "in_progress",
+  awaiting_review: "awaiting_review",
+  locked: "locked",
+} as const;
+
+export type WeeklyDebriefListItemNetSummary = {
+  plannedNet: string;
+  actualNet: string;
+  varianceNet: string;
+};
+
+export interface WeeklyDebriefListItem {
+  weekStart: string;
+  weekEnd: string;
+  status: WeeklyDebriefListItemStatus;
+  openItemsCount: number;
+  netSummary: WeeklyDebriefListItemNetSummary;
+  lockedAt?: string | null;
+}
+
+export interface WeeklyDebriefList {
+  weeks: WeeklyDebriefListItem[];
+}
+
+export type WeeklyDebriefDetailStatus =
+  (typeof WeeklyDebriefDetailStatus)[keyof typeof WeeklyDebriefDetailStatus];
+
+export const WeeklyDebriefDetailStatus = {
+  in_progress: "in_progress",
+  awaiting_review: "awaiting_review",
+  locked: "locked",
+} as const;
+
+export interface WeeklyDebriefDetail {
+  weekStart: string;
+  weekEnd: string;
+  status: WeeklyDebriefDetailStatus;
+  lockedAt?: string | null;
+  lockedByUserId?: string | null;
+  varianceSnapshot: WeeklyDebriefSnapshot | null;
+  actionsSummary?: WeeklyDebriefActionsSummary | null;
+  postLockAdditions: WeeklyDebriefPostLockAddition[];
+}
+
 export interface WeeklySettlement {
   id: string;
   weekStart: string;
@@ -2548,6 +2697,15 @@ export type ListWeeklySettlementsParams = {
 
 export type ReopenWeekParams = {
   weekStart: string;
+};
+
+export type ListWeeklyDebriefsParams = {
+  from?: string;
+  to?: string;
+};
+
+export type UnlockWeeklyDebriefBody = {
+  confirm: boolean;
 };
 
 export type UpdatePlaidImportCutoffDateBody = {

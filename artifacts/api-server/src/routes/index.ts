@@ -21,6 +21,7 @@ import amexRouter from "./amex";
 import advisorRouter from "./advisor";
 import advisorUndoRouter from "./advisorUndo";
 import advisorProposalsRouter from "./advisorProposals";
+import weeklyDebriefRouter from "./weeklyDebrief";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(amexRouter);
 router.use(advisorRouter);
 router.use(advisorUndoRouter);
 router.use(advisorProposalsRouter);
+router.use(weeklyDebriefRouter);
 
 export default router;
