@@ -2025,6 +2025,29 @@ export interface PlaidExchangeInput {
     institutionId?: string | null;
     /** @nullable */
     institutionName?: string | null;
+    /** (#dup-link) Opt out of the duplicate-institution guard. When
+  omitted/false, /plaid/exchange refuses with 409
+  `add_account_existing` if the household already has a healthy
+  plaid_item for this institution. Set true to allow a genuinely
+  separate second login (e.g. two distinct Chase logins).
+   */
+    force?: boolean;
+}
+export interface CleanupDeadPlaidItemsInput {
+    /** Internal plaid_items row ids (UUIDs) to delete. Every id must
+  belong to the caller's household and must be in a "dead"
+  state (synthetic seed, malformed/env-mismatched access_token,
+  or empty shell with zero plaid_accounts attached).
+   */
+    itemIds: string[];
+}
+export type CleanupDeadPlaidItemsResultDeletedItem = {
+    id: string;
+    itemIdExternal: string;
+};
+export interface CleanupDeadPlaidItemsResult {
+    totalDeleted: number;
+    deleted: CleanupDeadPlaidItemsResultDeletedItem[];
 }
 export interface PlaidAccount {
     id: string;

@@ -47,6 +47,8 @@ import type {
   CategoryPatchInput,
   CheckInvitationInput,
   CheckInvitationResult,
+  CleanupDeadPlaidItemsInput,
+  CleanupDeadPlaidItemsResult,
   CleanupNonProdPlaidItems200,
   CloseForecastMonthBody,
   CreateDebtFromPlaidAccount409,
@@ -6773,6 +6775,207 @@ export const useCreatePlaidUpdateLinkToken = <
   TContext
 > => {
   return useMutation(getCreatePlaidUpdateLinkTokenMutationOptions(options));
+};
+
+/**
+ * @summary (#dup-link) Create a Plaid Link token in add-account mode for an
+existing item — `update.account_selection_enabled` is true so the
+user can pick a previously-unselected account from the same bank
+login. Used by the duplicate-institution guard in /plaid/exchange
+so re-linking an already-connected bank attaches the new account
+to the existing item instead of minting a sibling row.
+
+ */
+export const getCreatePlaidAddAccountLinkTokenUrl = () => {
+  return `/api/plaid/link-token/add-account`;
+};
+
+export const createPlaidAddAccountLinkToken = async (
+  plaidUpdateLinkTokenInput: PlaidUpdateLinkTokenInput,
+  options?: RequestInit,
+): Promise<PlaidLinkToken> => {
+  return customFetch<PlaidLinkToken>(getCreatePlaidAddAccountLinkTokenUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(plaidUpdateLinkTokenInput),
+  });
+};
+
+export const getCreatePlaidAddAccountLinkTokenMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPlaidAddAccountLinkToken>>,
+    TError,
+    { data: BodyType<PlaidUpdateLinkTokenInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPlaidAddAccountLinkToken>>,
+  TError,
+  { data: BodyType<PlaidUpdateLinkTokenInput> },
+  TContext
+> => {
+  const mutationKey = ["createPlaidAddAccountLinkToken"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPlaidAddAccountLinkToken>>,
+    { data: BodyType<PlaidUpdateLinkTokenInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createPlaidAddAccountLinkToken(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePlaidAddAccountLinkTokenMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPlaidAddAccountLinkToken>>
+>;
+export type CreatePlaidAddAccountLinkTokenMutationBody =
+  BodyType<PlaidUpdateLinkTokenInput>;
+export type CreatePlaidAddAccountLinkTokenMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (#dup-link) Create a Plaid Link token in add-account mode for an
+existing item — `update.account_selection_enabled` is true so the
+user can pick a previously-unselected account from the same bank
+login. Used by the duplicate-institution guard in /plaid/exchange
+so re-linking an already-connected bank attaches the new account
+to the existing item instead of minting a sibling row.
+
+ */
+export const useCreatePlaidAddAccountLinkToken = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPlaidAddAccountLinkToken>>,
+    TError,
+    { data: BodyType<PlaidUpdateLinkTokenInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPlaidAddAccountLinkToken>>,
+  TError,
+  { data: BodyType<PlaidUpdateLinkTokenInput> },
+  TContext
+> => {
+  return useMutation(getCreatePlaidAddAccountLinkTokenMutationOptions(options));
+};
+
+/**
+ * @summary (#chase-restore) One-shot admin endpoint to delete dead Plaid items
+(synthetic seed rows, malformed/env-mismatched tokens, or empty
+shells with no attached accounts). Refuses healthy items — the
+per-item DELETE is the deliberate path for those. Returns the list
+of items actually deleted, or 409 / 403 if any id in the batch is
+ineligible or out-of-household.
+
+ */
+export const getCleanupDeadPlaidItemsUrl = () => {
+  return `/api/plaid/admin/cleanup-dead-items`;
+};
+
+export const cleanupDeadPlaidItems = async (
+  cleanupDeadPlaidItemsInput: CleanupDeadPlaidItemsInput,
+  options?: RequestInit,
+): Promise<CleanupDeadPlaidItemsResult> => {
+  return customFetch<CleanupDeadPlaidItemsResult>(
+    getCleanupDeadPlaidItemsUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(cleanupDeadPlaidItemsInput),
+    },
+  );
+};
+
+export const getCleanupDeadPlaidItemsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cleanupDeadPlaidItems>>,
+    TError,
+    { data: BodyType<CleanupDeadPlaidItemsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cleanupDeadPlaidItems>>,
+  TError,
+  { data: BodyType<CleanupDeadPlaidItemsInput> },
+  TContext
+> => {
+  const mutationKey = ["cleanupDeadPlaidItems"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cleanupDeadPlaidItems>>,
+    { data: BodyType<CleanupDeadPlaidItemsInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return cleanupDeadPlaidItems(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CleanupDeadPlaidItemsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cleanupDeadPlaidItems>>
+>;
+export type CleanupDeadPlaidItemsMutationBody =
+  BodyType<CleanupDeadPlaidItemsInput>;
+export type CleanupDeadPlaidItemsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (#chase-restore) One-shot admin endpoint to delete dead Plaid items
+(synthetic seed rows, malformed/env-mismatched tokens, or empty
+shells with no attached accounts). Refuses healthy items — the
+per-item DELETE is the deliberate path for those. Returns the list
+of items actually deleted, or 409 / 403 if any id in the batch is
+ineligible or out-of-household.
+
+ */
+export const useCleanupDeadPlaidItems = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cleanupDeadPlaidItems>>,
+    TError,
+    { data: BodyType<CleanupDeadPlaidItemsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cleanupDeadPlaidItems>>,
+  TError,
+  { data: BodyType<CleanupDeadPlaidItemsInput> },
+  TContext
+> => {
+  return useMutation(getCleanupDeadPlaidItemsMutationOptions(options));
 };
 
 export const getExchangePlaidPublicTokenUrl = () => {

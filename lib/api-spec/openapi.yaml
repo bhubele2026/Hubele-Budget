@@ -1371,6 +1371,50 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PlaidLinkToken" }
+  /plaid/link-token/add-account:
+    post:
+      operationId: createPlaidAddAccountLinkToken
+      tags: [plaid]
+      summary: |
+        (#dup-link) Create a Plaid Link token in add-account mode for an
+        existing item — `update.account_selection_enabled` is true so the
+        user can pick a previously-unselected account from the same bank
+        login. Used by the duplicate-institution guard in /plaid/exchange
+        so re-linking an already-connected bank attaches the new account
+        to the existing item instead of minting a sibling row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlaidUpdateLinkTokenInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlaidLinkToken" }
+  /plaid/admin/cleanup-dead-items:
+    post:
+      operationId: cleanupDeadPlaidItems
+      tags: [plaid]
+      summary: |
+        (#chase-restore) One-shot admin endpoint to delete dead Plaid items
+        (synthetic seed rows, malformed/env-mismatched tokens, or empty
+        shells with no attached accounts). Refuses healthy items — the
+        per-item DELETE is the deliberate path for those. Returns the list
+        of items actually deleted, or 409 / 403 if any id in the batch is
+        ineligible or out-of-household.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CleanupDeadPlaidItemsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CleanupDeadPlaidItemsResult" }
   /plaid/exchange:
     post:
       operationId: exchangePlaidPublicToken
@@ -3970,6 +4014,39 @@ components:
         publicToken: { type: string }
         institutionId: { type: ["string", "null"] }
         institutionName: { type: ["string", "null"] }
+        force:
+          type: boolean
+          description: |
+            (#dup-link) Opt out of the duplicate-institution guard. When
+            omitted/false, /plaid/exchange refuses with 409
+            `add_account_existing` if the household already has a healthy
+            plaid_item for this institution. Set true to allow a genuinely
+            separate second login (e.g. two distinct Chase logins).
+    CleanupDeadPlaidItemsInput:
+      type: object
+      required: [itemIds]
+      properties:
+        itemIds:
+          type: array
+          items: { type: string }
+          description: |
+            Internal plaid_items row ids (UUIDs) to delete. Every id must
+            belong to the caller's household and must be in a "dead"
+            state (synthetic seed, malformed/env-mismatched access_token,
+            or empty shell with zero plaid_accounts attached).
+    CleanupDeadPlaidItemsResult:
+      type: object
+      required: [deleted, totalDeleted]
+      properties:
+        totalDeleted: { type: integer }
+        deleted:
+          type: array
+          items:
+            type: object
+            required: [id, itemIdExternal]
+            properties:
+              id: { type: string }
+              itemIdExternal: { type: string }
     PlaidAccount:
       type: object
       required: [id, accountId]

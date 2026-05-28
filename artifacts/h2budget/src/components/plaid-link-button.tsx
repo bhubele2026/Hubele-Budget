@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { usePlaidLink } from "react-plaid-link";
 import {
   useCreatePlaidLinkToken,
+  useCreatePlaidAddAccountLinkToken,
   useExchangePlaidPublicToken,
   useGetPlaidEnvironment,
   useListPlaidItems,
@@ -212,6 +213,7 @@ export function PlaidLinkButton({
   const { status: postLinkStatus } = usePostLinkProgress();
   const setPostLinkStatus = setPostLinkProgress;
   const createLinkToken = useCreatePlaidLinkToken();
+  const createAddAccountLinkToken = useCreatePlaidAddAccountLinkToken();
   const exchange = useExchangePlaidPublicToken();
   const { data: plaidEnv } = useGetPlaidEnvironment();
   const qc = useQueryClient();
@@ -532,6 +534,58 @@ export function PlaidLinkButton({
             void pollAfterLink(justLinkedItemId, institutionName);
           },
           onError: (err) => {
+            // (#dup-link) Server refused the exchange because a healthy
+            // plaid_item for this institution already exists. Reopen
+            // Plaid Link in add-account mode against the existing item
+            // instead of stranding the user on a generic toast. This is
+            // what closes the root cause of the Chase incident: a fresh
+            // Link session for an already-connected bank invalidates the
+            // prior session's access_token; add-account mode preserves
+            // the existing token + item_id + sync cursor + history.
+            const apiErr = err as {
+              status?: number;
+              data?: {
+                action?: string;
+                existingItemRowId?: string;
+                institutionName?: string;
+              };
+            };
+            if (
+              apiErr?.status === 409 &&
+              apiErr?.data?.action === "add_account_existing" &&
+              apiErr.data.existingItemRowId
+            ) {
+              const existingItemRowId = apiErr.data.existingItemRowId;
+              const inst = apiErr.data.institutionName ?? institutionName ?? "this bank";
+              clearStoredLinkToken();
+              setLinkToken(null);
+              // Yield the focus trap so the inner Link iframe is
+              // interactable (same dance as the fresh-link path).
+              setYieldingToPlaid(false);
+              onExitPropRef.current?.();
+              openedTokenRef.current = null;
+              toast({
+                title: `${inst} is already linked`,
+                description: `Reopening Plaid so you can add the new account to your existing ${inst} connection (this preserves your transaction history).`,
+              });
+              createAddAccountLinkToken.mutate(
+                { data: { itemId: existingItemRowId } },
+                {
+                  onSuccess: (data) => setLinkToken(data.linkToken),
+                  onError: (innerErr) => {
+                    toast({
+                      title: "Could not reopen Plaid",
+                      description:
+                        innerErr instanceof Error
+                          ? innerErr.message
+                          : String(innerErr),
+                      variant: "destructive",
+                    });
+                  },
+                },
+              );
+              return;
+            }
             toast({
               title: "Link failed",
               description: String(err),
@@ -542,7 +596,15 @@ export function PlaidLinkButton({
         },
       );
     },
-    [exchange, qc, toast, clearStoredLinkToken, onLinked, pollAfterLink],
+    [
+      exchange,
+      qc,
+      toast,
+      clearStoredLinkToken,
+      onLinked,
+      pollAfterLink,
+      createAddAccountLinkToken,
+    ],
   );
 
   // (#804-followup) Stable refs for the parent yield-callbacks. Putting

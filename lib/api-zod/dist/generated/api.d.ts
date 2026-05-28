@@ -8617,18 +8617,88 @@ export declare const CreatePlaidUpdateLinkTokenResponse: zod.ZodObject<{
     linkToken: string;
     expiration: string;
 }>;
+/**
+ * @summary (#dup-link) Create a Plaid Link token in add-account mode for an
+existing item — `update.account_selection_enabled` is true so the
+user can pick a previously-unselected account from the same bank
+login. Used by the duplicate-institution guard in /plaid/exchange
+so re-linking an already-connected bank attaches the new account
+to the existing item instead of minting a sibling row.
+
+ */
+export declare const CreatePlaidAddAccountLinkTokenBody: zod.ZodObject<{
+    itemId: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    itemId: string;
+}, {
+    itemId: string;
+}>;
+export declare const CreatePlaidAddAccountLinkTokenResponse: zod.ZodObject<{
+    linkToken: zod.ZodString;
+    expiration: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    linkToken: string;
+    expiration: string;
+}, {
+    linkToken: string;
+    expiration: string;
+}>;
+/**
+ * @summary (#chase-restore) One-shot admin endpoint to delete dead Plaid items
+(synthetic seed rows, malformed/env-mismatched tokens, or empty
+shells with no attached accounts). Refuses healthy items — the
+per-item DELETE is the deliberate path for those. Returns the list
+of items actually deleted, or 409 / 403 if any id in the batch is
+ineligible or out-of-household.
+
+ */
+export declare const CleanupDeadPlaidItemsBody: zod.ZodObject<{
+    itemIds: zod.ZodArray<zod.ZodString, "many">;
+}, "strip", zod.ZodTypeAny, {
+    itemIds: string[];
+}, {
+    itemIds: string[];
+}>;
+export declare const CleanupDeadPlaidItemsResponse: zod.ZodObject<{
+    totalDeleted: zod.ZodNumber;
+    deleted: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodString;
+        itemIdExternal: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        id: string;
+        itemIdExternal: string;
+    }, {
+        id: string;
+        itemIdExternal: string;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    totalDeleted: number;
+    deleted: {
+        id: string;
+        itemIdExternal: string;
+    }[];
+}, {
+    totalDeleted: number;
+    deleted: {
+        id: string;
+        itemIdExternal: string;
+    }[];
+}>;
 export declare const ExchangePlaidPublicTokenBody: zod.ZodObject<{
     publicToken: zod.ZodString;
     institutionId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     institutionName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    force: zod.ZodOptional<zod.ZodBoolean>;
 }, "strip", zod.ZodTypeAny, {
     publicToken: string;
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
+    force?: boolean | undefined;
 }, {
     publicToken: string;
     institutionName?: string | null | undefined;
     institutionId?: string | null | undefined;
+    force?: boolean | undefined;
 }>;
 export declare const ExchangePlaidPublicTokenResponse: zod.ZodObject<{
     id: zod.ZodString;

@@ -3208,10 +3208,65 @@ export const CreatePlaidUpdateLinkTokenResponse = zod.object({
   expiration: zod.string(),
 });
 
+/**
+ * @summary (#dup-link) Create a Plaid Link token in add-account mode for an
+existing item — `update.account_selection_enabled` is true so the
+user can pick a previously-unselected account from the same bank
+login. Used by the duplicate-institution guard in /plaid/exchange
+so re-linking an already-connected bank attaches the new account
+to the existing item instead of minting a sibling row.
+
+ */
+export const CreatePlaidAddAccountLinkTokenBody = zod.object({
+  itemId: zod
+    .string()
+    .describe(
+      "Internal Plaid item row id (UUID) of the item that needs\nre-authentication. Used to look up the stored access_token and\ncreate a Plaid Link token in update mode.\n",
+    ),
+});
+
+export const CreatePlaidAddAccountLinkTokenResponse = zod.object({
+  linkToken: zod.string(),
+  expiration: zod.string(),
+});
+
+/**
+ * @summary (#chase-restore) One-shot admin endpoint to delete dead Plaid items
+(synthetic seed rows, malformed/env-mismatched tokens, or empty
+shells with no attached accounts). Refuses healthy items — the
+per-item DELETE is the deliberate path for those. Returns the list
+of items actually deleted, or 409 / 403 if any id in the batch is
+ineligible or out-of-household.
+
+ */
+export const CleanupDeadPlaidItemsBody = zod.object({
+  itemIds: zod
+    .array(zod.string())
+    .describe(
+      'Internal plaid_items row ids (UUIDs) to delete. Every id must\nbelong to the caller\'s household and must be in a \"dead\"\nstate (synthetic seed, malformed\/env-mismatched access_token,\nor empty shell with zero plaid_accounts attached).\n',
+    ),
+});
+
+export const CleanupDeadPlaidItemsResponse = zod.object({
+  totalDeleted: zod.number(),
+  deleted: zod.array(
+    zod.object({
+      id: zod.string(),
+      itemIdExternal: zod.string(),
+    }),
+  ),
+});
+
 export const ExchangePlaidPublicTokenBody = zod.object({
   publicToken: zod.string(),
   institutionId: zod.string().nullish(),
   institutionName: zod.string().nullish(),
+  force: zod
+    .boolean()
+    .optional()
+    .describe(
+      "(#dup-link) Opt out of the duplicate-institution guard. When\nomitted\/false, \/plaid\/exchange refuses with 409\n`add_account_existing` if the household already has a healthy\nplaid_item for this institution. Set true to allow a genuinely\nseparate second login (e.g. two distinct Chase logins).\n",
+    ),
 });
 
 export const ExchangePlaidPublicTokenResponse = zod.object({

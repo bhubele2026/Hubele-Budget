@@ -600,6 +600,11 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "publicToken is required" });
     return;
   }
+  // (#dup-link, architect-round-1) Strict boolean parse. Without this,
+  // any truthy non-boolean payload (e.g. the string "false") would
+  // bypass the duplicate-institution guard. Anything other than literal
+  // `true` is treated as "guard on".
+  const forceFlag = force === true;
   try {
     const exch = await plaid().itemPublicTokenExchange({
       public_token: publicToken,
@@ -672,17 +677,75 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
     }
 
     const slug = institutionSlug(resolvedName);
-    // (#659) Atomic upsert + sibling cleanup. Before this transaction
-    // wrap, the survivor row insert and `cleanupMalformedTokenSiblings`
-    // ran as two independent statements with the cleanup wrapped in a
-    // best-effort try/catch — so a transient DB blip after the survivor
-    // committed but before the orphan delete left the env-mismatched
-    // ghost in `plaid_items` forever (a regression of the very bug
-    // this task closes). Wrapping both in `db.transaction` means a
-    // cleanup failure rolls the survivor insert back too; the user
-    // sees a 5xx and retries Reconnect, which is strictly better than
-    // a silent half-cleanup masquerading as success.
-    const { item, cleaned, relinked } = await db.transaction(async (tx) => {
+
+    // (#659, #dup-link) Atomic dup-guard + upsert + sibling cleanup.
+    // Three behaviors are folded into one DB transaction so concurrent
+    // exchanges cannot race past the duplicate-institution guard:
+    //
+    //   1. Take a pg advisory xact lock keyed on (householdId,
+    //      institutionId). This serializes every exchange for the same
+    //      household+bank, eliminating the read-then-insert race that
+    //      could otherwise mint two healthy siblings under parallel
+    //      Link clicks/retries. Lock auto-releases at txn end.
+    //   2. Re-read siblings INSIDE the lock. If a healthy sibling
+    //      already exists (and `force !== true`), short-circuit the
+    //      txn with a `rejected` outcome — no upsert. We respond 409
+    //      after the txn commits.
+    //   3. Otherwise, do the original upsert + sibling cleanup
+    //      (#659/#401). Wrapping these together preserves the
+    //      previous invariant: a cleanup failure rolls back the
+    //      survivor insert so the user sees a 5xx and retries
+    //      Reconnect instead of a silent half-cleanup.
+    //
+    // Background: a fresh Plaid Link session for an institution that
+    // already has an active item causes the bank (notably Chase) to
+    // invalidate the prior session's access_token, leaving two broken
+    // items and zero txns. The picker is now routed via the 409 into
+    // add-account mode against the existing item, which preserves its
+    // token, item_id, /sync cursor, and historical txns.
+    // Discriminated outcome lets the rejected branch short-circuit
+    // without forcing the linked branch's `item`/`cleaned`/`relinked`
+    // to be optional (and without us having to re-spell the existing
+    // CleanedSibling type from cleanupMalformedTokenSiblings).
+    const outcome = await db.transaction(async (tx) => {
+      // (#dup-link) Per-(household,institution) advisory lock. The
+      // two-int4 form takes two int4 keys; we derive them from
+      // hashtext() of each id. Lock auto-releases at txn end.
+      // When institution_id is unknown (rare — /item/get failed) we
+      // skip the lock and the dup-guard; the existing #659 cleanup
+      // still handles malformed-sibling reaping.
+      if (resolvedInstId) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${req.householdId!}), hashtext(${resolvedInstId}))`,
+        );
+        if (!forceFlag) {
+          const siblings = await tx
+            .select()
+            .from(plaidItemsTable)
+            .where(
+              and(
+                eq(plaidItemsTable.householdId, req.householdId!),
+                eq(plaidItemsTable.institutionId, resolvedInstId),
+              ),
+            );
+          const healthyExisting = siblings.find(
+            (s) =>
+              s.itemId !== itemId &&
+              !isSyntheticPlaidItem(s) &&
+              isValidPlaidAccessToken(s.accessToken) &&
+              isAccessTokenForCurrentEnv(s.accessToken) &&
+              !s.lastSyncErrorCode,
+          );
+          if (healthyExisting) {
+            return {
+              kind: "rejected" as const,
+              existingItemRowId: healthyExisting.id,
+              existingInstitutionName: healthyExisting.institutionName,
+            };
+          }
+        }
+      }
+
       const [existingItem] = await tx
         .select({ id: plaidItemsTable.id })
         .from(plaidItemsTable)
@@ -771,8 +834,60 @@ router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
         log: req.log,
         tx,
       });
-      return { item: itemRow, cleaned: cleanedSiblings, relinked: relinkedInTx };
+      return {
+        kind: "linked" as const,
+        item: itemRow!,
+        cleaned: cleanedSiblings,
+        relinked: relinkedInTx,
+      };
     });
+
+    // (#dup-link) Rejected outcome: a healthy sibling already exists for
+    // this household+institution. Fire-and-forget itemRemove on the
+    // just-minted access_token so Plaid's side can reap the orphan
+    // (architect round 1 — synchronous call added measurable latency
+    // to the 409 response, which delays the client's add-account
+    // reopen). 409 response carries the existing item id and label so
+    // the client can call /plaid/link-token/add-account immediately.
+    if (outcome.kind === "rejected") {
+      void plaid()
+        .itemRemove({ access_token: accessToken })
+        .catch((removeErr) => {
+          req.log.warn(
+            {
+              err: removeErr,
+              userId: req.userId,
+              householdId: req.householdId,
+              institutionId: resolvedInstId,
+              newPlaidItemIdExternal: itemId,
+              existingItemRowId: outcome.existingItemRowId,
+            },
+            "[plaid-exchange] (#dup-link) itemRemove on refused duplicate failed (orphan will be reaped by Plaid)",
+          );
+        });
+      req.log.warn(
+        {
+          userId: req.userId,
+          householdId: req.householdId,
+          institutionId: resolvedInstId,
+          institutionName: resolvedName,
+          existingItemRowId: outcome.existingItemRowId,
+          newPlaidItemIdExternal: itemId,
+        },
+        "[plaid-exchange] (#dup-link) refused duplicate item for institution — steering client to add-account mode",
+      );
+      const displayName =
+        resolvedName ?? outcome.existingInstitutionName ?? "this bank";
+      res.status(409).json({
+        action: "add_account_existing",
+        existingItemRowId: outcome.existingItemRowId,
+        institutionName: displayName,
+        error: `You already have ${displayName} linked. Use add-account mode on the existing connection so you don't lose its history.`,
+      });
+      return;
+    }
+
+    const { item, cleaned, relinked } = outcome;
 
     // (#659) Per-task contract: emit a single summary line so support
     // can grep `[plaid-exchange] archived N orphan` and immediately
@@ -2483,5 +2598,181 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
     res.status(500).json({ error: msg });
   }
 });
+
+// (#chase-restore) One-shot admin cleanup endpoint for dead plaid_items
+// the user has acknowledged. Built for the May-28 incident where three
+// stale Chase items (an empty shell from a duplicate Link click, an older
+// ITEM_LOGIN_REQUIRED row, and the synthetic seed-april bleed) needed
+// to be reaped without forcing four manual DELETE calls.
+//
+// Safety rails — every item id in the request must:
+//   1. Belong to the caller's household (enforced per-item; mixed-batch
+//      requests with even one foreign id fail closed with 403).
+//   2. Be in a "dead" state, defined as ANY of:
+//        - synthetic seed row (isSyntheticPlaidItem)
+//        - stored access_token fails isValidPlaidAccessToken (malformed)
+//        - stored access_token is for a different PLAID_ENV
+//        - the item has ZERO plaid_accounts attached (empty shell from
+//          a Link session that exited before account selection)
+//      Healthy items, and items in ITEM_LOGIN_REQUIRED that still hold
+//      live accounts the user depends on, are protected — the caller
+//      must use the existing per-item DELETE endpoint for those (which
+//      resets dependent debts' source flags and is the deliberate path).
+// Reuses the same delete-side cleanup the per-item DELETE does:
+//   - skip upstream itemRemove when the stored token is malformed
+//   - reset balance/apr/min source flags on any debts linked to
+//     this item's accounts (FK is ON DELETE SET NULL, so the link
+//     clears automatically — we just flip badges back to manual)
+//   - delete plaid_accounts then plaid_items
+router.post(
+  "/plaid/admin/cleanup-dead-items",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const raw = (req.body ?? {}) as { itemIds?: unknown };
+    const itemIds = Array.isArray(raw.itemIds)
+      ? raw.itemIds.filter((v): v is string => typeof v === "string" && v.length > 0)
+      : [];
+    if (itemIds.length === 0) {
+      res.status(400).json({ error: "itemIds is required (non-empty string[])" });
+      return;
+    }
+    const householdId = req.householdId!;
+    const items = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(
+        and(
+          eq(plaidItemsTable.householdId, householdId),
+          inArray(plaidItemsTable.id, itemIds),
+        ),
+      );
+    // Fail closed: any caller-supplied id that doesn't resolve to a row
+    // in this household is treated as a security event, not a no-op.
+    if (items.length !== itemIds.length) {
+      const found = new Set(items.map((i) => i.id));
+      const missing = itemIds.filter((id) => !found.has(id));
+      req.log.warn(
+        { householdId, userId: req.userId, missing },
+        "[plaid-admin-cleanup] one or more itemIds not in household — refusing batch",
+      );
+      res.status(403).json({
+        error: "one or more itemIds are not in your household",
+        missing,
+      });
+      return;
+    }
+    // Per-item dead-state check + per-account snapshot — done up-front
+    // so we can return a clean report without partial deletes.
+    const itemAcctMap = new Map<string, string[]>();
+    if (items.length > 0) {
+      const allAccts = await db
+        .select({ id: plaidAccountsTable.id, itemId: plaidAccountsTable.itemId })
+        .from(plaidAccountsTable)
+        .where(
+          and(
+            eq(plaidAccountsTable.householdId, householdId),
+            inArray(
+              plaidAccountsTable.itemId,
+              items.map((i) => i.id),
+            ),
+          ),
+        );
+      for (const a of allAccts) {
+        const arr = itemAcctMap.get(a.itemId) ?? [];
+        arr.push(a.id);
+        itemAcctMap.set(a.itemId, arr);
+      }
+    }
+    const ineligible: { id: string; reason: string }[] = [];
+    for (const it of items) {
+      const isSynthetic = isSyntheticPlaidItem(it);
+      const tokenMalformed = !isValidPlaidAccessToken(it.accessToken);
+      const tokenEnvMismatch = !isAccessTokenForCurrentEnv(it.accessToken);
+      const noAccounts = (itemAcctMap.get(it.id) ?? []).length === 0;
+      const dead = isSynthetic || tokenMalformed || tokenEnvMismatch || noAccounts;
+      if (!dead) {
+        ineligible.push({
+          id: it.id,
+          reason:
+            "item is healthy and has attached accounts — use DELETE /plaid/items/:id instead",
+        });
+      }
+    }
+    if (ineligible.length > 0) {
+      res.status(409).json({
+        error: "one or more items are not in a dead state",
+        ineligible,
+      });
+      return;
+    }
+    // Execute deletes. Mirrors the per-item DELETE route's order:
+    // upstream itemRemove (skipped if token is malformed/env-mismatched),
+    // reset debt source flags, delete plaid_accounts, delete plaid_items.
+    const deleted: { id: string; itemIdExternal: string }[] = [];
+    for (const it of items) {
+      const tokenUsable =
+        isValidPlaidAccessToken(it.accessToken) &&
+        isAccessTokenForCurrentEnv(it.accessToken);
+      if (tokenUsable) {
+        try {
+          await plaid().itemRemove({ access_token: it.accessToken });
+        } catch (e) {
+          req.log.warn(
+            { err: e, itemRowId: it.id, plaidItemIdExternal: it.itemId },
+            "[plaid-admin-cleanup] upstream itemRemove failed — proceeding with local delete",
+          );
+        }
+      }
+      const acctIds = itemAcctMap.get(it.id) ?? [];
+      if (acctIds.length > 0) {
+        await db
+          .update(debtsTable)
+          .set({
+            balanceSource: "manual",
+            aprSource: "manual",
+            minPaymentSource: "manual",
+            plaidLastSyncedAt: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(debtsTable.householdId, householdId),
+              inArray(debtsTable.plaidAccountId, acctIds),
+            ),
+          );
+        await db
+          .delete(plaidAccountsTable)
+          .where(
+            and(
+              eq(plaidAccountsTable.itemId, it.id),
+              eq(plaidAccountsTable.householdId, householdId),
+            ),
+          );
+      }
+      await db
+        .delete(plaidItemsTable)
+        .where(
+          and(
+            eq(plaidItemsTable.id, it.id),
+            eq(plaidItemsTable.householdId, householdId),
+          ),
+        );
+      deleted.push({ id: it.id, itemIdExternal: it.itemId });
+      req.log.info(
+        {
+          householdId,
+          userId: req.userId,
+          itemRowId: it.id,
+          plaidItemIdExternal: it.itemId,
+          institutionName: it.institutionName,
+          institutionId: it.institutionId,
+          accountsDeleted: acctIds.length,
+        },
+        "[plaid-admin-cleanup] deleted dead plaid_item",
+      );
+    }
+    res.json({ deleted, totalDeleted: deleted.length });
+  },
+);
 
 export default router;
