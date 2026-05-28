@@ -82,3 +82,9 @@ id = "k49Y7ErL0nrKIouFlk9cG"
 uri = "file://.local/exports/prod-plaid-code.tar.gz"
 type = "unspecified"
 title = "Plaid components — PROD (live, commit adc780c9)"
+
+[[outputs]]
+id = "7AQcsw6sHxogMy80hfBn7"
+uri = "file://.local/exports/h2budget-prod-src.tar.gz"
+type = "unspecified"
+title = "Full app source — PROD (commit adc780c9, ~2.4MB, assets excluded)"
