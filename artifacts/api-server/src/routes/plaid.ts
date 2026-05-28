@@ -520,8 +520,82 @@ router.post(
   },
 );
 
+// (#dup-link) Plaid Link in add-account mode for an existing item — same
+// shape as /plaid/link-token/update but with `update.account_selection_enabled`
+// flipped on, which prompts the user to pick *new* accounts from the same
+// login session. Used by the duplicate-institution guard below: when the
+// user has a healthy item for institution X and re-runs Plaid Link against
+// X, we refuse to mint a second item and instead steer them here so the
+// new account is attached to the existing item (preserving its
+// access_token, item_id, transactions/sync cursor, etc.).
+router.post(
+  "/plaid/link-token/add-account",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const { itemId } = req.body ?? {};
+    if (!itemId || typeof itemId !== "string") {
+      res.status(400).json({ error: "itemId is required" });
+      return;
+    }
+    const [item] = await db
+      .select()
+      .from(plaidItemsTable)
+      .where(
+        and(
+          eq(plaidItemsTable.id, itemId),
+          eq(plaidItemsTable.householdId, req.householdId!),
+        ),
+      );
+    if (!item) {
+      res.status(404).json({ error: "Plaid item not found" });
+      return;
+    }
+    if (
+      !isValidPlaidAccessToken(item.accessToken) ||
+      !isAccessTokenForCurrentEnv(item.accessToken)
+    ) {
+      // Same short-circuit semantics as the /update endpoint: a stale or
+      // env-mismatched token cannot host add-account mode either.
+      res.status(409).json({
+        error: MALFORMED_PLAID_TOKEN_MESSAGE,
+        code: "ITEM_LOGIN_REQUIRED",
+        action: "relink",
+      });
+      return;
+    }
+    try {
+      const redirectUri = process.env.PLAID_REDIRECT_URI?.trim();
+      const webhookUrl = process.env.PLAID_WEBHOOK_URL?.trim();
+      const resp = await plaid().linkTokenCreate({
+        user: { client_user_id: req.userId! },
+        client_name: "H2 Family Budget",
+        access_token: item.accessToken,
+        country_codes: PLAID_COUNTRY_CODES,
+        language: "en",
+        update: { account_selection_enabled: true },
+        ...(redirectUri ? { redirect_uri: redirectUri } : {}),
+        ...(webhookUrl ? { webhook: webhookUrl } : {}),
+      });
+      res.json({
+        linkToken: resp.data.link_token,
+        expiration: resp.data.expiration,
+      });
+    } catch (e) {
+      const { code: plaidCode, message: msg } = extractPlaidError(e);
+      req.log.error(
+        { err: e, ...plaidLogContext(e, "/link/token/create (add-account)") },
+        "Plaid add-account link token failed",
+      );
+      res.status(500).json({
+        error: msg,
+        ...(plaidCode ? { code: plaidCode } : {}),
+      });
+    }
+  },
+);
+
 router.post("/plaid/exchange", requireAuth, async (req, res): Promise<void> => {
-  const { publicToken, institutionId, institutionName } = req.body ?? {};
+  const { publicToken, institutionId, institutionName, force } = req.body ?? {};
   if (!publicToken || typeof publicToken !== "string") {
     res.status(400).json({ error: "publicToken is required" });
     return;
