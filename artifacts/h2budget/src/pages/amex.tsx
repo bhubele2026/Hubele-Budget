@@ -1025,11 +1025,58 @@ export default function AmexPage() {
       sat = addDays(sat, 7);
     }
 
+    // (#821) The loop above stops before the in-progress current week —
+    // its closing Saturday is in the future — which would leave the
+    // rightmost real point stranded on the prior week's Saturday. Append
+    // a partial bucket anchored on TODAY (local midnight, matching how the
+    // Saturday points are anchored) so the most-recent point lines up with
+    // the "Today" reference line. Its balance is the latest known balance
+    // as of today: end of the prior month + this month's card-scoped
+    // transactions through today — the same computation the weekly loop
+    // uses, just closed on today instead of a Saturday. Skip when today is
+    // itself a Saturday (already pushed by the loop).
+    const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayMidMs = todayMid.getTime();
+    if (
+      todayMidMs >= windowStart.getTime() &&
+      todayMidMs <= windowEnd.getTime() &&
+      (series.length === 0 || series[series.length - 1].x !== todayMidMs)
+    ) {
+      const todayMk: MonthKey = {
+        year: now.getFullYear(),
+        month: now.getMonth(),
+      };
+      const prevMonthEnd = balanceAtEndOf(shiftMonth(todayMk, -1));
+      if (prevMonthEnd !== null) {
+        let intraMonth = 0;
+        for (const t of wideAllForBalance) {
+          if (
+            compareMonth(monthKeyFromISO(t.occurredOn), todayMk) === 0 &&
+            t.occurredOn.slice(0, 10) <= todayDay
+          ) {
+            intraMonth += Number(t.amount) || 0;
+          }
+        }
+        series.push({
+          x: todayMidMs,
+          balance: prevMonthEnd + intraMonth,
+          label: todayMid.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          }),
+        });
+      }
+    }
+
     return {
       series,
       domain: [windowStart.getTime(), windowEnd.getTime()],
       monthTicks,
-      todayMs: now.getTime(),
+      // Anchor the "Today" reference line on local midnight so it lines up
+      // exactly with the rightmost (today) data point, which is also
+      // anchored on local midnight.
+      todayMs: todayMidMs,
       subtitle,
     };
   }, [cardScopedAnchor.anchor, balanceAtEndOf, wideAllForBalance, currentMonth]);
