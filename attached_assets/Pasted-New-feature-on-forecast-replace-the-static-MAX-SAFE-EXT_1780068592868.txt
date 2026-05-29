@@ -1,0 +1,92 @@
+New feature on /forecast: replace the static "MAX SAFE EXTRA PAYMENT $0.00 NOT YET" tile with an AI-driven multi-date payment scheduler. Avalanche-targeted. Look across the next 12 months, find every safe window, propose specific dates and amounts.
+
+CURRENT BEHAVIOR (broken UX): MAX SAFE EXTRA PAYMENT = max(0, lowest - cashBuffer). If ANY single day in the next 90 days dips below the cash buffer, this goes to $0 and the tile says "NOT YET" — even when 11 of 12 months have several thousand of headroom. Useless for planning.
+
+NEW BEHAVIOR — a card on /forecast titled "Avalanche extra-payment schedule" (or similar). Shows a Claude-written narrative recommending 4-12 specific avalanche extra payments across the next 12 months. Each payment has: a date, an amount, and a one-sentence rationale. Total at the bottom: "X extra payments totaling $Y over 12 months."
+
+DESIGN:
+
+PHASE 1 — Deterministic finder (server, no LLM):
+
+In artifacts/api-server/src/lib/avalancheScheduler.ts (new file):
+
+1. Pull the daily projection out to 12 months. Use the same cashSignal expansion the /forecast page uses today — just call with daysAhead = 365 once and reuse the daily array.
+
+2. Find paychecks within the window. Walk the daily projection events; income events > $1000 from a recurring item tagged income (e.g. "Brad's paycheck (KFI)") count as paycheck anchors. Build a list of paycheck dates.
+
+3. For each consecutive paycheck-to-paycheck window, compute:
+   - The lowest projected balance between this paycheck (inclusive) and the next paycheck (exclusive).
+   - headroom = lowestInWindow - cashBuffer.
+   - If headroom > minProposalThreshold (suggest $250 — under that it's not worth scheduling), this window contains a slot.
+
+4. For each viable window, propose:
+   - amount = floor(headroom * 0.85 / 50) * 50 — leave a 15% cushion AND round to $50 multiples so payments are clean.
+   - date = paycheck date + 1 business day (let the paycheck clear first).
+   - confidence: "high" if amount < headroom * 0.7, "medium" if < 0.9, "low" otherwise.
+
+5. Subject to: cumulative cap = avalancheSettings.maxMonthly * 12 OR a sane default if avalanche settings empty. Don't recommend payments larger than the user's stated max monthly avalanche budget.
+
+6. Return: { proposedPayments: [{ date, amount, rationale, confidence, paycheckAnchor }], totalProposed, lowestPostScheduleBalance, lowestPostScheduleDate }.
+
+PHASE 2 — Claude narrative (server, follows debriefAdvisorSummary.ts pattern exactly):
+
+Add to the existing advisorSummary infrastructure. Reuse:
+- artifacts/api-server/src/lib/debriefAdvisorSummary.ts as the template (same Anthropic client setup, same DEFAULT_MODEL = "claude-sonnet-4-5", same 12s timeout, same 3-layer fallback).
+- Create artifacts/api-server/src/lib/avalancheAdvisorSummary.ts.
+
+Build a `facts` object from PHASE 1 output:
+{
+  proposals: [{ date, amount, rationale, confidence, paycheckAnchor, lowestBetweenThisAndNextPaycheck, headroom }],
+  total12mo,
+  currentAvalancheTarget: { debtName, apr, balance } from the avalanche settings,
+  cashBuffer,
+  bankBalance,
+  lowestPostScheduleBalance,
+  lowestPostScheduleDate
+}
+
+Prompt Claude with: "Given these specific dates and amounts, write a 3-5 sentence summary explaining the strategy. Be concrete with dates and dollar amounts. Mention the avalanche-target debt by name. Don't invent dates or amounts not in the facts. End with the total."
+
+Strict JSON output: { summary: string, paymentsText: string[] (one short string per proposal — "Pay $750 on Jun 16 after KFI paycheck") }.
+
+Three-layer fallback identical to debriefAdvisorSummary: 12s timeout → on timeout, return deterministic template ("Pay $X on June 16. Pay $Y on July 9. ...") → on outer exception, return single-line summary built from facts.
+
+Cache: store result + facts hash in a new column on forecast_settings (avalancheAdvisorSummary jsonb, avalancheAdvisorFactsHash text). Regenerate only when facts hash changes — same caching pattern as debrief advisor.
+
+PHASE 3 — Endpoint:
+
+GET /forecast/avalanche-schedule
+- Pulls cached advisor summary if facts unchanged
+- Otherwise runs PHASE 1 finder, sends facts to Claude, caches result, returns
+- Response: { proposedPayments, totalProposed, summary, paymentsText, generatedAt, source: "cache" | "fresh" }
+
+PHASE 4 — Frontend:
+
+In artifacts/h2budget/src/pages/forecast.tsx, replace the "MAX SAFE EXTRA PAYMENT" card (currently shows $0 / NOT YET) with a new "Avalanche extra-payment schedule" card.
+
+Card content:
+- Header: "Avalanche extra-payment schedule"
+- AI summary paragraph (the Claude `summary` field)
+- A vertical list of payments: date · amount · short rationale (Claude's `paymentsText[i]`) · confidence badge (small "high"/"medium"/"low" tag)
+- Footer: "Total: $X across N payments through May 2027"
+- Small "Refresh" button to force regeneration (clears the facts hash, regenerates)
+- Loading state: skeleton lines, NOT a blocking spinner
+- Error state: fall back to the deterministic list with a small "AI summary unavailable" note — still show the dates/amounts
+
+Important: this card stays useful even if Claude times out. Numbers are deterministic, narrative is the bonus layer.
+
+VERIFY:
+
+1. /forecast loads, the new card replaces the old "$0 / NOT YET" tile.
+2. Card shows 4-12 specific dates with specific amounts.
+3. Total at bottom is sum of amounts.
+4. Hover/click on a payment shows the rationale.
+5. Claude's summary names my actual avalanche-target debt and references real dates and amounts (not hallucinated).
+6. Refresh button → fresh Claude call (verify in server logs).
+7. Repeat load within 5 min → cached response (no new Anthropic call).
+8. Disconnect network mid-load → deterministic fallback renders (no AI text, but the dates/amounts still show).
+9. The standalone "MAX SAFE EXTRA PAYMENT" tile is gone, OR repurposed to "Next safe payment: $X on Jun 16" (the first item from the schedule). Either works — pick the cleaner layout.
+
+OUT OF SCOPE: actually creating recurring_items rows for the proposed payments. The schedule is advisory only; the user manually adds them via the existing flow if they want to commit. (A follow-up could add a "Schedule this payment" button next to each proposal, but not in this task.)
+
+Architect review + typecheck + publish. No new tests. Use existing Anthropic infra (don't add another vendor — same SDK, same model, same env var).

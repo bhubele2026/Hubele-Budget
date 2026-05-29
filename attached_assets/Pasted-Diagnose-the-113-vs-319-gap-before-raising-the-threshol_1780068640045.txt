@@ -1,0 +1,32 @@
+Diagnose the 113 vs 319 gap before raising the threshold. I want to know exactly what the chip's "113" represents so we don't clear the wrong scope.
+
+Read-only:
+
+1. Run the hook's predicate broken down by month:
+   SELECT TO_CHAR(occurred_on, 'YYYY-MM') AS month, COUNT(*) AS in_queue
+   FROM transactions t
+   WHERE t.household_id = 'a7182af8-49f0-48f3-920e-f916c7eab872'
+     AND t.source = 'plaid:chase'
+     AND t.plaid_account_id = 'YEvBBznkA3updAzAk7wyILEPd31z6BSQK184R'
+     AND t.forecast_flag = true
+     AND t.occurred_on <= CURRENT_DATE
+     AND NOT EXISTS (
+       SELECT 1 FROM forecast_resolutions fr
+       WHERE fr.matched_txn_id = t.id
+         AND fr.status IN ('matched', 'ignored_unforecasted', 'unplanned')
+     )
+   GROUP BY 1
+   ORDER BY 1;
+
+2. Sanity-check by month range: how many of the 319 are May 2026 specifically?
+   (Same predicate, but filter occurred_on >= '2026-05-01' AND occurred_on <= '2026-05-31'.)
+
+3. If May = 113 and earlier months account for the other 206, that means the chip is month-scoped (only shows the currently-viewed month) and the hook scope is correctly "everything." That makes 319 the right target.
+
+4. The chip code from transactions.tsx line 1076 confirms this — it loops `monthScoped` (the array already filtered to the active month tab), so any earlier month's backlog is invisible from the chip but still in the database.
+
+If the diagnosis confirms month scoping = the gap explanation, raise SAFETY_THRESHOLD to 400 and let it clear all 319. The pre-May backlog is just as worth clearing as the May backlog — those are old plaid:chase rows from before the snapshot pointer was fixed, all sitting forever in "awaiting" because the cascade I diagnosed yesterday excluded them. Clearing them is correct.
+
+If the diagnosis shows the gap is NOT month scoping (e.g. all 319 are in May), stop and report — we have a different bug to figure out.
+
+After diagnosis confirms the predicate hits the right 319 rows: ship the threshold change as a one-line patch. Same hook, same predicate, threshold 200 → 400. Architect review optional for a 1-character constant change. Publish.
