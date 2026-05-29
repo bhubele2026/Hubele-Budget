@@ -2278,6 +2278,7 @@ export interface WeeklyDebriefCategoryActualTxn {
     amount: number;
     date: string;
     matchedToPlan: boolean;
+    source?: string | null;
 }
 export interface WeeklyDebriefCategoryBucket {
     categoryId?: string | null;

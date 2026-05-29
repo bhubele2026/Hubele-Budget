@@ -357,6 +357,12 @@ describe("computeWeekVariance — Amex in category breakdown (#857)", () => {
     const drillIds = bucket.actualTxns.map((t) => t.txnId);
     expect(drillIds).toContain(chaseTxn!.id);
     expect(drillIds).toContain(amexTxn!.id);
+    // (#866) Each drill-down row carries its raw source so the UI can
+    // tag it Amex vs Chase.
+    const chaseDrill = bucket.actualTxns.find((t) => t.txnId === chaseTxn!.id)!;
+    const amexDrill = bucket.actualTxns.find((t) => t.txnId === amexTxn!.id)!;
+    expect(chaseDrill.source).toBe("plaid");
+    expect(amexDrill.source).toBe("amex");
   });
 
   it("top-line cash-flow totals stay Chase-only and exclude the Amex amount", async () => {

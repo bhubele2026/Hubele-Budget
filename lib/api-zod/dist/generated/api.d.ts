@@ -7743,18 +7743,21 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
                 amount: zod.ZodNumber;
                 date: zod.ZodString;
                 matchedToPlan: zod.ZodBoolean;
+                source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             }, "strip", zod.ZodTypeAny, {
                 date: string;
                 description: string;
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }, {
                 date: string;
                 description: string;
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }>, "many">;
         }, "strip", zod.ZodTypeAny, {
             plannedAmount: string;
@@ -7772,6 +7775,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }, {
@@ -7790,6 +7794,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }>, "many">;
@@ -7823,6 +7828,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -7904,6 +7910,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -8071,6 +8078,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -8186,6 +8194,7 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -8474,18 +8483,21 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: zod.ZodNumber;
                 date: zod.ZodString;
                 matchedToPlan: zod.ZodBoolean;
+                source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             }, "strip", zod.ZodTypeAny, {
                 date: string;
                 description: string;
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }, {
                 date: string;
                 description: string;
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }>, "many">;
         }, "strip", zod.ZodTypeAny, {
             plannedAmount: string;
@@ -8503,6 +8515,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }, {
@@ -8521,6 +8534,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }>, "many">;
@@ -8554,6 +8568,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -8635,6 +8650,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -8802,6 +8818,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -8917,6 +8934,7 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -9205,18 +9223,21 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
                 amount: zod.ZodNumber;
                 date: zod.ZodString;
                 matchedToPlan: zod.ZodBoolean;
+                source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             }, "strip", zod.ZodTypeAny, {
                 date: string;
                 description: string;
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }, {
                 date: string;
                 description: string;
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }>, "many">;
         }, "strip", zod.ZodTypeAny, {
             plannedAmount: string;
@@ -9234,6 +9255,7 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }, {
@@ -9252,6 +9274,7 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }>, "many">;
@@ -9285,6 +9308,7 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -9366,6 +9390,7 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -9533,6 +9558,7 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -9648,6 +9674,7 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -9943,18 +9970,21 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: zod.ZodNumber;
                 date: zod.ZodString;
                 matchedToPlan: zod.ZodBoolean;
+                source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
             }, "strip", zod.ZodTypeAny, {
                 date: string;
                 description: string;
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }, {
                 date: string;
                 description: string;
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }>, "many">;
         }, "strip", zod.ZodTypeAny, {
             plannedAmount: string;
@@ -9972,6 +10002,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }, {
@@ -9990,6 +10021,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }>, "many">;
@@ -10023,6 +10055,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -10104,6 +10137,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -10271,6 +10305,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];
@@ -10386,6 +10421,7 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
                 amount: number;
                 txnId: string;
                 matchedToPlan: boolean;
+                source?: string | null | undefined;
             }[];
             categoryId?: string | null | undefined;
         }[];

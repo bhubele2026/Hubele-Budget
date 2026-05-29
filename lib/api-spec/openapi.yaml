@@ -4439,6 +4439,7 @@ components:
         amount: { type: number }
         date: { type: string }
         matchedToPlan: { type: boolean }
+        source: { type: string, nullable: true }
     WeeklyDebriefCategoryBucket:
       type: object
       required: [plannedAmount, actualAmount, varianceAmount, plannedItems, actualTxns]

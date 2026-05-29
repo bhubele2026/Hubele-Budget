@@ -1316,6 +1316,16 @@ function VarianceSummaryCard({
 // Variance-summary grouped popovers). Renders the description/date/
 // amount line and, when editing is enabled, an inline CategoryPicker
 // preselected to the bucket's categoryId.
+// (#866) Category actuals blend Chase checking + Amex (task #856), so a
+// category's Actual total can legitimately exceed the Chase-only top-line
+// cash flow. Tag each drill-down row by its card so the blended number is
+// self-explanatory. Mirrors the backend `isAmexRow` predicate: strip a
+// leading `plaid:` and treat "amex" as Amex, everything else as Chase.
+function sourceCardLabel(source: string | null | undefined): "Amex" | "Chase" {
+  const s = (source ?? "").toLowerCase().replace(/^plaid:/, "");
+  return s === "amex" ? "Amex" : "Chase";
+}
+
 function ActualTxnRow({
   txn,
   categoryId,
@@ -1342,6 +1352,18 @@ function ActualTxnRow({
           <div className="truncate font-medium">{txn.description}</div>
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span>{txn.date}</span>
+            {(() => {
+              const card = sourceCardLabel(txn.source);
+              return (
+                <Badge
+                  variant="outline"
+                  className="h-4 px-1 text-[9px] uppercase"
+                  data-testid={`${testIdPrefix}-source-${txn.txnId}`}
+                >
+                  {card}
+                </Badge>
+              );
+            })()}
             {!txn.matchedToPlan && (
               <Badge variant="secondary" className="h-4 px-1 text-[9px] uppercase">
                 unplanned
@@ -1431,6 +1453,18 @@ function VarianceCellPopover({
             {kind === "planned" ? "Planned" : "Actual"}
           </div>
           <div className="text-sm font-medium">{categoryName}</div>
+          {/* (#866) Category actuals blend Amex charges in with Chase
+              checking spend, so this total can exceed the Chase-only
+              top-line cash flow. Tag each row by card so it's clear. */}
+          {kind === "actual" && (
+            <div
+              className="mt-1 text-[11px] leading-snug text-muted-foreground"
+              data-testid="debrief-variance-category-source-note"
+            >
+              Includes Amex charges, so this can be higher than the
+              Chase-only cash-flow totals above.
+            </div>
+          )}
         </div>
         <div className="max-h-64 overflow-y-auto py-1">
           {kind === "planned"

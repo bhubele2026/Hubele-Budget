@@ -1005,6 +1005,10 @@ export interface DebriefCategoryActualTxn {
   // status='matched' for the current week — i.e. it filled a plan.
   // False for unplanned and acknowledged_unplanned bank txns.
   matchedToPlan: boolean;
+  // (#866) Raw txn source ("amex", "plaid:amex", "manual", etc.) so the
+  // drill-down can tag each row Amex vs Chase. Nullable for older
+  // snapshots computed before this field existed.
+  source: string | null;
 }
 export interface DebriefVarianceCategoryBucket {
   categoryId: string | null;

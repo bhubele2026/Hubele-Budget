@@ -636,6 +636,9 @@ export async function computeWeekVariance(
       amount: amt,
       date: dateStr,
       matchedToPlan: matchedTxnSet.has(t.id),
+      // (#866) Carry the raw source so the drill-down can tag each row
+      // Amex vs Chase (category actuals blend both; #856).
+      source: t.source ?? null,
     });
   }
   const byCategory: DebriefVarianceCategoryBucket[] = [];

@@ -4996,6 +4996,7 @@ export interface DebriefCategoryActualTxn {
     amount: number;
     date: string;
     matchedToPlan: boolean;
+    source: string | null;
 }
 export interface DebriefVarianceCategoryBucket {
     categoryId: string | null;
