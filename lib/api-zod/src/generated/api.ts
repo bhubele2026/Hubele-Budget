@@ -2618,6 +2618,202 @@ export const GetReportsSpendingFactsResponse = zod.object({
   }),
 });
 
+/**
+ * Returns deterministic Behavior facts (days-since-last buckets, no-dining
+and coffee-free streaks, fun facts, hourly spending clock, day-of-week
+spend, hall of fame) for the Reports Behavior & Fun tab, on top of the
+same real-spend definition as Spending. `from`/`to` are optional
+(default last 30 days); ranges before the tracking start are clamped
+server-side (range.floorApplied = true).
+
+ * @summary Clean personality-driven Behavior facts for the Reports Behavior & Fun tab
+ */
+export const GetReportsBehaviorFactsQueryParams = zod.object({
+  from: zod.coerce
+    .string()
+    .optional()
+    .describe("Range start (YYYY-MM-DD). Defaults to 30 days ago."),
+  to: zod.coerce
+    .string()
+    .optional()
+    .describe("Range end (YYYY-MM-DD). Defaults to today."),
+});
+
+export const GetReportsBehaviorFactsResponse = zod.object({
+  range: zod.object({
+    start: zod.string(),
+    end: zod.string(),
+    daysCovered: zod.number(),
+    trackingStart: zod.string(),
+    floorApplied: zod.boolean(),
+  }),
+  daysSinceLast: zod.object({
+    dining: zod.union([
+      zod.object({
+        days: zod.number(),
+        lastDate: zod.string(),
+        lastMerchant: zod.string(),
+        lastAmount: zod.number(),
+      }),
+      zod.null(),
+    ]),
+    amazon: zod.union([
+      zod.object({
+        days: zod.number(),
+        lastDate: zod.string(),
+        lastMerchant: zod.string(),
+        lastAmount: zod.number(),
+      }),
+      zod.null(),
+    ]),
+    coffee: zod.union([
+      zod.object({
+        days: zod.number(),
+        lastDate: zod.string(),
+        lastMerchant: zod.string(),
+        lastAmount: zod.number(),
+      }),
+      zod.null(),
+    ]),
+    gasStation: zod.union([
+      zod.object({
+        days: zod.number(),
+        lastDate: zod.string(),
+        lastMerchant: zod.string(),
+        lastAmount: zod.number(),
+      }),
+      zod.null(),
+    ]),
+    groceries: zod.union([
+      zod.object({
+        days: zod.number(),
+        lastDate: zod.string(),
+        lastMerchant: zod.string(),
+        lastAmount: zod.number(),
+      }),
+      zod.null(),
+    ]),
+    onlineShopping: zod.union([
+      zod.object({
+        days: zod.number(),
+        lastDate: zod.string(),
+        lastMerchant: zod.string(),
+        lastAmount: zod.number(),
+      }),
+      zod.null(),
+    ]),
+  }),
+  streaks: zod.object({
+    noDining: zod.object({
+      currentDays: zod.number(),
+      longestDays: zod.number(),
+      longestEndDate: zod.string(),
+    }),
+    coffeeFree: zod.object({
+      currentDays: zod.number(),
+      longestDays: zod.number(),
+      longestEndDate: zod.string(),
+    }),
+  }),
+  funFacts: zod.object({
+    biggestSplurge: zod.union([
+      zod.object({
+        amount: zod.number(),
+        date: zod.string(),
+        merchant: zod.string(),
+        categoryName: zod.string().nullable(),
+      }),
+      zod.null(),
+    ]),
+    mostVisitedMerchant: zod.union([
+      zod.object({
+        name: zod.string(),
+        count: zod.number(),
+        total: zod.number(),
+        sampleCategoryName: zod.string().nullable(),
+      }),
+      zod.null(),
+    ]),
+    quietestDay: zod.union([
+      zod.object({
+        date: zod.string(),
+        total: zod.number(),
+        dayOfWeek: zod.string(),
+      }),
+      zod.null(),
+    ]),
+    mostExpensiveDay: zod.union([
+      zod.object({
+        date: zod.string(),
+        total: zod.number(),
+        dayOfWeek: zod.string(),
+      }),
+      zod.null(),
+    ]),
+    impulseBuyCount: zod.object({
+      count: zod.number(),
+      total: zod.number(),
+      exampleMerchants: zod.array(zod.string()),
+    }),
+    subscriptionsCount: zod.object({
+      count: zod.number(),
+      monthlyTotal: zod.number(),
+      topThree: zod.array(
+        zod.object({
+          name: zod.string(),
+          amount: zod.number(),
+          frequency: zod.string(),
+        }),
+      ),
+    }),
+    nextPaycheckCountdown: zod.union([
+      zod.object({
+        days: zod.number(),
+        paycheckLabel: zod.string(),
+        expectedAmount: zod.number(),
+        expectedDate: zod.string(),
+      }),
+      zod.null(),
+    ]),
+  }),
+  hourlySpendingClock: zod.array(
+    zod.object({
+      hour: zod.number(),
+      total: zod.number(),
+      count: zod.number(),
+    }),
+  ),
+  dayOfWeekSpend: zod.array(
+    zod.object({
+      dow: zod.number(),
+      label: zod.string(),
+      total: zod.number(),
+      count: zod.number(),
+      avgPerDay: zod.number(),
+    }),
+  ),
+  hallOfFame: zod.object({
+    biggestExpense: zod.union([
+      zod.object({
+        amount: zod.number(),
+        date: zod.string(),
+        merchant: zod.string(),
+        categoryName: zod.string().nullable(),
+      }),
+      zod.null(),
+    ]),
+    biggestIncome: zod.union([
+      zod.object({
+        amount: zod.number(),
+        date: zod.string(),
+        merchant: zod.string(),
+        categoryName: zod.string().nullable(),
+      }),
+      zod.null(),
+    ]),
+  }),
+});
+
 export const CloseForecastMonthBody = zod.object({
   monthKey: zod.string(),
   gap: zod.string().nullish(),

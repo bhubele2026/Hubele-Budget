@@ -1,0 +1,102 @@
+Budget tab — Phase 1: build a class-aware server-side facts pipeline so Phase 2 can rebuild the UI without inheriting the current "everything is one % of budget" framing. No UI changes this pass.
+
+CONTEXT — the current /reports → Budget tab tells three lies because it grades every line on a single "% of plan used" axis:
+1. Income graded as expense. Brad's KFI paycheck at $18k vs $12k plan shows up as red "+$6k over budget" in the variance bar chart and 152% red in the consistency grid. Income overperforming is good news flagged as bad. Hannah's $0 vs $4,500 plan shows GREEN "under budget" — which is backwards, a missing paycheck is not a win.
+2. Debts and fixed bills graded like discretionary spend. Mortgage, Car Payments, HELOC all hit ~100% of plan and get red cells. Hitting the exact amount IS the goal for a loan/bill payment, not the failure mode.
+3. 35 categories of three fundamentally different kinds — income, fixed obligations, flexible spend — share one chart axis and one judgement function. Real flex overruns (Dining & Coffee 413%) get buried because paychecks dominate the bar lengths.
+
+The data is already fine — budget lines carry kind ("income"/"expense"), sourceKind ("manual"/"auto_bills"/"auto_debts"), groupName, debtId, and excludeFromBudget. The pipeline just doesn't use any of it. Phase 1 builds the right pipeline; Phase 2 rebuilds the UI on top.
+
+REUSE existing infra — same shape as Spending Phase 1 (spendingFilter.ts + spendingFacts.ts + route in routes/reports.ts) and Behavior Phase 1 (behaviorFacts.ts + route). Pure predicates in one file, heavy facts builder in another, thin route handler. No new tables, no schema changes.
+
+THE FOUR CLASSES — the only conceptual decision. Every budget line maps to exactly one:
+- income — kind === "income". Paychecks, Other Income. More is good; less is concerning; NEVER call income "over budget."
+- debt — sourceKind === "auto_debts". Auto-pulled from Debts (Cap One cards, mortgage if linked, HELOC, Upstart, Amex Loan, Avalanche payment). Planned amount IS the target.
+- bill — sourceKind === "auto_bills" AND kind === "expense". Auto-pulled from Bills (Car Payments, Insurance, Utilities, Subscriptions). Same judgement as debt.
+- flex — everything else (sourceKind === "manual" AND kind === "expense"). Groceries, Dining & Coffee, Gas/Maintenance/Parking, Shopping, Entertainment, Childcare, Pets, Home Maintenance, Misc/Buffer, Monthly Spending. Under plan = good, over = bad.
+
+Exclude any line with excludeFromBudget === true from all four classes entirely (Uncategorized, Transfer, Ignore system categories). Never surface them.
+
+NEW FILE 1 — artifacts/api-server/src/lib/budgetLineClass.ts — pure classifier + judgement, NO db calls.
+Exports:
+- type BudgetLineClass = "income" | "debt" | "bill" | "flex"
+- type LineStatus = "good" | "watch" | "miss"
+- interface ClassifiableLine { kind: string; sourceKind: string; debtId?: string | null }
+- function classifyBudgetLine(line: ClassifiableLine): BudgetLineClass
+- function judgeLine(cls: BudgetLineClass, planned: number, actual: number, monthHasPassed: boolean): LineStatus
+
+judgeLine rules (status is a discrete signal — never return raw pct from this fn; pct lives in the facts payload alongside status):
+- income: planned === 0 → "good". Else pct = actual/planned. pct >= 0.95 → "good"; 0.5–0.94 → "watch"; < 0.5 → "watch" while month in progress, "miss" only after monthHasPassed.
+- debt / bill: planned === 0 && actual === 0 → "good". planned === 0 && actual > 0 → "watch" (unbudgeted bill). Else pct = actual/planned. 0.9 <= pct <= 1.15 → "good". pct === 0 → "miss" if monthHasPassed else "watch". Otherwise → "watch".
+- flex: planned === 0 && actual === 0 → "good". planned === 0 && actual > 0 → "watch" (unbudgeted spend). Else pct = actual/planned. pct <= 1.0 → "good"; 1.0–1.15 → "watch"; > 1.15 → "miss".
+
+NEW FILE 2 — artifacts/api-server/src/lib/budgetFacts.ts — heavy facts builder, mirrors spendingFacts.ts.
+Exports buildBudgetFacts(householdId: string, monthStart: string, monthsBack = 6): Promise<BudgetFacts> and the BudgetFacts interface.
+
+Internals:
+1. Resolve month window: monthStart (YYYY-MM-01) → monthEnd (last day of month). daysInMonth from the date. today = new Date(). monthHasPassed = today > monthEnd. daysElapsed = monthHasPassed ? daysInMonth : today.getUTCDate() (clamped 1..daysInMonth). monthLabel = "May 2026".
+2. Pull the same line set + actuals the existing GET /budget/months/:monthStart computes — reuse that query logic or call the shared helper if one exists. Actuals MUST use the amex-aware signed sum already in reportsAdvisorSummary.ts buildBudgetFacts (amex positive = charge, bank negative = outflow, isTransfer=false). Each line needs: categoryId, name, planned, actual, kind, sourceKind, debtId, excludeFromBudget.
+3. Drop excludeFromBudget lines. Classify the rest via classifyBudgetLine. Judge each via judgeLine.
+4. For the 6-month streak board: pull budget lines + actuals for the trailing monthsBack months (oldest → newest), classify + judge each cell with that month's own monthHasPassed (all past months = true).
+
+BudgetFacts shape (round all money to 2dp, all pct to whole numbers):
+{
+  range: { monthStart, monthEnd, monthLabel, daysInMonth, daysElapsed, monthHasPassed },
+  income: {
+    plannedTotal, actualTotal, progressPct,            // progressPct = actualTotal/plannedTotal*100, capped display in UI not here
+    lines: [{ categoryId, name, planned, actual, pct, status }]   // status from judgeLine("income",...)
+  },
+  bills: {                                              // class === "bill"
+    plannedTotal, actualTotal, paidCount, totalCount,
+    lines: [{ categoryId, name, planned, actual, pct, status }]
+  },
+  debts: {                                              // class === "debt"
+    plannedTotal, actualTotal, paidCount, totalCount,
+    lines: [{ categoryId, name, planned, actual, pct, status }]
+  },
+  flex: {                                               // class === "flex"
+    plannedTotal, actualTotal,
+    pacePlanToDate,                                     // plannedTotal * daysElapsed / daysInMonth
+    paceStatus,                                         // "under" | "on_track" | "over" vs pacePlanToDate +/-10%
+    projectedMonthEnd,                                  // actualTotal / daysElapsed * daysInMonth
+    projectedVsPlan,                                    // projectedMonthEnd - plannedTotal
+    lines: [{ categoryId, name, planned, actual, pct, status, unbudgeted }],  // unbudgeted = planned===0 && actual>0; sort by pct desc
+    burndown: [{ day, planned, actual }]                // day 1..daysInMonth; planned = plannedTotal*day/daysInMonth; actual = cumulative flex spend through that day, null for days after daysElapsed when monthHasPassed is false
+  },
+  streak: {
+    monthKeys: ["2025-12", ... "2026-05"],              // oldest → newest, length = monthsBack
+    rows: [{
+      categoryId, name, class,                          // class so UI can color-code correctly
+      cells: [{ monthKey, planned, actual, pct, status } | null],  // null = no budget that month, aligned to monthKeys
+      currentStreakGood,                                // count of consecutive "good" months ending at newest non-null cell
+      longestStreakGood
+    }]                                                  // sort by total planned across cells desc
+  },
+  paidCount counts lines where status === "good" within that class. totalCount = lines in that class with planned > 0 OR actual > 0.
+}
+
+Income/debt/bill burndown is meaningless — only flex gets a burndown array. Don't compute paces for income/debt/bill.
+
+NEW ENDPOINT — routes/reports.ts, mirror the spending-facts handler exactly:
+GET /reports/budget-facts?monthStart=YYYY-MM-DD&monthsBack=6
+- requireAuth, householdId from req.
+- Validate monthStart is YYYY-MM-DD (reuse isValidIsoDate). Default monthStart to current month's first day if absent. Clamp monthStart >= "2026-04-01" (same hard floor as GET /budget/months). monthsBack defaults 6, clamp 1..12.
+- const facts = await buildBudgetFacts(householdId, monthStart, monthsBack); res.json(facts).
+
+DO NOT in Phase 1:
+- Touch artifacts/h2budget/src/pages/reports.tsx or any frontend file.
+- Rewire reportsAdvisorSummary.ts buildBudgetFacts or its Claude prompt — that's Phase 2.
+- Remove the old reportsAnalytics.ts budget functions — Phase 2 deletes them when the UI stops calling them.
+
+VERIFY (curl GET /reports/budget-facts?monthStart=2026-05-01 with auth, paste me the JSON):
+1. income.lines has Brad's KFI paycheck with status "good" (actual >> planned is fine), Hannah's paycheck with status "watch"/"miss" — NOT graded as over/under "budget."
+2. debts.lines: Mortgage / Car Payments / HELOC / Avalanche etc. each show status "good" when actual ≈ planned. None show "miss" just for hitting 100%.
+3. bills.lines: Utilities / Insurance / Subscriptions classified correctly, status "good" in normal range.
+4. flex.lines: Dining & Coffee shows status "miss" with a high pct; sorted by pct desc; any planned===0 && actual>0 row has unbudgeted: true.
+5. flex.pacePlanToDate, projectedMonthEnd, projectedVsPlan are present and numeric; paceStatus is one of under/on_track/over.
+6. flex.burndown has daysInMonth entries; actual is cumulative and null for future days this month.
+7. streak.rows each carry class and currentStreakGood/longestStreakGood; cells align to monthKeys with nulls for months with no budget.
+8. No excludeFromBudget categories (Uncategorized / Transfer / Ignore) appear anywhere in the payload.
+9. paidCount / totalCount sane for bills and debts.
+
+Architect review (multi-file, new endpoint) + typecheck + publish. No new tests. Diagnose-then-fix: if the existing budget-month actuals query already lives in a shared helper, reuse it rather than duplicating the amex-aware sum.

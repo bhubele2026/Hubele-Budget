@@ -1,0 +1,90 @@
+Behavior & Fun tab — Phase 2: rebuild the UI on top of the clean behaviorFacts pipeline from Phase 1.
+
+CONTEXT — Phase 1 shipped clean. GET /reports/behavior-facts returns daysSinceLast (6 buckets), streaks (noDining + coffeeFree), funFacts (biggestSplurge, mostVisitedMerchant, quietestDay, mostExpensiveDay, impulseBuyCount, subscriptionsCount, nextPaycheckCountdown), hourlySpendingClock, dayOfWeekSpend, hallOfFame. The current tab UI is still rendering on the old broken pipeline — replace it.
+
+LAYOUT TOP TO BOTTOM on /reports → Behavior & Fun tab:
+
+1. AI summary block — STAYS at top ("What this means" Claude card). Rewire its facts source to GET /reports/behavior-facts. Update reportsAdvisorSummary.ts behaviorFunFacts builder to read from this endpoint instead of the old pipeline.
+
+   Claude prompt should sound like a friend texting observations, NOT analytics: "Brad — this month you ate out N times, biggest splurge was $X at MERCHANT on DATE, coffee runs every N days on average, longest no-dining streak so far is N days. Most-visited spot: MERCHANT (N times). Next paycheck lands in N days." 3-5 sentences. Warm, personal, specific dates and amounts. NEVER invents — reads only from funFacts and daysSinceLast and streaks.
+
+2. SIX-TILE GRID for funFacts + daysSinceLast — 3 columns × 2 rows on desktop, 2×3 on tablet, 1×6 on mobile.
+
+   ROW 1 (the three "days since last" tiles):
+   - Tile 1: DAYS SINCE LAST DINING OUT → daysSinceLast.dining.days. Sub-line: "last: lastMerchant · lastDate · $lastAmount"
+   - Tile 2: DAYS SINCE LAST AMAZON ORDER → daysSinceLast.amazon.days. Same sub-line.
+   - Tile 3: DAYS SINCE LAST COFFEE SHOP → daysSinceLast.coffee.days. Same sub-line.
+   
+   ROW 2 (three fun-fact tiles):
+   - Tile 4: BIGGEST SPLURGE → funFacts.biggestSplurge.amount. Sub-line: "merchant · date · categoryName"
+   - Tile 5: MOST-VISITED MERCHANT → funFacts.mostVisitedMerchant.name with count badge ("15 visits"). Sub-line: "total · sampleCategoryName"
+   - Tile 6: NEXT PAYCHECK COUNTDOWN → funFacts.nextPaycheckCountdown.days ("3 days"). Sub-line: "paycheckLabel · $expectedAmount on expectedDate"
+   
+   Visual: use the same tile pattern Brad screenshotted earlier — DAYS SINCE LAST label uppercase tracking-wide muted, big number below, sub-line tertiary text. Green color for "recent activity is healthy" (low days since last for things like grocery shopping is fine) and amber/orange for "going long" days-since values where appropriate. Use simple heuristic: dining tile gets green at 1-7 days, amber at 7-14, red at 14+. Amazon tile is inverted — green at 14+ days (resisting impulse), amber at 7-14, red at 1-7. Coffee same as dining direction. Brad will fine-tune later. If a daysSinceLast bucket is null (never happened in window), show "—" with sub-line "no record in this window."
+
+3. THREE EXTRA fun-fact tiles in a 3-col row below the main grid:
+   - Tile 7: QUIETEST DAY → funFacts.quietestDay.date + funFacts.quietestDay.total. Sub-line: "dayOfWeek · only one txn" (or count). Day-of-week comes from the date.
+   - Tile 8: IMPULSE BUYS → funFacts.impulseBuyCount.count + funFacts.impulseBuyCount.total. Sub-line: "exampleMerchants joined with commas, max 3"
+   - Tile 9: SUBSCRIPTIONS RUNNING → funFacts.subscriptionsCount.count + funFacts.subscriptionsCount.monthlyTotal/mo. Sub-line: "Top 3: top three names joined"
+   
+   Same tile pattern as above.
+
+4. TWO STREAKS (replaces the three current streaks):
+   - STREAK 1: NO-DINING STREAK → streaks.noDining.currentDays + sub "longest: longestDays days". Flame icon. Use warning-color icon if currentDays >= 5 (going strong), neutral otherwise.
+   - STREAK 2: COFFEE-FREE STREAK → streaks.coffeeFree.currentDays + sub "longest: longestDays days". Same flame treatment.
+   
+   Two cards side by side, same width.
+   
+   DROP entirely:
+   - "Under-budget streak" (0 current months reads as discouraging)
+   - "On-track streak" (1 month, weak signal)
+   These streaks will return when allowance data has more history. Don't render them with 0 or 1.
+
+5. HOURLY SPENDING CLOCK chart — feed from hourlySpendingClock (24 buckets). Same orange bar chart treatment as current. Reads cleanly now that transfers are excluded — no more 3am $190 spike. Title: "Hourly spending clock". Subtitle: "What hours of the day money actually leaves the account."
+
+6. DAY OF WEEK BAR CHART — feed from dayOfWeekSpend. Use avgPerDay on Y axis (not raw total — accounts for unequal day counts in a partial month). Title: "Spend by day of week". Subtitle: "Your weekly rhythm in dollars per day."
+   - Highlight the day with the highest avgPerDay in warning/accent color, rest in primary/teal.
+   - X axis: Sun Mon Tue Wed Thu Fri Sat.
+
+7. DROP entirely:
+   - "Spend by day of month" chart — replaced by Day of Week (more personality-revealing, less distorted by date-locked recurring txns)
+   - "Money personality radar" — categories don't match real category structure
+   
+   These can come back later if Brad asks, but kill them in this pass.
+
+8. HALL OF FAME block at the bottom — feed from hallOfFame:
+   - Left: BIGGEST EXPENSE THIS WINDOW → biggestExpense.amount in red. Sub-line: "merchant · categoryName · date"
+   - Right: BIGGEST INCOME THIS WINDOW → biggestIncome.amount in green. Sub-line: "merchant · categoryName · date"
+   
+   Same card pattern. Single wide card with two halves separated by a vertical rule.
+   
+   The merchant on biggestExpense should be the CLEANED name (Replit Inc., Best Buy, etc.) — no more "Online Transfer to SAV …9128 transaction#:..." strings. The biggestIncome merchant should be a real income source (KFI Staffing, Venmo, Hannah's employer) — no more "ODP TRANSFER FROM SAVINGS" strings. If either is null, show "No data this window."
+
+9. RANGE SELECTOR — the existing /reports range selector at the top of the page (Last 30 days / Last 90 days / etc.) drives this tab too. When user changes range, behavior-facts re-fetches with new from/to. Honor trackingStart floor — if user picks 1 year and we only have a month of data, the tab content scopes to what's available. No fake-history rendering.
+
+10. HIDE IGNORE — same UI rule as Spending Phase 2. Never surface excluded.* values anywhere on the page. The pipeline correctly excludes them; the UI doesn't surface that fact.
+
+VISUAL DETAILS:
+- All tiles use the existing Reports tile visual language (white card, 0.5px border, sentence-case labels, tabular numerics for dollar amounts)
+- Sub-line text in tertiary muted color
+- No emojis on tiles. Use lucide icons (flame for streaks, sparkles for AI block — match existing patterns)
+- Empty states: any tile where data is null shows "—" with a clear sub-line explanation (not "0" which would mislead)
+
+VERIFY (after publish + hard refresh on /reports → Behavior & Fun tab):
+
+1. AI summary at top reads like a friend's observations, mentions real merchants and real dates from funFacts, no transfer/ACH strings in the prose
+2. Days since last dining/Amazon/coffee tiles show sensible numbers with cleaned merchant names in sub-lines
+3. Biggest splurge tile shows a real merchant transaction (Best Buy or similar) — NOT "Online Transfer to SAV..."
+4. Most-visited merchant tile shows Kwik Trip / Metro Market / similar
+5. Next paycheck countdown shows days + amount + label
+6. Quietest day, impulse buys, subscriptions tiles all populated with real data
+7. No-dining and coffee-free streaks visible; under-budget and on-track streaks GONE
+8. Hourly spending clock chart shows a clean distribution — no 3am transfer spikes
+9. Day of week chart shows avgPerDay across Sun-Sat, top day highlighted
+10. Spend-by-day-of-month chart GONE
+11. Money personality radar GONE
+12. Hall of Fame at bottom shows biggest expense (real merchant) + biggest income (real source) — no transfer strings
+13. Range selector at top of /reports changes this tab's data when toggled (try 30d vs 90d vs since-tracking-started)
+14. Other /reports tabs unaffected
+
+Architect review + typecheck + publish. No new tests. Existing Anthropic infra for Claude summary rewire (reuse debriefAdvisorSummary pattern).

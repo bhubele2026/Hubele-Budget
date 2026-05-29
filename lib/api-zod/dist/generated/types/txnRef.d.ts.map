@@ -1,0 +1,1 @@
+{"version":3,"file":"txnRef.d.ts","sourceRoot":"","sources":["../../../src/generated/types/txnRef.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,MAAM;IACrB,MAAM,EAAE,MAAM,CAAC;IACf,IAAI,EAAE,MAAM,CAAC;IACb,QAAQ,EAAE,MAAM,CAAC;IACjB,gBAAgB;IAChB,YAAY,EAAE,MAAM,GAAG,IAAI,CAAC;CAC7B"}

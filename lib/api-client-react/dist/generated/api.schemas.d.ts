@@ -1823,6 +1823,110 @@ export interface SpendingFacts {
     monthlyTrends: SpendingFactsMonthlyTrendsItem[];
     reimbursable: SpendingFactsReimbursable;
 }
+export type BehaviorFactsRange = {
+    start: string;
+    end: string;
+    daysCovered: number;
+    trackingStart: string;
+    floorApplied: boolean;
+};
+export type DaysSinceEntry = {
+    days: number;
+    lastDate: string;
+    lastMerchant: string;
+    lastAmount: number;
+} | null;
+export type BehaviorFactsDaysSinceLast = {
+    dining: DaysSinceEntry;
+    amazon: DaysSinceEntry;
+    coffee: DaysSinceEntry;
+    gasStation: DaysSinceEntry;
+    groceries: DaysSinceEntry;
+    onlineShopping: DaysSinceEntry;
+};
+export interface StreakEntry {
+    currentDays: number;
+    longestDays: number;
+    longestEndDate: string;
+}
+export type BehaviorFactsStreaks = {
+    noDining: StreakEntry;
+    coffeeFree: StreakEntry;
+};
+export type BehaviorFactsFunFactsMostVisitedMerchant = {
+    name: string;
+    count: number;
+    total: number;
+    /** @nullable */
+    sampleCategoryName: string | null;
+} | null;
+export type BehaviorFactsFunFactsImpulseBuyCount = {
+    count: number;
+    total: number;
+    exampleMerchants: string[];
+};
+export type BehaviorFactsFunFactsSubscriptionsCountTopThreeItem = {
+    name: string;
+    amount: number;
+    frequency: string;
+};
+export type BehaviorFactsFunFactsSubscriptionsCount = {
+    count: number;
+    monthlyTotal: number;
+    topThree: BehaviorFactsFunFactsSubscriptionsCountTopThreeItem[];
+};
+export type BehaviorFactsFunFactsNextPaycheckCountdown = {
+    days: number;
+    paycheckLabel: string;
+    expectedAmount: number;
+    expectedDate: string;
+} | null;
+export interface TxnRef {
+    amount: number;
+    date: string;
+    merchant: string;
+    /** @nullable */
+    categoryName: string | null;
+}
+export interface DaySpend {
+    date: string;
+    total: number;
+    dayOfWeek: string;
+}
+export type BehaviorFactsFunFacts = {
+    biggestSplurge: TxnRef | null;
+    mostVisitedMerchant: BehaviorFactsFunFactsMostVisitedMerchant;
+    quietestDay: DaySpend | null;
+    mostExpensiveDay: DaySpend | null;
+    impulseBuyCount: BehaviorFactsFunFactsImpulseBuyCount;
+    subscriptionsCount: BehaviorFactsFunFactsSubscriptionsCount;
+    nextPaycheckCountdown: BehaviorFactsFunFactsNextPaycheckCountdown;
+};
+export type BehaviorFactsHourlySpendingClockItem = {
+    hour: number;
+    total: number;
+    count: number;
+};
+export type BehaviorFactsDayOfWeekSpendItem = {
+    dow: number;
+    label: string;
+    total: number;
+    count: number;
+    avgPerDay: number;
+};
+export type BehaviorFactsHallOfFame = {
+    biggestExpense: TxnRef | null;
+    biggestIncome: TxnRef | null;
+};
+export interface BehaviorFacts {
+    range: BehaviorFactsRange;
+    daysSinceLast: BehaviorFactsDaysSinceLast;
+    streaks: BehaviorFactsStreaks;
+    funFacts: BehaviorFactsFunFacts;
+    hourlySpendingClock: BehaviorFactsHourlySpendingClockItem[];
+    dayOfWeekSpend: BehaviorFactsDayOfWeekSpendItem[];
+    hallOfFame: BehaviorFactsHallOfFame;
+}
 export type AvalancheScheduleProposedPaymentsItemConfidence = (typeof AvalancheScheduleProposedPaymentsItemConfidence)[keyof typeof AvalancheScheduleProposedPaymentsItemConfidence];
 export declare const AvalancheScheduleProposedPaymentsItemConfidence: {
     readonly high: "high";
@@ -2611,6 +2715,16 @@ export declare const GetReportsAdvisorSummaryRefresh: {
     readonly NUMBER_1: "1";
 };
 export type GetReportsSpendingFactsParams = {
+    /**
+     * Range start (YYYY-MM-DD). Defaults to 30 days ago.
+     */
+    from?: string;
+    /**
+     * Range end (YYYY-MM-DD). Defaults to today.
+     */
+    to?: string;
+};
+export type GetReportsBehaviorFactsParams = {
     /**
      * Range start (YYYY-MM-DD). Defaults to 30 days ago.
      */

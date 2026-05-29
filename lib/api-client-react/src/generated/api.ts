@@ -32,6 +32,7 @@ import type {
   AvalancheSettings,
   AvalancheSettingsInput,
   BankSnapshot,
+  BehaviorFacts,
   BillsSummary,
   BudgetLine,
   BudgetLineInput,
@@ -80,6 +81,7 @@ import type {
   GetForecastCashSignalParams,
   GetForecastParams,
   GetReportsAdvisorSummaryParams,
+  GetReportsBehaviorFactsParams,
   GetReportsSpendingFactsParams,
   HealthStatus,
   ImportSummary,
@@ -5694,6 +5696,113 @@ export function useGetReportsSpendingFacts<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetReportsSpendingFactsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns deterministic Behavior facts (days-since-last buckets, no-dining
+and coffee-free streaks, fun facts, hourly spending clock, day-of-week
+spend, hall of fame) for the Reports Behavior & Fun tab, on top of the
+same real-spend definition as Spending. `from`/`to` are optional
+(default last 30 days); ranges before the tracking start are clamped
+server-side (range.floorApplied = true).
+
+ * @summary Clean personality-driven Behavior facts for the Reports Behavior & Fun tab
+ */
+export const getGetReportsBehaviorFactsUrl = (
+  params?: GetReportsBehaviorFactsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/reports/behavior-facts?${stringifiedParams}`
+    : `/api/reports/behavior-facts`;
+};
+
+export const getReportsBehaviorFacts = async (
+  params?: GetReportsBehaviorFactsParams,
+  options?: RequestInit,
+): Promise<BehaviorFacts> => {
+  return customFetch<BehaviorFacts>(getGetReportsBehaviorFactsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetReportsBehaviorFactsQueryKey = (
+  params?: GetReportsBehaviorFactsParams,
+) => {
+  return [`/api/reports/behavior-facts`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetReportsBehaviorFactsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReportsBehaviorFacts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetReportsBehaviorFactsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReportsBehaviorFacts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetReportsBehaviorFactsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReportsBehaviorFacts>>
+  > = ({ signal }) =>
+    getReportsBehaviorFacts(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReportsBehaviorFacts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReportsBehaviorFactsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReportsBehaviorFacts>>
+>;
+export type GetReportsBehaviorFactsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Clean personality-driven Behavior facts for the Reports Behavior & Fun tab
+ */
+
+export function useGetReportsBehaviorFacts<
+  TData = Awaited<ReturnType<typeof getReportsBehaviorFacts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetReportsBehaviorFactsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReportsBehaviorFacts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReportsBehaviorFactsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

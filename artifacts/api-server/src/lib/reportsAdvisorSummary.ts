@@ -25,6 +25,7 @@ import { logger } from "./logger";
 import { computeCashSignal } from "./cashSignal";
 import { buildAvalancheSchedule } from "./avalancheScheduler";
 import { buildSpendingFacts as buildSpendingFactsPipeline } from "./spendingFacts";
+import { buildBehaviorFacts as buildBehaviorFactsPipeline } from "./behaviorFacts";
 
 const DEFAULT_MODEL = "claude-sonnet-4-5";
 const MAX_OUTPUT_TOKENS = 600;
@@ -78,6 +79,9 @@ export interface TabFacts {
   fallbackBullets: string[];
   // Short label naming what this tab covers, used in the prompt.
   topic: string;
+  // Optional per-tab system prompt. When set, it replaces the default
+  // systemPrompt(topic) — used by the Behavior tab for a warmer voice.
+  systemPromptOverride?: string;
 }
 
 async function loadCategoryNames(
@@ -489,71 +493,158 @@ async function buildBudgetFacts(
 }
 
 // --- Behavior tab ---------------------------------------------------------
+// (#851 Phase 2) Narrate the clean behaviorFacts pipeline in a warm,
+// friend-texting voice. Reads ONLY from funFacts / daysSinceLast / streaks —
+// transfers and ignore rows are already excluded upstream, so the prose can
+// never surface "Online Transfer to SAV…" as a splurge.
 async function buildBehaviorFacts(
   householdId: string,
   p: ReportsTabParams,
 ): Promise<TabFacts> {
-  const { names, excluded } = await loadCategoryNames(householdId);
-  const txns = await loadRangeTxns(householdId, p.fromDate, p.toDate);
-  const spends = txns.filter((t) => !t.isTransfer && num(t.amount) < 0);
-
-  let biggest: { description: string; amount: number; date: string } | null = null;
-  const dowCount = [0, 0, 0, 0, 0, 0, 0];
-  const merchantCount = new Map<string, number>();
-  for (const t of spends) {
-    const a = -num(t.amount);
-    if (!biggest || a > biggest.amount) {
-      biggest = { description: t.description, amount: a, date: t.occurredOn };
-    }
-    const cid = t.categoryId ?? "";
-    if (!excluded.has(cid)) {
-      const dow = new Date(t.occurredOn + "T00:00:00Z").getUTCDay();
-      dowCount[dow] += 1;
-    }
-    const key = t.description.trim().toLowerCase();
-    if (key) merchantCount.set(key, (merchantCount.get(key) ?? 0) + 1);
-  }
-  const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  let busiestDow = 0;
-  for (let i = 1; i < 7; i++) if (dowCount[i] > dowCount[busiestDow]) busiestDow = i;
-  const topMerchant = [...merchantCount.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+  const f = await buildBehaviorFactsPipeline(householdId, p.fromDate, p.toDate);
+  const { funFacts, daysSinceLast, streaks } = f;
 
   const lines: string[] = [];
-  lines.push(`Window: last ${p.rangeDays} days`);
-  lines.push(`Total purchases (debits): ${spends.length}`);
-  if (biggest) {
-    lines.push(`Biggest single purchase: ${money(biggest.amount)} — "${biggest.description}" on ${biggest.date}`);
+  lines.push(
+    `Window: ${f.range.start} to ${f.range.end} (${f.range.daysCovered} days)${f.range.floorApplied ? " — clamped to the tracking start (May 1, 2026)" : ""}`,
+  );
+
+  if (funFacts.biggestSplurge) {
+    const s = funFacts.biggestSplurge;
+    lines.push(
+      `Biggest splurge: ${money(s.amount)} at ${s.merchant} on ${s.date}${s.categoryName ? ` (${s.categoryName})` : ""}`,
+    );
   }
-  lines.push(`Busiest spending day of week: ${DOW[busiestDow]} (${dowCount[busiestDow]} purchases)`);
-  if (topMerchant) {
-    lines.push(`Most frequent merchant: "${topMerchant[0]}" (${topMerchant[1]} times)`);
+  if (funFacts.mostVisitedMerchant) {
+    const m = funFacts.mostVisitedMerchant;
+    lines.push(
+      `Most-visited spot: ${m.name} — ${m.count} visits, ${money(m.total)} total`,
+    );
+  }
+  if (daysSinceLast.dining) {
+    const d = daysSinceLast.dining;
+    lines.push(
+      `Days since last dining out: ${d.days} (last was ${d.lastMerchant} on ${d.lastDate})`,
+    );
+  }
+  if (daysSinceLast.coffee) {
+    const d = daysSinceLast.coffee;
+    lines.push(
+      `Days since last coffee run: ${d.days} (last was ${d.lastMerchant} on ${d.lastDate})`,
+    );
+  }
+  if (daysSinceLast.amazon) {
+    const d = daysSinceLast.amazon;
+    lines.push(
+      `Days since last Amazon order: ${d.days} (last was ${d.lastMerchant} on ${d.lastDate})`,
+    );
+  }
+  lines.push(
+    `No-dining streak: ${streaks.noDining.currentDays} days right now (longest ever ${streaks.noDining.longestDays})`,
+  );
+  lines.push(
+    `Coffee-free streak: ${streaks.coffeeFree.currentDays} days right now (longest ever ${streaks.coffeeFree.longestDays})`,
+  );
+  if (funFacts.quietestDay) {
+    const q = funFacts.quietestDay;
+    lines.push(
+      `Quietest spending day: ${q.dayOfWeek} ${q.date}, only ${money(q.total)} out`,
+    );
+  }
+  if (funFacts.impulseBuyCount.count > 0) {
+    const i = funFacts.impulseBuyCount;
+    lines.push(
+      `Impulse buys (small, non-essential): ${i.count} totaling ${money(i.total)}${i.exampleMerchants.length ? ` (e.g. ${i.exampleMerchants.join(", ")})` : ""}`,
+    );
+  }
+  if (funFacts.subscriptionsCount.count > 0) {
+    lines.push(
+      `Active subscriptions: ${funFacts.subscriptionsCount.count} costing about ${money(funFacts.subscriptionsCount.monthlyTotal)}/mo`,
+    );
+  }
+  if (funFacts.nextPaycheckCountdown) {
+    const np = funFacts.nextPaycheckCountdown;
+    lines.push(
+      `Next paycheck: ${np.paycheckLabel} — ${money(np.expectedAmount)} landing in ${np.days} days (${np.expectedDate})`,
+    );
   }
 
+  // Deterministic fallback (warm voice, used when the AI call fails).
   const fallbackBullets: string[] = [];
-  if (biggest) {
-    fallbackBullets.push(`Your largest purchase was ${money(biggest.amount)} on "${biggest.description}".`);
+  if (funFacts.biggestSplurge) {
+    const s = funFacts.biggestSplurge;
+    fallbackBullets.push(
+      `Biggest splurge was ${money(s.amount)} at ${s.merchant} on ${s.date}.`,
+    );
   }
-  fallbackBullets.push(`${DOW[busiestDow]} is your busiest spending day.`);
-  if (topMerchant) {
-    fallbackBullets.push(`You visited "${topMerchant[0]}" ${topMerchant[1]} times in this window.`);
+  if (funFacts.mostVisitedMerchant) {
+    const m = funFacts.mostVisitedMerchant;
+    fallbackBullets.push(`You hit ${m.name} ${m.count} times this window.`);
   }
+  if (streaks.noDining.currentDays > 0) {
+    fallbackBullets.push(
+      `You're ${streaks.noDining.currentDays} days into a no-dining streak (longest ${streaks.noDining.longestDays}).`,
+    );
+  }
+  if (funFacts.nextPaycheckCountdown) {
+    fallbackBullets.push(
+      `Next paycheck lands in ${funFacts.nextPaycheckCountdown.days} days.`,
+    );
+  }
+  if (fallbackBullets.length === 0) {
+    fallbackBullets.push(
+      "Not much activity in this window yet — patterns will show up as more comes in.",
+    );
+  }
+
+  const fallbackHeadline = funFacts.biggestSplurge
+    ? `Brad — your biggest hit this window was ${money(funFacts.biggestSplurge.amount)} at ${funFacts.biggestSplurge.merchant}.`
+    : "Brad — here's how your habits looked this window.";
 
   return {
     hashInput: {
-      from: p.fromDate,
-      to: p.toDate,
-      count: spends.length,
-      biggest: biggest ? [biggest.description, Math.round(biggest.amount), biggest.date] : null,
-      busiestDow,
-      topMerchant: topMerchant ? [topMerchant[0], topMerchant[1]] : null,
+      from: f.range.start,
+      to: f.range.end,
+      splurge: funFacts.biggestSplurge
+        ? [
+            funFacts.biggestSplurge.merchant,
+            Math.round(funFacts.biggestSplurge.amount),
+            funFacts.biggestSplurge.date,
+          ]
+        : null,
+      mostVisited: funFacts.mostVisitedMerchant
+        ? [funFacts.mostVisitedMerchant.name, funFacts.mostVisitedMerchant.count]
+        : null,
+      noDining: streaks.noDining.currentDays,
+      coffeeFree: streaks.coffeeFree.currentDays,
+      diningDays: daysSinceLast.dining?.days ?? null,
+      coffeeDays: daysSinceLast.coffee?.days ?? null,
+      nextPaycheck: funFacts.nextPaycheckCountdown?.days ?? null,
     },
     lines,
-    fallbackHeadline: biggest
-      ? `${DOW[busiestDow]} is your busiest spending day, and "${biggest.description}" was your biggest hit.`
-      : `${DOW[busiestDow]} is your busiest spending day.`,
+    fallbackHeadline,
     fallbackBullets,
-    topic: "spending behavior and habits — fun patterns in how you spend",
+    topic: "spending habits and fun behavioral patterns",
+    systemPromptOverride: behaviorSystemPrompt(),
   };
+}
+
+function behaviorSystemPrompt(): string {
+  return `You are writing a few warm, personal observations about Brad's spending habits — like a friend texting him after a glance at his month, NOT an analytics report.
+
+The app has already computed deterministic FACTS. Your job is ONLY to narrate them warmly.
+
+Output requirements:
+- Respond with ONLY a JSON object, no markdown fence, no preamble.
+- Schema: {"headline": string, "bullets": string[]}
+- headline: ONE warm, personal opening line addressed to Brad.
+- bullets: 2 to 4 short, friendly observations (3-5 sentences total across them). Each references REAL numbers, merchants, and dates from the FACTS only.
+
+Style:
+- Sound like a friend texting: warm, personal, specific. Use Brad's name.
+- Name real merchants, real dates, and real dollar amounts straight from the FACTS.
+- Whole dollars only (no cents).
+- NEVER invent or guess numbers, dates, names, or categories. If a fact isn't in the FACTS block, don't mention it.`;
 }
 
 export async function buildTabFacts(
@@ -634,7 +725,7 @@ async function callAnthropic(facts: TabFacts): Promise<ParsedLLM | null> {
       {
         model: getModel(),
         max_tokens: MAX_OUTPUT_TOKENS,
-        system: systemPrompt(facts.topic),
+        system: facts.systemPromptOverride ?? systemPrompt(facts.topic),
         messages: [{ role: "user", content: userPrompt }],
       },
       { signal: ctrl.signal },

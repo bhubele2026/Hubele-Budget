@@ -5843,6 +5843,825 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         }[];
     }[];
 }>;
+/**
+ * Returns deterministic Behavior facts (days-since-last buckets, no-dining
+and coffee-free streaks, fun facts, hourly spending clock, day-of-week
+spend, hall of fame) for the Reports Behavior & Fun tab, on top of the
+same real-spend definition as Spending. `from`/`to` are optional
+(default last 30 days); ranges before the tracking start are clamped
+server-side (range.floorApplied = true).
+
+ * @summary Clean personality-driven Behavior facts for the Reports Behavior & Fun tab
+ */
+export declare const GetReportsBehaviorFactsQueryParams: zod.ZodObject<{
+    from: zod.ZodOptional<zod.ZodString>;
+    to: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    from?: string | undefined;
+    to?: string | undefined;
+}, {
+    from?: string | undefined;
+    to?: string | undefined;
+}>;
+export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
+    range: zod.ZodObject<{
+        start: zod.ZodString;
+        end: zod.ZodString;
+        daysCovered: zod.ZodNumber;
+        trackingStart: zod.ZodString;
+        floorApplied: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        start: string;
+        end: string;
+        daysCovered: number;
+        trackingStart: string;
+        floorApplied: boolean;
+    }, {
+        start: string;
+        end: string;
+        daysCovered: number;
+        trackingStart: string;
+        floorApplied: boolean;
+    }>;
+    daysSinceLast: zod.ZodObject<{
+        dining: zod.ZodUnion<[zod.ZodObject<{
+            days: zod.ZodNumber;
+            lastDate: zod.ZodString;
+            lastMerchant: zod.ZodString;
+            lastAmount: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        }, {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        }>, zod.ZodNull]>;
+        amazon: zod.ZodUnion<[zod.ZodObject<{
+            days: zod.ZodNumber;
+            lastDate: zod.ZodString;
+            lastMerchant: zod.ZodString;
+            lastAmount: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        }, {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        }>, zod.ZodNull]>;
+        coffee: zod.ZodUnion<[zod.ZodObject<{
+            days: zod.ZodNumber;
+            lastDate: zod.ZodString;
+            lastMerchant: zod.ZodString;
+            lastAmount: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        }, {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        }>, zod.ZodNull]>;
+        gasStation: zod.ZodUnion<[zod.ZodObject<{
+            days: zod.ZodNumber;
+            lastDate: zod.ZodString;
+            lastMerchant: zod.ZodString;
+            lastAmount: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        }, {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        }>, zod.ZodNull]>;
+        groceries: zod.ZodUnion<[zod.ZodObject<{
+            days: zod.ZodNumber;
+            lastDate: zod.ZodString;
+            lastMerchant: zod.ZodString;
+            lastAmount: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        }, {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        }>, zod.ZodNull]>;
+        onlineShopping: zod.ZodUnion<[zod.ZodObject<{
+            days: zod.ZodNumber;
+            lastDate: zod.ZodString;
+            lastMerchant: zod.ZodString;
+            lastAmount: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        }, {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        groceries: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        dining: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        amazon: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        coffee: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        gasStation: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        onlineShopping: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+    }, {
+        groceries: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        dining: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        amazon: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        coffee: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        gasStation: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        onlineShopping: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+    }>;
+    streaks: zod.ZodObject<{
+        noDining: zod.ZodObject<{
+            currentDays: zod.ZodNumber;
+            longestDays: zod.ZodNumber;
+            longestEndDate: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            currentDays: number;
+            longestDays: number;
+            longestEndDate: string;
+        }, {
+            currentDays: number;
+            longestDays: number;
+            longestEndDate: string;
+        }>;
+        coffeeFree: zod.ZodObject<{
+            currentDays: zod.ZodNumber;
+            longestDays: zod.ZodNumber;
+            longestEndDate: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            currentDays: number;
+            longestDays: number;
+            longestEndDate: string;
+        }, {
+            currentDays: number;
+            longestDays: number;
+            longestEndDate: string;
+        }>;
+    }, "strip", zod.ZodTypeAny, {
+        noDining: {
+            currentDays: number;
+            longestDays: number;
+            longestEndDate: string;
+        };
+        coffeeFree: {
+            currentDays: number;
+            longestDays: number;
+            longestEndDate: string;
+        };
+    }, {
+        noDining: {
+            currentDays: number;
+            longestDays: number;
+            longestEndDate: string;
+        };
+        coffeeFree: {
+            currentDays: number;
+            longestDays: number;
+            longestEndDate: string;
+        };
+    }>;
+    funFacts: zod.ZodObject<{
+        biggestSplurge: zod.ZodUnion<[zod.ZodObject<{
+            amount: zod.ZodNumber;
+            date: zod.ZodString;
+            merchant: zod.ZodString;
+            categoryName: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        }, {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        }>, zod.ZodNull]>;
+        mostVisitedMerchant: zod.ZodUnion<[zod.ZodObject<{
+            name: zod.ZodString;
+            count: zod.ZodNumber;
+            total: zod.ZodNumber;
+            sampleCategoryName: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            total: number;
+            name: string;
+            count: number;
+            sampleCategoryName: string | null;
+        }, {
+            total: number;
+            name: string;
+            count: number;
+            sampleCategoryName: string | null;
+        }>, zod.ZodNull]>;
+        quietestDay: zod.ZodUnion<[zod.ZodObject<{
+            date: zod.ZodString;
+            total: zod.ZodNumber;
+            dayOfWeek: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            total: number;
+            dayOfWeek: string;
+        }, {
+            date: string;
+            total: number;
+            dayOfWeek: string;
+        }>, zod.ZodNull]>;
+        mostExpensiveDay: zod.ZodUnion<[zod.ZodObject<{
+            date: zod.ZodString;
+            total: zod.ZodNumber;
+            dayOfWeek: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            total: number;
+            dayOfWeek: string;
+        }, {
+            date: string;
+            total: number;
+            dayOfWeek: string;
+        }>, zod.ZodNull]>;
+        impulseBuyCount: zod.ZodObject<{
+            count: zod.ZodNumber;
+            total: zod.ZodNumber;
+            exampleMerchants: zod.ZodArray<zod.ZodString, "many">;
+        }, "strip", zod.ZodTypeAny, {
+            total: number;
+            count: number;
+            exampleMerchants: string[];
+        }, {
+            total: number;
+            count: number;
+            exampleMerchants: string[];
+        }>;
+        subscriptionsCount: zod.ZodObject<{
+            count: zod.ZodNumber;
+            monthlyTotal: zod.ZodNumber;
+            topThree: zod.ZodArray<zod.ZodObject<{
+                name: zod.ZodString;
+                amount: zod.ZodNumber;
+                frequency: zod.ZodString;
+            }, "strip", zod.ZodTypeAny, {
+                amount: number;
+                name: string;
+                frequency: string;
+            }, {
+                amount: number;
+                name: string;
+                frequency: string;
+            }>, "many">;
+        }, "strip", zod.ZodTypeAny, {
+            count: number;
+            monthlyTotal: number;
+            topThree: {
+                amount: number;
+                name: string;
+                frequency: string;
+            }[];
+        }, {
+            count: number;
+            monthlyTotal: number;
+            topThree: {
+                amount: number;
+                name: string;
+                frequency: string;
+            }[];
+        }>;
+        nextPaycheckCountdown: zod.ZodUnion<[zod.ZodObject<{
+            days: zod.ZodNumber;
+            paycheckLabel: zod.ZodString;
+            expectedAmount: zod.ZodNumber;
+            expectedDate: zod.ZodString;
+        }, "strip", zod.ZodTypeAny, {
+            days: number;
+            paycheckLabel: string;
+            expectedAmount: number;
+            expectedDate: string;
+        }, {
+            days: number;
+            paycheckLabel: string;
+            expectedAmount: number;
+            expectedDate: string;
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        biggestSplurge: {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        } | null;
+        mostVisitedMerchant: {
+            total: number;
+            name: string;
+            count: number;
+            sampleCategoryName: string | null;
+        } | null;
+        quietestDay: {
+            date: string;
+            total: number;
+            dayOfWeek: string;
+        } | null;
+        mostExpensiveDay: {
+            date: string;
+            total: number;
+            dayOfWeek: string;
+        } | null;
+        impulseBuyCount: {
+            total: number;
+            count: number;
+            exampleMerchants: string[];
+        };
+        subscriptionsCount: {
+            count: number;
+            monthlyTotal: number;
+            topThree: {
+                amount: number;
+                name: string;
+                frequency: string;
+            }[];
+        };
+        nextPaycheckCountdown: {
+            days: number;
+            paycheckLabel: string;
+            expectedAmount: number;
+            expectedDate: string;
+        } | null;
+    }, {
+        biggestSplurge: {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        } | null;
+        mostVisitedMerchant: {
+            total: number;
+            name: string;
+            count: number;
+            sampleCategoryName: string | null;
+        } | null;
+        quietestDay: {
+            date: string;
+            total: number;
+            dayOfWeek: string;
+        } | null;
+        mostExpensiveDay: {
+            date: string;
+            total: number;
+            dayOfWeek: string;
+        } | null;
+        impulseBuyCount: {
+            total: number;
+            count: number;
+            exampleMerchants: string[];
+        };
+        subscriptionsCount: {
+            count: number;
+            monthlyTotal: number;
+            topThree: {
+                amount: number;
+                name: string;
+                frequency: string;
+            }[];
+        };
+        nextPaycheckCountdown: {
+            days: number;
+            paycheckLabel: string;
+            expectedAmount: number;
+            expectedDate: string;
+        } | null;
+    }>;
+    hourlySpendingClock: zod.ZodArray<zod.ZodObject<{
+        hour: zod.ZodNumber;
+        total: zod.ZodNumber;
+        count: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        total: number;
+        count: number;
+        hour: number;
+    }, {
+        total: number;
+        count: number;
+        hour: number;
+    }>, "many">;
+    dayOfWeekSpend: zod.ZodArray<zod.ZodObject<{
+        dow: zod.ZodNumber;
+        label: zod.ZodString;
+        total: zod.ZodNumber;
+        count: zod.ZodNumber;
+        avgPerDay: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        total: number;
+        count: number;
+        label: string;
+        dow: number;
+        avgPerDay: number;
+    }, {
+        total: number;
+        count: number;
+        label: string;
+        dow: number;
+        avgPerDay: number;
+    }>, "many">;
+    hallOfFame: zod.ZodObject<{
+        biggestExpense: zod.ZodUnion<[zod.ZodObject<{
+            amount: zod.ZodNumber;
+            date: zod.ZodString;
+            merchant: zod.ZodString;
+            categoryName: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        }, {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        }>, zod.ZodNull]>;
+        biggestIncome: zod.ZodUnion<[zod.ZodObject<{
+            amount: zod.ZodNumber;
+            date: zod.ZodString;
+            merchant: zod.ZodString;
+            categoryName: zod.ZodNullable<zod.ZodString>;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        }, {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        }>, zod.ZodNull]>;
+    }, "strip", zod.ZodTypeAny, {
+        biggestExpense: {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        } | null;
+        biggestIncome: {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        } | null;
+    }, {
+        biggestExpense: {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        } | null;
+        biggestIncome: {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        } | null;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    range: {
+        start: string;
+        end: string;
+        daysCovered: number;
+        trackingStart: string;
+        floorApplied: boolean;
+    };
+    daysSinceLast: {
+        groceries: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        dining: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        amazon: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        coffee: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        gasStation: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        onlineShopping: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+    };
+    streaks: {
+        noDining: {
+            currentDays: number;
+            longestDays: number;
+            longestEndDate: string;
+        };
+        coffeeFree: {
+            currentDays: number;
+            longestDays: number;
+            longestEndDate: string;
+        };
+    };
+    funFacts: {
+        biggestSplurge: {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        } | null;
+        mostVisitedMerchant: {
+            total: number;
+            name: string;
+            count: number;
+            sampleCategoryName: string | null;
+        } | null;
+        quietestDay: {
+            date: string;
+            total: number;
+            dayOfWeek: string;
+        } | null;
+        mostExpensiveDay: {
+            date: string;
+            total: number;
+            dayOfWeek: string;
+        } | null;
+        impulseBuyCount: {
+            total: number;
+            count: number;
+            exampleMerchants: string[];
+        };
+        subscriptionsCount: {
+            count: number;
+            monthlyTotal: number;
+            topThree: {
+                amount: number;
+                name: string;
+                frequency: string;
+            }[];
+        };
+        nextPaycheckCountdown: {
+            days: number;
+            paycheckLabel: string;
+            expectedAmount: number;
+            expectedDate: string;
+        } | null;
+    };
+    hourlySpendingClock: {
+        total: number;
+        count: number;
+        hour: number;
+    }[];
+    dayOfWeekSpend: {
+        total: number;
+        count: number;
+        label: string;
+        dow: number;
+        avgPerDay: number;
+    }[];
+    hallOfFame: {
+        biggestExpense: {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        } | null;
+        biggestIncome: {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        } | null;
+    };
+}, {
+    range: {
+        start: string;
+        end: string;
+        daysCovered: number;
+        trackingStart: string;
+        floorApplied: boolean;
+    };
+    daysSinceLast: {
+        groceries: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        dining: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        amazon: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        coffee: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        gasStation: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+        onlineShopping: {
+            days: number;
+            lastDate: string;
+            lastMerchant: string;
+            lastAmount: number;
+        } | null;
+    };
+    streaks: {
+        noDining: {
+            currentDays: number;
+            longestDays: number;
+            longestEndDate: string;
+        };
+        coffeeFree: {
+            currentDays: number;
+            longestDays: number;
+            longestEndDate: string;
+        };
+    };
+    funFacts: {
+        biggestSplurge: {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        } | null;
+        mostVisitedMerchant: {
+            total: number;
+            name: string;
+            count: number;
+            sampleCategoryName: string | null;
+        } | null;
+        quietestDay: {
+            date: string;
+            total: number;
+            dayOfWeek: string;
+        } | null;
+        mostExpensiveDay: {
+            date: string;
+            total: number;
+            dayOfWeek: string;
+        } | null;
+        impulseBuyCount: {
+            total: number;
+            count: number;
+            exampleMerchants: string[];
+        };
+        subscriptionsCount: {
+            count: number;
+            monthlyTotal: number;
+            topThree: {
+                amount: number;
+                name: string;
+                frequency: string;
+            }[];
+        };
+        nextPaycheckCountdown: {
+            days: number;
+            paycheckLabel: string;
+            expectedAmount: number;
+            expectedDate: string;
+        } | null;
+    };
+    hourlySpendingClock: {
+        total: number;
+        count: number;
+        hour: number;
+    }[];
+    dayOfWeekSpend: {
+        total: number;
+        count: number;
+        label: string;
+        dow: number;
+        avgPerDay: number;
+    }[];
+    hallOfFame: {
+        biggestExpense: {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        } | null;
+        biggestIncome: {
+            date: string;
+            amount: number;
+            categoryName: string | null;
+            merchant: string;
+        } | null;
+    };
+}>;
 export declare const CloseForecastMonthBody: zod.ZodObject<{
     monthKey: zod.ZodString;
     gap: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;

@@ -1195,6 +1195,34 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SpendingFacts" }
 
+  /reports/behavior-facts:
+    get:
+      operationId: getReportsBehaviorFacts
+      tags: [reports]
+      summary: Clean personality-driven Behavior facts for the Reports Behavior & Fun tab
+      description: |
+        Returns deterministic Behavior facts (days-since-last buckets, no-dining
+        and coffee-free streaks, fun facts, hourly spending clock, day-of-week
+        spend, hall of fame) for the Reports Behavior & Fun tab, on top of the
+        same real-spend definition as Spending. `from`/`to` are optional
+        (default last 30 days); ranges before the tracking start are clamped
+        server-side (range.floorApplied = true).
+      parameters:
+        - in: query
+          name: from
+          description: Range start (YYYY-MM-DD). Defaults to 30 days ago.
+          schema: { type: string }
+        - in: query
+          name: to
+          description: Range end (YYYY-MM-DD). Defaults to today.
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BehaviorFacts" }
+
   /forecast/closed-months:
     post:
       operationId: closeForecastMonth
@@ -3799,6 +3827,183 @@ components:
           properties:
             personalTotal: { type: number }
             outstandingReimbursableTotal: { type: number }
+
+    BehaviorFacts:
+      type: object
+      required:
+        [
+          range,
+          daysSinceLast,
+          streaks,
+          funFacts,
+          hourlySpendingClock,
+          dayOfWeekSpend,
+          hallOfFame,
+        ]
+      properties:
+        range:
+          type: object
+          required: [start, end, daysCovered, trackingStart, floorApplied]
+          properties:
+            start: { type: string }
+            end: { type: string }
+            daysCovered: { type: integer }
+            trackingStart: { type: string }
+            floorApplied: { type: boolean }
+        daysSinceLast:
+          type: object
+          required:
+            [dining, amazon, coffee, gasStation, groceries, onlineShopping]
+          properties:
+            dining: { $ref: "#/components/schemas/DaysSinceEntry" }
+            amazon: { $ref: "#/components/schemas/DaysSinceEntry" }
+            coffee: { $ref: "#/components/schemas/DaysSinceEntry" }
+            gasStation: { $ref: "#/components/schemas/DaysSinceEntry" }
+            groceries: { $ref: "#/components/schemas/DaysSinceEntry" }
+            onlineShopping: { $ref: "#/components/schemas/DaysSinceEntry" }
+        streaks:
+          type: object
+          required: [noDining, coffeeFree]
+          properties:
+            noDining: { $ref: "#/components/schemas/StreakEntry" }
+            coffeeFree: { $ref: "#/components/schemas/StreakEntry" }
+        funFacts:
+          type: object
+          required:
+            [
+              biggestSplurge,
+              mostVisitedMerchant,
+              quietestDay,
+              mostExpensiveDay,
+              impulseBuyCount,
+              subscriptionsCount,
+              nextPaycheckCountdown,
+            ]
+          properties:
+            biggestSplurge:
+              oneOf:
+                - { $ref: "#/components/schemas/TxnRef" }
+                - type: "null"
+            mostVisitedMerchant:
+              oneOf:
+                - type: object
+                  required: [name, count, total, sampleCategoryName]
+                  properties:
+                    name: { type: string }
+                    count: { type: integer }
+                    total: { type: number }
+                    sampleCategoryName: { type: ["string", "null"] }
+                - type: "null"
+            quietestDay:
+              oneOf:
+                - { $ref: "#/components/schemas/DaySpend" }
+                - type: "null"
+            mostExpensiveDay:
+              oneOf:
+                - { $ref: "#/components/schemas/DaySpend" }
+                - type: "null"
+            impulseBuyCount:
+              type: object
+              required: [count, total, exampleMerchants]
+              properties:
+                count: { type: integer }
+                total: { type: number }
+                exampleMerchants:
+                  type: array
+                  items: { type: string }
+            subscriptionsCount:
+              type: object
+              required: [count, monthlyTotal, topThree]
+              properties:
+                count: { type: integer }
+                monthlyTotal: { type: number }
+                topThree:
+                  type: array
+                  items:
+                    type: object
+                    required: [name, amount, frequency]
+                    properties:
+                      name: { type: string }
+                      amount: { type: number }
+                      frequency: { type: string }
+            nextPaycheckCountdown:
+              oneOf:
+                - type: object
+                  required: [days, paycheckLabel, expectedAmount, expectedDate]
+                  properties:
+                    days: { type: integer }
+                    paycheckLabel: { type: string }
+                    expectedAmount: { type: number }
+                    expectedDate: { type: string }
+                - type: "null"
+        hourlySpendingClock:
+          type: array
+          items:
+            type: object
+            required: [hour, total, count]
+            properties:
+              hour: { type: integer }
+              total: { type: number }
+              count: { type: integer }
+        dayOfWeekSpend:
+          type: array
+          items:
+            type: object
+            required: [dow, label, total, count, avgPerDay]
+            properties:
+              dow: { type: integer }
+              label: { type: string }
+              total: { type: number }
+              count: { type: integer }
+              avgPerDay: { type: number }
+        hallOfFame:
+          type: object
+          required: [biggestExpense, biggestIncome]
+          properties:
+            biggestExpense:
+              oneOf:
+                - { $ref: "#/components/schemas/TxnRef" }
+                - type: "null"
+            biggestIncome:
+              oneOf:
+                - { $ref: "#/components/schemas/TxnRef" }
+                - type: "null"
+
+    DaysSinceEntry:
+      oneOf:
+        - type: object
+          required: [days, lastDate, lastMerchant, lastAmount]
+          properties:
+            days: { type: integer }
+            lastDate: { type: string }
+            lastMerchant: { type: string }
+            lastAmount: { type: number }
+        - type: "null"
+
+    StreakEntry:
+      type: object
+      required: [currentDays, longestDays, longestEndDate]
+      properties:
+        currentDays: { type: integer }
+        longestDays: { type: integer }
+        longestEndDate: { type: string }
+
+    TxnRef:
+      type: object
+      required: [amount, date, merchant, categoryName]
+      properties:
+        amount: { type: number }
+        date: { type: string }
+        merchant: { type: string }
+        categoryName: { type: ["string", "null"] }
+
+    DaySpend:
+      type: object
+      required: [date, total, dayOfWeek]
+      properties:
+        date: { type: string }
+        total: { type: number }
+        dayOfWeek: { type: string }
 
     AvalancheSchedule:
       type: object
