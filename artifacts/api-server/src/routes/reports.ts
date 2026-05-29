@@ -17,6 +17,7 @@ import {
   type ReportsTabParams,
 } from "../lib/reportsAdvisorSummary";
 import { buildSpendingFacts } from "../lib/spendingFacts";
+import { buildBehaviorFacts } from "../lib/behaviorFacts";
 
 const router: IRouter = Router();
 
@@ -159,6 +160,37 @@ router.get(
     }
 
     const facts = await buildSpendingFacts(householdId, fromRaw, toRaw);
+    res.json(facts);
+  },
+);
+
+// (#851 — Behavior & Fun overhaul, Phase 1) Clean, personality-driven
+// Behavior facts on top of the same real-spend pipeline. Phase 2 will swap
+// the Behavior & Fun tab UI onto this endpoint. `from`/`to` are optional
+// (defaults to the last 30 days); ranges before the tracking start are
+// clamped server-side (range.floorApplied = true).
+router.get(
+  "/reports/behavior-facts",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const householdId = req.householdId!;
+    const fromRaw = typeof req.query.from === "string" ? req.query.from : undefined;
+    const toRaw = typeof req.query.to === "string" ? req.query.to : undefined;
+
+    if (fromRaw && !isValidIsoDate(fromRaw)) {
+      res.status(400).json({ error: "invalid 'from' (expected YYYY-MM-DD)" });
+      return;
+    }
+    if (toRaw && !isValidIsoDate(toRaw)) {
+      res.status(400).json({ error: "invalid 'to' (expected YYYY-MM-DD)" });
+      return;
+    }
+    if (fromRaw && toRaw && fromRaw > toRaw) {
+      res.status(400).json({ error: "'from' must be on or before 'to'" });
+      return;
+    }
+
+    const facts = await buildBehaviorFacts(householdId, fromRaw, toRaw);
     res.json(facts);
   },
 );
