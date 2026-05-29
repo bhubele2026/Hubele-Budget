@@ -1,0 +1,27 @@
+Merchant rename & learn — Phase 2 (UI). Phase 1 backend is live: merchant_aliases table, merchantSignature(), displayName = aliasBySignature ?? cleanMerchant on transactions, and endpoints PUT/DELETE /transactions/merchant-alias + POST /transactions/suggest-name. This pass adds the rename affordance and reuses it identically on Chase and Amex. No schema/endpoint changes.
+
+Generated hooks to use (from the Phase 1 openapi; if your operationIds differ, use the names your client actually generated): usePutTransactionsMerchantAlias, useDeleteTransactionsMerchantAlias, usePostTransactionsSuggestName, plus the transactions list query key for invalidation.
+
+NEW SHARED COMPONENT — artifacts/h2budget/src/components/merchant-rename-popover.tsx. Props: { tx } (needs tx.description = raw, tx.displayName = resolved name, and whether the current name is a saved alias — if the Transaction type doesn't expose alias-source, treat "has alias" as unknown and always offer Reset). Renders:
+- A small pencil/edit icon button (ghost, h-6 w-6, muted, data-testid rename-merchant-${tx.id}) that sits next to the merchant title. Opens a shadcn Popover.
+- Inside the popover:
+  - Heading "Rename merchant".
+  - A muted line showing the raw bank string (tx.description, truncated) so the user knows what they're renaming.
+  - Text input pre-filled with tx.displayName. Trim on save; disable Save when empty or unchanged.
+  - "✨ Suggest" button → calls usePostTransactionsSuggestName({ rawDescription: tx.description }); show a spinner while pending; on success put the suggestion into the input; on failure/timeout return to idle and show a muted "couldn't suggest a name" hint (the input keeps its value).
+  - Save button → usePutTransactionsMerchantAlias({ rawDescription: tx.description, alias: input.trim() }). On success: invalidate the transactions list query so every same-signature row re-renders with the new name, close the popover, and toast using the returned match count, e.g. "Renamed to '<alias>' · applies to N transactions" (singular/plural). Mention it's signature-wide so the user understands future deposits inherit it.
+  - If an alias currently exists for this row, show a small "Reset to bank default" link → useDeleteTransactionsMerchantAlias({ signature }) (compute/send signature per the Phase 1 contract; if the endpoint accepts rawDescription, send that instead) → invalidate + toast "Reset to default."
+- All mutations: disable buttons while pending; surface errors via toast, don't crash the row.
+
+WIRE INTO CHASE — artifacts/h2budget/src/pages/transactions.tsx: render <MerchantRenamePopover tx={tx} /> immediately after the merchant title (the displayName title from the cleanup pass). Keep the raw description sub-line as-is. Add to BOTH the pending and posted row blocks (they mirror each other — don't let them drift).
+
+WIRE INTO AMEX — artifacts/h2budget/src/pages/amex.tsx: make the row title render tx.displayName (so saved aliases show here too), then drop in the same <MerchantRenamePopover tx={tx} /> next to it. Amex names are already clean, so most rows won't need it — the affordance is just there for the occasional ugly one, behaving identically to Chase.
+
+VERIFY (publish + hard refresh):
+1. /transactions: pencil next to each merchant title opens the rename popover. Type "KFI Staffing LLC" on the KFI payroll row → Save → toast reports it applies to N transactions → every KFI payroll row (current + the next deposit) shows "KFI Staffing LLC".
+2. ✨ Suggest fills a clean name from the raw string; on timeout it fails gracefully and keeps the typed value.
+3. Reset to default reverts the row(s) to the auto-cleaned name.
+4. /amex: same pencil/popover works, titles show displayName, aliases set on Chase for a shared signature also show on Amex (and vice versa).
+5. No console errors; mutations disable while pending; the list refreshes without a manual reload.
+
+Architect review (new shared component + two page wirings + three mutations + cache invalidation). Typecheck + publish. No new tests.
