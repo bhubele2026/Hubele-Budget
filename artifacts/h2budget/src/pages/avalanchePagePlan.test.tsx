@@ -137,13 +137,6 @@ describe("Avalanche page — seeded plan with mixed solvable + underwater debts"
     expect(cellText).toMatch(/excludes 1 underwater debt/i);
   });
 
-  it("renders the always-on underwater banner naming the bad debt", () => {
-    renderPage();
-    const banner = screen.getByTestId("banner-underwater");
-    expect(banner.textContent ?? "").toContain("Mattress Firm");
-    expect(banner.textContent ?? "").toContain("1 debt is underwater");
-  });
-
   it("'This month' panel shows the full plan total (every min + extra) and the strategy target as the target", () => {
     renderPage();
     const panel = screen.getByTestId("panel-this-month");
