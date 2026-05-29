@@ -188,17 +188,21 @@ function SummaryTile({
           {label}
         </div>
         <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <div className="text-[10px] uppercase text-muted-foreground">
+          <div className="space-y-0.5">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
               Budget
             </div>
-            <div className="font-mono font-semibold">{fmt(budget)}</div>
+            <div className="font-mono font-semibold tabular-nums">
+              {fmt(budget)}
+            </div>
           </div>
-          <div>
-            <div className="text-[10px] uppercase text-muted-foreground">
+          <div className="space-y-0.5 text-right">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
               Actual
             </div>
-            <div className="font-mono font-semibold">{fmt(actual)}</div>
+            <div className="font-mono font-semibold tabular-nums">
+              {fmt(actual)}
+            </div>
           </div>
         </div>
       </CardContent>
@@ -1401,6 +1405,8 @@ function PlannedAmountCell({
   const hasSourceInfo = kind !== "manual";
 
   const handleBlur = (rawValue: string) => {
+    const parsed = parseFloat(rawValue);
+    if (Number.isFinite(parsed) && parsed === planned) return;
     if (rawValue === planned.toString()) return;
     onUpdatePlanned(line.categoryId, rawValue);
     // For bill-backed / derived rows, auto-pin so the manual override
@@ -1417,33 +1423,40 @@ function PlannedAmountCell({
   if (isAvalanchePayment) {
     // Read-only: this row is managed by the Avalanche page slider.
     return (
-      <div className="font-mono text-sm py-1 pr-3 text-right">
+      <div className="font-mono text-sm py-1 pr-3 text-right tabular-nums">
         {formatCurrency(line.plannedAmount)}
       </div>
     );
   }
 
   const input = (
-    <Input
-      type="number"
-      step="1"
-      className="h-7 text-right bg-transparent border-transparent hover:border-input focus:bg-background font-mono"
-      defaultValue={planned.toString()}
-      key={`${line.categoryId}-${line.plannedAmount}`}
-      onBlur={(e) => handleBlur(e.target.value)}
-      data-testid={`input-planned-${line.categoryId}`}
-    />
+    <div className="relative w-28">
+      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+        $
+      </span>
+      <Input
+        type="number"
+        step="0.01"
+        className="h-7 pl-5 text-right bg-transparent border-transparent hover:border-input focus:bg-background font-mono tabular-nums"
+        defaultValue={planned.toFixed(2)}
+        key={`${line.categoryId}-${line.plannedAmount}`}
+        onBlur={(e) => handleBlur(e.target.value)}
+        data-testid={`input-planned-${line.categoryId}`}
+      />
+    </div>
   );
 
-  if (!hasSourceInfo) return input;
+  if (!hasSourceInfo) {
+    return <div className="flex items-center justify-end">{input}</div>;
+  }
 
   return (
-    <div className="flex items-center justify-end gap-1">
+    <div className="group/planned flex items-center justify-end gap-1">
       <Popover>
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="text-muted-foreground hover:text-foreground p-1"
+            className="text-muted-foreground hover:text-foreground p-1 opacity-0 transition-opacity group-hover:opacity-100 group-hover/planned:opacity-100 focus-visible:opacity-100"
             title="Where did this amount come from?"
             data-testid={`button-planned-source-${line.categoryId}`}
           >
@@ -1496,7 +1509,7 @@ function PlannedAmountCell({
           )}
         </PopoverContent>
       </Popover>
-      <div className="flex-1 max-w-[8rem]">{input}</div>
+      {input}
     </div>
   );
 }
@@ -1918,13 +1931,7 @@ function BudgetLineRow({
             <Badge
               key={b.source}
               variant="outline"
-              className={cn(
-                "text-[10px] font-normal",
-                b.source === "Bank" &&
-                  "border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300",
-                b.source === "Amex" &&
-                  "border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300",
-              )}
+              className="text-[10px] font-normal text-muted-foreground border-muted-foreground/30"
               title={`${b.count} txn${b.count === 1 ? "" : "s"} · ${formatCurrency(b.amount)}`}
               data-testid={`badge-source-${b.source.toLowerCase()}-${line.categoryId}`}
             >
@@ -1932,19 +1939,18 @@ function BudgetLineRow({
             </Badge>
           ))}
           {line.pinned && (
-            <Badge
-              variant="outline"
-              className="text-[10px] font-normal border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300"
+            <span
+              className="text-muted-foreground"
               title={
                 monthPinned
                   ? "This month is pinned — every auto-pulled line is locked to its persisted planned amount."
                   : "This line is pinned to its persisted planned amount."
               }
+              aria-label="Pinned"
               data-testid={`badge-pinned-${line.categoryId}`}
             >
-              <Pin className="w-3 h-3 mr-1 fill-current" />
-              Pinned
-            </Badge>
+              <Pin className="w-3 h-3" />
+            </span>
           )}
           {/* #90 / #176 / #417 — inline categorize from Budget. Surfaces
               the violet "N matches" hint only when one or more
@@ -1955,16 +1961,16 @@ function BudgetLineRow({
           {suggestedTxns.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
-                <Badge
-                  variant="outline"
-                  className="text-[10px] font-normal cursor-pointer border-dashed border-violet-300 text-violet-700 bg-violet-50 hover:border-violet-500 dark:bg-violet-950/30 dark:text-violet-300"
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-[10px] font-normal text-muted-foreground hover:text-foreground cursor-pointer"
                   title={`${suggestedTxns.length} uncategorized transaction${suggestedTxns.length === 1 ? "" : "s"} look like ${line.categoryName} (rule or name match) — click to assign.`}
                   data-testid={`button-categorize-${line.categoryId}`}
                   data-suggested-count={suggestedTxns.length}
                 >
-                  <Tag className="w-3 h-3 mr-1" />
+                  <Tag className="w-3 h-3" />
                   {`${suggestedTxns.length} match${suggestedTxns.length === 1 ? "" : "es"}`}
-                </Badge>
+                </button>
               </PopoverTrigger>
               <PopoverContent className="w-80 p-3" align="start">
                 <div className="text-xs font-medium mb-2">
@@ -2177,7 +2183,7 @@ function BudgetLineRow({
           onPinLine={onTogglePin}
         />
       </div>
-      <div className="col-span-3 md:col-span-2 text-right font-mono text-sm">
+      <div className="col-span-3 md:col-span-2 text-right font-mono text-sm tabular-nums">
         <Popover>
           <PopoverTrigger asChild>
             <button
@@ -2333,15 +2339,32 @@ function BudgetLineRow({
       </div>
       <div
         className={cn(
-          "col-span-3 md:col-span-2 text-right font-mono text-sm font-medium",
+          "col-span-3 md:col-span-2 text-right font-mono text-sm font-medium tabular-nums",
           diffColor,
         )}
       >
         {diff >= 0 ? "+" : ""}
         {formatCurrency(diff)}
       </div>
-      <div className="col-span-3 md:col-span-1 text-right font-mono text-sm text-muted-foreground">
-        {pct === null ? "—" : `${pct}%`}
+      <div className="col-span-3 md:col-span-1 text-right font-mono text-sm text-muted-foreground tabular-nums">
+        <span className="inline-flex items-center justify-end gap-1">
+          {planned > 0 && actual !== planned && (
+            actual > planned ? (
+              <ArrowUp
+                className={cn("w-3 h-3 shrink-0", diffColor)}
+                aria-label="over plan"
+                data-testid={`pct-direction-${line.categoryId}`}
+              />
+            ) : (
+              <ArrowDown
+                className={cn("w-3 h-3 shrink-0", diffColor)}
+                aria-label="under plan"
+                data-testid={`pct-direction-${line.categoryId}`}
+              />
+            )
+          )}
+          {pct === null ? "—" : `${pct}%`}
+        </span>
       </div>
     </div>
     {contributingTxns.length > 0 && (
@@ -2349,34 +2372,6 @@ function BudgetLineRow({
         className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground tabular-nums"
         data-testid={`analysis-strip-${line.categoryId}`}
       >
-        <span>
-          <span className="font-mono">{formatCurrency(actual)}</span>
-          <span className="text-muted-foreground/70"> spent</span>
-        </span>
-        <span className="text-muted-foreground/40">·</span>
-        <span>
-          <span className="font-mono">{formatCurrency(planned)}</span>
-          <span className="text-muted-foreground/70"> planned</span>
-        </span>
-        {pct !== null && (
-          <>
-            <span className="text-muted-foreground/40">·</span>
-            <span>
-              <span className="font-mono">{pct}%</span>
-              <span className="text-muted-foreground/70"> of plan</span>
-            </span>
-          </>
-        )}
-        {planned > 0 && (
-          <>
-            <span className="text-muted-foreground/40">·</span>
-            <span className={cn("font-mono", diffColor)}>
-              {diff >= 0
-                ? `${formatCurrency(Math.abs(diff))} ${isIncome ? "over plan" : "remaining"}`
-                : `${formatCurrency(Math.abs(diff))} ${isIncome ? "under plan" : "over"}`}
-            </span>
-          </>
-        )}
         {planned > 0 && !isIncome && (() => {
           const monthDate = new Date(monthStart + "T00:00:00");
           const year = monthDate.getUTCFullYear();
@@ -2403,12 +2398,9 @@ function BudgetLineRow({
                 ? "text-amber-600 dark:text-amber-400"
                 : "text-emerald-600 dark:text-emerald-400";
           return (
-            <>
-              <span className="text-muted-foreground/40">·</span>
-              <span className={paceColor} data-testid={`analysis-pace-${line.categoryId}`}>
-                {paceLabel}
-              </span>
-            </>
+            <span className={paceColor} data-testid={`analysis-pace-${line.categoryId}`}>
+              {paceLabel}
+            </span>
           );
         })()}
       </div>

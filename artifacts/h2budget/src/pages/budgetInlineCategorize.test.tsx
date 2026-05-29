@@ -86,6 +86,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useUpsertBudgetLine: () => noopMutation,
   useCreateCategory: () => noopMutation,
   useDeleteCategory: () => noopMutation,
+  useUpdateCategory: () => noopMutation,
   useSeedDefaultBudget: () => noopMutation,
   usePinBudgetMonth: () => noopMutation,
   usePinBudgetLine: () => noopMutation,

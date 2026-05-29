@@ -73,6 +73,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useUpsertBudgetLine: () => noopMutation,
   useCreateCategory: () => noopMutation,
   useDeleteCategory: () => noopMutation,
+  useUpdateCategory: () => noopMutation,
   useSeedDefaultBudget: () => noopMutation,
   usePinBudgetMonth: () => noopMutation,
   usePinBudgetLine: () => noopMutation,
@@ -182,18 +183,15 @@ describe("Budget row analysis strip (#419 — covers strip added in #417)", () =
   it("renders the analysis strip under a category that has at least one actual this month", () => {
     renderPage();
 
+    // The trimmed strip no longer repeats the spent / planned / % of plan /
+    // remaining wording (those numbers live in the row's columns now). It
+    // still renders as the container for the pace chip when applicable.
     const strip = screen.getByTestId("analysis-strip-cat-1");
     const text = strip.textContent ?? "";
-    // Spent + planned amounts.
-    expect(text).toMatch(/\$40\.00/);
-    expect(text).toMatch(/spent/);
-    expect(text).toMatch(/\$100\.00/);
-    expect(text).toMatch(/planned/);
-    // Percent of plan (40 / 100 = 40%).
-    expect(text).toMatch(/40%/);
-    expect(text).toMatch(/of plan/);
-    // Expense line under plan → "remaining" wording (not "over").
-    expect(text).toMatch(/remaining/);
+    expect(text).not.toMatch(/spent/);
+    expect(text).not.toMatch(/planned/);
+    expect(text).not.toMatch(/of plan/);
+    expect(text).not.toMatch(/remaining/);
   });
 
   it("does NOT render the analysis strip for a category with zero actuals this month", () => {
@@ -257,21 +255,18 @@ describe("Budget row analysis strip (#419 — covers strip added in #417)", () =
 
     renderPage();
 
+    // The trimmed strip no longer carries the spent / planned / % of plan /
+    // over wording — those numbers are shown once in the row's columns. The
+    // pace chip remains the only thing nested inside the strip.
     const strip = screen.getByTestId("analysis-strip-cat-1");
     const text = strip.textContent ?? "";
-    expect(text).toMatch(/\$150\.00/);
-    expect(text).toMatch(/spent/);
-    expect(text).toMatch(/\$100\.00/);
-    expect(text).toMatch(/planned/);
-    // 150 / 100 = 150% — must be > 100%.
-    expect(text).toMatch(/150%/);
-    expect(text).toMatch(/of plan/);
-    // Over-budget wording is "$50.00 over" — never "remaining".
-    expect(text).toMatch(/\$50\.00 over\b/);
+    expect(text).not.toMatch(/spent/);
+    expect(text).not.toMatch(/planned/);
+    expect(text).not.toMatch(/of plan/);
     expect(text).not.toMatch(/remaining/);
-    // The diff span should carry the destructive (red) over-budget color.
-    const diffSpan = within(strip).getByText(/\$50\.00 over\b/);
-    expect(diffSpan.className).toMatch(/text-destructive/);
+    expect(text).not.toMatch(/\bover\b/);
+    // A current-month expense line still shows its pace chip inside the strip.
+    expect(within(strip).getByTestId("analysis-pace-cat-1")).toBeTruthy();
   });
 
   // Income variant: under-plan income reads "under plan", over-plan income
@@ -341,15 +336,17 @@ describe("Budget row analysis strip (#419 — covers strip added in #417)", () =
 
     renderPage();
 
+    // The trimmed strip no longer carries the under/over plan wording for
+    // income lines either — those numbers live in the row's columns now.
     const underStrip = screen.getByTestId("analysis-strip-cat-inc-under");
     const underText = underStrip.textContent ?? "";
-    expect(underText).toMatch(/\$200\.00 under plan\b/);
+    expect(underText).not.toMatch(/under plan/);
     expect(underText).not.toMatch(/remaining/);
     expect(underText).not.toMatch(/\bover\b/);
 
     const overStrip = screen.getByTestId("analysis-strip-cat-inc-over");
     const overText = overStrip.textContent ?? "";
-    expect(overText).toMatch(/\$200\.00 over plan\b/);
+    expect(overText).not.toMatch(/over plan/);
     expect(overText).not.toMatch(/remaining/);
     // Income lines never get the expense-only pace pill.
     expect(within(overStrip).queryByTestId("analysis-pace-cat-inc-over")).toBeNull();
