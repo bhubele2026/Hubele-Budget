@@ -1,0 +1,115 @@
+Overhaul on /reports Spending tab — Phase 1 of 2: server-side definition of "spending" + new fact-building pipeline. Phase 2 (UI rebuild) ships after this lands and I verify the facts are clean.
+
+PROBLEM:
+
+The Spending tab is rendering garbage because the data pipeline treats every outflow as "spending." It isn't.
+
+- Top Category = "Uncategorized $52,624" — uncategorized isn't a category, it's a backlog
+- Top Merchant = "Online Transfer to SAV …9128 transaction#: 28602049437 03/30" — that's a transfer to my own savings, not spending
+- Top Merchants list is dominated by transfer descriptions and ACH debt payments (Affirm, Upstart, Apple Card, AMERICAN EXPRESS ACH PMT…)
+- Pie chart legend shows FOUR "Uncategorized" entries (different category rows are all collapsing to the same label)
+- Total Spend $197,820 over 90 days is nonsensical — the app only started tracking May 1, 2026 (today is May 29)
+
+GOAL: redefine "spending" as money leaving the household to MERCHANTS for goods/services. Transfers between my own accounts, debt payments, reimbursements, and ignore-category txns are NOT spending. Then rebuild the Spending tab's facts on that clean foundation.
+
+WORK — server side only, no UI changes in this phase:
+
+1. CREATE artifacts/api-server/src/lib/spendingFilter.ts. Export an isRealSpend(tx, ctx) predicate. A transaction qualifies as real spending when ALL of these hold:
+
+   - tx.amount represents an outflow (negative in the household's perspective — match the sign convention the rest of the app uses, see effectiveSnapshot.ts / chaseEndingBalance.ts)
+   - tx.isTransfer !== true
+   - tx.category is NOT one of: "Reimbursement", "Ignore", "Transfer", "Transfers in", "Transfers out", "Uncategorized — transfer" (if any exist)
+   - The category's debtId is NULL (so any category linked to a debt row — Affirm, Upstart, Apple Card, PayPal Credit, Capital One Quicksilver, Capital One Platinum, Menards Big Card, etc. — is excluded; these are debt payments, not spending)
+   - tx.description after merchant-name extraction (see #2) does NOT match a known transfer/payment pattern: "online transfer", "ach pmt", "ach payment", "web id:", "credit card pmt", "autopay", "payment thank you", "card pmt", "epay", "chase credit", "bk of amer", "wells fargo card"
+
+   The predicate is pure — takes a Transaction + a small context object ({ categoriesById, debtCategoryIds: Set<string> }). No DB call inside.
+
+2. CREATE artifacts/api-server/src/lib/merchantNameExtract.ts. Export cleanMerchant(rawDescription: string): string. Strip bank-noise prefixes/suffixes:
+
+   - "ORIG CO NAME:..."  →  drop everything up to the next field-break
+   - "WEB ID:..." → strip
+   - "AMERICAN EXPRESS ACH PMT W...." → "American Express payment" (or, if filter caught it, irrelevant — but normalize the visible string anyway)
+   - "Online Transfer to SAV ...9128 transaction#: ..." → "Internal transfer"
+   - "ZELLE TO ..." → "Zelle: <recipient>"
+   - "PAYPAL *MERCHANT" → "MERCHANT (via PayPal)"
+   - "SQ *MERCHANT" → "MERCHANT (Square)"
+   - "TST* MERCHANT" → "MERCHANT (Toast)"
+   - Trailing transaction numbers (long digits) → stripped
+   - Date fragments like " 03/30", " 05/08" at end → stripped
+   - Leading/trailing whitespace, double spaces, uppercase ALL CAPS → Title Case when the whole string is uppercase
+
+   The function is pure, regex-driven, ~40 lines max. Add 10-15 test fixtures inside the file as a const TEST_CASES array so the patterns are documented inline (no jest test file — per personal-app policy).
+
+3. CREATE artifacts/api-server/src/lib/spendingFacts.ts. Export buildSpendingFacts(householdId, rangeStart, rangeEnd) returning the new structured facts the Spending tab will render in Phase 2:
+
+   {
+     range: { start, end, daysCovered, trackingStart: '2026-05-01', floorApplied: boolean },
+     realSpend: {
+       total,                          // sum of isRealSpend amounts
+       transactionCount,
+     },
+     uncategorized: {
+       total,                          // sum of amounts where isRealSpend would be TRUE if categoryId weren't null
+       transactionCount,
+       sampleMerchants: [{ name, total, count }],   // top 5 cleaned merchant names within uncategorized
+     },
+     excluded: {                       // for transparency — shows what was filtered out
+       transfersTotal,
+       debtPaymentsTotal,
+       reimbursementTotal,
+       ignoreTotal,
+     },
+     byCategory: [                     // real spend only — excludes uncategorized, transfers, debt payments
+       { categoryId, name, total, txnCount, pctOfRealSpend }
+     ],
+     byMerchant: [                     // top 10 merchants by total, real-spend only, cleaned names
+       { name, total, count, sampleCategoryName, sampleCategoryId }
+     ],
+     dailyBuckets: [                   // for heatmap
+       { date: 'YYYY-MM-DD', total, count }
+     ],
+     dayOfWeek: [                      // Sun..Sat
+       { dow: 0|1|2|3|4|5|6, label: 'Sun'..., avgPerDay, total }
+     ],
+     monthlyTrends: [                  // since trackingStart, monthly bucketed
+       { month: 'YYYY-MM', total, byTopCategory: [{ name, total }] }
+     ],
+     reimbursable: {                   // Amex-scoped, kept
+       personalTotal,
+       outstandingReimbursableTotal,
+     }
+   }
+
+   Key behaviors:
+
+   - The function detects trackingStart = '2026-05-01' (read it from a constant for now; later we can derive from the earliest transaction in the household). If rangeStart < trackingStart, clamp rangeStart to trackingStart and set facts.range.floorApplied = true.
+   - rangeStart/rangeEnd default to (today − 30 days, today) if not provided — matching the new 30-day default on the page.
+   - All sums use the household's existing sign convention (see how chaseEndingBalance.ts and weeklyDebrief.ts sign amounts).
+   - byCategory excludes uncategorized — uncategorized is its own surface (see uncategorized section). The pie chart consuming byCategory will not have the four-Uncategorized-rows bug because uncategorized is just absent.
+   - byMerchant uses cleanMerchant() on every txn description, then groups by the cleaned name. Excludes debt-payment / transfer / reimbursement / ignore txns.
+   - sampleCategoryName/Id on each merchant: the most common category for that merchant's recent txns. Lets the UI later say "Replit Inc. — Subscriptions" instead of just "Replit Inc."
+
+4. EXPOSE a new endpoint GET /reports/spending-facts?from=...&to=... that returns buildSpendingFacts(). This is what the Phase 2 UI will consume. The existing Spending tab endpoint can stay alive for now — Phase 2 will swap the consumer.
+
+5. EXISTING SPENDING TAB FACT BUILDER — find the current code that powers the Spending tab on /reports (probably in routes/reports.ts or a similar service file). DO NOT delete it yet. Phase 2 will replace its consumer. For now, just leave it in place so the existing tab keeps rendering (badly) until we rebuild the UI.
+
+6. CLAUDE NARRATIVE for the Spending tab — leave the existing "What this means" Claude advisor block in place for now. Phase 2 will rewire it to use the new facts. We're explicitly NOT regenerating that summary in this phase.
+
+VERIFY (read-only after publish):
+
+1. Hit GET /reports/spending-facts?from=2026-05-01&to=2026-05-29 against prod (or local) for my household. Show me the JSON response. I want to eyeball:
+   - realSpend.total — should be a sensible number, much smaller than the bogus $197k figure showing today (transfers + debt payments excluded)
+   - uncategorized.total + uncategorized.sampleMerchants — what's actually in the backlog
+   - byCategory[0..5] — should be legit categories with real merchant activity (Groceries, Subscriptions, Dining, etc.) not a giant "Uncategorized" slice
+   - byMerchant[0..10] — cleaned names, no transfer/ACH strings dominating, real merchants only
+   - excluded.transfersTotal, excluded.debtPaymentsTotal — should be SIGNIFICANT numbers (where the $197k illusion came from)
+   - dailyBuckets length = 29 (May 1–29) and totals are sane
+   - monthlyTrends has ONE entry (2026-05) and it equals realSpend.total
+
+2. Sanity check edge cases — pull the JSON for from=2026-01-01&to=2026-05-29 and confirm facts.range.floorApplied = true and the start is clamped to 2026-05-01.
+
+3. Confirm no UI regression on the live Spending tab — the existing rendering still works (badly), but doesn't crash.
+
+DO NOT proceed to UI changes after this lands. Report the JSON back to me. We'll review the data, decide if the filters need tightening (probably some categories I want to add/remove from the exclusion list), and only then write Phase 2.
+
+Architect review on the new files (spendingFilter.ts, merchantNameExtract.ts, spendingFacts.ts, endpoint). Typecheck + publish.

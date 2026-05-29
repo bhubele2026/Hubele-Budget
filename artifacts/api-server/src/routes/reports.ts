@@ -16,6 +16,7 @@ import {
   generateReportsTabSummary,
   type ReportsTabParams,
 } from "../lib/reportsAdvisorSummary";
+import { buildSpendingFacts } from "../lib/spendingFacts";
 
 const router: IRouter = Router();
 
@@ -120,6 +121,45 @@ router.get(
       generatedAt: summaryRow.generatedAt,
       source,
     });
+  },
+);
+
+// (#850 — Spending overhaul, Phase 1) Clean merchant-centric Spending facts.
+// Phase 2 will swap the Spending tab UI onto this endpoint. `from`/`to` are
+// optional (defaults to the last 30 days); ranges before the tracking start
+// are clamped server-side (range.floorApplied = true).
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Validate format AND that it's a real calendar date (rejects 2026-99-99).
+function isValidIsoDate(s: string): boolean {
+  if (!DATE_RE.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
+router.get(
+  "/reports/spending-facts",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const householdId = req.householdId!;
+    const fromRaw = typeof req.query.from === "string" ? req.query.from : undefined;
+    const toRaw = typeof req.query.to === "string" ? req.query.to : undefined;
+
+    if (fromRaw && !isValidIsoDate(fromRaw)) {
+      res.status(400).json({ error: "invalid 'from' (expected YYYY-MM-DD)" });
+      return;
+    }
+    if (toRaw && !isValidIsoDate(toRaw)) {
+      res.status(400).json({ error: "invalid 'to' (expected YYYY-MM-DD)" });
+      return;
+    }
+    if (fromRaw && toRaw && fromRaw > toRaw) {
+      res.status(400).json({ error: "'from' must be on or before 'to'" });
+      return;
+    }
+
+    const facts = await buildSpendingFacts(householdId, fromRaw, toRaw);
+    res.json(facts);
   },
 );
 
