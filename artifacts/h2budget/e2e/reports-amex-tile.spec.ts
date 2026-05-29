@@ -12,6 +12,13 @@ import {
   signInAndOpen,
   provisionTestHousehold,
 } from "./helpers/clerk";
+// (#884/#887) Single source of truth for the "Current balance" label and
+// the explanatory hover copy that distinguishes the /reports live balance
+// from the /amex projected end-of-month figure. Imported (rather than
+// duplicated as a literal) so the spec can never drift from the app copy.
+// `reportsBalances.ts` is a pure, import-free module, so pulling it into
+// the Playwright spec is safe.
+import { AMEX_BALANCE_DISTINCTION } from "../src/lib/reportsBalances";
 
 /**
  * Browser-level coverage for the second balance tile atop /reports — the
@@ -152,9 +159,23 @@ test.describe("Reports — Amex (Blue Cash + Platinum) balance tile", () => {
     await expect(tile).not.toContainText("6,560.84");
     await expect(tile).not.toContainText("$10,099.50");
 
-    // Sub-line is derived from the real cards/masks actually found.
-    await expect(tile).toContainText("Blue Cash ••1006 + Platinum ••1009");
+    // Sub-line is derived from the real cards/masks actually found, and
+    // (#884/#887) is prefixed with the "Current balance ·" label so the
+    // tile reads as the live current balance, distinct from the Amex
+    // page's projected end-of-month figure.
+    await expect(tile).toContainText(
+      "Current balance · Blue Cash ••1006 + Platinum ••1009",
+    );
     await expect(tile).not.toContainText("card unavailable");
+
+    // (#884/#887) The tile carries the explanatory hover copy so a user
+    // who mouses over it learns why this number can differ from the Amex
+    // page. The HeroTile surfaces it via the native title attribute on the
+    // rounded-card wrapper.
+    await expect(tile).toHaveAttribute(
+      "title",
+      AMEX_BALANCE_DISTINCTION.reportsTooltip,
+    );
 
     // The Capital One Platinum debt is untouched on /debts.
     await page.goto("/debts");
@@ -195,6 +216,42 @@ test.describe("Reports — Amex (Blue Cash + Platinum) balance tile", () => {
     // Blue Cash is present but has no usable balance → partial subnote.
     await expect(tile).toContainText(
       "Blue Cash ••1006 + Platinum ••1009 (1 card unavailable)",
+    );
+  });
+
+  test("does NOT label the tile 'Current balance' when no Amex card is linked", async ({
+    page,
+  }) => {
+    const { userId, email, password } = await createTestUser(
+      "reports-amex-none",
+      provisionedUserIds,
+    );
+    await provisionTestHousehold(userId);
+    seededUserIds.push(userId);
+
+    // (#884/#887) Seed NO Amex liability accounts. With no card linked the
+    // tile must fall back to the "link a card" nudge and must NOT claim to
+    // show a "Current balance" — there is no live balance to label — nor
+    // carry the explanatory hover copy.
+    await signInAndOpen(page, email, password, "/sign-in");
+    await page.goto("/reports");
+
+    const tile = amexTile(page);
+    await expect(tile).toBeVisible({ timeout: 15_000 });
+    await expect(tile).toContainText("Amex (Blue Cash + Platinum)");
+
+    // The empty-state nudge, not a labeled balance.
+    await expect(tile).toContainText(
+      "Link an Amex card to track your revolving balance",
+    );
+    await expect(tile).not.toContainText(
+      AMEX_BALANCE_DISTINCTION.reportsSubPrefix,
+    );
+
+    // No live balance → no explanatory hover copy either.
+    await expect(tile).not.toHaveAttribute(
+      "title",
+      AMEX_BALANCE_DISTINCTION.reportsTooltip,
     );
   });
 });
