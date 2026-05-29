@@ -34,7 +34,7 @@ import {
   type RecurringItemInput,
 } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
+import { AvalancheScheduleCard } from "@/components/avalanche-schedule-card";
 import { useOpportunisticPlaidSync } from "@/hooks/use-opportunistic-plaid-sync";
 import {
   ResponsiveContainer,
@@ -3416,7 +3416,7 @@ export default function ForecastPage({
             </div>
           </CardContent>
         </Card>
-        <AvalancheReadyCard />
+        <AvalancheScheduleCard />
       </div>
       </>)}
 

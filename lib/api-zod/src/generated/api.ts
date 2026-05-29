@@ -2419,6 +2419,55 @@ export const GetForecastCashSignalResponse = zod.object({
     .optional(),
 });
 
+/**
+ * Returns a deterministic schedule of avalanche extra payments
+across the next ~12 months (one per safe paycheck-to-paycheck
+window) plus a Claude-written narrative. The narrative is cached
+on a hash of the deterministic facts; pass `refresh=true` to force
+a fresh regeneration.
+
+ * @summary AI-driven multi-date avalanche extra-payment schedule
+ */
+export const GetForecastAvalancheScheduleQueryParams = zod.object({
+  refresh: zod
+    .enum(["true", "1"])
+    .optional()
+    .describe("Force a fresh Claude regeneration, bypassing the cache."),
+});
+
+export const GetForecastAvalancheScheduleResponse = zod.object({
+  proposedPayments: zod.array(
+    zod.object({
+      date: zod.string(),
+      amount: zod.number(),
+      rationale: zod.string(),
+      confidence: zod.enum(["high", "medium", "low"]),
+      paycheckAnchor: zod.string(),
+      lowestBetweenThisAndNextPaycheck: zod.number(),
+      headroom: zod.number(),
+    }),
+  ),
+  totalProposed: zod.number(),
+  lowestPostScheduleBalance: zod.number(),
+  lowestPostScheduleDate: zod.string().nullable(),
+  currentAvalancheTarget: zod.union([
+    zod.object({
+      debtName: zod.string(),
+      apr: zod.number(),
+      balance: zod.number(),
+    }),
+    zod.null(),
+  ]),
+  cashBuffer: zod.number(),
+  bankBalance: zod.number(),
+  scheduleThroughDate: zod.string().nullable(),
+  summary: zod.string(),
+  paymentsText: zod.array(zod.string()),
+  summarySource: zod.enum(["ai", "fallback"]),
+  generatedAt: zod.string(),
+  source: zod.enum(["cache", "fresh"]),
+});
+
 export const CloseForecastMonthBody = zod.object({
   monthKey: zod.string(),
   gap: zod.string().nullish(),

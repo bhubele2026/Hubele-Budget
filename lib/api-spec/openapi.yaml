@@ -1092,6 +1092,29 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CashSignal" }
 
+  /forecast/avalanche-schedule:
+    get:
+      operationId: getForecastAvalancheSchedule
+      tags: [forecast]
+      summary: AI-driven multi-date avalanche extra-payment schedule
+      description: |
+        Returns a deterministic schedule of avalanche extra payments
+        across the next ~12 months (one per safe paycheck-to-paycheck
+        window) plus a Claude-written narrative. The narrative is cached
+        on a hash of the deterministic facts; pass `refresh=true` to force
+        a fresh regeneration.
+      parameters:
+        - in: query
+          name: refresh
+          description: Force a fresh Claude regeneration, bypassing the cache.
+          schema: { type: string, enum: ["true", "1"] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvalancheSchedule" }
+
   /forecast/closed-months:
     post:
       operationId: closeForecastMonth
@@ -3551,6 +3574,69 @@ components:
                   forward by the pre-snapshot drag-to-today rule. Used
                   by the chart tooltip to distinguish dragged plans
                   from bills naturally due that day.
+    AvalancheSchedule:
+      type: object
+      required:
+        [
+          proposedPayments,
+          totalProposed,
+          lowestPostScheduleBalance,
+          lowestPostScheduleDate,
+          currentAvalancheTarget,
+          cashBuffer,
+          bankBalance,
+          scheduleThroughDate,
+          summary,
+          paymentsText,
+          summarySource,
+          generatedAt,
+          source,
+        ]
+      properties:
+        proposedPayments:
+          type: array
+          items:
+            type: object
+            required:
+              [
+                date,
+                amount,
+                rationale,
+                confidence,
+                paycheckAnchor,
+                lowestBetweenThisAndNextPaycheck,
+                headroom,
+              ]
+            properties:
+              date: { type: string }
+              amount: { type: number }
+              rationale: { type: string }
+              confidence: { type: string, enum: [high, medium, low] }
+              paycheckAnchor: { type: string }
+              lowestBetweenThisAndNextPaycheck: { type: number }
+              headroom: { type: number }
+        totalProposed: { type: number }
+        lowestPostScheduleBalance: { type: number }
+        lowestPostScheduleDate: { type: ["string", "null"] }
+        currentAvalancheTarget:
+          oneOf:
+            - type: object
+              required: [debtName, apr, balance]
+              properties:
+                debtName: { type: string }
+                apr: { type: number }
+                balance: { type: number }
+            - type: "null"
+        cashBuffer: { type: number }
+        bankBalance: { type: number }
+        scheduleThroughDate: { type: ["string", "null"] }
+        summary: { type: string }
+        paymentsText:
+          type: array
+          items: { type: string }
+        summarySource: { type: string, enum: [ai, fallback] }
+        generatedAt: { type: string }
+        source: { type: string, enum: [cache, fresh] }
     ForecastBundle:
       type: object
       required: [events, transactions, resolutions, closedMonths, settings, fromDate, toDate, plaidCheckingAccounts]

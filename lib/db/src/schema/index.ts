@@ -699,6 +699,23 @@ export const forecastClosedMonthsTable = pgTable(
   }),
 );
 
+// (#826) Cached Claude narrative for the Avalanche extra-payment
+// schedule card on /forecast. Persisted on forecast_settings alongside
+// a hash of the deterministic facts that produced it; regenerated only
+// when the facts hash changes (mirrors the Weekly Debrief advisor
+// caching approach). `source` distinguishes a real Anthropic write from
+// the deterministic fallback used when the API is down/slow.
+export interface AvalancheAdvisorSummary {
+  generatedAt: string; // ISO-8601
+  // 3-5 sentence concrete narrative naming the avalanche-target debt and
+  // referencing real dates/amounts from the schedule, ending with the total.
+  summary: string;
+  // One short string per proposed payment, index-aligned with the
+  // deterministic proposedPayments array (e.g. "Pay $750 on Jun 16").
+  paymentsText: string[];
+  source: "ai" | "fallback";
+}
+
 export const forecastSettingsTable = pgTable("forecast_settings", {
   userId: text("user_id").primaryKey(),
   householdId: uuid("household_id").references(
@@ -742,6 +759,11 @@ export const forecastSettingsTable = pgTable("forecast_settings", {
     >
   >(),
   autoDedupeRanAt: timestamp("auto_dedupe_ran_at", { withTimezone: true }),
+  // (#826) Cached Avalanche extra-payment schedule narrative + the hash
+  // of the deterministic facts that produced it. Regenerated only when
+  // the facts hash changes (or the user forces a refresh).
+  avalancheAdvisorSummary: jsonb("avalanche_advisor_summary").$type<AvalancheAdvisorSummary>(),
+  avalancheAdvisorFactsHash: text("avalanche_advisor_facts_hash"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

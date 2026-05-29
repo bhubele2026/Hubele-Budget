@@ -4215,6 +4215,12 @@ export declare const forecastClosedMonthsTable: import("drizzle-orm/pg-core").Pg
     };
     dialect: "pg";
 }>;
+export interface AvalancheAdvisorSummary {
+    generatedAt: string;
+    summary: string;
+    paymentsText: string[];
+    source: "ai" | "fallback";
+}
 export declare const forecastSettingsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "forecast_settings";
     schema: undefined;
@@ -4487,6 +4493,42 @@ export declare const forecastSettingsTable: import("drizzle-orm/pg-core").PgTabl
             isAutoincrement: false;
             hasRuntimeDefault: false;
             enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        avalancheAdvisorSummary: import("drizzle-orm/pg-core").PgColumn<{
+            name: "avalanche_advisor_summary";
+            tableName: "forecast_settings";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: AvalancheAdvisorSummary;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: AvalancheAdvisorSummary;
+        }>;
+        avalancheAdvisorFactsHash: import("drizzle-orm/pg-core").PgColumn<{
+            name: "avalanche_advisor_facts_hash";
+            tableName: "forecast_settings";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
             baseColumn: never;
             identity: undefined;
             generated: undefined;

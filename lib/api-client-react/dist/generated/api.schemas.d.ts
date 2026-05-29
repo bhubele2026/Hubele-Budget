@@ -1710,6 +1710,53 @@ export interface CashSignal {
     daily?: CashSignalDailyItem[];
     events?: CashSignalEventsItem[];
 }
+export type AvalancheScheduleProposedPaymentsItemConfidence = (typeof AvalancheScheduleProposedPaymentsItemConfidence)[keyof typeof AvalancheScheduleProposedPaymentsItemConfidence];
+export declare const AvalancheScheduleProposedPaymentsItemConfidence: {
+    readonly high: "high";
+    readonly medium: "medium";
+    readonly low: "low";
+};
+export type AvalancheScheduleProposedPaymentsItem = {
+    date: string;
+    amount: number;
+    rationale: string;
+    confidence: AvalancheScheduleProposedPaymentsItemConfidence;
+    paycheckAnchor: string;
+    lowestBetweenThisAndNextPaycheck: number;
+    headroom: number;
+};
+export type AvalancheScheduleCurrentAvalancheTarget = {
+    debtName: string;
+    apr: number;
+    balance: number;
+} | null;
+export type AvalancheScheduleSummarySource = (typeof AvalancheScheduleSummarySource)[keyof typeof AvalancheScheduleSummarySource];
+export declare const AvalancheScheduleSummarySource: {
+    readonly ai: "ai";
+    readonly fallback: "fallback";
+};
+export type AvalancheScheduleSource = (typeof AvalancheScheduleSource)[keyof typeof AvalancheScheduleSource];
+export declare const AvalancheScheduleSource: {
+    readonly cache: "cache";
+    readonly fresh: "fresh";
+};
+export interface AvalancheSchedule {
+    proposedPayments: AvalancheScheduleProposedPaymentsItem[];
+    totalProposed: number;
+    lowestPostScheduleBalance: number;
+    /** @nullable */
+    lowestPostScheduleDate: string | null;
+    currentAvalancheTarget: AvalancheScheduleCurrentAvalancheTarget;
+    cashBuffer: number;
+    bankBalance: number;
+    /** @nullable */
+    scheduleThroughDate: string | null;
+    summary: string;
+    paymentsText: string[];
+    summarySource: AvalancheScheduleSummarySource;
+    generatedAt: string;
+    source: AvalancheScheduleSource;
+}
 export interface MonthSnapshot {
     balance: string;
     at: string;
@@ -2407,6 +2454,17 @@ export type GetForecastParams = {
 export type GetForecastCashSignalParams = {
     horizonDays?: number;
     fromDate?: string;
+};
+export type GetForecastAvalancheScheduleParams = {
+    /**
+     * Force a fresh Claude regeneration, bypassing the cache.
+     */
+    refresh?: GetForecastAvalancheScheduleRefresh;
+};
+export type GetForecastAvalancheScheduleRefresh = (typeof GetForecastAvalancheScheduleRefresh)[keyof typeof GetForecastAvalancheScheduleRefresh];
+export declare const GetForecastAvalancheScheduleRefresh: {
+    readonly true: "true";
+    readonly NUMBER_1: "1";
 };
 export type CloseForecastMonthBody = {
     monthKey: string;

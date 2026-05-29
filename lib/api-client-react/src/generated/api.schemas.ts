@@ -1912,6 +1912,65 @@ export interface CashSignal {
   events?: CashSignalEventsItem[];
 }
 
+export type AvalancheScheduleProposedPaymentsItemConfidence =
+  (typeof AvalancheScheduleProposedPaymentsItemConfidence)[keyof typeof AvalancheScheduleProposedPaymentsItemConfidence];
+
+export const AvalancheScheduleProposedPaymentsItemConfidence = {
+  high: "high",
+  medium: "medium",
+  low: "low",
+} as const;
+
+export type AvalancheScheduleProposedPaymentsItem = {
+  date: string;
+  amount: number;
+  rationale: string;
+  confidence: AvalancheScheduleProposedPaymentsItemConfidence;
+  paycheckAnchor: string;
+  lowestBetweenThisAndNextPaycheck: number;
+  headroom: number;
+};
+
+export type AvalancheScheduleCurrentAvalancheTarget = {
+  debtName: string;
+  apr: number;
+  balance: number;
+} | null;
+
+export type AvalancheScheduleSummarySource =
+  (typeof AvalancheScheduleSummarySource)[keyof typeof AvalancheScheduleSummarySource];
+
+export const AvalancheScheduleSummarySource = {
+  ai: "ai",
+  fallback: "fallback",
+} as const;
+
+export type AvalancheScheduleSource =
+  (typeof AvalancheScheduleSource)[keyof typeof AvalancheScheduleSource];
+
+export const AvalancheScheduleSource = {
+  cache: "cache",
+  fresh: "fresh",
+} as const;
+
+export interface AvalancheSchedule {
+  proposedPayments: AvalancheScheduleProposedPaymentsItem[];
+  totalProposed: number;
+  lowestPostScheduleBalance: number;
+  /** @nullable */
+  lowestPostScheduleDate: string | null;
+  currentAvalancheTarget: AvalancheScheduleCurrentAvalancheTarget;
+  cashBuffer: number;
+  bankBalance: number;
+  /** @nullable */
+  scheduleThroughDate: string | null;
+  summary: string;
+  paymentsText: string[];
+  summarySource: AvalancheScheduleSummarySource;
+  generatedAt: string;
+  source: AvalancheScheduleSource;
+}
+
 export interface MonthSnapshot {
   balance: string;
   at: string;
@@ -2725,6 +2784,21 @@ export type GetForecastCashSignalParams = {
   horizonDays?: number;
   fromDate?: string;
 };
+
+export type GetForecastAvalancheScheduleParams = {
+  /**
+   * Force a fresh Claude regeneration, bypassing the cache.
+   */
+  refresh?: GetForecastAvalancheScheduleRefresh;
+};
+
+export type GetForecastAvalancheScheduleRefresh =
+  (typeof GetForecastAvalancheScheduleRefresh)[keyof typeof GetForecastAvalancheScheduleRefresh];
+
+export const GetForecastAvalancheScheduleRefresh = {
+  true: "true",
+  NUMBER_1: "1",
+} as const;
 
 export type CloseForecastMonthBody = {
   monthKey: string;

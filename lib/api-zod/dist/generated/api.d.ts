@@ -5332,6 +5332,125 @@ export declare const GetForecastCashSignalResponse: zod.ZodObject<{
         balance: string;
     }[] | undefined;
 }>;
+/**
+ * Returns a deterministic schedule of avalanche extra payments
+across the next ~12 months (one per safe paycheck-to-paycheck
+window) plus a Claude-written narrative. The narrative is cached
+on a hash of the deterministic facts; pass `refresh=true` to force
+a fresh regeneration.
+
+ * @summary AI-driven multi-date avalanche extra-payment schedule
+ */
+export declare const GetForecastAvalancheScheduleQueryParams: zod.ZodObject<{
+    refresh: zod.ZodOptional<zod.ZodEnum<["true", "1"]>>;
+}, "strip", zod.ZodTypeAny, {
+    refresh?: "1" | "true" | undefined;
+}, {
+    refresh?: "1" | "true" | undefined;
+}>;
+export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
+    proposedPayments: zod.ZodArray<zod.ZodObject<{
+        date: zod.ZodString;
+        amount: zod.ZodNumber;
+        rationale: zod.ZodString;
+        confidence: zod.ZodEnum<["high", "medium", "low"]>;
+        paycheckAnchor: zod.ZodString;
+        lowestBetweenThisAndNextPaycheck: zod.ZodNumber;
+        headroom: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        amount: number;
+        rationale: string;
+        confidence: "high" | "medium" | "low";
+        paycheckAnchor: string;
+        lowestBetweenThisAndNextPaycheck: number;
+        headroom: number;
+    }, {
+        date: string;
+        amount: number;
+        rationale: string;
+        confidence: "high" | "medium" | "low";
+        paycheckAnchor: string;
+        lowestBetweenThisAndNextPaycheck: number;
+        headroom: number;
+    }>, "many">;
+    totalProposed: zod.ZodNumber;
+    lowestPostScheduleBalance: zod.ZodNumber;
+    lowestPostScheduleDate: zod.ZodNullable<zod.ZodString>;
+    currentAvalancheTarget: zod.ZodUnion<[zod.ZodObject<{
+        debtName: zod.ZodString;
+        apr: zod.ZodNumber;
+        balance: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        balance: number;
+        apr: number;
+        debtName: string;
+    }, {
+        balance: number;
+        apr: number;
+        debtName: string;
+    }>, zod.ZodNull]>;
+    cashBuffer: zod.ZodNumber;
+    bankBalance: zod.ZodNumber;
+    scheduleThroughDate: zod.ZodNullable<zod.ZodString>;
+    summary: zod.ZodString;
+    paymentsText: zod.ZodArray<zod.ZodString, "many">;
+    summarySource: zod.ZodEnum<["ai", "fallback"]>;
+    generatedAt: zod.ZodString;
+    source: zod.ZodEnum<["cache", "fresh"]>;
+}, "strip", zod.ZodTypeAny, {
+    source: "cache" | "fresh";
+    summary: string;
+    cashBuffer: number;
+    proposedPayments: {
+        date: string;
+        amount: number;
+        rationale: string;
+        confidence: "high" | "medium" | "low";
+        paycheckAnchor: string;
+        lowestBetweenThisAndNextPaycheck: number;
+        headroom: number;
+    }[];
+    totalProposed: number;
+    lowestPostScheduleBalance: number;
+    lowestPostScheduleDate: string | null;
+    currentAvalancheTarget: {
+        balance: number;
+        apr: number;
+        debtName: string;
+    } | null;
+    bankBalance: number;
+    scheduleThroughDate: string | null;
+    paymentsText: string[];
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+}, {
+    source: "cache" | "fresh";
+    summary: string;
+    cashBuffer: number;
+    proposedPayments: {
+        date: string;
+        amount: number;
+        rationale: string;
+        confidence: "high" | "medium" | "low";
+        paycheckAnchor: string;
+        lowestBetweenThisAndNextPaycheck: number;
+        headroom: number;
+    }[];
+    totalProposed: number;
+    lowestPostScheduleBalance: number;
+    lowestPostScheduleDate: string | null;
+    currentAvalancheTarget: {
+        balance: number;
+        apr: number;
+        debtName: string;
+    } | null;
+    bankBalance: number;
+    scheduleThroughDate: string | null;
+    paymentsText: string[];
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+}>;
 export declare const CloseForecastMonthBody: zod.ZodObject<{
     monthKey: zod.ZodString;
     gap: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -9966,8 +10085,8 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         source: "plaid" | "manual";
         debtId: string;
         minPayment: string;
-        locked: boolean;
         debtName: string;
+        locked: boolean;
         dueDay?: number | null | undefined;
         nextOccurrence?: string | null | undefined;
         linkedRecurringId?: string | null | undefined;
@@ -9977,8 +10096,8 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         source: "plaid" | "manual";
         debtId: string;
         minPayment: string;
-        locked: boolean;
         debtName: string;
+        locked: boolean;
         dueDay?: number | null | undefined;
         nextOccurrence?: string | null | undefined;
         linkedRecurringId?: string | null | undefined;
@@ -10052,8 +10171,8 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         source: "plaid" | "manual";
         debtId: string;
         minPayment: string;
-        locked: boolean;
         debtName: string;
+        locked: boolean;
         dueDay?: number | null | undefined;
         nextOccurrence?: string | null | undefined;
         linkedRecurringId?: string | null | undefined;
@@ -10109,8 +10228,8 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         source: "plaid" | "manual";
         debtId: string;
         minPayment: string;
-        locked: boolean;
         debtName: string;
+        locked: boolean;
         dueDay?: number | null | undefined;
         nextOccurrence?: string | null | undefined;
         linkedRecurringId?: string | null | undefined;

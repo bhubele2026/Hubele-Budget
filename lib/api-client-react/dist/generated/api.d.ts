@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklyDebriefsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UnlockWeeklyDebriefBody, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, WeeklyDebriefDetail, WeeklyDebriefList, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BillsSummary, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastAvalancheScheduleParams, GetForecastCashSignalParams, GetForecastParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklyDebriefsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UnlockWeeklyDebriefBody, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, WeeklyDebriefDetail, WeeklyDebriefList, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -1477,6 +1477,35 @@ export type GetForecastCashSignalQueryResult = NonNullable<Awaited<ReturnType<ty
 export type GetForecastCashSignalQueryError = ErrorType<unknown>;
 export declare function useGetForecastCashSignal<TData = Awaited<ReturnType<typeof getForecastCashSignal>>, TError = ErrorType<unknown>>(params?: GetForecastCashSignalParams, options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getForecastCashSignal>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * Returns a deterministic schedule of avalanche extra payments
+across the next ~12 months (one per safe paycheck-to-paycheck
+window) plus a Claude-written narrative. The narrative is cached
+on a hash of the deterministic facts; pass `refresh=true` to force
+a fresh regeneration.
+
+ * @summary AI-driven multi-date avalanche extra-payment schedule
+ */
+export declare const getGetForecastAvalancheScheduleUrl: (params?: GetForecastAvalancheScheduleParams) => string;
+export declare const getForecastAvalancheSchedule: (params?: GetForecastAvalancheScheduleParams, options?: RequestInit) => Promise<AvalancheSchedule>;
+export declare const getGetForecastAvalancheScheduleQueryKey: (params?: GetForecastAvalancheScheduleParams) => readonly ["/api/forecast/avalanche-schedule", ...GetForecastAvalancheScheduleParams[]];
+export declare const getGetForecastAvalancheScheduleQueryOptions: <TData = Awaited<ReturnType<typeof getForecastAvalancheSchedule>>, TError = ErrorType<unknown>>(params?: GetForecastAvalancheScheduleParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getForecastAvalancheSchedule>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getForecastAvalancheSchedule>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetForecastAvalancheScheduleQueryResult = NonNullable<Awaited<ReturnType<typeof getForecastAvalancheSchedule>>>;
+export type GetForecastAvalancheScheduleQueryError = ErrorType<unknown>;
+/**
+ * @summary AI-driven multi-date avalanche extra-payment schedule
+ */
+export declare function useGetForecastAvalancheSchedule<TData = Awaited<ReturnType<typeof getForecastAvalancheSchedule>>, TError = ErrorType<unknown>>(params?: GetForecastAvalancheScheduleParams, options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getForecastAvalancheSchedule>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

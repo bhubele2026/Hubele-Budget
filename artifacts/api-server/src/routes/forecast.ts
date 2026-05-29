@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { createHash } from "node:crypto";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import {
   db,
@@ -12,6 +13,7 @@ import {
   plaidAccountsTable,
   avalancheSettingsTable,
   weeklyDebriefsTable,
+  type AvalancheAdvisorSummary,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -27,6 +29,8 @@ import {
   expandDebtMin,
   expandAvalancheExtra,
 } from "../lib/debtMinSchedule";
+import { buildAvalancheSchedule } from "../lib/avalancheScheduler";
+import { generateAvalancheSummary } from "../lib/avalancheAdvisorSummary";
 import {
   plaid,
   isValidPlaidAccessToken,
@@ -644,6 +648,94 @@ router.get("/forecast/cash-signal", requireAuth, async (req, res): Promise<void>
   const signal = await computeCashSignal(req.householdId!, req.householdOwnerId!, { horizonDays, fromDate });
   res.json(signal);
 });
+
+// (#826) Avalanche extra-payment schedule. Always recomputes the
+// DETERMINISTIC schedule (cheap), then returns the cached Claude
+// narrative when the facts hash is unchanged — otherwise regenerates it,
+// caches the result + hash, and returns "fresh". `?refresh=true` forces
+// regeneration (a new Anthropic call) for the Refresh button.
+router.get(
+  "/forecast/avalanche-schedule",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const householdId = req.householdId!;
+    const ownerUserId = req.householdOwnerId!;
+    const forceRefresh =
+      req.query.refresh === "true" || req.query.refresh === "1";
+
+    await ensureSettings(ownerUserId, householdId);
+
+    // Deterministic schedule — ground truth for the numbers + narrative.
+    const facts = await buildAvalancheSchedule(householdId, ownerUserId);
+
+    // Hash only the inputs that determine the narrative. generatedAt and
+    // free-form rationale strings are excluded so identical schedules
+    // produce identical hashes across requests.
+    const factsHash = createHash("sha256")
+      .update(
+        JSON.stringify({
+          payments: facts.proposedPayments.map((p) => [
+            p.date,
+            p.amount,
+            p.confidence,
+            p.paycheckAnchor,
+            p.lowestBetweenThisAndNextPaycheck,
+            p.headroom,
+          ]),
+          total: facts.totalProposed,
+          target: facts.currentAvalancheTarget,
+          cashBuffer: facts.cashBuffer,
+          // bankBalance is narrated in the prompt, so it must invalidate
+          // the cached summary when it changes.
+          bankBalance: facts.bankBalance,
+          lowestPost: facts.lowestPostScheduleBalance,
+          lowestPostDate: facts.lowestPostScheduleDate,
+        }),
+      )
+      .digest("hex");
+
+    const [settings] = await db
+      .select()
+      .from(forecastSettingsTable)
+      .where(eq(forecastSettingsTable.userId, ownerUserId));
+    const cached = settings?.avalancheAdvisorSummary ?? null;
+    const cachedHash = settings?.avalancheAdvisorFactsHash ?? null;
+
+    let summaryRow: AvalancheAdvisorSummary;
+    let source: "cache" | "fresh";
+    if (!forceRefresh && cached && cachedHash === factsHash) {
+      summaryRow = cached;
+      source = "cache";
+    } else {
+      summaryRow = await generateAvalancheSummary(facts);
+      await db
+        .update(forecastSettingsTable)
+        .set({
+          avalancheAdvisorSummary: summaryRow,
+          avalancheAdvisorFactsHash: factsHash,
+          updatedAt: new Date(),
+        })
+        .where(eq(forecastSettingsTable.userId, ownerUserId));
+      source = "fresh";
+    }
+
+    res.json({
+      proposedPayments: facts.proposedPayments,
+      totalProposed: facts.totalProposed,
+      lowestPostScheduleBalance: facts.lowestPostScheduleBalance,
+      lowestPostScheduleDate: facts.lowestPostScheduleDate,
+      currentAvalancheTarget: facts.currentAvalancheTarget,
+      cashBuffer: facts.cashBuffer,
+      bankBalance: facts.bankBalance,
+      scheduleThroughDate: facts.scheduleThroughDate,
+      summary: summaryRow.summary,
+      paymentsText: summaryRow.paymentsText,
+      summarySource: summaryRow.source,
+      generatedAt: summaryRow.generatedAt,
+      source,
+    });
+  },
+);
 
 router.post("/forecast/bank-snapshot", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;

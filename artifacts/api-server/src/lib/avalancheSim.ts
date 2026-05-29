@@ -88,6 +88,35 @@ export function monthsUntilAvalanchePayoff(
   return null;
 }
 
+/**
+ * (#826) Resolve the debt the avalanche is currently attacking — the
+ * highest-APR active debt with a positive balance (ties broken by
+ * smaller balance), using the same `targetIndex` rule the simulator
+ * applies each month. Returns null when no active debt has a balance.
+ */
+export function resolveAvalancheTargetDebt(
+  debts: DebtRow[],
+): { id: string; name: string; apr: number; balance: number } | null {
+  const active = debts.filter(
+    (d) => (d.status ?? "active") === "active" && Number(d.balance) > CENTS,
+  );
+  if (active.length === 0) return null;
+  const idx = targetIndex(
+    active.map((d) => ({
+      balance: Number(d.balance) || 0,
+      apr: Number(d.apr) || 0,
+    })),
+  );
+  if (idx === -1) return null;
+  const d = active[idx];
+  return {
+    id: d.id,
+    name: d.name,
+    apr: Number(d.apr) || 0,
+    balance: Number(d.balance) || 0,
+  };
+}
+
 /** Convert DB debt rows to the simulator input shape, filtering inactive. */
 export function activeSimDebts(debts: DebtRow[]): SimInputDebt[] {
   const out: SimInputDebt[] = [];

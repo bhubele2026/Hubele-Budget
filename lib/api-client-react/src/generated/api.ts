@@ -28,6 +28,7 @@ import type {
   AmexAnchorInput,
   AprilChaseSeedResult,
   AvalancheExtra,
+  AvalancheSchedule,
   AvalancheSettings,
   AvalancheSettingsInput,
   BankSnapshot,
@@ -75,6 +76,7 @@ import type {
   ForecastSettings,
   ForecastSettingsInput,
   GetBillsSummaryParams,
+  GetForecastAvalancheScheduleParams,
   GetForecastCashSignalParams,
   GetForecastParams,
   HealthStatus,
@@ -5275,6 +5277,121 @@ export function useGetForecastCashSignal<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetForecastCashSignalQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns a deterministic schedule of avalanche extra payments
+across the next ~12 months (one per safe paycheck-to-paycheck
+window) plus a Claude-written narrative. The narrative is cached
+on a hash of the deterministic facts; pass `refresh=true` to force
+a fresh regeneration.
+
+ * @summary AI-driven multi-date avalanche extra-payment schedule
+ */
+export const getGetForecastAvalancheScheduleUrl = (
+  params?: GetForecastAvalancheScheduleParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/forecast/avalanche-schedule?${stringifiedParams}`
+    : `/api/forecast/avalanche-schedule`;
+};
+
+export const getForecastAvalancheSchedule = async (
+  params?: GetForecastAvalancheScheduleParams,
+  options?: RequestInit,
+): Promise<AvalancheSchedule> => {
+  return customFetch<AvalancheSchedule>(
+    getGetForecastAvalancheScheduleUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetForecastAvalancheScheduleQueryKey = (
+  params?: GetForecastAvalancheScheduleParams,
+) => {
+  return [
+    `/api/forecast/avalanche-schedule`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetForecastAvalancheScheduleQueryOptions = <
+  TData = Awaited<ReturnType<typeof getForecastAvalancheSchedule>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetForecastAvalancheScheduleParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForecastAvalancheSchedule>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetForecastAvalancheScheduleQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getForecastAvalancheSchedule>>
+  > = ({ signal }) =>
+    getForecastAvalancheSchedule(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getForecastAvalancheSchedule>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetForecastAvalancheScheduleQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getForecastAvalancheSchedule>>
+>;
+export type GetForecastAvalancheScheduleQueryError = ErrorType<unknown>;
+
+/**
+ * @summary AI-driven multi-date avalanche extra-payment schedule
+ */
+
+export function useGetForecastAvalancheSchedule<
+  TData = Awaited<ReturnType<typeof getForecastAvalancheSchedule>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetForecastAvalancheScheduleParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForecastAvalancheSchedule>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetForecastAvalancheScheduleQueryOptions(
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
