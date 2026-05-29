@@ -17,10 +17,6 @@ vi.mock("@workspace/api-client-react", () => ({
   useCreateDebtFromPlaidAccount: () => ({ mutate: vi.fn(), isPending: false }),
   useCreatePlaidUpdateLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
   useCreatePlaidLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
-  useCreatePlaidAddAccountLinkToken: () => ({
-    mutate: vi.fn(),
-    isPending: false,
-  }),
   useExchangePlaidPublicToken: () => ({ mutate: vi.fn(), isPending: false }),
   useListPlaidItems: () => ({ data: [], isFetched: true }),
   getListDebtsQueryKey: () => ["/api/debts"],
