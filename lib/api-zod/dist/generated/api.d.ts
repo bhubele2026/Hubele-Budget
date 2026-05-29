@@ -5511,6 +5511,338 @@ export declare const GetReportsAdvisorSummaryResponse: zod.ZodObject<{
     headline: string;
     bullets: string[];
 }>;
+/**
+ * Returns deterministic Spending facts (real spend, excluded buckets,
+uncategorized backlog, by-category, by-merchant, daily, day-of-week,
+monthly trends, reimbursable) for the Reports Spending tab. `from`/`to`
+are optional (default last 30 days); ranges before the tracking start
+are clamped server-side (range.floorApplied = true).
+
+ * @summary Clean merchant-centric Spending facts for the Reports Spending tab
+ */
+export declare const GetReportsSpendingFactsQueryParams: zod.ZodObject<{
+    from: zod.ZodOptional<zod.ZodString>;
+    to: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    from?: string | undefined;
+    to?: string | undefined;
+}, {
+    from?: string | undefined;
+    to?: string | undefined;
+}>;
+export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
+    range: zod.ZodObject<{
+        start: zod.ZodString;
+        end: zod.ZodString;
+        daysCovered: zod.ZodNumber;
+        trackingStart: zod.ZodString;
+        floorApplied: zod.ZodBoolean;
+    }, "strip", zod.ZodTypeAny, {
+        start: string;
+        end: string;
+        daysCovered: number;
+        trackingStart: string;
+        floorApplied: boolean;
+    }, {
+        start: string;
+        end: string;
+        daysCovered: number;
+        trackingStart: string;
+        floorApplied: boolean;
+    }>;
+    realSpend: zod.ZodObject<{
+        total: zod.ZodNumber;
+        transactionCount: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        transactionCount: number;
+        total: number;
+    }, {
+        transactionCount: number;
+        total: number;
+    }>;
+    uncategorized: zod.ZodObject<{
+        total: zod.ZodNumber;
+        transactionCount: zod.ZodNumber;
+        sampleMerchants: zod.ZodArray<zod.ZodObject<{
+            name: zod.ZodString;
+            total: zod.ZodNumber;
+            count: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            total: number;
+            name: string;
+            count: number;
+        }, {
+            total: number;
+            name: string;
+            count: number;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        transactionCount: number;
+        total: number;
+        sampleMerchants: {
+            total: number;
+            name: string;
+            count: number;
+        }[];
+    }, {
+        transactionCount: number;
+        total: number;
+        sampleMerchants: {
+            total: number;
+            name: string;
+            count: number;
+        }[];
+    }>;
+    excluded: zod.ZodObject<{
+        transfersTotal: zod.ZodNumber;
+        debtPaymentsTotal: zod.ZodNumber;
+        reimbursementTotal: zod.ZodNumber;
+        ignoreTotal: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        transfersTotal: number;
+        debtPaymentsTotal: number;
+        reimbursementTotal: number;
+        ignoreTotal: number;
+    }, {
+        transfersTotal: number;
+        debtPaymentsTotal: number;
+        reimbursementTotal: number;
+        ignoreTotal: number;
+    }>;
+    byCategory: zod.ZodArray<zod.ZodObject<{
+        categoryId: zod.ZodString;
+        name: zod.ZodString;
+        total: zod.ZodNumber;
+        txnCount: zod.ZodNumber;
+        pctOfRealSpend: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        categoryId: string;
+        total: number;
+        name: string;
+        txnCount: number;
+        pctOfRealSpend: number;
+    }, {
+        categoryId: string;
+        total: number;
+        name: string;
+        txnCount: number;
+        pctOfRealSpend: number;
+    }>, "many">;
+    byMerchant: zod.ZodArray<zod.ZodObject<{
+        name: zod.ZodString;
+        total: zod.ZodNumber;
+        count: zod.ZodNumber;
+        sampleCategoryName: zod.ZodNullable<zod.ZodString>;
+        sampleCategoryId: zod.ZodNullable<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        total: number;
+        name: string;
+        count: number;
+        sampleCategoryName: string | null;
+        sampleCategoryId: string | null;
+    }, {
+        total: number;
+        name: string;
+        count: number;
+        sampleCategoryName: string | null;
+        sampleCategoryId: string | null;
+    }>, "many">;
+    dailyBuckets: zod.ZodArray<zod.ZodObject<{
+        date: zod.ZodString;
+        total: zod.ZodNumber;
+        count: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        date: string;
+        total: number;
+        count: number;
+    }, {
+        date: string;
+        total: number;
+        count: number;
+    }>, "many">;
+    dayOfWeek: zod.ZodArray<zod.ZodObject<{
+        dow: zod.ZodNumber;
+        label: zod.ZodString;
+        avgPerDay: zod.ZodNumber;
+        total: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        total: number;
+        label: string;
+        dow: number;
+        avgPerDay: number;
+    }, {
+        total: number;
+        label: string;
+        dow: number;
+        avgPerDay: number;
+    }>, "many">;
+    monthlyTrends: zod.ZodArray<zod.ZodObject<{
+        month: zod.ZodString;
+        total: zod.ZodNumber;
+        byTopCategory: zod.ZodArray<zod.ZodObject<{
+            name: zod.ZodString;
+            total: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            total: number;
+            name: string;
+        }, {
+            total: number;
+            name: string;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        total: number;
+        month: string;
+        byTopCategory: {
+            total: number;
+            name: string;
+        }[];
+    }, {
+        total: number;
+        month: string;
+        byTopCategory: {
+            total: number;
+            name: string;
+        }[];
+    }>, "many">;
+    reimbursable: zod.ZodObject<{
+        personalTotal: zod.ZodNumber;
+        outstandingReimbursableTotal: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        personalTotal: number;
+        outstandingReimbursableTotal: number;
+    }, {
+        personalTotal: number;
+        outstandingReimbursableTotal: number;
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    reimbursable: {
+        personalTotal: number;
+        outstandingReimbursableTotal: number;
+    };
+    uncategorized: {
+        transactionCount: number;
+        total: number;
+        sampleMerchants: {
+            total: number;
+            name: string;
+            count: number;
+        }[];
+    };
+    range: {
+        start: string;
+        end: string;
+        daysCovered: number;
+        trackingStart: string;
+        floorApplied: boolean;
+    };
+    realSpend: {
+        transactionCount: number;
+        total: number;
+    };
+    excluded: {
+        transfersTotal: number;
+        debtPaymentsTotal: number;
+        reimbursementTotal: number;
+        ignoreTotal: number;
+    };
+    byCategory: {
+        categoryId: string;
+        total: number;
+        name: string;
+        txnCount: number;
+        pctOfRealSpend: number;
+    }[];
+    byMerchant: {
+        total: number;
+        name: string;
+        count: number;
+        sampleCategoryName: string | null;
+        sampleCategoryId: string | null;
+    }[];
+    dailyBuckets: {
+        date: string;
+        total: number;
+        count: number;
+    }[];
+    dayOfWeek: {
+        total: number;
+        label: string;
+        dow: number;
+        avgPerDay: number;
+    }[];
+    monthlyTrends: {
+        total: number;
+        month: string;
+        byTopCategory: {
+            total: number;
+            name: string;
+        }[];
+    }[];
+}, {
+    reimbursable: {
+        personalTotal: number;
+        outstandingReimbursableTotal: number;
+    };
+    uncategorized: {
+        transactionCount: number;
+        total: number;
+        sampleMerchants: {
+            total: number;
+            name: string;
+            count: number;
+        }[];
+    };
+    range: {
+        start: string;
+        end: string;
+        daysCovered: number;
+        trackingStart: string;
+        floorApplied: boolean;
+    };
+    realSpend: {
+        transactionCount: number;
+        total: number;
+    };
+    excluded: {
+        transfersTotal: number;
+        debtPaymentsTotal: number;
+        reimbursementTotal: number;
+        ignoreTotal: number;
+    };
+    byCategory: {
+        categoryId: string;
+        total: number;
+        name: string;
+        txnCount: number;
+        pctOfRealSpend: number;
+    }[];
+    byMerchant: {
+        total: number;
+        name: string;
+        count: number;
+        sampleCategoryName: string | null;
+        sampleCategoryId: string | null;
+    }[];
+    dailyBuckets: {
+        date: string;
+        total: number;
+        count: number;
+    }[];
+    dayOfWeek: {
+        total: number;
+        label: string;
+        dow: number;
+        avgPerDay: number;
+    }[];
+    monthlyTrends: {
+        total: number;
+        month: string;
+        byTopCategory: {
+            total: number;
+            name: string;
+        }[];
+    }[];
+}>;
 export declare const CloseForecastMonthBody: zod.ZodObject<{
     monthKey: zod.ZodString;
     gap: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -6101,6 +6433,25 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -6149,25 +6500,6 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     }, {
         transactions: {
@@ -6182,6 +6514,25 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -6230,25 +6581,6 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     }>>;
     actionsSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
@@ -6349,6 +6681,25 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -6397,25 +6748,6 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     } | null;
     postLockAdditions: {
@@ -6464,6 +6796,25 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -6512,25 +6863,6 @@ export declare const GetWeeklyDebriefResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     } | null;
     postLockAdditions: {
@@ -6832,6 +7164,25 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -6880,25 +7231,6 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     }, {
         transactions: {
@@ -6913,6 +7245,25 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -6961,25 +7312,6 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     }>>;
     actionsSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
@@ -7080,6 +7412,25 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -7128,25 +7479,6 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     } | null;
     postLockAdditions: {
@@ -7195,6 +7527,25 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -7243,25 +7594,6 @@ export declare const LockWeeklyDebriefResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     } | null;
     postLockAdditions: {
@@ -7563,6 +7895,25 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -7611,25 +7962,6 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     }, {
         transactions: {
@@ -7644,6 +7976,25 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -7692,25 +8043,6 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     }>>;
     actionsSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
@@ -7811,6 +8143,25 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -7859,25 +8210,6 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     } | null;
     postLockAdditions: {
@@ -7926,6 +8258,25 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -7974,25 +8325,6 @@ export declare const GenerateWeeklyDebriefSummaryResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     } | null;
     postLockAdditions: {
@@ -8301,6 +8633,25 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -8349,25 +8700,6 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     }, {
         transactions: {
@@ -8382,6 +8714,25 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -8430,25 +8781,6 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     }>>;
     actionsSummary: zod.ZodOptional<zod.ZodNullable<zod.ZodObject<{
@@ -8549,6 +8881,25 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -8597,25 +8948,6 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     } | null;
     postLockAdditions: {
@@ -8664,6 +8996,25 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
         }[];
         weekStart: string;
         weekEnd: string;
+        byCategory: {
+            plannedAmount: string;
+            actualAmount: string;
+            varianceAmount: string;
+            plannedItems: {
+                amount: number;
+                name: string;
+                forecastDate: string;
+                recurringItemId?: string | null | undefined;
+            }[];
+            actualTxns: {
+                date: string;
+                description: string;
+                amount: number;
+                txnId: string;
+                matchedToPlan: boolean;
+            }[];
+            categoryId?: string | null | undefined;
+        }[];
         openItemsCount: number;
         computedAt: string;
         totals: {
@@ -8712,25 +9063,6 @@ export declare const UnlockWeeklyDebriefResponse: zod.ZodObject<{
             categoryId?: string | null | undefined;
             source?: string | null | undefined;
             matchedRecurringItemId?: string | null | undefined;
-        }[];
-        byCategory: {
-            plannedAmount: string;
-            actualAmount: string;
-            varianceAmount: string;
-            plannedItems: {
-                amount: number;
-                name: string;
-                forecastDate: string;
-                recurringItemId?: string | null | undefined;
-            }[];
-            actualTxns: {
-                date: string;
-                description: string;
-                amount: number;
-                txnId: string;
-                matchedToPlan: boolean;
-            }[];
-            categoryId?: string | null | undefined;
         }[];
     } | null;
     postLockAdditions: {

@@ -2518,6 +2518,106 @@ export const GetReportsAdvisorSummaryResponse = zod.object({
   source: zod.enum(["cache", "fresh"]),
 });
 
+/**
+ * Returns deterministic Spending facts (real spend, excluded buckets,
+uncategorized backlog, by-category, by-merchant, daily, day-of-week,
+monthly trends, reimbursable) for the Reports Spending tab. `from`/`to`
+are optional (default last 30 days); ranges before the tracking start
+are clamped server-side (range.floorApplied = true).
+
+ * @summary Clean merchant-centric Spending facts for the Reports Spending tab
+ */
+export const GetReportsSpendingFactsQueryParams = zod.object({
+  from: zod.coerce
+    .string()
+    .optional()
+    .describe("Range start (YYYY-MM-DD). Defaults to 30 days ago."),
+  to: zod.coerce
+    .string()
+    .optional()
+    .describe("Range end (YYYY-MM-DD). Defaults to today."),
+});
+
+export const GetReportsSpendingFactsResponse = zod.object({
+  range: zod.object({
+    start: zod.string(),
+    end: zod.string(),
+    daysCovered: zod.number(),
+    trackingStart: zod.string(),
+    floorApplied: zod.boolean(),
+  }),
+  realSpend: zod.object({
+    total: zod.number(),
+    transactionCount: zod.number(),
+  }),
+  uncategorized: zod.object({
+    total: zod.number(),
+    transactionCount: zod.number(),
+    sampleMerchants: zod.array(
+      zod.object({
+        name: zod.string(),
+        total: zod.number(),
+        count: zod.number(),
+      }),
+    ),
+  }),
+  excluded: zod.object({
+    transfersTotal: zod.number(),
+    debtPaymentsTotal: zod.number(),
+    reimbursementTotal: zod.number(),
+    ignoreTotal: zod.number(),
+  }),
+  byCategory: zod.array(
+    zod.object({
+      categoryId: zod.string(),
+      name: zod.string(),
+      total: zod.number(),
+      txnCount: zod.number(),
+      pctOfRealSpend: zod.number(),
+    }),
+  ),
+  byMerchant: zod.array(
+    zod.object({
+      name: zod.string(),
+      total: zod.number(),
+      count: zod.number(),
+      sampleCategoryName: zod.string().nullable(),
+      sampleCategoryId: zod.string().nullable(),
+    }),
+  ),
+  dailyBuckets: zod.array(
+    zod.object({
+      date: zod.string(),
+      total: zod.number(),
+      count: zod.number(),
+    }),
+  ),
+  dayOfWeek: zod.array(
+    zod.object({
+      dow: zod.number(),
+      label: zod.string(),
+      avgPerDay: zod.number(),
+      total: zod.number(),
+    }),
+  ),
+  monthlyTrends: zod.array(
+    zod.object({
+      month: zod.string(),
+      total: zod.number(),
+      byTopCategory: zod.array(
+        zod.object({
+          name: zod.string(),
+          total: zod.number(),
+        }),
+      ),
+    }),
+  ),
+  reimbursable: zod.object({
+    personalTotal: zod.number(),
+    outstandingReimbursableTotal: zod.number(),
+  }),
+});
+
 export const CloseForecastMonthBody = zod.object({
   monthKey: zod.string(),
   gap: zod.string().nullish(),

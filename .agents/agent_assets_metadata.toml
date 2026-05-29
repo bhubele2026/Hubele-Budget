@@ -70,3 +70,9 @@ id = "jTqOglQLpbiBiQPY1dmIG"
 uri = "file://dist/h2budget-source.tar.gz"
 type = "unspecified"
 title = "H2 Family Budget — full source code (latest)"
+
+[[outputs]]
+id = "-IWLnGpJ7cn-csulGdPhF"
+uri = "file://exports/h2budget-app-code.tar.gz"
+type = "unspecified"
+title = "H2 Family Budget — Full App Code"

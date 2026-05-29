@@ -1,0 +1,1 @@
+{"version":3,"file":"spendingFactsRange.d.ts","sourceRoot":"","sources":["../../../src/generated/types/spendingFactsRange.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,MAAM,kBAAkB,GAAG;IAC/B,KAAK,EAAE,MAAM,CAAC;IACd,GAAG,EAAE,MAAM,CAAC;IACZ,WAAW,EAAE,MAAM,CAAC;IACpB,aAAa,EAAE,MAAM,CAAC;IACtB,YAAY,EAAE,OAAO,CAAC;CACvB,CAAC"}

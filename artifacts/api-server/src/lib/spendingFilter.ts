@@ -24,7 +24,10 @@ export interface SpendTxn {
 }
 
 export interface SpendContext {
-  categoriesById: Map<string, { name: string; debtId: string | null }>;
+  categoriesById: Map<
+    string,
+    { name: string; debtId: string | null; kind: string }
+  >;
   debtCategoryIds: Set<string>;
 }
 
@@ -90,6 +93,7 @@ export function isRealSpend(tx: SpendTxn, ctx: SpendContext): boolean {
   if (!tx.categoryId) return false; // uncategorized -> separate bucket
   const cat = ctx.categoriesById.get(tx.categoryId);
   if (!cat) return false;
+  if (cat.kind === "income") return false; // income/refund/cashback is not spend
   if (isExcludedCategoryName(cat.name)) return false;
   if (cat.debtId || ctx.debtCategoryIds.has(tx.categoryId)) return false;
   if (matchesTransferPattern(tx.description)) return false;

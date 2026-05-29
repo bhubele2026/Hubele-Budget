@@ -80,6 +80,7 @@ import type {
   GetForecastCashSignalParams,
   GetForecastParams,
   GetReportsAdvisorSummaryParams,
+  GetReportsSpendingFactsParams,
   HealthStatus,
   ImportSummary,
   ImportWorkbookBody,
@@ -125,6 +126,7 @@ import type {
   SetBankSnapshotInput,
   Settings,
   SettingsInput,
+  SpendingFacts,
   SyncMinimumsResult,
   TestMappingRulesInput,
   TestMappingRulesResult,
@@ -5586,6 +5588,112 @@ export function useGetReportsAdvisorSummary<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetReportsAdvisorSummaryQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns deterministic Spending facts (real spend, excluded buckets,
+uncategorized backlog, by-category, by-merchant, daily, day-of-week,
+monthly trends, reimbursable) for the Reports Spending tab. `from`/`to`
+are optional (default last 30 days); ranges before the tracking start
+are clamped server-side (range.floorApplied = true).
+
+ * @summary Clean merchant-centric Spending facts for the Reports Spending tab
+ */
+export const getGetReportsSpendingFactsUrl = (
+  params?: GetReportsSpendingFactsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/reports/spending-facts?${stringifiedParams}`
+    : `/api/reports/spending-facts`;
+};
+
+export const getReportsSpendingFacts = async (
+  params?: GetReportsSpendingFactsParams,
+  options?: RequestInit,
+): Promise<SpendingFacts> => {
+  return customFetch<SpendingFacts>(getGetReportsSpendingFactsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetReportsSpendingFactsQueryKey = (
+  params?: GetReportsSpendingFactsParams,
+) => {
+  return [`/api/reports/spending-facts`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetReportsSpendingFactsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReportsSpendingFacts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetReportsSpendingFactsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReportsSpendingFacts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetReportsSpendingFactsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReportsSpendingFacts>>
+  > = ({ signal }) =>
+    getReportsSpendingFacts(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReportsSpendingFacts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReportsSpendingFactsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReportsSpendingFacts>>
+>;
+export type GetReportsSpendingFactsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Clean merchant-centric Spending facts for the Reports Spending tab
+ */
+
+export function useGetReportsSpendingFacts<
+  TData = Awaited<ReturnType<typeof getReportsSpendingFacts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetReportsSpendingFactsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReportsSpendingFacts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReportsSpendingFactsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

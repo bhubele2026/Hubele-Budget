@@ -1957,6 +1957,98 @@ export interface ReportsAdvisorSummary {
   source: ReportsAdvisorSummarySource;
 }
 
+export type SpendingFactsRange = {
+  start: string;
+  end: string;
+  daysCovered: number;
+  trackingStart: string;
+  floorApplied: boolean;
+};
+
+export type SpendingFactsRealSpend = {
+  total: number;
+  transactionCount: number;
+};
+
+export type SpendingFactsUncategorizedSampleMerchantsItem = {
+  name: string;
+  total: number;
+  count: number;
+};
+
+export type SpendingFactsUncategorized = {
+  total: number;
+  transactionCount: number;
+  sampleMerchants: SpendingFactsUncategorizedSampleMerchantsItem[];
+};
+
+export type SpendingFactsExcluded = {
+  transfersTotal: number;
+  debtPaymentsTotal: number;
+  reimbursementTotal: number;
+  ignoreTotal: number;
+};
+
+export type SpendingFactsByCategoryItem = {
+  categoryId: string;
+  name: string;
+  total: number;
+  txnCount: number;
+  pctOfRealSpend: number;
+};
+
+export type SpendingFactsByMerchantItem = {
+  name: string;
+  total: number;
+  count: number;
+  /** @nullable */
+  sampleCategoryName: string | null;
+  /** @nullable */
+  sampleCategoryId: string | null;
+};
+
+export type SpendingFactsDailyBucketsItem = {
+  date: string;
+  total: number;
+  count: number;
+};
+
+export type SpendingFactsDayOfWeekItem = {
+  dow: number;
+  label: string;
+  avgPerDay: number;
+  total: number;
+};
+
+export type SpendingFactsMonthlyTrendsItemByTopCategoryItem = {
+  name: string;
+  total: number;
+};
+
+export type SpendingFactsMonthlyTrendsItem = {
+  month: string;
+  total: number;
+  byTopCategory: SpendingFactsMonthlyTrendsItemByTopCategoryItem[];
+};
+
+export type SpendingFactsReimbursable = {
+  personalTotal: number;
+  outstandingReimbursableTotal: number;
+};
+
+export interface SpendingFacts {
+  range: SpendingFactsRange;
+  realSpend: SpendingFactsRealSpend;
+  uncategorized: SpendingFactsUncategorized;
+  excluded: SpendingFactsExcluded;
+  byCategory: SpendingFactsByCategoryItem[];
+  byMerchant: SpendingFactsByMerchantItem[];
+  dailyBuckets: SpendingFactsDailyBucketsItem[];
+  dayOfWeek: SpendingFactsDayOfWeekItem[];
+  monthlyTrends: SpendingFactsMonthlyTrendsItem[];
+  reimbursable: SpendingFactsReimbursable;
+}
+
 export type AvalancheScheduleProposedPaymentsItemConfidence =
   (typeof AvalancheScheduleProposedPaymentsItemConfidence)[keyof typeof AvalancheScheduleProposedPaymentsItemConfidence];
 
@@ -2882,6 +2974,17 @@ export const GetReportsAdvisorSummaryRefresh = {
   true: "true",
   NUMBER_1: "1",
 } as const;
+
+export type GetReportsSpendingFactsParams = {
+  /**
+   * Range start (YYYY-MM-DD). Defaults to 30 days ago.
+   */
+  from?: string;
+  /**
+   * Range end (YYYY-MM-DD). Defaults to today.
+   */
+  to?: string;
+};
 
 export type CloseForecastMonthBody = {
   monthKey: string;

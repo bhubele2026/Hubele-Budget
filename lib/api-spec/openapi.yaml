@@ -1168,6 +1168,33 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ReportsAdvisorSummary" }
 
+  /reports/spending-facts:
+    get:
+      operationId: getReportsSpendingFacts
+      tags: [reports]
+      summary: Clean merchant-centric Spending facts for the Reports Spending tab
+      description: |
+        Returns deterministic Spending facts (real spend, excluded buckets,
+        uncategorized backlog, by-category, by-merchant, daily, day-of-week,
+        monthly trends, reimbursable) for the Reports Spending tab. `from`/`to`
+        are optional (default last 30 days); ranges before the tracking start
+        are clamped server-side (range.floorApplied = true).
+      parameters:
+        - in: query
+          name: from
+          description: Range start (YYYY-MM-DD). Defaults to 30 days ago.
+          schema: { type: string }
+        - in: query
+          name: to
+          description: Range end (YYYY-MM-DD). Defaults to today.
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpendingFacts" }
+
   /forecast/closed-months:
     post:
       operationId: closeForecastMonth
@@ -3653,6 +3680,125 @@ components:
         summarySource: { type: string, enum: [ai, fallback] }
         generatedAt: { type: string }
         source: { type: string, enum: [cache, fresh] }
+
+    SpendingFacts:
+      type: object
+      required:
+        [
+          range,
+          realSpend,
+          uncategorized,
+          excluded,
+          byCategory,
+          byMerchant,
+          dailyBuckets,
+          dayOfWeek,
+          monthlyTrends,
+          reimbursable,
+        ]
+      properties:
+        range:
+          type: object
+          required: [start, end, daysCovered, trackingStart, floorApplied]
+          properties:
+            start: { type: string }
+            end: { type: string }
+            daysCovered: { type: integer }
+            trackingStart: { type: string }
+            floorApplied: { type: boolean }
+        realSpend:
+          type: object
+          required: [total, transactionCount]
+          properties:
+            total: { type: number }
+            transactionCount: { type: integer }
+        uncategorized:
+          type: object
+          required: [total, transactionCount, sampleMerchants]
+          properties:
+            total: { type: number }
+            transactionCount: { type: integer }
+            sampleMerchants:
+              type: array
+              items:
+                type: object
+                required: [name, total, count]
+                properties:
+                  name: { type: string }
+                  total: { type: number }
+                  count: { type: integer }
+        excluded:
+          type: object
+          required:
+            [transfersTotal, debtPaymentsTotal, reimbursementTotal, ignoreTotal]
+          properties:
+            transfersTotal: { type: number }
+            debtPaymentsTotal: { type: number }
+            reimbursementTotal: { type: number }
+            ignoreTotal: { type: number }
+        byCategory:
+          type: array
+          items:
+            type: object
+            required: [categoryId, name, total, txnCount, pctOfRealSpend]
+            properties:
+              categoryId: { type: string }
+              name: { type: string }
+              total: { type: number }
+              txnCount: { type: integer }
+              pctOfRealSpend: { type: number }
+        byMerchant:
+          type: array
+          items:
+            type: object
+            required: [name, total, count, sampleCategoryName, sampleCategoryId]
+            properties:
+              name: { type: string }
+              total: { type: number }
+              count: { type: integer }
+              sampleCategoryName: { type: ["string", "null"] }
+              sampleCategoryId: { type: ["string", "null"] }
+        dailyBuckets:
+          type: array
+          items:
+            type: object
+            required: [date, total, count]
+            properties:
+              date: { type: string }
+              total: { type: number }
+              count: { type: integer }
+        dayOfWeek:
+          type: array
+          items:
+            type: object
+            required: [dow, label, avgPerDay, total]
+            properties:
+              dow: { type: integer }
+              label: { type: string }
+              avgPerDay: { type: number }
+              total: { type: number }
+        monthlyTrends:
+          type: array
+          items:
+            type: object
+            required: [month, total, byTopCategory]
+            properties:
+              month: { type: string }
+              total: { type: number }
+              byTopCategory:
+                type: array
+                items:
+                  type: object
+                  required: [name, total]
+                  properties:
+                    name: { type: string }
+                    total: { type: number }
+        reimbursable:
+          type: object
+          required: [personalTotal, outstandingReimbursableTotal]
+          properties:
+            personalTotal: { type: number }
+            outstandingReimbursableTotal: { type: number }
 
     AvalancheSchedule:
       type: object

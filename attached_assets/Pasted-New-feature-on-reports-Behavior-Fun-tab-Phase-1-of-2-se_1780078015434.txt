@@ -1,0 +1,154 @@
+New feature on /reports Behavior & Fun tab — Phase 1 of 2: server-side facts pipeline. Phase 2 (UI rebuild) ships after this lands and the JSON is verified clean.
+
+CONTEXT — the existing Behavior & Fun tab is built on the same broken data path that polluted the Spending tab before Phase 1 (Spending) shipped. It shows transfer txns as biggest expenses, counts ACH payments as "purchases," and has a radar chart with abstract categories that don't match the user's real category structure.
+
+Reuse the clean infrastructure from the Spending Phase 1 task:
+- spendingFilter.ts isRealSpend(tx, ctx) — predicate that excludes transfers, debt payments, reimbursements, ignore, and (per the just-shipped fix) income-kind categories
+- merchantNameExtract.ts cleanMerchant() — strips bank noise, normalizes merchant names
+- TRACKING_START constant ('2026-05-01')
+
+GOAL: build a separate behavior-facts pipeline that powers a personality-driven view of the user's spending — fun small observations a friend would notice. NOT analytics; storytelling.
+
+WORK — server side only, NO UI changes in this phase:
+
+1. CREATE artifacts/api-server/src/lib/behaviorFacts.ts. Export buildBehaviorFacts(householdId, from?, to?) returning:
+
+   {
+     range: { start, end, daysCovered, trackingStart, floorApplied },
+     
+     daysSinceLast: {
+       dining:         { days, lastDate, lastMerchant, lastAmount } | null,
+       amazon:         { days, lastDate, lastMerchant, lastAmount } | null,
+       coffee:         { days, lastDate, lastMerchant, lastAmount } | null,
+       gasStation:     { days, lastDate, lastMerchant, lastAmount } | null,
+       groceries:      { days, lastDate, lastMerchant, lastAmount } | null,
+       onlineShopping: { days, lastDate, lastMerchant, lastAmount } | null,
+     },
+     
+     // Two streak counters
+     streaks: {
+       noDining: {
+         currentDays,                    // days since last dining txn
+         longestDays,                    // longest streak observed since trackingStart
+         longestEndDate,                 // when the longest streak ended
+       },
+       coffeeFree: {
+         currentDays,                    
+         longestDays,                    
+         longestEndDate,                 
+       },
+     },
+     
+     // Six fun-fact tiles
+     funFacts: {
+       biggestSplurge: {                 // single largest real-spend txn in window
+         amount, date, merchant, categoryName
+       } | null,
+       mostVisitedMerchant: {            // merchant with highest txnCount in window (real spend only)
+         name, count, total, sampleCategoryName
+       } | null,
+       quietestDay: {                    // lowest non-zero day in dailyBuckets
+         date, total, dayOfWeek
+       } | null,
+       mostExpensiveDay: {               // highest total day in dailyBuckets
+         date, total, dayOfWeek
+       } | null,
+       impulseBuyCount: {                // count of real-spend txns < $20 NOT in Groceries/Gas/Subscriptions
+         count, total, exampleMerchants  // up to 3 sample merchant names
+       },
+       subscriptionsCount: {             // active recurring_items with frequency in (monthly, weekly, biweekly, yearly), category != debt
+         count, monthlyTotal,            // monthly cost estimate (yearly/12, weekly*4.33, biweekly*2.17)
+         topThree: [{ name, amount, frequency }]
+       },
+       nextPaycheckCountdown: {          // days until next paycheck income event
+         days, paycheckLabel, expectedAmount, expectedDate
+       } | null,
+     },
+     
+     // Two charts
+     hourlySpendingClock: [               // 24 buckets by hour of day, real spend only
+       { hour: 0..23, total, count }
+     ],
+     dayOfWeekSpend: [                    // 7 buckets, real spend only
+       { dow: 0..6, label: 'Sun'..., total, count, avgPerDay }
+     ],
+     
+     // Hall of Fame
+     hallOfFame: {
+       biggestExpense: { amount, date, merchant, categoryName } | null,   // same as biggestSplurge — alias for the bottom-of-page block
+       biggestIncome: {                                                    // largest income txn in window, EXCLUDING transfers
+         amount, date, merchant, categoryName
+       } | null,
+     },
+   }
+
+2. KEYWORD CATEGORIES — define merchant-name patterns for the daysSinceLast and impulseBuyCount logic. Lowercase substring match against cleaned merchant name:
+
+   const KEYWORD_BUCKETS = {
+     dining:         ['dunkin', 'starbucks', 'doordash', 'mooyah', 'restaurant', 'cafe', 'pizza', 'bar &', 'grill', 'taco', 'sushi', 'mcdonald', 'wendys', 'chipotle', 'panera', 'subway', 'jimmy johns', 'qdoba', 'culver', 'noodles & co'],
+     amazon:         ['amazon', 'amzn'],
+     coffee:         ['starbucks', 'dunkin', 'colectivo', 'caffe', 'coffee', 'roast'],
+     gasStation:     ['kwik trip', 'shell', 'bp', 'mobil', 'exxon', 'sunoco', 'speedway', 'gas station'],
+     groceries:      ['metro market', 'costco', 'aldi', 'walmart', 'target', 'kroger', 'whole foods', 'trader joe', 'pick n save', 'hy-vee', 'piggly wiggly'],
+     onlineShopping: ['amazon', 'amzn', 'ebay', 'etsy', 'stitch fix', 'shein', 'shopify', 'shop.', 'paypal *', 'sq *', 'tst *'],
+   }
+
+   These are heuristic. Don't claim 100% accuracy. If the category-name of the txn ALSO matches (e.g. "Dining & Coffee" or "Groceries" or "Gas, Maintenance & Parking"), prefer that as a stronger signal. Specifically:
+   - dining: match if merchant OR category name contains "dining"
+   - groceries: match if category.name === "Groceries"
+   - gasStation: match if category.name contains "gas" or "fuel"
+   - coffee: match if merchant matches AND amount < $15 (excludes a bulk Starbucks pantry order from polluting the coffee tile)
+   - amazon: merchant match only
+   - onlineShopping: merchant match only
+
+3. STREAK COMPUTATION:
+   - noDining: walk daily from trackingStart through today. For each day, was there a dining txn? Streak = consecutive days WITHOUT a dining txn. Current = streak ending today. Longest = max streak observed across the full range.
+   - coffeeFree: same logic for coffee-keyword + amount<$15 filter
+   - Both streaks measured in days, not weeks
+   - Edge case: if the user has zero dining txns in the entire range, currentDays = daysCovered, longestDays = daysCovered, longestEndDate = today
+
+4. IMPULSE BUY DEFINITION — real-spend txn where:
+   - amount magnitude is < $20.00
+   - category.name is NOT one of: 'Groceries', 'Gas, Maintenance & Parking', 'Subscriptions', 'Utilities', 'Insurance', 'Mortgage (Lakeview)', 'Car Payments'
+   - Returns count, sum of amounts, and up to 3 sample distinct merchant names from those txns
+
+5. NEXT PAYCHECK COUNTDOWN — find the soonest income event in the forecast projection (>today). Reuse cashSignal.ts expandItem / event generation OR query recurring_items where kind='income' AND active='true', compute the next occurrence after today using anchorDate + frequency. Return days-until + label + expected amount + expected date. If no income event found in next 60 days, return null.
+
+6. HOURLY SPENDING CLOCK — bucket realSpend txns by hour of occurredAt timestamp (if hour granularity is available — if transactions table only stores occurredOn DATE, fall back to 12pm noon for all txns and add a comment that this is a limitation). Returns 24 buckets [0..23] with total and count.
+
+7. HALL OF FAME biggestIncome — query income-kind transactions (category.kind = 'income') where isTransfer = false, in the date range. Largest by amount magnitude. Excludes the bogus "Online Transfer FROM Savings" txns. If no income txn, return null.
+
+8. SIGN CONVENTION — same as spendingFacts.ts. Real spend amounts are stored as positive magnitudes after normalization. Reuse spendAmount() helper from spendingFilter.ts.
+
+9. EXPOSE endpoint GET /reports/behavior-facts?from=&to= that returns buildBehaviorFacts(). Same auth pattern as /reports/spending-facts. Same date validation (reject invalid calendar dates, reversed ranges). Same trackingStart floor logic.
+
+10. EXISTING BEHAVIOR & FUN TAB FACT BUILDER — find current code powering that tab. DO NOT delete it yet; Phase 2 will swap consumer. Leave the existing tab rendering (poorly) until UI rebuild.
+
+11. CLAUDE NARRATIVE — leave the existing "What this means" advisor block in place for Phase 1. Phase 2 will rewire reportsAdvisorSummary.ts behaviorFunFacts to read from this new endpoint.
+
+VERIFY (read-only after publish):
+
+1. Hit GET /reports/behavior-facts?from=2026-05-01&to=2026-05-29 against prod. Show me the JSON response. I'm looking for:
+   - daysSinceLast.dining — sensible number, sensible last merchant (not a transfer string)
+   - daysSinceLast.amazon — should be 82 or similar (matching what current Behavior tab shows)
+   - daysSinceLast.coffee — coffee-shop visit, < $15
+   - streaks.noDining — currentDays small (you eat out often), longestDays maybe 5-7 days
+   - streaks.coffeeFree — likely smaller numbers than no-dining
+   - funFacts.biggestSplurge — REAL merchant txn, NOT "Online Transfer to SAV...". Likely Best Buy $285 or Expedia $663 or similar
+   - funFacts.mostVisitedMerchant — Kwik Trip (15 visits) or Metro Market (10 visits) per current Spending facts
+   - funFacts.quietestDay + mostExpensiveDay — real day totals, no transfer-inflated days
+   - funFacts.impulseBuyCount — count + total + 2-3 sample merchants (Dunkin, Subway, etc)
+   - funFacts.subscriptionsCount — count of active monthly recurring items not tied to debts. monthlyTotal in the $200-500 range probably
+   - funFacts.nextPaycheckCountdown — days until next KFI paycheck or Hannah's paycheck
+   - hourlySpendingClock — distribution across 24h. NO MORE 3am $190 transfer spikes
+   - dayOfWeekSpend — clean 7-day distribution
+   - hallOfFame.biggestExpense — real merchant, NOT a transfer
+   - hallOfFame.biggestIncome — real income, NOT a transfer-FROM-savings
+
+2. Hit with from=2026-01-01&to=2026-05-29 — range.floorApplied = true, start clamped to 2026-05-01.
+
+3. Confirm no UI regression on the live Behavior & Fun tab.
+
+DO NOT proceed to UI changes. Report the JSON back. We'll review, iterate the filters if any tile is off, then write Phase 2.
+
+Architect review on the new file + endpoint. Typecheck + publish.

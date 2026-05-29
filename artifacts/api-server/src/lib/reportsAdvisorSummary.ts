@@ -24,6 +24,7 @@ import { and, eq, gte, lte, sql, desc } from "drizzle-orm";
 import { logger } from "./logger";
 import { computeCashSignal } from "./cashSignal";
 import { buildAvalancheSchedule } from "./avalancheScheduler";
+import { buildSpendingFacts as buildSpendingFactsPipeline } from "./spendingFacts";
 
 const DEFAULT_MODEL = "claude-sonnet-4-5";
 const MAX_OUTPUT_TOKENS = 600;
@@ -257,65 +258,115 @@ async function buildCashFlowFacts(
 }
 
 // --- Spending tab ---------------------------------------------------------
+// (Phase 2) Reuses the deterministic Spending facts pipeline that powers
+// GET /reports/spending-facts so the narrative and the charts agree on the
+// exact same numbers (real spend excludes income/transfers/debt/reimbursement,
+// merchant names are cleaned, uncategorized backlog is surfaced separately).
+// The prompt deliberately LEADS with the uncategorized call-to-action — an
+// untagged backlog distorts every other figure — then walks the top
+// categories and the merchant patterns underneath them.
 async function buildSpendingFacts(
   householdId: string,
   p: ReportsTabParams,
 ): Promise<TabFacts> {
-  const { names, excluded } = await loadCategoryNames(householdId);
-  const txns = await loadRangeTxns(householdId, p.fromDate, p.toDate);
-  const byCat = new Map<string, number>();
-  let totalSpend = 0;
-  for (const t of txns) {
-    if (t.isTransfer) continue;
-    const a = num(t.amount);
-    if (a >= 0) continue; // spending only
-    const cid = t.categoryId ?? "uncategorized";
-    if (cid !== "uncategorized" && excluded.has(cid)) continue;
-    const spend = -a;
-    totalSpend += spend;
-    byCat.set(cid, (byCat.get(cid) ?? 0) + spend);
-  }
-  const top = [...byCat.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([cid, amt]) => ({
-      name: cid === "uncategorized" ? "Uncategorized" : names.get(cid) ?? "Unknown",
-      amount: amt,
-      share: totalSpend > 0 ? (amt / totalSpend) * 100 : 0,
-    }));
+  const f = await buildSpendingFactsPipeline(householdId, p.fromDate, p.toDate);
+
+  const realTotal = f.realSpend.total;
+  const topCats = f.byCategory
+    .filter((c) => !/uncategorized/i.test(c.name))
+    .slice(0, 5);
+  const topMerchants = f.byMerchant.slice(0, 5);
+  const hasUncat = f.uncategorized.total > 0 && f.uncategorized.transactionCount > 0;
 
   const lines: string[] = [];
-  lines.push(`Window: last ${p.rangeDays} days (${p.fromDate} to ${p.toDate})`);
-  lines.push(`Total spending (excluding transfers/ignored): ${money(totalSpend)}`);
-  lines.push("Top categories:");
-  top.forEach((c, i) =>
-    lines.push(`  ${i + 1}. ${c.name}: ${money(c.amount)} (${pct(c.share)} of spend)`),
+  lines.push(
+    `Window: ${f.range.start} to ${f.range.end} (${f.range.daysCovered} days)${f.range.floorApplied ? " — clamped to the tracking start (May 1, 2026)" : ""}`,
+  );
+  lines.push(
+    `Real spend (excludes income, transfers, debt payments, reimbursements, ignored): ${money(realTotal)} across ${f.realSpend.transactionCount} transactions`,
   );
 
-  const fallbackBullets: string[] = [];
-  fallbackBullets.push(`You spent ${money(totalSpend)} over the last ${p.rangeDays} days.`);
-  if (top[0]) {
-    fallbackBullets.push(
-      `Your biggest category is ${top[0].name} at ${money(top[0].amount)} (${pct(top[0].share)} of spend).`,
+  // LEAD with the uncategorized backlog — the single most actionable fact.
+  if (hasUncat) {
+    lines.push(
+      `UNCATEGORIZED BACKLOG (call this out first): ${money(f.uncategorized.total)} across ${f.uncategorized.transactionCount} transactions is not yet tagged, so the category picture below is incomplete until it's cleared.`,
+    );
+    if (f.uncategorized.sampleMerchants.length > 0) {
+      const samples = f.uncategorized.sampleMerchants
+        .slice(0, 3)
+        .map((m) => `${m.name} (${money(m.total)})`)
+        .join(", ");
+      lines.push(`  Largest untagged merchants: ${samples}`);
+    }
+  } else {
+    lines.push("Everything in this window is categorized — no untagged backlog.");
+  }
+
+  lines.push("Top categories (real spend only):");
+  topCats.forEach((c, i) =>
+    lines.push(
+      `  ${i + 1}. ${c.name}: ${money(c.total)} (${pct(c.pctOfRealSpend)} of real spend, ${c.txnCount} txns)`,
+    ),
+  );
+
+  if (topMerchants.length > 0) {
+    lines.push("Top merchants (cleaned names):");
+    topMerchants.forEach((m, i) =>
+      lines.push(
+        `  ${i + 1}. ${m.name}: ${money(m.total)} over ${m.count} visits${m.sampleCategoryName ? ` (usually ${m.sampleCategoryName})` : ""}`,
+      ),
     );
   }
-  if (top[1]) {
-    fallbackBullets.push(`Next up: ${top[1].name} at ${money(top[1].amount)}.`);
+
+  if (f.reimbursable.outstandingReimbursableTotal > 0) {
+    lines.push(
+      `Outstanding reimbursable on Amex: ${money(f.reimbursable.outstandingReimbursableTotal)} still owed back to the household.`,
+    );
   }
+
+  // Deterministic fallback (used when the AI call fails). Same priority:
+  // uncategorized first, then the leading category and merchant.
+  const fallbackBullets: string[] = [];
+  if (hasUncat) {
+    fallbackBullets.push(
+      `${money(f.uncategorized.total)} across ${f.uncategorized.transactionCount} transactions is still uncategorized — tag it to sharpen these numbers.`,
+    );
+  }
+  fallbackBullets.push(
+    `Real spend was ${money(realTotal)} over ${f.range.daysCovered} days.`,
+  );
+  if (topCats[0]) {
+    fallbackBullets.push(
+      `Biggest category: ${topCats[0].name} at ${money(topCats[0].total)} (${pct(topCats[0].pctOfRealSpend)} of real spend).`,
+    );
+  }
+  if (topMerchants[0]) {
+    fallbackBullets.push(
+      `Top merchant: ${topMerchants[0].name} at ${money(topMerchants[0].total)} over ${topMerchants[0].count} visits.`,
+    );
+  }
+
+  const fallbackHeadline = hasUncat
+    ? `${money(f.uncategorized.total)} is still uncategorized — clear it to trust the rest of your spending picture.`
+    : topCats[0]
+      ? `${topCats[0].name} led your spending at ${money(topCats[0].total)} over ${f.range.daysCovered} days.`
+      : `You spent ${money(realTotal)} over ${f.range.daysCovered} days.`;
 
   return {
     hashInput: {
-      from: p.fromDate,
-      to: p.toDate,
-      total: Math.round(totalSpend),
-      top: top.map((c) => [c.name, Math.round(c.amount)]),
+      from: f.range.start,
+      to: f.range.end,
+      real: Math.round(realTotal),
+      uncategorized: Math.round(f.uncategorized.total),
+      uncategorizedCount: f.uncategorized.transactionCount,
+      topCats: topCats.map((c) => [c.name, Math.round(c.total)]),
+      topMerchants: topMerchants.map((m) => [m.name, Math.round(m.total)]),
     },
     lines,
-    fallbackHeadline: top[0]
-      ? `${top[0].name} led your spending at ${money(top[0].amount)} over ${p.rangeDays} days.`
-      : `You spent ${money(totalSpend)} over the last ${p.rangeDays} days.`,
+    fallbackHeadline,
     fallbackBullets,
-    topic: "where the money went — spending by category",
+    topic:
+      "where the money went — real spending by category and merchant, plus any uncategorized backlog to clear first",
   };
 }
 

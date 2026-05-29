@@ -117,14 +117,18 @@ export async function buildSpendingFacts(
       id: budgetCategoriesTable.id,
       name: budgetCategoriesTable.name,
       debtId: budgetCategoriesTable.debtId,
+      kind: budgetCategoriesTable.kind,
     })
     .from(budgetCategoriesTable)
     .where(eq(budgetCategoriesTable.householdId, householdId));
 
-  const categoriesById = new Map<string, { name: string; debtId: string | null }>();
+  const categoriesById = new Map<
+    string,
+    { name: string; debtId: string | null; kind: string }
+  >();
   const debtCategoryIds = new Set<string>();
   for (const c of cats) {
-    categoriesById.set(c.id, { name: c.name, debtId: c.debtId });
+    categoriesById.set(c.id, { name: c.name, debtId: c.debtId, kind: c.kind });
     if (c.debtId) debtCategoryIds.add(c.id);
   }
   const ctx: SpendContext = { categoriesById, debtCategoryIds };

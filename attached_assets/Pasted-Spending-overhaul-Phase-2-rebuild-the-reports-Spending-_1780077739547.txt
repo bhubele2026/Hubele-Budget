@@ -1,0 +1,76 @@
+Spending overhaul — Phase 2: rebuild the /reports Spending tab UI on top of the clean facts pipeline from Phase 1. Two small server-side fixes layered in.
+
+CONTEXT — Phase 1 shipped clean. The new GET /reports/spending-facts endpoint returns realSpend, excluded, uncategorized, byCategory, byMerchant, dailyBuckets, dayOfWeek, monthlyTrends, reimbursable. User reviewed the JSON. Numbers are real ($17,321 realSpend May 1-29 vs the $197k illusion before). Three follow-ups identified:
+
+SERVER FIXES first — in spendingFilter.ts:
+
+1. EXCLUDE INCOME-KIND CATEGORIES from realSpend. Add to isRealSpend(): the transaction's category.kind must NOT be 'income'. The Venmo $502 / "Other Income" txn currently leaks into byCategory because it has a categoryId pointing at an income-kind category but the sign happens to look like an outflow on the source account. Same fix applies to any future Venmo / refund / cashback / bonus txns mistakenly amexed.
+
+2. SAMPLE A FEW TXNS FROM EACH excluded.ignoreTotal SOURCE — actually no, scratch that. The user IS using "Ignore" intentionally for budget-side payments. Ignore is working as designed. The fix is UI-side (hide it entirely; see below).
+
+After those fixes ship, re-pull the same endpoint and confirm:
+- byCategory no longer contains "Other Income" or any income-kind category
+- realSpend.total drops by ~$502 (the Venmo entry's amount)
+- uncategorized.total unchanged (Venmo wasn't uncategorized)
+- excluded numbers unchanged
+
+UI WORK — rebuild the Spending tab on /reports.
+
+LAYOUT TOP TO BOTTOM:
+
+1. AI summary block — STAYS where it is at the top ("What this means" Claude card). Rewire its facts source to GET /reports/spending-facts. The advisor builder (reportsAdvisorSummary.ts spendingFacts) now reads from this endpoint, not the old broken pipeline. The prompt to Claude should LEAD with uncategorized as the action item: "$X.XX (Y%) is unlabeled. Fix that and the rest of this story gets clearer." Then explain real spending patterns from byCategory and byMerchant.
+
+2. UNCATEGORIZED BANNER — new component, sits ABOVE the existing 4-tile row. Only renders if uncategorized.total > 0.
+   - Background: warning surface (var(--color-background-warning) or similar amber tint)
+   - Icon: warning / wand-2 / similar
+   - Headline: "$X.XX of your spending is uncategorized" with the dollar amount tabular
+   - Sub-line: "Y transactions · top merchants: Replit Inc, Best Buy, ..." (use uncategorized.sampleMerchants top 3)
+   - Right side: "Recategorize" button — opens the same per-bucket popover treatment used on /debrief (the recategorize-from-popover feature shipped earlier this week). The popover lists those Y uncategorized transactions with the inline CategoryPicker on each row.
+   - Once all uncategorized txns get categorized, this banner disappears.
+
+3. FOUR-TILE ROW — keep the row but REWORK the four tiles to match the new pipeline:
+   - Tile 1: TOTAL REAL SPEND → realSpend.total. Sub-line: "189 transactions, May 1–29" (transactionCount + range.start–range.end formatted).
+   - Tile 2: TOP CATEGORY → byCategory[0].name + byCategory[0].total. Sub-line: "X% of real spend". The DB "Uncategorized" category MUST NOT appear here — filter byCategory to exclude /uncategorized/i (case-insensitive name match) before picking the top. Uncategorized has its own banner above; it shouldn't double-show as the top category.
+   - Tile 3: TOP MERCHANT → byMerchant[0].name + .total. Sub-line: "N hits · sampleCategoryName" (e.g. "1 hit · Mortgage (Lakeview)"). Cleaned merchant names only.
+   - Tile 4: REIMBURSABLE OUTSTANDING → reimbursable.outstandingReimbursableTotal. Sub-line: "of $X flagged". Keep current treatment.
+
+4. TWO PIES — keep the layout shape but rewire data:
+   - Top categories pie: feed from byCategory (already excludes uncategorized per the fix above). NO MORE four-Uncategorized-rows-in-legend bug, because uncategorized literally won't appear. Show top 8 by total, then "Other" slice for the rest. Legend rendered as custom HTML (per design system) — small squares, category name + dollar amount + percentage. Sentence case labels.
+   - Reimbursable vs personal donut: feed from reimbursable. Treatment unchanged.
+
+5. SPENDING HEATMAP — feed from dailyBuckets. The bucket only has 29 days right now (May 1-29). The heatmap currently shows "last 12 weeks" — change the caption and layout to "Since tracking started — May 1, 2026" and render only the days we have data for. When data extends past 84 days (12 weeks), revert to the rolling-12-weeks view automatically. Logic: if dailyBuckets.length < 84, render all days; otherwise render last 84.
+
+6. DAY OF WEEK BAR CHART — feed from dayOfWeek. Display avgPerDay (not raw total) since we have unequal day counts across days-of-week in a partial month. Y-axis label: "Average spend per day". Highlight the highest-average day in the warning/accent color. Keep current chart treatment.
+
+7. TOP MERCHANTS BAR CHART — feed from byMerchant. NO transfer/ACH strings should appear (Phase 1 cleaned them). Show top 10. Bar labels = cleaned merchant name. Right of each bar: " · sampleCategoryName" in a smaller muted font, so each merchant carries its category context.
+
+8. CATEGORY TRENDS — replace the "last 6 months" sparkline grid. Feed from monthlyTrends.
+   - If monthlyTrends.length === 1 (we only have May), show a single-month view: "May 2026: $X across N categories" with byTopCategory rendered as a horizontal stacked bar.
+   - If monthlyTrends.length >= 6, render the sparkline grid as today.
+   - Between 1 and 6 months: render bars per month for each top category (call it "Category trends — since tracking started"). Automatically transition to sparkline-grid view once 6 months of data exists.
+
+9. HIDE IGNORE — across the entire UI:
+   - The "excluded" section from facts is NOT rendered anywhere on the page. No "Transfers excluded", no "Ignore bucket", no "Debt payments excluded". The pipeline correctly excludes them; the UI doesn't surface that fact.
+   - Internal: facts.excluded still exists in the JSON for diagnostic purposes (don't strip it from the API response), but no component reads excluded.ignoreTotal or any other excluded.* value for display.
+
+DESIGN TOUCH:
+- All four top tiles match the existing Reports tile visual (same border, padding, typography as the Debt Payoff section tiles).
+- Sub-lines on tiles render at the smaller tertiary text color.
+- The uncategorized banner is the only warning-colored element on initial render (assuming there's still uncategorized work to do).
+
+VERIFY (after publish + hard refresh on /reports → Spending tab):
+
+1. Server fix lands first: re-hit GET /reports/spending-facts?from=2026-05-01&to=2026-05-29. byCategory contains no income-kind categories ("Other Income" $502 is gone). realSpend.total is ~$502 lower than before.
+2. UI: no element on the Spending tab shows "Ignore" or "ignoreTotal" or "Transfers excluded" anywhere.
+3. Uncategorized banner renders above the tiles (since uncategorized.total > 0). Click "Recategorize" → popover with the 21 uncategorized txns + category pickers.
+4. Top Category tile shows a real category (Dining & Coffee at the top of byCategory), NOT "Uncategorized".
+5. Top Merchant tile shows "Lakeview Loan Servicing" or similar cleaned name, NOT bank string.
+6. Two pies render. No duplicate "Uncategorized" entries in the legend. Reimbursable donut renders.
+7. Heatmap renders 29 days starting May 1.
+8. Day of week chart shows avgPerDay axis, Friday or Tuesday highlighted (highest average).
+9. Top merchants chart shows cleaned merchant names with category context to the right of each bar.
+10. Category trends shows the in-between treatment (we have 1 month of data) — single-month stacked bar with top categories.
+11. AI summary at top leads with the uncategorized call-to-action.
+12. /reports other tabs (Debt Payoff, Cash Flow, Budget, Behavior & Fun) unaffected.
+
+Architect review + typecheck + publish. No new tests. Existing Anthropic infra for the Claude summary rewire.
