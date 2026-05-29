@@ -24,7 +24,7 @@ import {
 } from "@workspace/api-client-react";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import {
-  resolveBlueCashPreferredBalance,
+  resolveAmexRevolvingBalance,
   cashBufferStatusMeta,
   type CashSignalStatus,
 } from "@/lib/reportsBalances";
@@ -444,11 +444,12 @@ function ReportsBalanceTiles({
     ? `${effective.source === "plaid" ? "Plaid" : "Manual"} · ${effective.name ?? "Bank"}${effective.mask ? ` ··${effective.mask}` : ""}`
     : "No checking snapshot yet";
 
-  const blueCash = useMemo(
-    () => resolveBlueCashPreferredBalance(debts),
-    [debts],
-  );
-  const amexValue = blueCash.found ? formatCurrency(blueCash.total) : "—";
+  const amex = useMemo(() => resolveAmexRevolvingBalance(debts), [debts]);
+  const amexValue = amex.found ? formatCurrency(amex.total) : "—";
+  const amexSub =
+    amex.found && amex.availableCount === 1
+      ? "Blue Cash 1006 + Platinum 1009 (1 card unavailable)"
+      : "Blue Cash 1006 + Platinum 1009";
 
   const totalDebtValue =
     dashboard != null ? formatCurrency(dashboard.totalDebt) : "—";
@@ -476,10 +477,10 @@ function ReportsBalanceTiles({
         icon={<PiggyBank className="w-4 h-4" />}
       />
       <HeroTile
-        label="Amex (Blue Cash)"
+        label="Amex (Blue Cash + Platinum)"
         value={amexValue}
-        sub="Blue Cash Preferred 1006"
-        tone={blueCash.found && blueCash.total > 0 ? "bad" : "default"}
+        sub={amexSub}
+        tone={amex.found && amex.total > 0 ? "bad" : "default"}
         icon={<CreditCard className="w-4 h-4" />}
       />
       <HeroTile
