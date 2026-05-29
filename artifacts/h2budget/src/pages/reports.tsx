@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "wouter";
 import {
   useListTransactions,
   useListCategories,
@@ -124,6 +125,7 @@ import {
   TrendingDown,
   PiggyBank,
   CreditCard,
+  ArrowRight,
   Sparkles,
   RefreshCcw,
   Loader2,
@@ -188,6 +190,7 @@ function HeroTile({
   icon,
   delta,
   badge,
+  action,
 }: {
   label: string;
   value: string;
@@ -196,6 +199,7 @@ function HeroTile({
   icon?: React.ReactNode;
   delta?: { pct: number; goodIfUp: boolean } | null;
   badge?: string;
+  action?: { label: string; href: string };
 }) {
   const toneClass =
     tone === "good"
@@ -231,6 +235,15 @@ function HeroTile({
         </div>
         {sub && (
           <div className="text-xs text-muted-foreground mt-1">{sub}</div>
+        )}
+        {action && (
+          <Link
+            href={action.href}
+            className="text-xs font-medium text-primary hover:underline mt-1 inline-flex items-center gap-1"
+          >
+            {action.label}
+            <ArrowRight className="w-3 h-3" />
+          </Link>
         )}
         {delta && Number.isFinite(delta.pct) && (
           <div
@@ -458,7 +471,13 @@ function ReportsBalanceTiles({
     [amexCardAccounts],
   );
   const amexValue = amex.found ? formatCurrency(amex.total) : "—";
-  const amexSub = describeAmexRevolvingCards(amex);
+  // No revolving Amex card was found in the Plaid liability-account list
+  // at all (as opposed to a card being present but lacking a usable
+  // balance). Only in that empty state do we nudge the user to link one.
+  const amexNoCardLinked = !amex.blueCash.present && !amex.platinum.present;
+  const amexSub = amexNoCardLinked
+    ? "Link an Amex card to track your revolving balance"
+    : describeAmexRevolvingCards(amex);
 
   const totalDebtValue =
     dashboard != null ? formatCurrency(dashboard.totalDebt) : "—";
@@ -491,6 +510,11 @@ function ReportsBalanceTiles({
         sub={amexSub}
         tone={amex.found && amex.total > 0 ? "bad" : "default"}
         icon={<CreditCard className="w-4 h-4" />}
+        action={
+          amexNoCardLinked
+            ? { label: "Link your Amex", href: "/amex" }
+            : undefined
+        }
       />
       <HeroTile
         label="Total Debt"
