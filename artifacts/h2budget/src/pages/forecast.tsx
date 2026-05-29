@@ -959,9 +959,9 @@ export default function ForecastPage({
       const n = v ? Number(v) : NaN;
       return Number.isFinite(n) && HORIZON_OPTS.some((h) => h.days === n)
         ? n
-        : 90;
+        : 30;
     } catch {
-      return 90;
+      return 30;
     }
   });
   // (#650 follow-up) Default the chart to start at TODAY so the
