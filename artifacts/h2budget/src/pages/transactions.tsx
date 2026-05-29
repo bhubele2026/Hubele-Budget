@@ -89,7 +89,6 @@ import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { type BucketKey } from "@/components/bucket-bubbles";
 import { TransactionRowChips } from "@/components/transaction-row-chips";
 import { chaseMonthTotals } from "@/lib/chaseScope";
-import { shouldShowManualPickerOption } from "@/lib/chasePickerOptions";
 import {
   makeChaseBalanceAtEndOf,
   scopeChaseTransactions,
@@ -288,6 +287,23 @@ export default function TransactionsPage() {
 
   const bankSnapshot = forecastData?.bankSnapshot ?? null;
   const accountSnapshots = forecastData?.accountSnapshots ?? {};
+  // (#797) Scope the linked-checking list to Chase only. The forecast
+  // API's `listCheckingAccounts` filters purely by subtype/type, so any
+  // depository account from another institution (PayPal, etc.) leaks in.
+  // We match by institution name (case-insensitive "chase") here — and
+  // by Plaid's `ins_56` institution id when that field is present on the
+  // payload — so the "View account" dropdown and every account-scoping
+  // derivation below can never select or be driven by a non-Chase account.
+  const chaseOnlyPlaidCheckingAccounts = useMemo(() => {
+    const accounts = forecastData?.plaidCheckingAccounts ?? [];
+    return accounts.filter((a) => {
+      const inst = (a.institutionName ?? "").toLowerCase();
+      const instId = (
+        (a as { institution_id?: string | null }).institution_id ?? ""
+      ).toLowerCase();
+      return inst.includes("chase") || instId === "ins_56";
+    });
+  }, [forecastData?.plaidCheckingAccounts]);
   // #103 — multi-checking households: let the user pick which linked
   // checking account powers this page. The selected key is either
   // `"manual"` (transactions without a plaidAccountId) or the internal
@@ -345,21 +361,21 @@ export default function TransactionsPage() {
       bankSnapshot,
       accountSnapshots,
       selectedAccountInternalId: effectiveAccountInternalId,
-      plaidCheckingAccounts: forecastData?.plaidCheckingAccounts ?? [],
+      plaidCheckingAccounts: chaseOnlyPlaidCheckingAccounts,
     });
   }, [
     bankSnapshot,
     effectiveAccountInternalId,
     accountSnapshots,
-    forecastData?.plaidCheckingAccounts,
+    chaseOnlyPlaidCheckingAccounts,
   ]);
   const chasePlaidAccountId = useMemo(() => {
     if (!effectiveAccountInternalId) return null;
-    const acct = (forecastData?.plaidCheckingAccounts ?? []).find(
+    const acct = chaseOnlyPlaidCheckingAccounts.find(
       (a) => a.id === effectiveAccountInternalId,
     );
     return acct?.accountId ?? null;
-  }, [effectiveAccountInternalId, forecastData?.plaidCheckingAccounts]);
+  }, [effectiveAccountInternalId, chaseOnlyPlaidCheckingAccounts]);
   // (#462) Equivalent external Plaid account_ids for the selected
   // account, collapsed by (institutionName, mask). During the brief
   // mid-re-link window before `dedupePlaidAccountsForUser` collapses
@@ -371,7 +387,7 @@ export default function TransactionsPage() {
   // `amexDebt` (institution, mask) collapse from #449.
   const chasePlaidAccountIds = useMemo<Set<string> | null>(() => {
     if (chasePlaidAccountId === null) return null;
-    const accounts = forecastData?.plaidCheckingAccounts ?? [];
+    const accounts = chaseOnlyPlaidCheckingAccounts;
     const selected = accounts.find(
       (a) => a.id === effectiveAccountInternalId,
     );
@@ -394,7 +410,7 @@ export default function TransactionsPage() {
   }, [
     chasePlaidAccountId,
     effectiveAccountInternalId,
-    forecastData?.plaidCheckingAccounts,
+    chaseOnlyPlaidCheckingAccounts,
   ]);
   // The currently selected account row (if it's a Plaid account) — used
   // by the meta line under the header so the user always sees the
@@ -403,11 +419,11 @@ export default function TransactionsPage() {
   const selectedPlaidAccount = useMemo(() => {
     if (!effectiveAccountInternalId) return null;
     return (
-      (forecastData?.plaidCheckingAccounts ?? []).find(
+      chaseOnlyPlaidCheckingAccounts.find(
         (a) => a.id === effectiveAccountInternalId,
       ) ?? null
     );
-  }, [effectiveAccountInternalId, forecastData?.plaidCheckingAccounts]);
+  }, [effectiveAccountInternalId, chaseOnlyPlaidCheckingAccounts]);
 
   // Persist the picker selection so reloads / deep-links land on the
   // same account. We update both `?account=` (visible, shareable) and
@@ -442,13 +458,29 @@ export default function TransactionsPage() {
   // exists (linked bank removed, account closed), drop it back to the
   // default so the picker doesn't render an empty value.
   useEffect(() => {
-    if (!selectedAccountKey || selectedAccountKey === "manual") return;
-    const accounts = forecastData?.plaidCheckingAccounts;
-    if (!accounts) return;
-    if (!accounts.some((a) => a.id === selectedAccountKey)) {
+    if (!selectedAccountKey) return;
+    if (!forecastData?.plaidCheckingAccounts) return;
+    // (#797) Legacy "manual" selection self-heal. The "Manual entries"
+    // picker option was removed, so a persisted `manual` selection can no
+    // longer be switched away from in the UI. When the user actually has
+    // a Chase account, drop back to the default (Chase) account so they
+    // aren't stranded on a manual-only view behind a blank picker trigger.
+    // When no Chase account exists we keep `manual` — that's still the
+    // legitimate source-based fallback surface.
+    if (selectedAccountKey === "manual") {
+      if (chaseOnlyPlaidCheckingAccounts.length > 0) {
+        setSelectedAccountKey(null);
+      }
+      return;
+    }
+    if (!chaseOnlyPlaidCheckingAccounts.some((a) => a.id === selectedAccountKey)) {
       setSelectedAccountKey(null);
     }
-  }, [selectedAccountKey, forecastData?.plaidCheckingAccounts]);
+  }, [
+    selectedAccountKey,
+    forecastData?.plaidCheckingAccounts,
+    chaseOnlyPlaidCheckingAccounts,
+  ]);
 
   // Scope to the linked checking account (or manual rows when nothing linked).
   // (#443) Dedupe by Plaid transaction id (or row id) so duplicate survivor
@@ -2053,20 +2085,14 @@ export default function TransactionsPage() {
         )}
       </div>
       {(() => {
-        // (#360) Show the picker whenever there are 2+ effective views —
-        // either multiple Plaid checking accounts, or one Plaid checking
-        // account paired with a manual-entries pseudo-account. Without
-        // counting the manual option here, a single-Plaid-account user
-        // with manual rows could never switch to the Manual view.
-        const plaidCount = forecastData?.plaidCheckingAccounts?.length ?? 0;
-        const showsManual =
-          plaidCount >= 1 &&
-          shouldShowManualPickerOption({
-            transactions: transactions ?? [],
-            currentlySelected: isManualAccount,
-          });
-        const totalOptions = plaidCount + (showsManual ? 1 : 0);
-        return totalOptions > 1;
+        // (#797) Show the picker only when there are 2+ *Chase* checking
+        // accounts to switch between. When there are no Chase accounts the
+        // picker hides entirely and the page falls through to the existing
+        // source-based fallback (`isChaseFallbackSource`), which still
+        // renders Chase + manual rows. The dead "Manual entries" pseudo-
+        // account option was removed — it was leaking a non-Chase view onto
+        // the Chase page.
+        return chaseOnlyPlaidCheckingAccounts.length > 1;
       })() && (
         <div className="flex items-center gap-2" data-testid="chase-account-picker">
           <span className="text-xs text-muted-foreground">View account:</span>
@@ -2078,7 +2104,7 @@ export default function TransactionsPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent data-testid="chase-account-options">
-              {(forecastData?.plaidCheckingAccounts ?? []).map((a) => {
+              {chaseOnlyPlaidCheckingAccounts.map((a) => {
                 const name = a.institutionName ?? a.name ?? "Checking";
                 const mask = a.mask ?? null;
                 const isSnapshot = bankSnapshot?.accountId === a.id;
@@ -2094,22 +2120,6 @@ export default function TransactionsPage() {
                   </SelectItem>
                 );
               })}
-              {/* (#412) Only render the "Manual entries" pseudo-account
-                  when the user actually has manual rows (no plaidAccountId)
-                  — otherwise it's pure clutter next to the real Chase row.
-                  Always keep it visible if it's the current selection so
-                  the trigger never goes blank. */}
-              {shouldShowManualPickerOption({
-                transactions: transactions ?? [],
-                currentlySelected: isManualAccount,
-              }) && (
-                <SelectItem
-                  value="manual"
-                  data-testid="option-chase-account-manual"
-                >
-                  Manual entries
-                </SelectItem>
-              )}
             </SelectContent>
           </Select>
         </div>
