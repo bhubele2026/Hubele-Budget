@@ -1,0 +1,39 @@
+Got the diagnosis. The data is intact — no orphans, Chase is healthy, transactions all link properly. The cascade I'm seeing on /forecast traces to a single dangling pointer.
+
+ROOT CAUSE: forecast_settings.bank_snapshot_account_id is blank (NULL), but bank_snapshot_name = 'TOTAL CHECKING' and bank_snapshot_mask = '5526' tell us it should be pointing at the Chase plaid_accounts row.
+
+In artifacts/api-server/src/lib/cashSignal.ts line 478-484, configuredCheckingExternalId is derived by joining bankSnapshotAccountId → plaid_accounts.account_id (external Plaid id). When bankSnapshotAccountId is NULL, configuredCheckingExternalId becomes null, and isBankRow() at line 489-493 returns false for EVERY transaction with a plaid_account_id set. That cascades:
+- All my plaid:chase transactions get excluded from the forecast's bank-row set
+- matchedTxnBankSet (line 562) is empty for Chase rows  
+- Matched resolutions referencing real Chase txns can't dedupe via the txn-id path (line 590)
+- Planned items that DID get paid by real bank txns are NOT recognized as matched
+- They get re-projected as still-pending → past-due drag triggers
+- Forecast double-counts every recurring plan that has already cleared
+- "Chase Amazon Prime Visa minimum" shows as past-due even though it was paid
+
+FIX: One UPDATE statement to set forecast_settings.bank_snapshot_account_id to the Chase TOTAL CHECKING plaid_accounts.id.
+
+From the diagnosis you ran, the Chase TOTAL CHECKING 5526 account row exists in plaid_accounts. Find its internal uuid and set bank_snapshot_account_id to that:
+
+  UPDATE forecast_settings
+    SET bank_snapshot_account_id = (
+      SELECT pa.id
+      FROM plaid_accounts pa
+      JOIN plaid_items pi ON pi.id = pa.item_id
+      WHERE pa.household_id = 'a7182af8-49f0-48f3-920e-f916c7eab872'
+        AND pa.mask = '5526'
+        AND LOWER(pi.institution_name) LIKE '%chase%'
+      LIMIT 1
+    )
+    WHERE user_id = (SELECT owner_user_id FROM households WHERE id = 'a7182af8-49f0-48f3-920e-f916c7eab872')
+      AND bank_snapshot_account_id IS NULL;
+
+Run it as a one-shot. Don't add a code path or startup hook — just fix the row. Confirm:
+  SELECT bank_snapshot_account_id FROM forecast_settings WHERE user_id = (mine);
+  → should be a UUID, not NULL
+
+After that, hard refresh /forecast. The "Chase Amazon Prime Visa minimum" past-due notice should disappear (it's been paid, the matched-txn dedupe will now find it). The forecast trajectory should normalize.
+
+No code changes needed for this fix. Just the UPDATE.
+
+SEPARATE ISSUE — also surfaced in your diagnosis: I have two American Express items. The older one (0eE8…8 from 05-27) is stuck on ADDITIONAL_CONSENT_REQUIRED. The newer one (Ezp9…5 from 05-28) is healthy. I want to keep only the healthy one. But DO NOT touch this until the forecast fix above is verified working. We tackle one thing at a time tonight.
