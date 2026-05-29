@@ -1,0 +1,26 @@
+"Total balance — actual history" chart on /reports (Debt Payoff tab) is wrong. Line trends UP from ~$78k to ~$108k over May 3-29. Debt should trend DOWN as I pay it off. The shape suggests the chart is plotting "sum of current balances of debts that existed on each date" rather than "sum of recorded balances at each date."
+
+Examples of the bug from the screenshot:
+- May 3 → ~$78k (when Capital One Quicksilver didn't yet exist as a debt row)
+- May 11-12 → step UP to ~$108k (Capital One Quicksilver added, sum reset)
+- The steps coincide with new-debt-linking events, NOT with payment events
+
+DIAGNOSE — read-only against prod:
+
+1. Find the query that powers this chart. Likely it's in /reports endpoint, Debt Payoff tab data. Look for SQL or service code that builds the per-snapshot total debt series. Show me the actual code.
+
+2. Test the hypothesis: does the code do `SELECT SUM(current_balance) FROM debts WHERE active = true GROUP BY snapshot_date`? If so it's broken — current_balance is today's number applied to every historical date, with debts blinking into existence only on the date they were created in the db.
+
+3. The correct query should pull recorded balances from a per-debt-per-date balance history table. Does account_snapshots or debt_balance_snapshots or similar exist? If yes, the chart should be sourced from THAT. If no, we need to discuss whether to start writing one.
+
+REPORT FINDINGS — show me:
+- The current chart-feeding query
+- Whether a per-date balance history table exists in schema
+- Sample of the data: pick 2-3 debts and show their current_balance vs whatever historical record exists
+
+DO NOT FIX yet. Diagnose first. Once I see the structure, we'll decide:
+(a) Fix to source from existing snapshot history (if it exists)
+(b) Add a debt_balance_snapshots table + backfill from Plaid liabilities sync + start writing forward (if it doesn't)
+(c) Hide the chart for now until (b) lands (if no historical data exists at all and backfill isn't possible)
+
+Option (a) is best. Option (c) is acceptable short-term. Option (b) is a bigger project — we'd want to scope separately.

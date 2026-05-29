@@ -22,7 +22,7 @@ import {
   getForecastAvalancheSchedule,
   getGetForecastAvalancheScheduleQueryKey,
 } from "@workspace/api-client-react";
-import { Mountain, RefreshCw, Info } from "lucide-react";
+import { Mountain, RefreshCw, Info, ChevronDown, ChevronUp } from "lucide-react";
 
 const CONFIDENCE_META = {
   high: {
@@ -46,6 +46,7 @@ export function AvalancheScheduleCard() {
   const qc = useQueryClient();
   const { data, isLoading } = useGetForecastAvalancheSchedule();
   const [refreshing, setRefreshing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   async function handleRefresh() {
     if (refreshing) return;
@@ -145,41 +146,93 @@ export function AvalancheScheduleCard() {
 
         <Separator />
 
-        {/* Payment schedule */}
+        {/* Payment schedule (collapsed by default) */}
         {hasPayments ? (
-          <ul className="space-y-2" data-testid="list-avalanche-payments">
-            {payments.map((p, i) => {
-              const meta = CONFIDENCE_META[p.confidence];
-              const label = data.paymentsText?.[i];
-              return (
-                <li
-                  key={`${p.date}-${i}`}
-                  className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3"
-                  data-testid={`row-avalanche-payment-${i}`}
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              aria-expanded={expanded}
+              data-testid="button-toggle-avalanche-schedule"
+              className="flex w-full items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <span>
+                {payments.length} payment{payments.length === 1 ? "" : "s"}{" "}
+                totaling{" "}
+                <span className="font-semibold tabular-nums text-foreground">
+                  {formatCurrency(data.totalProposed)}
+                </span>
+              </span>
+              <span aria-hidden="true">·</span>
+              <span className="font-medium text-foreground">
+                {expanded ? "Hide schedule" : "Show schedule"}
+              </span>
+              {expanded ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </button>
+
+            {expanded && (
+              <>
+                <ul
+                  className="space-y-2"
+                  data-testid="list-avalanche-payments"
                 >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold tabular-nums">
-                        {formatCurrency(p.amount)}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDate(p.date)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {label ?? p.rationale}
-                    </div>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className={`shrink-0 text-[10px] ${meta.className}`}
-                  >
-                    {meta.label}
-                  </Badge>
-                </li>
-              );
-            })}
-          </ul>
+                  {payments.map((p, i) => {
+                    const meta = CONFIDENCE_META[p.confidence];
+                    const label = data.paymentsText?.[i];
+                    return (
+                      <li
+                        key={`${p.date}-${i}`}
+                        className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3"
+                        data-testid={`row-avalanche-payment-${i}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold tabular-nums">
+                              {formatCurrency(p.amount)}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDate(p.date)}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {label ?? p.rationale}
+                          </div>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={`shrink-0 text-[10px] ${meta.className}`}
+                        >
+                          {meta.label}
+                        </Badge>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                {/* Footer total */}
+                <Separator />
+                <div
+                  className="flex items-center justify-between text-sm"
+                  data-testid="text-avalanche-total"
+                >
+                  <span className="text-muted-foreground">
+                    Total across {payments.length} payment
+                    {payments.length === 1 ? "" : "s"}
+                    {data.scheduleThroughDate && (
+                      <> through {formatDate(data.scheduleThroughDate)}</>
+                    )}
+                  </span>
+                  <span className="font-serif font-bold tabular-nums text-primary">
+                    {formatCurrency(data.totalProposed)}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
         ) : (
           <div
             className="text-sm text-muted-foreground"
@@ -188,28 +241,6 @@ export function AvalancheScheduleCard() {
             No safe extra-payment windows over the next 12 months. Keep an eye
             on your projected balance — windows open up as bills clear.
           </div>
-        )}
-
-        {/* Footer total */}
-        {hasPayments && (
-          <>
-            <Separator />
-            <div
-              className="flex items-center justify-between text-sm"
-              data-testid="text-avalanche-total"
-            >
-              <span className="text-muted-foreground">
-                Total across {payments.length} payment
-                {payments.length === 1 ? "" : "s"}
-                {data.scheduleThroughDate && (
-                  <> through {formatDate(data.scheduleThroughDate)}</>
-                )}
-              </span>
-              <span className="font-serif font-bold tabular-nums text-primary">
-                {formatCurrency(data.totalProposed)}
-              </span>
-            </div>
-          </>
         )}
       </CardContent>
     </Card>
