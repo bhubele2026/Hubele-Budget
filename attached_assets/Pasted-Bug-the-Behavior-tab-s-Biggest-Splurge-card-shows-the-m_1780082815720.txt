@@ -1,0 +1,27 @@
+Bug: the Behavior tab's "Biggest Splurge" card shows the mortgage ($2,085.79, Lakeview Loan Servicing · Mortgage). A "splurge" should be DISCRETIONARY spend only — shopping, dining, home improvement, clothing, entertainment — never a fixed obligation (mortgage, HELOC, loan, rent, insurance, utilities, taxes, debt payments).
+
+ROOT CAUSE — artifacts/h2budget/src/lib/reportsAnalytics.ts, biggest(txns) (~line 929) scans every transaction and returns the largest negative amount with NO category awareness, so the mortgage payment wins. The card (BehaviorSection in reports.tsx, hallOfFame = biggest(txns)) renders that expense as the splurge.
+
+FIX — make the splurge consider discretionary expenses only:
+1. Build a non-discretionary exclusion at the page level (reports.tsx, where categories from useListCategories() and the existing excludeFromBudget ID set ~line 565-578 already live). A category is NON-discretionary (excluded from splurge) if ANY of:
+   - sourceKind === "auto_bills" or "auto_debts"
+   - kind === "income"
+   - excludeFromBudget === true (reuse the existing set)
+   - its name or groupName matches a fixed-obligation pattern: /mortgage|heloc|home\s*equity|\bloan\b|\brent\b|insurance|\btax(es)?\b|utilit|\bdebt\b|card\s*payment/i
+   Produce a Set<categoryId> of excluded categories.
+2. Also exclude, regardless of category: transfers (isTransfer), external card payments (isExternalCardPayment), and reimbursable rows — these aren't splurges either.
+3. Add a name backstop so an UNcategorized fixed-obligation row is still excluded: if a txn has no categoryId but its description matches the fixed-obligation regex above, exclude it.
+4. Thread this into biggest(): add an optional param isExcluded?: (t: Transaction) => boolean. When computing the biggest EXPENSE (the splurge), skip txns where isExcluded(t) is true. Leave the income side unchanged. Pass the predicate from BehaviorSection (which will need the categories/exclusion set passed down from the page — it currently only receives catNameById; add the exclusion set or the full categories as a prop).
+5. If no discretionary expense exists in the window, the Biggest Splurge card shows "—" rather than falling back to an obligation.
+
+NOTE (don't do unless I ask): the same flex-only filter could apply to "Impulse buys" / "Quietest day" if those ever pull in obligations — leave them for now, just the splurge.
+
+TESTS — reportsAnalytics.test: add a biggest() case seeding a large "Mortgage" txn (auto_bills or name-matched) + a smaller "Home Depot / clothing" discretionary txn, and assert the splurge = the discretionary one, not the mortgage; assert a transfer/card-payment is never the splurge.
+
+VERIFY (publish + hard refresh, Behavior tab on /reports):
+1. Biggest Splurge is a discretionary purchase (shopping/dining/home-improvement/etc.), NOT the mortgage, HELOC, loan, or any bill.
+2. The card's sub-line (merchant · date · category) matches that discretionary txn.
+3. If you truly had no discretionary spend, it shows "—".
+4. reportsAnalytics tests pass.
+
+Architect review (shared helper signature + component prop threading, client-only). Typecheck + publish.
