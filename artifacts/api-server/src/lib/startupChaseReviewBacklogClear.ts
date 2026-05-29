@@ -30,7 +30,7 @@ import { logger } from "./logger";
  * require `occurred_on <= today` so future-dated / pending Plaid rows
  * that haven't posted yet are never touched.
  *
- * Safety guard: if the predicate would affect >= 200 rows we bail out
+ * Safety guard: if the predicate would affect >= 400 rows we bail out
  * with a warn and skip the update — this protects against a bad predicate
  * accidentally zapping thousands of rows.
  *
@@ -43,7 +43,7 @@ import { logger } from "./logger";
  */
 const HOUSEHOLD_ID = "a7182af8-49f0-48f3-920e-f916c7eab872";
 const CHASE_CHECKING_EXTERNAL_ID = "YEvBBznkA3updAzAk7wyILEPd31z6BSQK184R";
-const SAFETY_THRESHOLD = 200;
+const SAFETY_THRESHOLD = 400;
 
 export async function runStartupChaseReviewBacklogClear(): Promise<{
   cleared: number;
