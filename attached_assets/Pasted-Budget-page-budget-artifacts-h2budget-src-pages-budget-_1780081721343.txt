@@ -1,0 +1,30 @@
+Budget page (/budget, artifacts/h2budget/src/pages/budget.tsx) — UI cleanup. Layout/visual only, no data or calc changes.
+
+PROBLEM 1 (biggest) — redundant analysis strip. The per-row strip rendered under each line (data-testid analysis-strip-${categoryId}, ~lines 2347-2410 inside BudgetLineRow) repeats "$X spent · $Y planned · Z% of plan · $W remaining/over plan" — but those four values are ALREADY the BUDGETED, ACTUAL, DIFFERENCE, and % SPENT columns in the same row's grid right above it. Pure duplication on every row.
+FIX: strip it down to ONLY the genuinely-new signal — the pace label (analysis-pace-${categoryId}: "on pace" / "6% ahead of pace" / "N% under pace"). Remove the spent / planned / % of plan / remaining-or-over spans entirely. Keep the contributingTxns.length > 0 guard so empty rows still show nothing. Result: each row shows its numbers once (columns) plus a single muted pace chip when relevant.
+- Update budgetAnalysisStrip.test.tsx: drop the assertions for /spent/, /planned/, /of plan/, /remaining/ (lines ~189-196). KEEP the analysis-pace assertions (~208-214) — pace stays.
+
+PROBLEM 2 — name-row chip clutter. Next to each category name sits a stack of mismatched chips: source breakdown (Bank · 3, Amex · 5), a Pinned pill, a "1 match" pill, an (i) info icon, and an up/down arrow — all different colors and weights, crammed together.
+FIX, reduce to a calm, consistent set:
+- Source breakdown: collapse "Bank · 3" + "Amex · 5" into ONE muted neutral chip (same gray outline for both), e.g. "Bank 3 · Amex 5" in a single pill, or two pills sharing one subtle style instead of green/blue variants. One visual weight.
+- Pinned: replace the full "Pinned" text pill with a small pin icon (lucide Pin) in the row, muted; keep its tooltip/title. Don't use amber fill.
+- "1 match": make it a small subtle icon+count (lucide Tag) or a quiet link, not a purple dashed pill.
+- The (i) info icon and the up/down arrow: move both into row-hover affordances (show on hover) or align them into a single fixed-width meta slot so they stop floating mid-row with random whitespace. The arrow should be a small inline indicator beside % Spent, not a large mid-row glyph.
+
+PROBLEM 3 — number inputs + column alignment. The Budgeted inputs show raw unformatted values ("5000", "677.4", "12000") while every other cell is formatted currency — inconsistent. And the four numeric columns don't read as a clean grid.
+FIX:
+- Right-align BUDGETED / ACTUAL / DIFFERENCE / % SPENT with tabular-nums / font-mono so decimals line up across rows.
+- The editable Budgeted input: right-align its text, show a $ prefix (or at least consistent 2-decimal display on blur), fixed width matching the column. Keep it editable, just tidy.
+
+PROBLEM 4 — summary cards (top 4: Income / Expenses / Net / % Spent). They're fine structurally but tighten: consistent label sizing, BUDGET/ACTUAL sub-columns aligned, tabular-nums on all figures. Keep the existing card component.
+
+VISUAL — use existing app tokens (shadcn Card/Badge, muted-foreground, H2 palette, formatCurrency for all displayed money). Sentence-case. No new columns, no new data, no logic changes.
+
+VERIFY (publish + hard refresh on /budget):
+1. Each line row shows its four numbers ONCE (columns) — the duplicate "$X spent · $Y planned · Z% of plan" strip is gone; only the pace chip remains when applicable.
+2. Source chips are one consistent muted style; Pinned is a small icon; "1 match" is subtle; info/arrow no longer float with stray whitespace.
+3. Budgeted inputs are right-aligned, currency-formatted, column-aligned with the other numeric columns.
+4. budgetAnalysisStrip.test passes with the trimmed assertions (pace retained).
+5. All budget values, editing, pinning, and source drill-downs behave exactly as before.
+
+Multi-part single-file visual change — light architect review. Typecheck + publish. No new tests.
