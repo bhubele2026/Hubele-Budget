@@ -707,7 +707,14 @@ function DebriefPageActive({
             </Card>
           ) : (
             <>
-              <VarianceSummaryCard snapshot={snapshot} />
+              <VarianceSummaryCard
+                snapshot={snapshot}
+                byCategory={snapshot.byCategory}
+                catNameById={catNameById}
+                catKindById={catKindById}
+                categories={categories ?? []}
+                onChangeTxnCategory={isLocked ? undefined : handleChangeTxnCategory}
+              />
 
               {isLocked && (
                 <AdvisorTakeawayCard
@@ -1025,15 +1032,185 @@ function WeekChipRow({
   );
 }
 
-function VarianceSummaryCard({ snapshot }: { snapshot: NonNullable<WeeklyDebriefDetail["varianceSnapshot"]> }) {
+// (#805) Collapsible per-category section inside the Variance-summary
+// Income/Expenses popover. Header = category name + that bucket's actual
+// total; body = the bucket's actual txns, each with an inline picker
+// (preselected to the bucket's category) when editing is enabled.
+function SummaryCategorySection({
+  bucket,
+  catNameById,
+  categories,
+  onChangeTxnCategory,
+}: {
+  bucket: WeeklyDebriefCategoryBucket;
+  catNameById: Map<string, string>;
+  categories?: { id: string; name: string }[];
+  onChangeTxnCategory?: (
+    txnId: string,
+    newCategoryId: string | null,
+    rememberPattern?: string | null,
+  ) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const name = bucket.categoryId
+    ? catNameById.get(bucket.categoryId) ?? "Uncategorized"
+    : "Uncategorized";
+  const txns = bucket.actualTxns ?? [];
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-sm hover:bg-muted/50 focus:outline-none"
+          data-testid={`summary-section-${name.replace(/\s+/g, "-").toLowerCase()}`}
+        >
+          <span className="flex min-w-0 items-center gap-1 font-medium">
+            {open ? (
+              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+            )}
+            <span className="truncate">{name}</span>
+          </span>
+          <span className="tabular-nums whitespace-nowrap">{money(bucket.actualAmount)}</span>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        {txns.map((t, i) => (
+          <ActualTxnRow
+            key={t.txnId + i}
+            txn={t}
+            categoryId={bucket.categoryId}
+            categories={categories}
+            onChangeTxnCategory={onChangeTxnCategory}
+            testIdPrefix="debrief-summary-category"
+            className="pl-7"
+          />
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+// (#805) Grouped drill-down popover for the Variance-summary Income /
+// Expenses Actual cell. Content is built client-side from the existing
+// `byCategory` buckets (filtered to this row's kind) — no server change.
+// Falls back to plain text when there is nothing to drill into.
+function SummaryActualPopover({
+  label,
+  amount,
+  buckets,
+  catNameById,
+  categories,
+  onChangeTxnCategory,
+}: {
+  label: string;
+  amount: string;
+  buckets: WeeklyDebriefCategoryBucket[];
+  catNameById: Map<string, string>;
+  categories?: { id: string; name: string }[];
+  onChangeTxnCategory?: (
+    txnId: string,
+    newCategoryId: string | null,
+    rememberPattern?: string | null,
+  ) => void;
+}) {
+  const sections = buckets.filter((b) => (b.actualTxns?.length ?? 0) > 0);
+  const clickable = Number(amount) !== 0 && sections.length > 0;
+  if (!clickable) {
+    return <div className="px-4 py-2 text-right tabular-nums">{money(amount)}</div>;
+  }
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="w-full px-4 py-2 text-right tabular-nums cursor-pointer hover:underline underline-offset-2 focus:outline-none focus:underline"
+          data-testid={`variance-summary-cell-${label.toLowerCase()}`}
+        >
+          {money(amount)}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0">
+        <div className="border-b px-3 py-2">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Actual</div>
+          <div className="text-sm font-medium">{label}</div>
+        </div>
+        <div className="max-h-64 overflow-y-auto py-1">
+          {sections.map((b) => (
+            <SummaryCategorySection
+              key={b.categoryId ?? "_"}
+              bucket={b}
+              catNameById={catNameById}
+              categories={categories}
+              onChangeTxnCategory={onChangeTxnCategory}
+            />
+          ))}
+        </div>
+        <div className="flex items-center justify-between border-t px-3 py-2 text-sm">
+          <span className="text-muted-foreground">Total</span>
+          <span className="font-medium tabular-nums">{money(amount)}</span>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function VarianceSummaryCard({
+  snapshot,
+  byCategory,
+  catNameById,
+  catKindById,
+  categories,
+  onChangeTxnCategory,
+}: {
+  snapshot: NonNullable<WeeklyDebriefDetail["varianceSnapshot"]>;
+  byCategory: WeeklyDebriefCategoryBucket[];
+  catNameById: Map<string, string>;
+  catKindById: Map<string, "income" | "expense">;
+  categories: { id: string; name: string }[];
+  // (#805) Optional — omitted on a locked week so the Income/Expenses
+  // popovers stay read-only (no inline pickers).
+  onChangeTxnCategory?: (
+    txnId: string,
+    newCategoryId: string | null,
+    rememberPattern?: string | null,
+  ) => void;
+}) {
   const t = snapshot.totals;
-  const rows: Array<{ label: string; planned: string; actual: string; variance: number; positiveIsBad: boolean }> = [
+  // (#805) Split the byCategory buckets by their category kind so the
+  // Income/Expenses popovers list the right transactions. Buckets whose
+  // categoryId is null/unknown fall back to expense semantics — matching
+  // the Category-variance table's coloring logic.
+  const incomeBuckets = useMemo(
+    () =>
+      byCategory.filter(
+        (b) => b.categoryId && catKindById.get(b.categoryId) === "income",
+      ),
+    [byCategory, catKindById],
+  );
+  const expenseBuckets = useMemo(
+    () =>
+      byCategory.filter(
+        (b) => !(b.categoryId && catKindById.get(b.categoryId) === "income"),
+      ),
+    [byCategory, catKindById],
+  );
+  const rows: Array<{
+    label: string;
+    planned: string;
+    actual: string;
+    variance: number;
+    positiveIsBad: boolean;
+    drillBuckets?: WeeklyDebriefCategoryBucket[];
+  }> = [
     {
       label: "Income",
       planned: t.plannedIncome,
       actual: t.actualIncome,
       variance: Number(t.actualIncome) - Number(t.plannedIncome),
       positiveIsBad: false,
+      drillBuckets: incomeBuckets,
     },
     {
       label: "Expenses",
@@ -1041,6 +1218,7 @@ function VarianceSummaryCard({ snapshot }: { snapshot: NonNullable<WeeklyDebrief
       actual: t.actualExpenses,
       variance: Number(t.actualExpenses) - Number(t.plannedExpenses),
       positiveIsBad: true,
+      drillBuckets: expenseBuckets,
     },
     {
       label: "Net",
@@ -1072,7 +1250,22 @@ function VarianceSummaryCard({ snapshot }: { snapshot: NonNullable<WeeklyDebrief
                 <TableRow key={r.label}>
                   <TableCell className="font-medium">{r.label}</TableCell>
                   <TableCell className="text-right tabular-nums">{money(r.planned)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{money(r.actual)}</TableCell>
+                  {/* (#805) Income/Expenses Actual cells drill into a
+                      grouped popover; Net stays plain text. */}
+                  {r.drillBuckets ? (
+                    <TableCell className="text-right tabular-nums p-0">
+                      <SummaryActualPopover
+                        label={r.label}
+                        amount={r.actual}
+                        buckets={r.drillBuckets}
+                        catNameById={catNameById}
+                        categories={categories}
+                        onChangeTxnCategory={onChangeTxnCategory}
+                      />
+                    </TableCell>
+                  ) : (
+                    <TableCell className="text-right tabular-nums">{money(r.actual)}</TableCell>
+                  )}
                   <TableCell
                     className={cn(
                       "text-right tabular-nums font-medium",
@@ -1089,6 +1282,70 @@ function VarianceSummaryCard({ snapshot }: { snapshot: NonNullable<WeeklyDebrief
         </Table>
       </CardContent>
     </Card>
+  );
+}
+
+// (#805) Shared row for an actual transaction inside a drill-down
+// popover (used by both the Category-variance popover and the new
+// Variance-summary grouped popovers). Renders the description/date/
+// amount line and, when editing is enabled, an inline CategoryPicker
+// preselected to the bucket's categoryId.
+function ActualTxnRow({
+  txn,
+  categoryId,
+  categories,
+  onChangeTxnCategory,
+  testIdPrefix,
+  className,
+}: {
+  txn: NonNullable<WeeklyDebriefCategoryBucket["actualTxns"]>[number];
+  categoryId?: string | null;
+  categories?: { id: string; name: string }[];
+  onChangeTxnCategory?: (
+    txnId: string,
+    newCategoryId: string | null,
+    rememberPattern?: string | null,
+  ) => void;
+  testIdPrefix: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn("px-3 py-1.5 text-sm", className)}>
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate font-medium">{txn.description}</div>
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span>{txn.date}</span>
+            {!txn.matchedToPlan && (
+              <Badge variant="secondary" className="h-4 px-1 text-[9px] uppercase">
+                unplanned
+              </Badge>
+            )}
+          </div>
+        </div>
+        <div className="tabular-nums whitespace-nowrap">
+          {money(Math.abs(txn.amount), { signed: false })}
+        </div>
+      </div>
+      {/* (#801/#805) Inline recategorization — same picker as /chase,
+          full category list. Initial value is the bucket's categoryId
+          (shared by every txn here). Pass through rememberPattern so the
+          next matching description auto-categorizes. Popover stays open.
+          Hidden entirely when editing is disabled (e.g. a locked week). */}
+      {categories && onChangeTxnCategory && (
+        <div className="mt-1">
+          <CategoryPicker
+            value={categoryId ?? null}
+            categories={categories}
+            description={txn.description}
+            onChange={(newId, rememberPattern) =>
+              onChangeTxnCategory(txn.txnId, newId, rememberPattern)
+            }
+            testId={`${testIdPrefix}-${txn.txnId}`}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1163,46 +1420,15 @@ function VarianceCellPopover({
                   <div className="tabular-nums whitespace-nowrap">{money(p.amount)}</div>
                 </div>
               ))
-            : actualTxns!.map((t) => (
-                <div
-                  key={t.txnId}
-                  className="px-3 py-1.5 text-sm"
-                >
-                  <div className="flex items-baseline justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="truncate font-medium">{t.description}</div>
-                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                        <span>{t.date}</span>
-                        {!t.matchedToPlan && (
-                          <Badge variant="secondary" className="h-4 px-1 text-[9px] uppercase">
-                            unplanned
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    <div className="tabular-nums whitespace-nowrap">
-                      {money(Math.abs(t.amount), { signed: false })}
-                    </div>
-                  </div>
-                  {/* (#801) Inline recategorization — same picker as
-                      /chase, full category list. Initial value is the
-                      bucket's categoryId (shared by every txn here).
-                      Pass through rememberPattern so the next matching
-                      description auto-categorizes. Popover stays open. */}
-                  {categories && onChangeTxnCategory && (
-                    <div className="mt-1">
-                      <CategoryPicker
-                        value={categoryId ?? null}
-                        categories={categories}
-                        description={t.description}
-                        onChange={(newId, rememberPattern) =>
-                          onChangeTxnCategory(t.txnId, newId, rememberPattern)
-                        }
-                        testId={`debrief-variance-category-${t.txnId}`}
-                      />
-                    </div>
-                  )}
-                </div>
+            : actualTxns!.map((t, i) => (
+                <ActualTxnRow
+                  key={t.txnId + i}
+                  txn={t}
+                  categoryId={categoryId}
+                  categories={categories}
+                  onChangeTxnCategory={onChangeTxnCategory}
+                  testIdPrefix="debrief-variance-category"
+                />
               ))}
         </div>
         <div className="flex items-center justify-between border-t px-3 py-2 text-sm">
@@ -1225,10 +1451,10 @@ function CategoryVarianceTable({
   catNameById: Map<string, string>;
   catKindById: Map<string, "income" | "expense">;
   categories: { id: string; name: string }[];
-  // (#801) Omitted when the week is locked — a locked debrief is a frozen
-  // snapshot, so recategorizing wouldn't move the buckets here even
-  // though the PATCH would succeed. Leaving it undefined keeps the
-  // popover strictly read-only on locked weeks.
+  // (#801/#805) Optional — omitted when the week is locked. A locked
+  // debrief is a frozen snapshot, so recategorizing wouldn't move the
+  // buckets even though the PATCH would succeed. Leaving it undefined
+  // hides the inline pickers and keeps the popover read-only.
   onChangeTxnCategory?: (
     txnId: string,
     newCategoryId: string | null,
