@@ -1,0 +1,17 @@
+Chase transactions page UI cleanup. The row title currently shows the raw bank description ("ORIG CO NAME:KFI STAFFING, LL CO ENTRY DESCR:PAYROLL SEC:PPD ORIG ID:874304726") and each row stacks many mismatched chips. Layout/visual only.
+
+SERVER — surface a clean display name. cleanMerchant() already exists in artifacts/api-server/src/lib/merchantNameExtract.ts but the transactions list endpoint (routes/transactions.ts) returns only the raw description. Add a derived field displayName = cleanMerchant(description) to each transaction row the list endpoint returns. Add displayName to the Transaction schema in lib/api-spec/openapi.yaml and regenerate the client so it's typed. (This same field becomes the hook point for the rename feature next.)
+
+FRONTEND — artifacts/h2budget/src/pages/transactions.tsx (and transaction-row-chips.tsx for the chip cluster):
+1. ROW TITLE: render tx.displayName as the primary title (e.g. "KFI Staffing Ll", "American Express payment"). Demote the raw description to a small muted sub-line (text-xs text-muted-foreground, truncate with title tooltip) OR hide it behind a hover/expand. The raw ACH string should never be the headline.
+2. CHIP CLUSTER: tidy the stack of Pending / Chase·Plaid / Matched-to-forecast / manually-categorized / category / Manually-set / WK·MO·UN·RE elements. Consolidate to a calm, consistent set: one source chip (Chase·Plaid or Amex), one status chip (Pending / In review / Matched), the category control, and the WK/MO/UN/RE bucket toggles. Use one consistent chip style (muted outline), not three different colors. Group them on a single wrap row with gap-1.5 so they don't crowd the title.
+3. Right-align the amount + balance, tabular-nums; keep the running "bal $X" sub-line muted.
+4. Increase row vertical padding slightly for breathing room; subtle row separators.
+
+VERIFY (publish + hard refresh on /transactions):
+1. Row titles show clean merchant names, not raw ORIG CO / ACH strings; raw is available as a muted sub-line/tooltip.
+2. Chips are one consistent style, grouped, not a rainbow stack.
+3. Amounts right-aligned; rows have breathing room.
+4. Categorize / bucket toggles / source still work; no data changes — displayName is derived, the stored description is untouched.
+
+Architect review (server field + codegen + page). Typecheck + publish. No new tests.
