@@ -229,6 +229,7 @@ export * from "./unlockWeeklyDebriefBody";
 export * from "./updatePlaidImportCutoffDate200";
 export * from "./updatePlaidImportCutoffDateBody";
 export * from "./updateTransactionResponse";
+export * from "./versionInfo";
 export * from "./weeklyBucketLabels";
 export * from "./weeklyDebriefActionsSummary";
 export * from "./weeklyDebriefAdvisorSuggestion";

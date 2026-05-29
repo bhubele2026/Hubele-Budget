@@ -9,6 +9,15 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface VersionInfo {
+  /** Per-deploy build identifier (APP_BUILD_ID env, falling back
+to the git short hash, then a shared "dev" sentinel when
+neither is available). Compared against the identifier baked
+into the loaded web bundle to detect a new deploy.
+ */
+  version: string;
+}
+
 /**
  * @nullable
  */

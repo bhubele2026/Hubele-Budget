@@ -181,6 +181,20 @@ export default function AvalanchePage() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
+  // (#823) Debt changes shift the forecast (debt minimums are bills) and
+  // the cash-signal "lowest balance" projection (the Avalanche-ready card
+  // reads it). Broadly invalidate the whole forecast namespace so every
+  // cached horizon + cash-signal refreshes after a debt mutation, matching
+  // the prefix-based invalidation used on the Forecast page.
+  const invalidateForecast = () => {
+    qc.invalidateQueries({
+      predicate: (q) => {
+        const key = q.queryKey[0];
+        return typeof key === "string" && key.startsWith("/api/forecast");
+      },
+    });
+  };
+
   const updateSettings = useUpdateAvalancheSettings({
     mutation: {
       onSuccess: () => {
@@ -216,28 +230,39 @@ export default function AvalanchePage() {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
         qc.invalidateQueries({ queryKey: getGetAvalancheExtraQueryKey() });
+        invalidateForecast();
       },
     },
   });
   const createDebt = useCreateDebt({
     mutation: {
-      onSuccess: () => qc.invalidateQueries({ queryKey: getListDebtsQueryKey() }),
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
+        invalidateForecast();
+      },
     },
   });
   const updateDebt = useUpdateDebt({
     mutation: {
-      onSuccess: () => qc.invalidateQueries({ queryKey: getListDebtsQueryKey() }),
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
+        invalidateForecast();
+      },
     },
   });
   const deleteDebt = useDeleteDebt({
     mutation: {
-      onSuccess: () => qc.invalidateQueries({ queryKey: getListDebtsQueryKey() }),
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
+        invalidateForecast();
+      },
     },
   });
   const syncMinimums = useSyncDebtMinimums({
     mutation: {
       onSuccess: (res) => {
         qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
+        invalidateForecast();
         const n = res?.updated?.length ?? 0;
         toast({
           title: n > 0 ? `Synced ${n} debt${n === 1 ? "" : "s"}` : "Already in sync",

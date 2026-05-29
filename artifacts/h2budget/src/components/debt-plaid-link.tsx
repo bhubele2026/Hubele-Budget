@@ -9,7 +9,6 @@ import {
   getListDebtsQueryKey,
   getListPlaidLiabilityAccountsQueryKey,
   getGetBillsSummaryQueryKey,
-  getGetForecastQueryKey,
   getGetDashboardQueryKey,
   listPlaidLiabilityAccounts,
 } from "@workspace/api-client-react";
@@ -274,7 +273,16 @@ export function DebtPlaidActions({ debt }: { debt: Debt }) {
   const invalidateDebtConsumers = () => {
     qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
-    qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    // (#823) Invalidate the whole forecast namespace (every horizon +
+    // the cash-signal "lowest balance" projection) rather than just the
+    // default forecast key, so a debt refresh never leaves a stale
+    // balance on a non-default horizon or the Avalanche-ready card.
+    qc.invalidateQueries({
+      predicate: (q) => {
+        const key = q.queryKey[0];
+        return typeof key === "string" && key.startsWith("/api/forecast");
+      },
+    });
     qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
   };
   const refresh = useRefreshDebtFromPlaid({
@@ -408,7 +416,14 @@ function PlaidAccountPicker({
     qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
     qc.invalidateQueries({ queryKey: getListPlaidLiabilityAccountsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
-    qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+    // (#823) Whole forecast namespace (all horizons + cash-signal), see
+    // note in invalidateDebtConsumers above.
+    qc.invalidateQueries({
+      predicate: (q) => {
+        const key = q.queryKey[0];
+        return typeof key === "string" && key.startsWith("/api/forecast");
+      },
+    });
     qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
     // The Amex Ending balance tile derives from the linked Amex debt
     // when present, so refresh its anchor query too.

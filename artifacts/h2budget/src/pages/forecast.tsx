@@ -1742,8 +1742,21 @@ export default function ForecastPage({
   }, [cleared, windowKey, mode]);
 
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
-    qc.invalidateQueries({ queryKey: getGetForecastCashSignalQueryKey() });
+    // (#823) Broadly invalidate the ENTIRE forecast namespace (the
+    // forecast bundle for every daysAhead/horizon variant, the
+    // cash-signal projection, settings, resolutions, closed months,
+    // etc.) via a predicate match on the query-key prefix rather than
+    // listing precise keys. This guarantees that after any forecast
+    // mutation — recurring-item create/update/delete, resolution
+    // upsert/delete/mark-missed/skip/match, bank-snapshot set/refresh,
+    // or a debt change — every cached horizon refreshes, so switching
+    // 30/90/120-day views never shows a stale balance.
+    qc.invalidateQueries({
+      predicate: (q) => {
+        const key = q.queryKey[0];
+        return typeof key === "string" && key.startsWith("/api/forecast");
+      },
+    });
     qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
   };
 

@@ -18,6 +18,7 @@ import { shadcn } from "@clerk/themes";
 
 import { Toaster } from "@/components/ui/toaster";
 import { PlaidReconnectListener } from "@/components/plaid-reconnect-listener";
+import { VersionUpdatePrompt } from "@/components/version-update-prompt";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
 import { ThemeProvider } from "@/hooks/use-theme";
@@ -76,6 +77,37 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// (#823) Money-sensitive, high-churn data must never go stale behind the
+// user's back — that's what made the same Jun 8 day show one balance on
+// the 30-day forecast and a different one on the 90-day view. For these
+// namespaces we override the global 5-min staleTime so the data is always
+// considered stale, refetches on every mount (so switching forecast
+// horizons / re-opening a page always pulls fresh numbers), and refetches
+// when the user tabs back to the window. `placeholderData: keepPreviousData`
+// from the root config still applies, so the previous content stays on
+// screen during the background refetch instead of skeleton-flashing.
+//
+// We scope this with setQueryDefaults by query-key prefix so LOW-churn
+// queries (categories, recurring items, debts, forecast settings, closed
+// months, etc.) keep their existing 5-min cache behavior untouched.
+const ALWAYS_FRESH = {
+  staleTime: 0,
+  refetchOnMount: "always",
+  refetchOnWindowFocus: true,
+} as const;
+
+// Forecast bundle (all daysAhead/horizon variants) + the cash-signal
+// projection that drives the "Lowest balance" numbers.
+queryClient.setQueryDefaults(["/api/forecast"], ALWAYS_FRESH);
+queryClient.setQueryDefaults(["/api/forecast/cash-signal"], ALWAYS_FRESH);
+// Transaction lists powering Chase / Amex / Debrief / Dashboard (and the
+// other transaction views) — these reflect Plaid syncs and edits that the
+// user expects to see without a manual refresh.
+queryClient.setQueryDefaults(["/api/transactions"], ALWAYS_FRESH);
+// Weekly-debrief summaries (the list of weeks). Per-week detail keys are
+// distinct strings, so those opt in via per-call overrides on /debrief.
+queryClient.setQueryDefaults(["/api/debrief/weeks"], ALWAYS_FRESH);
 
 // (#755) Expose the React Query client on `window` so end-to-end tests can
 // simulate a mid-session recovery import (insert rows into the DB out-of-
@@ -255,6 +287,10 @@ function ClerkProviderWithRoutes() {
               Settings → Recent activity row) dispatches the
               "plaid:reconnect" event for a specific itemId. */}
           <PlaidReconnectListener />
+          {/* (#823) Non-intrusive "a new version is available" banner.
+              Polls /api/version and prompts a one-click reload when a
+              new bundle has been deployed. No-op in dev. */}
+          <VersionUpdatePrompt />
         </TooltipProvider>
         </ThemeProvider>
       </QueryClientProvider>

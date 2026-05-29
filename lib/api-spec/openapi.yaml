@@ -37,6 +37,22 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/HealthStatus" }
 
+  /version:
+    get:
+      operationId: getVersion
+      tags: [health]
+      summary: |
+        Stable per-deploy build identifier. The web bundle bakes the
+        same identifier at build time; a client poller compares the two
+        and prompts the user to reload when they differ (i.e. a new
+        version has been deployed). No auth — GET only.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionInfo" }
+
   /dashboard:
     get:
       operationId: getDashboard
@@ -1985,6 +2001,18 @@ components:
       required: [status]
       properties:
         status: { type: string }
+
+    VersionInfo:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: string
+          description: |
+            Per-deploy build identifier (APP_BUILD_ID env, falling back
+            to the git short hash, then a shared "dev" sentinel when
+            neither is available). Compared against the identifier baked
+            into the loaded web bundle to detect a new deploy.
 
     Transaction:
       type: object

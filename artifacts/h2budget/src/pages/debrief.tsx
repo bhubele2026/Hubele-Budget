@@ -173,7 +173,21 @@ export default function DebriefPage() {
   }, [today]);
   const toISO = useMemo(() => fmtISO(today), [today]);
 
-  const weeksQ = useListWeeklyDebriefs({ from: fromISO, to: toISO });
+  // (#823) Always-fresh: the weeks list reflects new transactions and
+  // edits the user expects to see without a hard refresh. Refetch on
+  // mount and on window focus. (The list key shares the /api/debrief/weeks
+  // prefix, but we set it per-call here so the intent stays local.)
+  const weeksQ = useListWeeklyDebriefs(
+    { from: fromISO, to: toISO },
+    {
+      query: {
+        queryKey: getListWeeklyDebriefsQueryKey({ from: fromISO, to: toISO }),
+        staleTime: 0,
+        refetchOnMount: "always",
+        refetchOnWindowFocus: true,
+      },
+    },
+  );
   const weeks: WeeklyDebriefListItem[] = useMemo(
     () => weeksQ.data?.weeks ?? [],
     [weeksQ.data],
@@ -290,7 +304,19 @@ function DebriefPageActive({
   qc: ReturnType<typeof useQueryClient>;
   toast: ReturnType<typeof useToast>["toast"];
 }) {
-  const detailQ = useGetWeeklyDebrief(activeWeekStart);
+  // (#823) Always-fresh per-week detail. Each week's detail uses a
+  // distinct query key (/api/debrief/weeks/{weekStart}) that the
+  // /api/debrief/weeks prefix default doesn't cover, so opt in here:
+  // refetch on mount and focus so re-opening a week never shows a stale
+  // snapshot after edits/syncs.
+  const detailQ = useGetWeeklyDebrief(activeWeekStart, {
+    query: {
+      queryKey: getGetWeeklyDebriefQueryKey(activeWeekStart),
+      staleTime: 0,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+    },
+  });
   const detail: WeeklyDebriefDetail | undefined = detailQ.data;
 
   // Pull Plaid txns for this week — needed for the "Pending Bank

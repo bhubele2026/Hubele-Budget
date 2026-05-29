@@ -15,6 +15,21 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
+ * @summary Stable per-deploy build identifier. The web bundle bakes the
+same identifier at build time; a client poller compares the two
+and prompts the user to reload when they differ (i.e. a new
+version has been deployed). No auth — GET only.
+
+ */
+export const GetVersionResponse = zod.object({
+  version: zod
+    .string()
+    .describe(
+      'Per-deploy build identifier (APP_BUILD_ID env, falling back\nto the git short hash, then a shared \"dev\" sentinel when\nneither is available). Compared against the identifier baked\ninto the loaded web bundle to detect a new deploy.\n',
+    ),
+});
+
+/**
  * @summary Dashboard summary
  */
 export const GetDashboardResponse = zod.object({

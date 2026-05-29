@@ -17,6 +17,20 @@ export declare const HealthCheckResponse: zod.ZodObject<{
     status: string;
 }>;
 /**
+ * @summary Stable per-deploy build identifier. The web bundle bakes the
+same identifier at build time; a client poller compares the two
+and prompts the user to reload when they differ (i.e. a new
+version has been deployed). No auth — GET only.
+
+ */
+export declare const GetVersionResponse: zod.ZodObject<{
+    version: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    version: string;
+}, {
+    version: string;
+}>;
+/**
  * @summary Dashboard summary
  */
 export declare const GetDashboardResponse: zod.ZodObject<{
