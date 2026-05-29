@@ -284,11 +284,13 @@ describe("Budget — My budget bucket rename + reorder (#692)", () => {
     expect(updateCategoryMock).not.toHaveBeenCalled();
   });
 
-  it("never exposes rename + move controls on the bill-/debt-backed groups", () => {
+  it("never exposes the rename control on the bill-/debt-backed groups (reorder is still allowed)", () => {
     // Add an auto_bills group alongside the My budget group so we can
-    // assert the rename/reorder controls are only wired up inside the
-    // manual envelope card — the server would reject patches against
-    // auto-sourced categories, so leaking the UI there would be a bug.
+    // assert the *rename* control is only wired up inside the manual
+    // envelope card — the server rejects name patches against
+    // auto-sourced categories, so leaking the pencil there would be a
+    // bug. Reordering (move up/down) IS available on the standard
+    // groups, so those buttons are expected to render on bill rows.
     budgetMonth = {
       ...makeMyBudgetMonth(),
       groups: [
@@ -329,15 +331,17 @@ describe("Budget — My budget bucket rename + reorder (#692)", () => {
 
     renderPage();
 
-    // My budget envelopes still have the controls.
+    // My budget envelopes still have the rename + move controls.
     expect(screen.getByTestId("button-rename-cat-gifts")).toBeTruthy();
     expect(screen.getByTestId("button-move-up-cat-gifts")).toBeTruthy();
-    // The auto_bills row gets none of them — the parent never passes
-    // onRename/onMove, so the BudgetLineRow renders without those
-    // buttons regardless of who the underlying category is.
+    // The auto_bills row never gets the rename pencil — the parent only
+    // passes onRename from the My budget card, so the BudgetLineRow
+    // renders without it regardless of the underlying category.
     expect(screen.queryByTestId("button-rename-cat-power")).toBeNull();
-    expect(screen.queryByTestId("button-move-up-cat-power")).toBeNull();
-    expect(screen.queryByTestId("button-move-down-cat-power")).toBeNull();
+    // Reordering is still available on the standard groups, so the bill
+    // row keeps its move buttons (disabled here since it's the only line).
+    expect(screen.getByTestId("button-move-up-cat-power")).toBeTruthy();
+    expect(screen.getByTestId("button-move-down-cat-power")).toBeTruthy();
   });
 
   it("bumps sortOrder when neighbors are tied so an equal-sort move is observable", async () => {
@@ -414,19 +418,24 @@ describe("Budget — My budget bucket rename + reorder (#692)", () => {
   });
 
   // (#698) Confirm dialog branches for "My budget" envelope deletion.
-  // Empty envelopes use the plain "Delete this category?" prompt so the
-  // common case stays one click. Non-empty envelopes show a warning with
-  // the count and total amount about to be unlinked so the user knows
-  // their existing spending will drop off the monthly roll-up.
+  // Empty envelopes skip the prompt entirely so the common case stays one
+  // click — there's no destructive side effect to warn about. Non-empty
+  // envelopes show a warning with the count and total amount about to be
+  // uncategorized so the user knows their existing spending will drop off
+  // the monthly roll-up.
   describe("(#698) delete confirm warns when the envelope still has spending", () => {
-    it("uses the short 'Delete this category?' prompt when the envelope has no transactions this month", () => {
+    it("skips the confirm prompt and deletes straight away when the envelope has no transactions this month", () => {
       const confirmSpy = vi
         .spyOn(window, "confirm")
         .mockImplementation(() => false);
       renderPage();
       fireEvent.click(screen.getByTestId("button-delete-cat-gifts"));
-      expect(confirmSpy).toHaveBeenCalledTimes(1);
-      expect(confirmSpy.mock.calls[0]![0]).toBe("Delete this category?");
+      // Empty envelope → no prompt, the delete mutation fires directly.
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(noopMutation.mutate).toHaveBeenCalledWith(
+        { id: "cat-gifts" },
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+      );
       confirmSpy.mockRestore();
     });
 
@@ -465,7 +474,7 @@ describe("Budget — My budget bucket rename + reorder (#692)", () => {
       // Count + total surface in the prompt so the user can decide.
       expect(msg).toContain("2 transactions");
       expect(msg).toContain("$50.00");
-      expect(msg.toLowerCase()).toContain("unlinked");
+      expect(msg.toLowerCase()).toContain("uncategorized");
       confirmSpy.mockRestore();
     });
   });
