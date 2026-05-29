@@ -1,0 +1,47 @@
+Persistent UX problem: I have to hard-refresh constantly. Two distinct staleness modes — fix both.
+
+LAYER 1 — Stale JS bundle after deploys.
+
+Every time you publish, my browser keeps serving the OLD bundle from cache until I do Ctrl+Shift+R. This has bitten me on every fix shipped in the last 48 hours — I think a fix didn't work, when in reality the new JS just hasn't loaded.
+
+Add a "new version available" prompt:
+
+1. Expose a /api/version endpoint that returns the current deployed commit hash (or build timestamp — whatever is stable per deploy). Cheap, no auth needed, GET only.
+
+2. On the client, poll /api/version on a sensible cadence (every 60-120 seconds AND on window focus). Compare to the version baked into the loaded JS bundle (Vite exposes this via import.meta.env or you can stamp it via define).
+
+3. When versions don't match, show a small non-intrusive toast/banner: "A new version is available — Reload". One click triggers location.reload(). No nag, no automatic reload (the user might be mid-input).
+
+4. Dismiss state survives until the user reloads or navigates fresh.
+
+LAYER 2 — Stale React Query data, especially on the Forecast page.
+
+I just hit this: 30-day forecast view showed Lowest = -$704.87 on Jun 8. 90-day showed Lowest = +$2,130.61 on the SAME Jun 8. Hard refresh resolved it. The two daysAhead values produce separate cache entries and one was stale from before I added a one-time plan.
+
+Fix:
+
+1. On the Forecast page, invalidate ALL forecast queries (all daysAhead variants) when:
+   - Any recurring_item mutation completes (create/update/delete) — covers adding the one-time Reimbursement
+   - Any forecast_resolution mutation completes (mark missed/skipped/matched/etc.)
+   - The bank_snapshot mutation completes (refresh-from-Plaid)
+   - Any debt mutation completes
+
+   Use queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0]?.includes('forecast') }) or whatever broad match the generated client supports. Don't try to be precise — invalidate the whole forecast namespace on these mutations. The cost is one re-fetch per view switch; the benefit is correctness.
+
+2. Set sensible defaults on the QueryClient root configuration:
+   - staleTime: 0 for /api/forecast queries — always treat as stale on mount/focus (this stuff is real money, freshness matters)
+   - refetchOnWindowFocus: true for forecast and weekly-debrief queries (so tab-switch brings fresh data)
+   - refetchOnMount: 'always' for the same queries
+
+3. /chase, /amex, /debrief, /dashboard transactions queries — same staleTime: 0 treatment. The transaction list should refetch on every mount and on focus.
+
+DON'T do this for low-churn queries: categories list, recurring items list, debts (when not being mutated). Those can keep the default cache behavior — over-invalidating those just creates network spam without correctness benefit.
+
+VERIFY:
+
+1. Make a forecast change (e.g. add a one-time plan), switch between 30/90/120 day views — all show the new plan immediately. No hard refresh.
+2. On Plaid sync completing, /chase and /forecast update without manual refresh.
+3. When a deploy goes out, within ~2 min the "new version available" banner appears. Click it → app reloads on the new bundle.
+4. Old behavior preserved: low-churn data (categories) doesn't refetch on every page change.
+
+Architect review + typecheck + publish. No new tests.
