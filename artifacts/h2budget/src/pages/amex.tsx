@@ -93,10 +93,18 @@ import {
   monthFirstISO,
   monthLastISO,
   type MonthKey,
-  type TrendPoint,
+  type WindowConfig,
+  type WindowPoint,
 } from "@/components/account-page";
+import { startOfMonth, addMonths, addDays, endOfWeek } from "date-fns";
 
 const AMEX_SOURCES = ["amex", "plaid:amex"];
+
+// (#809) Earliest month the forward-looking balance window may start
+// on. The window is `max(MAY_2026, start of current month)` so it never
+// reaches back before the product's data horizon, yet rolls forward by
+// a month every time "today" crosses into a new month.
+const MAY_2026: MonthKey = { year: 2026, month: 4 };
 
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -787,8 +795,8 @@ export default function AmexPage() {
 
   // (#476) Pre-build the shared end-of-month balance closure once per
   // (anchor + transactions) change. Both the visible-month
-  // `endingBalance` tile and the 12-point `balanceTrend` chart call
-  // through this same closure so they always agree, and the same
+  // `endingBalance` tile and the forward-looking `balanceWindow` chart
+  // call through this same closure so they always agree, and the same
   // helper backs the (future) dashboard "Amex ending balance" tile.
   const balanceAtEndOf = useMemo(
     () =>
@@ -940,25 +948,91 @@ export default function AmexPage() {
     return { sourceLabel, asOfLabel, relativeAsOf, footer, tooltip };
   }, [endingBalance, isAmexSyncing]);
 
-  // Trailing 12-month ending-balance series, anchored at the snapshot
-  // month's known Amex balance and rolled month-by-month using the same
-  // shared helper that powers `endingBalance` above.
-  const balanceTrend = useMemo<TrendPoint[]>(() => {
-    if (cardScopedAnchor.anchor === null) return [];
-    const points: TrendPoint[] = [];
-    for (let i = 11; i >= 0; i--) {
-      const mk = shiftMonth(selectedMonth, -i);
-      const d = new Date(mk.year, mk.month, 1);
-      points.push({
-        key: `${mk.year}-${mk.month}`,
-        label: d.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-        shortLabel: d.toLocaleDateString("en-US", { month: "short" }),
-        balance: balanceAtEndOf(mk) ?? 0,
-        isSelected: compareMonth(mk, selectedMonth) === 0,
-      });
+  // (#809) Forward-looking ending-balance window, pinned to a fixed
+  // 12-month span that rolls forward by month. Credit-card spending
+  // isn't forecastable, so we plot only real history as it accumulates:
+  // one point per Sun–Sat week (anchored on the Saturday that closes it)
+  // from the window start through today. Weeks ending after today are
+  // omitted so the right portion of the chart stays genuinely blank —
+  // no flat carry-forward of the last value.
+  const balanceWindow = useMemo<WindowConfig | null>(() => {
+    if (cardScopedAnchor.anchor === null) return null;
+
+    // Window start = max(May 2026, start of current month). Derived from
+    // `currentMonth` (= today's month) so it advances automatically on
+    // the first of each new month.
+    const startMk =
+      compareMonth(currentMonth, MAY_2026) < 0 ? MAY_2026 : currentMonth;
+    const windowStart = startOfMonth(new Date(startMk.year, startMk.month, 1));
+    // 12-month span: window start through (start + 12 months − 1 day).
+    const windowEnd = addDays(addMonths(windowStart, 12), -1);
+
+    const monthTicks: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      monthTicks.push(addMonths(windowStart, i).getTime());
     }
-    return points;
-  }, [cardScopedAnchor.anchor, balanceAtEndOf, selectedMonth]);
+
+    const fmtMonthYear = (d: Date) =>
+      d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    const subtitle = `${fmtMonthYear(windowStart)} – ${fmtMonthYear(
+      addMonths(windowStart, 11),
+    )}`;
+
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const dayStr = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const todayDay = dayStr(now);
+
+    const series: WindowPoint[] = [];
+    // First bucket: the Saturday that closes the week containing the
+    // window start. Normalize to local midnight so its X position lines
+    // up cleanly with the month-boundary ticks/domain.
+    let sat = endOfWeek(windowStart, { weekStartsOn: 0 });
+    sat = new Date(sat.getFullYear(), sat.getMonth(), sat.getDate());
+
+    while (sat.getTime() <= windowEnd.getTime()) {
+      const satDay = dayStr(sat);
+      // Omit weeks ending after today — keep the right side blank.
+      if (satDay > todayDay) break;
+      const satMk: MonthKey = {
+        year: sat.getFullYear(),
+        month: sat.getMonth(),
+      };
+      // End-of-week balance = end of the prior month (from the shared
+      // anchored month-end helper) + this month's card-scoped
+      // transactions through the Saturday.
+      const prevMonthEnd = balanceAtEndOf(shiftMonth(satMk, -1));
+      if (prevMonthEnd === null) break;
+      let intraMonth = 0;
+      for (const t of wideAllForBalance) {
+        if (
+          compareMonth(monthKeyFromISO(t.occurredOn), satMk) === 0 &&
+          t.occurredOn.slice(0, 10) <= satDay
+        ) {
+          intraMonth += Number(t.amount) || 0;
+        }
+      }
+      series.push({
+        x: sat.getTime(),
+        balance: prevMonthEnd + intraMonth,
+        label: sat.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }),
+      });
+      sat = addDays(sat, 7);
+    }
+
+    return {
+      series,
+      domain: [windowStart.getTime(), windowEnd.getTime()],
+      monthTicks,
+      todayMs: now.getTime(),
+      subtitle,
+    };
+  }, [cardScopedAnchor.anchor, balanceAtEndOf, wideAllForBalance, currentMonth]);
 
   const knownPayers = useMemo(() => {
     const set = new Set<string>();
@@ -2053,8 +2127,8 @@ export default function AmexPage() {
       </div>
 
       <BalanceTrendChart
-        caption="Ending balance · trailing 12 months"
-        data={balanceTrend}
+        caption="Ending balance — forward 12 months"
+        window={balanceWindow ?? undefined}
         color="hsl(var(--chart-1))"
         valueLabel="Ending balance"
       />
