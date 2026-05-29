@@ -114,6 +114,7 @@ export function PlaidLinkButton({
   label,
   viewTransactionsPath = "/transactions",
   inlineProgress = true,
+  addAccountItemId,
 }: {
   onLinked?: () => void;
   /**
@@ -160,6 +161,19 @@ export function PlaidLinkButton({
    * default `true` for backward compatibility.
    */
   inlineProgress?: boolean;
+  /**
+   * (#795) When set, this button skips the fresh-OAuth flow entirely and
+   * opens Plaid Link in update-mode "add new account" against this
+   * existing healthy item row id. Used by the debt-link picker to
+   * PROACTIVELY steer a user who is adding a card at a bank they already
+   * have linked (e.g. Chase checking → Chase Prime Visa) into the
+   * existing item, instead of minting a fresh OAuth grant that — at
+   * OAuth banks like Chase — silently invalidates the prior item's
+   * session. The reactive exchange→409→add-account fallback only fires
+   * AFTER that fresh grant has already broken the first item; steering
+   * up front avoids the damage entirely.
+   */
+  addAccountItemId?: string | null;
 } = {}) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [postLinkAccounts, setPostLinkAccounts] = useState<
@@ -239,16 +253,52 @@ export function PlaidLinkButton({
     });
   }, [createLinkToken, toast]);
 
+  // (#795) Open Plaid Link directly in update-mode add-account against an
+  // existing healthy item. Mirrors the reactive add-account fallback in
+  // onSuccess.onError, but is initiated UP FRONT by the debt-link picker
+  // so the fresh OAuth grant that would invalidate the prior item never
+  // happens in the first place.
+  const requestAddAccountLinkToken = useCallback(
+    (itemRowId: string) => {
+      createAddAccountLinkToken.mutate(
+        { data: { itemId: itemRowId } },
+        {
+          onSuccess: (data) => setLinkToken(data.linkToken),
+          onError: (err) => {
+            toast({
+              title: "Could not start Plaid Link",
+              description: String(err),
+              variant: "destructive",
+            });
+          },
+        },
+      );
+    },
+    [createAddAccountLinkToken, toast],
+  );
+
   // (#706) Intercept the fresh-link click when an existing item needs
   // reauth — show the guard dialog so the user is steered into update
   // mode for the dead item before spawning a duplicate.
   const fetchToken = useCallback(() => {
+    // (#795) Explicit add-account mode wins — the caller already knows
+    // exactly which existing item this account belongs to, so there's no
+    // fresh OAuth grant to guard against.
+    if (addAccountItemId) {
+      requestAddAccountLinkToken(addAccountItemId);
+      return;
+    }
     if (itemsNeedingReauth.length > 0) {
       setReauthGuardOpen(true);
       return;
     }
     requestFreshLinkToken();
-  }, [itemsNeedingReauth.length, requestFreshLinkToken]);
+  }, [
+    addAccountItemId,
+    requestAddAccountLinkToken,
+    itemsNeedingReauth.length,
+    requestFreshLinkToken,
+  ]);
 
   const proceedWithFreshLink = useCallback(() => {
     setReauthGuardOpen(false);
@@ -637,7 +687,10 @@ export function PlaidLinkButton({
     onExitPropRef.current?.();
   }, []);
 
-  const busy = createLinkToken.isPending || exchange.isPending;
+  const busy =
+    createLinkToken.isPending ||
+    createAddAccountLinkToken.isPending ||
+    exchange.isPending;
   // Disable Link Bank when the API reports Plaid isn't configured (or the
   // server reported a config error like a missing/invalid PLAID_ENV) so
   // the user gets a clear, immediate signal instead of a runtime failure

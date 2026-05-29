@@ -6,6 +6,8 @@ import {
   useUnlinkDebtFromPlaid,
   useRefreshDebtFromPlaid,
   useCreateDebtFromPlaidAccount,
+  useListPlaidItems,
+  getListPlaidItemsQueryKey,
   getListDebtsQueryKey,
   getListPlaidLiabilityAccountsQueryKey,
   getGetBillsSummaryQueryKey,
@@ -13,7 +15,11 @@ import {
   getGetDashboardQueryKey,
   listPlaidLiabilityAccounts,
 } from "@workspace/api-client-react";
-import type { Debt, PlaidLiabilityAccount } from "@workspace/api-client-react";
+import type {
+  Debt,
+  PlaidLiabilityAccount,
+  PlaidItemDetail,
+} from "@workspace/api-client-react";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +39,7 @@ import {
 import {
   PlaidReconnectButton,
   isPlaidReauthCode,
+  isSyntheticPlaidItem,
   plaidReauthReason,
 } from "@/components/plaid-reconnect-button";
 import { formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
@@ -397,6 +404,37 @@ function PlaidAccountPicker({
   const accounts = useListPlaidLiabilityAccounts(undefined, {
     query: { enabled: open, queryKey: getListPlaidLiabilityAccountsQueryKey() },
   });
+  // (#795) Existing Plaid items, used to PROACTIVELY detect when this
+  // debt's institution is already linked and healthy. If so, we steer
+  // the user into Plaid's update-mode "add new account" flow against the
+  // existing item instead of a fresh OAuth grant — which at OAuth banks
+  // like Chase silently invalidates the prior item's session.
+  const plaidItems = useListPlaidItems({
+    query: { enabled: open, queryKey: getListPlaidItemsQueryKey() },
+  });
+  // (#795) The healthy existing item whose institution matches this
+  // debt's name (e.g. a "Chase Prime Visa" debt matching the user's
+  // existing healthy "Chase" item that holds their checking account).
+  // "Healthy" mirrors the server-side dup-guard: a real (non-synthetic)
+  // item with no outstanding sync error code. We never steer toward an
+  // item that needs reconnecting — that's the reauth flow's job.
+  const matchedHealthyItem: PlaidItemDetail | null = useMemo(() => {
+    const list = plaidItems.data ?? [];
+    return (
+      list.find(
+        (it) =>
+          !isSyntheticPlaidItem(it) &&
+          !it.lastSyncErrorCode &&
+          isInstitutionMatch(
+            debt.name,
+            it.institutionName ?? null,
+            it.institutionSlug ?? null,
+          ),
+      ) ?? null
+    );
+  }, [plaidItems.data, debt.name]);
+  const matchedInstLabel =
+    matchedHealthyItem?.institutionName?.trim() || "your bank";
   // (#44) Shared invalidator — every consumer (Avalanche debts list,
   // Bills summary, Forecast, Dashboard, Amex anchor tile, the picker
   // itself) needs to refetch when a debt appears or its Plaid link
@@ -558,9 +596,38 @@ function PlaidAccountPicker({
               Loading accounts…
             </div>
           ) : items.length === 0 ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">
-              No linked Plaid accounts look like debts. Link a bank or card
-              first.
+            <div
+              className="py-6 px-3 text-center text-sm space-y-3"
+              data-testid={`text-debt-picker-empty-${debt.id}`}
+            >
+              {matchedHealthyItem ? (
+                // (#795) The user has no debt-like Plaid accounts yet,
+                // but DOES have a healthy item at this debt's bank (e.g.
+                // Chase checking). Steer them into add-account mode so
+                // the new card joins that existing connection instead of
+                // a fresh OAuth grant that would break the first item.
+                <>
+                  <p className="text-muted-foreground">
+                    You already have {matchedInstLabel} linked. Add{" "}
+                    {debt.name} to that connection to keep its history and
+                    login.
+                  </p>
+                  <div className="flex justify-center">
+                    <PlaidLinkButton
+                      label={`Add ${debt.name} to ${matchedInstLabel}`}
+                      addAccountItemId={matchedHealthyItem.id}
+                      onLinked={handlePlaidLinked}
+                      onOpen={handlePlaidOpen}
+                      onExit={handlePlaidExit}
+                    />
+                  </div>
+                </>
+              ) : (
+                <p className="text-muted-foreground">
+                  No linked Plaid accounts look like debts. Link a bank or
+                  card first.
+                </p>
+              )}
             </div>
           ) : matchedItems.length === 0 && !showAllAccounts ? (
             // (#link-button-bug) Existing linked accounts are present
@@ -577,16 +644,30 @@ function PlaidAccountPicker({
               data-testid={`text-debt-picker-no-matches-${debt.id}`}
             >
               <p className="text-muted-foreground">
-                None of your linked accounts look like {debt.name}. Link a new
-                bank or card to continue.
+                {matchedHealthyItem
+                  ? `You already have ${matchedInstLabel} linked. Add ${debt.name} to that connection to keep its history and login.`
+                  : `None of your linked accounts look like ${debt.name}. Link a new bank or card to continue.`}
               </p>
               <div className="flex justify-center">
-                <PlaidLinkButton
-                  label={`Link a bank for ${debt.name}`}
-                  onLinked={handlePlaidLinked}
-                  onOpen={handlePlaidOpen}
-                  onExit={handlePlaidExit}
-                />
+                {matchedHealthyItem ? (
+                  // (#795) Proactive add-account steer — the new card
+                  // joins the existing healthy item instead of a fresh
+                  // OAuth grant that would invalidate it.
+                  <PlaidLinkButton
+                    label={`Add ${debt.name} to ${matchedInstLabel}`}
+                    addAccountItemId={matchedHealthyItem.id}
+                    onLinked={handlePlaidLinked}
+                    onOpen={handlePlaidOpen}
+                    onExit={handlePlaidExit}
+                  />
+                ) : (
+                  <PlaidLinkButton
+                    label={`Link a bank for ${debt.name}`}
+                    onLinked={handlePlaidLinked}
+                    onOpen={handlePlaidOpen}
+                    onExit={handlePlaidExit}
+                  />
+                )}
               </div>
               <button
                 type="button"

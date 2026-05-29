@@ -64,6 +64,10 @@ vi.mock("@workspace/api-client-react", () => ({
   // post-link-progress tests below don't trip the guard.
   useListPlaidItems: () => ({ data: [], isFetched: true }),
   useCreatePlaidLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreatePlaidAddAccountLinkToken: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
   useExchangePlaidPublicToken: () => ({
     mutate: (
       _vars: unknown,
