@@ -1,0 +1,26 @@
+Diagnosis confirmed and fix is correct. But neither option you proposed is right:
+
+- Option A (use POST /forecast/bank-snapshot) also re-pulls the live balance and overwrites bank_snapshot_balance / bank_snapshot_at. I don't want that — the current snapshot fields are correct ($2,000 / 05-28 22:13), only the account_id pointer is missing. Touching the other fields invites another bug.
+
+- Option B (run SQL against prod) requires me to have direct prod DB access, which I don't.
+
+Option C — what we've done many times in this project (Delta Gold recovery, weekly_debriefs backfill, pinned cleanup, last night's cleanup hook): write a one-shot startup hook that runs exactly the UPDATE you wrote, gated to my household, idempotent, and ships via Publish. Add it under artifacts/api-server/src/lib/, wire into the boot sequence in index.ts. Then I publish, it runs once, you verify the row updated by reading prod, and we remove the hook in a follow-up.
+
+Specifically:
+1. New file artifacts/api-server/src/lib/startupBankSnapshotPointerRepair.ts that does:
+   UPDATE forecast_settings
+     SET bank_snapshot_account_id = '9ab57174-3dc4-4c63-bdda-349b95c98330'
+     WHERE user_id = (SELECT owner_user_id FROM households WHERE id = 'a7182af8-49f0-48f3-920e-f916c7eab872')
+       AND bank_snapshot_account_id IS NULL;
+   
+   Idempotent: subsequent runs match nothing (the IS NULL clause stops re-applying after first success).
+
+2. Wire it into the boot sequence in index.ts, same pattern as runStartupAccountSnapshotsRepair and runStartupCardPaymentReclassify.
+
+3. Architect review on the small change, typecheck, suggest Publish.
+
+4. After I click Publish, you read prod and verify the bank_snapshot_account_id is now set.
+
+5. Once verified, propose a follow-up PR to remove the hook (cleanup), but don't deploy that yet — same pattern as the other one-shot hooks that have stayed in the codebase as no-ops.
+
+Don't touch Amex yet. Forecast pointer first, verify it works (forecast trajectory normalizes, Chase Amazon Prime Visa past-due banner disappears on /forecast). Then we look at the Amex duplicate.

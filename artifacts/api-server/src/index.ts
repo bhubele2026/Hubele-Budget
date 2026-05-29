@@ -14,6 +14,7 @@ import { maybeAlertOnSiblingCleanup } from "./lib/plaidMalformedSiblingCleanupAl
 import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
+import { runStartupBankSnapshotPointerRepair } from "./lib/startupBankSnapshotPointerRepair";
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
 import { runStartupPendingNotesBackfill } from "./lib/startupPendingNotesBackfill";
 import "./lib/advisorReadTools";
@@ -132,6 +133,22 @@ app.listen(port, (err) => {
     })
     .catch((err) => {
       logger.error({ err }, "Startup accountSnapshots repair sweep failed");
+    });
+
+  // One-shot startup pass: repair a single household's NULL
+  // `forecast_settings.bank_snapshot_account_id` pointer (the snapshot
+  // balance/name/mask are already correct — only the account_id link is
+  // missing, which breaks `cashSignal.ts`'s isBankRow() matching and
+  // mis-flags paid recurring items as past-due on /forecast). Touches
+  // only the pointer column, never the balance fields. Idempotent — the
+  // IS NULL guard makes converged DBs a no-op. Best-effort: never blocks
+  // boot.
+  runStartupBankSnapshotPointerRepair()
+    .then((summary) => {
+      logger.info(summary, "Startup bank-snapshot pointer repair complete");
+    })
+    .catch((err) => {
+      logger.error({ err }, "Startup bank-snapshot pointer repair failed");
     });
 
   // (#632) One-shot per-startup sweep: clean up existing transactions
