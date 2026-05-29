@@ -1,0 +1,18 @@
+Debrief page (/debrief) — the "Category variance" table is showing ONLY a "Planned" column. In the current codebase, CategoryVarianceTable (artifacts/h2budget/src/pages/debrief.tsx ~line 1469) already renders Planned + Actual + Δ columns, with:
+- the Planned cell drilling into plannedItems (what's planned), and
+- the Actual cell drilling into actualTxns with an INLINE recategorize picker (VarianceCellPopover, same picker as /chase, with "remember pattern"), wired to handleChangeTxnCategory which invalidates debrief + transactions + forecast on success.
+That is exactly the "see what's planned, see the actuals, and recat the one-offs that are wrong" ask — so it's already built, just not visible in Brad's deployed build (deployed /debrief predates the #805 drill-down + #801 inline-recat work; this is a stale-deploy case, not a new feature).
+
+STEP 0 — diagnose, report before changing anything: pull up debrief.tsx as currently DEPLOYED and confirm whether CategoryVarianceTable still renders a single "Planned" column (old version) vs the Planned/Actual/Δ version above. Tell me which is deployed. Most likely the fix is simply to rebuild/redeploy so the current code (with Actual + Δ + drill-down + inline recat) ships. If the working tree already has the 3-column version, the only action is publish.
+
+IF (and only if) the current code truly lacks it, implement to match the spec above — but verify first; I expect it's already there.
+
+ONCE IT'S LIVE, confirm the behavior end-to-end:
+1. The Category variance table shows Planned, Actual, and Δ columns (Δ colored: income positive = green, expense overspend = red).
+2. Clicking a category's Actual cell opens a popover listing that category's actual transactions for the week.
+3. Each transaction in that popover has a category picker; changing it recategorizes the txn (same as /chase), and the table + Δ repaint without a manual reload. A "remember pattern" option is offered.
+4. The Planned cell drills into the planned items composing the planned amount.
+5. On a LOCKED week the pickers are correctly hidden/read-only (recat can't move a frozen snapshot) — that's intended, not a bug. Confirm an in-progress (unlocked) week shows the editable pickers.
+6. Spot-check the arrow's row: Groceries — Planned $300 should now show its Actual + the actual grocery txns, and a mis-bucketed one-off (e.g. a non-grocery charge) can be recategorized out right there.
+
+No schema/endpoint/codegen changes expected (server already returns plannedItems + actualTxns + plannedAmount/actualAmount/varianceAmount per bucket). Light architect review only if Step 0 finds the code genuinely lacks the columns. Typecheck + publish. No new tests.
