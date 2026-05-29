@@ -15,6 +15,7 @@ import {
   Menu,
   Inbox,
   CalendarCheck,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -37,6 +38,7 @@ const navItems = [
   { name: "Avalanche", href: "/avalanche", icon: Flame },
   { name: "Bills", href: "/bills", icon: CalendarDays },
   { name: "Budget", href: "/budget", icon: PieChart },
+  { name: "Allowances", href: "/allowances", icon: Wallet },
   { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Mapping Rules", href: "/mapping-rules", icon: GitMerge },
   { name: "Settings", href: "/settings", icon: Settings },

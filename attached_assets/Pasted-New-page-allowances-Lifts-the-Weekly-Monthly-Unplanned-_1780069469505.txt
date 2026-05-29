@@ -1,0 +1,52 @@
+New page: /allowances. Lifts the Weekly / Monthly / Unplanned tracking out of Dashboard and gives it a dedicated home where weekly and monthly spend can be reviewed in detail with drill-down per bucket.
+
+CONTEXT — verified in code:
+
+Transactions have boolean bucket flags: `weeklyAllowance`, `monthlyAllowance`, `unplannedAllowance`, `reimbursable` (artifacts/h2budget/src/components/bucket-bubbles.tsx, BucketKey type). The WK/MO/UN bubbles on /chase and /amex toggle these. Dashboard currently shows totals — but it's at-a-glance, not review-the-week detail.
+
+I want a real review surface. New page at /allowances.
+
+NAV: Add "Allowances" item to the left sidebar (same component as Dashboard / Forecast / Review / Debrief / Chase / Amex / Debts / Avalanche / Bills / Budget / Reports / Mapping Rules / Settings). Place it between Budget and Reports, or wherever fits the flow. Use lucide Wallet or Coins icon — match the existing style.
+
+PAGE LAYOUT:
+
+1. Header: "Allowances" / "Weekly, monthly, and unplanned spend — reviewed."
+
+2. Time-range selector at top: "Week of May 24–30, 2026" / "Month of May 2026" + prev/next chevrons to look back. Two tabs above the chevrons: WEEK / MONTH. Default to WEEK / current week on first load.
+
+3. Below the selector: THREE bucket summary cards in a row, one each for Weekly, Monthly, Unplanned. Each card shows:
+   - Bucket name (e.g. "Weekly allowance")
+   - Big number: actual spend in this period
+   - Sub-line: planned allowance for this period
+   - Variance: actual − planned, color-coded (under = green, over = red)
+   - Mini progress bar: actual vs planned
+
+4. Below the cards: an expandable list of transactions belonging to those buckets for the period, grouped by bucket and by category (for the Weekly bucket which has sub-buckets — Groceries / Dining / Entertainment / Misc per the existing TransactionWeeklyBucket enum). Click a category row to expand and see the actual transactions that rolled into it (description, date, amount).
+
+   Default state: all bucket groups collapsed. Click to expand. Match the Variance Summary popover treatment from /debrief — same visual language.
+
+5. Below the transaction breakdown: a small "Over/under summary" block. Plain text. "This week you came in $42 under your $300 weekly allowance" etc. No AI yet — just deterministic text.
+
+LOOK-BACK: when user clicks back-chevron, page loads previous week (or previous month if in MONTH tab). Locked weeks read from the existing weeklyDebriefs table render the locked snapshot's totals; non-locked weeks compute live.
+
+DATA SOURCES — reuse what exists:
+
+- The weekly planned allowance and monthly planned allowance amounts come from recurring_items (look for items tagged with kind = "expense" and the weekly/monthly cadence, or — more likely — from forecast_settings.weeklyAllowance / monthlyAllowance if they exist as user-configured fields. If not, sum the right recurring_items.).
+- Actual spend for the period: sum transactions where the respective bucket flag = true and occurred_on falls in the window, with sign convention matching the rest of the app.
+- For per-category drill-down within the Weekly bucket: group by transactionWeeklyBucket (the existing sub-classifier — Groceries / Dining / Entertainment / Misc).
+
+DON'T BREAK DASHBOARD: keep the Dashboard tiles for Weekly/Monthly as they are for now. We'll retire them in Play B (the Dashboard/Reports merge). For this task, just stand up the new /allowances page in parallel.
+
+VERIFY:
+
+1. /allowances loads, shows current week WEEK tab by default
+2. Three bucket cards display actual + planned + variance for current week
+3. Toggle to MONTH tab → cards repopulate with month-scoped numbers
+4. Click a bucket card → its category breakdown expands (Weekly bucket shows the 4 sub-categories)
+5. Click a category row → transactions list expands inline
+6. Prev/next chevrons navigate weeks (in WEEK tab) or months (in MONTH tab)
+7. Locked weeks render their locked snapshot
+8. Sidebar "Allowances" link appears between Budget and Reports
+9. Dashboard's existing weekly/monthly tiles still work — no regression there
+
+Architect review + typecheck + publish. No new tests.

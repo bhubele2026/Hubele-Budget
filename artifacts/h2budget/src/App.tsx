@@ -31,6 +31,7 @@ import AmexPage from "./pages/amex";
 import TransactionsPage from "./pages/transactions";
 import BillsPage from "./pages/bills";
 import BudgetPage from "./pages/budget";
+import AllowancesPage from "./pages/allowances";
 import MappingRulesPage from "./pages/mapping-rules";
 import DebriefPage from "./pages/debrief";
 import SettingsPage from "./pages/settings";
@@ -169,6 +170,7 @@ function ProtectedShell() {
               <Redirect to="/bills" />
             </Route>
             <Route path="/budget" component={BudgetPage} />
+            <Route path="/allowances" component={AllowancesPage} />
             <Route path="/mapping-rules" component={MappingRulesPage} />
             <Route path="/settings" component={SettingsPage} />
             <Route path="/plaid-oauth" component={PlaidOAuthPage} />
