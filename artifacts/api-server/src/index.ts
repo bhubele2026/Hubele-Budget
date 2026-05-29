@@ -16,6 +16,7 @@ import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
 import { runStartupBankSnapshotPointerRepair } from "./lib/startupBankSnapshotPointerRepair";
 import { runStartupChaseForecastFlagRepair } from "./lib/startupChaseForecastFlagRepair";
+import { runStartupChaseReviewBacklogClear } from "./lib/startupChaseReviewBacklogClear";
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
 import { runStartupPendingNotesBackfill } from "./lib/startupPendingNotesBackfill";
 import "./lib/advisorReadTools";
@@ -167,6 +168,26 @@ app.listen(port, (err) => {
     })
     .catch((err) => {
       logger.error({ err }, "Startup Chase forecast-flag repair failed");
+    });
+
+  // (#812) One-shot startup pass: clear the Chase "Review Bucket"
+  // backlog. After the forecast-flag repair above back-filled ~113
+  // already-categorized Chase checking rows into the Review queue, the
+  // user wants them out without reviewing each one. This flips
+  // forecast_flag=false on the genuinely-stuck backlog (forecast_flag=true,
+  // occurred_on <= today, no terminal forecast_resolutions row — the same
+  // predicate the awaiting-match chip uses), dropping them from the
+  // Debrief/Review pipeline while leaving the rows, categorization, and
+  // budget actuals intact. sentToReviewAt is deliberately untouched. A
+  // >=200-row safety guard skips the update if the predicate is too broad.
+  // Idempotent: flipped rows no longer match, and new Plaid syncs still
+  // insert with forecast_flag=true. Best-effort: never blocks boot.
+  runStartupChaseReviewBacklogClear()
+    .then((summary) => {
+      logger.info(summary, "Startup Chase review-backlog clear complete");
+    })
+    .catch((err) => {
+      logger.error({ err }, "Startup Chase review-backlog clear failed");
     });
 
   // (#632) One-shot per-startup sweep: clean up existing transactions
