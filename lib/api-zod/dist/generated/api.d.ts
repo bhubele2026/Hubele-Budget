@@ -6662,6 +6662,561 @@ export declare const GetReportsBehaviorFactsResponse: zod.ZodObject<{
         } | null;
     };
 }>;
+/**
+ * Returns deterministic, class-aware Budget facts (range, income, bills,
+debts, flex with pace/projection/burndown, and a trailing streak board)
+for the Reports Budget tab. Every line is classified into
+income/debt/bill/flex and judged on its own axis. `monthStart` is
+optional (defaults to the current month's first day; normalized to the
+first of its month and clamped to the 2026-04-01 floor). `monthsBack`
+controls the streak-board window (default 6, clamped 1..12).
+
+ * @summary Clean class-aware Budget facts for the Reports Budget tab
+ */
+export declare const GetReportsBudgetFactsQueryParams: zod.ZodObject<{
+    monthStart: zod.ZodOptional<zod.ZodString>;
+    monthsBack: zod.ZodOptional<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    monthStart?: string | undefined;
+    monthsBack?: number | undefined;
+}, {
+    monthStart?: string | undefined;
+    monthsBack?: number | undefined;
+}>;
+export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
+    range: zod.ZodObject<{
+        monthStart: zod.ZodString;
+        monthEnd: zod.ZodString;
+        daysInMonth: zod.ZodNumber;
+        daysElapsed: zod.ZodNumber;
+        monthHasPassed: zod.ZodBoolean;
+        monthLabel: zod.ZodString;
+        monthsBack: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        monthStart: string;
+        monthsBack: number;
+        monthEnd: string;
+        daysInMonth: number;
+        daysElapsed: number;
+        monthHasPassed: boolean;
+        monthLabel: string;
+    }, {
+        monthStart: string;
+        monthsBack: number;
+        monthEnd: string;
+        daysInMonth: number;
+        daysElapsed: number;
+        monthHasPassed: boolean;
+        monthLabel: string;
+    }>;
+    income: zod.ZodObject<{
+        paidCount: zod.ZodNumber;
+        totalCount: zod.ZodNumber;
+        lines: zod.ZodArray<zod.ZodObject<{
+            categoryId: zod.ZodString;
+            name: zod.ZodString;
+            class: zod.ZodEnum<["income", "debt", "bill", "flex"]>;
+            planned: zod.ZodNumber;
+            actual: zod.ZodNumber;
+            pct: zod.ZodNumber;
+            status: zod.ZodEnum<["good", "watch", "miss"]>;
+        }, "strip", zod.ZodTypeAny, {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }, {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }[];
+        paidCount: number;
+        totalCount: number;
+    }, {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }[];
+        paidCount: number;
+        totalCount: number;
+    }>;
+    bills: zod.ZodObject<{
+        paidCount: zod.ZodNumber;
+        totalCount: zod.ZodNumber;
+        lines: zod.ZodArray<zod.ZodObject<{
+            categoryId: zod.ZodString;
+            name: zod.ZodString;
+            class: zod.ZodEnum<["income", "debt", "bill", "flex"]>;
+            planned: zod.ZodNumber;
+            actual: zod.ZodNumber;
+            pct: zod.ZodNumber;
+            status: zod.ZodEnum<["good", "watch", "miss"]>;
+        }, "strip", zod.ZodTypeAny, {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }, {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }[];
+        paidCount: number;
+        totalCount: number;
+    }, {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }[];
+        paidCount: number;
+        totalCount: number;
+    }>;
+    debts: zod.ZodObject<{
+        paidCount: zod.ZodNumber;
+        totalCount: zod.ZodNumber;
+        lines: zod.ZodArray<zod.ZodObject<{
+            categoryId: zod.ZodString;
+            name: zod.ZodString;
+            class: zod.ZodEnum<["income", "debt", "bill", "flex"]>;
+            planned: zod.ZodNumber;
+            actual: zod.ZodNumber;
+            pct: zod.ZodNumber;
+            status: zod.ZodEnum<["good", "watch", "miss"]>;
+        }, "strip", zod.ZodTypeAny, {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }, {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }[];
+        paidCount: number;
+        totalCount: number;
+    }, {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }[];
+        paidCount: number;
+        totalCount: number;
+    }>;
+    flex: zod.ZodObject<{
+        paidCount: zod.ZodNumber;
+        totalCount: zod.ZodNumber;
+        lines: zod.ZodArray<zod.ZodObject<{
+            categoryId: zod.ZodString;
+            name: zod.ZodString;
+            class: zod.ZodEnum<["income", "debt", "bill", "flex"]>;
+            planned: zod.ZodNumber;
+            actual: zod.ZodNumber;
+            pct: zod.ZodNumber;
+            status: zod.ZodEnum<["good", "watch", "miss"]>;
+            unbudgeted: zod.ZodBoolean;
+        }, "strip", zod.ZodTypeAny, {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+            unbudgeted: boolean;
+        }, {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+            unbudgeted: boolean;
+        }>, "many">;
+        plannedTotal: zod.ZodNumber;
+        actualTotal: zod.ZodNumber;
+        pacePlanToDate: zod.ZodNumber;
+        paceStatus: zod.ZodEnum<["under", "on_track", "over"]>;
+        projectedMonthEnd: zod.ZodNumber;
+        projectedVsPlan: zod.ZodNumber;
+        burndown: zod.ZodArray<zod.ZodObject<{
+            day: zod.ZodNumber;
+            date: zod.ZodString;
+            plannedCumulative: zod.ZodNumber;
+            actualCumulative: zod.ZodNullable<zod.ZodNumber>;
+        }, "strip", zod.ZodTypeAny, {
+            date: string;
+            day: number;
+            plannedCumulative: number;
+            actualCumulative: number | null;
+        }, {
+            date: string;
+            day: number;
+            plannedCumulative: number;
+            actualCumulative: number | null;
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+            unbudgeted: boolean;
+        }[];
+        plannedTotal: number;
+        actualTotal: number;
+        paidCount: number;
+        totalCount: number;
+        pacePlanToDate: number;
+        paceStatus: "under" | "on_track" | "over";
+        projectedMonthEnd: number;
+        projectedVsPlan: number;
+        burndown: {
+            date: string;
+            day: number;
+            plannedCumulative: number;
+            actualCumulative: number | null;
+        }[];
+    }, {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+            unbudgeted: boolean;
+        }[];
+        plannedTotal: number;
+        actualTotal: number;
+        paidCount: number;
+        totalCount: number;
+        pacePlanToDate: number;
+        paceStatus: "under" | "on_track" | "over";
+        projectedMonthEnd: number;
+        projectedVsPlan: number;
+        burndown: {
+            date: string;
+            day: number;
+            plannedCumulative: number;
+            actualCumulative: number | null;
+        }[];
+    }>;
+    streak: zod.ZodObject<{
+        monthKeys: zod.ZodArray<zod.ZodString, "many">;
+        rows: zod.ZodArray<zod.ZodObject<{
+            categoryId: zod.ZodString;
+            name: zod.ZodString;
+            class: zod.ZodEnum<["income", "debt", "bill", "flex"]>;
+            currentStreakGood: zod.ZodNumber;
+            longestStreakGood: zod.ZodNumber;
+            cells: zod.ZodArray<zod.ZodUnion<[zod.ZodObject<{
+                status: zod.ZodEnum<["good", "watch", "miss"]>;
+                pct: zod.ZodNumber;
+            }, "strip", zod.ZodTypeAny, {
+                status: "good" | "watch" | "miss";
+                pct: number;
+            }, {
+                status: "good" | "watch" | "miss";
+                pct: number;
+            }>, zod.ZodNull]>, "many">;
+        }, "strip", zod.ZodTypeAny, {
+            categoryId: string;
+            name: string;
+            class: "income" | "debt" | "bill" | "flex";
+            currentStreakGood: number;
+            longestStreakGood: number;
+            cells: ({
+                status: "good" | "watch" | "miss";
+                pct: number;
+            } | null)[];
+        }, {
+            categoryId: string;
+            name: string;
+            class: "income" | "debt" | "bill" | "flex";
+            currentStreakGood: number;
+            longestStreakGood: number;
+            cells: ({
+                status: "good" | "watch" | "miss";
+                pct: number;
+            } | null)[];
+        }>, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        monthKeys: string[];
+        rows: {
+            categoryId: string;
+            name: string;
+            class: "income" | "debt" | "bill" | "flex";
+            currentStreakGood: number;
+            longestStreakGood: number;
+            cells: ({
+                status: "good" | "watch" | "miss";
+                pct: number;
+            } | null)[];
+        }[];
+    }, {
+        monthKeys: string[];
+        rows: {
+            categoryId: string;
+            name: string;
+            class: "income" | "debt" | "bill" | "flex";
+            currentStreakGood: number;
+            longestStreakGood: number;
+            cells: ({
+                status: "good" | "watch" | "miss";
+                pct: number;
+            } | null)[];
+        }[];
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    income: {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }[];
+        paidCount: number;
+        totalCount: number;
+    };
+    bills: {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }[];
+        paidCount: number;
+        totalCount: number;
+    };
+    range: {
+        monthStart: string;
+        monthsBack: number;
+        monthEnd: string;
+        daysInMonth: number;
+        daysElapsed: number;
+        monthHasPassed: boolean;
+        monthLabel: string;
+    };
+    flex: {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+            unbudgeted: boolean;
+        }[];
+        plannedTotal: number;
+        actualTotal: number;
+        paidCount: number;
+        totalCount: number;
+        pacePlanToDate: number;
+        paceStatus: "under" | "on_track" | "over";
+        projectedMonthEnd: number;
+        projectedVsPlan: number;
+        burndown: {
+            date: string;
+            day: number;
+            plannedCumulative: number;
+            actualCumulative: number | null;
+        }[];
+    };
+    debts: {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }[];
+        paidCount: number;
+        totalCount: number;
+    };
+    streak: {
+        monthKeys: string[];
+        rows: {
+            categoryId: string;
+            name: string;
+            class: "income" | "debt" | "bill" | "flex";
+            currentStreakGood: number;
+            longestStreakGood: number;
+            cells: ({
+                status: "good" | "watch" | "miss";
+                pct: number;
+            } | null)[];
+        }[];
+    };
+}, {
+    income: {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }[];
+        paidCount: number;
+        totalCount: number;
+    };
+    bills: {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }[];
+        paidCount: number;
+        totalCount: number;
+    };
+    range: {
+        monthStart: string;
+        monthsBack: number;
+        monthEnd: string;
+        daysInMonth: number;
+        daysElapsed: number;
+        monthHasPassed: boolean;
+        monthLabel: string;
+    };
+    flex: {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+            unbudgeted: boolean;
+        }[];
+        plannedTotal: number;
+        actualTotal: number;
+        paidCount: number;
+        totalCount: number;
+        pacePlanToDate: number;
+        paceStatus: "under" | "on_track" | "over";
+        projectedMonthEnd: number;
+        projectedVsPlan: number;
+        burndown: {
+            date: string;
+            day: number;
+            plannedCumulative: number;
+            actualCumulative: number | null;
+        }[];
+    };
+    debts: {
+        lines: {
+            status: "good" | "watch" | "miss";
+            categoryId: string;
+            name: string;
+            actual: number;
+            planned: number;
+            class: "income" | "debt" | "bill" | "flex";
+            pct: number;
+        }[];
+        paidCount: number;
+        totalCount: number;
+    };
+    streak: {
+        monthKeys: string[];
+        rows: {
+            categoryId: string;
+            name: string;
+            class: "income" | "debt" | "bill" | "flex";
+            currentStreakGood: number;
+            longestStreakGood: number;
+            cells: ({
+                status: "good" | "watch" | "miss";
+                pct: number;
+            } | null)[];
+        }[];
+    };
+}>;
 export declare const CloseForecastMonthBody: zod.ZodObject<{
     monthKey: zod.ZodString;
     gap: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
@@ -11329,18 +11884,18 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         income: string;
         bills: string;
         net: string;
+        monthEnd: string;
         debtMin: string;
         totalOutflow: string;
-        monthEnd: string;
     }, {
         active: number;
         monthStart: string;
         income: string;
         bills: string;
         net: string;
+        monthEnd: string;
         debtMin: string;
         totalOutflow: string;
-        monthEnd: string;
     }>;
 }, "strip", zod.ZodTypeAny, {
     income: {
@@ -11395,9 +11950,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         income: string;
         bills: string;
         net: string;
+        monthEnd: string;
         debtMin: string;
         totalOutflow: string;
-        monthEnd: string;
     };
 }, {
     income: {
@@ -11452,9 +12007,9 @@ export declare const GetBillsSummaryResponse: zod.ZodObject<{
         income: string;
         bills: string;
         net: string;
+        monthEnd: string;
         debtMin: string;
         totalOutflow: string;
-        monthEnd: string;
     };
 }>;
 export declare const ImportWorkbookBody: zod.ZodObject<{

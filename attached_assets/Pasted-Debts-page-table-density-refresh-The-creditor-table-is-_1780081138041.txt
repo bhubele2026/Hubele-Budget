@@ -1,0 +1,37 @@
+Debts page — table density refresh. The creditor table is cramped: most cells stack 2-3 elements (amount + PLAID/MANUAL chip + "synced 57m ago" + a colored dot), creditor names wrap to two lines, the DUE pill wraps into an awkward blob, and the right-side action cluster (Pay + refresh + unlink + edit + sometimes Link) is crowded. No data or logic changes — this is layout/visual only. Find the current Debts table component (likely artifacts/h2budget/src/pages/debts.tsx or a debts table component it renders).
+
+GOAL — give every row room to breathe by demoting repeated metadata to one place per row, not repeating it in every cell.
+
+1. SOURCE CHIPS — stop repeating PLAID/MANUAL in the APR, BALANCE, and MIN cells. A debt has ONE source. Show it once: a single small muted chip (or a colored dot with a tooltip) in the creditor cell, or as a tiny right-aligned tag on the row. Remove the per-cell "• PLAID" / "• MANUAL" duplicates from the numeric columns entirely. The numeric cells should show just the number.
+
+2. SYNC TIME — "synced 57m ago" should not occupy a line inside the BALANCE cell. Move it to the creditor sub-line (muted, 12px) or into a tooltip on the source chip. Balance cell = the dollar figure only.
+
+3. CREDITOR CELL — keep the name on a SINGLE line; truncate with ellipsis + title tooltip if long (so "PayPal Credit (Hannah) / Synchrony" and "Menards Big Card (Cap One)" stop wrapping to two lines). Below the name, one muted sub-line carrying the de-noised account ref — show just "•• 0257", drop the redundant "Capital One · credit Account 0257" (the institution can be a tiny chip or omitted). The Target badge stays inline before the name.
+
+4. TYPE COLUMN — it's "—" for almost every row (only loans show "Loan"). Drop the standalone TYPE column and fold the type into the creditor sub-line for loans only ("Loan · 18.00% APR" style) OR keep a very narrow icon. Reclaim that horizontal space for the cells that need it.
+
+5. DUE — replace the wrapping circular blob with a clean single-line pill (rounded-full, px-2 py-0.5, tabular-nums): "16d", "6d", "today". Color by urgency only: green ≥14d, amber 3-13d, red ≤2d / today / overdue. Header "Due". Right- or center-align consistently.
+
+6. APR CELL — number on one line; drop the tiny stacked colored dot. If APR is manually entered vs synced, that's covered by the single row-level source chip from step 1 — don't re-encode it here.
+
+7. ACTION CLUSTER — Pay stays as the one primary button. Collapse the secondary icons (refresh/sync, unlink, edit) into a single kebab "⋯" overflow menu, OR if kept inline, give them gap-2 spacing and a fixed-width action column so rows align. The "Link" button (unlinked debts) takes the slot where the sync/unlink icons would be — keep that swap, just give it consistent width.
+
+8. DAILY $ — header on one line ("Daily $"), right-aligned, tabular-nums. Tighten its column width.
+
+9. ROW RHYTHM — increase vertical row padding (roughly py-3 → py-4), add a subtle row separator or hover background for scannability, right-align all numeric columns (APR, Balance, Min, Daily $) with tabular-nums so decimals line up. Consistent column widths across rows.
+
+10. The little progress ring/dot at the far left of each creditor stays — just ensure it's vertically centered with the single-line name.
+
+VISUAL — match existing app tokens (shadcn table, muted-foreground for sub-lines, existing badge/pill components, H2 palette for due colors). Sentence-case any labels. No new columns, no new data.
+
+VERIFY (publish + hard refresh on /debts):
+1. No creditor name wraps to two lines at normal widths; long names truncate with tooltip.
+2. PLAID/MANUAL appears once per row, not in three cells.
+3. "synced 57m ago" is no longer inside the balance cell.
+4. DUE pills are single-line ("16d"/"today"), colored by urgency, not wrapping blobs.
+5. TYPE column gone (or folded into loan sub-line); table feels less cramped.
+6. Numeric columns right-aligned with aligned decimals; Daily $ header on one line.
+7. Action icons either in a kebab menu or evenly spaced in a fixed-width column; Pay still primary; Link still swaps in for unlinked debts.
+8. All debt values, sort order, sync/pay/link behavior unchanged — purely visual.
+
+Single-file (or table-component) visual change — light architect review if it spans more than the one component. Typecheck + publish. No new tests.

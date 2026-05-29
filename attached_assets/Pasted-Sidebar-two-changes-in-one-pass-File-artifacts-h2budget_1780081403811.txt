@@ -1,0 +1,31 @@
+Sidebar — two changes in one pass. File: artifacts/h2budget/src/components/layout.tsx. Layout/visual only, no routing or data changes.
+
+CHANGE 1 — reorder nav. In the navItems array (~line 30), move the Debts entry { name: "Debts", href: "/debts", icon: CreditCard } so it sits immediately after Budget and before Mapping Rules. New order:
+Reports, Allowances, Forecast, Review, Debrief, Chase, American Express, Avalanche, Bills, Budget, Debts, Mapping Rules, Settings.
+Same entries, hrefs, icons — just the reorder. (American Express and Debts both use the CreditCard icon; leave both.)
+
+CHANGE 2 — make the desktop sidebar collapsible to an icon rail. The desktop sidebar is the <aside className="hidden md:flex w-64 ..."> rendering <SidebarContents>. Mobile uses a Sheet — leave mobile entirely as-is (always full width, no collapse). Desktop-only.
+
+Add collapsed state in AppLayout, persisted to localStorage (real Vite app — localStorage is fine):
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("h2:sidebar-collapsed") === "1"; } catch { return false; } });
+  const toggleCollapsed = () => setCollapsed((c) => { const next = !c; try { localStorage.setItem("h2:sidebar-collapsed", next ? "1" : "0"); } catch {} return next; });
+- Desktop aside: change `w-64` to `collapsed ? "w-16" : "w-64"`, add `transition-[width] duration-200 ease-in-out`.
+- Pass collapsed={collapsed} and onToggleCollapse={toggleCollapsed} into the DESKTOP <SidebarContents> only. The mobile Sheet's <SidebarContents> gets neither (stays expanded).
+
+Update SidebarContents to accept optional collapsed?: boolean and onToggleCollapse?: () => void. When collapsed:
+1. HEADER (px-5 py-4 logo block): hide the "H2 Budget / Family finance" text column, show just H2Logo centered, reduce horizontal padding to fit the w-16 rail.
+2. TOGGLE: add a ghost icon Button calling onToggleCollapse — lucide PanelLeftClose (expanded → collapse) / PanelLeftOpen (collapsed → expand), add both to the lucide-react import. Right side of header when expanded, centered below logo when collapsed. aria-label "Collapse sidebar" / "Expand sidebar". Only render when onToggleCollapse is provided (desktop only).
+3. NAV ITEMS: when collapsed, hide the label span (<span className="flex-1">{item.name}</span>), center the icon (justify-center, px-0), and add title={item.name} to the row so hover shows the name (avoids a new tooltip dep; if a shadcn Tooltip is already used in the app, prefer that). Keep the active-state highlight on the icon.
+4. BADGES when collapsed: the numeric review/debrief Badge won't fit — replace it with a small dot (w-2 h-2 rounded-full bg-amber-400, positioned top-right of the icon) so pending items still show. Keep the full numeric Badge when expanded. Preserve the existing data-testid on whichever element carries the indicator.
+5. FOOTER (Account row): when collapsed, hide the "Account" text, stack/center ThemeToggle + UserButton vertically.
+Expanded mode renders exactly as it does today.
+
+VERIFY (publish + hard refresh):
+1. Debts sits directly under Budget in the sidebar; /debts still routes.
+2. Desktop sidebar has a collapse toggle; collapsing narrows it to an icon rail with centered icons, hidden labels, logo-only header, hover tooltips show names.
+3. Review/Debrief show a dot when collapsed, full count when expanded.
+4. Collapsed state persists across reloads (localStorage).
+5. Width change animates; main content reflows.
+6. Mobile sheet nav unchanged.
+
+Single file but non-trivial (state + props + conditional rendering + persistence) — light architect review. Typecheck + publish. No new tests.

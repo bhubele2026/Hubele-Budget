@@ -1,0 +1,1 @@
+{"version":3,"file":"budgetFactsRange.d.ts","sourceRoot":"","sources":["../../../src/generated/types/budgetFactsRange.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,MAAM,gBAAgB,GAAG;IAC7B,UAAU,EAAE,MAAM,CAAC;IACnB,QAAQ,EAAE,MAAM,CAAC;IACjB,WAAW,EAAE,MAAM,CAAC;IACpB,WAAW,EAAE,MAAM,CAAC;IACpB,cAAc,EAAE,OAAO,CAAC;IACxB,UAAU,EAAE,MAAM,CAAC;IACnB,UAAU,EAAE,MAAM,CAAC;CACpB,CAAC"}

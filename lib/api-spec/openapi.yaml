@@ -1223,6 +1223,35 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BehaviorFacts" }
 
+  /reports/budget-facts:
+    get:
+      operationId: getReportsBudgetFacts
+      tags: [reports]
+      summary: Clean class-aware Budget facts for the Reports Budget tab
+      description: |
+        Returns deterministic, class-aware Budget facts (range, income, bills,
+        debts, flex with pace/projection/burndown, and a trailing streak board)
+        for the Reports Budget tab. Every line is classified into
+        income/debt/bill/flex and judged on its own axis. `monthStart` is
+        optional (defaults to the current month's first day; normalized to the
+        first of its month and clamped to the 2026-04-01 floor). `monthsBack`
+        controls the streak-board window (default 6, clamped 1..12).
+      parameters:
+        - in: query
+          name: monthStart
+          description: First day of the budget month (YYYY-MM-DD). Defaults to the current month.
+          schema: { type: string }
+        - in: query
+          name: monthsBack
+          description: Streak-board window in months (default 6, clamped 1..12).
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BudgetFacts" }
+
   /forecast/closed-months:
     post:
       operationId: closeForecastMonth
@@ -3827,6 +3856,143 @@ components:
           properties:
             personalTotal: { type: number }
             outstandingReimbursableTotal: { type: number }
+
+    BudgetLineFact:
+      type: object
+      required: [categoryId, name, class, planned, actual, pct, status]
+      properties:
+        categoryId: { type: string }
+        name: { type: string }
+        class: { type: string, enum: [income, debt, bill, flex] }
+        planned: { type: number }
+        actual: { type: number }
+        pct: { type: number }
+        status: { type: string, enum: [good, watch, miss] }
+
+    FlexLineFact:
+      type: object
+      required:
+        [categoryId, name, class, planned, actual, pct, status, unbudgeted]
+      properties:
+        categoryId: { type: string }
+        name: { type: string }
+        class: { type: string, enum: [income, debt, bill, flex] }
+        planned: { type: number }
+        actual: { type: number }
+        pct: { type: number }
+        status: { type: string, enum: [good, watch, miss] }
+        unbudgeted: { type: boolean }
+
+    BudgetClassSection:
+      type: object
+      required: [paidCount, totalCount, lines]
+      properties:
+        paidCount: { type: integer }
+        totalCount: { type: integer }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/BudgetLineFact" }
+
+    BudgetFlexSection:
+      type: object
+      required:
+        [
+          paidCount,
+          totalCount,
+          lines,
+          plannedTotal,
+          actualTotal,
+          pacePlanToDate,
+          paceStatus,
+          projectedMonthEnd,
+          projectedVsPlan,
+          burndown,
+        ]
+      properties:
+        paidCount: { type: integer }
+        totalCount: { type: integer }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/FlexLineFact" }
+        plannedTotal: { type: number }
+        actualTotal: { type: number }
+        pacePlanToDate: { type: number }
+        paceStatus: { type: string, enum: [under, on_track, over] }
+        projectedMonthEnd: { type: number }
+        projectedVsPlan: { type: number }
+        burndown:
+          type: array
+          items:
+            type: object
+            required: [day, date, plannedCumulative, actualCumulative]
+            properties:
+              day: { type: integer }
+              date: { type: string }
+              plannedCumulative: { type: number }
+              actualCumulative: { type: ["number", "null"] }
+
+    BudgetStreakCell:
+      type: object
+      required: [status, pct]
+      properties:
+        status: { type: string, enum: [good, watch, miss] }
+        pct: { type: number }
+
+    BudgetStreakRow:
+      type: object
+      required:
+        [categoryId, name, class, currentStreakGood, longestStreakGood, cells]
+      properties:
+        categoryId: { type: string }
+        name: { type: string }
+        class: { type: string, enum: [income, debt, bill, flex] }
+        currentStreakGood: { type: integer }
+        longestStreakGood: { type: integer }
+        cells:
+          type: array
+          items:
+            oneOf:
+              - { $ref: "#/components/schemas/BudgetStreakCell" }
+              - { type: "null" }
+
+    BudgetFacts:
+      type: object
+      required: [range, income, bills, debts, flex, streak]
+      properties:
+        range:
+          type: object
+          required:
+            [
+              monthStart,
+              monthEnd,
+              daysInMonth,
+              daysElapsed,
+              monthHasPassed,
+              monthLabel,
+              monthsBack,
+            ]
+          properties:
+            monthStart: { type: string }
+            monthEnd: { type: string }
+            daysInMonth: { type: integer }
+            daysElapsed: { type: integer }
+            monthHasPassed: { type: boolean }
+            monthLabel: { type: string }
+            monthsBack: { type: integer }
+        income: { $ref: "#/components/schemas/BudgetClassSection" }
+        bills: { $ref: "#/components/schemas/BudgetClassSection" }
+        debts: { $ref: "#/components/schemas/BudgetClassSection" }
+        flex: { $ref: "#/components/schemas/BudgetFlexSection" }
+        streak:
+          type: object
+          required: [monthKeys, rows]
+          properties:
+            monthKeys:
+              type: array
+              items: { type: string }
+            rows:
+              type: array
+              items: { $ref: "#/components/schemas/BudgetStreakRow" }
 
     BehaviorFacts:
       type: object

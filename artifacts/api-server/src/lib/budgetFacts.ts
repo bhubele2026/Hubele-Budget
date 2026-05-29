@@ -83,13 +83,18 @@ export interface BudgetFlexSection {
   }[];
 }
 
+export interface BudgetStreakCell {
+  status: LineStatus;
+  pct: number;
+}
+
 export interface BudgetStreakRow {
   categoryId: string;
   name: string;
   class: BudgetLineClass;
   currentStreakGood: number;
   longestStreakGood: number;
-  cells: (LineStatus | null)[];
+  cells: (BudgetStreakCell | null)[];
 }
 
 export interface BudgetFacts {
@@ -505,14 +510,16 @@ export async function buildBudgetFacts(
     const meta = categoriesById.get(catId);
     if (!meta) continue;
     const cls = classifyBudgetLine(meta);
-    const cells: (LineStatus | null)[] = perMonth.map(
-      (byCat) => byCat.get(catId)?.status ?? null,
-    );
+    const cells: (BudgetStreakCell | null)[] = perMonth.map((byCat) => {
+      const jl = byCat.get(catId);
+      if (!jl) return null;
+      return { status: jl.status, pct: pctWhole(jl.actual, jl.planned) };
+    });
 
     let longest = 0;
     let run = 0;
     for (const c of cells) {
-      if (c === "good") {
+      if (c?.status === "good") {
         run += 1;
         if (run > longest) longest = run;
       } else {
@@ -521,7 +528,7 @@ export async function buildBudgetFacts(
     }
     let current = 0;
     for (let i = cells.length - 1; i >= 0; i -= 1) {
-      if (cells[i] === "good") current += 1;
+      if (cells[i]?.status === "good") current += 1;
       else break;
     }
 

@@ -1,0 +1,61 @@
+Budget tab — Phase 2: rebuild the UI on the clean budgetFacts pipeline from Phase 1, and rewire the Claude summary. Replace the single-% framing everywhere.
+
+CONTEXT — Phase 1 shipped GET /reports/budget-facts. It returns class-aware facts: range, income{plannedTotal, actualTotal, progressPct, lines[]}, bills{plannedTotal, actualTotal, paidCount, totalCount, lines[]}, debts{same shape}, flex{plannedTotal, actualTotal, pacePlanToDate, paceStatus, projectedMonthEnd, projectedVsPlan, lines[](w/ unbudgeted flag, sorted by pct desc), burndown[]}, streak{monthKeys[], rows[](categoryId, name, class, cells[]|null aligned to monthKeys, currentStreakGood, longestStreakGood)}. Every line carries status "good"|"watch"|"miss" from judgeLine, class-aware. The current Budget tab UI (BudgetSection in artifacts/h2budget/src/pages/reports.tsx, ~lines 1914-2191) still renders the OLD client-side reportsAnalytics functions (budgetVariance, budgetBurndown, perCategoryBurndown, budgetConsistencyHeatmap) on one shared % axis — replace it entirely.
+
+STEP 0 — codegen guard. Confirm /reports/budget-facts + the BudgetFacts schema are in lib/api-spec/openapi.yaml (operationId getReportsBudgetFacts, params monthStart + monthsBack, mirror the /reports/spending-facts entry). If missing, add them, then regenerate the client so these exist in @workspace/api-client-react: useGetReportsBudgetFacts, getReportsBudgetFacts, getGetReportsBudgetFactsQueryKey, GetReportsBudgetFactsParams, and the BudgetFacts type tree. The UI below depends on the typed hook — do not hand-roll a fetch.
+
+DATA WIRING — BudgetSection takes monthStart + monthOffset + setMonthOffset only now. Drop the budget/budgetTimeline/monthKeys/txns/today props — all of that comes from the endpoint. Fetch with useGetReportsBudgetFacts({ monthStart: budgetMonthStart, monthsBack: 6 }). Loading state: "Reading your budget…" like AdvisorSummaryCard. The month selector (This month / Last month / 2-3 months ago) still drives budgetMonthStart → re-fetches.
+
+LAYOUT TOP TO BOTTOM on /reports → Budget tab:
+
+1. AI summary block — STAYS at top (AdvisorSummaryCard tab="budget"). Rewire its facts in reportsAdvisorSummary.ts: buildBudgetFacts should consume the buildBudgetFacts pipeline from budgetFacts.ts (import it; don't recompute actuals inline). New prompt tone — a friend checking in, class-aware, NEVER calls income or a paid bill "over budget": "Brad — N of M paychecks landed (~$X in). Mortgage and N other bills are paid. Day-to-day spending is $X of $Y, pacing {under/over} — {top flex category} is the one running hot at Z% of plan." 3-5 sentences, real numbers only, no invented values. Keep the same Anthropic infra (claude-sonnet-4-5, 12s timeout, 3-layer fallback). Fallback headline should also be class-aware: lead with income + bills status, then the single hottest flex overrun — never "over budget by $23k" (that number was income-polluted).
+
+2. SectionHeader — keep "Plan vs. reality" eyebrow/title; blurb stays.
+
+3. Month selector — unchanged.
+
+4. TOP TILES — 3 tiles (HeroTile), each its OWN story and OWN color logic. DROP "Categories tracked".
+   - MONEY IN → income.actualTotal. Sub: "N of M paychecks landed · ~$expected expected" (N = income lines with status good, M = income lines with planned>0). tone: good if progressPct >= 95, amber otherwise. NEVER bad — a missing paycheck is timing, not failure.
+   - BILLS & LOANS → "(bills.paidCount + debts.paidCount) of (bills.totalCount + debts.totalCount)" as the big value (e.g. "12 of 14"). Sub: "$paid of $expected". tone: good if no "miss" statuses across bills+debts, amber if any miss.
+   - FLEX SPENDING → flex.actualTotal. Sub: "of $plannedTotal planned · {range.daysInMonth - range.daysElapsed} days left". tone: good if paceStatus "under" or "on_track", bad if "over".
+
+5. FLEX SPENDING — how it's going (centerpiece; REPLACES the old "Budgeted vs Actual" + "Variance" charts). One ChartCard-style card titled "Day-to-day spending":
+   - Top: a horizontal pace bar — filled to flex.actualTotal/flex.plannedTotal, with a vertical marker at flex.pacePlanToDate/flex.plannedTotal ("today's pace"). Color the fill by paceStatus.
+   - Narrative line under the bar: "At today's pace, {range.monthLabel} lands near {projectedMonthEnd} — about {abs(projectedVsPlan)} {over/under} plan." Green if under, red if over.
+   - Per-category list from flex.lines (already sorted by pct desc): each row = category name, "$actual / $planned" tabular-nums, an inline mini progress bar (clamp width at 130%), and a status chip ("on track"/"watch"/"over") colored by status (good=H2_PALETTE.primary, watch=H2_PALETTE.amber, miss=H2_PALETTE.red). Rows with unbudgeted=true show "no budget — $actual spent" in amber instead of a ratio.
+
+6. BILLS & LOANS — checklist (REPLACES variance bars for fixed obligations). Merge bills.lines + debts.lines into two groups:
+   - "Paid this month" — status === "good", green Check icon, sorted by actual desc. Row = name + "$actual".
+   - "Still expected" — status !== "good", amber Clock icon, sorted by planned desc. Row = name + "$actual / $planned" (shows partial vs full).
+   No charts here — it's a list. A loan payment at 100% reads as a green check, not a red bar.
+
+7. PAYCHECKS — small card list from income.lines. Row per paycheck: name, "$actual in · ~$planned expected", status. status good → green Check + "on track" (or "ahead" when actual > planned — overage is GOOD, never flagged). status watch/miss → amber, "still expected this month". Never render income as red mid-month.
+
+8. PACE OF THE MONTH — burndown line chart, flex-only, fed from flex.burndown. Keep the LineChart (planned dashed / actual solid) inside a ChartCard. Caption: "Are we on track to make it through the month on day-to-day spending?" DROP the old per-category burndown chart entirely.
+
+9. SIX-MONTH STREAK BOARD (REPLACES "6-month consistency"). Same category × month grid, built from streak.rows + streak.monthKeys. Each cell colored by cell.status (good=primary/emerald, watch=amber, miss=red) — NOT raw pct. Show the pct number inside the cell as before, but color comes from status, so a mortgage at 100% is green and a paycheck at 152% is green. null cell = empty muted box. Add a small Flame icon next to a row's category name when row.currentStreakGood >= 3. Caption: "Each row graded on its own terms — bills want 100%, spending wants less, paychecks want more."
+
+DROP entirely (remove from reports.tsx):
+- "Budgeted vs Actual" bar chart (paychecks dominated the axis)
+- "Variance — under vs over" bar chart (mislabeled income + bills as good/bad)
+- "Burn-down by category" multi-line chart (noise — the per-category list in section 5 tells it better)
+- The four old calls: budgetVariance / budgetBurndown / perCategoryBurndown / budgetConsistencyHeatmap. If removing the calls leaves those exports unreferenced, deleting them from reportsAnalytics.ts is fine — but first check reportsAnalyticsExclusion.test.ts and reportsAnalyticsPalette.test.ts; only remove a test that exclusively covers a deleted function, and don't break the palette/exclusion tests.
+
+VISUAL DETAILS:
+- Use existing Reports primitives: HeroTile, ChartCard, SectionHeader, H2_PALETTE. Sentence-case labels, tabular-nums for all dollar amounts, tertiary muted sub-lines.
+- Status colors everywhere: good = H2_PALETTE.primary (or emerald for checks), watch = H2_PALETTE.amber, miss = H2_PALETTE.red.
+- lucide icons, no emoji: Check (paid/on-track), Clock (expected), Flame (streak), TrendingUp/TrendingDown (pace narrative).
+- Empty states: if income/bills/debts/flex has zero lines, hide that section (hideWhenEmpty pattern). If no budget set for the month at all, show the existing "All clear — no budget set for this month."
+
+VERIFY (publish + hard refresh on /reports → Budget tab):
+1. AI summary reads like a friend checking in — never says income or a paid bill is "over budget"; mentions real paycheck counts + the hottest flex category.
+2. Three top tiles: Money in (never red), Bills & loans as "X of Y", Flex spending paced. No "Categories tracked" tile.
+3. Brad's KFI paycheck shows as on-track/ahead — NOT red, NOT "+$6k over."
+4. Mortgage / Car Payments / HELOC appear under "Paid this month" with green checks, not red bars.
+5. Flex section: Dining & Coffee near the top with an "over" chip; pace bar + "lands near $X" narrative present and correct sign.
+6. Burndown chart shows flex-only planned vs actual; per-category burndown GONE; Budgeted-vs-Actual and Variance charts GONE.
+7. Streak board: mortgage 100% = green, KFI paycheck 152% = green, dining 400%+ = red; Flame badge on any 3+ good-month row.
+8. Month selector re-fetches budget-facts for prior months; floor at 2026-04-01 still returns the empty state cleanly.
+9. Other /reports tabs unaffected.
+
+Architect review (multi-file: openapi + codegen + reports.tsx + reportsAdvisorSummary.ts) + typecheck + publish. No new tests. Reuse the debriefAdvisorSummary pattern for the Claude rewire.

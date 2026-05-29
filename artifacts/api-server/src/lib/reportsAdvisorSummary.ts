@@ -26,6 +26,7 @@ import { computeCashSignal } from "./cashSignal";
 import { buildAvalancheSchedule } from "./avalancheScheduler";
 import { buildSpendingFacts as buildSpendingFactsPipeline } from "./spendingFacts";
 import { buildBehaviorFacts as buildBehaviorFactsPipeline } from "./behaviorFacts";
+import { buildBudgetFacts as buildBudgetFactsPipeline } from "./budgetFacts";
 
 const DEFAULT_MODEL = "claude-sonnet-4-5";
 const MAX_OUTPUT_TOKENS = 600;
@@ -375,121 +376,161 @@ async function buildSpendingFacts(
 }
 
 // --- Budget tab -----------------------------------------------------------
+// (#854 Phase 2) Narrate the clean, class-aware budgetFacts pipeline like a
+// friend checking in. Income and paid bills are NEVER framed as "over budget"
+// — a paycheck landing at 152% is good, a mortgage at 100% is paid. The only
+// thing that can run "hot" is flex (day-to-day) spending.
 async function buildBudgetFacts(
   householdId: string,
   p: ReportsTabParams,
 ): Promise<TabFacts> {
-  const monthStart = p.monthStart;
-  const d = new Date(monthStart + "T00:00:00Z");
-  const monthEnd = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0))
-    .toISOString()
-    .slice(0, 10);
+  const f = await buildBudgetFactsPipeline(householdId, p.monthStart, 6);
+  const { range, income, bills, debts, flex } = f;
 
-  const lines_ = await db
-    .select({
-      categoryId: budgetLinesTable.categoryId,
-      planned: budgetLinesTable.plannedAmount,
-      name: budgetCategoriesTable.name,
-      excludeFromBudget: budgetCategoriesTable.excludeFromBudget,
-    })
-    .from(budgetLinesTable)
-    .leftJoin(
-      budgetCategoriesTable,
-      eq(budgetLinesTable.categoryId, budgetCategoriesTable.id),
-    )
-    .where(
-      and(
-        eq(budgetLinesTable.householdId, householdId),
-        eq(budgetLinesTable.monthStart, monthStart),
-      ),
-    );
+  const sumActual = (ls: { actual: number }[]) =>
+    ls.reduce((s, l) => s + l.actual, 0);
+  const sumPlanned = (ls: { planned: number }[]) =>
+    ls.reduce((s, l) => s + l.planned, 0);
 
-  // Mirror budget.ts actuals semantics: spend per category, amex-aware sign
-  // (amex charges are positive, bank spend is negative), excluding transfers.
-  // Avoids the abs(sum) distortion that mixed-sign refunds would cause.
-  const actualsRows = await db
-    .select({
-      categoryId: transactionsTable.categoryId,
-      spend: sql<string>`coalesce(sum(case
-        when ${transactionsTable.source} = 'amex' and ${transactionsTable.amount} > 0 then ${transactionsTable.amount}
-        when ${transactionsTable.source} <> 'amex' and ${transactionsTable.amount} < 0 then -${transactionsTable.amount}
-        else 0 end)::text, '0')`,
-    })
-    .from(transactionsTable)
-    .where(
-      and(
-        eq(transactionsTable.householdId, householdId),
-        gte(transactionsTable.occurredOn, monthStart),
-        lte(transactionsTable.occurredOn, monthEnd),
-        eq(transactionsTable.isTransfer, false),
-      ),
-    )
-    .groupBy(transactionsTable.categoryId);
-  const actualByCat = new Map<string, number>();
-  for (const r of actualsRows) {
-    if (!r.categoryId) continue;
-    actualByCat.set(r.categoryId, num(r.spend));
-  }
+  // Income (paychecks) — "landed" = status good; expected = planned > 0.
+  const incomeActual = sumActual(income.lines);
+  const incomePlanned = sumPlanned(income.lines);
+  const paychecksLanded = income.paidCount;
+  const paychecksExpected = income.lines.filter((l) => l.planned > 0).length;
 
-  let totalPlanned = 0;
-  let totalActual = 0;
-  const rows = lines_
-    .filter((l) => !l.excludeFromBudget)
-    .map((l) => {
-      const planned = num(l.planned);
-      const actual = actualByCat.get(l.categoryId) ?? 0;
-      totalPlanned += planned;
-      totalActual += actual;
-      return { name: l.name ?? "Unknown", planned, actual, over: actual - planned };
-    });
-  const overspent = rows
-    .filter((r) => r.over > 0)
-    .sort((a, b) => b.over - a.over)
-    .slice(0, 3);
+  // Bills + loans merged — paid = status good.
+  const fixedLines = [...bills.lines, ...debts.lines];
+  const paidCount = bills.paidCount + debts.paidCount;
+  const totalCount = bills.totalCount + debts.totalCount;
+  const fixedActual = sumActual(fixedLines);
+  const fixedPlanned = sumPlanned(fixedLines);
+  const paidNames = fixedLines
+    .filter((l) => l.status === "good")
+    .sort((a, b) => b.actual - a.actual)
+    .map((l) => l.name);
+
+  // Flex — the only class that can run hot.
+  const hotFlex =
+    flex.lines.find((l) => l.status !== "good") ?? flex.lines[0] ?? null;
+
+  const nothingSet =
+    income.totalCount === 0 &&
+    totalCount === 0 &&
+    flex.totalCount === 0;
 
   const lines: string[] = [];
-  lines.push(`Budget month: ${monthStart.slice(0, 7)}`);
-  lines.push(`Total planned: ${money(totalPlanned)}`);
-  lines.push(`Total actual: ${money(totalActual)}`);
   lines.push(
-    `Overall: ${totalActual <= totalPlanned ? "under" : "over"} budget by ${money(Math.abs(totalPlanned - totalActual))}`,
+    `Budget month: ${range.monthLabel} — day ${range.daysElapsed} of ${range.daysInMonth}${range.monthHasPassed ? " (month complete)" : ""}`,
   );
-  if (overspent.length) {
-    lines.push("Most over-budget categories:");
-    overspent.forEach((r, i) =>
-      lines.push(`  ${i + 1}. ${r.name}: spent ${money(r.actual)} vs planned ${money(r.planned)} (over by ${money(r.over)})`),
-    );
+
+  if (nothingSet) {
+    lines.push("No budget has been set for this month yet.");
   } else {
-    lines.push("No categories are over budget this month.");
+    // Income
+    lines.push(
+      `Paychecks (income): ${paychecksLanded} of ${paychecksExpected} landed — ${money(incomeActual)} in of ${money(incomePlanned)} expected. A paycheck over its estimate is GOOD, never over budget.`,
+    );
+    income.lines.forEach((l) =>
+      lines.push(
+        `  - ${l.name}: ${money(l.actual)} in vs ${money(l.planned)} expected (${l.status === "good" ? (l.actual > l.planned ? "ahead" : "on track") : "still expected"})`,
+      ),
+    );
+    // Bills + loans
+    lines.push(
+      `Bills & loans: ${paidCount} of ${totalCount} paid — ${money(fixedActual)} of ${money(fixedPlanned)}. A bill or loan at 100% is PAID, never over budget.`,
+    );
+    if (paidNames.length) {
+      lines.push(`  Paid so far: ${paidNames.join(", ")}`);
+    }
+    const stillExpected = fixedLines
+      .filter((l) => l.status !== "good")
+      .map((l) => l.name);
+    if (stillExpected.length) {
+      lines.push(`  Still expected: ${stillExpected.join(", ")}`);
+    }
+    // Flex
+    lines.push(
+      `Day-to-day (flex) spending: ${money(flex.actualTotal)} of ${money(flex.plannedTotal)} planned, pacing ${flex.paceStatus.replace("_", " ")}.`,
+    );
+    lines.push(
+      `At today's pace, ${range.monthLabel} projects to about ${money(flex.projectedMonthEnd)} flex — ${money(Math.abs(flex.projectedVsPlan))} ${flex.projectedVsPlan >= 0 ? "over" : "under"} plan.`,
+    );
+    flex.lines.slice(0, 5).forEach((l) =>
+      lines.push(
+        `  - ${l.name}: ${money(l.actual)}${l.unbudgeted ? " (no budget set)" : ` of ${money(l.planned)} (${pct(l.pct)})`} — ${l.status === "good" ? "on track" : l.status === "watch" ? "watch" : "over"}`,
+      ),
+    );
   }
 
+  // Deterministic fallback — class-aware. Leads with income + bills, then the
+  // single hottest flex overrun. NEVER an income-polluted "over budget by $X".
   const fallbackBullets: string[] = [];
-  fallbackBullets.push(
-    totalActual <= totalPlanned
-      ? `You are under budget by ${money(totalPlanned - totalActual)} this month.`
-      : `You are over budget by ${money(totalActual - totalPlanned)} this month.`,
-  );
-  if (overspent[0]) {
+  if (nothingSet) {
+    fallbackBullets.push("No budget is set for this month yet.");
+  } else {
     fallbackBullets.push(
-      `${overspent[0].name} is the biggest overspend — ${money(overspent[0].actual)} against a ${money(overspent[0].planned)} plan.`,
+      `${paychecksLanded} of ${paychecksExpected} paychecks are in — ${money(incomeActual)} of ${money(incomePlanned)} expected.`,
     );
+    fallbackBullets.push(
+      `${paidCount} of ${totalCount} bills & loans paid (${money(fixedActual)} of ${money(fixedPlanned)}).`,
+    );
+    fallbackBullets.push(
+      `Day-to-day spending is ${money(flex.actualTotal)} of ${money(flex.plannedTotal)}, pacing ${flex.paceStatus.replace("_", " ")}.`,
+    );
+    if (hotFlex && hotFlex.status !== "good") {
+      fallbackBullets.push(
+        hotFlex.unbudgeted
+          ? `${hotFlex.name} is running hot — ${money(hotFlex.actual)} spent with no budget set.`
+          : `${hotFlex.name} is the one running hot at ${pct(hotFlex.pct)} of plan.`,
+      );
+    }
   }
+
+  const fallbackHeadline = nothingSet
+    ? `Brad — no budget set for ${range.monthLabel} yet.`
+    : `Brad — ${paychecksLanded} of ${paychecksExpected} paychecks landed (~${money(incomeActual)} in), and ${paidCount} of ${totalCount} bills & loans are paid.`;
 
   return {
     hashInput: {
-      month: monthStart.slice(0, 7),
-      totalPlanned: Math.round(totalPlanned),
-      totalActual: Math.round(totalActual),
-      overspent: overspent.map((r) => [r.name, Math.round(r.over)]),
+      month: range.monthStart,
+      paychecks: [paychecksLanded, paychecksExpected, Math.round(incomeActual)],
+      bills: [paidCount, totalCount, Math.round(fixedActual)],
+      flex: [
+        Math.round(flex.actualTotal),
+        Math.round(flex.plannedTotal),
+        flex.paceStatus,
+      ],
+      hotFlex: hotFlex ? [hotFlex.name, hotFlex.pct, hotFlex.status] : null,
     },
     lines,
-    fallbackHeadline:
-      totalActual <= totalPlanned
-        ? `You are tracking ${money(totalPlanned - totalActual)} under budget this month.`
-        : `You are ${money(totalActual - totalPlanned)} over budget this month.`,
+    fallbackHeadline,
     fallbackBullets,
-    topic: "budget plan versus actual spending this month",
+    topic: "this month's budget — paychecks in, bills paid, and day-to-day spending pace",
+    systemPromptOverride: budgetSystemPrompt(),
   };
+}
+
+function budgetSystemPrompt(): string {
+  return `You are checking in with Brad about his household's budget this month — like a friend who glanced at his numbers, NOT an analytics report.
+
+The app has already computed deterministic, class-aware FACTS. Your job is ONLY to narrate them warmly and accurately.
+
+Output requirements:
+- Respond with ONLY a JSON object, no markdown fence, no preamble.
+- Schema: {"headline": string, "bullets": string[]}
+- headline: ONE warm opening line addressed to Brad, leading with paychecks landed and bills paid.
+- bullets: 2 to 4 short, friendly observations (3-5 sentences total). Each references REAL numbers from the FACTS only.
+
+Critical framing rules:
+- NEVER call income (paychecks) "over budget". A paycheck landing above its estimate is GOOD — say "ahead" or "on track", never a problem.
+- NEVER call a paid bill or loan "over budget". A bill at 100% is simply PAID.
+- The ONLY thing that can run "hot" or "over" is day-to-day (flex) spending. If something is running hot, name the single hottest flex category and its % of plan.
+- Lead with the good: paychecks in, bills paid. Then mention flex pace and the hottest flex category if any.
+
+Style:
+- Sound like a friend checking in: warm, specific, encouraging. Use Brad's name.
+- Whole dollars only (no cents).
+- NEVER invent or guess numbers, names, or percentages. If a fact isn't in the FACTS block, don't mention it.`;
 }
 
 // --- Behavior tab ---------------------------------------------------------

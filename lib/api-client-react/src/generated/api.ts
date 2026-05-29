@@ -34,6 +34,7 @@ import type {
   BankSnapshot,
   BehaviorFacts,
   BillsSummary,
+  BudgetFacts,
   BudgetLine,
   BudgetLineInput,
   BudgetMonthDetail,
@@ -82,6 +83,7 @@ import type {
   GetForecastParams,
   GetReportsAdvisorSummaryParams,
   GetReportsBehaviorFactsParams,
+  GetReportsBudgetFactsParams,
   GetReportsSpendingFactsParams,
   HealthStatus,
   ImportSummary,
@@ -5803,6 +5805,114 @@ export function useGetReportsBehaviorFacts<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetReportsBehaviorFactsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns deterministic, class-aware Budget facts (range, income, bills,
+debts, flex with pace/projection/burndown, and a trailing streak board)
+for the Reports Budget tab. Every line is classified into
+income/debt/bill/flex and judged on its own axis. `monthStart` is
+optional (defaults to the current month's first day; normalized to the
+first of its month and clamped to the 2026-04-01 floor). `monthsBack`
+controls the streak-board window (default 6, clamped 1..12).
+
+ * @summary Clean class-aware Budget facts for the Reports Budget tab
+ */
+export const getGetReportsBudgetFactsUrl = (
+  params?: GetReportsBudgetFactsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/reports/budget-facts?${stringifiedParams}`
+    : `/api/reports/budget-facts`;
+};
+
+export const getReportsBudgetFacts = async (
+  params?: GetReportsBudgetFactsParams,
+  options?: RequestInit,
+): Promise<BudgetFacts> => {
+  return customFetch<BudgetFacts>(getGetReportsBudgetFactsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetReportsBudgetFactsQueryKey = (
+  params?: GetReportsBudgetFactsParams,
+) => {
+  return [`/api/reports/budget-facts`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetReportsBudgetFactsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReportsBudgetFacts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetReportsBudgetFactsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReportsBudgetFacts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetReportsBudgetFactsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReportsBudgetFacts>>
+  > = ({ signal }) =>
+    getReportsBudgetFacts(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReportsBudgetFacts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReportsBudgetFactsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReportsBudgetFacts>>
+>;
+export type GetReportsBudgetFactsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Clean class-aware Budget facts for the Reports Budget tab
+ */
+
+export function useGetReportsBudgetFacts<
+  TData = Awaited<ReturnType<typeof getReportsBudgetFacts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetReportsBudgetFactsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReportsBudgetFacts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReportsBudgetFactsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

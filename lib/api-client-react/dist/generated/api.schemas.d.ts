@@ -1823,6 +1823,127 @@ export interface SpendingFacts {
     monthlyTrends: SpendingFactsMonthlyTrendsItem[];
     reimbursable: SpendingFactsReimbursable;
 }
+export type BudgetLineFactClass = (typeof BudgetLineFactClass)[keyof typeof BudgetLineFactClass];
+export declare const BudgetLineFactClass: {
+    readonly income: "income";
+    readonly debt: "debt";
+    readonly bill: "bill";
+    readonly flex: "flex";
+};
+export type BudgetLineFactStatus = (typeof BudgetLineFactStatus)[keyof typeof BudgetLineFactStatus];
+export declare const BudgetLineFactStatus: {
+    readonly good: "good";
+    readonly watch: "watch";
+    readonly miss: "miss";
+};
+export interface BudgetLineFact {
+    categoryId: string;
+    name: string;
+    class: BudgetLineFactClass;
+    planned: number;
+    actual: number;
+    pct: number;
+    status: BudgetLineFactStatus;
+}
+export type FlexLineFactClass = (typeof FlexLineFactClass)[keyof typeof FlexLineFactClass];
+export declare const FlexLineFactClass: {
+    readonly income: "income";
+    readonly debt: "debt";
+    readonly bill: "bill";
+    readonly flex: "flex";
+};
+export type FlexLineFactStatus = (typeof FlexLineFactStatus)[keyof typeof FlexLineFactStatus];
+export declare const FlexLineFactStatus: {
+    readonly good: "good";
+    readonly watch: "watch";
+    readonly miss: "miss";
+};
+export interface FlexLineFact {
+    categoryId: string;
+    name: string;
+    class: FlexLineFactClass;
+    planned: number;
+    actual: number;
+    pct: number;
+    status: FlexLineFactStatus;
+    unbudgeted: boolean;
+}
+export interface BudgetClassSection {
+    paidCount: number;
+    totalCount: number;
+    lines: BudgetLineFact[];
+}
+export type BudgetFlexSectionPaceStatus = (typeof BudgetFlexSectionPaceStatus)[keyof typeof BudgetFlexSectionPaceStatus];
+export declare const BudgetFlexSectionPaceStatus: {
+    readonly under: "under";
+    readonly on_track: "on_track";
+    readonly over: "over";
+};
+export type BudgetFlexSectionBurndownItem = {
+    day: number;
+    date: string;
+    plannedCumulative: number;
+    /** @nullable */
+    actualCumulative: number | null;
+};
+export interface BudgetFlexSection {
+    paidCount: number;
+    totalCount: number;
+    lines: FlexLineFact[];
+    plannedTotal: number;
+    actualTotal: number;
+    pacePlanToDate: number;
+    paceStatus: BudgetFlexSectionPaceStatus;
+    projectedMonthEnd: number;
+    projectedVsPlan: number;
+    burndown: BudgetFlexSectionBurndownItem[];
+}
+export type BudgetStreakCellStatus = (typeof BudgetStreakCellStatus)[keyof typeof BudgetStreakCellStatus];
+export declare const BudgetStreakCellStatus: {
+    readonly good: "good";
+    readonly watch: "watch";
+    readonly miss: "miss";
+};
+export interface BudgetStreakCell {
+    status: BudgetStreakCellStatus;
+    pct: number;
+}
+export type BudgetStreakRowClass = (typeof BudgetStreakRowClass)[keyof typeof BudgetStreakRowClass];
+export declare const BudgetStreakRowClass: {
+    readonly income: "income";
+    readonly debt: "debt";
+    readonly bill: "bill";
+    readonly flex: "flex";
+};
+export interface BudgetStreakRow {
+    categoryId: string;
+    name: string;
+    class: BudgetStreakRowClass;
+    currentStreakGood: number;
+    longestStreakGood: number;
+    cells: (BudgetStreakCell | null)[];
+}
+export type BudgetFactsRange = {
+    monthStart: string;
+    monthEnd: string;
+    daysInMonth: number;
+    daysElapsed: number;
+    monthHasPassed: boolean;
+    monthLabel: string;
+    monthsBack: number;
+};
+export type BudgetFactsStreak = {
+    monthKeys: string[];
+    rows: BudgetStreakRow[];
+};
+export interface BudgetFacts {
+    range: BudgetFactsRange;
+    income: BudgetClassSection;
+    bills: BudgetClassSection;
+    debts: BudgetClassSection;
+    flex: BudgetFlexSection;
+    streak: BudgetFactsStreak;
+}
 export type BehaviorFactsRange = {
     start: string;
     end: string;
@@ -2733,6 +2854,16 @@ export type GetReportsBehaviorFactsParams = {
      * Range end (YYYY-MM-DD). Defaults to today.
      */
     to?: string;
+};
+export type GetReportsBudgetFactsParams = {
+    /**
+     * First day of the budget month (YYYY-MM-DD). Defaults to the current month.
+     */
+    monthStart?: string;
+    /**
+     * Streak-board window in months (default 6, clamped 1..12).
+     */
+    monthsBack?: number;
 };
 export type CloseForecastMonthBody = {
     monthKey: string;

@@ -1,0 +1,38 @@
+Debrief — Category variance actuals must include Amex, not just Chase.
+
+BUG — on /debrief, the "Category variance" table only counts Chase transactions. Amex charges that are categorized (e.g. Roundys $62.97 → Groceries on Blue Cash, Dunkin → Dining & Coffee on Platinum) never appear in the actuals, so Groceries shows $215.93 when it should include the Amex grocery spend too.
+
+ROOT CAUSE — artifacts/api-server/src/lib/weeklyDebrief.ts. isBankRow() (in makeIsBankRow, ~line 102) returns false for source "amex"/"plaid:amex" by design. bankTxns (~line 238-263) is therefore Chase-checking only. The by-category actuals loop (~line 604-615) reads from bankTxns, so Amex categorized spend is excluded from Category variance.
+
+FIX — feed ONLY the by-category breakdown from a wider set that includes Amex. Build it right after bankTxns is finalized (~line 263):
+
+  const budgetTxns = txnsAll.filter(
+    (t) =>
+      (isBankRow(t.source, t.plaidAccountId) ||
+        (t.source ?? "").toLowerCase().replace("plaid:", "") === "amex") &&
+      !isExcludedTxn(t.categoryId),
+  );
+
+Then change the by-category loop (currently `for (const t of txnItems)` / built from bankTxns at ~line 604) so the byCategory accumulator and its actualTxns drill-down are built from budgetTxns instead of bankTxns. Keep the existing `acc.actual += Math.abs(signed)` magnitude math — an Amex charge is a positive amount, so abs() gives the correct spend magnitude, consistent with how Chase outflows (negative) are already summed. The actualTxns drill-down popovers will then naturally include the Amex rows.
+
+Note: the by-category loop today iterates txnItems (which is derived from bankTxns). Build a parallel list of {txnId, description, amount, date, categoryId, status} from budgetTxns for this loop — Amex rows won't have a matched/unplanned resolution status, so default their status to "unplanned" via the same matchedTxnSet/acknowledgedTxnSet lookup (they'll simply fall through to unplanned, which is correct — Amex charges aren't reconciled against the checking snapshot).
+
+DO NOT widen anything else. These STAY strictly on bankTxns (Chase checking only):
+- actualIncome / actualExpenses and totals.* — they reconcile against the checking-account snapshot; adding Amex would double-count and break the expected-ending-balance math.
+- plan matching (matchedTxnSet / acknowledgedTxnSet / matchedRecurringByTxn), unplannedTxns, openTxns, openItemsCount, and the snapshot reconciliation — all bank-only. Week-locking is gated on Chase items, unchanged.
+- The openTxns reviewed-flag lookup `bankTxns.find((bt) => bt.id === t.txnId)` (~line 642) stays bankTxns.
+
+So: Category variance (byCategory + its drill-downs) gains Amex; the cash-flow top-line totals and lock logic are untouched. The byCategory sums will now legitimately exceed actualExpenses — that's expected (budget-actuals ≠ checking cash-flow), not a bug.
+
+Edge case, leave as-is: an Amex statement credit/refund (negative amount on Amex) would be abs()'d as spend — same pre-existing behavior as Chase refunds. Don't special-case it in this pass.
+
+VERIFY (publish + hard refresh on /debrief, current week):
+1. Groceries actual now includes the Amex Roundys $62.97 (was $215.93 → should rise accordingly).
+2. Dining & Coffee actual includes the Amex Dunkin charge.
+3. Category-variance drill-down popover for Groceries lists the Amex Roundys txn alongside Chase ones.
+4. Top-line cash-flow totals (actualIncome / actualExpenses / net) are UNCHANGED vs before — Amex did not leak into them.
+5. Week open-items count and lock behavior unchanged.
+6. "N categories" header may increase if an Amex-only category now appears.
+7. Existing weeklyDebrief.integration.test passes (it seeds bank-only rows + asserts actualExpenses="1512.00", which this fix doesn't touch).
+
+Single-file server change but it touches shared actuals semantics — light architect review on the "cash-flow totals stay bank-only" boundary. Typecheck + publish. No new tests.

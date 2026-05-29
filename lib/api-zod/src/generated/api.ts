@@ -2814,6 +2814,138 @@ export const GetReportsBehaviorFactsResponse = zod.object({
   }),
 });
 
+/**
+ * Returns deterministic, class-aware Budget facts (range, income, bills,
+debts, flex with pace/projection/burndown, and a trailing streak board)
+for the Reports Budget tab. Every line is classified into
+income/debt/bill/flex and judged on its own axis. `monthStart` is
+optional (defaults to the current month's first day; normalized to the
+first of its month and clamped to the 2026-04-01 floor). `monthsBack`
+controls the streak-board window (default 6, clamped 1..12).
+
+ * @summary Clean class-aware Budget facts for the Reports Budget tab
+ */
+export const GetReportsBudgetFactsQueryParams = zod.object({
+  monthStart: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "First day of the budget month (YYYY-MM-DD). Defaults to the current month.",
+    ),
+  monthsBack: zod.coerce
+    .number()
+    .optional()
+    .describe("Streak-board window in months (default 6, clamped 1..12)."),
+});
+
+export const GetReportsBudgetFactsResponse = zod.object({
+  range: zod.object({
+    monthStart: zod.string(),
+    monthEnd: zod.string(),
+    daysInMonth: zod.number(),
+    daysElapsed: zod.number(),
+    monthHasPassed: zod.boolean(),
+    monthLabel: zod.string(),
+    monthsBack: zod.number(),
+  }),
+  income: zod.object({
+    paidCount: zod.number(),
+    totalCount: zod.number(),
+    lines: zod.array(
+      zod.object({
+        categoryId: zod.string(),
+        name: zod.string(),
+        class: zod.enum(["income", "debt", "bill", "flex"]),
+        planned: zod.number(),
+        actual: zod.number(),
+        pct: zod.number(),
+        status: zod.enum(["good", "watch", "miss"]),
+      }),
+    ),
+  }),
+  bills: zod.object({
+    paidCount: zod.number(),
+    totalCount: zod.number(),
+    lines: zod.array(
+      zod.object({
+        categoryId: zod.string(),
+        name: zod.string(),
+        class: zod.enum(["income", "debt", "bill", "flex"]),
+        planned: zod.number(),
+        actual: zod.number(),
+        pct: zod.number(),
+        status: zod.enum(["good", "watch", "miss"]),
+      }),
+    ),
+  }),
+  debts: zod.object({
+    paidCount: zod.number(),
+    totalCount: zod.number(),
+    lines: zod.array(
+      zod.object({
+        categoryId: zod.string(),
+        name: zod.string(),
+        class: zod.enum(["income", "debt", "bill", "flex"]),
+        planned: zod.number(),
+        actual: zod.number(),
+        pct: zod.number(),
+        status: zod.enum(["good", "watch", "miss"]),
+      }),
+    ),
+  }),
+  flex: zod.object({
+    paidCount: zod.number(),
+    totalCount: zod.number(),
+    lines: zod.array(
+      zod.object({
+        categoryId: zod.string(),
+        name: zod.string(),
+        class: zod.enum(["income", "debt", "bill", "flex"]),
+        planned: zod.number(),
+        actual: zod.number(),
+        pct: zod.number(),
+        status: zod.enum(["good", "watch", "miss"]),
+        unbudgeted: zod.boolean(),
+      }),
+    ),
+    plannedTotal: zod.number(),
+    actualTotal: zod.number(),
+    pacePlanToDate: zod.number(),
+    paceStatus: zod.enum(["under", "on_track", "over"]),
+    projectedMonthEnd: zod.number(),
+    projectedVsPlan: zod.number(),
+    burndown: zod.array(
+      zod.object({
+        day: zod.number(),
+        date: zod.string(),
+        plannedCumulative: zod.number(),
+        actualCumulative: zod.number().nullable(),
+      }),
+    ),
+  }),
+  streak: zod.object({
+    monthKeys: zod.array(zod.string()),
+    rows: zod.array(
+      zod.object({
+        categoryId: zod.string(),
+        name: zod.string(),
+        class: zod.enum(["income", "debt", "bill", "flex"]),
+        currentStreakGood: zod.number(),
+        longestStreakGood: zod.number(),
+        cells: zod.array(
+          zod.union([
+            zod.object({
+              status: zod.enum(["good", "watch", "miss"]),
+              pct: zod.number(),
+            }),
+            zod.null(),
+          ]),
+        ),
+      }),
+    ),
+  }),
+});
+
 export const CloseForecastMonthBody = zod.object({
   monthKey: zod.string(),
   gap: zod.string().nullish(),
