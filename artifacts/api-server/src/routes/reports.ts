@@ -18,6 +18,7 @@ import {
 } from "../lib/reportsAdvisorSummary";
 import { buildSpendingFacts } from "../lib/spendingFacts";
 import { buildBehaviorFacts } from "../lib/behaviorFacts";
+import { buildBudgetFacts } from "../lib/budgetFacts";
 
 const router: IRouter = Router();
 
@@ -191,6 +192,51 @@ router.get(
     }
 
     const facts = await buildBehaviorFacts(householdId, fromRaw, toRaw);
+    res.json(facts);
+  },
+);
+
+// (#854 — Budget overhaul, Phase 1) Class-aware Budget facts. Phase 2 will
+// swap the Budget tab UI onto this endpoint. `monthStart` is optional
+// (defaults to the current month's first day); it is clamped to the same
+// 2026-04-01 hard floor as `GET /budget/months`. `monthsBack` controls the
+// streak-board window (default 6, clamped 1..12).
+const BUDGET_FACTS_FLOOR = "2026-04-01";
+
+router.get(
+  "/reports/budget-facts",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const householdId = req.householdId!;
+
+    const monthStartRaw =
+      typeof req.query.monthStart === "string"
+        ? req.query.monthStart
+        : undefined;
+    if (monthStartRaw && !isValidIsoDate(monthStartRaw)) {
+      res
+        .status(400)
+        .json({ error: "invalid 'monthStart' (expected YYYY-MM-DD)" });
+      return;
+    }
+
+    const today = new Date();
+    const defaultMonthStart = isoDate(
+      new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)),
+    );
+    // Normalize any supplied date to the first of its month so a mid-month
+    // value (e.g. 2026-05-15) does not produce partial month results.
+    let monthStart = monthStartRaw
+      ? `${monthStartRaw.slice(0, 7)}-01`
+      : defaultMonthStart;
+    if (monthStart < BUDGET_FACTS_FLOOR) monthStart = BUDGET_FACTS_FLOOR;
+
+    const monthsBack = Math.max(
+      1,
+      Math.min(12, Number(req.query.monthsBack) || 6),
+    );
+
+    const facts = await buildBudgetFacts(householdId, monthStart, monthsBack);
     res.json(facts);
   },
 );
