@@ -203,6 +203,73 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RecategorizeByPatternResult" }
 
+  /transactions/merchant-alias:
+    put:
+      operationId: putMerchantAlias
+      tags: [transactions]
+      summary: |
+        (#888) Set or update a friendly merchant name (alias) for a
+        transaction's stable signature. The caller passes the raw bank
+        `description` (the server owns signature derivation so client and
+        server can never drift) plus the desired `alias`. The alias is
+        household-scoped and keyed on the signature, so it applies to every
+        current AND future transaction that shares the same signature. The
+        response reports how many existing transactions share the signature
+        so the UI can say "applies to N transactions".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PutMerchantAliasInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PutMerchantAliasResult" }
+        "400":
+          description: Invalid input (empty alias or no derivable signature)
+    delete:
+      operationId: deleteMerchantAlias
+      tags: [transactions]
+      summary: |
+        (#888) Remove a merchant alias, resetting the row headline back to the
+        deterministic bank-default name (cleanMerchant). Idempotent — deleting
+        a non-existent alias succeeds as a no-op.
+      parameters:
+        - in: query
+          name: signature
+          required: true
+          schema: { type: string }
+          description: The merchant signature whose alias should be cleared.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeleteMerchantAliasResult" }
+
+  /transactions/suggest-name:
+    post:
+      operationId: suggestMerchantName
+      tags: [transactions]
+      summary: |
+        (#888) Suggest a clean, human-friendly merchant name for a raw bank
+        `description` using Anthropic. Read-only — does NOT persist an alias.
+        Always returns a usable suggestion: on any AI error/timeout it falls
+        back to the deterministic cleanMerchant label (`source: "fallback"`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SuggestMerchantNameInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuggestMerchantNameResult" }
+
   /transactions/uncategorize-by-ids:
     post:
       operationId: uncategorizeTransactionsByIds
@@ -2214,11 +2281,23 @@ components:
           type: string
           description: |
             (#868) Clean, human-readable merchant label derived from the
-            raw bank `description` on read via `cleanMerchant()` (ACH noise,
-            ORIG CO / WEB ID fields, and processor prefixes stripped). Used
-            as the Transactions page row headline so the raw description can
-            be demoted to a muted sub-line. Computed server-side per list
-            response — never persisted; the stored `description` is untouched.
+            raw bank `description` on read. (#888) Precedence: a household
+            merchant alias keyed on `merchantSignature` wins; otherwise the
+            deterministic `cleanMerchant()` label (ACH noise, ORIG CO / WEB
+            ID fields, and processor prefixes stripped). Used as the row
+            headline so the raw description can be demoted to a muted
+            sub-line. Computed server-side per list response — never
+            persisted; the stored `description` is untouched.
+        merchantSignature:
+          type: string
+          description: |
+            (#888) Stable, normalized merchant key derived from the raw
+            `description`. Rows that differ only by volatile trailing IDs /
+            trace numbers / dates share a signature, so one rename applies to
+            all of them. Used by the rename popover to set/clear an alias and
+            to count how many rows a rename will affect. Empty string when no
+            stable signature can be derived. Computed server-side per list
+            response — never persisted.
     CreateTransactionInput:
       type: object
       required: [occurredOn, description, amount]
@@ -5290,3 +5369,76 @@ components:
       properties:
         error:
           type: string
+
+    PutMerchantAliasInput:
+      type: object
+      additionalProperties: false
+      required: [description, alias]
+      properties:
+        description:
+          type: string
+          minLength: 1
+          description: |
+            (#888) The raw bank description of the transaction being renamed.
+            The server derives the stable signature from this — the client
+            never sends a signature so the two can't drift.
+        alias:
+          type: string
+          minLength: 1
+          description: The friendly merchant name to display for this signature.
+
+    PutMerchantAliasResult:
+      type: object
+      additionalProperties: false
+      required: [signature, alias, affectedCount]
+      properties:
+        signature:
+          type: string
+          description: The signature the alias was keyed on.
+        alias:
+          type: string
+          description: The (trimmed) alias that was stored.
+        affectedCount:
+          type: integer
+          description: |
+            How many existing transactions share this signature (i.e. how many
+            row headlines this rename now affects). Future matching rows are
+            also covered but not counted here.
+
+    DeleteMerchantAliasResult:
+      type: object
+      additionalProperties: false
+      required: [signature, deleted]
+      properties:
+        signature:
+          type: string
+        deleted:
+          type: boolean
+
+    SuggestMerchantNameInput:
+      type: object
+      additionalProperties: false
+      required: [description]
+      properties:
+        description:
+          type: string
+          minLength: 1
+          description: The raw bank description to clean into a friendly name.
+
+    SuggestMerchantNameResult:
+      type: object
+      additionalProperties: false
+      required: [suggestion, signature, source]
+      properties:
+        suggestion:
+          type: string
+          description: The suggested friendly merchant name.
+        signature:
+          type: string
+          description: The stable signature derived from the description.
+        source:
+          type: string
+          enum: [ai, fallback]
+          description: |
+            "ai" when Anthropic produced the name, "fallback" when the
+            deterministic cleanMerchant label was used (API down/slow/empty).

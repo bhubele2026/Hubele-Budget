@@ -1,0 +1,1 @@
+{"version":3,"file":"suggestMerchantNameResult.d.ts","sourceRoot":"","sources":["../../../src/generated/types/suggestMerchantNameResult.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,+BAA+B,EAAE,MAAM,mCAAmC,CAAC;AAEzF,MAAM,WAAW,yBAAyB;IACxC,4CAA4C;IAC5C,UAAU,EAAE,MAAM,CAAC;IACnB,yDAAyD;IACzD,SAAS,EAAE,MAAM,CAAC;IAClB;;KAEC;IACD,MAAM,EAAE,+BAA+B,CAAC;CACzC"}

@@ -1131,6 +1131,39 @@ export const weeklyDebriefsTable = pgTable(
 );
 export type WeeklyDebrief = typeof weeklyDebriefsTable.$inferSelect;
 
+// (#888 — Merchant rename & learn, Phase 1) Household-scoped, signature-keyed
+// merchant aliases. When a user renames the messy bank name on a transaction,
+// we store the friendly name against the transaction's stable
+// `merchantSignature()` so EVERY current and future row with the same
+// signature resolves to that name on read (displayName precedence:
+// aliasBySignature ?? cleanMerchant). One alias per (household, signature).
+export const merchantAliasesTable = pgTable(
+  "merchant_aliases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => householdsTable.id, { onDelete: "cascade" }),
+    // Actor who set/last-updated the alias (audit/display only).
+    userId: text("user_id").notNull(),
+    signature: text("signature").notNull(),
+    alias: text("alias").notNull(),
+    // 'user' for a manual rename, 'claude' if ever auto-applied from a
+    // suggestion (suggestions never auto-write today, but the column lets
+    // us distinguish provenance later).
+    source: text("source").notNull().default("user"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    householdSignatureUq: uniqueIndex("merchant_aliases_household_signature_uq").on(
+      t.householdId,
+      t.signature,
+    ),
+  }),
+);
+export type MerchantAlias = typeof merchantAliasesTable.$inferSelect;
+
 export const advisorAuditLogTable = pgTable(
   "advisor_audit_log",
   {

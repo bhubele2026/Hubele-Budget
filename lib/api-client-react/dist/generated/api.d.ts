@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastAvalancheScheduleParams, GetForecastCashSignalParams, GetForecastParams, GetReportsAdvisorSummaryParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklyDebriefsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReportsAdvisorSummary, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UiPreferences, UncategorizeByIdsInput, UncategorizeByIdsResult, UnlockWeeklyDebriefBody, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, VersionInfo, WeeklyDebriefDetail, WeeklyDebriefList, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DeleteMerchantAliasParams, DeleteMerchantAliasResult, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastAvalancheScheduleParams, GetForecastCashSignalParams, GetForecastParams, GetReportsAdvisorSummaryParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklyDebriefsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, PutMerchantAliasInput, PutMerchantAliasResult, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReportsAdvisorSummary, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, SuggestMerchantNameInput, SuggestMerchantNameResult, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UiPreferences, UncategorizeByIdsInput, UncategorizeByIdsResult, UnlockWeeklyDebriefBody, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, VersionInfo, WeeklyDebriefDetail, WeeklyDebriefList, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -239,6 +239,116 @@ export declare const useRecategorizeTransactionsByPattern: <TError = ErrorType<u
     request?: SecondParameter<typeof customFetch>;
 }) => UseMutationResult<Awaited<ReturnType<typeof recategorizeTransactionsByPattern>>, TError, {
     data: BodyType<RecategorizeByPatternInput>;
+}, TContext>;
+/**
+ * @summary (#888) Set or update a friendly merchant name (alias) for a
+transaction's stable signature. The caller passes the raw bank
+`description` (the server owns signature derivation so client and
+server can never drift) plus the desired `alias`. The alias is
+household-scoped and keyed on the signature, so it applies to every
+current AND future transaction that shares the same signature. The
+response reports how many existing transactions share the signature
+so the UI can say "applies to N transactions".
+
+ */
+export declare const getPutMerchantAliasUrl: () => string;
+export declare const putMerchantAlias: (putMerchantAliasInput: PutMerchantAliasInput, options?: RequestInit) => Promise<PutMerchantAliasResult>;
+export declare const getPutMerchantAliasMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof putMerchantAlias>>, TError, {
+        data: BodyType<PutMerchantAliasInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof putMerchantAlias>>, TError, {
+    data: BodyType<PutMerchantAliasInput>;
+}, TContext>;
+export type PutMerchantAliasMutationResult = NonNullable<Awaited<ReturnType<typeof putMerchantAlias>>>;
+export type PutMerchantAliasMutationBody = BodyType<PutMerchantAliasInput>;
+export type PutMerchantAliasMutationError = ErrorType<void>;
+/**
+ * @summary (#888) Set or update a friendly merchant name (alias) for a
+transaction's stable signature. The caller passes the raw bank
+`description` (the server owns signature derivation so client and
+server can never drift) plus the desired `alias`. The alias is
+household-scoped and keyed on the signature, so it applies to every
+current AND future transaction that shares the same signature. The
+response reports how many existing transactions share the signature
+so the UI can say "applies to N transactions".
+
+ */
+export declare const usePutMerchantAlias: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof putMerchantAlias>>, TError, {
+        data: BodyType<PutMerchantAliasInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof putMerchantAlias>>, TError, {
+    data: BodyType<PutMerchantAliasInput>;
+}, TContext>;
+/**
+ * @summary (#888) Remove a merchant alias, resetting the row headline back to the
+deterministic bank-default name (cleanMerchant). Idempotent — deleting
+a non-existent alias succeeds as a no-op.
+
+ */
+export declare const getDeleteMerchantAliasUrl: (params: DeleteMerchantAliasParams) => string;
+export declare const deleteMerchantAlias: (params: DeleteMerchantAliasParams, options?: RequestInit) => Promise<DeleteMerchantAliasResult>;
+export declare const getDeleteMerchantAliasMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteMerchantAlias>>, TError, {
+        params: DeleteMerchantAliasParams;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof deleteMerchantAlias>>, TError, {
+    params: DeleteMerchantAliasParams;
+}, TContext>;
+export type DeleteMerchantAliasMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMerchantAlias>>>;
+export type DeleteMerchantAliasMutationError = ErrorType<unknown>;
+/**
+ * @summary (#888) Remove a merchant alias, resetting the row headline back to the
+deterministic bank-default name (cleanMerchant). Idempotent — deleting
+a non-existent alias succeeds as a no-op.
+
+ */
+export declare const useDeleteMerchantAlias: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteMerchantAlias>>, TError, {
+        params: DeleteMerchantAliasParams;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof deleteMerchantAlias>>, TError, {
+    params: DeleteMerchantAliasParams;
+}, TContext>;
+/**
+ * @summary (#888) Suggest a clean, human-friendly merchant name for a raw bank
+`description` using Anthropic. Read-only — does NOT persist an alias.
+Always returns a usable suggestion: on any AI error/timeout it falls
+back to the deterministic cleanMerchant label (`source: "fallback"`).
+
+ */
+export declare const getSuggestMerchantNameUrl: () => string;
+export declare const suggestMerchantName: (suggestMerchantNameInput: SuggestMerchantNameInput, options?: RequestInit) => Promise<SuggestMerchantNameResult>;
+export declare const getSuggestMerchantNameMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof suggestMerchantName>>, TError, {
+        data: BodyType<SuggestMerchantNameInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof suggestMerchantName>>, TError, {
+    data: BodyType<SuggestMerchantNameInput>;
+}, TContext>;
+export type SuggestMerchantNameMutationResult = NonNullable<Awaited<ReturnType<typeof suggestMerchantName>>>;
+export type SuggestMerchantNameMutationBody = BodyType<SuggestMerchantNameInput>;
+export type SuggestMerchantNameMutationError = ErrorType<unknown>;
+/**
+ * @summary (#888) Suggest a clean, human-friendly merchant name for a raw bank
+`description` using Anthropic. Read-only — does NOT persist an alias.
+Always returns a usable suggestion: on any AI error/timeout it falls
+back to the deterministic cleanMerchant label (`source: "fallback"`).
+
+ */
+export declare const useSuggestMerchantName: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof suggestMerchantName>>, TError, {
+        data: BodyType<SuggestMerchantNameInput>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof suggestMerchantName>>, TError, {
+    data: BodyType<SuggestMerchantNameInput>;
 }, TContext>;
 /**
  * @summary Bulk clear the categoryId on a list of transactions, scoped by an

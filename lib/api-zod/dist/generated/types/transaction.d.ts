@@ -99,12 +99,23 @@ export interface Transaction {
      */
     matchedRuleId?: string | null;
     /** (#868) Clean, human-readable merchant label derived from the
-  raw bank `description` on read via `cleanMerchant()` (ACH noise,
-  ORIG CO / WEB ID fields, and processor prefixes stripped). Used
-  as the Transactions page row headline so the raw description can
-  be demoted to a muted sub-line. Computed server-side per list
-  response — never persisted; the stored `description` is untouched.
+  raw bank `description` on read. (#888) Precedence: a household
+  merchant alias keyed on `merchantSignature` wins; otherwise the
+  deterministic `cleanMerchant()` label (ACH noise, ORIG CO / WEB
+  ID fields, and processor prefixes stripped). Used as the row
+  headline so the raw description can be demoted to a muted
+  sub-line. Computed server-side per list response — never
+  persisted; the stored `description` is untouched.
    */
     displayName?: string;
+    /** (#888) Stable, normalized merchant key derived from the raw
+  `description`. Rows that differ only by volatile trailing IDs /
+  trace numbers / dates share a signature, so one rename applies to
+  all of them. Used by the rename popover to set/clear an alias and
+  to count how many rows a rename will affect. Empty string when no
+  stable signature can be derived. Computed server-side per list
+  response — never persisted.
+   */
+    merchantSignature?: string;
 }
 //# sourceMappingURL=transaction.d.ts.map

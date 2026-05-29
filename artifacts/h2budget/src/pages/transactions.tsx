@@ -25,6 +25,7 @@ import {
   type CreateTransactionInput,
 } from "@workspace/api-client-react";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
+import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
 import { useOpportunisticPlaidSync } from "@/hooks/use-opportunistic-plaid-sync";
 import {
   useBulkRecategorizePrompt,
@@ -2519,6 +2520,7 @@ export default function TransactionsPage() {
                           >
                             {tx.displayName || tx.description}
                           </span>
+                          <MerchantRenamePopover tx={tx} />
                         </div>
                         <div
                           className="text-[10px] text-muted-foreground/70 truncate mb-1"
@@ -2726,6 +2728,7 @@ export default function TransactionsPage() {
                         >
                           {tx.displayName || tx.description}
                         </span>
+                        <MerchantRenamePopover tx={tx} />
                       </div>
                       <div
                         className="text-[10px] text-muted-foreground/70 truncate mb-1"

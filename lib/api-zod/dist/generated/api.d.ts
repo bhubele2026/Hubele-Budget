@@ -73,6 +73,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         pending: zod.ZodBoolean;
         matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         displayName: zod.ZodOptional<zod.ZodString>;
+        merchantSignature: zod.ZodOptional<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         occurredOn: string;
@@ -103,6 +104,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         debtId?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
+        merchantSignature?: string | undefined;
     }, {
         id: string;
         occurredOn: string;
@@ -133,6 +135,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         debtId?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
+        merchantSignature?: string | undefined;
     }>, "many">;
     topCategories: zod.ZodArray<zod.ZodObject<{
         categoryName: zod.ZodString;
@@ -218,6 +221,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         debtId?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
+        merchantSignature?: string | undefined;
     }[];
     topCategories: {
         categoryName: string;
@@ -275,6 +279,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         debtId?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
+        merchantSignature?: string | undefined;
     }[];
     topCategories: {
         categoryName: string;
@@ -360,6 +365,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     pending: zod.ZodBoolean;
     matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     displayName: zod.ZodOptional<zod.ZodString>;
+    merchantSignature: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     occurredOn: string;
@@ -390,6 +396,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     debtId?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
+    merchantSignature?: string | undefined;
 }, {
     id: string;
     occurredOn: string;
@@ -420,6 +427,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     debtId?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
+    merchantSignature?: string | undefined;
 }>;
 export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -451,6 +459,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     pending: zod.ZodBoolean;
     matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     displayName: zod.ZodOptional<zod.ZodString>;
+    merchantSignature: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     occurredOn: string;
@@ -481,6 +490,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     debtId?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
+    merchantSignature?: string | undefined;
 }, {
     id: string;
     occurredOn: string;
@@ -511,6 +521,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     debtId?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
+    merchantSignature?: string | undefined;
 }>, "many">;
 export declare const CreateTransactionBody: zod.ZodObject<{
     occurredOn: zod.ZodString;
@@ -686,6 +697,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     pending: zod.ZodBoolean;
     matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     displayName: zod.ZodOptional<zod.ZodString>;
+    merchantSignature: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     occurredOn: string;
@@ -716,6 +728,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     debtId?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
+    merchantSignature?: string | undefined;
 }, {
     id: string;
     occurredOn: string;
@@ -746,6 +759,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     debtId?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
+    merchantSignature?: string | undefined;
 }>, zod.ZodObject<{
     repointedRules: zod.ZodArray<zod.ZodObject<{
         ruleId: zod.ZodString;
@@ -935,6 +949,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     pending: zod.ZodBoolean;
     matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     displayName: zod.ZodOptional<zod.ZodString>;
+    merchantSignature: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     id: string;
     occurredOn: string;
@@ -965,6 +980,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     debtId?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
+    merchantSignature?: string | undefined;
 }, {
     id: string;
     occurredOn: string;
@@ -995,6 +1011,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     debtId?: string | null | undefined;
     matchedRuleId?: string | null | undefined;
     displayName?: string | undefined;
+    merchantSignature?: string | undefined;
 }>;
 /**
  * @summary Bulk re-categorize past transactions whose description matches a
@@ -1040,6 +1057,90 @@ export declare const RecategorizeTransactionsByPatternResponse: zod.ZodObject<{
     updated: number;
     affectedMonths: string[];
     affectedIds: string[];
+}>;
+/**
+ * @summary (#888) Set or update a friendly merchant name (alias) for a
+transaction's stable signature. The caller passes the raw bank
+`description` (the server owns signature derivation so client and
+server can never drift) plus the desired `alias`. The alias is
+household-scoped and keyed on the signature, so it applies to every
+current AND future transaction that shares the same signature. The
+response reports how many existing transactions share the signature
+so the UI can say "applies to N transactions".
+
+ */
+export declare const PutMerchantAliasBody: zod.ZodObject<{
+    description: zod.ZodString;
+    alias: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    description: string;
+    alias: string;
+}, {
+    description: string;
+    alias: string;
+}>;
+export declare const PutMerchantAliasResponse: zod.ZodObject<{
+    signature: zod.ZodString;
+    alias: zod.ZodString;
+    affectedCount: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    alias: string;
+    signature: string;
+    affectedCount: number;
+}, {
+    alias: string;
+    signature: string;
+    affectedCount: number;
+}>;
+/**
+ * @summary (#888) Remove a merchant alias, resetting the row headline back to the
+deterministic bank-default name (cleanMerchant). Idempotent — deleting
+a non-existent alias succeeds as a no-op.
+
+ */
+export declare const DeleteMerchantAliasQueryParams: zod.ZodObject<{
+    signature: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    signature: string;
+}, {
+    signature: string;
+}>;
+export declare const DeleteMerchantAliasResponse: zod.ZodObject<{
+    signature: zod.ZodString;
+    deleted: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    signature: string;
+    deleted: boolean;
+}, {
+    signature: string;
+    deleted: boolean;
+}>;
+/**
+ * @summary (#888) Suggest a clean, human-friendly merchant name for a raw bank
+`description` using Anthropic. Read-only — does NOT persist an alias.
+Always returns a usable suggestion: on any AI error/timeout it falls
+back to the deterministic cleanMerchant label (`source: "fallback"`).
+
+ */
+export declare const SuggestMerchantNameBody: zod.ZodObject<{
+    description: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    description: string;
+}, {
+    description: string;
+}>;
+export declare const SuggestMerchantNameResponse: zod.ZodObject<{
+    suggestion: zod.ZodString;
+    signature: zod.ZodString;
+    source: zod.ZodEnum<["ai", "fallback"]>;
+}, "strip", zod.ZodTypeAny, {
+    source: "ai" | "fallback";
+    signature: string;
+    suggestion: string;
+}, {
+    source: "ai" | "fallback";
+    signature: string;
+    suggestion: string;
 }>;
 /**
  * @summary Bulk clear the categoryId on a list of transactions, scoped by an
@@ -4474,6 +4575,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         pending: zod.ZodBoolean;
         matchedRuleId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         displayName: zod.ZodOptional<zod.ZodString>;
+        merchantSignature: zod.ZodOptional<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         id: string;
         occurredOn: string;
@@ -4504,6 +4606,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         debtId?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
+        merchantSignature?: string | undefined;
     }, {
         id: string;
         occurredOn: string;
@@ -4534,6 +4637,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         debtId?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
+        merchantSignature?: string | undefined;
     }>, "many">;
     resolutions: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodString;
@@ -4848,6 +4952,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         debtId?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
+        merchantSignature?: string | undefined;
     }[];
     resolutions: {
         status: string;
@@ -4978,6 +5083,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         debtId?: string | null | undefined;
         matchedRuleId?: string | null | undefined;
         displayName?: string | undefined;
+        merchantSignature?: string | undefined;
     }[];
     resolutions: {
         status: string;

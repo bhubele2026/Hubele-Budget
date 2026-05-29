@@ -70,6 +70,8 @@ import type {
   DedupeTransactionsReport,
   DeleteAmexAnchor200,
   DeleteDashboardBudgetParams,
+  DeleteMerchantAliasParams,
+  DeleteMerchantAliasResult,
   DuplicateTransactionCount,
   ForecastBundle,
   ForecastClosedMonth,
@@ -116,6 +118,8 @@ import type {
   PlaidSyncInput,
   PlaidSyncResult,
   PlaidUpdateLinkTokenInput,
+  PutMerchantAliasInput,
+  PutMerchantAliasResult,
   RecategorizeByPatternInput,
   RecategorizeByPatternResult,
   RecurringItem,
@@ -131,6 +135,8 @@ import type {
   Settings,
   SettingsInput,
   SpendingFacts,
+  SuggestMerchantNameInput,
+  SuggestMerchantNameResult,
   SyncMinimumsResult,
   TestMappingRulesInput,
   TestMappingRulesResult,
@@ -917,6 +923,310 @@ export const useRecategorizeTransactionsByPattern = <
   return useMutation(
     getRecategorizeTransactionsByPatternMutationOptions(options),
   );
+};
+
+/**
+ * @summary (#888) Set or update a friendly merchant name (alias) for a
+transaction's stable signature. The caller passes the raw bank
+`description` (the server owns signature derivation so client and
+server can never drift) plus the desired `alias`. The alias is
+household-scoped and keyed on the signature, so it applies to every
+current AND future transaction that shares the same signature. The
+response reports how many existing transactions share the signature
+so the UI can say "applies to N transactions".
+
+ */
+export const getPutMerchantAliasUrl = () => {
+  return `/api/transactions/merchant-alias`;
+};
+
+export const putMerchantAlias = async (
+  putMerchantAliasInput: PutMerchantAliasInput,
+  options?: RequestInit,
+): Promise<PutMerchantAliasResult> => {
+  return customFetch<PutMerchantAliasResult>(getPutMerchantAliasUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(putMerchantAliasInput),
+  });
+};
+
+export const getPutMerchantAliasMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof putMerchantAlias>>,
+    TError,
+    { data: BodyType<PutMerchantAliasInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof putMerchantAlias>>,
+  TError,
+  { data: BodyType<PutMerchantAliasInput> },
+  TContext
+> => {
+  const mutationKey = ["putMerchantAlias"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof putMerchantAlias>>,
+    { data: BodyType<PutMerchantAliasInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return putMerchantAlias(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PutMerchantAliasMutationResult = NonNullable<
+  Awaited<ReturnType<typeof putMerchantAlias>>
+>;
+export type PutMerchantAliasMutationBody = BodyType<PutMerchantAliasInput>;
+export type PutMerchantAliasMutationError = ErrorType<void>;
+
+/**
+ * @summary (#888) Set or update a friendly merchant name (alias) for a
+transaction's stable signature. The caller passes the raw bank
+`description` (the server owns signature derivation so client and
+server can never drift) plus the desired `alias`. The alias is
+household-scoped and keyed on the signature, so it applies to every
+current AND future transaction that shares the same signature. The
+response reports how many existing transactions share the signature
+so the UI can say "applies to N transactions".
+
+ */
+export const usePutMerchantAlias = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof putMerchantAlias>>,
+    TError,
+    { data: BodyType<PutMerchantAliasInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof putMerchantAlias>>,
+  TError,
+  { data: BodyType<PutMerchantAliasInput> },
+  TContext
+> => {
+  return useMutation(getPutMerchantAliasMutationOptions(options));
+};
+
+/**
+ * @summary (#888) Remove a merchant alias, resetting the row headline back to the
+deterministic bank-default name (cleanMerchant). Idempotent — deleting
+a non-existent alias succeeds as a no-op.
+
+ */
+export const getDeleteMerchantAliasUrl = (
+  params: DeleteMerchantAliasParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/transactions/merchant-alias?${stringifiedParams}`
+    : `/api/transactions/merchant-alias`;
+};
+
+export const deleteMerchantAlias = async (
+  params: DeleteMerchantAliasParams,
+  options?: RequestInit,
+): Promise<DeleteMerchantAliasResult> => {
+  return customFetch<DeleteMerchantAliasResult>(
+    getDeleteMerchantAliasUrl(params),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteMerchantAliasMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMerchantAlias>>,
+    TError,
+    { params: DeleteMerchantAliasParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteMerchantAlias>>,
+  TError,
+  { params: DeleteMerchantAliasParams },
+  TContext
+> => {
+  const mutationKey = ["deleteMerchantAlias"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteMerchantAlias>>,
+    { params: DeleteMerchantAliasParams }
+  > = (props) => {
+    const { params } = props ?? {};
+
+    return deleteMerchantAlias(params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteMerchantAliasMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteMerchantAlias>>
+>;
+
+export type DeleteMerchantAliasMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (#888) Remove a merchant alias, resetting the row headline back to the
+deterministic bank-default name (cleanMerchant). Idempotent — deleting
+a non-existent alias succeeds as a no-op.
+
+ */
+export const useDeleteMerchantAlias = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMerchantAlias>>,
+    TError,
+    { params: DeleteMerchantAliasParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteMerchantAlias>>,
+  TError,
+  { params: DeleteMerchantAliasParams },
+  TContext
+> => {
+  return useMutation(getDeleteMerchantAliasMutationOptions(options));
+};
+
+/**
+ * @summary (#888) Suggest a clean, human-friendly merchant name for a raw bank
+`description` using Anthropic. Read-only — does NOT persist an alias.
+Always returns a usable suggestion: on any AI error/timeout it falls
+back to the deterministic cleanMerchant label (`source: "fallback"`).
+
+ */
+export const getSuggestMerchantNameUrl = () => {
+  return `/api/transactions/suggest-name`;
+};
+
+export const suggestMerchantName = async (
+  suggestMerchantNameInput: SuggestMerchantNameInput,
+  options?: RequestInit,
+): Promise<SuggestMerchantNameResult> => {
+  return customFetch<SuggestMerchantNameResult>(getSuggestMerchantNameUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(suggestMerchantNameInput),
+  });
+};
+
+export const getSuggestMerchantNameMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof suggestMerchantName>>,
+    TError,
+    { data: BodyType<SuggestMerchantNameInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof suggestMerchantName>>,
+  TError,
+  { data: BodyType<SuggestMerchantNameInput> },
+  TContext
+> => {
+  const mutationKey = ["suggestMerchantName"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof suggestMerchantName>>,
+    { data: BodyType<SuggestMerchantNameInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return suggestMerchantName(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SuggestMerchantNameMutationResult = NonNullable<
+  Awaited<ReturnType<typeof suggestMerchantName>>
+>;
+export type SuggestMerchantNameMutationBody =
+  BodyType<SuggestMerchantNameInput>;
+export type SuggestMerchantNameMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (#888) Suggest a clean, human-friendly merchant name for a raw bank
+`description` using Anthropic. Read-only — does NOT persist an alias.
+Always returns a usable suggestion: on any AI error/timeout it falls
+back to the deterministic cleanMerchant label (`source: "fallback"`).
+
+ */
+export const useSuggestMerchantName = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof suggestMerchantName>>,
+    TError,
+    { data: BodyType<SuggestMerchantNameInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof suggestMerchantName>>,
+  TError,
+  { data: BodyType<SuggestMerchantNameInput> },
+  TContext
+> => {
+  return useMutation(getSuggestMerchantNameMutationOptions(options));
 };
 
 /**

@@ -7,6 +7,7 @@ import {
   mappingRulesTable,
   upsertMappingRule,
   debtsTable,
+  merchantAliasesTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -17,7 +18,8 @@ import {
   loadUserRules,
 } from "../lib/autoCategorize";
 import { selectPatternCandidates } from "../lib/patternCandidates";
-import { cleanMerchant } from "../lib/merchantNameExtract";
+import { cleanMerchant, merchantSignature } from "../lib/merchantNameExtract";
+import { suggestMerchantName } from "../lib/merchantSuggest";
 import {
   EXCLUDED_CATEGORY_RULE_ERROR,
   isExcludedCategory,
@@ -38,6 +40,9 @@ import {
   bulkUpdateTransactionsBodyIdsMax,
   SendTransactionsToReviewBody,
   sendTransactionsToReviewBodyTransactionIdsMax,
+  PutMerchantAliasBody,
+  DeleteMerchantAliasQueryParams,
+  SuggestMerchantNameBody,
 } from "@workspace/api-zod";
 
 void UpdateTransactionBody;
@@ -99,15 +104,32 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   // on the txn so editing a rule's pattern instantly reflects on every
   // existing row without a backfill. Rules are loaded once for the list.
   const userRules = await loadUserRules(req.householdId!);
-  const annotated = rows.map((r) => ({
-    ...r,
-    matchedRuleId: findMatchedRuleId(r.description, r.categoryId, userRules),
-    // (#868) Clean, human-readable merchant label derived from the raw bank
-    // description on read. Powers the Transactions page row headline so the
-    // raw ACH/ORIG CO string can be demoted to a muted sub-line. Never
+  // (#888) Load the household's merchant aliases once and key them by
+  // signature so each row's displayName can prefer a user rename over the
+  // deterministic cleanMerchant label. One query per list, not per row.
+  const aliasRows = await db
+    .select({
+      signature: merchantAliasesTable.signature,
+      alias: merchantAliasesTable.alias,
+    })
+    .from(merchantAliasesTable)
+    .where(eq(merchantAliasesTable.householdId, req.householdId!));
+  const aliasBySignature = new Map(aliasRows.map((a) => [a.signature, a.alias]));
+  const annotated = rows.map((r) => {
+    // (#888) displayName precedence: a user/AI alias keyed on the row's
+    // stable signature wins; otherwise fall back to cleanMerchant. Never
     // persisted — computed per-list so the stored description is untouched.
-    displayName: cleanMerchant(r.description),
-  }));
+    const sig = merchantSignature(r.description);
+    const alias = sig ? aliasBySignature.get(sig) : undefined;
+    return {
+      ...r,
+      matchedRuleId: findMatchedRuleId(r.description, r.categoryId, userRules),
+      // (#888) Stable signature exposed so the client can group rows and
+      // tell the user how many transactions a rename will affect.
+      merchantSignature: sig,
+      displayName: alias ?? cleanMerchant(r.description),
+    };
+  });
   res.json(annotated);
 });
 
@@ -1332,6 +1354,31 @@ router.post(
   },
 );
 
+// (#888) Remove a merchant alias (reset the headline back to the bank
+// default). Idempotent — deleting a non-existent alias is a no-op 200.
+// IMPORTANT: declared BEFORE DELETE /transactions/:id so Express does not
+// shadow this fixed path with the parameterized one.
+router.delete(
+  "/transactions/merchant-alias",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const q = DeleteMerchantAliasQueryParams.safeParse(req.query);
+    if (!q.success) {
+      res.status(400).json({ error: q.error.message });
+      return;
+    }
+    await db
+      .delete(merchantAliasesTable)
+      .where(
+        and(
+          eq(merchantAliasesTable.householdId, req.householdId!),
+          eq(merchantAliasesTable.signature, q.data.signature),
+        ),
+      );
+    res.json({ signature: q.data.signature, deleted: true });
+  },
+);
+
 router.delete(
   "/transactions/:id",
   requireAuth,
@@ -1350,6 +1397,78 @@ router.delete(
         ),
       );
     res.sendStatus(204);
+  },
+);
+
+// (#888 — Merchant rename & learn, Phase 1) Set/update a friendly merchant
+// alias for a signature. The client passes a raw `description` (so the server
+// owns signature derivation — the two must never drift) plus the `alias`. We
+// compute the signature, upsert the household-scoped alias, and report how
+// many existing transactions share that signature so the UI can say "applies
+// to N transactions". An empty/whitespace alias is rejected (use DELETE to
+// clear / reset to the bank default).
+router.put(
+  "/transactions/merchant-alias",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const body = PutMerchantAliasBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const signature = merchantSignature(body.data.description);
+    const alias = body.data.alias.trim();
+    if (!signature) {
+      res.status(400).json({ error: "Description has no stable merchant signature" });
+      return;
+    }
+    if (!alias) {
+      res.status(400).json({ error: "Alias must not be empty" });
+      return;
+    }
+    const now = new Date();
+    await db
+      .insert(merchantAliasesTable)
+      .values({
+        householdId: req.householdId!,
+        userId: req.userId!,
+        signature,
+        alias,
+        source: "user",
+      })
+      .onConflictDoUpdate({
+        target: [merchantAliasesTable.householdId, merchantAliasesTable.signature],
+        set: { alias, userId: req.userId!, source: "user", updatedAt: now },
+      });
+    // Count existing rows that share this signature so the client can show
+    // the blast radius. Signature is computed in JS (not SQL), so we load the
+    // household's descriptions and count matches — bounded by the household's
+    // transaction volume and only on an explicit rename action.
+    const rows = await db
+      .select({ description: transactionsTable.description })
+      .from(transactionsTable)
+      .where(eq(transactionsTable.householdId, req.householdId!));
+    const affectedCount = rows.filter(
+      (r) => merchantSignature(r.description) === signature,
+    ).length;
+    res.json({ signature, alias, affectedCount });
+  },
+);
+
+// (#888) AI-assisted name suggestion for the rename popover's "✨ Suggest".
+// Always returns a usable name — falls back to cleanMerchant if the LLM is
+// unavailable/slow. Read-only (does NOT persist an alias).
+router.post(
+  "/transactions/suggest-name",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const body = SuggestMerchantNameBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const result = await suggestMerchantName(body.data.description);
+    res.json(result);
   },
 );
 

@@ -119,13 +119,24 @@ export interface Transaction {
      */
     matchedRuleId?: string | null;
     /** (#868) Clean, human-readable merchant label derived from the
-  raw bank `description` on read via `cleanMerchant()` (ACH noise,
-  ORIG CO / WEB ID fields, and processor prefixes stripped). Used
-  as the Transactions page row headline so the raw description can
-  be demoted to a muted sub-line. Computed server-side per list
-  response — never persisted; the stored `description` is untouched.
+  raw bank `description` on read. (#888) Precedence: a household
+  merchant alias keyed on `merchantSignature` wins; otherwise the
+  deterministic `cleanMerchant()` label (ACH noise, ORIG CO / WEB
+  ID fields, and processor prefixes stripped). Used as the row
+  headline so the raw description can be demoted to a muted
+  sub-line. Computed server-side per list response — never
+  persisted; the stored `description` is untouched.
    */
     displayName?: string;
+    /** (#888) Stable, normalized merchant key derived from the raw
+  `description`. Rows that differ only by volatile trailing IDs /
+  trace numbers / dates share a signature, so one rename applies to
+  all of them. Used by the rename popover to set/clear an alias and
+  to count how many rows a rename will affect. Empty string when no
+  stable signature can be derived. Computed server-side per list
+  response — never persisted.
+   */
+    merchantSignature?: string;
 }
 /**
  * @nullable
@@ -2780,6 +2791,63 @@ export interface AdvisorUndoResponse {
 export interface AdvisorUndoErrorResponse {
     error: string;
 }
+export interface PutMerchantAliasInput {
+    /**
+     * (#888) The raw bank description of the transaction being renamed.
+  The server derives the stable signature from this — the client
+  never sends a signature so the two can't drift.
+  
+     * @minLength 1
+     */
+    description: string;
+    /**
+     * The friendly merchant name to display for this signature.
+     * @minLength 1
+     */
+    alias: string;
+}
+export interface PutMerchantAliasResult {
+    /** The signature the alias was keyed on. */
+    signature: string;
+    /** The (trimmed) alias that was stored. */
+    alias: string;
+    /** How many existing transactions share this signature (i.e. how many
+  row headlines this rename now affects). Future matching rows are
+  also covered but not counted here.
+   */
+    affectedCount: number;
+}
+export interface DeleteMerchantAliasResult {
+    signature: string;
+    deleted: boolean;
+}
+export interface SuggestMerchantNameInput {
+    /**
+     * The raw bank description to clean into a friendly name.
+     * @minLength 1
+     */
+    description: string;
+}
+/**
+ * "ai" when Anthropic produced the name, "fallback" when the
+deterministic cleanMerchant label was used (API down/slow/empty).
+
+ */
+export type SuggestMerchantNameResultSource = (typeof SuggestMerchantNameResultSource)[keyof typeof SuggestMerchantNameResultSource];
+export declare const SuggestMerchantNameResultSource: {
+    readonly ai: "ai";
+    readonly fallback: "fallback";
+};
+export interface SuggestMerchantNameResult {
+    /** The suggested friendly merchant name. */
+    suggestion: string;
+    /** The stable signature derived from the description. */
+    signature: string;
+    /** "ai" when Anthropic produced the name, "fallback" when the
+  deterministic cleanMerchant label was used (API down/slow/empty).
+   */
+    source: SuggestMerchantNameResultSource;
+}
 export type ListTransactionsParams = {
     from?: string;
     to?: string;
@@ -2792,6 +2860,12 @@ export type ListTransactionsParams = {
     minAmount?: string;
     maxAmount?: string;
     categoryId?: string;
+};
+export type DeleteMerchantAliasParams = {
+    /**
+     * The merchant signature whose alias should be cleared.
+     */
+    signature: string;
 };
 export type ListPlaidLiabilityAccountsParams = {
     refresh?: boolean;

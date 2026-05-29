@@ -14,6 +14,7 @@ import {
   type BulkUpdateTransactionsInput,
 } from "@workspace/api-client-react";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
+import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
 import {
   useBulkRecategorizePrompt,
   bulkRuleFromRepointed,
@@ -2326,8 +2327,14 @@ export default function AmexPage() {
                         className="mt-1"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium break-words" title={t.description}>
-                          {t.description}
+                        <div className="flex items-center gap-1">
+                          <span
+                            className="font-medium break-words"
+                            title={t.description}
+                          >
+                            {t.displayName || t.description}
+                          </span>
+                          <MerchantRenamePopover tx={t} />
                         </div>
                         {t.notes && (
                           <div className="text-[11px] text-muted-foreground break-words" title={t.notes}>
@@ -2500,8 +2507,14 @@ export default function AmexPage() {
                           />
                         </td>
                         <td className="px-3 py-3 align-top">
-                          <div className="font-medium truncate max-w-[420px]" title={t.description}>
-                            {t.description}
+                          <div className="flex items-center gap-1">
+                            <span
+                              className="font-medium truncate max-w-[420px]"
+                              title={t.description}
+                            >
+                              {t.displayName || t.description}
+                            </span>
+                            <MerchantRenamePopover tx={t} />
                           </div>
                           {t.notes && (
                             <div className="text-[11px] text-muted-foreground truncate" title={t.notes}>

@@ -1,0 +1,29 @@
+Merchant rename & learn — Phase 1 (backend foundation). Let the user rename the messy bank name on a transaction, remember it, and auto-apply it to future transactions with the same merchant signature. Claude assists (suggest + fuzzy), but the remember/recognize core is deterministic. No UI this pass.
+
+CONCEPT — a "signature" is a normalized key derived from the raw description that stays stable across months even as trailing IDs change. "ORIG CO NAME:KFI STAFFING, LL CO ENTRY DESCR:PAYROLL SEC:PPD ORIG ID:874304726" and next month's payroll (different ORIG ID/trace) must produce the SAME signature, so one rename ("KFI Staffing LLC") sticks for all future paychecks.
+
+NEW — signature fn in merchantNameExtract.ts: export merchantSignature(rawDescription): string. Lowercase, collapse whitespace, and STRIP volatile trailing tokens (ORIG ID:, IND ID:, WEB ID:, trace/check numbers, dates, SEC: codes) while KEEPING the stable identity (the ORIG CO NAME value, or the cleaned merchant core for card rows). Reuse the existing ORIG CO NAME regex in cleanMerchant. Return "" for empty input.
+
+NEW TABLE — merchant_aliases (household-scoped), Drizzle schema + migration:
+- id uuid pk, householdId uuid (fk households, cascade), userId text (actor),
+- signature text not null, alias text not null, source text not null default 'user' ('user' | 'claude'),
+- createdAt, updatedAt.
+- Unique index on (householdId, signature) — one alias per signature per household; upsert on conflict.
+
+RESOLVE PRECEDENCE — in routes/transactions.ts, change the displayName derivation added in the cleanup pass to:
+displayName = aliasBySignature(merchantSignature(description)) ?? cleanMerchant(description).
+Load the household's merchant_aliases once into a Map<signature, alias> per request; look up each row's signature. So once an alias exists, every current AND future row with that signature shows the friendly name automatically — that's the "remember next time."
+
+NEW ENDPOINTS (routes/transactions.ts or a small merchantAlias route), add to openapi + regenerate client:
+- PUT /transactions/merchant-alias  { rawDescription OR signature, alias }  → compute signature if rawDescription given, upsert (householdId, signature) → alias, source 'user'. Returns the saved alias + how many existing txns share that signature (for the UI toast "applies to N transactions").
+- DELETE /transactions/merchant-alias?signature=...  → remove the alias (revert to cleanMerchant).
+- (optional, Claude assist) POST /transactions/suggest-name { rawDescription } → Claude returns a short, clean merchant name. Reuse the debriefAdvisorSummary Anthropic infra (claude-sonnet-4-5, 12s timeout, 3-layer fallback → cleanMerchant on failure). Cache by signature. Claude only SUGGESTS a string; it never writes the alias.
+
+VERIFY (curl, paste me the JSON):
+1. GET /transactions returns displayName resolved via alias when one exists, else cleanMerchant.
+2. merchantSignature() returns the SAME value for two KFI payroll rows with different ORIG IDs (paste both).
+3. PUT /transactions/merchant-alias { rawDescription: "<KFI raw>", alias: "KFI Staffing LLC" } upserts and reports the count of matching txns; a re-fetch of /transactions now shows "KFI Staffing LLC" on all of them.
+4. DELETE reverts to cleanMerchant.
+5. (if built) POST /transactions/suggest-name returns a clean name and falls back to cleanMerchant on timeout.
+
+Architect review (schema + migration + endpoints + codegen). Diagnose-then-fix on the signature regex — show me 3-4 real raw descriptions and their signatures before finalizing. No new tests.

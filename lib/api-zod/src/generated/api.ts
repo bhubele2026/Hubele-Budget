@@ -110,7 +110,13 @@ export const GetDashboardResponse = zod.object({
         .string()
         .optional()
         .describe(
-          "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read via `cleanMerchant()` (ACH noise,\nORIG CO \/ WEB ID fields, and processor prefixes stripped). Used\nas the Transactions page row headline so the raw description can\nbe demoted to a muted sub-line. Computed server-side per list\nresponse — never persisted; the stored `description` is untouched.\n",
+          "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read. (#888) Precedence: a household\nmerchant alias keyed on `merchantSignature` wins; otherwise the\ndeterministic `cleanMerchant()` label (ACH noise, ORIG CO \/ WEB\nID fields, and processor prefixes stripped). Used as the row\nheadline so the raw description can be demoted to a muted\nsub-line. Computed server-side per list response — never\npersisted; the stored `description` is untouched.\n",
+        ),
+      merchantSignature: zod
+        .string()
+        .optional()
+        .describe(
+          "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
         ),
     }),
   ),
@@ -217,7 +223,13 @@ export const ListTransactionsResponseItem = zod.object({
     .string()
     .optional()
     .describe(
-      "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read via `cleanMerchant()` (ACH noise,\nORIG CO \/ WEB ID fields, and processor prefixes stripped). Used\nas the Transactions page row headline so the raw description can\nbe demoted to a muted sub-line. Computed server-side per list\nresponse — never persisted; the stored `description` is untouched.\n",
+      "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read. (#888) Precedence: a household\nmerchant alias keyed on `merchantSignature` wins; otherwise the\ndeterministic `cleanMerchant()` label (ACH noise, ORIG CO \/ WEB\nID fields, and processor prefixes stripped). Used as the row\nheadline so the raw description can be demoted to a muted\nsub-line. Computed server-side per list response — never\npersisted; the stored `description` is untouched.\n",
+    ),
+  merchantSignature: zod
+    .string()
+    .optional()
+    .describe(
+      "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
     ),
 });
 export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem);
@@ -364,7 +376,13 @@ export const UpdateTransactionResponse = zod
       .string()
       .optional()
       .describe(
-        "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read via `cleanMerchant()` (ACH noise,\nORIG CO \/ WEB ID fields, and processor prefixes stripped). Used\nas the Transactions page row headline so the raw description can\nbe demoted to a muted sub-line. Computed server-side per list\nresponse — never persisted; the stored `description` is untouched.\n",
+        "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read. (#888) Precedence: a household\nmerchant alias keyed on `merchantSignature` wins; otherwise the\ndeterministic `cleanMerchant()` label (ACH noise, ORIG CO \/ WEB\nID fields, and processor prefixes stripped). Used as the row\nheadline so the raw description can be demoted to a muted\nsub-line. Computed server-side per list response — never\npersisted; the stored `description` is untouched.\n",
+      ),
+    merchantSignature: zod
+      .string()
+      .optional()
+      .describe(
+        "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
       ),
   })
   .and(
@@ -555,7 +573,13 @@ export const ClearTransferOverrideResponse = zod.object({
     .string()
     .optional()
     .describe(
-      "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read via `cleanMerchant()` (ACH noise,\nORIG CO \/ WEB ID fields, and processor prefixes stripped). Used\nas the Transactions page row headline so the raw description can\nbe demoted to a muted sub-line. Computed server-side per list\nresponse — never persisted; the stored `description` is untouched.\n",
+      "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read. (#888) Precedence: a household\nmerchant alias keyed on `merchantSignature` wins; otherwise the\ndeterministic `cleanMerchant()` label (ACH noise, ORIG CO \/ WEB\nID fields, and processor prefixes stripped). Used as the row\nheadline so the raw description can be demoted to a muted\nsub-line. Computed server-side per list response — never\npersisted; the stored `description` is untouched.\n",
+    ),
+  merchantSignature: zod
+    .string()
+    .optional()
+    .describe(
+      "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
     ),
 });
 
@@ -609,6 +633,85 @@ export const RecategorizeTransactionsByPatternResponse = zod.object({
     .array(zod.string())
     .describe(
       'Ids of the transactions whose categoryId was flipped. The\nclient passes these back into the same endpoint with `from`\nand `to` swapped (and `ids` set) to implement one-click\n\"Undo\" of a bulk recategorization.\n',
+    ),
+});
+
+/**
+ * @summary (#888) Set or update a friendly merchant name (alias) for a
+transaction's stable signature. The caller passes the raw bank
+`description` (the server owns signature derivation so client and
+server can never drift) plus the desired `alias`. The alias is
+household-scoped and keyed on the signature, so it applies to every
+current AND future transaction that shares the same signature. The
+response reports how many existing transactions share the signature
+so the UI can say "applies to N transactions".
+
+ */
+
+export const PutMerchantAliasBody = zod.object({
+  description: zod
+    .string()
+    .min(1)
+    .describe(
+      "(#888) The raw bank description of the transaction being renamed.\nThe server derives the stable signature from this — the client\nnever sends a signature so the two can't drift.\n",
+    ),
+  alias: zod
+    .string()
+    .min(1)
+    .describe("The friendly merchant name to display for this signature."),
+});
+
+export const PutMerchantAliasResponse = zod.object({
+  signature: zod.string().describe("The signature the alias was keyed on."),
+  alias: zod.string().describe("The (trimmed) alias that was stored."),
+  affectedCount: zod
+    .number()
+    .describe(
+      "How many existing transactions share this signature (i.e. how many\nrow headlines this rename now affects). Future matching rows are\nalso covered but not counted here.\n",
+    ),
+});
+
+/**
+ * @summary (#888) Remove a merchant alias, resetting the row headline back to the
+deterministic bank-default name (cleanMerchant). Idempotent — deleting
+a non-existent alias succeeds as a no-op.
+
+ */
+export const DeleteMerchantAliasQueryParams = zod.object({
+  signature: zod.coerce
+    .string()
+    .describe("The merchant signature whose alias should be cleared."),
+});
+
+export const DeleteMerchantAliasResponse = zod.object({
+  signature: zod.string(),
+  deleted: zod.boolean(),
+});
+
+/**
+ * @summary (#888) Suggest a clean, human-friendly merchant name for a raw bank
+`description` using Anthropic. Read-only — does NOT persist an alias.
+Always returns a usable suggestion: on any AI error/timeout it falls
+back to the deterministic cleanMerchant label (`source: "fallback"`).
+
+ */
+
+export const SuggestMerchantNameBody = zod.object({
+  description: zod
+    .string()
+    .min(1)
+    .describe("The raw bank description to clean into a friendly name."),
+});
+
+export const SuggestMerchantNameResponse = zod.object({
+  suggestion: zod.string().describe("The suggested friendly merchant name."),
+  signature: zod
+    .string()
+    .describe("The stable signature derived from the description."),
+  source: zod
+    .enum(["ai", "fallback"])
+    .describe(
+      '\"ai\" when Anthropic produced the name, \"fallback\" when the\ndeterministic cleanMerchant label was used (API down\/slow\/empty).\n',
     ),
 });
 
@@ -2193,7 +2296,13 @@ export const GetForecastResponse = zod.object({
         .string()
         .optional()
         .describe(
-          "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read via `cleanMerchant()` (ACH noise,\nORIG CO \/ WEB ID fields, and processor prefixes stripped). Used\nas the Transactions page row headline so the raw description can\nbe demoted to a muted sub-line. Computed server-side per list\nresponse — never persisted; the stored `description` is untouched.\n",
+          "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read. (#888) Precedence: a household\nmerchant alias keyed on `merchantSignature` wins; otherwise the\ndeterministic `cleanMerchant()` label (ACH noise, ORIG CO \/ WEB\nID fields, and processor prefixes stripped). Used as the row\nheadline so the raw description can be demoted to a muted\nsub-line. Computed server-side per list response — never\npersisted; the stored `description` is untouched.\n",
+        ),
+      merchantSignature: zod
+        .string()
+        .optional()
+        .describe(
+          "(#888) Stable, normalized merchant key derived from the raw\n`description`. Rows that differ only by volatile trailing IDs \/\ntrace numbers \/ dates share a signature, so one rename applies to\nall of them. Used by the rename popover to set\/clear an alias and\nto count how many rows a rename will affect. Empty string when no\nstable signature can be derived. Computed server-side per list\nresponse — never persisted.\n",
         ),
     }),
   ),
