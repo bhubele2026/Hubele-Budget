@@ -1,0 +1,38 @@
+Cleanup task: clear the "113 awaiting match in Review Bucket" backlog on /chase. These are real transactions, already categorized correctly. I don't need to review them — just want them out of the queue so I have a clean slate going forward.
+
+CONTEXT — verified in code:
+
+The "N awaiting match in Review Bucket" chip on /chase (artifacts/h2budget/src/pages/transactions.tsx line 1076 awaitingMatchCount) counts transactions where:
+  - forecastFlag = true, AND
+  - resolution status is missing OR is anything other than "matched" / "ignored_unforecasted" / "unplanned"
+
+The simplest clean-up: flip forecastFlag = false on the backlog. The Debrief/Review pipeline filter (artifacts/api-server/src/routes/forecast.ts line 376 — `eq(forecastFlag, true)`) drops them from the queue. They stay in the database, stay categorized, stay in the budget actuals (Debrief reads them via the category buckets path, not the forecast_flag path). Variance numbers don't change. They just stop counting as "awaiting review."
+
+This is the same UPDATE pattern as yesterday's startupChaseForecastFlagRepair, just in the opposite direction and bounded by date.
+
+FIX — one-shot startup hook.
+
+Create artifacts/api-server/src/lib/startupChaseReviewBacklogClear.ts. For my household (a7182af8-49f0-48f3-920e-f916c7eab872, Chase checking external account YEvBBznkA3updAzAk7wyILEPd31z6BSQK184R) set forecast_flag = false on any plaid:chase row that:
+
+- occurredOn <= today (so future-pending Plaid rows that haven't actually posted yet are NOT touched)
+- forecastFlag = true (current backlog)
+- has NO existing forecast_resolutions row with status='matched'/'ignored_unforecasted'/'unplanned' OR has no resolution at all (the same predicate the awaiting-match counter uses — only zap rows that are genuinely sitting in the queue, leave already-resolved rows alone)
+
+Two query approaches both work — LEFT JOIN with the resolutions table and filter, OR subquery with NOT EXISTS. Whichever you prefer; use the same pattern as existing startup repairs.
+
+IMPORTANT — preserve sentToReviewAt. Don't null it out. The user has been clicking "Review" on individual txns this morning and that data is meaningful. Just flip forecastFlag.
+
+Gate the hook with a guard: count rows that would be affected, log "would clear N rows" if it's > 200 (safety check — if something's wrong with the predicate it shouldn't accidentally zap thousands), proceed only if the count is reasonable (< 200). Bail with a warn log if the count blows past the threshold.
+
+Wire into the boot sequence in artifacts/api-server/src/index.ts, same pattern as the existing hooks.
+
+Idempotent: subsequent runs find nothing (forecastFlag is already false), no-op.
+
+VERIFY (after publish, hard refresh /chase):
+
+1. The "113 awaiting match in Review Bucket" chip is gone or shows a much smaller number (just future-pending rows that synced today but occurred today and never got a resolution — those are fine to leave in the queue)
+2. Category variance on /debrief is UNCHANGED (Debrief reads actuals through the category-bucket path, not the forecast_flag gate)
+3. The 114 transactions on /chase still all visible — only their forecast_flag changed, the rows themselves are untouched
+4. Future Plaid syncs still insert new rows with forecast_flag = true (sync code wasn't touched), so going forward the Review pipeline works normally
+
+Architect review + typecheck + publish. No new tests.
