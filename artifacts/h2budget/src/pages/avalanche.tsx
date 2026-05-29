@@ -76,7 +76,6 @@ import {
 import { Pencil, Trash2, Plus, RefreshCw, Flame, TrendingDown, PartyPopper, X, ClipboardPaste, Sparkles } from "lucide-react";
 import {
   DebtPlaidActions,
-  DebtPlaidIndicator,
   DebtLastSynced,
   DebtPlaidSource,
   DebtReauthBanner,
@@ -173,6 +172,26 @@ function aprToneClass(apr: number): string {
   if (apr >= 0.15) return "text-amber-600 dark:text-amber-400";
   if (apr > 0) return "text-emerald-600 dark:text-emerald-400";
   return "text-muted-foreground";
+}
+
+// Single, row-level source chip for the Debts table. Replaces the per-cell
+// PLAID/MANUAL indicators that used to repeat in the APR, Balance, and Min
+// columns — the source is shown once per row in the creditor cell instead.
+function DebtSourceChip({ debt }: { debt: Debt }) {
+  const linked = !!debt.plaidAccountId;
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+      title={linked ? "Synced from Plaid" : "Manually entered"}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${
+          linked ? "bg-emerald-500" : "bg-muted-foreground/50"
+        }`}
+      />
+      {linked ? "Plaid" : "Manual"}
+    </span>
+  );
 }
 
 export default function AvalanchePage() {
@@ -1237,23 +1256,20 @@ export default function AvalanchePage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
-                    <th className="text-left px-3 py-2">Creditor</th>
-                    <th className="text-left px-3 py-2">Type</th>
-                    <th className="text-right px-3 py-2">APR</th>
-                    <th className="text-right px-3 py-2">Balance</th>
-                    <th className="text-right px-3 py-2">Min</th>
-                    <th className="text-left px-3 py-2">Due</th>
-                    <th className="text-right px-3 py-2">Payoff</th>
-                    <th className="text-right px-3 py-2">Daily $</th>
-                    <th className="px-3 py-2"></th>
-                    <th className="px-3 py-2"></th>
-                    <th className="px-3 py-2"></th>
+                    <th className="text-left px-3 py-2.5">Creditor</th>
+                    <th className="text-right px-3 py-2.5">APR</th>
+                    <th className="text-right px-3 py-2.5">Balance</th>
+                    <th className="text-right px-3 py-2.5">Min</th>
+                    <th className="text-left px-3 py-2.5">Due</th>
+                    <th className="text-right px-3 py-2.5">Payoff</th>
+                    <th className="text-right px-3 py-2.5 whitespace-nowrap">Daily $</th>
+                    <th className="text-right px-3 py-2.5 w-[1%] whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedActive.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="text-center py-8 text-muted-foreground">
+                      <td colSpan={8} className="text-center py-8 text-muted-foreground">
                         All clear — no active debts. Add one above to get started.
                       </td>
                     </tr>
@@ -1280,8 +1296,8 @@ export default function AvalanchePage() {
                         }`}
                         onClick={() => setDrillDown(d.id)}
                       >
-                        <td className="px-3 py-2 font-medium">
-                          <div className="flex items-center gap-2">
+                        <td className="px-3 py-4 font-medium align-middle">
+                          <div className="flex items-center gap-2.5">
                             <PayoffRing
                               originalBalance={
                                 dbt.originalBalance != null
@@ -1291,30 +1307,38 @@ export default function AvalanchePage() {
                               balance={Number(dbt.balance)}
                             />
                             <div className="min-w-0">
-                              {isTarget && (
-                                <Badge className="mr-2" variant="default">
-                                  Target
-                                </Badge>
+                              <div className="flex items-center gap-2 min-w-0">
+                                {isTarget && (
+                                  <Badge className="shrink-0" variant="default">
+                                    Target
+                                  </Badge>
+                                )}
+                                <span className="truncate" title={d.name}>
+                                  {d.name}
+                                </span>
+                                <DebtSourceChip debt={dbt} />
+                              </div>
+                              {(dbt.plaidAccountId || dbt.type) && (
+                                <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                                  {dbt.type && (
+                                    <span className="text-[11px] text-muted-foreground capitalize whitespace-nowrap">
+                                      {dbt.type}
+                                    </span>
+                                  )}
+                                  <DebtPlaidSource debt={dbt} />
+                                  <DebtLastSynced debt={dbt} />
+                                </div>
                               )}
-                              {d.name}
-                              <DebtPlaidSource debt={dbt} />
                             </div>
                           </div>
                         </td>
-                        <td className="px-3 py-2 text-muted-foreground">{dbt.type ?? "—"}</td>
                         <td
-                          className={`px-3 py-2 text-right tabular-nums ${aprToneClass(d.apr)}`}
+                          className={`px-3 py-4 text-right tabular-nums ${aprToneClass(d.apr)}`}
                         >
-                          <div className="flex items-center justify-end gap-1">
-                            <span>{fmtPct(d.apr)}</span>
-                            <DebtPlaidIndicator debt={dbt} field="apr" />
-                          </div>
+                          {fmtPct(d.apr)}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          <div className="flex items-center justify-end gap-1">
-                            <span>{fmtMoney(d.balance)}</span>
-                            <DebtPlaidIndicator debt={dbt} field="balance" />
-                          </div>
+                        <td className="px-3 py-4 text-right tabular-nums">
+                          <div>{fmtMoney(d.balance)}</div>
                           {(() => {
                             // (#421) Show a "−$X pending" hint when the user
                             // has tagged checking-account payments to this
@@ -1356,50 +1380,45 @@ export default function AvalanchePage() {
                               </Tooltip>
                             );
                           })()}
-                          <DebtLastSynced debt={dbt} />
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          <div className="flex items-center justify-end gap-1">
-                            <span>{fmtMoney(d.minPayment)}</span>
-                            <DebtPlaidIndicator debt={dbt} field="minPayment" />
-                          </div>
+                        <td className="px-3 py-4 text-right tabular-nums">
+                          {fmtMoney(d.minPayment)}
                         </td>
-                        <td className="px-3 py-2">{dueChip}</td>
-                        <td className="px-3 py-2 text-right text-xs text-muted-foreground">
+                        <td className="px-3 py-4">{dueChip}</td>
+                        <td className="px-3 py-4 text-right text-xs text-muted-foreground whitespace-nowrap">
                           {k ? fmtMonth(k.date) : "—"}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-xs text-muted-foreground">
+                        <td className="px-3 py-4 text-right tabular-nums text-xs text-muted-foreground">
                           {fmtMoney(dailyInterest(d))}
                         </td>
-                        <td className="px-3 py-2 text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPaying(dbt);
-                            }}
-                          >
-                            Pay
-                          </Button>
-                        </td>
                         <td
-                          className="px-3 py-2 text-right"
+                          className="px-3 py-4 text-right whitespace-nowrap"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <DebtPlaidActions debt={dbt} />
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditing(dbt);
-                            }}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPaying(dbt);
+                              }}
+                            >
+                              Pay
+                            </Button>
+                            <DebtPlaidActions debt={dbt} />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Edit debt"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditing(dbt);
+                              }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1408,16 +1427,16 @@ export default function AvalanchePage() {
                 {sortedActive.length > 0 && (
                   <tfoot>
                     <tr className="border-t bg-muted/40 font-semibold">
-                      <td className="px-3 py-2" colSpan={3}>
+                      <td className="px-3 py-3" colSpan={2}>
                         Totals
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
+                      <td className="px-3 py-3 text-right tabular-nums">
                         {fmtMoney(totalBalance)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
+                      <td className="px-3 py-3 text-right tabular-nums">
                         {fmtMoney(totalMin)}
                       </td>
-                      <td colSpan={6}></td>
+                      <td colSpan={4}></td>
                     </tr>
                   </tfoot>
                 )}
@@ -2050,10 +2069,10 @@ function renderDueChip(dueDay: number | null) {
   }
   let cls = "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
   if (days <= 2) cls = "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300";
-  else if (days <= 6) cls = "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
-  const label = days === 0 ? "Due today" : days === 1 ? "Due tomorrow" : `Due in ${days}d`;
+  else if (days <= 13) cls = "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
+  const label = days < 0 ? "overdue" : days === 0 ? "today" : `${days}d`;
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${cls}`}>
       {label}
     </span>
   );

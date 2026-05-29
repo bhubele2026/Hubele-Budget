@@ -134,19 +134,26 @@ export function DebtLastSynced({ debt }: { debt: Debt }) {
 export function DebtPlaidSource({ debt }: { debt: Debt }) {
   if (!debt.plaidAccountId || !debt.plaidAccount) return null;
   const a = debt.plaidAccount;
-  const inst = a.institutionName ?? "Plaid";
-  const acctLabel =
-    a.name ?? a.mask
-      ? `${a.name ?? "Account"}${a.mask ? ` ••${a.mask}` : ""}`
-      : "Linked account";
+  const inst = a.institutionName ?? null;
+  if (!a.mask && !inst) return null;
+  const fullLabel = `${inst ?? "Account"}${a.mask ? ` ••${a.mask}` : ""}`;
   return (
-    <div
-      className="text-[10px] text-muted-foreground truncate"
+    <span
+      className="inline-flex items-center gap-1.5 min-w-0"
       data-testid={`text-debt-plaid-source-${debt.id}`}
-      title={`${inst} — ${acctLabel}`}
+      title={fullLabel}
     >
-      {inst} · {acctLabel}
-    </div>
+      {inst ? (
+        <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground truncate max-w-[96px]">
+          {inst}
+        </span>
+      ) : null}
+      {a.mask ? (
+        <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+          •• {a.mask}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
