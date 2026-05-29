@@ -340,6 +340,7 @@ type BehaviorTxnRow = {
   amount: string;
   categoryId: string | null;
   isTransfer: boolean;
+  isExternalCardPayment: boolean;
   source: string;
 };
 
@@ -366,6 +367,34 @@ const SUBSCRIPTION_FREQUENCIES: ReadonlySet<string> = new Set([
   "yearly",
   "annual",
 ]);
+
+// (#879 — Biggest Splurge: discretionary only) A "splurge" should reflect
+// discretionary spend (shopping/dining/home-improvement/clothing/entertainment),
+// never a fixed obligation like mortgage, HELOC, a loan, rent, insurance,
+// utilities, taxes, or any debt/card payment. This pattern is matched against
+// a category name, a category group name, or the raw transaction description.
+export const FIXED_OBLIGATION_PATTERN =
+  /mortgage|heloc|home\s*equity|\bloan\b|\brent\b|insurance|\btax(es)?\b|utilit|\bdebt\b|card\s*payment/i;
+
+export interface SplurgeCategoryInfo {
+  name: string;
+  groupName: string;
+  kind: string;
+  sourceKind: string;
+  excludeFromBudget: boolean;
+}
+
+// True when a category is a fixed obligation and therefore can never be the
+// "biggest splurge". This is a splurge-only exclusion — it does NOT change the
+// shared isRealSpend / spendAmount predicate that feeds other surfaces.
+export function isNonDiscretionaryCategory(c: SplurgeCategoryInfo): boolean {
+  if (c.sourceKind === "auto_bills" || c.sourceKind === "auto_debts") return true;
+  if (c.kind === "income") return true;
+  if (c.excludeFromBudget) return true;
+  if (FIXED_OBLIGATION_PATTERN.test(c.name)) return true;
+  if (FIXED_OBLIGATION_PATTERN.test(c.groupName)) return true;
+  return false;
+}
 
 export async function buildBehaviorFacts(
   householdId: string,
@@ -395,8 +424,11 @@ export async function buildBehaviorFacts(
     .select({
       id: budgetCategoriesTable.id,
       name: budgetCategoriesTable.name,
+      groupName: budgetCategoriesTable.groupName,
       debtId: budgetCategoriesTable.debtId,
       kind: budgetCategoriesTable.kind,
+      sourceKind: budgetCategoriesTable.sourceKind,
+      excludeFromBudget: budgetCategoriesTable.excludeFromBudget,
     })
     .from(budgetCategoriesTable)
     .where(eq(budgetCategoriesTable.householdId, householdId));
@@ -406,9 +438,22 @@ export async function buildBehaviorFacts(
     { name: string; debtId: string | null; kind: string }
   >();
   const debtCategoryIds = new Set<string>();
+  // (#879) Categories that can never win "biggest splurge" — fixed obligations.
+  const splurgeExcludedCategoryIds = new Set<string>();
   for (const c of cats) {
     categoriesById.set(c.id, { name: c.name, debtId: c.debtId, kind: c.kind });
     if (c.debtId) debtCategoryIds.add(c.id);
+    if (
+      isNonDiscretionaryCategory({
+        name: c.name,
+        groupName: c.groupName,
+        kind: c.kind,
+        sourceKind: c.sourceKind,
+        excludeFromBudget: c.excludeFromBudget,
+      })
+    ) {
+      splurgeExcludedCategoryIds.add(c.id);
+    }
   }
   const ctx: SpendContext = { categoriesById, debtCategoryIds };
 
@@ -424,6 +469,7 @@ export async function buildBehaviorFacts(
       amount: transactionsTable.amount,
       categoryId: transactionsTable.categoryId,
       isTransfer: transactionsTable.isTransfer,
+      isExternalCardPayment: transactionsTable.isExternalCardPayment,
       source: transactionsTable.source,
     })
     .from(transactionsTable)
@@ -446,6 +492,7 @@ export async function buildBehaviorFacts(
       amount: transactionsTable.amount,
       categoryId: transactionsTable.categoryId,
       isTransfer: transactionsTable.isTransfer,
+      isExternalCardPayment: transactionsTable.isExternalCardPayment,
       source: transactionsTable.source,
     })
     .from(transactionsTable)
@@ -542,8 +589,20 @@ export async function buildBehaviorFacts(
       }
     }
 
-    // Biggest splurge.
-    if (!biggestSplurge || spend > biggestSplurge.amount) {
+    // Biggest splurge — discretionary spend only (#879). Skip fixed-obligation
+    // categories (mortgage/HELOC/loan/rent/insurance/utilities/taxes/debt/card
+    // payment, bills/debts auto categories, excluded-from-budget), and skip any
+    // row whose raw description matches the fixed-obligation pattern (a
+    // description backstop for card payments / mortgage rows that slip a
+    // discretionary-looking category), plus an explicit guard on the
+    // isExternalCardPayment flag so a flagged card payment can never win
+    // regardless of its category or description. Transfers and debt/card-payment
+    // noise are already removed by isRealSpend above.
+    const splurgeExcluded =
+      t.isExternalCardPayment === true ||
+      (t.categoryId !== null && splurgeExcludedCategoryIds.has(t.categoryId)) ||
+      FIXED_OBLIGATION_PATTERN.test(t.description);
+    if (!splurgeExcluded && (!biggestSplurge || spend > biggestSplurge.amount)) {
       biggestSplurge = {
         amount: round2(spend),
         date: t.occurredOn,
