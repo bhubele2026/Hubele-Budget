@@ -73,7 +73,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { Pencil, Trash2, Plus, RefreshCw, Flame, TrendingDown, PartyPopper, X, ClipboardPaste, Sparkles } from "lucide-react";
+import { Trash2, Plus, RefreshCw, Flame, TrendingDown, PartyPopper, X, ClipboardPaste, Sparkles } from "lucide-react";
 import {
   DebtPlaidActions,
   DebtLastSynced,
@@ -1406,18 +1406,10 @@ export default function AvalanchePage() {
                             >
                               Pay
                             </Button>
-                            <DebtPlaidActions debt={dbt} />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              title="Edit debt"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditing(dbt);
-                              }}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
+                            <DebtPlaidActions
+                              debt={dbt}
+                              onEdit={() => setEditing(dbt)}
+                            />
                           </div>
                         </td>
                       </tr>

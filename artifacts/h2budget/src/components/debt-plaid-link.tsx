@@ -25,7 +25,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Link2, Unlink, RefreshCw, Loader2, AlertTriangle, X } from "lucide-react";
+import { Link2, Unlink, RefreshCw, Loader2, AlertTriangle, X, MoreHorizontal, Pencil } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import {
   PlaidLinkButton,
@@ -272,7 +279,13 @@ function clearStaleStoredPlaidLinkToken(): void {
   }
 }
 
-export function DebtPlaidActions({ debt }: { debt: Debt }) {
+export function DebtPlaidActions({
+  debt,
+  onEdit,
+}: {
+  debt: Debt;
+  onEdit?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -335,44 +348,77 @@ export function DebtPlaidActions({ debt }: { debt: Debt }) {
             size="sm"
           />
         ) : null}
-        <Button
-          variant="ghost"
-          size="icon"
-          title="Refresh from Plaid"
-          disabled={refresh.isPending}
-          onClick={(e) => {
-            e.stopPropagation();
-            refresh.mutate({ id: debt.id });
-          }}
-          data-testid={`button-debt-refresh-${debt.id}`}
-        >
-          {refresh.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          title="Unlink from Plaid"
-          disabled={unlink.isPending}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (confirm("Unlink this debt from Plaid? Values will go back to manual.")) {
-              unlink.mutate({ id: debt.id });
-            }
-          }}
-          data-testid={`button-debt-unlink-${debt.id}`}
-        >
-          <Unlink className="h-3.5 w-3.5" />
-        </Button>
+        {/* (#863) Collapse the secondary row actions (sync/unlink + edit)
+            into a single "⋯" overflow menu so the row stays calm. The
+            inline Reconnect button (re-auth) stays out of the menu since
+            it's the one urgent fix. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              title="More actions"
+              onClick={(e) => e.stopPropagation()}
+              data-testid={`button-debt-actions-${debt.id}`}
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <DropdownMenuItem
+              disabled={refresh.isPending}
+              onClick={(e) => {
+                e.stopPropagation();
+                refresh.mutate({ id: debt.id });
+              }}
+              data-testid={`button-debt-refresh-${debt.id}`}
+            >
+              {refresh.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              Refresh from Plaid
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={unlink.isPending}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (confirm("Unlink this debt from Plaid? Values will go back to manual.")) {
+                  unlink.mutate({ id: debt.id });
+                }
+              }}
+              data-testid={`button-debt-unlink-${debt.id}`}
+            >
+              <Unlink className="h-3.5 w-3.5" />
+              Unlink from Plaid
+            </DropdownMenuItem>
+            {onEdit ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
+                  data-testid={`button-debt-edit-${debt.id}`}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit debt
+                </DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     );
   }
 
   return (
-    <>
+    <div className="flex items-center gap-1 justify-end">
       <Button
         variant="outline"
         size="sm"
@@ -389,6 +435,38 @@ export function DebtPlaidActions({ debt }: { debt: Debt }) {
         <Link2 className="h-3.5 w-3.5 mr-1" />
         Link
       </Button>
+      {/* (#863) Even for unlinked debts the edit pencil lives in the
+          overflow menu; the inline Link button stays as the primary swap. */}
+      {onEdit ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              title="More actions"
+              onClick={(e) => e.stopPropagation()}
+              data-testid={`button-debt-actions-${debt.id}`}
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              data-testid={`button-debt-edit-${debt.id}`}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit debt
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
       {open && (
         <PlaidAccountPicker
           debt={debt}
@@ -396,7 +474,7 @@ export function DebtPlaidActions({ debt }: { debt: Debt }) {
           onOpenChange={setOpen}
         />
       )}
-    </>
+    </div>
   );
 }
 
