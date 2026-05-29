@@ -1,0 +1,23 @@
+Bug: the "Amex (Blue Cash + Platinum)" balance tile on /reports is wrong. It shows $6,560.84, which is the CAPITAL ONE Platinum debt balance, not Amex.
+
+ROOT CAUSE — artifacts/h2budget/src/lib/reportsBalances.ts: resolveAmexRevolvingBalance(debts) matches cards by name (/platinum/i, /blue cash/i) against the DEBTS list. Brad's debts include "Capital One Platinum", which matches /platinum/i (the only guard is !/delta/i), so the tile sums the Capital One card as if it were Amex. And the debts list is the wrong source: Brad's revolving Amex cards (Blue Cash Preferred ••1006, Platinum Card ••1009) are tracked as Amex card accounts, NOT as debt rows — so "Blue Cash" is never found there, producing the bogus "1 card unavailable". Note Amex Platinum and Amex Delta Gold BOTH end ••1009, so they're only distinguishable by card NAME, not mask.
+
+DIAGNOSE FIRST (report before fixing) — identify what Amex card-account data is available to the ReportsBalanceTiles component (reports.tsx ~line 431): does the ForecastBundle expose Amex accounts (names + current balances), or is there a query/helper the /amex page already uses (amexEndingBalance.ts / the Amex Plaid accounts list)? The /amex page computes per-card ending balances today — point the tile at that same source. Tell me the exact data path you'll use.
+
+FIX:
+1. Resolve the Blue Cash + Platinum balances from the actual Amex CARD ACCOUNTS (the source /amex uses), NOT from debts. Match by card name on that Amex-scoped data: Blue Cash Preferred (exclude "Everyday"), Platinum Card (exclude "Delta"/"Gold"). Because the source is already Amex-only, a Capital One/Chase "Platinum" can never appear — but ALSO add an issuer guard so the matcher only ever considers Amex cards (defense in depth: never match a row whose issuer/name indicates Capital One, Chase, etc.).
+2. Sum only the two Amex revolving cards; exclude Delta SkyMiles Gold (charge card, pay-in-full) and Blue Cash Everyday.
+3. Make the sub-line DERIVED, not hard-coded: list the cards actually found with their real masks (e.g. "Blue Cash ••1006 + Platinum ••1009"). Only show "(N card unavailable)" when a genuinely-expected Amex card has no usable balance — not because it was looked for in the wrong list.
+4. The tile reads as the sum of the two Amex revolving card balances; verify it is NOT $6,560.84 (that's Capital One Platinum) and that Capital One Platinum still appears correctly on the Debts page, untouched.
+
+SCOPE — in the code I have, this tile renders once (ReportsBalanceTiles in reports.tsx via resolveAmexRevolvingBalance). Brad reports the badge "appears multiple times" — search for every render/use of resolveAmexRevolvingBalance and the "Amex (Blue Cash + Platinum)" label across the app; they should all flow through the corrected helper so every instance is fixed at once. If any instance still sources from debts, repoint it.
+
+TESTS — update reportsBalances.test.ts: seed Amex card accounts (Blue Cash ••1006, Platinum ••1009, Delta Gold ••1009) plus a "Capital One Platinum" DEBT, and assert (a) the total is Blue Cash + Amex Platinum only, (b) Capital One Platinum is NEVER included, (c) Delta Gold excluded, (d) the sub-line reflects the cards actually found.
+
+VERIFY (publish + hard refresh on /reports):
+1. Amex tile = sum of Amex Blue Cash + Amex Platinum balances; no longer $6,560.84.
+2. Sub-line shows the real cards/masks found; no false "card unavailable".
+3. Capital One Platinum unchanged on /debts.
+4. reportsBalances tests pass.
+
+Architect review (data-source change + possible new data wiring to the tile). Typecheck + publish.

@@ -1,0 +1,24 @@
+Amex page (artifacts/h2budget/src/pages/amex.tsx) — remove the weekly sub-bucket dropdown and tighten the row UI. Layout/visual + one element removal. No category, bubble, or amount logic changes.
+
+REMOVE — the far-right weekly sub-bucket dropdown. It's the Select with data-testid select-weekly-bucket-* (inside the slot-weekly-bucket-* wrapper), gated on t.weeklyAllowance, options groceries/dining/entertainment/misc (weeklyLabels.*). There are two instances (mobile + desktop, ~line 2404 and ~line 2700). Remove BOTH the Select and their wrapper slots. Brad doesn't use it.
+- KEEP everything else: the WK/MO/UN/RE bubbles, the main category dropdown, the magic-wand cleaned-merchant sub-line, amounts/balance.
+- KEEP the underlying weeklyBucket data + setRowBucket logic + the bubbles' weekly toggle — only the sub-bucket PICKER UI is removed. Rows marked weekly keep whatever bucket they have (default misc). Don't touch the Allowances page.
+- The useWeeklyBucketLabels import / weeklyLabels var may become unused after removal — drop them if so to keep typecheck clean.
+- Tests: if amexPageBucketAutoReview.test.tsx (or any amex test) asserts select-weekly-bucket-* exists, remove only that assertion/test; keep tests that cover bucket DATA/auto-review logic rather than the dropdown UI.
+
+TIGHTEN — same density pass as the Chase cleanup, applied to the Amex row:
+1. With the sub-bucket dropdown gone, re-balance the row: merchant name (Amex already gives clean names like "Roundys", "Exact Science" — keep as the title), card sub-line ("Blue Cash Preferred ••1006") muted, main category dropdown, WK/MO/UN/RE bubbles, then amount + "bal $X" right-aligned. Use the reclaimed horizontal space so columns breathe instead of crowding.
+2. Consolidate the chip/label clutter (Manually set, manually categorized, magic-wand merchant) into one consistent muted style on a single wrap row; don't mix weights/colors.
+3. Right-align amount + balance, tabular-nums; bal sub-line muted.
+4. Slightly more row vertical padding; subtle separators. Match the Chase row treatment so the two pages feel consistent.
+
+NAME CHANGE — do NOT build a separate rename UI here. When the shared merchant-alias backend lands (the rename feature), the same rename affordance will be wired onto this row too, reusing that endpoint, so Chase and Amex behave identically. Amex names are already clean, so this is the lower-priority follow-on, not part of this pass.
+
+VERIFY (publish + hard refresh on /amex):
+1. The far-right groceries/dining/misc dropdown is gone from every row (both mobile + desktop layouts).
+2. WK/MO/UN/RE bubbles and the main category dropdown still work and still save.
+3. Rows are tighter/aligned, chips one consistent style, amounts right-aligned.
+4. Marking a row weekly (WK) still works; Allowances page unaffected.
+5. Typecheck clean (no unused weeklyLabels import); amex tests pass.
+
+Single-file visual + element removal — light architect review. Typecheck + publish. No new tests.
