@@ -36,6 +36,10 @@ async function recordBalanceSnapshot(
 ): Promise<void> {
   const balStr =
     typeof balance === "number" ? balance.toFixed(2) : String(balance);
+  // Upsert the day's row so a later same-day balance update wins (including
+  // a correction down to $0). Previously this used onConflictDoNothing,
+  // which silently dropped same-day drops to zero and left paid-off debts
+  // frozen at their last non-zero balance in the history curve.
   await db
     .insert(debtBalanceHistoryTable)
     .values({
@@ -45,12 +49,13 @@ async function recordBalanceSnapshot(
       recordedOn: todayISO(),
       balance: balStr,
     })
-    .onConflictDoNothing({
+    .onConflictDoUpdate({
       target: [
         debtBalanceHistoryTable.householdId,
         debtBalanceHistoryTable.debtId,
         debtBalanceHistoryTable.recordedOn,
       ],
+      set: { balance: balStr },
     });
 }
 
@@ -675,6 +680,12 @@ router.patch("/debts/:id", requireAuth, async (req, res): Promise<void> => {
         );
       row.originalBalance = next;
     }
+  } else if (row.status === "archived" && current.status !== "archived") {
+    // Closing snapshot: when a debt is archived without a balance change in
+    // the same patch, record today's balance so the history curve has a
+    // final point at the debt's closing value (and the chart's current-
+    // balance latest point and the recorded history agree going forward).
+    await recordBalanceSnapshot(req.userId!, req.householdId!, row.id, row.balance);
   }
   const accountIds = row.plaidAccountId ? [row.plaidAccountId] : [];
   const { accountById, itemById } = await loadAccountContext(req.householdId!, accountIds);

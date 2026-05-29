@@ -604,26 +604,48 @@ export function perDebtProgress(
     });
 }
 
-// Aggregate per-day total balance across all debts that have ever been
-// recorded (active OR archived/paid-off). Days with no snapshot for a
-// particular debt carry that debt's last known balance forward (LOCF) so
-// the curve is continuous and a paid-off debt's decline to $0 stays in
-// the picture.
+// Aggregate per-day total household debt across all debts that have ever
+// been recorded (active OR archived/paid-off), so the curve reflects the
+// true total and trends DOWN as balances are paid.
+//
+// Two shaping rules keep the line honest:
+//
+//  1. Every debt is anchored to the chart window's common start using its
+//     earliest known balance (earliest recorded snapshot, falling back to
+//     originalBalance) as a flat baseline for the days BEFORE its first
+//     snapshot. Without this a newly-linked debt would "blink in" on its
+//     link date and step the total UP; instead it sits at a stable
+//     baseline that then declines. (Pre-link daily balances don't exist,
+//     so this baseline is an approximation — see the chart caption.)
+//
+//  2. The latest day uses each debt's CURRENT balance rather than its last
+//     recorded snapshot, so archived/paid-off debts fall to $0 (and active
+//     debts reflect today's true number) instead of freezing at a stale
+//     last snapshot.
+//
+// Days between a debt's first snapshot and the latest day carry the debt's
+// last known balance forward (LOCF) so the curve stays continuous.
 export function totalBalanceHistory(
   debts: Debt[],
   history: DebtBalanceHistoryEntry[],
 ): { date: string; total: number }[] {
   if (history.length === 0) return [];
-  const knownIds = new Set(debts.map((d) => d.id));
-  const filtered = history.filter((h) => knownIds.has(h.debtId));
+  const debtById = new Map(debts.map((d) => [d.id, d]));
+  const filtered = history.filter((h) => debtById.has(h.debtId));
   if (filtered.length === 0) return [];
   const allDays = Array.from(new Set(filtered.map((h) => h.recordedOn))).sort();
+  const latestDay = allDays[allDays.length - 1];
   const byDebt = groupBalanceHistory(filtered);
-  // Only count a debt from its own first recorded date forward — never
-  // back-fill it into days before tracking started, which would inflate
-  // older totals when a new debt is added later.
-  const firstDayByDebt = new Map<string, string>();
-  for (const [id, arr] of byDebt) firstDayByDebt.set(id, arr[0].recordedOn);
+  // Flat pre-link baseline per debt: earliest recorded snapshot, falling
+  // back to originalBalance (then current balance) when no snapshot exists.
+  const baselineByDebt = new Map<string, number>();
+  for (const [id, arr] of byDebt) {
+    const d = debtById.get(id);
+    const earliest = arr.length > 0 ? Number(arr[0].balance) : NaN;
+    const fallback =
+      d?.originalBalance != null ? Number(d.originalBalance) : Number(d?.balance ?? 0);
+    baselineByDebt.set(id, Number.isFinite(earliest) ? earliest : fallback);
+  }
   const last = new Map<string, number>();
   const out: { date: string; total: number }[] = [];
   for (const day of allDays) {
@@ -631,9 +653,20 @@ export function totalBalanceHistory(
       if (h.recordedOn === day) last.set(h.debtId, Number(h.balance));
     }
     let total = 0;
-    for (const [id, v] of last) {
-      const firstDay = firstDayByDebt.get(id);
-      if (firstDay && day >= firstDay) total += v;
+    for (const [id] of byDebt) {
+      let v: number;
+      if (day === latestDay) {
+        // True current balance wins on the final point so paid-off /
+        // archived debts drop to $0 instead of freezing at a stale value.
+        const d = debtById.get(id);
+        v = d ? Number(d.balance) : (last.get(id) ?? baselineByDebt.get(id) ?? 0);
+      } else if (last.has(id)) {
+        v = last.get(id)!;
+      } else {
+        // Before this debt's first snapshot: flat approximated baseline.
+        v = baselineByDebt.get(id) ?? 0;
+      }
+      total += v;
     }
     out.push({ date: day, total: Math.round(total) });
   }

@@ -996,8 +996,8 @@ function DebtSection({
         title="Total balance — actual history"
         caption={
           pastBalanceCurve.length > 1
-            ? "Sum of all active debt balances per recorded snapshot."
-            : "We're collecting daily snapshots — the curve grows as you pay down."
+            ? "Total household debt over time, trending down as you pay off. Balances before a debt was linked are approximated, and the final point reflects current balances (paid-off debts drop to $0)."
+            : "We're collecting daily snapshots — the curve fills in as you pay down."
         }
         empty={
           pastBalanceCurve.length === 0
