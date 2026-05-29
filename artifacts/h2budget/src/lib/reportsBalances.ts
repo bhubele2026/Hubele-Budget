@@ -213,6 +213,47 @@ export function describeAmexRevolvingCards(b: AmexRevolvingBalance): string {
   return base;
 }
 
+// (#884) The /reports Amex tile and the /amex page header intentionally
+// surface two *different* numbers, and each must label itself so the gap
+// never reads as a bug or a sync glitch:
+//   - /reports shows the **current** revolving balance, summed live from
+//     the Plaid liability-account source (`resolveAmexRevolvingBalance`
+//     above) — i.e. "what the cards owe right now".
+//   - /amex shows the **ending balance** for the selected month: an
+//     anchor rolled forward by that month's transactions
+//     (`makeAmexBalanceAtEndOf` in `amexEndingBalance.ts`) — i.e. the
+//     projected balance at the close of the month.
+// Because one is "right now" and the other is "projected end of month",
+// they can legitimately drift mid-month and from each other's anchor
+// source. Centralizing the copy here is the single source of truth that
+// keeps both surfaces describing the distinction the same way instead of
+// silently diverging.
+export const AMEX_BALANCE_DISTINCTION = {
+  // Prefix for the /reports tile sub-line, so it reads as the current
+  // (live) balance rather than the Amex page's end-of-month figure.
+  reportsSubPrefix: "Current balance",
+  // Hover copy for the /reports tile explaining why it can differ from
+  // the Amex page.
+  reportsTooltip:
+    "Current balance, summed live from your Amex card accounts. The Amex page shows the projected end-of-month balance, so the two can differ mid-month.",
+  // Note appended to the /amex Ending balance tooltip explaining the
+  // reciprocal distinction.
+  amexTooltipNote:
+    "This is the projected end-of-month balance. The Reports page shows the current live balance, so the two can differ mid-month.",
+} as const;
+
+// Build the /reports Amex tile sub-line: the live-card description
+// (`describeAmexRevolvingCards`) prefixed with the shared
+// "Current balance" label so the tile reads unambiguously as the
+// current balance — distinct from the Amex page's end-of-month figure.
+// When no card is found we keep the plain "No Amex cards linked" message
+// (no point labeling a missing balance as "current").
+export function describeReportsAmexTileSub(b: AmexRevolvingBalance): string {
+  const cards = describeAmexRevolvingCards(b);
+  if (!b.found) return cards;
+  return `${AMEX_BALANCE_DISTINCTION.reportsSubPrefix} · ${cards}`;
+}
+
 // Map the cash-signal status to the tile's label + tone. Mirrors the
 // language used by <AvalancheReadyCard/> ("Ready" / "Tight" / "Not Yet").
 export type CashSignalStatus = "ready" | "tight" | "not_yet" | "no_data";

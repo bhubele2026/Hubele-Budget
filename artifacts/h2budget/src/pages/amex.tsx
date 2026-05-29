@@ -74,6 +74,7 @@ import { useOpportunisticPlaidSync } from "@/hooks/use-opportunistic-plaid-sync"
 import { cn } from "@/lib/utils";
 import { relevantAmexPlaidItemIds } from "@/pages/amexPlaidScope";
 import { makeAmexBalanceAtEndOf, resolveAmexDebt } from "@/lib/amexEndingBalance";
+import { AMEX_BALANCE_DISTINCTION } from "@/lib/reportsBalances";
 import {
   compareNewestFirst,
   computeRunningBalances,
@@ -985,12 +986,17 @@ export default function AmexPage() {
         : asOfLabel
           ? `${sourceLabel} · as of ${asOfLabel}`
           : sourceLabel;
-    const tooltip =
+    const baseTooltip =
       endingBalance.source === "computed"
         ? `${footer}\nRunning sum of imported transactions. Set an actual balance to anchor the chip to the real card.`
         : endingBalance.source === "plaid" && asOfLabel
           ? `${sourceLabel} · as of ${asOfLabel}\nFetched directly from Plaid's per-account balance. Click refresh to re-fetch.`
           : footer;
+    // (#884) Append the shared note explaining that this tile shows the
+    // projected end-of-month balance while the Reports page shows the
+    // current live balance, so a mid-month difference between the two
+    // surfaces is expected — not a sync bug.
+    const tooltip = `${baseTooltip}\n\n${AMEX_BALANCE_DISTINCTION.amexTooltipNote}`;
     return { sourceLabel, asOfLabel, relativeAsOf, footer, tooltip };
   }, [endingBalance, isAmexSyncing]);
 

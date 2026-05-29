@@ -40,7 +40,8 @@ import { useToast } from "@/hooks/use-toast";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import {
   resolveAmexRevolvingBalance,
-  describeAmexRevolvingCards,
+  describeReportsAmexTileSub,
+  AMEX_BALANCE_DISTINCTION,
   cashBufferStatusMeta,
   type CashSignalStatus,
 } from "@/lib/reportsBalances";
@@ -191,6 +192,7 @@ function HeroTile({
   delta,
   badge,
   action,
+  tooltip,
 }: {
   label: string;
   value: string;
@@ -200,6 +202,10 @@ function HeroTile({
   delta?: { pct: number; goodIfUp: boolean } | null;
   badge?: string;
   action?: { label: string; href: string };
+  // (#884) Optional hover hint, surfaced via the native title attribute.
+  // Used by the Amex tile to explain why its "current balance" can differ
+  // from the Amex page's projected end-of-month figure.
+  tooltip?: string;
 }) {
   const toneClass =
     tone === "good"
@@ -210,7 +216,7 @@ function HeroTile({
           ? "text-[hsl(var(--warning))]"
           : "text-foreground";
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-2xl" title={tooltip}>
       <CardContent className="p-5">
         <div className="flex items-center justify-between">
           <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -475,9 +481,13 @@ function ReportsBalanceTiles({
   // at all (as opposed to a card being present but lacking a usable
   // balance). Only in that empty state do we nudge the user to link one.
   const amexNoCardLinked = !amex.blueCash.present && !amex.platinum.present;
+  // (#884) When at least one card is present, describeReportsAmexTileSub
+  // prefixes the sub-line with "Current balance ·" so the tile reads as
+  // the live current balance (distinct from the Amex page's projected
+  // end-of-month figure).
   const amexSub = amexNoCardLinked
     ? "Link an Amex card to track your revolving balance"
-    : describeAmexRevolvingCards(amex);
+    : describeReportsAmexTileSub(amex);
 
   const totalDebtValue =
     dashboard != null ? formatCurrency(dashboard.totalDebt) : "—";
@@ -515,6 +525,7 @@ function ReportsBalanceTiles({
             ? { label: "Link your Amex", href: "/amex" }
             : undefined
         }
+        tooltip={amex.found ? AMEX_BALANCE_DISTINCTION.reportsTooltip : undefined}
       />
       <HeroTile
         label="Total Debt"

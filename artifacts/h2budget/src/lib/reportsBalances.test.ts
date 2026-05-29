@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   resolveAmexRevolvingBalance,
   describeAmexRevolvingCards,
+  describeReportsAmexTileSub,
+  AMEX_BALANCE_DISTINCTION,
   type AmexCardAccountLike,
 } from "./reportsBalances";
 
@@ -223,5 +225,41 @@ describe("describeAmexRevolvingCards", () => {
   it("falls back to a friendly message when no Amex cards are linked", () => {
     const out = resolveAmexRevolvingBalance([]);
     expect(describeAmexRevolvingCards(out)).toBe("No Amex cards linked");
+  });
+});
+
+// (#884) The /reports tile shows the *current* balance while the /amex
+// page shows the *projected end-of-month* balance — two intentionally
+// different numbers. `describeReportsAmexTileSub` labels the reports tile
+// so the gap never reads as a bug.
+describe("describeReportsAmexTileSub", () => {
+  it("prefixes the card description with the shared 'Current balance' label", () => {
+    const out = resolveAmexRevolvingBalance([
+      amexCard("Blue Cash Preferred Card", "100.00", { mask: "1006" }),
+      amexCard("Platinum Card", "250.50", { mask: "1009" }),
+    ]);
+    expect(describeReportsAmexTileSub(out)).toBe(
+      "Current balance · Blue Cash ••1006 + Platinum ••1009",
+    );
+    // The prefix comes from the single shared source of truth.
+    expect(describeReportsAmexTileSub(out)).toContain(
+      AMEX_BALANCE_DISTINCTION.reportsSubPrefix,
+    );
+  });
+
+  it("keeps the unavailable subnote intact under the Current balance prefix", () => {
+    const out = resolveAmexRevolvingBalance([
+      amexCard("Blue Cash Preferred Card", null, { mask: "1006" }),
+      amexCard("Platinum Card", "420.00", { mask: "1009" }),
+    ]);
+    expect(describeReportsAmexTileSub(out)).toBe(
+      "Current balance · Blue Cash ••1006 + Platinum ••1009 (1 card unavailable)",
+    );
+  });
+
+  it("does NOT label a missing balance as 'Current balance'", () => {
+    const out = resolveAmexRevolvingBalance([]);
+    expect(describeReportsAmexTileSub(out)).toBe("No Amex cards linked");
+    expect(describeReportsAmexTileSub(out)).not.toContain("Current balance");
   });
 });
