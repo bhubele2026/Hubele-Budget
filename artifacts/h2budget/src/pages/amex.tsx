@@ -60,7 +60,6 @@ import { useToast } from "@/hooks/use-toast";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
-import { useWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { BucketBubbles, type BucketKey } from "@/components/bucket-bubbles";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { PostLinkProgressBanner } from "@/components/post-link-progress";
@@ -403,7 +402,6 @@ export default function AmexPage() {
   const updateTx = useUpdateTransaction();
   const bulkUpdateTx = useBulkUpdateTransactions();
   const buildRuleUndoAction = useRuleActionUndo();
-  const weeklyLabels = useWeeklyBucketLabels();
 
   // "Set actual balance" popover (only surfaced when ending balance source
   // is "computed"). Persists the typed value to the server-side anchor at
@@ -2383,54 +2381,10 @@ export default function AmexPage() {
                           onToggle={(b, next) => onBubbleToggle(t, b, next)}
                         />
                       )}
-                      {/* (#638) Per-row weekly-bucket picker. Always
-                          rendered in a fixed-size slot so toggling WK
-                          on/off doesn't change the row height and
-                          bounce the virtualized list (#626). The
-                          inner Select is only mounted (and only
-                          interactive) when WK is on. */}
-                      {!t.isTransfer && (
-                        <div
-                          className="h-7 w-28 shrink-0"
-                          aria-hidden={t.weeklyAllowance ? undefined : true}
-                          style={
-                            t.weeklyAllowance
-                              ? undefined
-                              : { visibility: "hidden", pointerEvents: "none" }
-                          }
-                          data-testid={`slot-weekly-bucket-mobile-${t.id}`}
-                        >
-                          {t.weeklyAllowance ? (
-                            <Select
-                              value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}
-                              onValueChange={(v) =>
-                                setRowBucket(
-                                  t,
-                                  "weekly",
-                                  v as typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket],
-                                )
-                              }
-                            >
-                              <SelectTrigger
-                                className="h-7 w-28 text-xs"
-                                data-testid={`select-weekly-bucket-mobile-${t.id}`}
-                              >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value={TransactionWeeklyBucket.groceries}>{weeklyLabels.groceries}</SelectItem>
-                                <SelectItem value={TransactionWeeklyBucket.dining}>{weeklyLabels.dining}</SelectItem>
-                                <SelectItem value={TransactionWeeklyBucket.entertainment}>{weeklyLabels.entertainment}</SelectItem>
-                                <SelectItem value={TransactionWeeklyBucket.misc}>{weeklyLabels.misc}</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : null}
-                        </div>
-                      )}
                       {!t.isTransfer && t.isTransferUserOverridden && (
                         <Badge
                           variant="outline"
-                          className="inline-flex items-center text-[10px] font-normal border-slate-200 text-slate-500 bg-slate-50/60"
+                          className="inline-flex items-center text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
                           title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
                           data-testid={`badge-transfer-overridden-cleared-mobile-${t.id}`}
                         >
@@ -2440,7 +2394,7 @@ export default function AmexPage() {
                       {t.isTransfer && (
                         <Badge
                           variant="outline"
-                          className="inline-flex items-center gap-1 text-[10px] border-slate-300 text-slate-700 bg-slate-50"
+                          className="inline-flex items-center gap-1 text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
                           title={
                             t.isTransferUserOverridden
                               ? "Manually set — won't be re-flagged on the next sync"
@@ -2538,14 +2492,14 @@ export default function AmexPage() {
                         data-ignored={isIgnored ? "true" : "false"}
                         data-testid={`row-amex-${t.id}`}
                       >
-                        <td className="px-3 py-2 w-8">
+                        <td className="px-3 py-3 w-8 align-top">
                           <Checkbox
                             checked={selected.has(t.id)}
                             onCheckedChange={() => toggleOne(t.id)}
                             aria-label="Select"
                           />
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-3 align-top">
                           <div className="font-medium truncate max-w-[420px]" title={t.description}>
                             {t.description}
                           </div>
@@ -2556,14 +2510,14 @@ export default function AmexPage() {
                           )}
                         </td>
                         <td
-                          className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap"
+                          className="px-3 py-3 text-xs text-muted-foreground whitespace-nowrap align-top"
                           data-testid={`text-card-${t.id}`}
                         >
                           {(t.plaidAccountId &&
                             cardLabelByPlaidAccountId.get(t.plaidAccountId)) ||
                             "—"}
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-3 align-top">
                           <CategoryPicker
                             value={t.categoryId ?? null}
                             categories={categories ?? []}
@@ -2575,7 +2529,7 @@ export default function AmexPage() {
                           {!t.isTransfer && t.isTransferUserOverridden && (
                             <Badge
                               variant="outline"
-                              className="mt-1 inline-flex items-center text-[10px] font-normal border-slate-200 text-slate-500 bg-slate-50/60"
+                              className="mt-1 inline-flex items-center text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
                               title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
                               data-testid={`badge-transfer-overridden-cleared-${t.id}`}
                             >
@@ -2585,7 +2539,7 @@ export default function AmexPage() {
                           {t.isTransfer && (
                             <Badge
                               variant="outline"
-                              className="mt-1 inline-flex items-center gap-1 text-[10px] border-slate-300 text-slate-700 bg-slate-50"
+                              className="mt-1 inline-flex items-center gap-1 text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
                               title={
                                 t.isTransferUserOverridden
                                   ? "Manually set — won't be re-flagged on the next sync"
@@ -2667,7 +2621,7 @@ export default function AmexPage() {
                             />
                           </div>
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-3 align-top">
                           <div className="flex items-center gap-2">
                             {/* (#607) Hide bucket bubbles on transfer
                                 rows — see mobile layout above. */}
@@ -2682,56 +2636,11 @@ export default function AmexPage() {
                                 onToggle={(b, next) => onBubbleToggle(t, b, next)}
                               />
                             )}
-                            {/* (#638) Per-row weekly-bucket picker.
-                                Always rendered in a fixed-size slot so
-                                toggling WK on/off doesn't change the
-                                row height and bounce the virtualized
-                                list (#626). The inner Select is only
-                                mounted (and only interactive) when WK
-                                is on. */}
-                            {!t.isTransfer && (
-                              <div
-                                className="h-7 w-28 shrink-0"
-                                aria-hidden={t.weeklyAllowance ? undefined : true}
-                                style={
-                                  t.weeklyAllowance
-                                    ? undefined
-                                    : { visibility: "hidden", pointerEvents: "none" }
-                                }
-                                data-testid={`slot-weekly-bucket-${t.id}`}
-                              >
-                                {t.weeklyAllowance ? (
-                                  <Select
-                                    value={t.weeklyBucket ?? TransactionWeeklyBucket.misc}
-                                    onValueChange={(v) =>
-                                      setRowBucket(
-                                        t,
-                                        "weekly",
-                                        v as typeof TransactionWeeklyBucket[keyof typeof TransactionWeeklyBucket],
-                                      )
-                                    }
-                                  >
-                                    <SelectTrigger
-                                      className="h-7 w-28 text-xs"
-                                      data-testid={`select-weekly-bucket-${t.id}`}
-                                    >
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value={TransactionWeeklyBucket.groceries}>{weeklyLabels.groceries}</SelectItem>
-                                      <SelectItem value={TransactionWeeklyBucket.dining}>{weeklyLabels.dining}</SelectItem>
-                                      <SelectItem value={TransactionWeeklyBucket.entertainment}>{weeklyLabels.entertainment}</SelectItem>
-                                      <SelectItem value={TransactionWeeklyBucket.misc}>{weeklyLabels.misc}</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                ) : null}
-                              </div>
-                            )}
                           </div>
                         </td>
-                        <td className="px-3 py-2 text-right font-mono tabular-nums whitespace-nowrap">
+                        <td className="px-3 py-3 text-right font-mono tabular-nums whitespace-nowrap align-top">
                           <div className="flex flex-col items-end">
-                            <span>{formatCurrency(parseAbs(t.amount))}</span>
+                            <span className="font-semibold">{formatCurrency(parseAbs(t.amount))}</span>
                             {runningBalanceMap.has(t.id) && (
                               <span
                                 className="text-[11px] text-muted-foreground"
