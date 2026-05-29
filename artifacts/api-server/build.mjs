@@ -1,43 +1,24 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { execSync } from "node:child_process";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
 import { rm } from "node:fs/promises";
+import { resolveBuildId } from "../../scripts/build-id.mjs";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
 
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 
-// (#823) Per-deploy build identifier baked into the bundle via esbuild
-// `define`. The web build (vite.config.ts) computes this the SAME way so
-// the API and the loaded bundle agree on what version is "current" per
-// deploy. Resolution order:
-//   1. APP_BUILD_ID env — lets a pipeline pin ONE shared id across both
-//      bundles explicitly (most robust).
-//   2. git short hash — stable per commit; what we use on Replit.
-//   3. "dev" — a SHARED, non-actionable fallback. We deliberately do NOT
-//      fall back to a timestamp: the API and web builds run as separate
-//      processes, so independent timestamps would never match and would
-//      make the freshly-loaded bundle look permanently outdated. With a
-//      shared "dev" the version-check simply no-ops (the client ignores
-//      "dev"), which is the safe failure mode.
-function resolveBuildId() {
-  if (process.env.APP_BUILD_ID) return process.env.APP_BUILD_ID;
-  try {
-    return execSync("git rev-parse --short HEAD", {
-      cwd: artifactDir,
-      stdio: ["ignore", "pipe", "ignore"],
-    })
-      .toString()
-      .trim();
-  } catch {
-    return "dev";
-  }
-}
-
+// (#823/#833) Per-deploy build identifier baked into the bundle via
+// esbuild `define`. The web build (vite.config.ts) resolves it the SAME
+// way (shared module: scripts/build-id.mjs) so the API and the loaded
+// bundle agree on what version is "current" per deploy. Resolution
+// order: APP_BUILD_ID env → .app-build-id file (written once by the
+// deploy pre-build hook so both bundles match even with no git) → git
+// short hash → "dev" (the client ignores "dev", so the check no-ops —
+// the safe failure mode). See scripts/build-id.mjs for the rationale.
 const buildId = resolveBuildId();
 
 async function buildAll() {

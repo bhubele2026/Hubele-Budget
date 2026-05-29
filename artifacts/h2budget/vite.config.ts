@@ -2,35 +2,20 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import { execSync } from "node:child_process";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+// @ts-expect-error -- plain .mjs shared module, no type declarations
+import { resolveBuildId } from "../../scripts/build-id.mjs";
 
-// (#823) Per-deploy build identifier baked into the web bundle. The API
-// server (artifacts/api-server/build.mjs) computes this the SAME way so
-// the loaded bundle and `/api/version` agree on what's "current" per
-// deploy. The client poller compares them and prompts a reload when they
-// differ. Resolution order mirrors the API build exactly:
-//   1. APP_BUILD_ID env (a pipeline can pin ONE shared id).
-//   2. git short hash (what we use on Replit).
-//   3. "dev" — a SHARED, non-actionable fallback. We deliberately do NOT
-//      fall back to a timestamp: API and web build as separate processes,
-//      so independent timestamps could never match and would make the
-//      loaded bundle look permanently outdated. "dev" makes the check
-//      no-op (the client ignores "dev"), the safe failure mode.
-function resolveBuildId(): string {
-  if (process.env.APP_BUILD_ID) return process.env.APP_BUILD_ID;
-  try {
-    return execSync("git rev-parse --short HEAD", {
-      stdio: ["ignore", "pipe", "ignore"],
-    })
-      .toString()
-      .trim();
-  } catch {
-    return "dev";
-  }
-}
-
-const buildId = resolveBuildId();
+// (#823/#833) Per-deploy build identifier baked into the web bundle. The
+// API server (artifacts/api-server/build.mjs) resolves it the SAME way
+// (shared module: scripts/build-id.mjs) so the loaded bundle and
+// `/api/version` agree on what's "current" per deploy. The client poller
+// compares them and prompts a reload when they differ. Resolution order:
+// APP_BUILD_ID env → .app-build-id file (written once by the deploy
+// pre-build hook so both bundles match even with no git) → git short hash
+// → "dev" (the client ignores "dev", so the check no-ops — the safe
+// failure mode). See scripts/build-id.mjs for the rationale.
+const buildId: string = resolveBuildId();
 
 const isServe =
   process.argv.includes("serve") ||
