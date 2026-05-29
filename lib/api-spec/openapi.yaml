@@ -2210,6 +2210,15 @@ components:
             pattern reflects on every existing transaction without a
             backfill. Powers the "matched by rule X · jump to it" affordance
             on the Transactions and Amex pages.
+        displayName:
+          type: string
+          description: |
+            (#868) Clean, human-readable merchant label derived from the
+            raw bank `description` on read via `cleanMerchant()` (ACH noise,
+            ORIG CO / WEB ID fields, and processor prefixes stripped). Used
+            as the Transactions page row headline so the raw description can
+            be demoted to a muted sub-line. Computed server-side per list
+            response — never persisted; the stored `description` is untouched.
     CreateTransactionInput:
       type: object
       required: [occurredOn, description, amount]

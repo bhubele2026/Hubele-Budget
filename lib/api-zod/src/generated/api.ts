@@ -106,6 +106,12 @@ export const GetDashboardResponse = zod.object({
         .describe(
           'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
         ),
+      displayName: zod
+        .string()
+        .optional()
+        .describe(
+          "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read via `cleanMerchant()` (ACH noise,\nORIG CO \/ WEB ID fields, and processor prefixes stripped). Used\nas the Transactions page row headline so the raw description can\nbe demoted to a muted sub-line. Computed server-side per list\nresponse — never persisted; the stored `description` is untouched.\n",
+        ),
     }),
   ),
   topCategories: zod.array(
@@ -206,6 +212,12 @@ export const ListTransactionsResponseItem = zod.object({
     .nullish()
     .describe(
       'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+    ),
+  displayName: zod
+    .string()
+    .optional()
+    .describe(
+      "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read via `cleanMerchant()` (ACH noise,\nORIG CO \/ WEB ID fields, and processor prefixes stripped). Used\nas the Transactions page row headline so the raw description can\nbe demoted to a muted sub-line. Computed server-side per list\nresponse — never persisted; the stored `description` is untouched.\n",
     ),
 });
 export const ListTransactionsResponse = zod.array(ListTransactionsResponseItem);
@@ -347,6 +359,12 @@ export const UpdateTransactionResponse = zod
       .nullish()
       .describe(
         'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+      ),
+    displayName: zod
+      .string()
+      .optional()
+      .describe(
+        "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read via `cleanMerchant()` (ACH noise,\nORIG CO \/ WEB ID fields, and processor prefixes stripped). Used\nas the Transactions page row headline so the raw description can\nbe demoted to a muted sub-line. Computed server-side per list\nresponse — never persisted; the stored `description` is untouched.\n",
       ),
   })
   .and(
@@ -532,6 +550,12 @@ export const ClearTransferOverrideResponse = zod.object({
     .nullish()
     .describe(
       'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+    ),
+  displayName: zod
+    .string()
+    .optional()
+    .describe(
+      "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read via `cleanMerchant()` (ACH noise,\nORIG CO \/ WEB ID fields, and processor prefixes stripped). Used\nas the Transactions page row headline so the raw description can\nbe demoted to a muted sub-line. Computed server-side per list\nresponse — never persisted; the stored `description` is untouched.\n",
     ),
 });
 
@@ -2164,6 +2188,12 @@ export const GetForecastResponse = zod.object({
         .nullish()
         .describe(
           'Id of the mapping rule that auto-categorize would currently\nattribute for this row, or null when no rule matches (e.g. the\ncategory was set manually). Computed server-side per list\nresponse — not persisted on the row — so editing a rule\'s\npattern reflects on every existing transaction without a\nbackfill. Powers the \"matched by rule X · jump to it\" affordance\non the Transactions and Amex pages.\n',
+        ),
+      displayName: zod
+        .string()
+        .optional()
+        .describe(
+          "(#868) Clean, human-readable merchant label derived from the\nraw bank `description` on read via `cleanMerchant()` (ACH noise,\nORIG CO \/ WEB ID fields, and processor prefixes stripped). Used\nas the Transactions page row headline so the raw description can\nbe demoted to a muted sub-line. Computed server-side per list\nresponse — never persisted; the stored `description` is untouched.\n",
         ),
     }),
   ),

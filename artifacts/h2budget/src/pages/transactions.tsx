@@ -86,7 +86,10 @@ import { isBankTxn } from "@/lib/forecastMatch";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
 import { type BucketKey } from "@/components/bucket-bubbles";
-import { TransactionRowChips } from "@/components/transaction-row-chips";
+import {
+  TransactionRowChips,
+  CHIP_BASE,
+} from "@/components/transaction-row-chips";
 import { chaseMonthTotals } from "@/lib/chaseScope";
 import {
   makeChaseBalanceAtEndOf,
@@ -2492,7 +2495,7 @@ export default function TransactionsPage() {
                   <div
                     key={tx.id}
                     className={cn(
-                      "p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-muted/30 transition-colors",
+                      "px-3 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-muted/30 transition-colors",
                       (tx.forecastFlag || isIgnored) && "opacity-60 bg-muted/20",
                       focusTxId === tx.id &&
                         "ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/30",
@@ -2509,80 +2512,28 @@ export default function TransactionsPage() {
                         data-testid={`select-${tx.id}`}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline gap-2 mb-1 flex-wrap">
-                          <span className="font-medium text-foreground truncate">
-                            {tx.description}
-                          </span>
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] font-normal border-amber-200 text-amber-700 bg-amber-50"
-                            data-testid={`badge-pending-${tx.id}`}
-                            title="Plaid reported this charge as pending — it will flip to posted automatically when the bank finalizes it."
-                          >
-                            Pending
-                          </Badge>
+                        <div className="flex items-baseline gap-2 mb-0.5 flex-wrap">
                           <span
-                            className="text-[11px] text-muted-foreground/80"
-                            data-testid={`text-source-${tx.id}`}
+                            className="font-medium text-foreground truncate"
+                            data-testid={`text-display-name-${tx.id}`}
                           >
-                            {formatTransactionSource(tx.source)}
+                            {tx.displayName || tx.description}
                           </span>
                         </div>
-                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <div
+                          className="text-[10px] text-muted-foreground/70 truncate mb-1"
+                          title={tx.description}
+                          data-testid={`text-raw-description-${tx.id}`}
+                        >
+                          {tx.description}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground mb-1">
                           <span>
                             {new Date(`${tx.occurredOn}T00:00:00`).toLocaleDateString(
                               undefined,
                               { month: "short", day: "numeric" },
                             )}
                           </span>
-                          {/* (#728) Pending rows are still subject to the
-                              forecast auto-matcher — without this badge
-                              the user can't tell whether a pending
-                              charge is already tracked against a
-                              forecast item or is a brand-new unplanned
-                              charge they need to react to. Mirrors the
-                              forecast-state chip rendered on posted
-                              rows below. */}
-                          {tx.forecastFlag && (() => {
-                            const r = resolutionByTxnId.get(tx.id);
-                            if (r?.status === "matched") {
-                              return (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px] border-primary/30 text-primary bg-primary/10"
-                                  data-testid={`badge-forecast-state-${tx.id}`}
-                                  data-forecast-state="matched"
-                                >
-                                  <Inbox className="w-3 h-3 mr-1" /> Matched to forecast
-                                </Badge>
-                              );
-                            }
-                            if (
-                              r?.status === "ignored_unforecasted" ||
-                              r?.status === "unplanned"
-                            ) {
-                              return (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px] border-slate-300 text-slate-700 bg-slate-50"
-                                  data-testid={`badge-forecast-state-${tx.id}`}
-                                  data-forecast-state="unplanned"
-                                >
-                                  <Inbox className="w-3 h-3 mr-1" /> Unplanned
-                                </Badge>
-                              );
-                            }
-                            return (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] border-amber-200 text-amber-800 bg-amber-50"
-                                data-testid={`badge-forecast-state-${tx.id}`}
-                                data-forecast-state="in-review-bucket"
-                              >
-                                <Inbox className="w-3 h-3 mr-1" /> In Review Bucket
-                              </Badge>
-                            );
-                          })()}
                           <MatchedRuleChip
                             categoryId={tx.categoryId}
                             matchedRuleId={tx.matchedRuleId}
@@ -2590,19 +2541,58 @@ export default function TransactionsPage() {
                             testIdSuffix={`pending-${tx.id}`}
                           />
                         </div>
-                        {/* (#740/#741/#742) Categorization affordances on
-                            pending rows. Shares the `<TransactionRowChips />`
-                            component with the posted block below so any
-                            future tweak lands on both at once (the gap
-                            #740 fixed was exactly this drift).
-                            Excludes the inline amount + date editors on
-                            purpose (those values are Plaid-controlled on
-                            pending rows and would silently get overwritten
-                            on the next sync). The matched-rule chip and
-                            forecast-state badge live in the secondary
-                            header row above instead of the cluster, so
-                            they're not passed in here. */}
+                        {/* (#740/#741/#742/#868) Single muted chip cluster:
+                            source + status (Pending / forecast-state) +
+                            category control + bucket toggles, all on one
+                            wrapping row in a calm muted-outline style. Shares
+                            the <TransactionRowChips /> cluster with the posted
+                            block. Inline amount + date editors are excluded on
+                            purpose (Plaid-controlled on pending rows and would
+                            silently get overwritten on the next sync). */}
                         <div className="flex flex-wrap gap-1.5 items-center mt-1">
+                          <Badge
+                            variant="outline"
+                            className={`text-[11px] font-normal ${CHIP_BASE}`}
+                            data-testid={`text-source-${tx.id}`}
+                          >
+                            {formatTransactionSource(tx.source)}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={`text-[11px] font-normal ${CHIP_BASE}`}
+                            data-testid={`badge-pending-${tx.id}`}
+                            title="Plaid reported this charge as pending — it will flip to posted automatically when the bank finalizes it."
+                          >
+                            Pending
+                          </Badge>
+                          {/* (#728) Pending rows are still subject to the
+                              forecast auto-matcher — this status chip tells
+                              the user whether a pending charge is already
+                              tracked against a forecast item or is a brand-new
+                              unplanned charge. Mirrors the posted block. */}
+                          {tx.forecastFlag && (() => {
+                            const r = resolutionByTxnId.get(tx.id);
+                            const state =
+                              r?.status === "matched"
+                                ? { attr: "matched", label: "Matched to forecast" }
+                                : r?.status === "ignored_unforecasted" ||
+                                    r?.status === "unplanned"
+                                  ? { attr: "unplanned", label: "Unplanned" }
+                                  : {
+                                      attr: "in-review-bucket",
+                                      label: "In Review Bucket",
+                                    };
+                            return (
+                              <Badge
+                                variant="outline"
+                                className={`text-[11px] font-normal ${CHIP_BASE}`}
+                                data-testid={`badge-forecast-state-${tx.id}`}
+                                data-forecast-state={state.attr}
+                              >
+                                <Inbox className="w-3 h-3 mr-1" /> {state.label}
+                              </Badge>
+                            );
+                          })()}
                           <TransactionRowChips
                             tx={tx}
                             categories={categories ?? []}
@@ -2711,7 +2701,7 @@ export default function TransactionsPage() {
                 <div
                   key={tx.id}
                   className={cn(
-                    "p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-muted/30 transition-colors",
+                    "px-3 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-muted/30 transition-colors",
                     (tx.forecastFlag || isIgnored) && "opacity-60 bg-muted/20",
                     focusTxId === tx.id &&
                       "ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/30",
@@ -2729,26 +2719,58 @@ export default function TransactionsPage() {
                       data-testid={`select-${tx.id}`}
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2 mb-1 flex-wrap">
-                        <span className="font-medium text-foreground truncate">
-                          {tx.description}
-                        </span>
+                      <div className="flex items-baseline gap-2 mb-0.5 flex-wrap">
                         <span
-                          className="text-[11px] text-muted-foreground/80"
+                          className="font-medium text-foreground truncate"
+                          data-testid={`text-display-name-${tx.id}`}
+                        >
+                          {tx.displayName || tx.description}
+                        </span>
+                      </div>
+                      <div
+                        className="text-[10px] text-muted-foreground/70 truncate mb-1"
+                        title={tx.description}
+                        data-testid={`text-raw-description-${tx.id}`}
+                      >
+                        {tx.description}
+                      </div>
+                      {/* (#741/#742/#868) Single muted chip cluster shared with
+                          the pending block (see `<TransactionRowChips />`):
+                          source + status (forecast-state) chips lead, then the
+                          category control, matched-rule chip, transfer pill,
+                          and bucket toggles — all on one wrapping row in a calm
+                          muted-outline style. */}
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <Badge
+                          variant="outline"
+                          className={`text-[11px] font-normal ${CHIP_BASE}`}
                           data-testid={`text-source-${tx.id}`}
                         >
                           {formatTransactionSource(tx.source)}
-                        </span>
-                      </div>
-                      {/* (#741/#742) Shared cluster with the pending block
-                          above (see `<TransactionRowChips />`). The matched-rule
-                          chip is slotted in next to the category picker
-                          and the forecast-state badge is slotted in
-                          between the transfer pill and the bucket
-                          bubbles — those are the only posted-only
-                          extras; everything else is identical to pending
-                          by construction. */}
-                      <div className="flex flex-wrap gap-1.5 items-center">
+                        </Badge>
+                        {tx.forecastFlag && (() => {
+                          const r = resolutionByTxnId.get(tx.id);
+                          const state =
+                            r?.status === "matched"
+                              ? { attr: "matched", label: "Matched" }
+                              : r?.status === "ignored_unforecasted" ||
+                                  r?.status === "unplanned"
+                                ? { attr: "unplanned", label: "Unplanned" }
+                                : {
+                                    attr: "in-review-bucket",
+                                    label: "In Review Bucket",
+                                  };
+                          return (
+                            <Badge
+                              variant="outline"
+                              className={`text-[11px] font-normal ${CHIP_BASE}`}
+                              data-testid={`badge-forecast-state-${tx.id}`}
+                              data-forecast-state={state.attr}
+                            >
+                              <Inbox className="w-3 h-3 mr-1" /> {state.label}
+                            </Badge>
+                          );
+                        })()}
                         <TransactionRowChips
                           tx={tx}
                           categories={categories ?? []}
@@ -2765,48 +2787,6 @@ export default function TransactionsPage() {
                               testIdSuffix={tx.id}
                             />
                           }
-                          forecastStateBadge={tx.forecastFlag
-                            ? (() => {
-                                const r = resolutionByTxnId.get(tx.id);
-                                if (r?.status === "matched") {
-                                  return (
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs border-primary/30 text-primary bg-primary/15"
-                                      data-testid={`badge-forecast-state-${tx.id}`}
-                                      data-forecast-state="matched"
-                                    >
-                                      <Inbox className="w-3 h-3 mr-1" /> Matched
-                                    </Badge>
-                                  );
-                                }
-                                if (
-                                  r?.status === "ignored_unforecasted" ||
-                                  r?.status === "unplanned"
-                                ) {
-                                  return (
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs border-slate-300 text-slate-700 bg-slate-50"
-                                      data-testid={`badge-forecast-state-${tx.id}`}
-                                      data-forecast-state="unplanned"
-                                    >
-                                      <Inbox className="w-3 h-3 mr-1" /> Unplanned
-                                    </Badge>
-                                  );
-                                }
-                                return (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs border-amber-200 text-amber-800 bg-amber-50"
-                                    data-testid={`badge-forecast-state-${tx.id}`}
-                                    data-forecast-state="in-review-bucket"
-                                  >
-                                    <Inbox className="w-3 h-3 mr-1" /> In Review Bucket
-                                  </Badge>
-                                );
-                              })()
-                            : null}
                         />
                       </div>
                     </div>

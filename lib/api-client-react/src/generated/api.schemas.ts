@@ -124,6 +124,14 @@ on the Transactions and Amex pages.
    * @nullable
    */
   matchedRuleId?: string | null;
+  /** (#868) Clean, human-readable merchant label derived from the
+raw bank `description` on read via `cleanMerchant()` (ACH noise,
+ORIG CO / WEB ID fields, and processor prefixes stripped). Used
+as the Transactions page row headline so the raw description can
+be demoted to a muted sub-line. Computed server-side per list
+response — never persisted; the stored `description` is untouched.
+ */
+  displayName?: string;
 }
 
 /**

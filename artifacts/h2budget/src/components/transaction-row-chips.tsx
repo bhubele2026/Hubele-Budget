@@ -22,6 +22,14 @@ import {
 
 export type TxRowCategory = { id: string; name: string };
 
+// (#868) Single consistent muted-outline chip style shared across the row
+// cluster, replacing the earlier violet/amber/slate/green rainbow. Keeps the
+// cluster calm and scannable; interactive chips add their own hover/cursor.
+// Exported so the Transactions page can style the source + status chips it
+// renders alongside this cluster with the exact same baseline.
+export const CHIP_BASE = "border-border text-muted-foreground bg-transparent";
+export const CHIP_INTERACTIVE = `${CHIP_BASE} cursor-pointer hover:bg-muted transition-colors`;
+
 // (#742) Keyword → list of category-name substrings to surface as suggestions
 // when a transaction is uncategorized. The first existing category whose name
 // matches any of the substrings (case-insensitive) wins. Designed to cover the
@@ -109,7 +117,7 @@ function InlineCategoryPicker({
           variant="outline"
           role="button"
           tabIndex={0}
-          className="cursor-pointer text-xs font-medium border-violet-200 text-violet-700 bg-violet-50 hover:bg-violet-100 transition-colors"
+          className={`text-xs font-medium ${CHIP_INTERACTIVE}`}
           data-testid={`badge-category-${tx.id}`}
           title="Change category"
         >
@@ -173,7 +181,7 @@ function CategorizeChip({
       <span className="inline-flex items-center gap-1">
         <Badge
           variant="outline"
-          className="cursor-pointer text-xs border-violet-300 text-violet-700 bg-violet-50 hover:bg-violet-100"
+          className={`text-xs ${CHIP_INTERACTIVE}`}
           onClick={() => onPick(top.id)}
           title="Categorize and remember this merchant"
           data-testid={`badge-suggest-${tx.id}`}
@@ -184,7 +192,7 @@ function CategorizeChip({
           <PopoverTrigger asChild>
             <Badge
               variant="outline"
-              className="cursor-pointer text-xs border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+              className={`text-xs ${CHIP_INTERACTIVE}`}
               data-testid={`badge-uncategorized-${tx.id}`}
             >
               Other…
@@ -238,7 +246,7 @@ function CategorizeChip({
       <PopoverTrigger asChild>
         <Badge
           variant="outline"
-          className="cursor-pointer text-xs border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+          className={`text-xs ${CHIP_INTERACTIVE}`}
           data-testid={`badge-uncategorized-${tx.id}`}
         >
           <Wand2 className="w-3 h-3 mr-1" /> Categorize
@@ -284,8 +292,6 @@ export interface TransactionRowChipsProps {
   onToggleBucket: (tx: Transaction, bucket: BucketKey, next: boolean) => void;
   /** Optional slot for the per-call-site matched-rule chip placement. */
   matchedRuleChip?: ReactNode;
-  /** Optional slot for the per-call-site forecast-state badge. */
-  forecastStateBadge?: ReactNode;
 }
 
 /**
@@ -294,8 +300,9 @@ export interface TransactionRowChipsProps {
  * that wants to render the same category picker / transfer pill / bucket
  * bubbles / reimbursed badge cluster). The two earlier inline copies had
  * already drifted once (#740), so this component is now the single source
- * of truth — the only per-block differences (matched-rule chip placement,
- * forecast-state badge styling) are passed in as slots.
+ * of truth — the only per-block difference (matched-rule chip placement) is
+ * passed in as a slot. (#868) The source + status chips now live alongside
+ * this cluster on the page, styled with the same shared CHIP_BASE.
  */
 export function TransactionRowChips({
   tx,
@@ -306,7 +313,6 @@ export function TransactionRowChips({
   onClearTransfer,
   onToggleBucket,
   matchedRuleChip,
-  forecastStateBadge,
 }: TransactionRowChipsProps) {
   return (
     <>
@@ -329,7 +335,7 @@ export function TransactionRowChips({
       {!tx.isTransfer && tx.isTransferUserOverridden && (
         <Badge
           variant="outline"
-          className="inline-flex items-center text-[11px] font-normal border-slate-200 text-slate-500 bg-slate-50/60"
+          className={`inline-flex items-center text-[11px] font-normal ${CHIP_BASE}`}
           data-testid={`badge-transfer-overridden-cleared-${tx.id}`}
           title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
         >
@@ -339,7 +345,7 @@ export function TransactionRowChips({
       {tx.isTransfer && (
         <Badge
           variant="outline"
-          className="inline-flex items-center gap-1 text-xs border-slate-300 text-slate-700 bg-slate-50"
+          className={`inline-flex items-center gap-1 text-xs ${CHIP_BASE}`}
           data-testid={`badge-transfer-${tx.id}`}
           title={
             tx.isTransferUserOverridden
@@ -371,7 +377,6 @@ export function TransactionRowChips({
           </button>
         </Badge>
       )}
-      {forecastStateBadge}
       <BucketBubbles
         flags={{
           weekly: !!tx.weeklyAllowance,
@@ -387,7 +392,7 @@ export function TransactionRowChips({
       {tx.reimbursed && (
         <Badge
           variant="outline"
-          className="text-xs border-green-200 text-green-700 bg-green-50"
+          className={`text-xs ${CHIP_BASE}`}
         >
           Reimbursed
         </Badge>

@@ -17,6 +17,7 @@ import {
   loadUserRules,
 } from "../lib/autoCategorize";
 import { selectPatternCandidates } from "../lib/patternCandidates";
+import { cleanMerchant } from "../lib/merchantNameExtract";
 import {
   EXCLUDED_CATEGORY_RULE_ERROR,
   isExcludedCategory,
@@ -101,6 +102,11 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   const annotated = rows.map((r) => ({
     ...r,
     matchedRuleId: findMatchedRuleId(r.description, r.categoryId, userRules),
+    // (#868) Clean, human-readable merchant label derived from the raw bank
+    // description on read. Powers the Transactions page row headline so the
+    // raw ACH/ORIG CO string can be demoted to a muted sub-line. Never
+    // persisted — computed per-list so the stored description is untouched.
+    displayName: cleanMerchant(r.description),
   }));
   res.json(annotated);
 });
