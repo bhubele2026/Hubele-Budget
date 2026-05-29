@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import {
   Switch,
   Route,
@@ -21,21 +21,31 @@ import { PlaidReconnectListener } from "@/components/plaid-reconnect-listener";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
 import { ThemeProvider } from "@/hooks/use-theme";
+import { Skeleton } from "@/components/ui/skeleton";
+// Auth pages stay eagerly imported — they're on the unauthenticated
+// critical path (and are small), so code-splitting them would only add
+// a render-blocking chunk fetch before the user can even sign in.
 import { SignInPage, SignUpPage } from "./pages/auth";
-import ForecastPage from "./pages/forecast";
-import ReportsPage from "./pages/reports";
-import DebtsPage from "./pages/debts";
-import AvalanchePage from "./pages/avalanche";
-import AmexPage from "./pages/amex";
-import TransactionsPage from "./pages/transactions";
-import BillsPage from "./pages/bills";
-import BudgetPage from "./pages/budget";
-import AllowancesPage from "./pages/allowances";
-import MappingRulesPage from "./pages/mapping-rules";
-import DebriefPage from "./pages/debrief";
-import SettingsPage from "./pages/settings";
-import PlaidOAuthPage from "./pages/plaid-oauth";
-import NotFound from "./pages/not-found";
+
+// (#819) Route-level code splitting. Each page is loaded on demand so the
+// initial bundle no longer carries every page (and their heavy deps like
+// recharts) up front. Navigating to a route fetches just that route's
+// chunk, which is cached for subsequent visits. Behavior is unchanged —
+// a brief <Suspense> fallback shows while a route's chunk streams in.
+const ForecastPage = lazy(() => import("./pages/forecast"));
+const ReportsPage = lazy(() => import("./pages/reports"));
+const DebtsPage = lazy(() => import("./pages/debts"));
+const AvalanchePage = lazy(() => import("./pages/avalanche"));
+const AmexPage = lazy(() => import("./pages/amex"));
+const TransactionsPage = lazy(() => import("./pages/transactions"));
+const BillsPage = lazy(() => import("./pages/bills"));
+const BudgetPage = lazy(() => import("./pages/budget"));
+const AllowancesPage = lazy(() => import("./pages/allowances"));
+const MappingRulesPage = lazy(() => import("./pages/mapping-rules"));
+const DebriefPage = lazy(() => import("./pages/debrief"));
+const SettingsPage = lazy(() => import("./pages/settings"));
+const PlaidOAuthPage = lazy(() => import("./pages/plaid-oauth"));
+const NotFound = lazy(() => import("./pages/not-found"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -144,11 +154,21 @@ function HomeRoute() {
   );
 }
 
+function RouteFallback() {
+  return (
+    <div className="space-y-4 p-2" data-testid="route-loading">
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-64 w-full" />
+    </div>
+  );
+}
+
 function ProtectedShell() {
   return (
     <>
       <Show when="signed-in">
         <AppLayout>
+          <Suspense fallback={<RouteFallback />}>
           <Switch>
             <Route path="/dashboard">
               <Redirect to="/reports" />
@@ -177,6 +197,7 @@ function ProtectedShell() {
             <Route path="/plaid-oauth" component={PlaidOAuthPage} />
             <Route component={NotFound} />
           </Switch>
+          </Suspense>
         </AppLayout>
       </Show>
       <Show when="signed-out">
