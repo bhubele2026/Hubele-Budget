@@ -1505,6 +1505,12 @@ export interface SettingsPreferences {
     weeklyBucketLabels?: WeeklyBucketLabels;
     daysSinceTrackers?: DaysSinceTracker[];
 }
+/**
+ * Per-user (not per-household) UI preferences for the signed-in user.
+ */
+export interface UiPreferences {
+    sidebarCollapsed?: boolean;
+}
 export interface Settings {
     weeklyAllowanceAmount: string;
     monthlyAllowanceAmount: string;

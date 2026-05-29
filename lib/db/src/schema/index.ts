@@ -644,6 +644,16 @@ export const settingsTable = pgTable("settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+// (#860) Per-USER UI preferences — distinct from the household-scoped
+// `settings.preferences` JSONB. Keyed by the signed-in Clerk userId
+// (req.actualUserId), NOT the household owner, so two members of the
+// same household keep independent UI state (e.g. sidebar collapsed).
+export const userUiPreferencesTable = pgTable("user_ui_preferences", {
+  userId: text("user_id").primaryKey(),
+  preferences: jsonb("preferences"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const importBatchesTable = pgTable("import_batches", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").notNull(),

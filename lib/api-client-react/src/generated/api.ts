@@ -136,6 +136,7 @@ import type {
   TestMappingRulesResult,
   Transaction,
   TransactionInput,
+  UiPreferences,
   UncategorizeByIdsInput,
   UncategorizeByIdsResult,
   UnlockWeeklyDebriefBody,
@@ -8687,6 +8688,167 @@ export function useGetMe<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Returns the signed-in user's per-user UI preferences.
+ */
+export const getGetUiPreferencesUrl = () => {
+  return `/api/me/ui-preferences`;
+};
+
+export const getUiPreferences = async (
+  options?: RequestInit,
+): Promise<UiPreferences> => {
+  return customFetch<UiPreferences>(getGetUiPreferencesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUiPreferencesQueryKey = () => {
+  return [`/api/me/ui-preferences`] as const;
+};
+
+export const getGetUiPreferencesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUiPreferences>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUiPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUiPreferencesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getUiPreferences>>
+  > = ({ signal }) => getUiPreferences({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUiPreferences>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUiPreferencesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUiPreferences>>
+>;
+export type GetUiPreferencesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Returns the signed-in user's per-user UI preferences.
+ */
+
+export function useGetUiPreferences<
+  TData = Awaited<ReturnType<typeof getUiPreferences>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUiPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUiPreferencesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Updates the signed-in user's per-user UI preferences (merged into the existing record).
+ */
+export const getUpdateUiPreferencesUrl = () => {
+  return `/api/me/ui-preferences`;
+};
+
+export const updateUiPreferences = async (
+  uiPreferences: UiPreferences,
+  options?: RequestInit,
+): Promise<UiPreferences> => {
+  return customFetch<UiPreferences>(getUpdateUiPreferencesUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(uiPreferences),
+  });
+};
+
+export const getUpdateUiPreferencesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateUiPreferences>>,
+    TError,
+    { data: BodyType<UiPreferences> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateUiPreferences>>,
+  TError,
+  { data: BodyType<UiPreferences> },
+  TContext
+> => {
+  const mutationKey = ["updateUiPreferences"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateUiPreferences>>,
+    { data: BodyType<UiPreferences> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateUiPreferences(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateUiPreferencesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateUiPreferences>>
+>;
+export type UpdateUiPreferencesMutationBody = BodyType<UiPreferences>;
+export type UpdateUiPreferencesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Updates the signed-in user's per-user UI preferences (merged into the existing record).
+ */
+export const useUpdateUiPreferences = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateUiPreferences>>,
+    TError,
+    { data: BodyType<UiPreferences> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateUiPreferences>>,
+  TError,
+  { data: BodyType<UiPreferences> },
+  TContext
+> => {
+  return useMutation(getUpdateUiPreferencesMutationOptions(options));
+};
 
 /**
  * @summary List all invitations (owner only).

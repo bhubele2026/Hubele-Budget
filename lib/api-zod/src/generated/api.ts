@@ -4256,6 +4256,36 @@ export const GetMeResponse = zod.object({
 });
 
 /**
+ * @summary Returns the signed-in user's per-user UI preferences.
+ */
+export const GetUiPreferencesResponse = zod
+  .object({
+    sidebarCollapsed: zod.boolean().optional(),
+  })
+  .describe(
+    "Per-user (not per-household) UI preferences for the signed-in user.",
+  );
+
+/**
+ * @summary Updates the signed-in user's per-user UI preferences (merged into the existing record).
+ */
+export const UpdateUiPreferencesBody = zod
+  .object({
+    sidebarCollapsed: zod.boolean().optional(),
+  })
+  .describe(
+    "Per-user (not per-household) UI preferences for the signed-in user.",
+  );
+
+export const UpdateUiPreferencesResponse = zod
+  .object({
+    sidebarCollapsed: zod.boolean().optional(),
+  })
+  .describe(
+    "Per-user (not per-household) UI preferences for the signed-in user.",
+  );
+
+/**
  * @summary List all invitations (owner only).
  */
 export const ListInvitationsResponseItem = zod.object({

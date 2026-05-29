@@ -274,6 +274,7 @@ export * from "./transactionInput";
 export * from "./transactionInputWeeklyBucket";
 export * from "./transactionWeeklyBucket";
 export * from "./txnRef";
+export * from "./uiPreferences";
 export * from "./uncategorizeByIdsInput";
 export * from "./uncategorizeByIdsResult";
 export * from "./unlockWeeklyDebriefBody";

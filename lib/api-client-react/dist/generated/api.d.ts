@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastAvalancheScheduleParams, GetForecastCashSignalParams, GetForecastParams, GetReportsAdvisorSummaryParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklyDebriefsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReportsAdvisorSummary, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UncategorizeByIdsInput, UncategorizeByIdsResult, UnlockWeeklyDebriefBody, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, VersionInfo, WeeklyDebriefDetail, WeeklyDebriefList, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
+import type { AdvisorChatRequest, AdvisorChatResponse, AdvisorNudge, AdvisorProposalErrorResponse, AdvisorProposalResolveResponse, AdvisorUndoErrorResponse, AdvisorUndoResponse, AmexAnchor, AmexAnchorInput, AprilChaseSeedResult, AvalancheExtra, AvalancheSchedule, AvalancheSettings, AvalancheSettingsInput, BankSnapshot, BehaviorFacts, BillsSummary, BudgetFacts, BudgetLine, BudgetLineInput, BudgetMonthDetail, BulkCreateDebtsFromPlaidRequest, BulkCreateDebtsFromPlaidResponse, BulkSetForecastFlagInput, BulkSetForecastFlagResult, BulkUpdateTransactionsInput, BulkUpdateTransactionsResult, CashSignal, Category, CategoryInput, CategoryPatchInput, CheckInvitationInput, CheckInvitationResult, CleanupNonProdPlaidItems200, CloseForecastMonthBody, CreateDebtFromPlaidAccount409, CreateDebtFromPlaidResult, CreateInvitationInput, CreateMappingRuleResponse, CreateTransactionInput, CreateTransactionResponse, DashboardBudget, DashboardBudgetInput, DashboardSummary, Debt, DebtBalanceHistoryEntry, DebtInput, DebtLinkInput, DebtPaymentInput, DebtPaymentResult, DedupeTransactionsReport, DeleteAmexAnchor200, DeleteDashboardBudgetParams, DuplicateTransactionCount, ForecastBundle, ForecastClosedMonth, ForecastResolution, ForecastResolutionInput, ForecastSettings, ForecastSettingsInput, GetBillsSummaryParams, GetForecastAvalancheScheduleParams, GetForecastCashSignalParams, GetForecastParams, GetReportsAdvisorSummaryParams, GetReportsBehaviorFactsParams, GetReportsBudgetFactsParams, GetReportsSpendingFactsParams, HealthStatus, ImportSummary, ImportWorkbookBody, Invitation, ListDashboardBudgetsParams, ListPlaidLiabilityAccountsParams, ListTransactionsParams, ListWeeklyDebriefsParams, ListWeeklySettlementsParams, MappingRule, MappingRuleInput, MappingRulePatternRecategorizePreview, MappingRulePatternRecategorizePreviewInput, MappingRuleRecategorizePreview, MappingRuleRecategorizePreviewInput, MeResponse, Member, PinBudgetLineInput, PinBudgetMonthInput, PinResult, PlaidConsentRefreshResult, PlaidEnvironmentInfo, PlaidExchangeInput, PlaidItemDetail, PlaidLiabilityAccount, PlaidLinkToken, PlaidMalformedTokenSweepResult, PlaidSyncAttemptsResult, PlaidSyncInput, PlaidSyncResult, PlaidUpdateLinkTokenInput, RecategorizeByPatternInput, RecategorizeByPatternResult, RecurringItem, RecurringItemInput, RefreshBankInput, ReopenWeekParams, ReorderMappingRulesInput, ReportsAdvisorSummary, SeedDefaultBudgetResult, SendTransactionsToReviewInput, SendTransactionsToReviewResult, SetBankSnapshotInput, Settings, SettingsInput, SpendingFacts, SyncMinimumsResult, TestMappingRulesInput, TestMappingRulesResult, Transaction, TransactionInput, UiPreferences, UncategorizeByIdsInput, UncategorizeByIdsResult, UnlockWeeklyDebriefBody, UpdatePlaidImportCutoffDate200, UpdatePlaidImportCutoffDateBody, UpdateTransactionResponse, VersionInfo, WeeklyDebriefDetail, WeeklyDebriefList, WeeklySettlement, WeeklySettlementInput } from "./api.schemas";
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -2397,6 +2397,56 @@ export declare function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TErr
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+/**
+ * @summary Returns the signed-in user's per-user UI preferences.
+ */
+export declare const getGetUiPreferencesUrl: () => string;
+export declare const getUiPreferences: (options?: RequestInit) => Promise<UiPreferences>;
+export declare const getGetUiPreferencesQueryKey: () => readonly ["/api/me/ui-preferences"];
+export declare const getGetUiPreferencesQueryOptions: <TData = Awaited<ReturnType<typeof getUiPreferences>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getUiPreferences>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseQueryOptions<Awaited<ReturnType<typeof getUiPreferences>>, TError, TData> & {
+    queryKey: QueryKey;
+};
+export type GetUiPreferencesQueryResult = NonNullable<Awaited<ReturnType<typeof getUiPreferences>>>;
+export type GetUiPreferencesQueryError = ErrorType<unknown>;
+/**
+ * @summary Returns the signed-in user's per-user UI preferences.
+ */
+export declare function useGetUiPreferences<TData = Awaited<ReturnType<typeof getUiPreferences>>, TError = ErrorType<unknown>>(options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getUiPreferences>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+};
+/**
+ * @summary Updates the signed-in user's per-user UI preferences (merged into the existing record).
+ */
+export declare const getUpdateUiPreferencesUrl: () => string;
+export declare const updateUiPreferences: (uiPreferences: UiPreferences, options?: RequestInit) => Promise<UiPreferences>;
+export declare const getUpdateUiPreferencesMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateUiPreferences>>, TError, {
+        data: BodyType<UiPreferences>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof updateUiPreferences>>, TError, {
+    data: BodyType<UiPreferences>;
+}, TContext>;
+export type UpdateUiPreferencesMutationResult = NonNullable<Awaited<ReturnType<typeof updateUiPreferences>>>;
+export type UpdateUiPreferencesMutationBody = BodyType<UiPreferences>;
+export type UpdateUiPreferencesMutationError = ErrorType<unknown>;
+/**
+ * @summary Updates the signed-in user's per-user UI preferences (merged into the existing record).
+ */
+export declare const useUpdateUiPreferences: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateUiPreferences>>, TError, {
+        data: BodyType<UiPreferences>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof updateUiPreferences>>, TError, {
+    data: BodyType<UiPreferences>;
+}, TContext>;
 /**
  * @summary List all invitations (owner only).
  */

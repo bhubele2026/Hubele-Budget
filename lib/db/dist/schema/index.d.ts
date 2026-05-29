@@ -3854,6 +3854,64 @@ export declare const settingsTable: import("drizzle-orm/pg-core").PgTableWithCol
     };
     dialect: "pg";
 }>;
+export declare const userUiPreferencesTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "user_ui_preferences";
+    schema: undefined;
+    columns: {
+        userId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "user_id";
+            tableName: "user_ui_preferences";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        preferences: import("drizzle-orm/pg-core").PgColumn<{
+            name: "preferences";
+            tableName: "user_ui_preferences";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: unknown;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        updatedAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "updated_at";
+            tableName: "user_ui_preferences";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+    };
+    dialect: "pg";
+}>;
 export declare const importBatchesTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "import_batches";
     schema: undefined;

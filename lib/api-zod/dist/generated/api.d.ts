@@ -12108,6 +12108,33 @@ export declare const GetMeResponse: zod.ZodObject<{
     displayName?: string | null | undefined;
 }>;
 /**
+ * @summary Returns the signed-in user's per-user UI preferences.
+ */
+export declare const GetUiPreferencesResponse: zod.ZodObject<{
+    sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    sidebarCollapsed?: boolean | undefined;
+}, {
+    sidebarCollapsed?: boolean | undefined;
+}>;
+/**
+ * @summary Updates the signed-in user's per-user UI preferences (merged into the existing record).
+ */
+export declare const UpdateUiPreferencesBody: zod.ZodObject<{
+    sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    sidebarCollapsed?: boolean | undefined;
+}, {
+    sidebarCollapsed?: boolean | undefined;
+}>;
+export declare const UpdateUiPreferencesResponse: zod.ZodObject<{
+    sidebarCollapsed: zod.ZodOptional<zod.ZodBoolean>;
+}, "strip", zod.ZodTypeAny, {
+    sidebarCollapsed?: boolean | undefined;
+}, {
+    sidebarCollapsed?: boolean | undefined;
+}>;
+/**
  * @summary List all invitations (owner only).
  */
 export declare const ListInvitationsResponseItem: zod.ZodObject<{

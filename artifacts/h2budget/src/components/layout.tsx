@@ -1,6 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { UserButton } from "@clerk/react";
+import {
+  useGetUiPreferences,
+  useUpdateUiPreferences,
+  getGetUiPreferencesQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Receipt,
@@ -206,25 +212,89 @@ function SidebarContents({
   );
 }
 
+function readStoredCollapsed(): string | null {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredCollapsed(value: boolean): void {
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, value ? "1" : "0");
+  } catch {
+    // ignore persistence errors
+  }
+}
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
-    } catch {
-      return false;
+
+  // localStorage is the fast first-paint fallback. If it holds a value we
+  // trust it immediately (it mirrors the server from the last session on
+  // this device), so first paint is correct with no flicker. Only when it's
+  // absent (a brand-new device / cleared storage) do we wait for the
+  // server's per-user value before painting the sidebar, which avoids a
+  // visible collapsed↔expanded switch on initial render.
+  const initialStored = readStoredCollapsed();
+  const [collapsed, setCollapsed] = useState<boolean>(initialStored === "1");
+  const [hydrated, setHydrated] = useState<boolean>(initialStored !== null);
+  const [animateWidth, setAnimateWidth] = useState<boolean>(false);
+
+  const queryClient = useQueryClient();
+  const { data: uiPreferences, isSuccess, isError } = useGetUiPreferences();
+  const updateUiPreferences = useUpdateUiPreferences();
+
+  // Once the user's saved preference loads from the server it wins over the
+  // localStorage fallback. A ref guards against a slow in-flight read
+  // clobbering a fresh toggle the user just made.
+  const serverSyncedRef = useRef(false);
+  useEffect(() => {
+    if (serverSyncedRef.current) return;
+    if (isSuccess) {
+      serverSyncedRef.current = true;
+      const serverValue = uiPreferences?.sidebarCollapsed;
+      if (typeof serverValue === "boolean") {
+        setCollapsed(serverValue);
+        writeStoredCollapsed(serverValue);
+      }
+      setHydrated(true);
+    } else if (isError) {
+      // No server value available — fall back to whatever we have locally.
+      serverSyncedRef.current = true;
+      setHydrated(true);
     }
-  });
+  }, [isSuccess, isError, uiPreferences]);
+
+  // Enable the width transition only after the first hydrated paint so the
+  // initial server reconciliation snaps instantly (no animated sweep), while
+  // later user toggles still animate smoothly.
+  useEffect(() => {
+    if (!hydrated || animateWidth) return;
+    const id = requestAnimationFrame(() => setAnimateWidth(true));
+    return () => cancelAnimationFrame(id);
+  }, [hydrated, animateWidth]);
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
       const next = !prev;
-      try {
-        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
-      } catch {
-        // ignore persistence errors
-      }
+      // Mark as synced so the in-flight server read can't clobber the choice
+      // the user just made.
+      serverSyncedRef.current = true;
+      setHydrated(true);
+      writeStoredCollapsed(next);
+      updateUiPreferences.mutate(
+        { data: { sidebarCollapsed: next } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({
+              queryKey: getGetUiPreferencesQueryKey(),
+            });
+          },
+        },
+      );
       return next;
     });
   };
@@ -234,18 +304,27 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="h-screen overflow-hidden bg-background flex flex-col md:flex-row">
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar. Until the per-user preference is hydrated (only
+          ever pending on a brand-new device with no localStorage hint) we
+          render the shell without committing to a collapsed/expanded state,
+          so the user never sees the wrong layout flash and switch. The width
+          transition is enabled one frame after hydration so the initial
+          server reconciliation snaps instantly instead of animating. */}
       <aside
         className={cn(
-          "hidden md:flex bg-sidebar border-r border-sidebar-border flex-col transition-[width] duration-200 ease-in-out",
-          collapsed ? "w-16" : "w-64",
+          "hidden md:flex bg-sidebar border-r border-sidebar-border flex-col",
+          animateWidth && "transition-[width] duration-200 ease-in-out",
+          !hydrated ? "w-64 opacity-0" : collapsed ? "w-16" : "w-64",
         )}
+        aria-hidden={!hydrated}
       >
-        <SidebarContents
-          location={location}
-          collapsed={collapsed}
-          onToggleCollapse={toggleCollapsed}
-        />
+        {hydrated && (
+          <SidebarContents
+            location={location}
+            collapsed={collapsed}
+            onToggleCollapse={toggleCollapsed}
+          />
+        )}
       </aside>
 
       {/* Mobile top bar */}

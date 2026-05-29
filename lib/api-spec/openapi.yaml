@@ -1807,6 +1807,33 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MeResponse" }
 
+  /me/ui-preferences:
+    get:
+      operationId: getUiPreferences
+      tags: [auth]
+      summary: Returns the signed-in user's per-user UI preferences.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UiPreferences" }
+    put:
+      operationId: updateUiPreferences
+      tags: [auth]
+      summary: Updates the signed-in user's per-user UI preferences (merged into the existing record).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UiPreferences" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UiPreferences" }
+
   /invitations:
     get:
       operationId: listInvitations
@@ -3501,6 +3528,11 @@ components:
         daysSinceTrackers:
           type: array
           items: { $ref: "#/components/schemas/DaysSinceTracker" }
+    UiPreferences:
+      type: object
+      description: Per-user (not per-household) UI preferences for the signed-in user.
+      properties:
+        sidebarCollapsed: { type: boolean }
     Settings:
       type: object
       required: [weeklyAllowanceAmount, monthlyAllowanceAmount, unplannedAllowanceAmount]
