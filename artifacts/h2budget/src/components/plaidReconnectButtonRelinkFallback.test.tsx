@@ -26,11 +26,23 @@ vi.mock("react-plaid-link", () => ({
 const toastMock = vi.fn();
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: toastMock }) }));
 
+type SyncErrorDetailLike = {
+  itemId: string | null;
+  plaidItemRowId: string | null;
+  institutionName: string | null;
+  message: string;
+  code: string | null;
+  displayMessage: string | null;
+  requestId: string | null;
+  httpStatus: number | null;
+  kind: string | null;
+};
 const runSyncMock = vi.fn(async () => ({
   added: 0,
   modified: 0,
   removed: 0,
   errors: [] as string[],
+  errorDetails: [] as SyncErrorDetailLike[],
 }));
 vi.mock("@/hooks/use-plaid-sync", () => ({
   usePlaidSync: () => ({ runSync: runSyncMock, isPending: false }),
@@ -185,6 +197,130 @@ describe("(#370) PlaidReconnectButton 409→fresh-link fallback (no reconnect lo
         itemId: "item-1",
         silent: true,
       }),
+    );
+  });
+});
+
+describe("(#794) PlaidReconnectButton auto-recovers when the post-reconnect sync still needs reauth", () => {
+  it("update mode succeeds → next sync returns ITEM_LOGIN_REQUIRED → fresh link is invoked automatically (no toast, no extra click)", async () => {
+    // Update-mode token mint succeeds — the bank "accepts" the
+    // re-auth, so Plaid Link opens and finishes in update mode.
+    updateLinkTokenMutate.mockImplementation(
+      (_vars: unknown, opts: MutOpts) => {
+        opts.onSuccess?.({ linkToken: "link-sandbox-update" });
+      },
+    );
+    // The fresh-link mint (the fallback we expect to fire) succeeds.
+    linkTokenMutate.mockImplementation((_vars: unknown, opts: MutOpts) => {
+      opts.onSuccess?.({ linkToken: "link-sandbox-fresh" });
+    });
+    // The very next sync STILL comes back needing reauth even though
+    // update mode "succeeded" — the second-account-at-same-bank case
+    // that invalidates the prior OAuth session.
+    runSyncMock.mockResolvedValueOnce({
+      added: 0,
+      modified: 0,
+      removed: 0,
+      errors: ["Chase: Your saved login expired"],
+      errorDetails: [
+        {
+          itemId: "item-1",
+          plaidItemRowId: "item-1",
+          institutionName: "Chase",
+          message: "Your saved login expired",
+          code: "ITEM_LOGIN_REQUIRED",
+          displayMessage: null,
+          requestId: null,
+          httpStatus: null,
+          kind: "reauth",
+        },
+      ],
+    });
+
+    renderButton();
+    fireEvent.click(screen.getByTestId("button-plaid-reconnect-item-1"));
+    await waitFor(() => expect(capturedOnSuccess).not.toBeNull());
+
+    // Finish Plaid Link in update mode (no public_token exchange —
+    // update mode reuses the existing access_token).
+    await capturedOnSuccess!("", {
+      institution: { institution_id: "ins_56", name: "Chase" },
+    });
+
+    // The post-reconnect sync ran in update mode...
+    await waitFor(() =>
+      expect(runSyncMock).toHaveBeenCalledWith({
+        itemId: "item-1",
+        silent: true,
+      }),
+    );
+    // ...came back needing reauth, so the component transparently fell
+    // through to the fresh-link mint WITHOUT another user click.
+    await waitFor(() => expect(linkTokenMutate).toHaveBeenCalledTimes(1));
+    // And it did NOT strand the user behind the dead-looking
+    // "Reconnected, but sync still failing" toast.
+    expect(toastMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Reconnected, but sync still failing",
+      }),
+    );
+  });
+
+  it("does NOT loop: a fresh-link attempt that STILL needs reauth surfaces the toast instead of re-minting again", async () => {
+    // 409 → fresh-link path on the first click.
+    updateLinkTokenMutate.mockImplementation(
+      (_vars: unknown, opts: MutOpts) => {
+        opts.onError?.({ status: 409, data: { action: "relink" } });
+      },
+    );
+    linkTokenMutate.mockImplementation((_vars: unknown, opts: MutOpts) => {
+      opts.onSuccess?.({ linkToken: "link-sandbox-fresh" });
+    });
+    exchangeMutate.mockImplementation((_vars: unknown, opts: MutOpts) => {
+      opts.onSuccess?.({});
+    });
+    // Even after minting a brand-new token, sync STILL needs reauth —
+    // the genuinely-stuck case. The component must give up gracefully.
+    runSyncMock.mockResolvedValueOnce({
+      added: 0,
+      modified: 0,
+      removed: 0,
+      errors: ["Chase: Your saved login expired"],
+      errorDetails: [
+        {
+          itemId: "item-1",
+          plaidItemRowId: "item-1",
+          institutionName: "Chase",
+          message: "Your saved login expired",
+          code: "ITEM_LOGIN_REQUIRED",
+          displayMessage: null,
+          requestId: null,
+          httpStatus: null,
+          kind: "reauth",
+        },
+      ],
+    });
+
+    renderButton();
+    fireEvent.click(screen.getByTestId("button-plaid-reconnect-item-1"));
+    await waitFor(() => expect(linkTokenMutate).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(capturedOnSuccess).not.toBeNull());
+
+    await capturedOnSuccess!("public-sandbox-abc", {
+      institution: { institution_id: "ins_56", name: "Chase" },
+    });
+
+    await waitFor(() => expect(runSyncMock).toHaveBeenCalled());
+    // No second fresh-link mint — the !wasFresh guard stops the loop.
+    expect(linkTokenMutate).toHaveBeenCalledTimes(1);
+    // Instead the user sees the honest "still failing" toast.
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Reconnected, but sync still failing",
+          variant: "destructive",
+        }),
+      ),
     );
   });
 });

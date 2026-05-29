@@ -347,13 +347,45 @@ export function PlaidReconnectButton({
       qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
     }
     if (totals.errors.length > 0) {
+      // (#794) The post-reconnect sync can still come back with a
+      // reauth error even though Plaid Link update mode "succeeded":
+      // adding a second account at the same bank (e.g. a Chase credit
+      // card alongside an already-linked Chase checking) can invalidate
+      // the prior OAuth session, so update mode heals nothing and the
+      // very next /transactions/sync returns ITEM_LOGIN_REQUIRED. The
+      // server-side cleanup hardened in #790 can't fix this from its
+      // end — the stored access_token is simply dead — so the only
+      // recovery is to mint a brand-new one via the fresh-link path.
+      // Rather than strand the user behind a dead-looking "Reconnected,
+      // but sync still failing" toast (which just repeats update mode on
+      // the next click and fails the same way), transparently fall
+      // through to fetchFreshLinkToken() — the same self-heal the
+      // 409→relink branch uses. Guard on !wasFresh so a fresh-link
+      // attempt that ALSO comes back needing reauth can't loop forever;
+      // in that genuinely-stuck case we surface the toast instead.
+      const stillNeedsReauth = totals.errorDetails.some(
+        (d) => d.kind === "reauth" || isPlaidReauthCode(d.code),
+      );
+      if (stillNeedsReauth && !wasFresh) {
+        fetchFreshLinkToken();
+        return;
+      }
       toast({
         title: "Reconnected, but sync still failing",
         description: totals.errors.join("; "),
         variant: "destructive",
       });
     }
-  }, [institutionName, itemId, qc, runSync, toast, freshMode, exchange]);
+  }, [
+    institutionName,
+    itemId,
+    qc,
+    runSync,
+    toast,
+    freshMode,
+    exchange,
+    fetchFreshLinkToken,
+  ]);
 
   // (#804-followup) Stable refs for parent yield-callbacks — same
   // pattern as PlaidLinkButton. Keeps the open() effect off the
