@@ -262,6 +262,23 @@ export async function computeWeekVariance(
 
   const bankTxns = bankTxnsPreExclude.filter((t) => !isExcludedTxn(t.categoryId));
 
+  // (#856) The by-category variance breakdown is widened to include
+  // Amex spend so categorized Amex charges (e.g. Roundys → Groceries)
+  // show up in category actuals. This is intentionally BROADER than
+  // bankTxns: cash-flow top-line totals, plan matching, unplanned/open
+  // items, and snapshot reconciliation all stay strictly Chase-only
+  // (bankTxns). Only the byCategory accumulator + its drill-down read
+  // from budgetTxns.
+  const isAmexRow = (source: string | null | undefined): boolean => {
+    const s = (source ?? "").toLowerCase().replace(/^plaid:/, "");
+    return s === "amex";
+  };
+  const budgetTxns = txnsAll.filter(
+    (t) =>
+      (isBankRow(t.source, t.plaidAccountId) || isAmexRow(t.source)) &&
+      !isExcludedTxn(t.categoryId),
+  );
+
   // (#783) Defensively drop recurring-plan occurrences that point at
   // an excluded system category so they never feed planItems /
   // unmatchedPlans / byCategory. Mutate via reassignment so the rest
@@ -601,16 +618,24 @@ export async function computeWeekVariance(
       forecastDate: p.forecastDate,
     });
   }
-  for (const t of txnItems) {
-    const acc = ensure(t.categoryId);
-    const signed = Number(t.amount);
-    acc.actual += Math.abs(signed);
+  // (#856) The by-category accumulator reads from budgetTxns (Chase +
+  // Amex), NOT txnItems (Chase-only), so categorized Amex spend shows
+  // up in category actuals + drill-downs. Amex rows aren't reconciled
+  // against the Chase checking snapshot, so they fall through the same
+  // matched/acknowledged lookup to "unplanned" (correct). These sums
+  // will legitimately exceed actualExpenses — budget-actuals are not
+  // checking cash-flow.
+  for (const t of budgetTxns) {
+    const acc = ensure(t.categoryId ?? null);
+    const amt = Number(t.amount) || 0;
+    const dateStr = t.occurredAt ? t.occurredAt.slice(0, 10) : t.occurredOn;
+    acc.actual += Math.abs(amt);
     acc.actualTxns.push({
-      txnId: t.txnId,
+      txnId: t.id,
       description: t.description,
-      amount: signed,
-      date: t.date,
-      matchedToPlan: t.status === "matched",
+      amount: amt,
+      date: dateStr,
+      matchedToPlan: matchedTxnSet.has(t.id),
     });
   }
   const byCategory: DebriefVarianceCategoryBucket[] = [];
