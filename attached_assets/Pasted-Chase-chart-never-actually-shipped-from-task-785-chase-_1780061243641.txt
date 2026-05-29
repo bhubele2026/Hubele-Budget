@@ -1,0 +1,69 @@
+Chase chart never actually shipped from task #785. /chase still shows "Checking balance · Trailing 12 months · Jun 2025–May 2026" — the old trailing chart. Ship the actual-vs-forecast version that was already designed and architect-approved.
+
+CONTEXT — this was task #785 originally. Pull the spec from there if it's still in your task history; otherwise the design below is the source of truth. The Amex forward-12-months chart that's now in flight uses the same BalanceTrendChart component — Chase should reuse that infrastructure with two series plus a forecast.
+
+DESIGN — Chase page chart (artifacts/h2budget/src/pages/transactions.tsx).
+
+WINDOW
+- Start = max(2026-05-01, current month start).
+- End = today + 12 months.
+
+THREE SERIES, ALL WEEKLY (Sun–Sat buckets)
+
+1. historicalActual — weekly end-of-week Chase checking balance from window start through the last completed week before today. Uses the existing snapshot + per-account dedupe path (makeChaseBalanceAtEndOf / computeBalanceAtEndOf / scopeChaseTransactions in artifacts/h2budget/src/lib/chaseEndingBalance.ts and chaseScope.ts). If a balanceAtEndOfDate(isoDate) helper doesn't exist as a sibling of the month-bucketing one, generalize the existing helper — same anchor + net-change logic, just summed by date instead of by month.
+
+2. forecastFromToday — starts at today's actual Chase balance. Projects forward weekly Sun–Sat using the same projection /forecast consumes (server cashSignal via useGetForecast — forecastData has the daily series). Aggregate those daily projection points into weekly buckets through the end of the window.
+
+3. actualFromToday — seeded with today's actual balance as the only point on day one. As future days pass, new Plaid balance points populate forward weeks naturally.
+
+ALL THREE share today's actual balance as their anchor: visually the historical line meets today's balance, then actualFromToday continues from that same point AND forecastFromToday diverges from it.
+
+RENDERING
+
+- Reuse BalanceTrendChart (artifacts/h2budget/src/components/account-page/balance-trend-chart.tsx). If the Amex single-series mode shipped, extend to multi-series; if multi-series already exists from task #785's earlier work, just call it. Don't build a parallel component.
+- historicalActual + actualFromToday: solid line, existing balance color. Visually one continuous line through today.
+- forecastFromToday: dashed line, distinct color (blue/grey suggestion). Reads as "projection."
+- ReferenceLine at todayISO so the eye lands on the actual/forecast split.
+
+TRIM TO REAL DATA, BOTH DIRECTIONS
+- historicalActual ends at the last completed weekly bucket on or before today. No flat right-edge extension.
+- forecastFromToday ends at whatever weekly bucket falls beyond the server's projection horizon. If the server projects 9 months out, the dashed line ends at 9 months — DO NOT carry the last projected value forward to fill 12. Document this choice in the code with a comment so the next person doesn't "fix" it.
+
+LEGEND
+- Two entries only: "Actual" (solid) and "Forecast" (dashed). Don't split historicalActual and actualFromToday in the legend — they're the same conceptual line.
+
+TOOLTIP
+- Pre-today bucket: actual value only.
+- Today or future bucket: forecast value AND actual value (if a real balance point exists for that bucket) AND the delta between them.
+- X-axis tick format reads cleanly across 12 months — monthly labels, not weekly.
+
+CAPTION / SUBTITLE
+- Caption: "Checking balance — actual vs forecast"
+- Subtitle: "May 2026 – [month 12 months from today]"
+
+IMPLEMENTATION STEPS
+
+1. In transactions.tsx, replace the existing balanceTrend useMemo (or whatever the trailing-12-months data assembly is currently named) with logic that builds the three series above.
+
+2. Pass them + todayISO into BalanceTrendChart. Update the caption + right-aligned subtitle.
+
+3. Single-series Amex callsite must be unaffected — extend the API additively.
+
+4. /forecast page's own chart is OUT OF SCOPE. Don't touch it.
+
+VERIFY (smoke):
+
+1. /chase chart caption now reads "Checking balance — actual vs forecast"
+2. Subtitle is "May 2026 – May 2027" (or whatever 12 months from today shows)
+3. X-axis starts at May 2026 (not Jun 2025)
+4. Single solid line traces history through today's actual balance
+5. From today: line splits — solid continues forward (just one bucket on day one, growing weekly as Plaid syncs), dashed projects through the projection horizon
+6. Today marker visible at the split
+7. Hover a pre-today bucket → tooltip shows actual only
+8. Hover a today/future bucket → tooltip shows forecast + actual (if present) + delta
+9. /amex chart unaffected
+10. /forecast chart unaffected
+
+Architect review + typecheck + publish. No new tests.
+
+If the architect flags anything ambiguous in this spec, default to the simpler interpretation — we can iterate after I see it on screen.
