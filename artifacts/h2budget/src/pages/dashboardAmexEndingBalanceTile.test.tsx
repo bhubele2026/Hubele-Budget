@@ -145,6 +145,7 @@ vi.mock("@workspace/api-client-react", () => {
   return {
     TransactionWeeklyBucket,
     useGetSettings: () => ({ data: undefined }),
+    useGetAdvisorNudge: () => ({ data: undefined, isLoading: false }),
     useGetDashboard: () => ({
       data: {
         totalDebt: "0",
