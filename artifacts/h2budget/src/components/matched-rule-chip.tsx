@@ -85,8 +85,8 @@ export function MatchedRuleChip({
         <span
           className={
             compact
-              ? "inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/70 italic"
-              : "inline-flex items-center gap-1 text-[11px] text-muted-foreground/80 italic"
+              ? "inline-flex items-center gap-0.5 text-[10px] text-muted-foreground"
+              : "inline-flex items-center gap-1 text-[11px] text-muted-foreground"
           }
           data-testid={`text-no-rule-${testIdSuffix}`}
         >

@@ -144,7 +144,7 @@ function ExternalCardChip({
     return (
       <Badge
         variant="outline"
-        className="inline-flex items-center gap-1 text-[10px] border-amber-300 text-amber-800 bg-amber-50"
+        className="inline-flex items-center gap-1 text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
         title="Excluded from avalanche actuals and every dashboard bucket"
         data-testid={`badge-external-card-${testIdSuffix}`}
       >
@@ -154,7 +154,7 @@ function ExternalCardChip({
           type="button"
           aria-label="Clear external card flag"
           data-testid={`button-clear-external-card-${testIdSuffix}`}
-          className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-amber-200/60"
+          className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-muted"
           onClick={(e) => {
             e.stopPropagation();
             onToggle(false);
@@ -175,7 +175,7 @@ function ExternalCardChip({
       type="button"
       data-testid={`button-mark-external-card-${testIdSuffix}`}
       title="Mark this payment as going to a card outside our avalanche"
-      className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-amber-700 hover:underline"
+      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground hover:underline"
       onClick={(e) => {
         e.stopPropagation();
         onToggle(true);
