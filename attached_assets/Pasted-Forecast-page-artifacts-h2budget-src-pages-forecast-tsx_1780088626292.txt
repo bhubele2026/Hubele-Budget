@@ -1,0 +1,30 @@
+Forecast page (artifacts/h2budget/src/pages/forecast.tsx): the per-occurrence "Move to…" reschedule already works — it upserts a `rescheduled` resolution keyed to (recurringItemId, occurrenceDate) with rescheduledTo, never touches the recurring rule, and shows a moved-items bucket. The gap: it's FUTURE-ONLY. Brad wants to freely move any planned occurrence to ANY day within the next 30 days — earlier or later.
+
+CURRENT CONSTRAINTS TO RELAX (move is currently later-than-today AND later-than-original only):
+1. Client onMoveSave (~line 2057-2063): drop the two "must be after" guards:
+   - the `moveDateDraft <= todayIso` → "Pick a date after today" check, and
+   - the `moveDateDraft <= occurrenceDate` → "Pick a date after the original occurrence" check.
+   Replace with a WINDOW guard: the picked date must be within the forecast window — from today (inclusive) through today+30 days (inclusive) — and not equal to the current occurrence date (no-op). Keep the "Pick a date." empty guard. New error copy: "Pick a day within the next 30 days."
+2. Server POST /forecast/resolutions (routes/forecast.ts ~line 1133): remove/relax the `rescheduledTo <= occurrenceDate` → "must be after occurrenceDate" rejection. Keep: valid ISO date, household scoping, and status==="rescheduled" still requires recurringItemId + occurrenceDate + rescheduledTo. Optionally bound rescheduledTo to a sane window (>= today-1d, <= today+ ~60d) so it can't be set to an arbitrary far date, but DO allow earlier-than-original within the window. Tell me what bound you applied.
+3. The date input itself: set min = today (ISO), max = today+30d (ISO) so the picker can't select outside the window. Pre-fill with the occurrence's current date.
+4. Update the button tooltip/copy: "Move this occurrence to a future date" → "Move this occurrence to another day (next 30 days)". Same for the #480 reschedule control at ~line 4035 ("Reschedule this occurrence to a future date").
+
+KEEP INTACT (the parts that already work — don't regress):
+- One occurrence only; recurring_items template (dayOfMonth/anchorDate/frequency) is never modified.
+- The (recurringItemId, occurrenceDate) upsert key, the "Rescheduled" status badge, the moved-items bucket panel (rescheduled-bucket-*) showing date → rescheduledTo, and the undo/reset (DELETE resolution) flow.
+- A moved occurrence renders once, on its new date, not duplicated.
+- weeklyDebrief's "rescheduled" handling and the Missed-bucket → set-new-date path (onSetNewDateFromBucket) still route through onMoveSave.
+- Mark missed is unchanged.
+
+EDGE CASES:
+- Moving a bill to earlier-today or today: allow it (status stays "rescheduled", rescheduledTo = today). Confirm the forecast build places it correctly and it doesn't get double-counted with actuals.
+- An occurrence whose original date is already in the past but still upcoming/unmatched (e.g. the May 30 row when today is later): the 30-day window is measured from TODAY, so it can be moved to any day today..+30. Make sure originalDate vs occurrenceDate keying still works (the handler already uses moveTarget.originalDate ?? moveTarget.date).
+
+VERIFY (publish + hard refresh on /forecast):
+1. Pick any planned row → "Move to…" → the date picker is limited to today..+30 days and lets me choose an EARLIER day than the original (e.g. pull Jun 2 HELOC back to May 31).
+2. Saving moves that single occurrence to the new day on the list + chart; the recurring rule is unchanged (next month lands on the normal day).
+3. Moving later still works; moved rows show in the rescheduled bucket with date → newDate and can be reset.
+4. No double-render; debrief still treats it as rescheduled; Mark missed unaffected.
+5. Server accepts an earlier-than-original rescheduledTo (within window) and still rejects invalid/out-of-window dates.
+
+Architect review (client validation relax + server validation relax + picker bounds + copy). Typecheck + publish. Update forecastMissedActions / any test asserting "after today"/"after original" to the new window rule; add a case that an earlier-within-window move succeeds and leaves the template intact. No other new tests.

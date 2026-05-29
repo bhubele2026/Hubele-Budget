@@ -664,7 +664,7 @@ function PlanDropRow({
               onMove?.(row);
             }}
             data-testid={`move-plan-${row.itemId}-${row.date}`}
-            title="Move this occurrence to a future date"
+            title="Move this occurrence to another day (next 30 days)"
           >
             Move to…
           </Button>
@@ -2041,7 +2041,7 @@ export default function ForecastPage({
 
   const onMoveStart = (row: PlanLine) => {
     setMoveTarget(row);
-    setMoveDateDraft("");
+    setMoveDateDraft(row.date);
     setMoveError(null);
   };
   const onMoveSave = () => {
@@ -2050,17 +2050,25 @@ export default function ForecastPage({
       setMoveError("Pick a date.");
       return;
     }
-    const t = new Date();
-    const todayIso = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
-    if (moveDateDraft <= todayIso) {
-      setMoveError("Pick a date after today.");
+    // (#888) Window guard: the picked day must fall within the forecast
+    // window — from today (inclusive) through today+30 days (inclusive) —
+    // and not equal the day it's currently on (that would be a no-op).
+    // Earlier-than-original is now allowed inside the window.
+    const isoOf = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const todayIso = isoOf(new Date());
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 30);
+    const maxIso = isoOf(maxDate);
+    if (moveDateDraft < todayIso || moveDateDraft > maxIso) {
+      setMoveError("Pick a day within the next 30 days.");
+      return;
+    }
+    if (moveDateDraft === moveTarget.date) {
+      setMoveError("That's already its current day.");
       return;
     }
     const occurrenceDate = moveTarget.originalDate ?? moveTarget.date;
-    if (moveDateDraft <= occurrenceDate) {
-      setMoveError("Pick a date after the original occurrence.");
-      return;
-    }
     upsertResolution.mutate(
       {
         data: {
@@ -4032,7 +4040,7 @@ export default function ForecastPage({
                                 className="h-7 px-2 text-xs"
                                 onClick={() => onSetNewDateFromBucket(b)}
                                 data-testid={`missed-set-new-date-${b.id}`}
-                                title="Reschedule this occurrence to a future date"
+                                title="Reschedule this occurrence to another day (next 30 days)"
                               >
                                 Set new date
                               </Button>
@@ -4427,7 +4435,7 @@ export default function ForecastPage({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Move occurrence to a future date</DialogTitle>
+            <DialogTitle>Move occurrence to another day</DialogTitle>
           </DialogHeader>
           {moveTarget && (
             <div className="space-y-4">
@@ -4454,7 +4462,11 @@ export default function ForecastPage({
                   value={moveDateDraft}
                   min={(() => {
                     const t = new Date();
-                    t.setDate(t.getDate() + 1);
+                    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+                  })()}
+                  max={(() => {
+                    const t = new Date();
+                    t.setDate(t.getDate() + 30);
                     return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
                   })()}
                   onChange={(e) => {
@@ -4464,8 +4476,8 @@ export default function ForecastPage({
                   data-testid="input-move-date"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Must be after today. Creates a one-off override for this
-                  occurrence only.
+                  Pick any day within the next 30 days. Creates a one-off
+                  override for this occurrence only.
                 </p>
                 {moveError && (
                   <p

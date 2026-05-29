@@ -27,10 +27,24 @@ class ResizeObserverStub {
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??
   ResizeObserverStub;
 
+if (typeof window !== "undefined" && !window.matchMedia) {
+  window.matchMedia = (() => ({
+    matches: false,
+    media: "",
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+}
+
 vi.mock("canvas-confetti", () => ({ default: () => undefined }));
 
 vi.mock("wouter", () => ({
   Link: ({ children }: { children?: React.ReactNode }) => <a>{children}</a>,
+  useLocation: () => ["/forecast", () => {}],
 }));
 
 vi.mock("@/components/plaid-reauth-banner", () => ({
@@ -39,6 +53,10 @@ vi.mock("@/components/plaid-reauth-banner", () => ({
 
 vi.mock("@/components/avalanche-ready-card", () => ({
   AvalancheReadyCard: () => null,
+}));
+
+vi.mock("@/components/avalanche-schedule-card", () => ({
+  AvalancheScheduleCard: () => null,
 }));
 
 vi.mock("@/components/ui/tabs", () => {
@@ -125,8 +143,12 @@ const FORECAST_BASE = {
   // One pending plan row (Rent) and one already-missed row (Gym) so we
   // can exercise both flows in one fixture.
   events: [
-    { itemId: "rent", date: "2026-05-10", label: "Rent", amount: -1500 },
+    { itemId: "rent", date: "2026-05-30", label: "Rent", amount: -1500 },
     { itemId: "gym", date: "2026-05-03", label: "Gym", amount: -40 },
+    // (#888) A still-upcoming plan row late in the active month. With
+    // "today" = 2026-05-29 this sits inside the today..+30 window, so it can
+    // be pulled EARLIER (to 2026-05-30) — the case the new window rule adds.
+    { itemId: "heloc", date: "2026-05-31", label: "HELOC", amount: -800 },
   ],
   transactions: [],
   resolutions: [
@@ -170,14 +192,20 @@ vi.mock("@workspace/api-client-react", () => {
     useUpdateTransaction: noopMutation,
     useSetForecastBankSnapshot: noopMutation,
     useRefreshForecastBank: noopMutation,
+    useSyncPlaidTransactions: noopMutation,
+    getListPlaidItemsQueryKey: () => ["plaid-items"],
     useListCategories: () => ({ data: [], isLoading: false }),
     useListDebts: () => ({ data: [], isLoading: false }),
     useListRecurringItems: () => ({ data: [], isLoading: false }),
+    useCreateRecurringItem: noopMutation,
     useGetAvalancheSettings: () => ({ data: undefined }),
     useGetAvalancheExtra: () => ({ data: undefined }),
     getGetForecastQueryKey: () => ["forecast"],
     getGetForecastCashSignalQueryKey: () => ["forecast-cash-signal"],
     getListTransactionsQueryKey: () => ["transactions"],
+    getListRecurringItemsQueryKey: () => ["recurring-items"],
+    getGetBillsSummaryQueryKey: () => ["bills-summary"],
+    getGetDashboardQueryKey: () => ["dashboard"],
   };
 });
 
@@ -209,19 +237,19 @@ beforeEach(() => {
 describe("Forecast — Missed bucket actions (#480)", () => {
   it("renders the per-row Mark missed button on a pending plan row", () => {
     renderPage();
-    const btn = screen.getByTestId("mark-missed-rent-2026-05-10");
+    const btn = screen.getByTestId("mark-missed-rent-2026-05-30");
     expect(btn.textContent ?? "").toMatch(/Mark missed/i);
   });
 
   it("clicking Mark missed upserts a missed resolution (no browser confirm) and surfaces an Undo toast", () => {
     renderPage();
-    fireEvent.click(screen.getByTestId("mark-missed-rent-2026-05-10"));
+    fireEvent.click(screen.getByTestId("mark-missed-rent-2026-05-30"));
     expect(upsertMutate).toHaveBeenCalledTimes(1);
     expect(upsertMutate.mock.calls[0][0]).toMatchObject({
       data: {
         status: "missed",
         recurringItemId: "rent",
-        occurrenceDate: "2026-05-10",
+        occurrenceDate: "2026-05-30",
       },
     });
     expect(toastMock).toHaveBeenCalledTimes(1);
@@ -255,16 +283,37 @@ describe("Forecast — Missed bucket actions (#480)", () => {
     });
   });
 
-  it("Set new date rejects past/today dates with the inline error", () => {
+  it("(#888) Set new date rejects dates outside the today..+30 window", () => {
     renderPage();
     fireEvent.click(screen.getByTestId("missed-set-new-date-res-gym-missed"));
     const dateInput = screen.getByTestId("input-move-date") as HTMLInputElement;
-    // The original occurrence is 2026-05-03; pick a same-or-earlier date.
+    // 2026-05-03 is before "today" (2026-05-29) → outside the window.
     fireEvent.change(dateInput, { target: { value: "2026-05-03" } });
     fireEvent.click(screen.getByTestId("button-save-move"));
     expect(upsertMutate).not.toHaveBeenCalled();
     const err = screen.getByTestId("move-error");
-    expect(err.textContent ?? "").toMatch(/after today|after the original/i);
+    expect(err.textContent ?? "").toMatch(/within the next 30 days/i);
+  });
+
+  it("(#888) moves an upcoming occurrence EARLIER within the window and only upserts a one-off resolution (template untouched)", () => {
+    renderPage();
+    // HELOC is planned for 2026-05-31; pull it back to 2026-05-30 — earlier
+    // than the original, but still inside the today..+30 window.
+    fireEvent.click(screen.getByTestId("move-plan-heloc-2026-05-31"));
+    const dateInput = screen.getByTestId("input-move-date") as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: "2026-05-30" } });
+    fireEvent.click(screen.getByTestId("button-save-move"));
+    expect(upsertMutate).toHaveBeenCalledTimes(1);
+    // It writes a one-off `rescheduled` resolution keyed to the original
+    // occurrence — it never edits the recurring template.
+    expect(upsertMutate.mock.calls[0][0]).toMatchObject({
+      data: {
+        status: "rescheduled",
+        recurringItemId: "heloc",
+        occurrenceDate: "2026-05-31",
+        rescheduledTo: "2026-05-30",
+      },
+    });
   });
 
   it("Skip upserts a `skipped` resolution and surfaces an Undo toast wired to delete it", () => {

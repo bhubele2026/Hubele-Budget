@@ -1130,10 +1130,21 @@ router.post("/forecast/resolutions", requireAuth, async (req, res): Promise<void
       });
       return;
     }
-    if (rescheduledTo <= occurrenceDate) {
+    // (#888) Allow moving an occurrence EARLIER or later than its original
+    // date — Brad wants to freely reschedule within the forecast window.
+    // We no longer require rescheduledTo > occurrenceDate. We do bound it to
+    // a sane window (today-1d .. today+60d) so it can't be set to an
+    // arbitrary far-off date; earlier-than-original is allowed inside it.
+    const isoOf = (d: Date): string =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const lower = new Date();
+    lower.setDate(lower.getDate() - 1);
+    const upper = new Date();
+    upper.setDate(upper.getDate() + 60);
+    if (rescheduledTo < isoOf(lower) || rescheduledTo > isoOf(upper)) {
       res
         .status(400)
-        .json({ error: "rescheduledTo must be after occurrenceDate" });
+        .json({ error: "rescheduledTo out of allowed window" });
       return;
     }
   }
