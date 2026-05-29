@@ -74,8 +74,6 @@ import {
   Landmark,
   RefreshCw,
   CalendarDays,
-  ChevronDown,
-  ChevronUp,
   X,
 } from "lucide-react";
 import {
@@ -537,25 +535,6 @@ export default function TransactionsPage() {
     }
   }, [categories]);
   const [memberFilter, setMemberFilter] = useState<string>("all");
-
-  // (#759) Collapse toggle that hides the summary tiles row and the
-  // filter bar so the transaction list gets more vertical room. The
-  // month picker and "N of M txns" row count stay visible at all
-  // times so the user can still switch months and see what's filtered.
-  // Persisted to localStorage under a transactions-specific key so it
-  // never collides with the Amex page's preference (#758).
-  const [headerCollapsed, setHeaderCollapsed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("transactions.headerCollapsed") === "1";
-  });
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (headerCollapsed) {
-      window.localStorage.setItem("transactions.headerCollapsed", "1");
-    } else {
-      window.localStorage.removeItem("transactions.headerCollapsed");
-    }
-  }, [headerCollapsed]);
 
   const categoryById = useMemo(() => {
     const m = new Map<string, string>();
@@ -1915,47 +1894,9 @@ export default function TransactionsPage() {
 
       <div className="flex items-stretch gap-4 flex-wrap">
         <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
-        {/* (#759) Compact toggle that hides/shows the summary tiles row
-            and the filter bar below. Stays inline with the month picker
-            so the user can still navigate months when collapsed. */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-9 shrink-0 self-center"
-          onClick={() => setHeaderCollapsed((v) => !v)}
-          aria-expanded={!headerCollapsed}
-          aria-controls="transactions-header-collapsible"
-          aria-label={
-            headerCollapsed
-              ? "Show summary tiles and filters"
-              : "Hide summary tiles and filters"
-          }
-          data-testid="button-toggle-transactions-header"
-        >
-          {headerCollapsed ? (
-            <ChevronDown className="h-3.5 w-3.5 mr-1.5" />
-          ) : (
-            <ChevronUp className="h-3.5 w-3.5 mr-1.5" />
-          )}
-          {headerCollapsed ? "Show filters" : "Hide filters"}
-        </Button>
-        {/* When collapsed, surface the row count next to the toggle so
-            the user still sees "19 of 219 txns" at a glance. The same
-            readout is rendered inside the filter bar's rightSlot when
-            expanded, so it doesn't disappear when the filter bar is
-            showing. */}
-        {headerCollapsed && (
-          <div
-            className="text-xs text-muted-foreground ml-auto self-center"
-            data-testid="text-row-count-collapsed"
-          >
-            {filtered.length} of {monthScoped.length} txns
-          </div>
-        )}
-        {!headerCollapsed && (
+        {/* (#806) Summary tiles are always visible; only the filter
+            fields collapse, and that lives inside AccountFilterBar. */}
         <div
-          id="transactions-header-collapsible"
           className="grid grid-cols-2 md:grid-cols-5 gap-3 flex-1 min-w-[280px]">
           {hasLinkedChecking ? (
             <StatChip
@@ -2016,7 +1957,6 @@ export default function TransactionsPage() {
             testId="stat-net-change"
           />
         </div>
-        )}
       </div>
 
       {effectiveSnapshot && (
@@ -2125,7 +2065,6 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {!headerCollapsed && (
       <AccountFilterBar
         search={search}
         onSearchChange={setSearch}
@@ -2148,7 +2087,6 @@ export default function TransactionsPage() {
           </div>
         }
       />
-      )}
       </div>
 
       <BalanceTrendChart

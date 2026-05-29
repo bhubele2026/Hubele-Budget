@@ -122,69 +122,64 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-describe("Transactions (Chase) header collapse toggle (#759)", () => {
-  it("starts expanded; toggle hides tiles + filter bar while keeping month switcher and row count visible; restores on second click", async () => {
+describe("Transactions (Chase) filter collapse toggle (#806)", () => {
+  it("starts with filters collapsed; tiles + row count stay visible; toggle reveals the filter fields and flips back", async () => {
     renderPage();
 
-    const toggle = await screen.findByTestId(
-      "button-toggle-transactions-header",
-    );
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(toggle.textContent).toMatch(/Hide filters/);
+    const toggle = await screen.findByTestId("button-toggle-filters");
+    // Filters collapsed by default on every load (no persistence).
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.textContent).toMatch(/Show filters/);
 
-    // Defaults: filter bar + summary row count + tiles visible.
+    // Summary tiles + row-count chip are ALWAYS visible regardless of
+    // the filter collapse state.
     expect(screen.getByTestId("text-row-count")).toBeTruthy();
     expect(screen.getByTestId("stat-money-in")).toBeTruthy();
     expect(screen.getByTestId("stat-money-out")).toBeTruthy();
-
-    // Collapse.
-    act(() => {
-      fireEvent.click(toggle);
-    });
-
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(toggle.textContent).toMatch(/Show filters/);
-    expect(screen.queryByTestId("text-row-count")).toBeNull();
-    expect(screen.queryByTestId("stat-money-in")).toBeNull();
-    expect(screen.queryByTestId("stat-money-out")).toBeNull();
-
-    // Month switcher + collapsed row count still visible.
-    expect(screen.getByTestId("text-row-count-collapsed")).toBeTruthy();
+    // Month switcher still visible.
     expect(screen.getByTestId("button-prev-month")).toBeTruthy();
     expect(screen.getByTestId("button-next-month")).toBeTruthy();
     expect(screen.getByTestId("text-selected-month")).toBeTruthy();
 
-    // Persisted to localStorage under the transactions-specific key
-    // (must not collide with the Amex page's preference).
-    expect(window.localStorage.getItem("transactions.headerCollapsed")).toBe(
-      "1",
-    );
-    expect(window.localStorage.getItem("amex.headerCollapsed")).toBeNull();
+    // Filter fields hidden while collapsed.
+    expect(screen.queryByTestId("input-search")).toBeNull();
 
-    // Restore.
+    // Expand.
     act(() => {
       fireEvent.click(toggle);
     });
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(toggle.textContent).toMatch(/Hide filters/);
+    expect(screen.getByTestId("input-search")).toBeTruthy();
+    // Tiles + row count remain visible while expanded.
     expect(screen.getByTestId("text-row-count")).toBeTruthy();
     expect(screen.getByTestId("stat-money-in")).toBeTruthy();
-    expect(screen.queryByTestId("text-row-count-collapsed")).toBeNull();
+
+    // No persistence — nothing is written to localStorage.
     expect(
       window.localStorage.getItem("transactions.headerCollapsed"),
     ).toBeNull();
+
+    // Collapse again.
+    act(() => {
+      fireEvent.click(toggle);
+    });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByTestId("input-search")).toBeNull();
   });
 
-  it("reapplies the persisted collapsed preference on remount", async () => {
-    window.localStorage.setItem("transactions.headerCollapsed", "1");
-    renderPage();
+  it("resets to collapsed on remount even after expanding (no persistence)", async () => {
+    const first = renderPage();
+    const toggle = await screen.findByTestId("button-toggle-filters");
+    act(() => {
+      fireEvent.click(toggle);
+    });
+    expect(screen.getByTestId("input-search")).toBeTruthy();
+    first.unmount();
 
-    const toggle = await screen.findByTestId(
-      "button-toggle-transactions-header",
-    );
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(toggle.textContent).toMatch(/Show filters/);
-    expect(screen.queryByTestId("text-row-count")).toBeNull();
-    expect(screen.queryByTestId("stat-money-in")).toBeNull();
-    expect(screen.getByTestId("text-row-count-collapsed")).toBeTruthy();
+    renderPage();
+    const toggle2 = await screen.findByTestId("button-toggle-filters");
+    expect(toggle2.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByTestId("input-search")).toBeNull();
   });
 });

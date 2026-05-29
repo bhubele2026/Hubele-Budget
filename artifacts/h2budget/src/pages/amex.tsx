@@ -49,8 +49,6 @@ import {
 } from "@/components/ui/command";
 import {
   Check,
-  ChevronDown,
-  ChevronUp,
   CreditCard,
   RefreshCw,
   X,
@@ -225,25 +223,6 @@ export default function AmexPage() {
       window.localStorage.removeItem("amex.hideReviewed");
     }
   }, [hideReviewed]);
-
-  // (#758) Collapse toggle that hides both the summary tiles row and
-  // the filter bar so the transaction list gets more vertical room.
-  // The month picker and row-count readout stay visible at all times
-  // so the user can still switch months and see what's filtered.
-  // Persisted to localStorage so the preference survives reloads and
-  // navigation within the app.
-  const [headerCollapsed, setHeaderCollapsed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("amex.headerCollapsed") === "1";
-  });
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (headerCollapsed) {
-      window.localStorage.setItem("amex.headerCollapsed", "1");
-    } else {
-      window.localStorage.removeItem("amex.headerCollapsed");
-    }
-  }, [headerCollapsed]);
 
   const currentMonth = useMemo<MonthKey>(() => monthKeyOf(new Date()), []);
   // Task #168 — Budget page deep-links into the Amex page when a row's
@@ -1721,57 +1700,9 @@ export default function AmexPage() {
         <div className="shrink-0">
           <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
         </div>
-        {/* (#758) Compact toggle that hides/shows the summary tiles row
-            and the filter bar below. Stays inline with the month picker
-            so the user can still navigate months when collapsed. */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-9 shrink-0"
-          onClick={() => setHeaderCollapsed((v) => !v)}
-          aria-expanded={!headerCollapsed}
-          aria-controls="amex-header-collapsible"
-          aria-label={
-            headerCollapsed
-              ? "Show summary tiles and filters"
-              : "Hide summary tiles and filters"
-          }
-          data-testid="button-toggle-amex-header"
-        >
-          {headerCollapsed ? (
-            <ChevronDown className="h-3.5 w-3.5 mr-1.5" />
-          ) : (
-            <ChevronUp className="h-3.5 w-3.5 mr-1.5" />
-          )}
-          {headerCollapsed ? "Show filters" : "Hide filters"}
-        </Button>
-        {/* When collapsed, surface the row count next to the toggle so
-            the user still sees "19 of 219 txns" at a glance. The
-            same readout is rendered inside the filter bar's rightSlot
-            when expanded, so it doesn't disappear when the filter bar
-            is showing. */}
-        {headerCollapsed && (
-          <div
-            className="text-xs ml-auto flex flex-col items-end"
-            data-testid="text-row-count-collapsed"
-          >
-            <span className="text-muted-foreground">
-              {filtered.length} of {monthScoped.length} txns
-            </span>
-            {monthCapHit && (
-              <span
-                className="text-[10px] text-amber-700"
-                data-testid="text-month-cap-hit-collapsed"
-              >
-                Showing first {MONTH_LIMIT} — narrow your filters
-              </span>
-            )}
-          </div>
-        )}
-        {!headerCollapsed && (
+        {/* (#806) Summary tiles are always visible; only the filter
+            fields collapse, and that lives inside AccountFilterBar. */}
         <div
-          id="amex-header-collapsible"
           className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 min-w-[280px]"
         >
           {endingBalance.source === "missing" ||
@@ -2052,10 +1983,8 @@ export default function AmexPage() {
             testId="stat-net-change"
           />
         </div>
-        )}
       </div>
 
-        {!headerCollapsed && (
         <AccountFilterBar
           search={search}
           onSearchChange={setSearch}
@@ -2121,7 +2050,6 @@ export default function AmexPage() {
             </div>
           }
         />
-        )}
       </div>
 
       <BalanceTrendChart
