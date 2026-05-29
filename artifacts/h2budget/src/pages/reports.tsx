@@ -10,6 +10,7 @@ import {
   useGetForecast,
   useGetForecastCashSignal,
   useGetDashboard,
+  useListPlaidLiabilityAccounts,
   useGetReportsAdvisorSummary,
   getReportsAdvisorSummary,
   getGetReportsAdvisorSummaryQueryKey,
@@ -38,6 +39,7 @@ import { useToast } from "@/hooks/use-toast";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import {
   resolveAmexRevolvingBalance,
+  describeAmexRevolvingCards,
   cashBufferStatusMeta,
   type CashSignalStatus,
 } from "@/lib/reportsBalances";
@@ -425,10 +427,8 @@ function AdvisorSummaryCard({
 // opens with the household's live financial vitals.
 function ReportsBalanceTiles({
   forecast,
-  debts,
 }: {
   forecast: ForecastBundle | null | undefined;
-  debts: import("@workspace/api-client-react").Debt[] | undefined;
 }) {
   const { data: dashboard } = useGetDashboard();
   const { data: cashSignal } = useGetForecastCashSignal();
@@ -452,12 +452,13 @@ function ReportsBalanceTiles({
     ? `${effective.source === "plaid" ? "Plaid" : "Manual"} · ${effective.name ?? "Bank"}${effective.mask ? ` ··${effective.mask}` : ""}`
     : "No checking snapshot yet";
 
-  const amex = useMemo(() => resolveAmexRevolvingBalance(debts), [debts]);
+  const { data: amexCardAccounts } = useListPlaidLiabilityAccounts();
+  const amex = useMemo(
+    () => resolveAmexRevolvingBalance(amexCardAccounts),
+    [amexCardAccounts],
+  );
   const amexValue = amex.found ? formatCurrency(amex.total) : "—";
-  const amexSub =
-    amex.found && amex.availableCount === 1
-      ? "Blue Cash 1006 + Platinum 1009 (1 card unavailable)"
-      : "Blue Cash 1006 + Platinum 1009";
+  const amexSub = describeAmexRevolvingCards(amex);
 
   const totalDebtValue =
     dashboard != null ? formatCurrency(dashboard.totalDebt) : "—";
@@ -610,7 +611,7 @@ export default function ReportsPage() {
       </div>
 
       {/* (Play B) At-a-glance balance tiles — formerly the Dashboard */}
-      <ReportsBalanceTiles forecast={forecast} debts={debts} />
+      <ReportsBalanceTiles forecast={forecast} />
 
       {/* Global controls */}
       <div className="flex flex-wrap items-center gap-6">

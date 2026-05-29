@@ -3,11 +3,31 @@
 // math has a single, testable home and the numbers stay in lock-step
 // with the rest of the app.
 
-export type BlueCashDebtLike = {
-  name: string;
-  balance: string | number | null | undefined;
-  status?: string | null;
+// The Amex tile sources the two revolving Amex cards from the actual
+// Amex card *accounts* (the Plaid liability-accounts endpoint), NOT from
+// the household debts list. Sourcing from debts was the root cause of
+// task #875: a "Capital One Platinum" debt matched the `/platinum/i`
+// matcher and its balance was reported as the Amex total. Reading from
+// the Amex-scoped account source makes a non-Amex "Platinum" impossible
+// to fold in, and the issuer guard below is defense in depth.
+//
+// This shape is structurally compatible with `PlaidLiabilityAccount`
+// rows from `@workspace/api-client-react` so the caller can pass them
+// straight through without converting.
+export type AmexCardAccountLike = {
+  name?: string | null;
+  officialName?: string | null;
+  mask?: string | null;
+  balance?: string | number | null;
   type?: string | null;
+  subtype?: string | null;
+  liabilityKind?: string | null;
+  institutionName?: string | null;
+  institutionSlug?: string | null;
+  // Carried by debt-like rows; the account source has no notion of
+  // "status" but we keep it optional so any active/inactive flag is
+  // honored if present.
+  status?: string | null;
 };
 
 // Amex revolving-balance matchers. The tile sums the two revolving Amex
@@ -17,13 +37,23 @@ export type BlueCashDebtLike = {
 //     balance is NOT revolving debt), and
 //   - "Blue Cash Everyday" (a different, lower-tier card).
 // A bare "Blue Cash" name is treated as the Preferred card. Matching on
-// name keeps this independent of whether the debt row carries a mask —
+// name keeps this independent of whether the row carries a mask —
 // critical here because the Platinum Card and Delta SkyMiles Gold BOTH
 // end in 1009, so they can only be distinguished by name (or Plaid id).
 const BLUE_CASH_RE = /blue\s*cash/i;
 const PLATINUM_RE = /platinum/i;
 const DELTA_RE = /delta/i;
 const EVERYDAY_RE = /everyday/i;
+
+// Issuer guard (defense in depth). Only rows that are unambiguously
+// Amex-issued are ever considered. We accept a row whose issuer
+// (institutionName / institutionSlug) or name says Amex / American
+// Express, and we hard-reject any row whose issuer or name names a
+// known non-Amex issuer — so even if a "Capital One Platinum" row ever
+// reached this helper it could never be folded into the Amex total.
+const AMEX_ISSUER_RE = /amex|american\s*express/i;
+const NON_AMEX_ISSUER_RE =
+  /capital\s*one|\bchase\b|\bciti\b|citibank|discover|wells\s*fargo|bank\s*of\s*america|\bbofa\b|barclay|synchrony|\bus\s*bank\b|usbank|navy\s*federal|\bpnc\b|truist|\bamex\s*loan\b/i;
 
 export function parseAmount(v: string | number | null | undefined): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
@@ -34,6 +64,23 @@ export function parseAmount(v: string | number | null | undefined): number {
 function isActive(status: string | null | undefined): boolean {
   const s = (status ?? "active").toLowerCase();
   return s !== "paid" && s !== "closed" && s !== "archived" && s !== "inactive";
+}
+
+function cardName(row: AmexCardAccountLike): string {
+  return (row.name ?? row.officialName ?? "").trim();
+}
+
+// True only when the row is unambiguously Amex-issued. Rejects any row
+// whose issuer or name matches a known non-Amex issuer first, then
+// requires a positive Amex signal from either the issuer fields or the
+// card name.
+function isAmexIssued(row: AmexCardAccountLike): boolean {
+  const issuer = `${row.institutionName ?? ""} ${row.institutionSlug ?? ""}`;
+  const name = cardName(row);
+  if (NON_AMEX_ISSUER_RE.test(issuer) || NON_AMEX_ISSUER_RE.test(name)) {
+    return false;
+  }
+  return AMEX_ISSUER_RE.test(issuer) || AMEX_ISSUER_RE.test(name);
 }
 
 function isBlueCashPreferred(name: string): boolean {
@@ -47,32 +94,46 @@ function isPlatinum(name: string): boolean {
 }
 
 export type AmexCardAvailability = {
-  // Whether a matching active card row was found AND carried a usable
-  // (non-null) balance. When false the card contributes 0 to the total
-  // and counts as "unavailable" for the partial-result subnote.
+  // A matching Amex-issued card row was found in the Amex-scoped source.
+  // This is what distinguishes a "genuinely-expected but unavailable"
+  // card (present, no usable balance) from one that simply isn't linked.
+  present: boolean;
+  // Whether the matched card carried a usable (non-null) balance. When
+  // false the card contributes 0 to the total; if it is also `present`
+  // it counts as "unavailable" for the partial-result subnote.
   available: boolean;
   balance: number | null;
+  // Real mask of the matched card (first match), used to derive the
+  // tile sub-line (e.g. "Blue Cash ••1006").
+  mask: string | null;
 };
 
-function resolveCard<T extends BlueCashDebtLike>(
-  debts: ReadonlyArray<T>,
+function resolveCard<T extends AmexCardAccountLike>(
+  rows: ReadonlyArray<T>,
   predicate: (name: string) => boolean,
 ): AmexCardAvailability {
-  const matches = debts.filter((d) => {
-    if (!isActive(d.status)) return false;
-    if ((d.type ?? "").toLowerCase() === "loan") return false;
-    return predicate(d.name);
+  const matches = rows.filter((r) => {
+    if (!isActive(r.status)) return false;
+    if ((r.type ?? "").toLowerCase() === "loan") return false;
+    if (!isAmexIssued(r)) return false;
+    return predicate(cardName(r));
   });
-  if (matches.length === 0) return { available: false, balance: null };
+  if (matches.length === 0) {
+    return { present: false, available: false, balance: null, mask: null };
+  }
+  const mask = (matches[0].mask ?? "").trim() || null;
   const usable = matches.filter(
-    (d) =>
-      d.balance !== null &&
-      d.balance !== undefined &&
-      String(d.balance).trim() !== "",
+    (r) =>
+      r.balance !== null &&
+      r.balance !== undefined &&
+      String(r.balance).trim() !== "",
   );
-  if (usable.length === 0) return { available: false, balance: null };
-  const balance = usable.reduce((acc, d) => acc + parseAmount(d.balance), 0);
-  return { available: true, balance };
+  if (usable.length === 0) {
+    return { present: true, available: false, balance: null, mask };
+  }
+  const usableMask = (usable[0].mask ?? "").trim() || mask;
+  const balance = usable.reduce((acc, r) => acc + parseAmount(r.balance), 0);
+  return { present: true, available: true, balance, mask: usableMask };
 }
 
 export type AmexRevolvingBalance = {
@@ -87,16 +148,22 @@ export type AmexRevolvingBalance = {
 };
 
 // Sum the current balance of the revolving Amex cards — Blue Cash
-// Preferred (1006) and Platinum Card (1009) — excluding Delta SkyMiles
-// Gold (a charge card, also ending 1009) and Blue Cash Everyday. Returns
-// per-card availability so the tile can render a partial result when only
-// one card has a usable balance, and `found: false` only when neither is
-// available.
-export function resolveAmexRevolvingBalance<T extends BlueCashDebtLike>(
-  debts: ReadonlyArray<T> | null | undefined,
+// Preferred (1006) and Platinum Card (1009) — from the Amex card-account
+// source, excluding Delta SkyMiles Gold (a charge card, also ending
+// 1009) and Blue Cash Everyday, and excluding any non-Amex-issued row
+// (defense in depth). Returns per-card availability so the tile can
+// render a partial result when only one card has a usable balance, and
+// `found: false` only when neither is available.
+export function resolveAmexRevolvingBalance<T extends AmexCardAccountLike>(
+  rows: ReadonlyArray<T> | null | undefined,
 ): AmexRevolvingBalance {
-  const empty: AmexCardAvailability = { available: false, balance: null };
-  if (!debts || debts.length === 0) {
+  const empty: AmexCardAvailability = {
+    present: false,
+    available: false,
+    balance: null,
+    mask: null,
+  };
+  if (!rows || rows.length === 0) {
     return {
       total: 0,
       found: false,
@@ -105,8 +172,8 @@ export function resolveAmexRevolvingBalance<T extends BlueCashDebtLike>(
       availableCount: 0,
     };
   }
-  const blueCash = resolveCard(debts, isBlueCashPreferred);
-  const platinum = resolveCard(debts, isPlatinum);
+  const blueCash = resolveCard(rows, isBlueCashPreferred);
+  const platinum = resolveCard(rows, isPlatinum);
   const total =
     (blueCash.available ? (blueCash.balance ?? 0) : 0) +
     (platinum.available ? (platinum.balance ?? 0) : 0);
@@ -119,6 +186,31 @@ export function resolveAmexRevolvingBalance<T extends BlueCashDebtLike>(
     platinum,
     availableCount,
   };
+}
+
+// Derive the tile sub-line from the cards actually found in the
+// Amex-scoped source, using their real masks (e.g.
+// "Blue Cash ••1006 + Platinum ••1009"). "(N card unavailable)" is
+// appended only for cards that were genuinely found (present) but had no
+// usable balance — never because a card simply isn't linked.
+export function describeAmexRevolvingCards(b: AmexRevolvingBalance): string {
+  const part = (label: string, card: AmexCardAvailability): string | null => {
+    if (!card.present) return null;
+    return card.mask ? `${label} ••${card.mask}` : label;
+  };
+  const parts = [
+    part("Blue Cash", b.blueCash),
+    part("Platinum", b.platinum),
+  ].filter((p): p is string => p !== null);
+  const unavailableCount =
+    (b.blueCash.present && !b.blueCash.available ? 1 : 0) +
+    (b.platinum.present && !b.platinum.available ? 1 : 0);
+  if (parts.length === 0) return "No Amex cards linked";
+  const base = parts.join(" + ");
+  if (unavailableCount > 0) {
+    return `${base} (${unavailableCount} card${unavailableCount === 1 ? "" : "s"} unavailable)`;
+  }
+  return base;
 }
 
 // Map the cash-signal status to the tile's label + tone. Mirrors the
