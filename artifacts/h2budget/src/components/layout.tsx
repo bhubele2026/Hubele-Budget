@@ -12,6 +12,7 @@ import {
   TrendingUp,
   BarChart3,
   Flame,
+  Landmark,
   Menu,
   Inbox,
   CalendarCheck,
@@ -42,7 +43,7 @@ const navItems = [
   { name: "Avalanche", href: "/avalanche", icon: Flame },
   { name: "Bills", href: "/bills", icon: CalendarDays },
   { name: "Budget", href: "/budget", icon: PieChart },
-  { name: "Debts", href: "/debts", icon: CreditCard },
+  { name: "Debts", href: "/debts", icon: Landmark },
   { name: "Mapping Rules", href: "/mapping-rules", icon: GitMerge },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
