@@ -232,7 +232,61 @@ export default function AmexPage() {
     }
   }, [hideReviewed]);
 
-  const currentMonth = useMemo<MonthKey>(() => monthKeyOf(new Date()), []);
+  // (#814) Reactive "today" so the forward-looking chart window rolls
+  // forward without a reload. `currentMonth` is derived from this, so the
+  // chart's subtitle, ticks, today marker, and series advance on their own
+  // when the clock crosses into a new day/month — even on a tab that was
+  // left open. We bump it on tab focus / visibility change and schedule a
+  // timer for the next local midnight (so an idle, focused tab still
+  // advances). To avoid needless re-renders, `today` only changes when the
+  // local calendar day actually differs from the last value.
+  const [today, setToday] = useState<Date>(() => new Date());
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const bump = () => {
+      setToday((prev) => {
+        const next = new Date();
+        if (
+          next.getFullYear() === prev.getFullYear() &&
+          next.getMonth() === prev.getMonth() &&
+          next.getDate() === prev.getDate()
+        ) {
+          return prev; // same calendar day — no state change
+        }
+        return next;
+      });
+    };
+    const scheduleMidnight = () => {
+      const now = new Date();
+      const nextMidnight = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 1,
+        0,
+        0,
+        0,
+        100,
+      );
+      timer = setTimeout(() => {
+        bump();
+        scheduleMidnight();
+      }, nextMidnight.getTime() - now.getTime());
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") bump();
+    };
+    window.addEventListener("focus", bump);
+    document.addEventListener("visibilitychange", onVisible);
+    scheduleMidnight();
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("focus", bump);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  const currentMonth = useMemo<MonthKey>(() => monthKeyOf(today), [today]);
   // Task #168 — Budget page deep-links into the Amex page when a row's
   // actuals are Amex-dominated. Honor `?month=YYYY-MM-01` from that link
   // so the user lands on the same month they were viewing on Budget.
