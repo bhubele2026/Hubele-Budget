@@ -25,6 +25,7 @@ import {
   plaidAccountsTable,
   plaidItemsTable,
   weeklyDebriefsTable,
+  budgetCategoriesTable,
 } from "@workspace/db";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import {
@@ -64,6 +65,9 @@ async function cleanup(): Promise<void> {
     .delete(plaidAccountsTable)
     .where(eq(plaidAccountsTable.userId, TEST_USER));
   await db.delete(plaidItemsTable).where(eq(plaidItemsTable.userId, TEST_USER));
+  await db
+    .delete(budgetCategoriesTable)
+    .where(eq(budgetCategoriesTable.userId, TEST_USER));
 }
 
 beforeAll(async () => {
@@ -290,6 +294,144 @@ describe("computeWeekVariance", () => {
   });
 });
 
+// (#857) Amex spend in the by-category breakdown. Task #856 widened the
+// byCategory accumulator (only) to include Amex charges so categorized
+// Amex spend shows up in category actuals + drill-downs, while keeping
+// the cash-flow top-line totals and open-items/lock gating strictly
+// Chase-only. These tests lock that split in.
+describe("computeWeekVariance — Amex in category breakdown (#857)", () => {
+  async function makeCategory(name: string): Promise<string> {
+    const [cat] = await db
+      .insert(budgetCategoriesTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        name: `${name} ${randomUUID().slice(0, 6)}`,
+        kind: "expense",
+        groupName: "Other",
+        sourceKind: "manual",
+      })
+      .returning();
+    return cat!.id;
+  }
+
+  it("category actual + drill-down include the Amex charge alongside the Chase row", async () => {
+    const externalAcct = await setupCheckingAccount();
+    const groceriesId = await makeCategory("Groceries");
+
+    // Chase checking grocery charge ($50) and an Amex grocery charge
+    // ($30) in the SAME category, both in the current week.
+    const [chaseTxn] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-26",
+        occurredAt: "2026-05-26T15:00:00Z",
+        description: "Roundys",
+        amount: "-50.00",
+        categoryId: groceriesId,
+        plaidAccountId: externalAcct,
+        source: "plaid",
+      })
+      .returning();
+    const [amexTxn] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-27",
+        occurredAt: "2026-05-27T18:00:00Z",
+        description: "Roundys (Amex)",
+        amount: "-30.00",
+        categoryId: groceriesId,
+        source: "amex",
+      })
+      .returning();
+
+    const snap = await computeWeekVariance(TEST_HOUSEHOLD_ID, CURRENT_WEEK);
+    const bucket = snap.byCategory.find((b) => b.categoryId === groceriesId)!;
+    expect(bucket).toBeTruthy();
+    // actual = abs(Chase 50) + abs(Amex 30) = 80
+    expect(bucket.actualAmount).toBe("80.00");
+    const drillIds = bucket.actualTxns.map((t) => t.txnId);
+    expect(drillIds).toContain(chaseTxn!.id);
+    expect(drillIds).toContain(amexTxn!.id);
+  });
+
+  it("top-line cash-flow totals stay Chase-only and exclude the Amex amount", async () => {
+    const externalAcct = await setupCheckingAccount();
+    const groceriesId = await makeCategory("Groceries");
+
+    await db.insert(transactionsTable).values([
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-26",
+        occurredAt: "2026-05-26T15:00:00Z",
+        description: "Roundys",
+        amount: "-50.00",
+        categoryId: groceriesId,
+        plaidAccountId: externalAcct,
+        source: "plaid",
+      },
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-27",
+        occurredAt: "2026-05-27T18:00:00Z",
+        description: "Dunkin (Amex)",
+        amount: "-30.00",
+        categoryId: groceriesId,
+        source: "amex",
+      },
+    ]);
+
+    const snap = await computeWeekVariance(TEST_HOUSEHOLD_ID, CURRENT_WEEK);
+    // Only the Chase $50 hits cash-flow expenses; the Amex $30 does not.
+    expect(snap.totals.actualExpenses).toBe("50.00");
+    expect(snap.totals.actualIncome).toBe("0.00");
+    expect(snap.totals.actualNet).toBe("-50.00");
+  });
+
+  it("openItemsCount / lock gating are unaffected by an Amex row", async () => {
+    const externalAcct = await setupCheckingAccount();
+    const groceriesId = await makeCategory("Groceries");
+
+    // Baseline: a single unplanned Chase charge → 1 open item.
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      occurredOn: "2026-05-19",
+      occurredAt: "2026-05-19T15:00:00Z",
+      description: "Roundys",
+      amount: "-50.00",
+      categoryId: groceriesId,
+      plaidAccountId: externalAcct,
+      source: "plaid",
+    });
+    const before = await computeWeekVariance(TEST_HOUSEHOLD_ID, PRIOR_WEEK);
+    expect(before.openItemsCount).toBe(1);
+
+    // Adding an Amex charge in the same week must NOT change open items.
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      occurredOn: "2026-05-20",
+      occurredAt: "2026-05-20T18:00:00Z",
+      description: "Dunkin (Amex)",
+      amount: "-30.00",
+      categoryId: groceriesId,
+      source: "amex",
+    });
+    const after = await computeWeekVariance(TEST_HOUSEHOLD_ID, PRIOR_WEEK);
+    expect(after.openItemsCount).toBe(1);
+    // The Amex row still shows up in the category breakdown though.
+    const bucket = after.byCategory.find((b) => b.categoryId === groceriesId)!;
+    expect(bucket.actualAmount).toBe("80.00");
+  });
+});
+
 // -- Route integration tests ---------------------------------------
 
 async function startServer(): Promise<{ baseUrl: string; server: Server }> {
@@ -423,6 +565,25 @@ describe("weeklyDebrief routes", () => {
     expect(res.body.actionsSummary).toBeTruthy();
     const cur = await req(baseUrl, "POST", `/debrief/weeks/${CURRENT_WEEK}/lock`, {});
     expect(cur.status).toBe(400);
+  });
+
+  it("(#857) POST lock still succeeds when only an Amex txn is in the week", async () => {
+    await setupCheckingAccount();
+    // An Amex charge (source="amex") is in the by-category breakdown but
+    // is NOT a Chase/checking row, so it must not gate locking.
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      occurredOn: "2026-05-20",
+      occurredAt: "2026-05-20T18:00:00Z",
+      description: "Dunkin (Amex)",
+      amount: "-30.00",
+      source: "amex",
+    });
+    const res = await req(baseUrl, "POST", `/debrief/weeks/${PRIOR_WEEK}/lock`, {});
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("locked");
+    expect(res.body.lockedAt).toBeTruthy();
   });
 
   it("POST /debrief/weeks/:weekStart/unlock requires { confirm: true }", async () => {
