@@ -15,6 +15,7 @@ import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
 import { runStartupBankSnapshotPointerRepair } from "./lib/startupBankSnapshotPointerRepair";
+import { runStartupChaseForecastFlagRepair } from "./lib/startupChaseForecastFlagRepair";
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
 import { runStartupPendingNotesBackfill } from "./lib/startupPendingNotesBackfill";
 import "./lib/advisorReadTools";
@@ -149,6 +150,23 @@ app.listen(port, (err) => {
     })
     .catch((err) => {
       logger.error({ err }, "Startup bank-snapshot pointer repair failed");
+    });
+
+  // One-shot startup pass: repair `forecast_flag` on the household's
+  // Chase checking rows that were imported while
+  // `bank_snapshot_account_id` was NULL (so plaidSync's `isChecking` was
+  // false and every row landed with forecast_flag=false, hiding them
+  // from the Debrief/Review queue). Mirrors the sync predicate — only
+  // non-transfer rows (is_transfer=false) on the checking account get
+  // flipped to true. Idempotent: the forecast_flag=false guard makes
+  // converged DBs a no-op, and post-pointer-fix syncs already set the
+  // flag correctly. Best-effort: never blocks boot.
+  runStartupChaseForecastFlagRepair()
+    .then((summary) => {
+      logger.info(summary, "Startup Chase forecast-flag repair complete");
+    })
+    .catch((err) => {
+      logger.error({ err }, "Startup Chase forecast-flag repair failed");
     });
 
   // (#632) One-shot per-startup sweep: clean up existing transactions

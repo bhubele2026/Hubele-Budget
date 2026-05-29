@@ -1,0 +1,46 @@
+Found the next issue. Click "Review" on a pending Chase txn → it sets sentToReviewAt correctly (badge shows ✓ in review), but the Debrief Review queue still excludes them. Cause is in the data, not the click handler.
+
+ROOT CAUSE — traced in code:
+
+artifacts/api-server/src/lib/plaidSync.ts line 1262-1263:
+  isChecking = checkingPlaidAccountId !== null && t.account_id === checkingPlaidAccountId
+
+Line 1534: forecastFlag = isChecking && !cat.isTransfer
+
+Line 771-776: checkingPlaidAccountId comes from forecastSettings.bankSnapshotAccountId via plaid_accounts lookup.
+
+Before yesterday's pointer repair, bankSnapshotAccountId was NULL. So checkingPlaidAccountId was NULL during all Chase Plaid syncs in that window → isChecking always false → every transaction was inserted with forecastFlag = false.
+
+artifacts/api-server/src/routes/forecast.ts line 376 filters the Review queue by `eq(forecastFlag, true)`. So those rows are invisible to the Debrief/Review pipeline even when manually sent.
+
+DIAGNOSIS first — read-only:
+
+  SELECT COUNT(*), MIN(occurred_on), MAX(occurred_on)
+  FROM transactions
+  WHERE household_id = 'a7182af8-49f0-48f3-920e-f916c7eab872'
+    AND source = 'plaid:chase'
+    AND plaid_account_id = 'YEvBBznkA3updAzAk7wyILEPd31z6BSQK184R'
+    AND forecast_flag = false;
+
+Report the count and date range. That tells me the blast radius. Expect: most/all of the 116 plaid:chase rows since 2026-05-01.
+
+FIX (one-shot repair). For my household, set forecast_flag = true for every plaid:chase row that should have it:
+
+  UPDATE transactions
+  SET forecast_flag = true
+  WHERE household_id = 'a7182af8-49f0-48f3-920e-f916c7eab872'
+    AND source = 'plaid:chase'
+    AND plaid_account_id = 'YEvBBznkA3updAzAk7wyILEPd31z6BSQK184R'
+    AND forecast_flag = false
+    -- exclude transfers
+    AND (LOWER(category) NOT LIKE '%transfer%' OR category IS NULL);
+
+Two questions before applying:
+1. The transfer-exclusion clause above is rough. The original code uses `cat.isTransfer` from the auto-categorizer. What's the correct production way to identify transfers — by category name, by a flag, by pfc_primary IN ('TRANSFER_IN','TRANSFER_OUT')? Use the right predicate so we don't flip transfers to forecastFlag=true.
+2. Going forward — once forecastFlag is set correctly during sync (which it now is, post-pointer-fix), this stays right. So the fix is one-shot for the broken-window rows. Confirm.
+
+Ship as a startup hook same as the pointer repair (one-shot, IS NULL/false-only guard, idempotent, gated to my household). After publish:
+- Re-query forecast_flag=false count → should be 0 (or just legitimate transfers).
+- Hard refresh /chase. Click Review on a pending Chase txn. The Debrief Review queue should now include it. /debrief should also show real actual numbers for the current week.
+
+Architect review + typecheck + publish.
