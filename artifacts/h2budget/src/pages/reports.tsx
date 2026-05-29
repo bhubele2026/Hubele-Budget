@@ -503,7 +503,7 @@ function ReportsBalanceTiles({
 
 export default function ReportsPage() {
   const today = useMemo(() => new Date(), []);
-  const [rangeDays, setRangeDays] = useState("90");
+  const [rangeDays, setRangeDays] = useState("30");
   const [monthOffset, setMonthOffset] = useState("0");
   const [compareToPrev, setCompareToPrev] = useState(false);
 
