@@ -6,6 +6,7 @@ export type {
   TrendPoint,
   WindowPoint,
   WindowConfig,
+  BalanceSeriesPoint,
 } from "./balance-trend-chart";
 export { DayGroup, formatDayHeader } from "./day-group";
 export {

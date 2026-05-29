@@ -79,3 +79,42 @@ export function computeBalanceAtEndOf(args: {
   }
   return bal;
 }
+
+/**
+ * Date-bucketed sibling of {@link computeBalanceAtEndOf}: compute the
+ * account balance as of the end of a single calendar day (`targetDay`,
+ * `YYYY-MM-DD`), anchored at `anchorDay` with `anchorBalance`.
+ *
+ * Same anchor convention as the month version: `anchorBalance` is the
+ * point-in-time balance as of `anchorDay`, and transactions that occur
+ * on `anchorDay` itself are assumed to already be reflected in it. So:
+ *  - For a target on/after the anchor we ADD every transaction strictly
+ *    after the anchor day up through (and including) the target day.
+ *  - For a target before the anchor we SUBTRACT every transaction
+ *    strictly after the target day up through (and including) the
+ *    anchor day, walking the balance backward.
+ *
+ * Days are compared as `YYYY-MM-DD` strings, which sort lexicographically
+ * in chronological order, so no Date parsing is required.
+ */
+export function computeBalanceAtEndOfDate(args: {
+  anchorBalance: number;
+  anchorDay: string;
+  targetDay: string;
+  txns: ReadonlyArray<AnchorMonthTxn>;
+}): number {
+  const { anchorBalance, anchorDay, targetDay, txns } = args;
+  let bal = anchorBalance;
+  if (targetDay >= anchorDay) {
+    for (const t of txns) {
+      const day = t.occurredOn.slice(0, 10);
+      if (day > anchorDay && day <= targetDay) bal += Number(t.amount) || 0;
+    }
+  } else {
+    for (const t of txns) {
+      const day = t.occurredOn.slice(0, 10);
+      if (day > targetDay && day <= anchorDay) bal -= Number(t.amount) || 0;
+    }
+  }
+  return bal;
+}

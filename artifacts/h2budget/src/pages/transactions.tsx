@@ -18,6 +18,7 @@ import {
   getGetForecastQueryKey,
   getGetBudgetMonthQueryKey,
   useListPlaidItems,
+  useGetForecastCashSignal,
   type Transaction,
   type RepointedRule,
   type MappingRule,
@@ -89,6 +90,7 @@ import { TransactionRowChips } from "@/components/transaction-row-chips";
 import { chaseMonthTotals } from "@/lib/chaseScope";
 import {
   makeChaseBalanceAtEndOf,
+  makeChaseBalanceAtEndOfDate,
   scopeChaseTransactions,
 } from "@/lib/chaseEndingBalance";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
@@ -125,7 +127,7 @@ import {
   compareMonth,
   shiftMonth,
   type MonthKey,
-  type TrendPoint,
+  type BalanceSeriesPoint,
 } from "@/components/account-page";
 
 const formSchema = z.object({
@@ -239,6 +241,23 @@ export default function TransactionsPage() {
   const { data: categories } = useListCategories();
   const { data: mappingRules } = useListMappingRules();
   const { data: forecastData } = useGetForecast();
+  // Stable "today" (YYYY-MM-DD) used as the actual/forecast split anchor
+  // and as the projection's `fromDate` so the dashed forecast line starts
+  // at today and the cash-signal series aligns with the chart window.
+  const todayISO = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate(),
+    ).padStart(2, "0")}`;
+  }, []);
+  // Forward-looking projection that powers the actual-vs-forecast trend
+  // chart's dashed line. Sourced from the SAME cash-signal daily series
+  // the /forecast page's projected-balance chart consumes (`proj.daily`),
+  // requested over a 12-month horizon from today.
+  const { data: cashProjection } = useGetForecastCashSignal({
+    horizonDays: 365,
+    fromDate: todayISO,
+  });
   const refreshBank = useRefreshForecastBank();
   const seedAprilChase = useSeedAprilChase();
   const queryClient = useQueryClient();
@@ -665,22 +684,131 @@ export default function TransactionsPage() {
     [balanceAtEndOf, selectedMonth],
   );
 
-  const balanceTrend = useMemo<TrendPoint[]>(() => {
-    if (!effectiveSnapshot) return [];
-    const points: TrendPoint[] = [];
-    for (let i = 11; i >= 0; i--) {
-      const mk = shiftMonth(selectedMonth, -i);
-      const d = new Date(mk.year, mk.month, 1);
-      points.push({
-        key: `${mk.year}-${mk.month}`,
-        label: d.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-        shortLabel: d.toLocaleDateString("en-US", { month: "short" }),
-        balance: balanceAtEndOf(mk) ?? 0,
-        isSelected: compareMonth(mk, selectedMonth) === 0,
+  // Date-bucketed sibling of `balanceAtEndOf`, used by the actual-vs-
+  // forecast trend chart to get the end-of-week (Sun–Sat) checking
+  // balance for each historical weekly bucket. Shares the same snapshot
+  // anchor + scoped transaction set as the month closure.
+  const balanceAtEndOfDate = useMemo(
+    () =>
+      makeChaseBalanceAtEndOfDate({
+        effectiveSnapshot,
+        chaseTransactions,
+      }),
+    [effectiveSnapshot, chaseTransactions],
+  );
+
+  // The forward-looking actual-vs-forecast trend chart series. Window:
+  // start = max(2026-05-01, current month start); end = today + 12 months.
+  // We walk Sun–Sat weeks (bucketed on the week-ending Saturday) and
+  // build three weekly series that all share today's actual balance as
+  // their common anchor, so the historical solid line meets today and
+  // both forward lines diverge from that same point.
+  const balanceTrend = useMemo(() => {
+    if (!effectiveSnapshot) return null;
+
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const toISO = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    const now = new Date();
+    // Window start: floor at May 2026, else the current month's first day.
+    const FLOOR = new Date(2026, 4, 1); // 2026-05-01
+    const curMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const windowStart = curMonthStart > FLOOR ? curMonthStart : FLOOR;
+    // Window end: 12 months from today.
+    const windowEnd = new Date(
+      now.getFullYear(),
+      now.getMonth() + 12,
+      now.getDate(),
+    );
+
+    // Today's actual balance — the common anchor for all three series.
+    const todayBalance = balanceAtEndOfDate(todayISO) ?? 0;
+
+    // First week-ending Saturday on/after the window start.
+    const firstSat = new Date(windowStart);
+    firstSat.setDate(firstSat.getDate() + ((6 - firstSat.getDay() + 7) % 7));
+
+    const historicalActual: BalanceSeriesPoint[] = [];
+    for (
+      let sat = new Date(firstSat);
+      sat <= windowEnd;
+      sat.setDate(sat.getDate() + 7)
+    ) {
+      const satISO = toISO(sat);
+      if (satISO >= todayISO) break; // today + future handled below
+      historicalActual.push({
+        date: satISO,
+        balance: balanceAtEndOfDate(satISO) ?? 0,
       });
     }
-    return points;
-  }, [effectiveSnapshot, balanceAtEndOf, selectedMonth]);
+
+    // Projected end-of-day balance per ISO date from the cash signal.
+    const projByDate = new Map<string, number>();
+    for (const d of cashProjection?.daily ?? []) {
+      const n = Number(d.balance);
+      if (Number.isFinite(n)) projByDate.set(d.date, n);
+    }
+
+    // Forecast: seeded at today's actual balance, then weekly Saturday
+    // buckets pulled from the projection. We deliberately STOP at the
+    // last Saturday the projection actually covers — if the server
+    // horizon is shorter than the 12-month window we do NOT carry the
+    // last value forward to fill the gap (that would draw a misleading
+    // flat dashed tail). Leave this trim in place.
+    const forecastFromToday: BalanceSeriesPoint[] = [
+      { date: todayISO, balance: todayBalance },
+    ];
+    for (
+      let sat = new Date(firstSat);
+      sat <= windowEnd;
+      sat.setDate(sat.getDate() + 7)
+    ) {
+      const satISO = toISO(sat);
+      if (satISO <= todayISO) continue;
+      const projected = projByDate.get(satISO);
+      if (projected == null) continue; // beyond horizon — do not extend
+      forecastFromToday.push({ date: satISO, balance: projected });
+    }
+
+    // Actual-from-today: just today's seed on day one. Future real
+    // balance points will accrue naturally as later syncs land and the
+    // historical/date closure starts returning post-today values.
+    const actualFromToday: BalanceSeriesPoint[] = [
+      { date: todayISO, balance: todayBalance },
+    ];
+
+    // Full weekly date scaffold across the whole window (every week-ending
+    // Saturday + today). Passed to the chart so the monthly x-axis ticks
+    // span the entire ~12-month window even while the projection is still
+    // loading or the server horizon is shorter than 12 months — the lines
+    // themselves still stop at the last real point (no flat extension).
+    const axisDates: string[] = [todayISO];
+    for (
+      let sat = new Date(firstSat);
+      sat <= windowEnd;
+      sat.setDate(sat.getDate() + 7)
+    ) {
+      axisDates.push(toISO(sat));
+    }
+
+    const fmtMonthYear = (d: Date) =>
+      d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    const subtitle = `${fmtMonthYear(windowStart)} – ${fmtMonthYear(windowEnd)}`;
+
+    return {
+      historicalActual,
+      forecastFromToday,
+      actualFromToday,
+      axisDates,
+      subtitle,
+    };
+  }, [
+    effectiveSnapshot,
+    balanceAtEndOfDate,
+    cashProjection,
+    todayISO,
+  ]);
 
   // Anchor every same-day balance assignment to the canonical
   // newest-first comparator (occurredOn DESC, occurredAt DESC nulls
@@ -2089,12 +2217,18 @@ export default function TransactionsPage() {
       />
       </div>
 
-      <BalanceTrendChart
-        caption="Checking balance · trailing 12 months"
-        data={balanceTrend}
-        color="hsl(var(--chart-1))"
-        valueLabel="Ending balance"
-      />
+      {balanceTrend && (
+        <BalanceTrendChart
+          caption="Checking balance — actual vs forecast"
+          subtitle={balanceTrend.subtitle}
+          historicalActual={balanceTrend.historicalActual}
+          forecastFromToday={balanceTrend.forecastFromToday}
+          actualFromToday={balanceTrend.actualFromToday}
+          axisDates={balanceTrend.axisDates}
+          todayISO={todayISO}
+          valueLabel="Balance"
+        />
+      )}
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">

@@ -18,7 +18,10 @@ import {
   monthKeyFromISO,
   type MonthKey,
 } from "@/components/account-page";
-import { computeBalanceAtEndOf } from "./accountBalance";
+import {
+  computeBalanceAtEndOf,
+  computeBalanceAtEndOfDate,
+} from "./accountBalance";
 import {
   dedupeTransactionsByIdentity,
   isChaseFallbackSource,
@@ -118,6 +121,36 @@ export function makeChaseBalanceAtEndOf(args: {
       target,
       anchorAt: effectiveSnapshot.at,
       anchorMonthTxns,
+    });
+}
+
+/**
+ * Date-bucketed sibling of {@link makeChaseBalanceAtEndOf}: build a
+ * `(targetDay) => number | null` closure returning the Chase checking
+ * balance as of the end of any calendar day (`YYYY-MM-DD`). Used by the
+ * Chase page's actual-vs-forecast trend chart to compute the
+ * end-of-week (Sun–Sat) historical balance for each weekly bucket.
+ *
+ * Reuses the same anchor (effective snapshot) + per-account transaction
+ * set as the month-bucketing closure, delegating the day math to
+ * `computeBalanceAtEndOfDate` so the two surfaces never drift.
+ */
+export function makeChaseBalanceAtEndOfDate(args: {
+  effectiveSnapshot: EffectiveSnapshotEntry | null;
+  chaseTransactions: ReadonlyArray<ChaseTxnInput>;
+}): (targetDay: string) => number | null {
+  const { effectiveSnapshot, chaseTransactions } = args;
+  if (!effectiveSnapshot) return () => null;
+
+  const anchorBalance = Number(effectiveSnapshot.balance) || 0;
+  const anchorDay = effectiveSnapshot.at.slice(0, 10);
+
+  return (targetDay: string) =>
+    computeBalanceAtEndOfDate({
+      anchorBalance,
+      anchorDay,
+      targetDay,
+      txns: chaseTransactions,
     });
 }
 

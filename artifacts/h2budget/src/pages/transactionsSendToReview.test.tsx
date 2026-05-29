@@ -150,6 +150,7 @@ vi.mock("@workspace/api-client-react", () => {
     useListCategories: () => ({ data: [] }),
     useListMappingRules: () => ({ data: [], isLoading: false }),
     useGetForecast: () => ({ data: undefined }),
+    useGetForecastCashSignal: () => ({ data: undefined }),
     useRefreshForecastBank: () => ({ ...noop, isPending: false }),
     useSeedAprilChase: () => ({
       mutate: (_v: unknown, opts?: { onSuccess?: (r: unknown) => void }) =>
