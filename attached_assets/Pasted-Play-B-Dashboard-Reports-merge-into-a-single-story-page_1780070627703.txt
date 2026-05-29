@@ -1,0 +1,90 @@
+Play B — Dashboard + Reports merge into a single story page at /reports. Plus sidebar reorder.
+
+CONTEXT — verified in code:
+
+- /reports already exists with the structure you can see in the user's screenshot: a header "Reports — Your money, told as a story...", a RANGE selector (Last 90 days), a "Compare to previous period" toggle, and a tab strip: Debt Payoff / Cash Flow / Spending / Budget / Behavior & Fun. Each tab loads its own panel of charts and tiles. This page is the keeper.
+- /dashboard currently shows balance tiles + status widgets. The allowance tiles JUST got moved to /allowances (Play A shipped). The remaining Dashboard pieces are the at-a-glance balance numbers and an existing collection of tiles.
+- /allowances page is live (shipped today) and is the home for weekly/monthly/unplanned spend review.
+
+GOAL: Merge into /reports. Dashboard goes away. Add at-a-glance balance tiles at the top of /reports, retire Dashboard entirely, redirect /dashboard route. Add Claude-driven narrative per tab. Reorder sidebar.
+
+WORK:
+
+1. SIDEBAR REORDER — current order is (per user screenshot):
+   Dashboard, Forecast, Review, Debrief, Chase, American Express, Debts, Avalanche, Bills, Budget, Allowances, Reports, Mapping Rules, Settings.
+   
+   New order:
+   Reports (top), Allowances, Forecast, Review, Debrief, Chase, American Express, Debts, Avalanche, Bills, Budget, Mapping Rules, Settings.
+   
+   Dashboard is removed from the sidebar entirely. Reports moves to the top. Allowances moves to second. Everything else keeps its current relative position.
+
+2. ROUTE: /dashboard redirects to /reports (client-side wouter redirect is fine — match how any existing redirects in the app are done). No 404. Bookmarks and old links continue to land somewhere useful.
+
+3. TOP TILES on /reports — add a new row of FOUR at-a-glance balance tiles ABOVE the RANGE selector and Compare-to-previous toggle. Each tile is a small card with:
+
+   - Tile 1: BANK BALANCE — Chase Total Checking 5526 current balance from effective snapshot (artifacts/h2budget/src/lib/effectiveSnapshot.ts → deriveEffectiveSnapshot). Sub-line: "Plaid · Chase ··5526 · last updated Xm ago".
+   - Tile 2: AMEX BALANCE (BLUE CASH PREFERRED) — sum of Amex Blue Cash Preferred current balance only. EXCLUDES Delta Gold Card and Platinum Card. Sub-line: "Blue Cash Preferred 1006".
+   - Tile 3: TOTAL DEBT — sum across all active debts. Sub-line: "N active".
+   - Tile 4: CASH BUFFER STATUS — current bank balance vs cashBuffer setting ($500). Status badge: "Ready" / "Tight" / "Not Yet" using the existing cashSignal status calculation. Sub-line: "Cash buffer $500".
+   
+   Tiles render in a 4-col grid on desktop, 2-col on tablet, 1-col stack on mobile. Match the existing Reports tile visual language (same card border, padding, typography as the existing "TOTAL DEBT / MONTHS TO DEBT-FREE / DEBT-FREE DATE / INTEREST AVOIDED" row inside the Debt Payoff tab).
+
+4. PER-TAB CLAUDE NARRATIVE — each of the 5 tabs (Debt Payoff / Cash Flow / Spending / Budget / Behavior & Fun) gets a Claude-generated summary block at the top of its panel content (above the existing tiles/charts of that tab).
+
+   USE THE EXISTING ADVISOR INFRASTRUCTURE:
+   - artifacts/api-server/src/lib/debriefAdvisorSummary.ts is the template — same Anthropic client setup, DEFAULT_MODEL = "claude-sonnet-4-5", 12s timeout, three-layer fallback.
+   - The Avalanche scheduler (artifacts/api-server/src/lib/avalancheAdvisorSummary.ts, also in flight) is the second template — also uses the same pattern.
+   
+   Create artifacts/api-server/src/lib/reportsAdvisorSummary.ts. Five facts-builders, one per tab:
+   
+   - debtPayoffFacts: { totalDebt, paidSinceTracking, paidPctOfStarting, monthsToDebtFree, debtFreeDate, interestAvoided, topDebts: [{ name, balance, apr, paid, paidPct, monthsLeft }], avalancheTarget }
+   - cashFlowFacts: { rangeLabel, incomeTotal, expensesTotal, netCashFlow, lowestProjected, lowestProjectedDate, paychecksInPeriod, biggestExpenseCategory, biggestExpenseAmount, vsPriorPeriodDelta }
+   - spendingFacts: { rangeLabel, topCategories: [{ name, amount, pctOfTotal, vsPriorPeriodDelta }], totalSpend, categoriesCount }
+   - budgetFacts: { rangeLabel, weeklyPlanned, weeklyActual, monthlyPlanned, monthlyActual, varianceDirection, biggestOverBucket, biggestUnderBucket }
+   - behaviorFunFacts: whatever metrics the Behavior & Fun tab already computes — read what that tab renders today and adapt facts shape to match.
+   
+   For each tab, send facts to Claude with: "Write a 3-5 sentence summary of these specific numbers. Be concrete. Use real dates and dollar amounts from the facts. Don't invent. Use a warm, conversational tone — this is a personal finance app." Strict JSON output: { summary: string }.
+   
+   Three-layer fallback identical to debriefAdvisorSummary: 12s timeout → on timeout return deterministic single-line template ("$74,804 across 8 debts — you've paid 24.4% since May.") → on outer exception return shortest factual string.
+   
+   Cache: store per-tab result + facts hash in a new table or columns on user_settings (reportsAdvisorSummaries jsonb, reportsAdvisorFactsHashes jsonb). Regenerate only when facts hash changes per tab. Don't regenerate ALL tabs when only one tab's facts shift.
+
+5. ENDPOINTS — five new endpoints OR one parameterized endpoint, your call. Pattern:
+   - GET /reports/advisor-summary?tab=debt-payoff (one endpoint, ?tab= parameter for the 5 tabs)
+   - OR five separate routes for cleaner caching: GET /reports/advisor-summary/debt-payoff, /cash-flow, etc.
+   - Either works. Pick the one that fits the existing Reports route shape.
+
+6. UI — on the Reports page, in each tab's render path, add a small AdvisorSummaryCard at the top:
+   - Header: matches the tab name (e.g. "Debt-free at a glance" for Debt Payoff)
+   - AI summary paragraph (Claude's `summary` field)
+   - Small "Refresh" button on the right (clears cache, regenerates)
+   - Loading state: skeleton lines, NOT a blocking spinner
+   - Error state: fall back to the deterministic single-line — still useful
+   - Visual treatment: matches the existing "advisor takeaway" block on /debrief (same card style, same typography)
+
+7. WHAT GETS RETIRED FROM DASHBOARD entirely:
+   - All allowance tiles (moved to /allowances)
+   - All balance tiles (moved to /reports top — but the calculation logic stays as a shared helper)
+   - All status widgets that duplicate Reports content
+   - Dashboard route file removed entirely (or kept as a thin redirect-only shim)
+   - Any tests targeting Dashboard's UI smoke can be deleted (per the new "less testing on personal app" decision)
+
+8. WHAT MUST NOT BREAK:
+   - /reports's existing tab structure and chart content — only adding above and within
+   - The Reports RANGE selector and Compare-to-previous toggle — both still work
+   - /allowances page — leave fully untouched
+   - All shared helpers Dashboard used must still exist (just no longer called from Dashboard) so the new tiles can call them
+
+VERIFY:
+
+1. Sidebar: Reports is at the top, Allowances second, Dashboard is gone. The rest stays in the order listed above.
+2. Navigate to /dashboard → lands on /reports.
+3. /reports loads. The four balance tiles appear at the top. Numbers match what the old Dashboard showed.
+4. Each of the 5 tabs has a Claude summary block at the top of its panel.
+5. Refresh button on a tab summary forces regeneration (verify in server logs there's a fresh Anthropic call).
+6. Repeat page load within 5 min → cached responses (no new Anthropic calls).
+7. Disconnect network mid-load on the summary endpoint → deterministic fallback renders.
+8. /allowances unaffected.
+9. /forecast unaffected.
+
+Architect review + typecheck + publish. No new tests. Use existing Anthropic infra — same SDK, same model, same env var. Reuse cache + fallback patterns from debriefAdvisorSummary and avalancheAdvisorSummary.

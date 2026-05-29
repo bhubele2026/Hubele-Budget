@@ -2468,6 +2468,41 @@ export const GetForecastAvalancheScheduleResponse = zod.object({
   source: zod.enum(["cache", "fresh"]),
 });
 
+/**
+ * Returns a short Claude-written narrative (headline + bullets) for
+one Reports tab, grounded in deterministic facts computed from the
+household's data. The narrative is cached per tab on a hash of the
+facts; pass `refresh=true` to force a fresh regeneration.
+
+ * @summary Per-tab Claude narrative for the Reports page
+ */
+export const GetReportsAdvisorSummaryQueryParams = zod.object({
+  tab: zod
+    .enum(["debt", "cashflow", "spending", "budget", "behavior"])
+    .describe("Which Reports tab to summarize."),
+  rangeDays: zod.coerce
+    .number()
+    .optional()
+    .describe("Look-back window in days for range-scoped tabs."),
+  monthOffset: zod.coerce
+    .number()
+    .optional()
+    .describe("Months back from the current month for the budget tab."),
+  refresh: zod
+    .enum(["true", "1"])
+    .optional()
+    .describe("Force a fresh Claude regeneration, bypassing the cache."),
+});
+
+export const GetReportsAdvisorSummaryResponse = zod.object({
+  tab: zod.enum(["debt", "cashflow", "spending", "budget", "behavior"]),
+  headline: zod.string(),
+  bullets: zod.array(zod.string()),
+  summarySource: zod.enum(["ai", "fallback"]),
+  generatedAt: zod.string(),
+  source: zod.enum(["cache", "fresh"]),
+});
+
 export const CloseForecastMonthBody = zod.object({
   monthKey: zod.string(),
   gap: zod.string().nullish(),

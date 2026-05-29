@@ -716,6 +716,29 @@ export interface AvalancheAdvisorSummary {
   source: "ai" | "fallback";
 }
 
+// (Play B) The five Reports tabs each get a small Claude-written
+// narrative. One advisor shape is shared across tabs; the deterministic
+// facts that produce it differ per tab. Cached on forecast_settings
+// keyed by tab (see reportsAdvisorSummaries / reportsAdvisorFactsHashes),
+// regenerated only when that tab's facts hash changes — same approach as
+// the Avalanche + Weekly Debrief advisors.
+export type ReportsAdvisorTab =
+  | "debt"
+  | "cashflow"
+  | "spending"
+  | "budget"
+  | "behavior";
+
+export interface ReportsAdvisorSummary {
+  generatedAt: string; // ISO-8601
+  tab: ReportsAdvisorTab;
+  // One-sentence direct takeaway for the tab.
+  headline: string;
+  // 2-5 concrete observations grounded in the deterministic facts.
+  bullets: string[];
+  source: "ai" | "fallback";
+}
+
 export const forecastSettingsTable = pgTable("forecast_settings", {
   userId: text("user_id").primaryKey(),
   householdId: uuid("household_id").references(
@@ -764,6 +787,14 @@ export const forecastSettingsTable = pgTable("forecast_settings", {
   // the facts hash changes (or the user forces a refresh).
   avalancheAdvisorSummary: jsonb("avalanche_advisor_summary").$type<AvalancheAdvisorSummary>(),
   avalancheAdvisorFactsHash: text("avalanche_advisor_facts_hash"),
+  // (Play B) Per-tab Reports advisor narratives + the hash of the
+  // deterministic facts that produced each, keyed by ReportsAdvisorTab.
+  reportsAdvisorSummaries: jsonb("reports_advisor_summaries").$type<
+    Partial<Record<ReportsAdvisorTab, ReportsAdvisorSummary>>
+  >(),
+  reportsAdvisorFactsHashes: jsonb("reports_advisor_facts_hashes").$type<
+    Partial<Record<ReportsAdvisorTab, string>>
+  >(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

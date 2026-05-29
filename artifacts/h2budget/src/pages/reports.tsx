@@ -9,12 +9,25 @@ import {
   useGetAvalancheExtra,
   useListRecurringItems,
   useGetForecast,
+  useGetForecastCashSignal,
+  useGetDashboard,
   useGetSettings,
+  useGetReportsAdvisorSummary,
+  getReportsAdvisorSummary,
+  getGetReportsAdvisorSummaryQueryKey,
   type Transaction,
   type ForecastBundle,
   type RecurringItem,
   type DebtBalanceHistoryEntry,
+  type GetReportsAdvisorSummaryParams,
+  type GetReportsAdvisorSummaryTab,
 } from "@workspace/api-client-react";
+import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
+import {
+  resolveBlueCashPreferredBalance,
+  cashBufferStatusMeta,
+  type CashSignalStatus,
+} from "@/lib/reportsBalances";
 import {
   DEFAULT_DAYS_SINCE_TRACKERS,
   compileMatcher,
@@ -100,7 +113,13 @@ import {
   TrendingUp,
   TrendingDown,
   PiggyBank,
+  CreditCard,
+  Sparkles,
+  RefreshCcw,
+  Loader2,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
 import {
   H2_PALETTE,
   CHART_SERIES,
@@ -299,6 +318,188 @@ const tooltipStyle = {
 // MAIN PAGE
 // --------------------------------------------------------------------------
 
+// (Play B) Per-tab Claude narrative. Reuses the deterministic facts +
+// 3-layer fallback advisor pattern from the Weekly Debrief / Avalanche
+// cards. Cached server-side per tab; the refresh button forces a fresh
+// Anthropic regeneration.
+function AdvisorSummaryCard({
+  tab,
+  rangeDays,
+  monthOffset,
+}: {
+  tab: GetReportsAdvisorSummaryTab;
+  rangeDays: number;
+  monthOffset: number;
+}) {
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const params: GetReportsAdvisorSummaryParams = useMemo(
+    () => ({ tab, rangeDays, monthOffset }),
+    [tab, rangeDays, monthOffset],
+  );
+  const { data, isLoading } = useGetReportsAdvisorSummary(params);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const fresh = await getReportsAdvisorSummary({ ...params, refresh: "true" });
+      queryClient.setQueryData(getGetReportsAdvisorSummaryQueryKey(params), fresh);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  return (
+    <Card data-testid={`card-advisor-${tab}`} className="border-primary/20 bg-primary/[0.03]">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary" />
+            What this means
+            {data?.summarySource === "fallback" && (
+              <Badge variant="outline" className="text-[10px] font-normal">
+                template
+              </Badge>
+            )}
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing || isLoading}
+            data-testid={`button-advisor-refresh-${tab}`}
+            title="Regenerate"
+          >
+            {refreshing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <RefreshCcw className="w-3.5 h-3.5" />
+            )}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {isLoading || !data ? (
+          <p className="text-sm text-muted-foreground flex items-center gap-2">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Reading your numbers…
+          </p>
+        ) : (
+          <>
+            <p
+              className="text-sm font-semibold leading-snug"
+              data-testid={`text-advisor-headline-${tab}`}
+            >
+              {data.headline}
+            </p>
+            {data.bullets.length > 0 && (
+              <ul className="text-sm space-y-1 list-disc pl-5 text-foreground/90">
+                {data.bullets.map((b, i) => (
+                  <li key={i} data-testid={`text-advisor-bullet-${tab}-${i}`}>
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <span className="text-xs text-muted-foreground block pt-1">
+              Generated {new Date(data.generatedAt).toLocaleString()}
+            </span>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// (Play B) Four at-a-glance balance tiles inherited from the retired
+// Dashboard, surfaced above the Reports range controls so the page
+// opens with the household's live financial vitals.
+function ReportsBalanceTiles({
+  forecast,
+  debts,
+}: {
+  forecast: ForecastBundle | null | undefined;
+  debts: import("@workspace/api-client-react").Debt[] | undefined;
+}) {
+  const { data: dashboard } = useGetDashboard();
+  const { data: cashSignal } = useGetForecastCashSignal();
+
+  const bankSnapshot = forecast?.bankSnapshot ?? null;
+  const accountSnapshots = forecast?.accountSnapshots ?? {};
+  const plaidCheckingAccounts = forecast?.plaidCheckingAccounts ?? [];
+  const effective = useMemo(
+    () =>
+      deriveEffectiveSnapshot({
+        bankSnapshot,
+        accountSnapshots,
+        selectedAccountInternalId: bankSnapshot?.accountId ?? null,
+        plaidCheckingAccounts,
+      }),
+    [bankSnapshot, accountSnapshots, plaidCheckingAccounts],
+  );
+
+  const bankValue = effective ? formatCurrency(effective.balance) : "—";
+  const bankSub = effective
+    ? `${effective.source === "plaid" ? "Plaid" : "Manual"} · ${effective.name ?? "Bank"}${effective.mask ? ` ··${effective.mask}` : ""}`
+    : "No checking snapshot yet";
+
+  const blueCash = useMemo(
+    () => resolveBlueCashPreferredBalance(debts),
+    [debts],
+  );
+  const amexValue = blueCash.found ? formatCurrency(blueCash.total) : "—";
+
+  const totalDebtValue =
+    dashboard != null ? formatCurrency(dashboard.totalDebt) : "—";
+  const activeDebtCount = dashboard?.activeDebtCount ?? 0;
+  const totalDebtSub =
+    dashboard != null
+      ? `${activeDebtCount} active debt${activeDebtCount === 1 ? "" : "s"}`
+      : "Across active debts";
+
+  const status = (cashSignal?.status ?? "no_data") as CashSignalStatus;
+  const statusMeta = cashBufferStatusMeta(status);
+  const buffer = Number(cashSignal?.cashBuffer ?? 0) || 0;
+  const lowest = Number(cashSignal?.lowestProjected ?? 0) || 0;
+  const cashSub =
+    status === "no_data"
+      ? "Set a checking balance on Forecast"
+      : `Lowest ${formatCurrency(lowest)} · buffer ${formatCurrency(buffer)}`;
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <HeroTile
+        label="Bank Balance"
+        value={bankValue}
+        sub={bankSub}
+        icon={<PiggyBank className="w-4 h-4" />}
+      />
+      <HeroTile
+        label="Amex (Blue Cash)"
+        value={amexValue}
+        sub="Blue Cash Preferred 1006"
+        tone={blueCash.found && blueCash.total > 0 ? "bad" : "default"}
+        icon={<CreditCard className="w-4 h-4" />}
+      />
+      <HeroTile
+        label="Total Debt"
+        value={totalDebtValue}
+        sub={totalDebtSub}
+        tone={dashboard != null && Number(dashboard.totalDebt) > 0 ? "bad" : "default"}
+        icon={<TrendingDown className="w-4 h-4" />}
+      />
+      <HeroTile
+        label="Cash Buffer Status"
+        value={statusMeta.label}
+        sub={cashSub}
+        tone={statusMeta.tone}
+        icon={<PiggyBank className="w-4 h-4" />}
+      />
+    </div>
+  );
+}
+
 export default function ReportsPage() {
   const today = useMemo(() => new Date(), []);
   const [rangeDays, setRangeDays] = useState("90");
@@ -423,6 +624,9 @@ export default function ReportsPage() {
         <div className="border-t border-border mt-5" />
       </div>
 
+      {/* (Play B) At-a-glance balance tiles — formerly the Dashboard */}
+      <ReportsBalanceTiles forecast={forecast} debts={debts} />
+
       {/* Global controls */}
       <div className="flex flex-wrap items-center gap-6">
         <div className="flex items-center gap-2">
@@ -467,6 +671,7 @@ export default function ReportsPage() {
         </TabsList>
 
         <TabsContent value="debt" className="space-y-6">
+          <AdvisorSummaryCard tab="debt" rangeDays={Number(rangeDays)} monthOffset={Number(monthOffset)} />
           <DebtSection
             debts={debts ?? []}
             balanceHistory={debtBalanceHistory ?? []}
@@ -477,6 +682,7 @@ export default function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="cashflow" className="space-y-6">
+          <AdvisorSummaryCard tab="cashflow" rangeDays={Number(rangeDays)} monthOffset={Number(monthOffset)} />
           <CashFlowSection
             txns={rangeTxns}
             prevTxns={prevRangeTxns}
@@ -490,6 +696,7 @@ export default function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="spending" className="space-y-6">
+          <AdvisorSummaryCard tab="spending" rangeDays={Number(rangeDays)} monthOffset={Number(monthOffset)} />
           <SpendingSection
             txns={rangeTxns}
             prevTxns={prevRangeTxns}
@@ -502,6 +709,7 @@ export default function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="budget" className="space-y-6">
+          <AdvisorSummaryCard tab="budget" rangeDays={Number(rangeDays)} monthOffset={Number(monthOffset)} />
           <BudgetSection
             monthStart={budgetMonthStart}
             monthOffset={monthOffset}
@@ -515,6 +723,7 @@ export default function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="behavior" className="space-y-6">
+          <AdvisorSummaryCard tab="behavior" rangeDays={Number(rangeDays)} monthOffset={Number(monthOffset)} />
           <BehaviorSection
             txns={rangeTxns}
             yearTxns={txns ?? []}

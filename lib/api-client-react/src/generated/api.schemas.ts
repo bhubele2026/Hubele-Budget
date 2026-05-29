@@ -1912,6 +1912,42 @@ export interface CashSignal {
   events?: CashSignalEventsItem[];
 }
 
+export type ReportsAdvisorSummaryTab =
+  (typeof ReportsAdvisorSummaryTab)[keyof typeof ReportsAdvisorSummaryTab];
+
+export const ReportsAdvisorSummaryTab = {
+  debt: "debt",
+  cashflow: "cashflow",
+  spending: "spending",
+  budget: "budget",
+  behavior: "behavior",
+} as const;
+
+export type ReportsAdvisorSummarySummarySource =
+  (typeof ReportsAdvisorSummarySummarySource)[keyof typeof ReportsAdvisorSummarySummarySource];
+
+export const ReportsAdvisorSummarySummarySource = {
+  ai: "ai",
+  fallback: "fallback",
+} as const;
+
+export type ReportsAdvisorSummarySource =
+  (typeof ReportsAdvisorSummarySource)[keyof typeof ReportsAdvisorSummarySource];
+
+export const ReportsAdvisorSummarySource = {
+  cache: "cache",
+  fresh: "fresh",
+} as const;
+
+export interface ReportsAdvisorSummary {
+  tab: ReportsAdvisorSummaryTab;
+  headline: string;
+  bullets: string[];
+  summarySource: ReportsAdvisorSummarySummarySource;
+  generatedAt: string;
+  source: ReportsAdvisorSummarySource;
+}
+
 export type AvalancheScheduleProposedPaymentsItemConfidence =
   (typeof AvalancheScheduleProposedPaymentsItemConfidence)[keyof typeof AvalancheScheduleProposedPaymentsItemConfidence];
 
@@ -2796,6 +2832,44 @@ export type GetForecastAvalancheScheduleRefresh =
   (typeof GetForecastAvalancheScheduleRefresh)[keyof typeof GetForecastAvalancheScheduleRefresh];
 
 export const GetForecastAvalancheScheduleRefresh = {
+  true: "true",
+  NUMBER_1: "1",
+} as const;
+
+export type GetReportsAdvisorSummaryParams = {
+  /**
+   * Which Reports tab to summarize.
+   */
+  tab: GetReportsAdvisorSummaryTab;
+  /**
+   * Look-back window in days for range-scoped tabs.
+   */
+  rangeDays?: number;
+  /**
+   * Months back from the current month for the budget tab.
+   */
+  monthOffset?: number;
+  /**
+   * Force a fresh Claude regeneration, bypassing the cache.
+   */
+  refresh?: GetReportsAdvisorSummaryRefresh;
+};
+
+export type GetReportsAdvisorSummaryTab =
+  (typeof GetReportsAdvisorSummaryTab)[keyof typeof GetReportsAdvisorSummaryTab];
+
+export const GetReportsAdvisorSummaryTab = {
+  debt: "debt",
+  cashflow: "cashflow",
+  spending: "spending",
+  budget: "budget",
+  behavior: "behavior",
+} as const;
+
+export type GetReportsAdvisorSummaryRefresh =
+  (typeof GetReportsAdvisorSummaryRefresh)[keyof typeof GetReportsAdvisorSummaryRefresh];
+
+export const GetReportsAdvisorSummaryRefresh = {
   true: "true",
   NUMBER_1: "1",
 } as const;

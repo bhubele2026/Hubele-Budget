@@ -28,7 +28,8 @@ import { AdvisorChat } from "@/components/advisor-chat";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const navItems = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Reports", href: "/reports", icon: BarChart3 },
+  { name: "Allowances", href: "/allowances", icon: Wallet },
   { name: "Forecast", href: "/forecast", icon: TrendingUp },
   { name: "Review", href: "/review", icon: Inbox },
   { name: "Debrief", href: "/debrief", icon: CalendarCheck },
@@ -38,8 +39,6 @@ const navItems = [
   { name: "Avalanche", href: "/avalanche", icon: Flame },
   { name: "Bills", href: "/bills", icon: CalendarDays },
   { name: "Budget", href: "/budget", icon: PieChart },
-  { name: "Allowances", href: "/allowances", icon: Wallet },
-  { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Mapping Rules", href: "/mapping-rules", icon: GitMerge },
   { name: "Settings", href: "/settings", icon: Settings },
 ];

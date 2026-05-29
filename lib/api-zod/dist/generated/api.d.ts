@@ -5451,6 +5451,52 @@ export declare const GetForecastAvalancheScheduleResponse: zod.ZodObject<{
     summarySource: "ai" | "fallback";
     generatedAt: string;
 }>;
+/**
+ * Returns a short Claude-written narrative (headline + bullets) for
+one Reports tab, grounded in deterministic facts computed from the
+household's data. The narrative is cached per tab on a hash of the
+facts; pass `refresh=true` to force a fresh regeneration.
+
+ * @summary Per-tab Claude narrative for the Reports page
+ */
+export declare const GetReportsAdvisorSummaryQueryParams: zod.ZodObject<{
+    tab: zod.ZodEnum<["debt", "cashflow", "spending", "budget", "behavior"]>;
+    rangeDays: zod.ZodOptional<zod.ZodNumber>;
+    monthOffset: zod.ZodOptional<zod.ZodNumber>;
+    refresh: zod.ZodOptional<zod.ZodEnum<["true", "1"]>>;
+}, "strip", zod.ZodTypeAny, {
+    tab: "budget" | "debt" | "cashflow" | "spending" | "behavior";
+    refresh?: "1" | "true" | undefined;
+    rangeDays?: number | undefined;
+    monthOffset?: number | undefined;
+}, {
+    tab: "budget" | "debt" | "cashflow" | "spending" | "behavior";
+    refresh?: "1" | "true" | undefined;
+    rangeDays?: number | undefined;
+    monthOffset?: number | undefined;
+}>;
+export declare const GetReportsAdvisorSummaryResponse: zod.ZodObject<{
+    tab: zod.ZodEnum<["debt", "cashflow", "spending", "budget", "behavior"]>;
+    headline: zod.ZodString;
+    bullets: zod.ZodArray<zod.ZodString, "many">;
+    summarySource: zod.ZodEnum<["ai", "fallback"]>;
+    generatedAt: zod.ZodString;
+    source: zod.ZodEnum<["cache", "fresh"]>;
+}, "strip", zod.ZodTypeAny, {
+    source: "cache" | "fresh";
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+    tab: "budget" | "debt" | "cashflow" | "spending" | "behavior";
+    headline: string;
+    bullets: string[];
+}, {
+    source: "cache" | "fresh";
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+    tab: "budget" | "debt" | "cashflow" | "spending" | "behavior";
+    headline: string;
+    bullets: string[];
+}>;
 export declare const CloseForecastMonthBody: zod.ZodObject<{
     monthKey: zod.ZodString;
     gap: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;

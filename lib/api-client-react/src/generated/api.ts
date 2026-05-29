@@ -79,6 +79,7 @@ import type {
   GetForecastAvalancheScheduleParams,
   GetForecastCashSignalParams,
   GetForecastParams,
+  GetReportsAdvisorSummaryParams,
   HealthStatus,
   ImportSummary,
   ImportWorkbookBody,
@@ -117,6 +118,7 @@ import type {
   RefreshBankInput,
   ReopenWeekParams,
   ReorderMappingRulesInput,
+  ReportsAdvisorSummary,
   SeedDefaultBudgetResult,
   SendTransactionsToReviewInput,
   SendTransactionsToReviewResult,
@@ -5392,6 +5394,114 @@ export function useGetForecastAvalancheSchedule<
     params,
     options,
   );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns a short Claude-written narrative (headline + bullets) for
+one Reports tab, grounded in deterministic facts computed from the
+household's data. The narrative is cached per tab on a hash of the
+facts; pass `refresh=true` to force a fresh regeneration.
+
+ * @summary Per-tab Claude narrative for the Reports page
+ */
+export const getGetReportsAdvisorSummaryUrl = (
+  params: GetReportsAdvisorSummaryParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/reports/advisor-summary?${stringifiedParams}`
+    : `/api/reports/advisor-summary`;
+};
+
+export const getReportsAdvisorSummary = async (
+  params: GetReportsAdvisorSummaryParams,
+  options?: RequestInit,
+): Promise<ReportsAdvisorSummary> => {
+  return customFetch<ReportsAdvisorSummary>(
+    getGetReportsAdvisorSummaryUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetReportsAdvisorSummaryQueryKey = (
+  params?: GetReportsAdvisorSummaryParams,
+) => {
+  return [`/api/reports/advisor-summary`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetReportsAdvisorSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReportsAdvisorSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetReportsAdvisorSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReportsAdvisorSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetReportsAdvisorSummaryQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReportsAdvisorSummary>>
+  > = ({ signal }) =>
+    getReportsAdvisorSummary(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReportsAdvisorSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReportsAdvisorSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReportsAdvisorSummary>>
+>;
+export type GetReportsAdvisorSummaryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Per-tab Claude narrative for the Reports page
+ */
+
+export function useGetReportsAdvisorSummary<
+  TData = Awaited<ReturnType<typeof getReportsAdvisorSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetReportsAdvisorSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReportsAdvisorSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReportsAdvisorSummaryQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

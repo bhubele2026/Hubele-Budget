@@ -4221,6 +4221,14 @@ export interface AvalancheAdvisorSummary {
     paymentsText: string[];
     source: "ai" | "fallback";
 }
+export type ReportsAdvisorTab = "debt" | "cashflow" | "spending" | "budget" | "behavior";
+export interface ReportsAdvisorSummary {
+    generatedAt: string;
+    tab: ReportsAdvisorTab;
+    headline: string;
+    bullets: string[];
+    source: "ai" | "fallback";
+}
 export declare const forecastSettingsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "forecast_settings";
     schema: undefined;
@@ -4533,6 +4541,44 @@ export declare const forecastSettingsTable: import("drizzle-orm/pg-core").PgTabl
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        reportsAdvisorSummaries: import("drizzle-orm/pg-core").PgColumn<{
+            name: "reports_advisor_summaries";
+            tableName: "forecast_settings";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: Partial<Record<ReportsAdvisorTab, ReportsAdvisorSummary>>;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: Partial<Record<ReportsAdvisorTab, ReportsAdvisorSummary>>;
+        }>;
+        reportsAdvisorFactsHashes: import("drizzle-orm/pg-core").PgColumn<{
+            name: "reports_advisor_facts_hashes";
+            tableName: "forecast_settings";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: Partial<Record<ReportsAdvisorTab, string>>;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: Partial<Record<ReportsAdvisorTab, string>>;
+        }>;
         updatedAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "updated_at";
             tableName: "forecast_settings";

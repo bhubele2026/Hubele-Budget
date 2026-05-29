@@ -1115,6 +1115,43 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AvalancheSchedule" }
 
+  /reports/advisor-summary:
+    get:
+      operationId: getReportsAdvisorSummary
+      tags: [reports]
+      summary: Per-tab Claude narrative for the Reports page
+      description: |
+        Returns a short Claude-written narrative (headline + bullets) for
+        one Reports tab, grounded in deterministic facts computed from the
+        household's data. The narrative is cached per tab on a hash of the
+        facts; pass `refresh=true` to force a fresh regeneration.
+      parameters:
+        - in: query
+          name: tab
+          required: true
+          description: Which Reports tab to summarize.
+          schema:
+            type: string
+            enum: [debt, cashflow, spending, budget, behavior]
+        - in: query
+          name: rangeDays
+          description: Look-back window in days for range-scoped tabs.
+          schema: { type: integer }
+        - in: query
+          name: monthOffset
+          description: Months back from the current month for the budget tab.
+          schema: { type: integer }
+        - in: query
+          name: refresh
+          description: Force a fresh Claude regeneration, bypassing the cache.
+          schema: { type: string, enum: ["true", "1"] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportsAdvisorSummary" }
+
   /forecast/closed-months:
     post:
       operationId: closeForecastMonth
@@ -3574,6 +3611,21 @@ components:
                   forward by the pre-snapshot drag-to-today rule. Used
                   by the chart tooltip to distinguish dragged plans
                   from bills naturally due that day.
+    ReportsAdvisorSummary:
+      type: object
+      required: [tab, headline, bullets, summarySource, generatedAt, source]
+      properties:
+        tab:
+          type: string
+          enum: [debt, cashflow, spending, budget, behavior]
+        headline: { type: string }
+        bullets:
+          type: array
+          items: { type: string }
+        summarySource: { type: string, enum: [ai, fallback] }
+        generatedAt: { type: string }
+        source: { type: string, enum: [cache, fresh] }
+
     AvalancheSchedule:
       type: object
       required:

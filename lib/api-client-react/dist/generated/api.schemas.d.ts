@@ -1710,6 +1710,32 @@ export interface CashSignal {
     daily?: CashSignalDailyItem[];
     events?: CashSignalEventsItem[];
 }
+export type ReportsAdvisorSummaryTab = (typeof ReportsAdvisorSummaryTab)[keyof typeof ReportsAdvisorSummaryTab];
+export declare const ReportsAdvisorSummaryTab: {
+    readonly debt: "debt";
+    readonly cashflow: "cashflow";
+    readonly spending: "spending";
+    readonly budget: "budget";
+    readonly behavior: "behavior";
+};
+export type ReportsAdvisorSummarySummarySource = (typeof ReportsAdvisorSummarySummarySource)[keyof typeof ReportsAdvisorSummarySummarySource];
+export declare const ReportsAdvisorSummarySummarySource: {
+    readonly ai: "ai";
+    readonly fallback: "fallback";
+};
+export type ReportsAdvisorSummarySource = (typeof ReportsAdvisorSummarySource)[keyof typeof ReportsAdvisorSummarySource];
+export declare const ReportsAdvisorSummarySource: {
+    readonly cache: "cache";
+    readonly fresh: "fresh";
+};
+export interface ReportsAdvisorSummary {
+    tab: ReportsAdvisorSummaryTab;
+    headline: string;
+    bullets: string[];
+    summarySource: ReportsAdvisorSummarySummarySource;
+    generatedAt: string;
+    source: ReportsAdvisorSummarySource;
+}
 export type AvalancheScheduleProposedPaymentsItemConfidence = (typeof AvalancheScheduleProposedPaymentsItemConfidence)[keyof typeof AvalancheScheduleProposedPaymentsItemConfidence];
 export declare const AvalancheScheduleProposedPaymentsItemConfidence: {
     readonly high: "high";
@@ -2463,6 +2489,37 @@ export type GetForecastAvalancheScheduleParams = {
 };
 export type GetForecastAvalancheScheduleRefresh = (typeof GetForecastAvalancheScheduleRefresh)[keyof typeof GetForecastAvalancheScheduleRefresh];
 export declare const GetForecastAvalancheScheduleRefresh: {
+    readonly true: "true";
+    readonly NUMBER_1: "1";
+};
+export type GetReportsAdvisorSummaryParams = {
+    /**
+     * Which Reports tab to summarize.
+     */
+    tab: GetReportsAdvisorSummaryTab;
+    /**
+     * Look-back window in days for range-scoped tabs.
+     */
+    rangeDays?: number;
+    /**
+     * Months back from the current month for the budget tab.
+     */
+    monthOffset?: number;
+    /**
+     * Force a fresh Claude regeneration, bypassing the cache.
+     */
+    refresh?: GetReportsAdvisorSummaryRefresh;
+};
+export type GetReportsAdvisorSummaryTab = (typeof GetReportsAdvisorSummaryTab)[keyof typeof GetReportsAdvisorSummaryTab];
+export declare const GetReportsAdvisorSummaryTab: {
+    readonly debt: "debt";
+    readonly cashflow: "cashflow";
+    readonly spending: "spending";
+    readonly budget: "budget";
+    readonly behavior: "behavior";
+};
+export type GetReportsAdvisorSummaryRefresh = (typeof GetReportsAdvisorSummaryRefresh)[keyof typeof GetReportsAdvisorSummaryRefresh];
+export declare const GetReportsAdvisorSummaryRefresh: {
     readonly true: "true";
     readonly NUMBER_1: "1";
 };

@@ -22,7 +22,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { SignInPage, SignUpPage } from "./pages/auth";
-import DashboardPage from "./pages/dashboard";
 import ForecastPage from "./pages/forecast";
 import ReportsPage from "./pages/reports";
 import DebtsPage from "./pages/debts";
@@ -136,7 +135,7 @@ function HomeRoute() {
   return (
     <>
       <Show when="signed-in">
-        <Redirect to="/dashboard" />
+        <Redirect to="/reports" />
       </Show>
       <Show when="signed-out">
         <Redirect to="/sign-in" />
@@ -151,7 +150,9 @@ function ProtectedShell() {
       <Show when="signed-in">
         <AppLayout>
           <Switch>
-            <Route path="/dashboard" component={DashboardPage} />
+            <Route path="/dashboard">
+              <Redirect to="/reports" />
+            </Route>
             <Route path="/forecast">
               <ForecastPage mode="overall" />
             </Route>
