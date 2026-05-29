@@ -24,6 +24,7 @@ import {
   useUpsertForecastResolution,
   useCreateRecurringItem,
   useSendTransactionsToReview,
+  useUpdateTransaction,
   useListTransactions,
   useListCategories,
   getGetWeeklyDebriefQueryKey,
@@ -84,6 +85,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
+import { CategoryPicker } from "@/components/category-picker";
 import { cn } from "@/lib/utils";
 
 // ----- date helpers ---------------------------------------------------
@@ -328,11 +330,50 @@ function DebriefPageActive({
   const sendToReview = useSendTransactionsToReview();
   const lockWeek = useLockWeeklyDebrief();
   const unlockWeek = useUnlockWeeklyDebrief();
+  const updateTxn = useUpdateTransaction();
 
   const invalidateAfterResolution = () => {
     qc.invalidateQueries({ queryKey: getGetWeeklyDebriefQueryKey(activeWeekStart) });
     qc.invalidateQueries({ queryKey: getListWeeklyDebriefsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+  };
+
+  // (#801) Recategorize a single transaction straight from the
+  // Category-variance popover, without leaving /debrief. Mirrors the
+  // /chase + /forecast PATCH: `{ categoryId, rememberPattern? }`. On
+  // success we invalidate the weekly-debrief (so the variance table +
+  // popover repaint with the txn in its new bucket) plus the
+  // transactions list (so the round-trip shows on /chase). The popover
+  // is intentionally NOT closed — the caller lets the user keep editing.
+  const handleChangeTxnCategory = (
+    txnId: string,
+    newCategoryId: string | null,
+    rememberPattern?: string | null,
+  ) => {
+    updateTxn.mutate(
+      {
+        id: txnId,
+        data: {
+          categoryId: newCategoryId,
+          ...(rememberPattern ? { rememberPattern } : {}),
+        },
+      },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getGetWeeklyDebriefQueryKey(activeWeekStart) });
+          qc.invalidateQueries({ queryKey: getListWeeklyDebriefsQueryKey() });
+          qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+          toast({ title: "Recategorized" });
+        },
+        onError: (err) =>
+          toast({
+            title: "Couldn't recategorize",
+            description: (err as Error).message,
+            variant: "destructive",
+          }),
+      },
+    );
   };
 
   const handleMatchPlan = (plan: WeeklyDebriefPlanItem, txnId: string) => {
@@ -679,6 +720,8 @@ function DebriefPageActive({
                 buckets={snapshot.byCategory}
                 catNameById={catNameById}
                 catKindById={catKindById}
+                categories={categories ?? []}
+                onChangeTxnCategory={isLocked ? undefined : handleChangeTxnCategory}
               />
 
               {!isLocked && (
@@ -1059,12 +1102,25 @@ function VarianceCellPopover({
   amount,
   plannedItems,
   actualTxns,
+  categoryId,
+  categories,
+  onChangeTxnCategory,
 }: {
   kind: "planned" | "actual";
   categoryName: string;
   amount: string;
   plannedItems?: NonNullable<WeeklyDebriefCategoryBucket["plannedItems"]>;
   actualTxns?: NonNullable<WeeklyDebriefCategoryBucket["actualTxns"]>;
+  // (#801) Bucket's categoryId — used as the inline picker's initial
+  // value (all txns in a bucket share the same category). Only the
+  // Actual cell threads these through; the Planned side stays read-only.
+  categoryId?: string | null;
+  categories?: { id: string; name: string }[];
+  onChangeTxnCategory?: (
+    txnId: string,
+    newCategoryId: string | null,
+    rememberPattern?: string | null,
+  ) => void;
 }) {
   const num = Number(amount);
   const hasItems =
@@ -1107,25 +1163,45 @@ function VarianceCellPopover({
                   <div className="tabular-nums whitespace-nowrap">{money(p.amount)}</div>
                 </div>
               ))
-            : actualTxns!.map((t, i) => (
+            : actualTxns!.map((t) => (
                 <div
-                  key={t.txnId + i}
-                  className="flex items-baseline justify-between gap-3 px-3 py-1.5 text-sm"
+                  key={t.txnId}
+                  className="px-3 py-1.5 text-sm"
                 >
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{t.description}</div>
-                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <span>{t.date}</span>
-                      {!t.matchedToPlan && (
-                        <Badge variant="secondary" className="h-4 px-1 text-[9px] uppercase">
-                          unplanned
-                        </Badge>
-                      )}
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{t.description}</div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <span>{t.date}</span>
+                        {!t.matchedToPlan && (
+                          <Badge variant="secondary" className="h-4 px-1 text-[9px] uppercase">
+                            unplanned
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="tabular-nums whitespace-nowrap">
+                      {money(Math.abs(t.amount), { signed: false })}
                     </div>
                   </div>
-                  <div className="tabular-nums whitespace-nowrap">
-                    {money(Math.abs(t.amount), { signed: false })}
-                  </div>
+                  {/* (#801) Inline recategorization — same picker as
+                      /chase, full category list. Initial value is the
+                      bucket's categoryId (shared by every txn here).
+                      Pass through rememberPattern so the next matching
+                      description auto-categorizes. Popover stays open. */}
+                  {categories && onChangeTxnCategory && (
+                    <div className="mt-1">
+                      <CategoryPicker
+                        value={categoryId ?? null}
+                        categories={categories}
+                        description={t.description}
+                        onChange={(newId, rememberPattern) =>
+                          onChangeTxnCategory(t.txnId, newId, rememberPattern)
+                        }
+                        testId={`debrief-variance-category-${t.txnId}`}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
         </div>
@@ -1142,10 +1218,22 @@ function CategoryVarianceTable({
   buckets,
   catNameById,
   catKindById,
+  categories,
+  onChangeTxnCategory,
 }: {
   buckets: WeeklyDebriefCategoryBucket[];
   catNameById: Map<string, string>;
   catKindById: Map<string, "income" | "expense">;
+  categories: { id: string; name: string }[];
+  // (#801) Omitted when the week is locked — a locked debrief is a frozen
+  // snapshot, so recategorizing wouldn't move the buckets here even
+  // though the PATCH would succeed. Leaving it undefined keeps the
+  // popover strictly read-only on locked weeks.
+  onChangeTxnCategory?: (
+    txnId: string,
+    newCategoryId: string | null,
+    rememberPattern?: string | null,
+  ) => void;
 }) {
   const [open, setOpen] = useState(true);
   const sorted = useMemo(
@@ -1208,7 +1296,7 @@ function CategoryVarianceTable({
                             ? badColor
                             : goodColor;
                     return (
-                      <TableRow key={(b.categoryId ?? "_") + i}>
+                      <TableRow key={b.categoryId ?? "_uncat"}>
                         <TableCell className="font-medium">
                           {name}
                           {kind === "income" && (
@@ -1231,6 +1319,9 @@ function CategoryVarianceTable({
                             categoryName={name}
                             amount={b.actualAmount}
                             actualTxns={b.actualTxns ?? []}
+                            categoryId={b.categoryId}
+                            categories={categories}
+                            onChangeTxnCategory={onChangeTxnCategory}
                           />
                         </TableCell>
                         <TableCell

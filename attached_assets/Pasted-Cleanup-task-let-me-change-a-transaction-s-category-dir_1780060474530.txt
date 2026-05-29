@@ -1,0 +1,52 @@
+Cleanup task: let me change a transaction's category directly from the Debrief's Category-variance popover, without leaving /debrief.
+
+CONTEXT — confirmed in code:
+
+The Category-variance section in artifacts/h2budget/src/pages/debrief.tsx renders a table where each row's "Actual" cell is a button that opens a popover (VarianceCellPopover, line 1056). The popover lists individual transactions for that category — description, date, amount, "unplanned" badge. Today the rows are read-only.
+
+I want: each transaction row in the popover gets a CategoryPicker inline (the existing artifacts/h2budget/src/components/category-picker.tsx — same one used elsewhere, same behavior, same full category list). Picking a category fires PATCH /transactions/:id with the new categoryId. After the patch lands, invalidate the weekly-debrief query so the popover (and the variance table) repaint — the txn vanishes from the old bucket and reappears in the new one. No navigation away from /debrief.
+
+DESIGN — answers locked in:
+
+1. Scope: category change ONLY. No match-to-plan, no send-to-review here. (Those affordances already exist elsewhere.)
+2. Interaction: inline picker inside the popover row (no separate dialog, no navigation).
+3. Categories: full list, same picker as /chase — no filtering of Ignore/Transfer/Uncategorized targets.
+
+IMPLEMENTATION:
+
+A. In artifacts/api-server/src/lib/weeklyDebrief.ts line 608: when building actualTxns, ALSO include a stable id we can patch against. Currently the shape is { txnId, description, amount, date, matchedToPlan }. txnId is already the transactions table primary key, so no schema change needed — the data is already there, just confirm the client reads it.
+
+B. In artifacts/h2budget/src/pages/debrief.tsx VarianceCellPopover (line 1056):
+   - Accept additional props: `categories` (the existing useListCategories data from line 306), and `onChangeTxnCategory` (callback `(txnId: string, newCategoryId: string | null) => void`).
+   - Only used when kind === "actual" — planned items don't have this.
+   - For each transaction row in the popover (current rendering around line 1110-1130), add a small CategoryPicker BELOW the description/date line (not inline with the amount — keep the row tidy).
+   - Initial value: the parent bucket's categoryId (since all txns in a bucket share the same category — confirmed in weeklyDebrief.ts line 605).
+   - On change: call onChangeTxnCategory(t.txnId, newId). Don't close the popover automatically; let the user pick, see the change, then close themselves.
+
+C. In the CategoryVarianceTable (line 1141), thread the categories list and the onChange handler down to VarianceCellPopover (only on the Actual cell).
+
+D. In the parent page where CategoryVarianceTable is rendered (line 678-682): wire the change handler to call useUpdateTransaction (same hook /chase uses, same one /forecast uses at line 1070) with `{ categoryId: newId }`. On success: invalidateQueries for getGetWeeklyDebriefQueryKey (and any debrief-detail query keys), so the table repaints with the txn in its new bucket.
+
+E. Show a small toast on success ("Recategorized") and on error (failed patch).
+
+F. Optimistic update is nice-to-have but not required — the invalidate path is good enough for now. Don't over-engineer.
+
+CAVEATS:
+
+- CategoryPicker accepts `onChange: (id: string | null, rememberPattern?: string | null) => void`. The second arg is for auto-creating a mapping rule. PASS THROUGH the rememberPattern if provided — that's the existing behavior elsewhere and the user will expect the next "AMERICAN EXPRESS ACH PMT" to auto-categorize the same way.
+- The popover has `align="end" className="w-80 p-0"`. Adding a 8-row picker inline might push the popover height past comfortable. Already has `max-h-64 overflow-y-auto` on the scroll region (line 1096) — that's fine, scroll stays.
+- Don't break the existing read-only behavior for the "planned" side of the popover. CategoryPicker is only on actual rows.
+
+VERIFY (smoke test only, no new automated tests):
+
+1. Open /debrief on the current week.
+2. Find a row in Category variance with Actual > 0 (e.g. Uncategorized, $1,295.52).
+3. Click the Actual cell → popover opens, lists transactions.
+4. On one transaction row, click the category picker → full list of categories appears.
+5. Pick a different category (e.g. "Subscriptions").
+6. Popover stays open. Pick another transaction's category to confirm multi-edit works.
+7. Close popover. The Category variance table should now show the changed txns under the new categories — Uncategorized total decreased, Subscriptions total increased by the same amount.
+8. Hard refresh — changes persist.
+9. Go to /chase and confirm those txn rows have the new category there too (round-trip).
+
+Architect review + typecheck + publish. No new tests.

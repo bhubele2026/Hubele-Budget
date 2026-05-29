@@ -1,0 +1,47 @@
+Cleanup task on /amex: replace the "Ending balance · Trailing 12 months" chart with a forward-looking version pinned to a fixed window that rolls forward by month.
+
+CONTEXT — same pattern as the /chase chart already shipped (task #785, "actual vs forecast"). That work extended BalanceTrendChart at artifacts/h2budget/src/components/account-page/balance-trend-chart.tsx to support multi-series, date-keyed rendering with a today marker. We reuse that infrastructure here — single series only.
+
+DESIGN:
+
+WINDOW
+- Start = max(2026-05-01, current month start). The current month is the left edge.
+- End = start + 12 months − 1 day (so the chart shows exactly 12 months).
+- Rolling: on the first of each new month, the window slides forward one month. So in Jun 2026 the window becomes Jun 2026 → May 2027, in Jul 2026 it becomes Jul 2026 → Jun 2027, etc.
+
+DATA
+- Single series: actual Amex ending balance per week (Sun-Sat buckets), bounded by the window above.
+- Today is visually marked on the chart (vertical ReferenceLine or shaded background change — same as the /chase version).
+- No forecast line. Credit card spending isn't reasonably forecastable, so we just plot real history as it accumulates.
+- TRIM TO REAL DATA. If the last Amex sync delivered points up to today (e.g. May 29 2026), the line ends at the today marker. Do NOT carry the last value forward as a flat line into future months. The right portion of the chart is genuinely blank until future syncs populate it.
+
+CHART TITLE / SUBTITLE
+- Caption: "ENDING BALANCE — forward 12 months"
+- Right-aligned subtitle: window range, e.g. "May 2026 – Apr 2027". Use the same date-formatting helper the trailing chart uses today.
+
+OTHER BEHAVIORS — don't break these
+- The per-card chip filter at the top (All / Blue Cash / Delta Gold / Platinum) still scopes the chart to the selected card.
+- The per-card Amex ending balance numbers above the chart stay unchanged.
+- If task #785's BalanceTrendChart already supports the date-keyed multi-series mode, reuse it — pass a single historicalActual series, omit forecastFromToday and actualFromToday. If the current props don't cleanly support "single series with a windowed date range," add a minimal mode parameter rather than building a parallel component.
+
+IMPLEMENTATION HINTS
+
+- artifacts/h2budget/src/pages/amex.tsx renders the chart. Find the trailing-12-months data assembly (likely a useMemo that builds monthly balance points) and replace with a useMemo that:
+  1. Computes the window: start = max(parseISO("2026-05-01"), startOfMonth(today)); end = addMonths(start, 12) − 1 day.
+  2. Walks Sun–Sat weeks across the window.
+  3. For each week ending on/before today, computes the end-of-week Amex balance using the existing amexEndingBalance helper (artifacts/h2budget/src/lib/amexEndingBalance.ts). Bucket by week, anchored on Sat.
+  4. Future-week points: omit. Line just ends at the last past-today week.
+
+- Today marker: pass `todayISO={ymd(new Date())}` (or whatever the existing helper produces) — same way the /chase chart marks today.
+
+VERIFY (smoke):
+
+1. /amex → chart caption updates to "Ending balance — forward 12 months".
+2. Subtitle reads "May 2026 – Apr 2027".
+3. X-axis spans May 2026 (leftmost) to Apr 2027 (rightmost). Today's marker visible in the May column.
+4. Line plots history from May 1 → today only. No flat extension after today.
+5. Click Delta Gold / Blue Cash chip → chart re-scopes to that card, same window.
+6. Open the page on a future date (manually verify the conceptual logic, no need to actually wait) — on Jun 1 2026, the window should slide to Jun 2026 → May 2027. Easy way to spot-check: pass a fake `today` into the windowing useMemo via a local override and confirm it slides.
+7. /chase chart behavior unchanged.
+
+Architect review + typecheck + publish. No new tests.

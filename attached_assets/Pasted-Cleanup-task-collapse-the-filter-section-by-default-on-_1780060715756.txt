@@ -1,0 +1,35 @@
+Cleanup task: collapse the filter section by default on both /chase and /amex.
+
+Both pages currently render a filter block at the top with: Search, From, To, Source, Category, Member, Reviewed (Hide reviewed toggle). It eats vertical space I rarely use.
+
+DESIGN:
+
+- Collapsed by default. A small button reading "Show filters" (with a filter icon — Filter from lucide-react fits) sits where the filter block used to be.
+- Click → block expands, button flips to "Hide filters" (same icon).
+- State is in component-local useState. Default-collapsed on every page load (no persistence — I don't need it remembered across reloads).
+- Filters expanded view: exact same fields, exact same layout as today, no behavior change.
+- The txn count chip ("237 of 237 txns") and any other right-side affordances that currently live next to the filters stay visible regardless of collapse state — those are status, not filter input.
+
+The filter block is rendered through artifacts/h2budget/src/components/account-page/account-filter-bar.tsx (used by both pages — I confirmed earlier when looking at this file structure). Two reasonable implementation paths:
+
+(a) Add a `defaultCollapsed` / `collapsed` prop on AccountFilterBar with the toggle button rendered inside the component. Both pages opt in by passing `defaultCollapsed={true}` (or the prop is default-true).
+
+(b) Wrap AccountFilterBar at the call site on each page with a local toggle. Same outcome, slightly more duplication.
+
+Lean toward (a) — single source of truth, neither page can drift.
+
+The txn-count chip currently passed via `rightSlot` prop on /chase (around artifacts/h2budget/src/pages/transactions.tsx line 2319) and the equivalent on /amex must remain visible when collapsed. Two options:
+  - Always render `rightSlot` outside the collapsible region (cleanest)
+  - Or move it next to the "Show filters" toggle button when collapsed
+
+Cleanest is the first — `rightSlot` lives in its own wrapper that's always visible; the filter inputs live in the collapsible region underneath.
+
+VERIFY (smoke):
+
+1. /chase → filter section collapsed by default. "Show filters" button visible. Txn count chip still shows.
+2. Click "Show filters" → block expands, button flips to "Hide filters", filters function normally.
+3. Set a filter (e.g. From date), collapse → filter stays active (state preserved), txn count reflects it.
+4. /amex → same behavior.
+5. No regression on the dropdowns/inputs themselves.
+
+Architect review + typecheck + publish. No new tests.

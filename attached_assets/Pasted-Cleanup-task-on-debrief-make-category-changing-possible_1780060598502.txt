@@ -1,0 +1,72 @@
+Cleanup task on /debrief: make category-changing possible directly from BOTH variance tables (no navigation away).
+
+CONTEXT — verified in code:
+
+The page (artifacts/h2budget/src/pages/debrief.tsx) has two variance tables today:
+
+1. CategoryVarianceTable (line 1141): one row per category. Each "Actual" cell is already a clickable VarianceCellPopover (line 1056) that shows the underlying transactions in read-only form.
+
+2. VarianceSummaryCard (line 985): three rows — Income, Expenses, Net. The "Actual" cells are plain text TableCell, no popover at all.
+
+GOAL: from EITHER table, click the Actual cell → popover lists the underlying transactions → each transaction row has an inline CategoryPicker → picking a category fires PATCH /transactions/:id → page repaints with the txn in its new bucket.
+
+DESIGN — locked in:
+
+- Picker: existing artifacts/h2budget/src/components/category-picker.tsx, full category list, same behavior as /chase.
+- Variance summary popover: GROUPED BY CATEGORY. Click Income → Actual shows transactions grouped under their category headings (e.g. "Brad's paycheck (KFI) — $6,885.48" section with its txns, "Bonus — $2,000.00" section, etc.). Click Expenses → Actual same idea grouped by expense category. The Net row stays NOT clickable — derived number, no underlying items.
+- Category variance popover: keeps its current per-bucket shape (already one category, just lists txns) — same as the read-only version today, plus picker on each row.
+- Picker is only on the ACTUAL side. Planned side stays read-only (no change there).
+- Patch path: useUpdateTransaction (same hook /forecast uses at line 1070). On success, invalidate the weekly-debrief query so both tables repaint.
+- Don't close the popover on category change — let the user recategorize multiple txns and close manually.
+- Show small success/error toast.
+
+IMPLEMENTATION:
+
+A. weeklyDebrief.ts already returns actualTxns with txnId — no server change needed. Confirm the txnId is the transactions.id primary key (it is per line 609).
+
+B. Refactor VarianceCellPopover (line 1056) to accept optional editing props:
+   - categories?: { id: string; name: string }[]
+   - onChangeTxnCategory?: (txnId: string, newCategoryId: string | null, rememberPattern?: string | null) => void
+   - currentCategoryId?: string | null  (for the picker's default value — passed by the Category-variance caller since all rows in one bucket share a category)
+   
+   For each actualTxns row, render a small CategoryPicker BELOW the description/date line — keeps the row tidy and lets the trigger button (52w width per its own definition) breathe. Initial picker value = currentCategoryId for Category-variance, or the txn's actual categoryId for Variance-summary (see point D below — that needs the categoryId per row).
+   
+   Picker disabled state while the mutation is in-flight (optional, prevents double-clicks).
+
+C. CategoryVarianceTable (line 1141): thread `categories` and `onChangeTxnCategory` down to VarianceCellPopover. Pass `currentCategoryId={b.categoryId ?? null}` so the picker preselects the bucket's category.
+
+D. VarianceSummaryCard (line 985): currently doesn't render a popover at all. Add one for Income and Expenses rows.
+   - Build the popover content by filtering `snapshot.byCategory` to `kind === "income"` (for Income row) or `kind === "expense"` (for Expenses row), using catKindById to determine kind. Then render those buckets as collapsible sections — section header = category name + section total, body = the actualTxns list for that bucket with the picker on each row.
+   - Use the same CategoryPicker per row. currentCategoryId per row = the bucket's categoryId (since all txns in one bucket share it).
+   - The Net row's Actual cell stays plain text — no popover, no click handler.
+   - The Planned cell on Income/Expenses also stays plain text — same read-only rule as Category variance.
+   - VarianceSummaryCard needs the `byCategory` data and `catKindById` and `catNameById` maps — same data CategoryVarianceTable already receives. Pass them in as props from the parent (line 669 callsite).
+
+E. Wire up the parent (line 660-700 area):
+   - Get useUpdateTransaction hook + useListCategories (categories already loaded at line 306 — pass it down).
+   - Define onChangeTxnCategory handler that calls updateTransaction with { categoryId: newId, rememberPattern } (pass rememberPattern through unchanged).
+   - onSuccess: invalidate getGetWeeklyDebriefQueryKey for the active week + getListTransactionsQueryKey + getGetForecastQueryKey (since forecast also reads categorization).
+   - onError: destructive toast.
+   - Pass the handler into both VarianceSummaryCard and CategoryVarianceTable.
+
+F. Skip CategoryPicker on locked weeks (isLocked check exists at line 671) — the lock should freeze categorization too. If the user wants to recategorize a locked-week txn, they unlock first. This matches existing semantics.
+
+CAVEATS:
+
+- CategoryPicker's onChange has signature `(id: string | null, rememberPattern?: string | null) => void`. Pass the rememberPattern through to updateTransaction — the existing auto-mapping-rule behavior is expected.
+- The Variance summary popover could get LARGE if many categories — keep `max-h-64 overflow-y-auto` on its scrollable region just like CategoryVarianceTable's popover already has.
+- Don't restructure the data shape returned by weeklyDebrief.ts. The aggregation is done client-side from the existing byCategory array.
+
+VERIFY (smoke test only):
+
+1. /debrief current week.
+2. Click Variance summary's Income Actual ($8,885) → popover opens with Income categories grouped (Brad's paycheck etc.), each with their txns and a category picker.
+3. Click Variance summary's Expenses Actual → same, grouped by expense category.
+4. Net row Actual ($3,849.78) is NOT clickable.
+5. Click Category variance's Uncategorized Actual cell → popover opens with txns + pickers.
+6. From any popover, change a txn's category. Popover stays open. Page repaints, txn moves buckets. Variance summary totals update. Category variance row counts update. Toast confirms.
+7. Hard refresh — changes persist.
+8. /chase shows the category change too (round-trip).
+9. Lock the week → category pickers in popovers are disabled/hidden.
+
+Architect review + typecheck + publish. No new tests.
