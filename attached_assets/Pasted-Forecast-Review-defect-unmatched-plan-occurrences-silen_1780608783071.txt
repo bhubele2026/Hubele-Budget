@@ -1,0 +1,54 @@
+Forecast/Review defect: unmatched plan occurrences silently disappear and drag the forecast down. I do ALL Chase expense matching manually (no auto-match — keep AUTO_MATCH_ENABLED = false). The problem: plans I don't match right away vanish from view, drag the forecast down day-by-day, and I lose track of them. I need every unmatched plan occurrence to STAY visible and actionable until I personally match it, mark it missed, or skip it.
+
+CURRENT BEHAVIOR (verified in code):
+
+- cashSignal.ts: a past-due unresolved expense plan drags forward to nextBusinessDay(today) and keeps re-dragging every day until resolved (lines ~681-705). Good intent for genuinely-late bills, but it happens SILENTLY.
+- DRAG_LOOKBACK_DAYS = 14 (cashSignal.ts:308): plans older than 14 days STOP dragging AND fall off the "past-due plans" card on /forecast entirely. They vanish — no longer in the forecast, no longer in any actionable list. THIS is where I lose them.
+- The "N past-due plans are weighing on..." card (forecast.tsx ~2820) only shows plans that are ALREADY past-due, only within the 14-day window, only on /forecast, and only offers "mark missed" / "skip" — no "match to a transaction" action.
+- The Review queue (forecast.ts:391) lists TRANSACTIONS with sentToReviewAt, not unmatched PLANS. So plans and the transactions that should match them live on separate surfaces.
+- AUTO_MATCH_ENABLED = false (plaidSync.ts:49) — correct, keep it. I want manual.
+
+WHAT I WANT:
+
+A persistent, complete "Unmatched plans" surface that never silently drops anything. Every plan occurrence from the start of the current month forward that is NOT yet matched/missed/skipped/rescheduled shows up in a list I can work through. Three actions per row: match-to-transaction, mark-missed, skip. The list does not shrink because of an arbitrary age cutoff.
+
+CHANGES:
+
+1. REMOVE THE SILENT VANISH. In cashSignal.ts, the DRAG_LOOKBACK_DAYS = 14 cap currently makes plans older than 14 days both (a) stop dragging the forecast and (b) disappear from the past-due card. Decouple these two concerns:
+   - Keep a drag cap so the FORECAST LINE doesn't get wrecked by ancient zombies (the original #803 intent is valid).
+   - But surface EVERY unmatched plan occurrence (regardless of age, back to start of current month) in the new Unmatched-plans list described below. Age affects whether it drags the line, NOT whether I can see and act on it.
+
+2. NEW "Unmatched plans" PANEL — surface it in BOTH places:
+   - On /forecast (replace or expand the existing "past-due plans weighing on" card)
+   - In the Review area (so when I'm reconciling Chase transactions, the unmatched plans are right there next to the transactions)
+
+   The panel lists every plan occurrence where:
+   - occurrenceDate >= start of current month (configurable; current month + any still-unresolved from prior months back to tracking start May 1 2026)
+   - no forecast_resolution row with status in (matched, missed, skipped, dismissed, rescheduled) exists for that (recurringItemId, occurrenceDate)
+   - i.e. genuinely unresolved
+
+   Each row shows: plan label, originally-due date, amount, and how many days overdue (if past due). Sort: past-due first (most overdue at top), then upcoming.
+
+3. THREE ACTIONS PER ROW:
+   - "Match to transaction" — opens a small picker of recent unmatched Chase transactions (sentToReview or all bank-checking txns in a ±10 day / reasonable-$ window around the plan date), I pick the real transaction, it writes a forecast_resolution with status='matched', matchedTxnId=<that txn>, recurringItemId + occurrenceDate. This is the manual match I currently can't do from here. Reuse the existing upsert endpoint (forecast.ts ~1114 POST that accepts recurringItemId/occurrenceDate/status/matchedTxnId).
+   - "Mark missed" — existing onMarkMissed flow (writes status='missed'). Keep.
+   - "Skip" — existing skip flow (writes status='skipped'). Keep.
+
+4. COUNT BADGE — show the number of unmatched plans as a badge on the Review nav item and/or at the top of the Forecast page, the same way the Chase "N awaiting match" chip works. So I always know how many plans need my attention without hunting. "N plans need matching."
+
+5. FORECAST CLARITY — when unmatched plans exist, the Current Forecast Balance card should note "Includes $X in N unmatched plans — review to confirm" so I understand WHY the number looks the way it does. Right now the drag silently lowers the number with no explanation at the headline level.
+
+6. DO NOT add auto-match. DO NOT change AUTO_MATCH_ENABLED. Every match is a manual action I take. This is intentional — I review everything.
+
+VERIFY:
+
+1. A plan due earlier this month that I haven't matched appears in the Unmatched-plans panel on BOTH /forecast and the Review area.
+2. A plan due 20+ days ago (older than the 14-day drag window) STILL appears in the panel — it does not vanish. (It may or may not drag the forecast line per the cap, but it's visible and actionable.)
+3. From the panel, "Match to transaction" lets me pick a real Chase transaction and writes a matched resolution. The plan then leaves the panel and stops dragging the forecast.
+4. "Mark missed" and "Skip" still work from the panel.
+5. The count badge reflects the number of unmatched plans and updates after each action.
+6. Current Forecast Balance card explains when unmatched plans are affecting the number.
+7. No auto-matching happens on sync or anywhere — AUTO_MATCH_ENABLED stays false.
+8. Matching a plan via this panel updates the forecast immediately (invalidate the forecast queries on success — the cache-freshness work should already cover this).
+
+Architect review (multi-file, touches cashSignal + forecast route + forecast page + review area). Typecheck + publish. No new tests.

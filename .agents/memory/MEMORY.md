@@ -1,0 +1,2 @@
+- [cleanMerchant fixture quirks](cleanmerchant-fixtures.md) — 2 in-file TEST_CASES are known-inaccurate (apostrophe upcasing, trailing-period strip); don't "fix" titleCaseSmart/stripNoise without weighing Spending-grouping ripple.
+- [Merchant signature contract](merchant-signature.md) — merchantSignature() is the cross-month-stable rename key; server owns derivation (never trust client), aliases keyed (householdId, signature).
