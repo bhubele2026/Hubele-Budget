@@ -36,6 +36,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { CategoryPicker } from "@/components/category-picker";
+import { SubscriptionInsightsSection } from "@/components/subscription-insights";
 import { useToast } from "@/hooks/use-toast";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import {
@@ -741,6 +742,11 @@ export default function ReportsPage() {
         <TabsContent value="behavior" className="space-y-6">
           <AdvisorSummaryCard tab="behavior" rangeDays={Number(rangeDays)} monthOffset={Number(monthOffset)} />
           <BehaviorSection from={fmtISO(fromDate)} to={fmtISO(today)} />
+          <SubscriptionInsightsSection
+            recurringItems={recurringItems}
+            txns={txns}
+            catNameById={catNameById}
+          />
         </TabsContent>
       </Tabs>
     </div>
