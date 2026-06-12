@@ -20,7 +20,7 @@ export function AccountPageHeader({
   // compatibility; the flat header no longer renders a heavy accent bar.
   void accentBorderClass;
   return (
-    <div className="flex items-end justify-between gap-4 flex-wrap">
+    <div className="flex items-start justify-between gap-4 flex-wrap">
       <div className="min-w-0">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground flex items-center gap-2.5">
           {icon ? (
@@ -35,7 +35,7 @@ export function AccountPageHeader({
         ) : null}
       </div>
       {actions ? (
-        <div className="flex items-center gap-2 flex-wrap">{actions}</div>
+        <div className="flex items-start gap-2 flex-wrap">{actions}</div>
       ) : null}
     </div>
   );
