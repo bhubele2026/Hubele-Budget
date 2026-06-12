@@ -1718,23 +1718,6 @@ export default function AmexPage() {
           icon={<CreditCard className="h-7 w-7 text-blue-600" />}
           actions={
             <>
-              {relevantPlaidItemIds.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRefreshAmex}
-                  disabled={isAmexSyncing}
-                  data-testid="button-refresh-amex"
-                >
-                  <RefreshCw
-                    className={cn(
-                      "w-4 h-4 mr-1.5",
-                      isAmexSyncing && "animate-spin",
-                    )}
-                  />
-                  Refresh from Plaid
-                </Button>
-              )}
               <SyncButton relevantItemIds={relevantPlaidItemIds} />
               <PlaidLinkButton
                 label="Connect a card"
@@ -1788,15 +1771,11 @@ export default function AmexPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="shrink-0">
-          <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
-        </div>
+      <div className="space-y-3">
+        <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
         {/* (#806) Summary tiles are always visible; only the filter
             fields collapse, and that lives inside AccountFilterBar. */}
-        <div
-          className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 min-w-[280px]"
-        >
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {endingBalance.source === "missing" ||
           (endingBalance.source !== "loading" &&
             endingBalance.value === null) ? (
@@ -1908,37 +1887,8 @@ export default function AmexPage() {
               tooltip={endingBalanceMeta?.tooltip}
               testId="stat-ending-balance"
               action={
-                endingBalance.source === "plaid" ? (
-                  // (#498) Refresh affordance for the live Plaid balance.
-                  // Triggers `runSync` for every Amex-owning Plaid item in
-                  // scope and the success path inside `usePlaidSync`
-                  // already invalidates `["/api/amex/anchor"]`, so the
-                  // tile picks up the fresh per-account balance without
-                  // a full page reload. While the sync is in flight we
-                  // keep the existing cached value visible and only swap
-                  // the button label, so we don't re-introduce the
-                  // stuck-loading regression Task #483 fixed.
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-6 px-2 text-[11px] border-blue-300 text-blue-900 bg-white/60 hover:bg-white"
-                    onClick={handleRefreshAmex}
-                    disabled={
-                      isAmexSyncing || relevantPlaidItemIds.length === 0
-                    }
-                    data-testid="button-refresh-plaid-balance"
-                    title="Re-fetch the live Amex balance from Plaid"
-                  >
-                    <RefreshCw
-                      className={cn(
-                        "h-3 w-3 mr-1",
-                        isAmexSyncing && "animate-spin",
-                      )}
-                    />
-                    {isAmexSyncing ? "Refreshing…" : "Refresh"}
-                  </Button>
-                ) : endingBalance.source === "computed" ||
-                  endingBalance.source === "anchor" ? (
+                endingBalance.source === "computed" ||
+                endingBalance.source === "anchor" ? (
                   <Popover
                     open={anchorOpen}
                     onOpenChange={(o) => {
