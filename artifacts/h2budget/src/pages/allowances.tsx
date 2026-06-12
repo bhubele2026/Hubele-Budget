@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, ChevronDown, Pencil } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Ban } from "lucide-react";
 import {
   useListTransactions,
   useGetSettings,
@@ -14,6 +14,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useToCancelList } from "@/hooks/useToCancelList";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -125,12 +126,18 @@ function TxnRow({
   t,
   subLabels,
   onChangeBucket,
+  categories,
+  onChangeCategory,
+  onToCancel,
+  isToCancel,
 }: {
   t: Transaction;
   subLabels?: Record<SubBucket, string>;
   onChangeBucket?: (t: Transaction, sub: SubBucket) => void;
   categories?: { id: string; name: string }[];
   onChangeCategory?: (t: Transaction, categoryId: string) => void;
+  onToCancel?: (t: Transaction) => void;
+  isToCancel?: boolean;
 }) {
   const current: SubBucket = SUB_BUCKETS.includes(t.weeklyBucket as SubBucket)
     ? (t.weeklyBucket as SubBucket)
@@ -189,6 +196,24 @@ function TxnRow({
             </SelectContent>
           </Select>
         )}
+        {onToCancel && (
+          <Button
+            type="button"
+            variant={isToCancel ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => onToCancel(t)}
+            data-testid={`allowance-to-cancel-${t.id}`}
+            title={
+              isToCancel
+                ? "On your To-cancel list"
+                : "Add to your To-cancel list"
+            }
+          >
+            <Ban className="w-3.5 h-3.5 mr-1.5" />
+            {isToCancel ? "On list" : "To cancel"}
+          </Button>
+        )}
         <span className="tabular-nums whitespace-nowrap font-mono">
           {formatCurrency(expenseAmount(t))}
         </span>
@@ -203,12 +228,16 @@ function CategoryGroupRow({
   onChangeBucket,
   categories,
   onChangeCategory,
+  onToCancel,
+  isToCancel,
 }: {
   group: Group;
   subLabels?: Record<SubBucket, string>;
   onChangeBucket?: (t: Transaction, sub: SubBucket) => void;
   categories?: { id: string; name: string }[];
   onChangeCategory?: (t: Transaction, categoryId: string) => void;
+  onToCancel?: (t: Transaction) => void;
+  isToCancel?: (t: Transaction) => boolean;
 }) {
   const [open, setOpen] = useState(false);
   const expandable = group.txns.length > 0;
@@ -250,6 +279,8 @@ function CategoryGroupRow({
             onChangeBucket={onChangeBucket}
             categories={categories}
             onChangeCategory={onChangeCategory}
+            onToCancel={onToCancel}
+            isToCancel={isToCancel?.(t)}
           />
         ))}
       </CollapsibleContent>
@@ -398,6 +429,20 @@ export default function AllowancesPage() {
   const today = useMemo(() => new Date(), []);
   const [mode, setMode] = useState<Mode>("week");
   const [weekStart, setWeekStart] = useState<Date>(() => sundayOf(new Date()));
+  // Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO).
+  // Editing the weekly planned amount while viewing a specific week only
+  // changes THAT week — the global setting stays the default for every other
+  // week. Stored client-side so it needs no schema change.
+  const [weeklyOverrides, setWeeklyOverrides] = useState<
+    Record<string, number>
+  >(() => {
+    try {
+      const raw = localStorage.getItem("h2:weekly-allowance-overrides");
+      return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    } catch {
+      return {};
+    }
+  });
   const [monthStart, setMonthStart] = useState<Date>(() =>
     firstOfMonth(new Date()),
   );
@@ -426,6 +471,17 @@ export default function AllowancesPage() {
       };
     }, [mode, weekStart, monthStart, currentWeekStart, currentMonthStart]);
 
+  // (#monthly) The Monthly and Unplanned cards always reflect the whole
+  // MONTH that the current window sits in — never a week slice — so the user
+  // can watch the month fill in day by day even while the Weekly card tracks
+  // a single week. Weekly stays week-scoped; only monthly/unplanned use this.
+  const monthScopeStartDate = useMemo(
+    () => firstOfMonth(windowStartDate),
+    [windowStartDate],
+  );
+  const monthScopeStart = fmtISO(monthScopeStartDate);
+  const monthScopeEnd = fmtISO(lastOfMonth(monthScopeStartDate));
+
   const atOrAfterCurrent =
     mode === "week"
       ? weekStart >= currentWeekStart
@@ -452,6 +508,25 @@ export default function AllowancesPage() {
   // Edit a bucket's PLANNED allowance amount inline (the "of $X planned"
   // line). PATCHes the matching settings field.
   const savePlanned = async (key: BucketKey, amount: number) => {
+    // Weekly edit while viewing a specific week → override THIS week only,
+    // leaving the global weekly default (and every other week) untouched.
+    if (key === "weekly" && mode === "week") {
+      const wk = fmtISO(weekStart);
+      setWeeklyOverrides((prev) => {
+        const next = { ...prev, [wk]: amount };
+        try {
+          localStorage.setItem(
+            "h2:weekly-allowance-overrides",
+            JSON.stringify(next),
+          );
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+      toast({ title: `Weekly allowance set for this week` });
+      return;
+    }
     const val = amount.toFixed(2);
     const data =
       key === "weekly"
@@ -492,6 +567,27 @@ export default function AllowancesPage() {
     }
   };
 
+  // (#to-cancel) Flag an unplanned charge onto the shared "To cancel" list
+  // (the same bucket surfaced under Reports → Behavior → Subscriptions). We
+  // treat it as a recurring monthly drain so the bucket's annual-savings
+  // total is meaningful; the user can remove it if it was a one-off.
+  const toCancel = useToCancelList();
+  const toCancelKeyFor = (t: Transaction) => `txn:${t.id}`;
+  const handleToCancelTxn = (t: Transaction) => {
+    const key = toCancelKeyFor(t);
+    if (toCancel.has(key)) {
+      toCancel.remove(key);
+      return;
+    }
+    const monthly = Math.abs(expenseAmount(t));
+    toCancel.add({
+      key,
+      name: t.displayName || t.description,
+      monthly,
+      annual: monthly * 12,
+    });
+  };
+
   // Change a transaction's CATEGORY from the Monthly / Unplanned breakdown
   // (those group by real category, unlike Weekly's sub-buckets).
   const changeCategory = async (t: Transaction, categoryId: string) => {
@@ -509,9 +605,15 @@ export default function AllowancesPage() {
     }
   };
 
+  // Fetch the union of the (weekly) window and the month scope so both the
+  // week-scoped Weekly card and the month-scoped Monthly/Unplanned cards
+  // have all their rows in a single query.
+  const fetchFrom =
+    monthScopeStart < windowStart ? monthScopeStart : windowStart;
+  const fetchTo = monthScopeEnd > windowEnd ? monthScopeEnd : windowEnd;
   const txnsQ = useListTransactions({
-    from: windowStart,
-    to: windowEnd,
+    from: fetchFrom,
+    to: fetchTo,
     limit: 5000,
   });
   const txns = txnsQ.data ?? [];
@@ -541,25 +643,26 @@ export default function AllowancesPage() {
   // using each day's own month length, so a week straddling a month boundary
   // is prorated exactly across both months.
   const planned = useMemo<Record<BucketKey, number>>(() => {
-    const weeklyAmt = Number(settings?.weeklyAllowanceAmount) || 0;
+    // A per-week override (set while viewing that week) wins over the global
+    // weekly default; other weeks keep using the default.
+    const weeklyOverride =
+      mode === "week" ? weeklyOverrides[weekStartISO] : undefined;
+    const weeklyAmt =
+      weeklyOverride != null
+        ? weeklyOverride
+        : Number(settings?.weeklyAllowanceAmount) || 0;
     const monthlyAmt = Number(settings?.monthlyAllowanceAmount) || 0;
     const unplannedAmt = Number(settings?.unplannedAllowanceAmount) || 0;
-    let monthly = 0;
-    let unplanned = 0;
-    for (let i = 0; i < windowDays; i++) {
-      const d = addDays(windowStartDate, i);
-      const dimD = daysInMonthOf(d);
-      monthly += monthlyAmt / dimD;
-      unplanned += unplannedAmt / dimD;
-    }
     return {
+      // Weekly is prorated to its window; monthly/unplanned are the FULL
+      // month figure so the cards show whole-month progress.
       weekly: (weeklyAmt / 7) * windowDays,
-      monthly,
-      unplanned,
+      monthly: monthlyAmt,
+      unplanned: unplannedAmt,
     };
-  }, [settings, windowStartDate, windowDays]);
+  }, [settings, windowDays, mode, weeklyOverrides, weekStartISO]);
 
-  // Window-scoped transactions split per bucket.
+  // Window-scoped transactions (drives the week-scoped Weekly card).
   const windowTxns = useMemo(
     () =>
       txns.filter(
@@ -568,20 +671,33 @@ export default function AllowancesPage() {
     [txns, windowStart, windowEnd],
   );
 
+  // Month-scoped transactions (drives the Monthly + Unplanned cards).
+  const monthScopeTxns = useMemo(
+    () =>
+      txns.filter(
+        (t) => t.occurredOn >= monthScopeStart && t.occurredOn <= monthScopeEnd,
+      ),
+    [txns, monthScopeStart, monthScopeEnd],
+  );
+
   const actual = useMemo(() => {
     const out: Record<BucketKey, number> = {
       weekly: 0,
       monthly: 0,
       unplanned: 0,
     };
+    // Weekly tracks the selected week…
     for (const t of windowTxns) {
+      if (hasBucketFlag(t, "weekly")) out.weekly += expenseAmount(t);
+    }
+    // …monthly + unplanned track the whole month.
+    for (const t of monthScopeTxns) {
       const amt = expenseAmount(t);
-      for (const b of BUCKETS) {
-        if (hasBucketFlag(t, b.key)) out[b.key] += amt;
-      }
+      if (hasBucketFlag(t, "monthly")) out.monthly += amt;
+      if (hasBucketFlag(t, "unplanned")) out.unplanned += amt;
     }
     return out;
-  }, [windowTxns]);
+  }, [windowTxns, monthScopeTxns]);
 
   // Per-bucket drill-down groups. Weekly groups by its sub-bucket enum
   // (all four shown); monthly/unplanned group by category.
@@ -610,10 +726,10 @@ export default function AllowancesPage() {
       };
     });
 
-    // Monthly / Unplanned — group by category.
+    // Monthly / Unplanned — group by category, over the whole month.
     for (const key of ["monthly", "unplanned"] as const) {
       const buckets = new Map<string, Transaction[]>();
-      for (const t of windowTxns) {
+      for (const t of monthScopeTxns) {
         if (!hasBucketFlag(t, key)) continue;
         const cid = t.categoryId ?? "_uncat";
         const arr = buckets.get(cid);
@@ -634,7 +750,7 @@ export default function AllowancesPage() {
     }
 
     return result;
-  }, [windowTxns, SUB_LABEL, catNameById]);
+  }, [windowTxns, monthScopeTxns, SUB_LABEL, catNameById]);
 
   const [expanded, setExpanded] = useState<Set<BucketKey>>(new Set());
   const toggle = (key: BucketKey) =>
@@ -777,7 +893,8 @@ export default function AllowancesPage() {
                     {groups.length === 0 ||
                     groups.every((g) => g.txns.length === 0) ? (
                       <div className="px-3 py-2 text-xs text-muted-foreground">
-                        No {b.noun} transactions in this {mode}.
+                        No {b.noun} transactions in this{" "}
+                        {b.key === "weekly" ? mode : "month"}.
                       </div>
                     ) : (
                       groups.map((g) => (
@@ -793,6 +910,14 @@ export default function AllowancesPage() {
                           }
                           onChangeCategory={
                             b.key !== "weekly" ? changeCategory : undefined
+                          }
+                          onToCancel={
+                            b.key === "unplanned" ? handleToCancelTxn : undefined
+                          }
+                          isToCancel={
+                            b.key === "unplanned"
+                              ? (t) => toCancel.has(toCancelKeyFor(t))
+                              : undefined
                           }
                         />
                       ))
