@@ -840,7 +840,7 @@ export default function AllowancesPage() {
       </div>
 
       {/* Bucket summary cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 stagger-children">
         {BUCKETS.map((b) => (
           <BucketCard
             key={b.key}

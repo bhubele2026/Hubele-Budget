@@ -715,7 +715,7 @@ export default function AvalanchePage() {
         const primaryDebt = (debts ?? []).find((x) => x.id === primary.id);
         return (
           <Card
-            className="rounded-2xl border-primary/40 bg-primary/[0.03]"
+            className="rounded-lg border-primary/40 bg-primary/[0.03]"
             data-testid="panel-this-month"
           >
             <CardContent className="p-5 flex flex-col md:flex-row md:items-start gap-4">
@@ -873,7 +873,7 @@ export default function AvalanchePage() {
       {/* Two cards: Extra per month + Strategy */}
       <div className="grid md:grid-cols-2 gap-4">
         {/* Extra per month */}
-        <Card className="rounded-2xl">
+        <Card className="rounded-lg">
           <CardContent className="p-6 space-y-4">
             <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
               Extra per month
@@ -1058,7 +1058,7 @@ export default function AvalanchePage() {
         </Card>
 
         {/* Strategy */}
-        <Card className="rounded-2xl">
+        <Card className="rounded-lg">
           <CardContent className="p-6 space-y-4">
             <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
               Strategy
@@ -1184,7 +1184,7 @@ export default function AvalanchePage() {
           </span>
         </div>
         {next3.length === 0 ? (
-          <Card className="rounded-2xl">
+          <Card className="rounded-lg">
             <CardContent className="p-6 text-sm text-muted-foreground">
               Add a debt above to see which one gets killed first.
             </CardContent>
@@ -1197,7 +1197,7 @@ export default function AvalanchePage() {
               const cascadeFreed = killEntry?.minFreed ?? 0;
               const nextDebt = next3[i + 1];
               return (
-                <Card key={d.id} className="rounded-2xl">
+                <Card key={d.id} className="rounded-lg">
                   <CardContent className="p-4 space-y-1">
                     <div className="flex items-center gap-2">
                       <div className="h-6 w-6 rounded-full bg-foreground text-background text-xs font-semibold flex items-center justify-center">

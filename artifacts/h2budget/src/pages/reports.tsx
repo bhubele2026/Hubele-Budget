@@ -301,7 +301,7 @@ function ChartCard({
 }) {
   if (empty && hideWhenEmpty) return null;
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-lg">
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-serif">{title}</CardTitle>
         {caption && (
@@ -887,7 +887,7 @@ function DebtSection({
 
       {/* Debt thermometer + per-debt progress rings */}
       <div className="grid lg:grid-cols-3 gap-4">
-        <Card className="rounded-2xl lg:col-span-1">
+        <Card className="rounded-lg lg:col-span-1">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-serif">Debt thermometer</CardTitle>
             <p className="text-xs text-muted-foreground">
@@ -928,7 +928,7 @@ function DebtSection({
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl lg:col-span-2">
+        <Card className="rounded-lg lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-serif">
               Per-debt progress rings
@@ -1530,7 +1530,7 @@ function CashFlowSection({
       </ChartCard>
 
       <div className="grid lg:grid-cols-2 gap-4">
-        <Card className="rounded-2xl">
+        <Card className="rounded-lg">
           <CardContent className="p-5">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               Locked-in monthly burn
@@ -1796,7 +1796,7 @@ function UncategorizedBanner({
 
   return (
     <Card
-      className="rounded-2xl border-[hsl(var(--warning))]/40 bg-[hsl(var(--warning))]/[0.08]"
+      className="rounded-lg border-[hsl(var(--warning))]/40 bg-[hsl(var(--warning))]/[0.08]"
       data-testid="banner-uncategorized"
     >
       <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2046,10 +2046,10 @@ function SpendingSection({
           title="Where the money went"
           blurb="The rhythms, the leaks, and the merchants that quietly add up."
         />
-        <Skeleton className="h-28 w-full rounded-2xl" />
+        <Skeleton className="h-28 w-full rounded-lg" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 rounded-2xl" />
+            <Skeleton key={i} className="h-32 rounded-lg" />
           ))}
         </div>
       </div>
@@ -2535,7 +2535,7 @@ function BudgetSection({
     return (
       <div className="space-y-6">
         {header}
-        <Card className="rounded-2xl">
+        <Card className="rounded-lg">
           <CardContent className="p-8 text-center text-sm text-muted-foreground">
             {message}
           </CardContent>
@@ -2582,7 +2582,7 @@ function BudgetSection({
     return (
       <div className="space-y-6">
         {header}
-        <Card className="rounded-2xl">
+        <Card className="rounded-lg">
           <CardContent className="p-8 text-center text-sm text-muted-foreground">
             All clear — no budget set for this month.
           </CardContent>
@@ -2649,7 +2649,7 @@ function BudgetSection({
 
       {/* Flex — how it's going (centerpiece) */}
       {flex.lines.length > 0 && (
-        <Card className="rounded-2xl">
+        <Card className="rounded-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-serif">Day-to-day spending</CardTitle>
             <p className="text-xs text-muted-foreground">
@@ -2733,7 +2733,7 @@ function BudgetSection({
 
       {/* Bills & loans — checklist */}
       {fixedLines.length > 0 && (
-        <Card className="rounded-2xl">
+        <Card className="rounded-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-serif">Bills & loans</CardTitle>
             <p className="text-xs text-muted-foreground">
@@ -2785,7 +2785,7 @@ function BudgetSection({
 
       {/* Paychecks */}
       {income.lines.length > 0 && (
-        <Card className="rounded-2xl">
+        <Card className="rounded-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-serif">Paychecks</CardTitle>
             <p className="text-xs text-muted-foreground">
@@ -2978,7 +2978,7 @@ function BehaviorSection({ from, to }: { from: string; to: string }) {
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-28 rounded-2xl" />
+            <Skeleton key={i} className="h-28 rounded-lg" />
           ))}
         </div>
       </div>
@@ -2993,7 +2993,7 @@ function BehaviorSection({ from, to }: { from: string; to: string }) {
           title="Money personality, decoded"
           blurb="The streaks, the spikes, and the spending-shaped fingerprint of your month."
         />
-        <Card className="rounded-2xl border-dashed">
+        <Card className="rounded-lg border-dashed">
           <CardContent className="p-5 text-center text-sm text-muted-foreground">
             We couldn't load your behavior insights just now. Try refreshing in a
             moment.
@@ -3164,7 +3164,7 @@ function BehaviorSection({ from, to }: { from: string; to: string }) {
       </ChartCard>
 
       {/* Hall of fame — biggest expense + biggest income, split card. */}
-      <Card className="rounded-2xl">
+      <Card className="rounded-lg">
         <CardContent className="p-5">
           <div className="flex items-center justify-between">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -3225,7 +3225,7 @@ function StreakCard({
 }) {
   const hot = current >= 5;
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-lg">
       <CardContent className="p-5">
         <div className="flex items-center justify-between">
           <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
