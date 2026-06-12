@@ -28,6 +28,7 @@ import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
 import { RowDateControls } from "@/components/row-date-controls";
 import { AccountTransactionRow } from "@/components/account-page/transaction-row";
+import { AccountPageSkeleton } from "@/components/account-page/account-page-skeleton";
 import {
   useBulkRecategorizePrompt,
   bulkRuleFromRepointed,
@@ -1882,13 +1883,7 @@ export default function TransactionsPage() {
   // transactions list visible during refetches so we never flash a
   // skeleton after the first load.
   if (!transactions) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
+    return <AccountPageSkeleton tiles={5} />;
   }
 
   // (#741/#742) The shared row-chip cluster moved into
