@@ -360,12 +360,18 @@ function AdvisorSummaryCard({
 }) {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  // On-demand: don't auto-fire the (LLM-backed, billable) AI summary. The
+  // user opts in per tab, so opening Reports is instant and costs nothing
+  // unless they actually ask for the AI read.
+  const [show, setShow] = useState(false);
 
   const params: GetReportsAdvisorSummaryParams = useMemo(
     () => ({ tab, rangeDays, monthOffset }),
     [tab, rangeDays, monthOffset],
   );
-  const { data, isLoading } = useGetReportsAdvisorSummary(params);
+  const { data, isLoading } = useGetReportsAdvisorSummary(params, {
+    query: { enabled: show },
+  });
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -394,7 +400,7 @@ function AdvisorSummaryCard({
             variant="ghost"
             size="sm"
             onClick={handleRefresh}
-            disabled={refreshing || isLoading}
+            disabled={!show || refreshing || isLoading}
             data-testid={`button-advisor-refresh-${tab}`}
             title="Regenerate"
           >
@@ -407,7 +413,17 @@ function AdvisorSummaryCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {isLoading || !data ? (
+        {!show ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShow(true)}
+            data-testid={`button-advisor-generate-${tab}`}
+          >
+            <Sparkles className="w-3.5 h-3.5 mr-1.5 text-primary" />
+            Explain these numbers
+          </Button>
+        ) : isLoading || !data ? (
           <p className="text-sm text-muted-foreground flex items-center gap-2">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             Reading your numbers…
