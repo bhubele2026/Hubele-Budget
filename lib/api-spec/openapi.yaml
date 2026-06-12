@@ -3949,12 +3949,20 @@ components:
           type: array
           items:
             type: object
-            required: [dow, label, avgPerDay, total]
+            required: [dow, label, avgPerDay, total, topMerchants]
             properties:
               dow: { type: integer }
               label: { type: string }
               avgPerDay: { type: number }
               total: { type: number }
+              topMerchants:
+                type: array
+                items:
+                  type: object
+                  required: [name, total]
+                  properties:
+                    name: { type: string }
+                    total: { type: number }
         monthlyTrends:
           type: array
           items:

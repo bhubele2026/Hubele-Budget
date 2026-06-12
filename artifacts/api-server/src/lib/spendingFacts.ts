@@ -61,7 +61,13 @@ export interface SpendingFacts {
     sampleCategoryId: string | null;
   }[];
   dailyBuckets: { date: string; total: number; count: number }[];
-  dayOfWeek: { dow: number; label: string; avgPerDay: number; total: number }[];
+  dayOfWeek: {
+    dow: number;
+    label: string;
+    avgPerDay: number;
+    total: number;
+    topMerchants: { name: string; total: number }[];
+  }[];
   monthlyTrends: {
     month: string;
     total: number;
@@ -174,6 +180,12 @@ export async function buildSpendingFacts(
   >();
   const daily = new Map<string, { total: number; count: number }>();
   const dowTotals = new Array(7).fill(0) as number[];
+  // (#dow-drill) Per-weekday merchant totals so the "Spend by day of week"
+  // chart can show WHAT was spent when a bar is clicked.
+  const dowMerchants = Array.from(
+    { length: 7 },
+    () => new Map<string, number>(),
+  );
   const monthly = new Map<string, { total: number; byCat: Map<string, number> }>();
 
   let personalTotal = 0; // Amex spend, personal (non-reimbursable)
@@ -215,6 +227,7 @@ export async function buildSpendingFacts(
 
       const dow = new Date(`${t.occurredOn}T00:00:00Z`).getUTCDay();
       dowTotals[dow] += spend;
+      dowMerchants[dow].set(name, (dowMerchants[dow].get(name) ?? 0) + spend);
 
       const month = t.occurredOn.slice(0, 7);
       const mo = monthly.get(month) ?? { total: 0, byCat: new Map() };
@@ -317,6 +330,10 @@ export async function buildSpendingFacts(
     total: round2(dowTotals[dow]),
     avgPerDay:
       dowOccurrences[dow] > 0 ? round2(dowTotals[dow] / dowOccurrences[dow]) : 0,
+    topMerchants: [...dowMerchants[dow].entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, total]) => ({ name, total: round2(total) })),
   }));
 
   const monthlyTrends = [...monthly.entries()]

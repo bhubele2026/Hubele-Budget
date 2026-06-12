@@ -2748,6 +2748,12 @@ export const GetReportsSpendingFactsResponse = zod.object({
       label: zod.string(),
       avgPerDay: zod.number(),
       total: zod.number(),
+      topMerchants: zod.array(
+        zod.object({
+          name: zod.string(),
+          total: zod.number(),
+        }),
+      ),
     }),
   ),
   monthlyTrends: zod.array(

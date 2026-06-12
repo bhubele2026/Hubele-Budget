@@ -2043,11 +2043,17 @@ export type SpendingFactsDailyBucketsItem = {
   count: number;
 };
 
+export type SpendingFactsDayOfWeekItemTopMerchantsItem = {
+  name: string;
+  total: number;
+};
+
 export type SpendingFactsDayOfWeekItem = {
   dow: number;
   label: string;
   avgPerDay: number;
   total: number;
+  topMerchants: SpendingFactsDayOfWeekItemTopMerchantsItem[];
 };
 
 export type SpendingFactsMonthlyTrendsItemByTopCategoryItem = {

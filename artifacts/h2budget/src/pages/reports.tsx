@@ -1890,6 +1890,8 @@ function SpendingSection({
   categories: { id: string; name: string }[];
 }) {
   const { data: facts, isLoading } = useGetReportsSpendingFacts({ from, to });
+  // (#dow-drill) Clicked weekday bar → reveal that day's top merchants.
+  const [selectedDow, setSelectedDow] = useState<number | null>(null);
 
   // Real uncategorized rows (with IDs) for the Recategorize popover, scoped to
   // the facts' (possibly floor-clamped) range so the count matches the banner.
@@ -2239,52 +2241,126 @@ function SpendingSection({
       </ChartCard>
 
       <div className="grid lg:grid-cols-2 gap-4">
-        <ChartCard
-          title="Day of week"
-          caption="Average spend per day — exposes which weekday does the damage."
-          empty={
-            (facts.dayOfWeek ?? []).every((d) => d.avgPerDay === 0)
-              ? "All clear — no spending data yet."
-              : null
-          }
-          hideWhenEmpty
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={facts.dayOfWeek}
-              margin={{ top: 10, right: 16, bottom: 24, left: 0 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis
-                tick={{ fontSize: 10 }}
-                tickFormatter={(v: number) => `$${Math.round(v)}`}
-                label={{
-                  value: "Avg / day",
-                  angle: -90,
-                  position: "insideLeft",
-                  style: { fontSize: 10, fill: "hsl(var(--muted-foreground))" },
-                }}
-              />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={(v: number) => tooltipMoney(v)}
-              />
-              <Bar dataKey="avgPerDay" radius={[6, 6, 0, 0]}>
-                {facts.dayOfWeek.map((d, i) => (
-                  <Cell
-                    key={i}
-                    fill={
-                      maxDowAvg > 0 && d.avgPerDay === maxDowAvg
-                        ? H2_PALETTE.amber
-                        : H2_PALETTE.primary
-                    }
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
+        <Card className="rounded-lg">
+          <CardContent className="p-5">
+            <div className="font-semibold">Day of week</div>
+            <p className="text-sm text-muted-foreground mb-3">
+              Average spend per day — click a bar to see what you spent.
+            </p>
+            {(facts.dayOfWeek ?? []).every((d) => d.avgPerDay === 0) ? (
+              <div className="h-[180px] flex items-center justify-center text-sm text-muted-foreground">
+                All clear — no spending data yet.
+              </div>
+            ) : (
+              <>
+                <div className="h-[180px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={facts.dayOfWeek}
+                      margin={{ top: 10, right: 16, bottom: 4, left: 0 }}
+                    >
+                      <CartesianGrid
+                        stroke="hsl(var(--border))"
+                        strokeOpacity={0.6}
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 11 }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10 }}
+                        tickFormatter={(v: number) => `$${Math.round(v)}`}
+                        tickLine={false}
+                        axisLine={false}
+                        width={44}
+                      />
+                      <Tooltip
+                        contentStyle={tooltipStyle}
+                        formatter={(v: number) => tooltipMoney(v)}
+                        cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
+                      />
+                      <Bar
+                        dataKey="avgPerDay"
+                        radius={[6, 6, 0, 0]}
+                        onClick={(d: { dow?: number; payload?: { dow?: number } }) => {
+                          const dow = d?.payload?.dow ?? d?.dow ?? null;
+                          setSelectedDow((cur) => (cur === dow ? null : dow));
+                        }}
+                      >
+                        {facts.dayOfWeek.map((d, i) => (
+                          <Cell
+                            key={i}
+                            cursor="pointer"
+                            fill={
+                              selectedDow === d.dow ||
+                              (maxDowAvg > 0 && d.avgPerDay === maxDowAvg)
+                                ? H2_PALETTE.amber
+                                : H2_PALETTE.primary
+                            }
+                            fillOpacity={
+                              selectedDow === null || selectedDow === d.dow
+                                ? 1
+                                : 0.4
+                            }
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                {(() => {
+                  const sel =
+                    selectedDow === null
+                      ? null
+                      : facts.dayOfWeek.find((d) => d.dow === selectedDow);
+                  if (!sel) {
+                    return (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Click a bar to break down that day&rsquo;s spending.
+                      </p>
+                    );
+                  }
+                  return (
+                    <div className="mt-3 border-t pt-3">
+                      <div className="flex items-baseline justify-between mb-1.5">
+                        <div className="text-sm font-medium">
+                          {sel.label} · top merchants
+                        </div>
+                        <div className="text-sm tabular-nums font-semibold">
+                          {formatCurrency(sel.total)}
+                        </div>
+                      </div>
+                      {sel.topMerchants.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No spending on {sel.label}s in this window.
+                        </p>
+                      ) : (
+                        <div className="space-y-1">
+                          {sel.topMerchants.map((m) => (
+                            <div
+                              key={m.name}
+                              className="flex items-center justify-between text-sm"
+                            >
+                              <span className="truncate text-muted-foreground">
+                                {m.name}
+                              </span>
+                              <span className="tabular-nums shrink-0 ml-2">
+                                {formatCurrency(m.total)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+          </CardContent>
+        </Card>
 
         <ChartCard
           title="Top merchants"
