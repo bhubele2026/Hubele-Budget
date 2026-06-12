@@ -129,6 +129,8 @@ function TxnRow({
   t: Transaction;
   subLabels?: Record<SubBucket, string>;
   onChangeBucket?: (t: Transaction, sub: SubBucket) => void;
+  categories?: { id: string; name: string }[];
+  onChangeCategory?: (t: Transaction, categoryId: string) => void;
 }) {
   const current: SubBucket = SUB_BUCKETS.includes(t.weeklyBucket as SubBucket)
     ? (t.weeklyBucket as SubBucket)
@@ -166,6 +168,27 @@ function TxnRow({
             </SelectContent>
           </Select>
         )}
+        {onChangeCategory && categories && (
+          <Select
+            value={t.categoryId ?? undefined}
+            onValueChange={(v) => onChangeCategory(t, v)}
+          >
+            <SelectTrigger
+              className="h-7 w-[160px] text-xs"
+              aria-label="Category"
+              data-testid={`allowance-category-select-${t.id}`}
+            >
+              <SelectValue placeholder="Uncategorized" />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((c) => (
+                <SelectItem key={c.id} value={c.id} className="text-xs">
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <span className="tabular-nums whitespace-nowrap font-mono">
           {formatCurrency(expenseAmount(t))}
         </span>
@@ -178,10 +201,14 @@ function CategoryGroupRow({
   group,
   subLabels,
   onChangeBucket,
+  categories,
+  onChangeCategory,
 }: {
   group: Group;
   subLabels?: Record<SubBucket, string>;
   onChangeBucket?: (t: Transaction, sub: SubBucket) => void;
+  categories?: { id: string; name: string }[];
+  onChangeCategory?: (t: Transaction, categoryId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const expandable = group.txns.length > 0;
@@ -221,6 +248,8 @@ function CategoryGroupRow({
             t={t}
             subLabels={subLabels}
             onChangeBucket={onChangeBucket}
+            categories={categories}
+            onChangeCategory={onChangeCategory}
           />
         ))}
       </CollapsibleContent>
@@ -457,6 +486,23 @@ export default function AllowancesPage() {
     } catch (e) {
       toast({
         title: "Couldn't move",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Change a transaction's CATEGORY from the Monthly / Unplanned breakdown
+  // (those group by real category, unlike Weekly's sub-buckets).
+  const changeCategory = async (t: Transaction, categoryId: string) => {
+    if ((t.categoryId ?? "") === categoryId) return;
+    try {
+      await updateTx.mutateAsync({ id: t.id, data: { categoryId } });
+      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      toast({ title: "Category updated" });
+    } catch (e) {
+      toast({
+        title: "Couldn't update category",
         description: (e as Error).message,
         variant: "destructive",
       });
@@ -741,6 +787,12 @@ export default function AllowancesPage() {
                           subLabels={b.key === "weekly" ? SUB_LABEL : undefined}
                           onChangeBucket={
                             b.key === "weekly" ? changeWeeklyBucket : undefined
+                          }
+                          categories={
+                            b.key !== "weekly" ? categories ?? [] : undefined
+                          }
+                          onChangeCategory={
+                            b.key !== "weekly" ? changeCategory : undefined
                           }
                         />
                       ))
