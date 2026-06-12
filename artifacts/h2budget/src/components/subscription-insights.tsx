@@ -5,15 +5,30 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 import { computeSubscriptionInsights } from "@/lib/subscriptionInsights";
+import {
+  detectSubscriptionsFromTransactions,
+  type DetectedSub,
+} from "@/lib/detectedSubscriptions";
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+const confidenceClass = (c: DetectedSub["confidence"]): string =>
+  c === "high"
+    ? "text-emerald-700 border-emerald-300 bg-emerald-50"
+    : c === "medium"
+      ? "text-amber-700 border-amber-300 bg-amber-50"
+      : "text-muted-foreground";
+
 /**
- * Subscriptions section for the Reports → Behavior tab. Surfaces the
- * yearly cost of every true subscription, flags likely price increases and
- * duplicates, and notes services with no recent charge. Pure-derived from
- * the household's recurring items + ~1y of transactions (passed in by the
- * parent, so no extra fetch).
+ * Subscriptions section for Reports → Behavior. Two cards:
+ *  1. "Found in your spending" — likely subscriptions detected from raw
+ *     transaction patterns (same merchant, steady amount, regular cadence),
+ *     including ones never set up as recurring items.
+ *  2. "Set up as recurring" — cost / price-increase / duplicate insights for
+ *     the subscriptions the user explicitly added.
+ *
+ * Pure-derived from data the parent already loads (recurring items + ~1y of
+ * transactions), so no extra fetch.
  */
 export function SubscriptionInsightsSection({
   recurringItems,
@@ -24,6 +39,10 @@ export function SubscriptionInsightsSection({
   txns: Transaction[] | undefined;
   catNameById: Map<string, string>;
 }) {
+  const detected = useMemo(
+    () => detectSubscriptionsFromTransactions(txns),
+    [txns],
+  );
   const insights = useMemo(
     () =>
       computeSubscriptionInsights(
@@ -34,6 +53,10 @@ export function SubscriptionInsightsSection({
       ),
     [recurringItems, txns, catNameById],
   );
+
+  const detectedAnnual = detected
+    .filter((d) => d.confidence !== "low")
+    .reduce((s, d) => s + d.annual, 0);
 
   return (
     <div className="space-y-3" data-testid="subscription-insights">
@@ -47,16 +70,90 @@ export function SubscriptionInsightsSection({
         </p>
       </div>
 
+      {/* Card 1 — detected from raw spending */}
       <Card>
         <CardContent className="p-5">
+          <div className="mb-3 flex items-baseline justify-between flex-wrap gap-2">
+            <div>
+              <div className="font-semibold">Found in your spending</div>
+              <p className="text-sm text-muted-foreground">
+                Recurring charges that look like subscriptions — including ones
+                you haven&rsquo;t set up. Auto-detected from the last year of
+                transactions.
+              </p>
+            </div>
+            {detectedAnnual > 0 && (
+              <div className="text-right">
+                <div className="text-2xl font-bold tabular-nums">
+                  {formatCurrency(detectedAnnual)}
+                  <span className="text-sm font-normal text-muted-foreground">
+                    /yr
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  likely subscriptions
+                </div>
+              </div>
+            )}
+          </div>
+          {detected.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No recurring same-amount charges found in your transactions.
+            </p>
+          ) : (
+            <div className="divide-y divide-border">
+              {detected.map((d) => (
+                <div
+                  key={`${d.merchant}-${d.cadence}`}
+                  className="flex items-start justify-between gap-3 py-2.5"
+                  data-testid={`detected-sub-${d.merchant}`}
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{d.merchant}</div>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1 text-xs text-muted-foreground">
+                      <Badge
+                        variant="outline"
+                        className={`${confidenceClass(d.confidence)} capitalize`}
+                      >
+                        {d.confidence}
+                      </Badge>
+                      <span className="tabular-nums">
+                        {formatCurrency(d.typical)} · {d.cadence} · ×{d.count}
+                      </span>
+                      {d.amountVaries && (
+                        <span className="text-amber-700">amount varies</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-semibold tabular-nums">
+                      {formatCurrency(d.annual)}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        /yr
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      last {d.lastDate}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Card 2 — subscriptions explicitly set up as recurring items */}
+      <Card>
+        <CardContent className="p-5">
+          <div className="mb-3 font-semibold">Set up as recurring</div>
           {insights.count === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No subscriptions detected yet. Recurring services you add (Netflix,
-              Spotify, a gym, software) will show up here with their yearly cost.
+              You haven&rsquo;t added any subscriptions as recurring items yet.
+              The list above is detected straight from your spending.
             </p>
           ) : (
             <div className="space-y-4">
-              {/* Hero: annual total + alert chips */}
               <div className="flex items-baseline justify-between flex-wrap gap-2">
                 <div>
                   <div
@@ -94,8 +191,6 @@ export function SubscriptionInsightsSection({
                   )}
                 </div>
               </div>
-
-              {/* Per-subscription list, priciest first */}
               <div className="divide-y divide-border">
                 {insights.items.map((s) => (
                   <div
