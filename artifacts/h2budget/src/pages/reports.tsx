@@ -276,14 +276,12 @@ function SectionHeader({
   blurb: string;
 }) {
   return (
-    <div className="space-y-1">
-      <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+    <div className="space-y-0.5">
+      <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
         {eyebrow}
       </div>
-      <h2 className="text-2xl md:text-3xl font-serif font-bold tracking-tight">
-        {title}
-      </h2>
-      <p className="text-sm text-muted-foreground italic">{blurb}</p>
+      <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+      <p className="text-sm text-muted-foreground">{blurb}</p>
     </div>
   );
 }
@@ -643,16 +641,16 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Editorial header */}
       <div>
-        <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
           Section V
         </div>
-        <h1 className="text-4xl md:text-5xl font-serif font-bold text-foreground mt-1 leading-none">
+        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground mt-0.5 leading-tight">
           Reports
         </h1>
-        <p className="text-muted-foreground mt-2 italic">
+        <p className="text-muted-foreground mt-1 text-sm">
           Your money, told as a story — debt momentum, cash flow, where it all
           went, and a few surprises.
         </p>

@@ -114,7 +114,7 @@ function ChartHeader({
       onClick={onToggle}
       aria-expanded={!collapsed}
       data-testid="chart-collapse-toggle"
-      className="w-full flex items-baseline justify-between gap-2 px-1 mb-1 text-left"
+      className="w-full flex items-baseline justify-between gap-2 px-2 py-1 -mx-1 mb-1 text-left rounded-md cursor-pointer hover:bg-muted/60 transition-colors"
     >
       <span className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-muted-foreground">
         <ChevronDown
