@@ -118,7 +118,6 @@ const PolarAngleAxis = PolarAngleAxisRaw as unknown as FCFromProps<PolarAngleAxi
 const PolarRadiusAxis = PolarRadiusAxisRaw as unknown as FCFromProps<PolarRadiusAxisProps>;
 const Radar = RadarRaw as unknown as FCFromProps<RadarProps>;
 const ReferenceLine = ReferenceLineRaw as unknown as FCFromProps<ReferenceLineProps>;
-import confetti from "canvas-confetti";
 import {
   Trophy,
   Flame,
@@ -177,9 +176,7 @@ const RANGES = [
 ];
 
 function fireMilestoneConfetti() {
-  const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
-  confetti({ ...defaults, particleCount: 80, origin: { x: 0.3, y: 0.4 } });
-  confetti({ ...defaults, particleCount: 80, origin: { x: 0.7, y: 0.4 } });
+  // Confetti celebration removed by request.
 }
 
 // --- Small visual building blocks -----------------------------------------

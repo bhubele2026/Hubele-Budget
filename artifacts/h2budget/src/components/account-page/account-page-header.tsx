@@ -16,20 +16,22 @@ export function AccountPageHeader({
   iconClass?: string;
   actions?: ReactNode;
 }) {
+  // accentBorderClass / iconClass kept in the signature for call-site
+  // compatibility; the flat header no longer renders a heavy accent bar.
+  void accentBorderClass;
   return (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-4 flex-wrap border-l-4 pl-4",
-        accentBorderClass ?? "border-blue-600",
-      )}
-    >
-      <div>
-        <h1 className="text-3xl font-serif font-bold text-foreground flex items-center gap-2">
-          {icon ? <span className={cn("inline-flex", iconClass)}>{icon}</span> : null}
+    <div className="flex items-end justify-between gap-4 flex-wrap">
+      <div className="min-w-0">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground flex items-center gap-2.5">
+          {icon ? (
+            <span className={cn("inline-flex text-muted-foreground", iconClass)}>
+              {icon}
+            </span>
+          ) : null}
           {title}
         </h1>
         {subtitle ? (
-          <p className="text-muted-foreground mt-1">{subtitle}</p>
+          <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
         ) : null}
       </div>
       {actions ? (

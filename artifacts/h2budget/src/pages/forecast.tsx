@@ -89,7 +89,6 @@ import {
   DragOverlay,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import confetti from "canvas-confetti";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
@@ -206,18 +205,8 @@ function writeReconciledMap(map: Record<string, boolean>) {
 }
 
 function fireConfetti() {
-  const defaults = { startVelocity: 32, spread: 360, ticks: 70, zIndex: 9999 };
-  confetti({ ...defaults, particleCount: 90, origin: { x: 0.2, y: 0.3 } });
-  confetti({ ...defaults, particleCount: 90, origin: { x: 0.8, y: 0.3 } });
-  setTimeout(
-    () =>
-      confetti({
-        ...defaults,
-        particleCount: 120,
-        origin: { x: 0.5, y: 0.4 },
-      }),
-    150,
-  );
+  // Confetti celebration removed by request — the clear/reconcile gating
+  // logic stays so behavior is otherwise unchanged.
 }
 
 type InboxCard = {
