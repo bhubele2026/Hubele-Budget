@@ -1905,7 +1905,20 @@ router.post("/plaid/webhook", async (req, res): Promise<void> => {
       // and records a trailing rerun if more webhooks arrive while one is
       // already in-flight. The handler returns 200 immediately — the sync
       // runs in the background.
-      scheduleSyncForItem(item.userId, item.id);
+      //
+      // Gated by PLAID_AUTO_SYNC_ENABLED (default OFF): a webhook-driven
+      // pull is still an automatic pull, and Plaid bills per pull. With
+      // the flag off we just ACK the webhook (200 below) and the user's
+      // next manual Sync click picks up the waiting updates. Set the env
+      // var to "true" to restore webhook-triggered background syncing.
+      if (process.env.PLAID_AUTO_SYNC_ENABLED === "true") {
+        scheduleSyncForItem(item.userId, item.id);
+      } else {
+        req.log?.info(
+          { item_id, webhook_code },
+          "[plaid-webhook] auto-sync disabled — ACKing without scheduling a pull",
+        );
+      }
     }
   } else if (webhook_type === "ITEM") {
     if (webhook_code === "ERROR") {

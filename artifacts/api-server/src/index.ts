@@ -250,12 +250,27 @@ app.listen(port, (err) => {
         logger.error({ err }, "Plaid orphan plaid_items backfill failed");
       });
 
-    cron.schedule("0 * * * *", () => {
-      syncAllForAllUsers().catch((err) => {
-        logger.error({ err }, "Hourly Plaid sync failed");
+    // Master switch for ALL automatic Plaid pulls: the hourly cursor
+    // sync, the frequent forced-refresh loop, and the daily consent
+    // refresh. Defaults to OFF because Plaid bills per pull — banks now
+    // sync only when the user clicks the in-app Sync button (the manual
+    // POST /plaid/sync route and the post-link first sync are unaffected).
+    // Set PLAID_AUTO_SYNC_ENABLED=true to restore background syncing. The
+    // webhook-triggered sync honors the same flag (see routes/plaid.ts).
+    const autoSyncEnabled = process.env.PLAID_AUTO_SYNC_ENABLED === "true";
+    if (!autoSyncEnabled) {
+      logger.warn(
+        "PLAID_AUTO_SYNC_ENABLED is not 'true' — automatic Plaid syncing is OFF; banks pull only via the manual Sync button.",
+      );
+    }
+
+    if (autoSyncEnabled) {
+      cron.schedule("0 * * * *", () => {
+        syncAllForAllUsers().catch((err) => {
+          logger.error({ err }, "Hourly Plaid sync failed");
+        });
       });
-    });
-    logger.info("Plaid hourly sync scheduled");
+      logger.info("Plaid hourly sync scheduled");
 
     // (#671) Frequent forced-refresh loop. The hourly cron above does a
     // pure cursor-only /transactions/sync, which only returns what Plaid
@@ -322,6 +337,7 @@ app.listen(port, (err) => {
       { timezone: "UTC" },
     );
     logger.info("Plaid daily consent refresh scheduled");
+    } // end if (autoSyncEnabled)
 
     // (#369) Daily malformed access_token sweep. The boot-time scan
     // (`flagMalformedAccessTokens` above) only runs on server restart,

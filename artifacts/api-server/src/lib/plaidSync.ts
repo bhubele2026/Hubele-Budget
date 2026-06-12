@@ -1553,7 +1553,12 @@ export async function syncPlaidItem(
           // (e.g. linking a checking-side payment to a debt) are not wiped on
           // the next Plaid sync.
           set: {
-            occurredOn: values.occurredOn,
+            // Honor a manual date edit. When the user pulled this row into
+            // a different day (e.g. Sunday→Saturday so it counts in the
+            // right allowance week), `occurred_on_user_overridden` is true
+            // and we keep their date; otherwise refresh from Plaid. Same
+            // CASE-guard shape as `isTransfer` below.
+            occurredOn: sql`CASE WHEN ${transactionsTable.occurredOnUserOverridden} THEN ${transactionsTable.occurredOn} ELSE ${values.occurredOn} END`,
             occurredAt: values.occurredAt,
             description: values.description,
             amount: values.amount,
@@ -3262,7 +3267,10 @@ export async function runGapBackfillForItem(
           .onConflictDoUpdate({
             target: transactionsTable.plaidTransactionId,
             set: {
-              occurredOn: values.occurredOn,
+              // Twin of the cursor-sync guard above: honor a manual date
+              // edit (Sunday→Saturday week fix) so the gap-backfill path
+              // doesn't restamp `occurredOn` back to Plaid's value.
+              occurredOn: sql`CASE WHEN ${transactionsTable.occurredOnUserOverridden} THEN ${transactionsTable.occurredOn} ELSE ${values.occurredOn} END`,
               description: values.description,
               amount: values.amount,
               // (#728) Gap-backfill upsert mirrors the cursor-sync

@@ -316,6 +316,14 @@ export const transactionsTable = pgTable(
     isTransferUserOverridden: boolean("is_transfer_user_overridden")
       .notNull()
       .default(false),
+    // Set true when the user manually edits `occurredOn` (e.g. pulling a
+    // "paid Saturday, posted Sunday" charge back into the correct Sun→Sat
+    // allowance week). Guards the Plaid sync upsert so a later `modified`
+    // row doesn't restamp the date back to Plaid's value — mirrors the
+    // `isTransferUserOverridden` preservation pattern.
+    occurredOnUserOverridden: boolean("occurred_on_user_overridden")
+      .notNull()
+      .default(false),
     isExternalCardPayment: boolean("is_external_card_payment")
       .notNull()
       .default(false),
