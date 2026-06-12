@@ -17,7 +17,7 @@
  *   pnpm --filter @workspace/scripts exec tsx ./src/reapplyCategories.ts          # dry-run (just counts)
  *   pnpm --filter @workspace/scripts exec tsx ./src/reapplyCategories.ts --apply  # write the changes
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gte, isNull, lte } from "drizzle-orm";
 import {
   db,
   pool,
@@ -29,8 +29,22 @@ import {
   matchRule,
 } from "../../artifacts/api-server/src/lib/autoCategorize";
 
+function argValue(flag: string): string | null {
+  const hit = process.argv.find((a) => a.startsWith(`${flag}=`));
+  return hit ? hit.slice(flag.length + 1) : null;
+}
+
 async function main(): Promise<void> {
   const apply = process.argv.includes("--apply");
+  // Optional date window (inclusive). Pass --from=YYYY-MM-DD --to=YYYY-MM-DD
+  // to ONLY recover a specific span (e.g. just May–June). Omit to scan all.
+  const from = argValue("--from");
+  const to = argValue("--to");
+  if (from || to) {
+    console.log(`Window: ${from ?? "(start)"} → ${to ?? "(today)"}`);
+  } else {
+    console.log("Window: ALL dates (pass --from/--to to limit)");
+  }
 
   const households = await db.select().from(householdsTable);
   if (households.length === 0) {
@@ -54,6 +68,8 @@ async function main(): Promise<void> {
         and(
           eq(transactionsTable.householdId, h.id),
           isNull(transactionsTable.categoryId),
+          ...(from ? [gte(transactionsTable.occurredOn, from)] : []),
+          ...(to ? [lte(transactionsTable.occurredOn, to)] : []),
         ),
       );
 
