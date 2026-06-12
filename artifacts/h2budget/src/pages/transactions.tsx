@@ -113,6 +113,7 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
+import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { ToastAction } from "@/components/ui/toast";
 import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
@@ -1181,24 +1182,13 @@ export default function TransactionsPage() {
     return m;
   }, [forecastData?.resolutions]);
 
-  // Count of this account's "sent" rows in the currently-viewed month
-  // that are still sitting in the Review Bucket (no matched / unplanned
-  // resolution yet). Powers the clickable header chip.
-  const awaitingMatchCount = useMemo(() => {
-    let n = 0;
-    for (const tx of monthScoped) {
-      if (!tx.forecastFlag) continue;
-      const r = resolutionByTxnId.get(tx.id);
-      if (!r) {
-        n += 1;
-        continue;
-      }
-      if (r.status !== "matched" && r.status !== "ignored_unforecasted" && r.status !== "unplanned") {
-        n += 1;
-      }
-    }
-    return n;
-  }, [monthScoped, resolutionByTxnId]);
+  // (#fix) Powers the clickable header chip. Previously this was a local
+  // tally over the *viewed* month's forecast-flagged rows (including pending
+  // and rows the Review Bucket filters out), so it disagreed with the actual
+  // Forecast Review Bucket the chip links to — showing "4 awaiting" when the
+  // bucket was empty. Now it reads the SAME canonical count the bucket uses,
+  // so the chip and the destination always agree.
+  const awaitingMatchCount = useReviewInboxCount();
 
   // The configured Chase checking account's external Plaid account_id.
   // Forecast is scoped to this single account, not to all depository
@@ -2072,38 +2062,11 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {effectiveSnapshot && (
-        <div
-          className="text-xs text-muted-foreground"
-          data-testid="text-snapshot-meta"
-        >
-          {effectiveSnapshot.source === "plaid" ? "Plaid" : "Manual"} ·{" "}
-          {selectedPlaidAccount?.institutionName ??
-            effectiveSnapshot.name ??
-            selectedPlaidAccount?.name ??
-            "Checking"}
-          {effectiveSnapshot.mask ? ` ••${effectiveSnapshot.mask}` : ""} ·
-          Current balance {formatCurrency(effectiveSnapshot.balance)}
-          {usingSnapshotAccount ? " · snapshot" : ""}
-          <BankSnapshotFreshness
-            source={effectiveSnapshot.source}
-            at={effectiveSnapshot.at}
-          />
-        </div>
-      )}
-      {!effectiveSnapshot && selectedPlaidAccount && (
-        <div
-          className="text-xs text-muted-foreground"
-          data-testid="text-snapshot-meta"
-        >
-          Plaid ·{" "}
-          {selectedPlaidAccount.institutionName ??
-            selectedPlaidAccount.name ??
-            "Checking"}
-          {selectedPlaidAccount.mask ? ` ••${selectedPlaidAccount.mask}` : ""} ·
-          Press Refresh from Plaid to see Starting and Ending balances.
-        </div>
-      )}
+      {/* (cleanup) The verbose "Plaid · Chase ··5526 · Current balance …
+          Last auto-updated" snapshot line was removed — the balance already
+          shows in the stat tiles, and the single "Last synced" note next to
+          the Sync button is the one source of truth for freshness now that
+          background auto-updates are disabled. */}
       {!usingSnapshotAccount && isManualAccount && (
         <div
           className="text-xs text-muted-foreground"
@@ -2447,12 +2410,10 @@ export default function TransactionsPage() {
             onToggleAll={(on) => toggleDay(ids, on)}
             totalNode={dayNetNode}
           >
-            <div className="overflow-x-auto">
-            <table
-              className="w-full text-sm min-w-[720px]"
+            <div
+              className="divide-y divide-border"
               data-testid="group-pending"
             >
-              <tbody>
                 {items.map((tx) => {
                   const isIgnored =
                     !!ignoreCatId && tx.categoryId === ignoreCatId;
@@ -2475,63 +2436,31 @@ export default function TransactionsPage() {
                       testId={`row-tx-${tx.id}`}
                       rowData={{ "data-pending": "true" }}
                       metaNode={
-                        <>
-                          <div
-                            className="text-[10px] text-muted-foreground/70 truncate"
-                            title={tx.description}
-                            data-testid={`text-raw-description-${tx.id}`}
-                          >
-                            {tx.description}
-                          </div>
-                          <div className="flex flex-wrap gap-1 items-center mt-1">
-                            <Badge
-                              variant="outline"
-                              className={`text-[11px] font-normal ${CHIP_BASE}`}
-                              data-testid={`badge-pending-${tx.id}`}
-                              title="Plaid reported this charge as pending — it will flip to posted automatically when the bank finalizes it."
-                            >
-                              Pending
-                            </Badge>
-                            {tx.forecastFlag &&
-                              (() => {
-                                const r = resolutionByTxnId.get(tx.id);
-                                const state =
-                                  r?.status === "matched"
-                                    ? {
-                                        attr: "matched",
-                                        label: "Matched to forecast",
-                                      }
-                                    : r?.status === "ignored_unforecasted" ||
-                                        r?.status === "unplanned"
-                                      ? { attr: "unplanned", label: "Unplanned" }
-                                      : {
-                                          attr: "in-review-bucket",
-                                          label: "In Review Bucket",
-                                        };
-                                return (
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-[11px] font-normal ${CHIP_BASE}`}
-                                    data-testid={`badge-forecast-state-${tx.id}`}
-                                    data-forecast-state={state.attr}
-                                  >
-                                    <Inbox className="w-3 h-3 mr-1" />{" "}
-                                    {state.label}
-                                  </Badge>
-                                );
-                              })()}
-                          </div>
-                        </>
-                      }
-                      chipsNode={
-                        <div className="mt-1">
-                          <MatchedRuleChip
-                            categoryId={tx.categoryId}
-                            matchedRuleId={tx.matchedRuleId}
-                            rules={mappingRules}
-                            testIdSuffix={`pending-${tx.id}`}
-                          />
-                        </div>
+                        tx.forecastFlag
+                          ? (() => {
+                              const r = resolutionByTxnId.get(tx.id);
+                              const state =
+                                r?.status === "matched"
+                                  ? { attr: "matched", label: "Matched" }
+                                  : r?.status === "ignored_unforecasted" ||
+                                      r?.status === "unplanned"
+                                    ? { attr: "unplanned", label: "Unplanned" }
+                                    : {
+                                        attr: "in-review-bucket",
+                                        label: "In Review",
+                                      };
+                              return (
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[10px] font-normal ${CHIP_BASE}`}
+                                  data-testid={`badge-forecast-state-${tx.id}`}
+                                  data-forecast-state={state.attr}
+                                >
+                                  <Inbox className="w-3 h-3 mr-1" /> {state.label}
+                                </Badge>
+                              );
+                            })()
+                          : null
                       }
                       amountNode={
                         <span
@@ -2576,8 +2505,6 @@ export default function TransactionsPage() {
                     />
                   );
                 })}
-              </tbody>
-            </table>
             </div>
           </DayGroup>
         );
@@ -2613,9 +2540,7 @@ export default function TransactionsPage() {
             onToggleAll={(on) => toggleDay(ids, on)}
             totalNode={dayNetNode}
           >
-            <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
-              <tbody>
+            <div className="divide-y divide-border">
                 {items.map((tx) => {
                   // (#629) Dim Ignore'd rows the same way forecast-sent rows
                   // are dimmed, so the bubble lights don't make a held-out
@@ -2643,16 +2568,8 @@ export default function TransactionsPage() {
                         "data-ignored": isIgnored ? "true" : "false",
                       }}
                       metaNode={
-                        <>
-                          <div
-                            className="text-[10px] text-muted-foreground/70 truncate"
-                            title={tx.description}
-                            data-testid={`text-raw-description-${tx.id}`}
-                          >
-                            {tx.description}
-                          </div>
-                          {tx.forecastFlag &&
-                            (() => {
+                        tx.forecastFlag
+                          ? (() => {
                               const r = resolutionByTxnId.get(tx.id);
                               const state =
                                 r?.status === "matched"
@@ -2662,33 +2579,20 @@ export default function TransactionsPage() {
                                     ? { attr: "unplanned", label: "Unplanned" }
                                     : {
                                         attr: "in-review-bucket",
-                                        label: "In Review Bucket",
+                                        label: "In Review",
                                       };
                               return (
-                                <div className="mt-1">
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-[11px] font-normal ${CHIP_BASE}`}
-                                    data-testid={`badge-forecast-state-${tx.id}`}
-                                    data-forecast-state={state.attr}
-                                  >
-                                    <Inbox className="w-3 h-3 mr-1" />{" "}
-                                    {state.label}
-                                  </Badge>
-                                </div>
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[10px] font-normal ${CHIP_BASE}`}
+                                  data-testid={`badge-forecast-state-${tx.id}`}
+                                  data-forecast-state={state.attr}
+                                >
+                                  <Inbox className="w-3 h-3 mr-1" /> {state.label}
+                                </Badge>
                               );
-                            })()}
-                        </>
-                      }
-                      chipsNode={
-                        <div className="mt-1">
-                          <MatchedRuleChip
-                            categoryId={tx.categoryId}
-                            matchedRuleId={tx.matchedRuleId}
-                            rules={mappingRules}
-                            testIdSuffix={tx.id}
-                          />
-                        </div>
+                            })()
+                          : null
                       }
                       amountNode={
                         <div className="flex flex-col items-end">
@@ -2793,8 +2697,6 @@ export default function TransactionsPage() {
                     />
                   );
                 })}
-              </tbody>
-            </table>
             </div>
           </DayGroup>
           </div>

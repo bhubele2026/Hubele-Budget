@@ -10,8 +10,10 @@ import {
   ReferenceLine,
   Label as RechartsLabel,
 } from "recharts";
+import { useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 export type TrendPoint = {
   key: string;
@@ -62,6 +64,8 @@ type SingleSeriesProps = {
   // Leaving it undefined preserves the original trailing-12-months
   // behavior exactly.
   window?: WindowConfig;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 };
 
 type MultiSeriesProps = {
@@ -86,9 +90,47 @@ type MultiSeriesProps = {
   forecastColor?: string;
   valueLabel?: string;
   testId?: string;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 };
 
 type BalanceTrendChartProps = SingleSeriesProps | MultiSeriesProps;
+
+/** Shared collapsible caption header — a chevron toggles the chart body. */
+function ChartHeader({
+  caption,
+  subtitle,
+  collapsed,
+  onToggle,
+}: {
+  caption: string;
+  subtitle?: ReactNode;
+  collapsed?: boolean;
+  onToggle?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      data-testid="chart-collapse-toggle"
+      className="w-full flex items-baseline justify-between gap-2 px-1 mb-1 text-left"
+    >
+      <span className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-muted-foreground">
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 transition-transform",
+            collapsed && "-rotate-90",
+          )}
+        />
+        {caption}
+      </span>
+      {subtitle != null && (
+        <span className="text-[10px] text-muted-foreground">{subtitle}</span>
+      )}
+    </button>
+  );
+}
 
 function isMultiSeries(
   props: BalanceTrendChartProps,
@@ -97,10 +139,43 @@ function isMultiSeries(
 }
 
 export function BalanceTrendChart(props: BalanceTrendChartProps) {
+  // Collapse state is remembered per chart (keyed by testId/caption) so a
+  // user who hides a chart keeps it hidden across visits.
+  const storageKey = `h2:chart-collapsed:${props.testId ?? props.caption}`;
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(storageKey) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const onToggleCollapsed = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem(storageKey, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+
   if (isMultiSeries(props)) {
-    return <MultiSeriesBalanceTrendChart {...props} />;
+    return (
+      <MultiSeriesBalanceTrendChart
+        {...props}
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+      />
+    );
   }
-  return <SingleSeriesBalanceTrendChart {...props} />;
+  return (
+    <SingleSeriesBalanceTrendChart
+      {...props}
+      collapsed={collapsed}
+      onToggleCollapsed={onToggleCollapsed}
+    />
+  );
 }
 
 function SingleSeriesBalanceTrendChart({
@@ -110,6 +185,8 @@ function SingleSeriesBalanceTrendChart({
   valueLabel = "Ending balance",
   testId = "card-balance-trend",
   window,
+  collapsed,
+  onToggleCollapsed,
 }: SingleSeriesProps) {
   if (window) {
     // (#809) Render the fixed window (axes, month ticks, today marker)
@@ -120,15 +197,13 @@ function SingleSeriesBalanceTrendChart({
     return (
       <Card data-testid={testId}>
         <CardContent className="p-3 pt-4">
-          <div className="flex items-baseline justify-between gap-2 px-1 mb-1">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              {caption}
-            </div>
-            <div className="text-[10px] text-muted-foreground">
-              {window.subtitle}
-            </div>
-          </div>
-          <div className="h-[120px] w-full">
+          <ChartHeader
+            caption={caption}
+            subtitle={window.subtitle}
+            collapsed={collapsed}
+            onToggle={onToggleCollapsed}
+          />
+          <div className={cn("h-[120px] w-full", collapsed && "hidden")}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={window.series}
@@ -209,15 +284,13 @@ function SingleSeriesBalanceTrendChart({
   return (
     <Card data-testid={testId}>
       <CardContent className="p-3 pt-4">
-        <div className="flex items-baseline justify-between gap-2 px-1 mb-1">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            {caption}
-          </div>
-          <div className="text-[10px] text-muted-foreground">
-            {data[0].label} – {data[data.length - 1].label}
-          </div>
-        </div>
-        <div className="h-[120px] w-full">
+        <ChartHeader
+          caption={caption}
+          subtitle={`${data[0].label} – ${data[data.length - 1].label}`}
+          collapsed={collapsed}
+          onToggle={onToggleCollapsed}
+        />
+        <div className={cn("h-[120px] w-full", collapsed && "hidden")}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={data}
@@ -314,6 +387,8 @@ function MultiSeriesBalanceTrendChart({
   forecastColor = "hsl(217 91% 60%)",
   valueLabel = "Balance",
   testId = "card-balance-trend",
+  collapsed,
+  onToggleCollapsed,
 }: MultiSeriesProps) {
   // Merge the three weekly series into one date-keyed row set. The
   // historical and actual-from-today series are folded into a single
@@ -356,20 +431,17 @@ function MultiSeriesBalanceTrendChart({
   return (
     <Card data-testid={testId}>
       <CardContent className="p-3 pt-4">
-        <div className="flex items-baseline justify-between gap-2 px-1 mb-1">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            {caption}
-          </div>
-          {subtitle && (
-            <div
-              className="text-[10px] text-muted-foreground"
-              data-testid="text-trend-subtitle"
-            >
-              {subtitle}
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-3 px-1 mb-1">
+        <ChartHeader
+          caption={caption}
+          subtitle={
+            subtitle ? (
+              <span data-testid="text-trend-subtitle">{subtitle}</span>
+            ) : null
+          }
+          collapsed={collapsed}
+          onToggle={onToggleCollapsed}
+        />
+        <div className={cn("flex items-center gap-3 px-1 mb-1", collapsed && "hidden")}>
           <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
             <span
               className="inline-block h-[2px] w-4 rounded"
@@ -385,7 +457,7 @@ function MultiSeriesBalanceTrendChart({
             Forecast
           </span>
         </div>
-        <div className="h-[140px] w-full">
+        <div className={cn("h-[140px] w-full", collapsed && "hidden")}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={merged}

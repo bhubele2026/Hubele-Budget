@@ -2415,10 +2415,8 @@ export default function AmexPage() {
                   );
                 })}
               </div>
-              {/* Desktop: table layout (md and up) */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-sm min-w-[720px]">
-                  <tbody>
+              {/* Desktop: compact row list (md and up) */}
+              <div className="hidden md:block divide-y divide-border">
                     {items.map((t) => {
                       // (#629) Either reviewed OR Ignore'd dims the row.
                       const isIgnored =
@@ -2459,75 +2457,27 @@ export default function AmexPage() {
                           ) : null
                         }
                         chipsNode={
-                          <>
-                            {!t.isTransfer && t.isTransferUserOverridden && (
-                              <Badge
-                                variant="outline"
-                                className="mt-1 inline-flex items-center text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
-                                title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
-                                data-testid={`badge-transfer-overridden-cleared-${t.id}`}
-                              >
-                                Manually set
-                              </Badge>
-                            )}
-                            {t.isTransfer && (
-                              <Badge
-                                variant="outline"
-                                className="mt-1 inline-flex items-center gap-1 text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
-                                title={
-                                  t.isTransferUserOverridden
-                                    ? "Manually set — won't be re-flagged on the next sync"
-                                    : "Excluded from budget actuals"
-                                }
-                                data-testid={`badge-transfer-${t.id}`}
-                              >
-                                Transfer
-                                {t.isTransferUserOverridden && (
-                                  <span
-                                    aria-hidden="true"
-                                    data-testid={`badge-transfer-overridden-${t.id}`}
-                                    className="text-slate-500 -ml-0.5"
-                                  >
-                                    *
-                                  </span>
-                                )}
-                                <button
-                                  type="button"
-                                  aria-label="Clear Transfer flag"
-                                  data-testid={`button-clear-transfer-${t.id}`}
-                                  className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-slate-200/60"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateTx.mutate(
-                                      { id: t.id, data: { isTransfer: false } },
-                                      {
-                                        onSuccess: () => {
-                                          qc.invalidateQueries({
-                                            queryKey: getListTransactionsQueryKey(),
-                                          });
-                                          qc.invalidateQueries({
-                                            queryKey: getGetBudgetMonthQueryKey(
-                                              `${t.occurredOn.slice(0, 7)}-01`,
-                                            ),
-                                          });
-                                        },
-                                      },
-                                    );
-                                  }}
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </Badge>
-                            )}
-                            <div className="mt-1">
-                              <ExternalCardChip
-                                t={t}
-                                onToggle={(v) =>
+                          t.isTransfer ? (
+                            <Badge
+                              variant="outline"
+                              className="inline-flex items-center gap-1 text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
+                              title={
+                                t.isTransferUserOverridden
+                                  ? "Manually set — won't be re-flagged on the next sync"
+                                  : "Excluded from budget actuals"
+                              }
+                              data-testid={`badge-transfer-${t.id}`}
+                            >
+                              Transfer
+                              <button
+                                type="button"
+                                aria-label="Clear Transfer flag"
+                                data-testid={`button-clear-transfer-${t.id}`}
+                                className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-slate-200/60"
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   updateTx.mutate(
-                                    {
-                                      id: t.id,
-                                      data: { isExternalCardPayment: v },
-                                    },
+                                    { id: t.id, data: { isTransfer: false } },
                                     {
                                       onSuccess: () => {
                                         qc.invalidateQueries({
@@ -2540,21 +2490,13 @@ export default function AmexPage() {
                                         });
                                       },
                                     },
-                                  )
-                                }
-                                testIdSuffix={`${t.id}`}
-                              />
-                            </div>
-                            <div className="mt-1">
-                              <MatchedRuleChip
-                                categoryId={t.categoryId}
-                                matchedRuleId={t.matchedRuleId}
-                                rules={mappingRules}
-                                testIdSuffix={`amex-${t.id}`}
-                                variant="compact"
-                              />
-                            </div>
-                          </>
+                                  );
+                                }}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </Badge>
+                          ) : null
                         }
                         amountNode={
                           <div className="flex flex-col items-end">
@@ -2574,8 +2516,6 @@ export default function AmexPage() {
                       />
                       );
                     })}
-                  </tbody>
-                </table>
               </div>
           </DayGroup>
         );

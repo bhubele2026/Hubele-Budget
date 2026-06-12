@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
  * Shared account-page transaction row.
  *
  * Both the Amex (credit card) and Chase (checking) pages render their
- * transaction lists through this ONE `<tr>` so the two pages can never
+ * transaction lists through this ONE compact flex row so the two pages can never
  * visually drift apart again — same columns, same spacing, same controls.
  * Page-specific bits are passed in as ReactNode "slots" rather than baked
  * in, which keeps this component free of either page's handlers/types:
@@ -74,37 +74,44 @@ export function AccountTransactionRow({
   rowData,
 }: AccountTransactionRowProps) {
   return (
-    <tr
+    <div
       className={cn(
-        "border-t hover:bg-muted/30 transition-colors",
+        // Compact, single-line on wide screens; wraps to a second line on
+        // narrow ones instead of forcing a horizontal scrollbar. No fixed
+        // min-width anywhere — that's what caused the sideways scroll.
+        "flex flex-wrap lg:flex-nowrap items-center gap-x-3 gap-y-1 px-3 py-1.5 hover:bg-muted/30 transition-colors",
         dimmed && "opacity-50",
       )}
       data-testid={testId}
       {...rowData}
     >
-      <td className="px-3 py-2 w-8 align-top">
-        <Checkbox
-          checked={selected}
-          onCheckedChange={() => onToggleSelect()}
-          aria-label="Select"
-        />
-      </td>
-      <td className="px-3 py-2 align-top">
-        <div className="flex items-center gap-1">
-          <span
-            className="font-medium truncate max-w-[420px]"
-            title={tx.description}
-          >
-            {tx.displayName || tx.description}
-          </span>
-          <MerchantRenamePopover tx={tx} />
-        </div>
+      <Checkbox
+        checked={selected}
+        onCheckedChange={() => onToggleSelect()}
+        aria-label="Select"
+        className="shrink-0"
+      />
+      {/* Merchant absorbs the free space and truncates so the row never
+          grows wider than its container. Inline status chips (metaNode)
+          ride alongside it. */}
+      <div className="flex min-w-0 flex-1 basis-[160px] items-center gap-x-2 gap-y-0.5 flex-wrap">
+        <span
+          className="font-medium truncate max-w-full"
+          title={tx.description}
+        >
+          {tx.displayName || tx.description}
+        </span>
+        <MerchantRenamePopover tx={tx} />
         {metaNode}
-      </td>
-      <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap align-top">
-        {cardLabel || "—"}
-      </td>
-      <td className="px-3 py-2 align-top">
+      </div>
+      {/* Card / source — least important, so it's the first thing dropped
+          on smaller screens. */}
+      {cardLabel != null && (
+        <div className="hidden xl:block shrink-0 max-w-[150px] truncate text-xs text-muted-foreground">
+          {cardLabel || "—"}
+        </div>
+      )}
+      <div className="shrink-0 flex items-center gap-1.5">
         <CategoryPicker
           value={tx.categoryId ?? null}
           categories={categories}
@@ -112,11 +119,10 @@ export function AccountTransactionRow({
           onChange={onCategoryChange}
         />
         {chipsNode}
-      </td>
-      <td className="px-3 py-2 align-top">
-        {/* (#607) Bucket bubbles are hidden on transfer rows — a transfer
-            can't be tagged to an allowance bucket. Mirrors both pages. */}
-        {!tx.isTransfer && (
+      </div>
+      {/* (#607) Bucket bubbles are hidden on transfer rows. */}
+      {!tx.isTransfer && (
+        <div className="shrink-0">
           <BucketBubbles
             flags={{
               weekly: tx.weeklyAllowance,
@@ -126,26 +132,19 @@ export function AccountTransactionRow({
             }}
             onToggle={onBucketToggle}
           />
-        )}
-      </td>
-      <td className="px-3 py-2 text-right font-mono tabular-nums whitespace-nowrap align-top">
-        {amountNode}
-      </td>
-      <td className="px-3 py-2 align-top whitespace-nowrap text-right">
-        <div className="flex gap-1 items-center justify-end">
-          {/* Pending rows are restamped by Plaid on the next sync, so the
-              date editor is hidden there to avoid a fix that silently
-              reverts. */}
-          {!hideDate && (
-            <RowDateControls
-              tx={tx}
-              onMove={onQuickDate}
-              disabled={disabled}
-            />
-          )}
-          {actionsNode}
         </div>
-      </td>
-    </tr>
+      )}
+      <div className="shrink-0 ml-auto text-right font-mono tabular-nums whitespace-nowrap">
+        {amountNode}
+      </div>
+      <div className="shrink-0 flex gap-0.5 items-center">
+        {/* Pending rows are restamped by Plaid on the next sync, so the date
+            editor is hidden there to avoid a fix that silently reverts. */}
+        {!hideDate && (
+          <RowDateControls tx={tx} onMove={onQuickDate} disabled={disabled} />
+        )}
+        {actionsNode}
+      </div>
+    </div>
   );
 }
