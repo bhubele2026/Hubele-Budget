@@ -2446,6 +2446,23 @@ export async function pruneOrphanPlaidTransactionsForHousehold(
         sql`${transactionsTable.plaidAccountId} is not null`,
         sql`not exists (select 1 from ${plaidAccountsTable}
               where ${plaidAccountsTable.accountId} = ${transactionsTable.plaidAccountId})`,
+        // Never delete a transaction the user has TOUCHED. An "orphan" here
+        // usually means the account row was momentarily re-materialized (e.g.
+        // a resync, or two Amex cards sharing mask ··1009 colliding on
+        // reconnect) — pruning a categorized / allowance-flagged row in that
+        // window destroys the user's work, which is exactly the data loss we
+        // hit. Only prune pristine, untouched rows; anything carrying a
+        // category, an allowance bucket, a reimbursable/reviewed mark, or a
+        // manual override survives and gets re-linked on the next account
+        // refresh instead.
+        sql`${transactionsTable.categoryId} is null`,
+        eq(transactionsTable.weeklyAllowance, false),
+        eq(transactionsTable.monthlyAllowance, false),
+        eq(transactionsTable.unplannedAllowance, false),
+        eq(transactionsTable.reimbursable, false),
+        eq(transactionsTable.reviewed, false),
+        eq(transactionsTable.isTransferUserOverridden, false),
+        eq(transactionsTable.occurredOnUserOverridden, false),
       ),
     )
     .returning({ id: transactionsTable.id });

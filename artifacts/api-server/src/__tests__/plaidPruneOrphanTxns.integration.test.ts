@@ -160,6 +160,47 @@ describe("pruneOrphanPlaidTransactionsForHousehold", () => {
     expect(await pruneOrphanPlaidTransactionsForHousehold(HH)).toBe(0);
   });
 
+  it("never prunes a touched (categorized / allowance-flagged) orphan — protects user work across resync & reconnect", async () => {
+    // Pristine orphan (account row gone, no user data) → should be pruned.
+    const pristine = await insertPlaidTxn({
+      user: TEST_USER,
+      household: HH,
+      plaidAccountId: `acct-gone-${randomUUID().slice(0, 8)}`,
+      plaidTransactionId: `prist-${randomUUID().slice(0, 8)}`,
+    });
+
+    // Same "account deleted" condition, but the user flagged it Unplanned —
+    // this is the Amex ··1009 reconnect case. It must SURVIVE the prune.
+    const [flagged] = await db
+      .insert(transactionsTable)
+      .values({
+        userId: TEST_USER,
+        householdId: HH,
+        occurredOn: "2026-06-11",
+        description: "Short Story",
+        amount: "-371.68",
+        source: "plaid:amex",
+        plaidTransactionId: `flag-${randomUUID().slice(0, 8)}`,
+        plaidAccountId: `acct-gone-${randomUUID().slice(0, 8)}`,
+        unplannedAllowance: true,
+      })
+      .returning({ id: transactionsTable.id });
+
+    const pruned = await pruneOrphanPlaidTransactionsForHousehold(HH);
+    expect(pruned).toBe(1); // only the pristine orphan, never the flagged one
+
+    const stillThere = async (id: string): Promise<boolean> => {
+      const [r] = await db
+        .select({ id: transactionsTable.id })
+        .from(transactionsTable)
+        .where(eq(transactionsTable.id, id))
+        .limit(1);
+      return !!r;
+    };
+    expect(await stillThere(pristine)).toBe(false);
+    expect(await stillThere(flagged!.id)).toBe(true);
+  });
+
   it("is a no-op when the household has no plaid txns at all", async () => {
     await insertManualTxn({ user: TEST_USER, household: HH });
     expect(await pruneOrphanPlaidTransactionsForHousehold(HH)).toBe(0);
