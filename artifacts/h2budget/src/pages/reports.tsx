@@ -213,19 +213,17 @@ function HeroTile({
         : tone === "amber"
           ? "text-[hsl(var(--warning))]"
           : "text-foreground";
+  void icon;
   return (
-    <Card className="rounded-2xl" title={tooltip}>
-      <CardContent className="p-5">
-        <div className="flex items-center justify-between">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            {label}
-          </div>
-          {icon && <div className="text-muted-foreground/70">{icon}</div>}
+    <Card className="rounded-lg" title={tooltip}>
+      <CardContent className="p-4">
+        <div className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+          {label}
         </div>
-        <div className="mt-2 flex items-baseline gap-2 flex-wrap">
+        <div className="mt-1.5 flex items-baseline gap-2 flex-wrap">
           <div
             className={cn(
-              "text-3xl md:text-4xl font-serif font-bold tabular-nums truncate",
+              "text-[1.7rem] font-semibold tracking-tight tabular-nums truncate",
               toneClass,
             )}
           >
@@ -386,7 +384,6 @@ function AdvisorSummaryCard({
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
             What this means
             {data?.summarySource === "fallback" && (
               <Badge variant="outline" className="text-[10px] font-normal">
@@ -418,7 +415,6 @@ function AdvisorSummaryCard({
             onClick={() => setShow(true)}
             data-testid={`button-advisor-generate-${tab}`}
           >
-            <Sparkles className="w-3.5 h-3.5 mr-1.5 text-primary" />
             Explain these numbers
           </Button>
         ) : isLoading || !data ? (
