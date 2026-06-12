@@ -133,6 +133,7 @@ import {
   type MonthKey,
   type BalanceSeriesPoint,
 } from "@/components/account-page";
+import { ChaseLogo } from "@/components/brand-logos";
 
 const formSchema = z.object({
   occurredOn: z.string().min(1, "Date is required"),
@@ -1983,32 +1984,13 @@ export default function TransactionsPage() {
       <PostLinkProgressBanner viewTransactionsPath="/transactions" />
       <div
         ref={paneRef}
-        className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-4"
+        className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-3 md:pt-4 pb-3 bg-background border-b shadow-sm space-y-3"
       >
       <AccountPageHeader
         title="Chase"
-        subtitle="Your checking activity, day by day."
-        icon={<Landmark className="h-7 w-7 text-primary" />}
-        accentBorderClass="border-primary"
+        icon={<ChaseLogo className="h-7 w-7" />}
         actions={
           <>
-            {isPlaidLinked && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefreshBank}
-                disabled={refreshBank.isPending}
-                data-testid="button-refresh-bank"
-              >
-                <RefreshCw
-                  className={cn(
-                    "w-4 h-4 mr-1.5",
-                    refreshBank.isPending && "animate-spin",
-                  )}
-                />
-                Refresh from Plaid
-              </Button>
-            )}
             <Button onClick={handleOpenNew} variant="outline" size="sm" data-testid="button-add-transaction">
               <Plus className="w-4 h-4 mr-1.5" /> Add transaction
             </Button>
@@ -2022,12 +2004,9 @@ export default function TransactionsPage() {
         }
       />
 
-      <div className="flex items-stretch gap-4 flex-wrap">
+      <div className="space-y-3">
         <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
-        {/* (#806) Summary tiles are always visible; only the filter
-            fields collapse, and that lives inside AccountFilterBar. */}
-        <div
-          className="grid grid-cols-2 md:grid-cols-5 gap-3 flex-1 min-w-[280px]">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {hasLinkedChecking ? (
             <StatChip
               label="Starting balance"
@@ -2195,28 +2174,6 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <AccountFilterBar
-        search={search}
-        onSearchChange={setSearch}
-        from={from}
-        onFromChange={setFrom}
-        to={to}
-        onToChange={setTo}
-        sourceFilter={sourceFilter}
-        onSourceFilterChange={setSourceFilter}
-        sourceOptions={sourceOptions}
-        categoryFilter={categoryFilter}
-        onCategoryFilterChange={setCategoryFilter}
-        categories={categories ?? []}
-        members={members}
-        memberFilter={memberFilter}
-        onMemberFilterChange={setMemberFilter}
-        rightSlot={
-          <div className="text-xs text-muted-foreground ml-auto" data-testid="text-row-count">
-            {filtered.length} of {monthScoped.length} txns
-          </div>
-        }
-      />
       </div>
 
       {balanceTrend && (

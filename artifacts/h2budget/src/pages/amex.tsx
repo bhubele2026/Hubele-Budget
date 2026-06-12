@@ -96,6 +96,7 @@ import {
   type MonthKey,
   type WindowConfig,
 } from "@/components/account-page";
+import { AmexLogo } from "@/components/brand-logos";
 import { buildBalanceWindow } from "@/lib/amexBalanceWindow";
 
 const AMEX_SOURCES = ["amex", "plaid:amex"];
@@ -1710,12 +1711,11 @@ export default function AmexPage() {
       <PostLinkProgressBanner viewTransactionsPath="/amex" />
       <div
         ref={paneRef}
-        className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-4 md:pt-8 pb-4 bg-background border-b shadow-sm space-y-4"
+        className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-3 md:pt-4 pb-3 bg-background border-b shadow-sm space-y-3"
       >
         <AccountPageHeader
           title="American Express"
-          subtitle="Day-by-day card spending — categorized into your budget."
-          icon={<CreditCard className="h-7 w-7 text-blue-600" />}
+          icon={<AmexLogo className="h-6 w-7" />}
           actions={
             <>
               <SyncButton relevantItemIds={relevantPlaidItemIds} />

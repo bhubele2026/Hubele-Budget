@@ -40,8 +40,11 @@ export function SubscriptionInsightsSection({
   catNameById: Map<string, string>;
 }) {
   const detected = useMemo(
-    () => detectSubscriptionsFromTransactions(txns),
-    [txns],
+    () =>
+      detectSubscriptionsFromTransactions(txns, (id) =>
+        id ? catNameById.get(id) ?? null : null,
+      ),
+    [txns, catNameById],
   );
   const insights = useMemo(
     () =>

@@ -3141,28 +3141,6 @@ function BehaviorSection({ from, to }: { from: string; to: string }) {
       </div>
 
       <ChartCard
-        title="Hourly spending clock"
-        caption="What hours of the day money actually leaves the account."
-        empty={hourly.every((h) => h.amount === 0) ? "All clear — no spending in this window." : null}
-        hideWhenEmpty
-        height={280}
-      >
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={hourly} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-            <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={1} />
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${Math.round(v)}`} />
-            <Tooltip
-              contentStyle={tooltipStyle}
-              formatter={(v: number) => tooltipMoney(v)}
-              labelFormatter={(l: string) => `${l}`}
-            />
-            <Bar dataKey="amount" fill={H2_PALETTE.amber} radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </ChartCard>
-
-      <ChartCard
         title="Spend by day of week"
         caption="Your weekly rhythm in dollars per day."
         empty={dow.every((d) => d.avgPerDay === 0) ? "All clear — no spending in this window." : null}

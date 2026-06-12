@@ -37,14 +37,28 @@ function classifyCadence(
   return null;
 }
 
+// Recurring charges that are BILLS / DEBT / life expenses — NOT consumer
+// subscriptions. A subscription is a service (streaming, meal kits like
+// Hungryroot, software, a gym, a membership). A mortgage, car payment,
+// loan, HELOC, insurance, utility, phone, tuition, gas, or groceries is a
+// recurring bill, not a subscription — exclude them by merchant or category.
+const NOT_A_SUBSCRIPTION =
+  /loan|mortgage|heloc|lending|leasing|\blease\b|servicing|credit\s*union|payroll|insur|utilit|electric|\bwater\b|sewer|tuition|univ|college|\btax(es)?\b|\bhoa\b|escrow|\brent\b|car\s*payment|card\s*payment|verizon|at&t|t-?mobile|comcast|xfinity|spectrum|cricket|kwik\s*trip|casey|speedway|shell|exxon|mobil|chevron|marathon|\bbp\b|holiday\s*station|grocer|kroger|aldi|costco|hy-?vee|woodman|metro\s*market|festival\s*foods|pick\s*n\s*save|walmart|target|\bach\b|autopay|transfer|wells\s*fargo|capital\s*one|\bdiscover\b|synchrony|barclays|comenity|navient|nelnet|sofi|venmo|paypal|zelle|cash\s*app/i;
+
 export function detectSubscriptionsFromTransactions(
   txns: readonly Transaction[] | undefined,
+  categoryNameOf?: (id: string | null | undefined) => string | null,
 ): DetectedSub[] {
   const byMerchant = new Map<string, { dates: string[]; amounts: number[] }>();
   for (const t of txns ?? []) {
     const amt = Number(t.amount) || 0;
     if (amt >= 0 || t.isTransfer) continue; // expenses only, skip transfers
     const name = (t.displayName || t.description || "Unknown").trim();
+    // Skip bills / debt / life expenses — matched on the merchant name OR
+    // the transaction's category (e.g. a "Mortgage" or "Car Payments"
+    // category). Leaves real consumer subscriptions.
+    const cat = categoryNameOf?.(t.categoryId) ?? "";
+    if (NOT_A_SUBSCRIPTION.test(name) || NOT_A_SUBSCRIPTION.test(cat)) continue;
     const g = byMerchant.get(name) ?? { dates: [], amounts: [] };
     g.dates.push(t.occurredOn.slice(0, 10));
     g.amounts.push(Math.abs(amt));
