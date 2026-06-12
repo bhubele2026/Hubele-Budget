@@ -951,7 +951,7 @@ export default function BudgetPage() {
       </div>
 
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 stagger-children">
           <SummaryTile
             label="Income"
             budget={summary.income.budget}
