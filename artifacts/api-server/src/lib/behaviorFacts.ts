@@ -357,6 +357,7 @@ type BehaviorTxnRow = {
   categoryId: string | null;
   isTransfer: boolean;
   isExternalCardPayment: boolean;
+  reimbursable: boolean;
   source: string;
 };
 
@@ -497,7 +498,7 @@ export async function buildBehaviorFacts(
     id ? categoriesById.get(id)?.name ?? null : null;
 
   // --- Range transactions (for range-bound facts) ------------------------
-  const rangeTxns = (await db
+  const rangeTxnsAll = (await db
     .select({
       occurredOn: transactionsTable.occurredOn,
       occurredAt: transactionsTable.occurredAt,
@@ -506,6 +507,7 @@ export async function buildBehaviorFacts(
       categoryId: transactionsTable.categoryId,
       isTransfer: transactionsTable.isTransfer,
       isExternalCardPayment: transactionsTable.isExternalCardPayment,
+      reimbursable: transactionsTable.reimbursable,
       source: transactionsTable.source,
     })
     .from(transactionsTable)
@@ -516,11 +518,15 @@ export async function buildBehaviorFacts(
         lte(transactionsTable.occurredOn, end),
       ),
     )) as BehaviorTxnRow[];
+  // (#reimbursable) Reimbursable charges (e.g. a work expense you'll be paid
+  // back for) aren't really "your" spending, so they're dropped from every
+  // behavior insight — most-visited merchant, splurges, streaks, etc.
+  const rangeTxns = rangeTxnsAll.filter((t) => !t.reimbursable);
 
   // --- Streak transactions (always trackingStart..today) -----------------
   // Streaks are anchored to the tracking start and "today", independent of
   // the requested window, so a narrow range can't fake a long streak.
-  const streakTxns = (await db
+  const streakTxnsAll = (await db
     .select({
       occurredOn: transactionsTable.occurredOn,
       occurredAt: transactionsTable.occurredAt,
@@ -529,6 +535,7 @@ export async function buildBehaviorFacts(
       categoryId: transactionsTable.categoryId,
       isTransfer: transactionsTable.isTransfer,
       isExternalCardPayment: transactionsTable.isExternalCardPayment,
+      reimbursable: transactionsTable.reimbursable,
       source: transactionsTable.source,
     })
     .from(transactionsTable)
@@ -539,6 +546,7 @@ export async function buildBehaviorFacts(
         lte(transactionsTable.occurredOn, todayIso),
       ),
     )) as BehaviorTxnRow[];
+  const streakTxns = streakTxnsAll.filter((t) => !t.reimbursable);
 
   // --- daysSinceLast ------------------------------------------------------
   const BUCKETS: Bucket[] = [

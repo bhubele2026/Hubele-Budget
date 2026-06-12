@@ -3649,10 +3649,11 @@ export default function ForecastPage({
                   </div>
                 )}
                 {bankInbox.length === 0 && (
-                  <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+                  <div className="py-2.5 text-center text-xs text-muted-foreground">
                     {isReconciledToBank ? (
-                      <span className="inline-flex items-center gap-2 text-primary">
-                        <CheckCircle2 className="w-4 h-4" /> Reconciled to bank for {monthFilter}.
+                      <span className="inline-flex items-center gap-1.5 text-primary">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Reconciled to bank
+                        for {monthFilter}.
                       </span>
                     ) : (
                       <>Send a bank transaction from the Transactions page to start reconciling.</>
