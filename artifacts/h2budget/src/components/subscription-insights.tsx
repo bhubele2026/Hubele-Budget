@@ -1,17 +1,36 @@
 import { useMemo } from "react";
-import { TrendingUp, Copy, Ban, X } from "lucide-react";
-import type { RecurringItem, Transaction } from "@workspace/api-client-react";
+import { TrendingUp, Copy, Ban, X, Plus } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useCreateRecurringItem,
+  getGetBillsSummaryQueryKey,
+  getListRecurringItemsQueryKey,
+  type RecurringItem,
+  type Transaction,
+} from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn, formatCurrency } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import { computeSubscriptionInsights } from "@/lib/subscriptionInsights";
 import {
   detectSubscriptionsFromTransactions,
   type DetectedSub,
 } from "@/lib/detectedSubscriptions";
 import { useToCancelList, toCancelKey } from "@/hooks/useToCancelList";
+
+/** Map a detected cadence label to a recurring-item frequency string. */
+const CADENCE_TO_FREQUENCY: Record<string, string> = {
+  weekly: "weekly",
+  biweekly: "biweekly",
+  monthly: "monthly",
+  "every 2 months": "monthly",
+  quarterly: "quarterly",
+  "twice a year": "yearly",
+  yearly: "yearly",
+};
 
 /** Compact button that flags a subscription onto the "To cancel" list (or
  *  un-flags it). Kept here so both row types render an identical control. */
@@ -100,6 +119,41 @@ export function SubscriptionInsightsSection({
     .reduce((s, d) => s + d.annual, 0);
 
   const toCancel = useToCancelList();
+
+  // (#set-up) Promote a detected recurring charge to a tracked recurring item
+  // (so it shows up in Bills / Forecast). Maps the detected cadence + amount.
+  const createRecurring = useCreateRecurringItem();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const setupRecurring = (d: DetectedSub) => {
+    createRecurring.mutate(
+      {
+        data: {
+          name: d.merchant,
+          kind: "subscription",
+          amount: d.typical.toFixed(2),
+          frequency: CADENCE_TO_FREQUENCY[d.cadence] ?? "monthly",
+          anchorDate: d.nextDate ?? d.lastDate,
+          active: "true",
+        },
+      },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListRecurringItemsQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
+          toast({ title: `Now tracking ${d.merchant} as recurring` });
+        },
+        onError: (e: unknown) => {
+          toast({
+            title: "Couldn't set it up",
+            description: e instanceof Error ? e.message : String(e),
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
   // Annual savings still on the table = items flagged but not yet cancelled.
   const pendingCancelAnnual = toCancel.items
     .filter((i) => !i.cancelled)
@@ -276,7 +330,20 @@ export function SubscriptionInsightsSection({
                       const key = toCancelKey(d.merchant);
                       const marked = toCancel.has(key);
                       return (
-                        <div className="mt-1.5 flex justify-end">
+                        <div className="mt-1.5 flex justify-end gap-1.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setupRecurring(d)}
+                            disabled={createRecurring.isPending}
+                            title="Track this as a recurring item (Bills + Forecast)"
+                            data-testid={`button-setup-recurring-${d.merchant}`}
+                          >
+                            <Plus className="w-3.5 h-3.5 mr-1" />
+                            Set up
+                          </Button>
                           <ToCancelButton
                             marked={marked}
                             onToggle={() =>
