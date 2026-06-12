@@ -26,7 +26,7 @@ import {
 } from "@workspace/api-client-react";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
-import { useOpportunisticPlaidSync } from "@/hooks/use-opportunistic-plaid-sync";
+import { RowDateControls } from "@/components/row-date-controls";
 import {
   useBulkRecategorizePrompt,
   bulkRuleFromRepointed,
@@ -237,10 +237,8 @@ function readInitialChaseAccount(): string | null {
 }
 
 export default function TransactionsPage() {
-  // (#671) Layer 4 — opportunistic Plaid refresh on Transactions mount.
-  // The most common "where's my pending charge?" entry point — fire a
-  // silent forceRefresh so newly authorized rows land without a click.
-  useOpportunisticPlaidSync();
+  // Auto Plaid refresh on mount is DISABLED to avoid per-pull Plaid
+  // charges — banks sync only on the manual Sync button now.
   const { data: transactions, isLoading } = useListTransactions({ limit: 5000 });
   const { data: categories } = useListCategories();
   const { data: mappingRules } = useListMappingRules();
@@ -2812,9 +2810,9 @@ export default function TransactionsPage() {
                       )}
                     </div>
                     <div className="flex gap-1 items-center">
-                      <InlineDateMover
+                      <RowDateControls
                         tx={tx}
-                        onSave={(raw) => handleQuickDate(tx, raw)}
+                        onMove={(raw) => handleQuickDate(tx, raw)}
                         disabled={updateTx.isPending}
                       />
                       {tx.forecastFlag ? (
@@ -3037,94 +3035,6 @@ function InlineAmountEditor({
               </Button>
             </div>
           )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/**
- * Task #454 — Inline date mover. Lives next to the per-row action
- * buttons as a small calendar icon. Clicking opens a date input that
- * PATCHes `occurredOn` through the same `updateTx` flow as the Edit
- * dialog so the row visibly hops to its new day group without forcing
- * a full dialog round trip. Submitting the same date is a no-op.
- */
-function InlineDateMover({
-  tx,
-  onSave,
-  disabled,
-}: {
-  tx: Transaction;
-  onSave: (raw: string) => Promise<boolean>;
-  disabled?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const initial = tx.occurredOn.slice(0, 10);
-  const [draft, setDraft] = useState(initial);
-  useEffect(() => {
-    if (open) setDraft(tx.occurredOn.slice(0, 10));
-  }, [open, tx.occurredOn]);
-  const submit = async () => {
-    const ok = await onSave(draft);
-    if (ok) setOpen(false);
-  };
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled={disabled}
-          title="Move to a different day"
-          data-testid={`button-inline-date-${tx.id}`}
-        >
-          <CalendarDays className="w-4 h-4 text-muted-foreground" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-60 p-3" align="end">
-        <div className="space-y-2">
-          <label
-            htmlFor={`inline-date-input-${tx.id}`}
-            className="text-xs text-muted-foreground"
-          >
-            Move to
-          </label>
-          <Input
-            id={`inline-date-input-${tx.id}`}
-            data-testid={`input-inline-date-${tx.id}`}
-            type="date"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void submit();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                setOpen(false);
-              }
-            }}
-            autoFocus
-          />
-          <div className="flex justify-end gap-2 pt-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setOpen(false)}
-              data-testid={`button-cancel-inline-date-${tx.id}`}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => void submit()}
-              disabled={disabled}
-              data-testid={`button-save-inline-date-${tx.id}`}
-            >
-              Save
-            </Button>
-          </div>
         </div>
       </PopoverContent>
     </Popover>

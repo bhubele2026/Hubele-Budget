@@ -48,7 +48,6 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { DashboardKillOrder } from "@/components/dashboard-kill-order";
 import { BankSnapshotFreshness } from "@/components/bank-snapshot-freshness";
-import { useOpportunisticPlaidSync } from "@/hooks/use-opportunistic-plaid-sync";
 import { AvalancheReadyCard } from "@/components/avalanche-ready-card";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
 import { PlaidReauthBanner } from "@/components/plaid-reauth-banner";
@@ -1986,11 +1985,10 @@ export function DashboardMonthlyBuckets({
 }
 
 export default function DashboardPage() {
-  // (#671) Layer 4 — fire a silent background Plaid refresh on mount
-  // so the dashboard the user sees reflects what their bank already
-  // has. Rate-limited at the module level (5 min) so paging across
-  // dashboard/forecast/transactions doesn't hammer Plaid.
-  useOpportunisticPlaidSync();
+  // Auto Plaid refresh on mount is DISABLED — Plaid bills per pull and
+  // the opportunistic refresh was driving up cost. Banks now sync only
+  // when the user clicks the Sync button. To restore, re-add
+  // `useOpportunisticPlaidSync()` here and on the other data pages.
   const today = useMemo(() => new Date(), []);
   // Pull 12 months back so prev-month navigation in monthly sections has data.
   const monthlyFromISO = useMemo(() => {

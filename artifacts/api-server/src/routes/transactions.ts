@@ -351,6 +351,18 @@ router.patch(
     if (bodyHasIsTransfer || pickingCategory) {
       patchToApply.isTransferUserOverridden = true;
     }
+    // When the user manually moves a row to a different day (e.g. pulling a
+    // "paid Saturday, posted Sunday" charge back into the correct Sun→Sat
+    // allowance week), mark it overridden so the Plaid sync upsert preserves
+    // the edited date instead of restamping it from Plaid on the next
+    // `modified` row. Mirrors the `isTransferUserOverridden` guard above.
+    const bodyHasOccurredOn = Object.prototype.hasOwnProperty.call(
+      req.body ?? {},
+      "occurredOn",
+    );
+    if (bodyHasOccurredOn) {
+      patchToApply.occurredOnUserOverridden = true;
+    }
     if (pickingTransfer) {
       patchToApply.isTransfer = true;
       patchToApply.weeklyAllowance = false;

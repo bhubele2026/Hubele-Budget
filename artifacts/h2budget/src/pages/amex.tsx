@@ -14,6 +14,7 @@ import {
   type BulkUpdateTransactionsInput,
 } from "@workspace/api-client-react";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
+import { RowDateControls } from "@/components/row-date-controls";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
 import {
   useBulkRecategorizePrompt,
@@ -70,7 +71,6 @@ import {
 import { SyncButton } from "@/components/sync-button";
 import { useListPlaidItems } from "@workspace/api-client-react";
 import { usePlaidSync } from "@/hooks/use-plaid-sync";
-import { useOpportunisticPlaidSync } from "@/hooks/use-opportunistic-plaid-sync";
 import { cn } from "@/lib/utils";
 import { relevantAmexPlaidItemIds } from "@/pages/amexPlaidScope";
 import { makeAmexBalanceAtEndOf, resolveAmexDebt } from "@/lib/amexEndingBalance";
@@ -194,12 +194,8 @@ export default function AmexPage() {
   const qc = useQueryClient();
   const { offerBulkRecategorize, previewDialog } = useBulkRecategorizePrompt();
 
-  // (#673) Layer 4 — fire a silent best-effort Plaid sync when the
-  // user opens the Amex page or returns to the tab from background,
-  // so a just-swiped pending charge is on screen without a Sync
-  // click. Module-level cooldown inside the hook keeps tab-flip
-  // bursts down to a single call.
-  useOpportunisticPlaidSync();
+  // Auto Plaid refresh on mount is DISABLED to avoid per-pull Plaid
+  // charges — banks sync only on the manual Sync button now.
 
   // Filters
   const [sourceFilter, setSourceFilter] = useState<string>("all");
@@ -1070,6 +1066,44 @@ export default function AmexPage() {
       if (seen.has(m)) continue;
       seen.add(m);
       qc.invalidateQueries({ queryKey: getGetBudgetMonthQueryKey(m) });
+    }
+  };
+
+  // Move a row to a different day. The weekly allowance buckets on
+  // `occurredOn`, so this is how a "paid Saturday, posted Sunday" charge
+  // gets pulled back into the correct Sun→Sat week. Persisting the edit
+  // also flips `occurredOnUserOverridden` server-side so the next Plaid
+  // sync won't restamp it back to Plaid's date. Invalidates both the
+  // source and destination budget months when the move crosses a boundary.
+  const handleQuickDate = async (
+    t: Transaction,
+    raw: string,
+  ): Promise<boolean> => {
+    const next = (raw ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) {
+      toast({ title: "Pick a date", variant: "destructive" });
+      return false;
+    }
+    if (next === t.occurredOn.slice(0, 10)) return true;
+    try {
+      const updated = await updateTx.mutateAsync({
+        id: t.id,
+        data: { occurredOn: next },
+      });
+      invalidateTxns();
+      invalidateBudgetMonths([
+        monthStartOf(t.occurredOn),
+        monthStartOf(updated.occurredOn),
+      ]);
+      toast({ title: "Date updated" });
+      return true;
+    } catch (e) {
+      toast({
+        title: "Couldn't update date",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+      return false;
     }
   };
 
@@ -2379,6 +2413,15 @@ export default function AmexPage() {
                           setRowCategory(t.id, id, remember)
                         }
                       />
+                      {/* Move a charge to the right Sun→Sat week.
+                          Hidden on pending rows (Plaid restamps them). */}
+                      {!t.pending && (
+                        <RowDateControls
+                          tx={t}
+                          onMove={(raw) => handleQuickDate(t, raw)}
+                          disabled={updateTx.isPending}
+                        />
+                      )}
                       {/* (#607) Transfer rows are excluded from budget
                           actuals, so weekly/monthly/unplanned bubbles
                           would never affect any roll-up. Hide them on
@@ -2669,6 +2712,18 @@ export default function AmexPage() {
                               </span>
                             )}
                           </div>
+                        </td>
+                        <td className="px-3 py-3 align-top whitespace-nowrap text-right">
+                          {/* Pending rows are restamped by Plaid on the
+                              next sync, so hide the date editor there to
+                              avoid a fix that silently reverts. */}
+                          {!t.pending && (
+                            <RowDateControls
+                              tx={t}
+                              onMove={(raw) => handleQuickDate(t, raw)}
+                              disabled={updateTx.isPending}
+                            />
+                          )}
                         </td>
                       </tr>
                       );

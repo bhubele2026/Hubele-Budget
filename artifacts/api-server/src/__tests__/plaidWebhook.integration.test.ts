@@ -87,6 +87,11 @@ process.env.PLAID_WEBHOOK_VERIFICATION_DISABLED = "true";
 // fired mid-burst, started one sync, and the late webhooks queued a
 // trailing rerun — yielding two syncPlaidItem calls instead of one.
 process.env.PLAID_SYNC_DEBOUNCE_MS = "60000";
+// Webhook-triggered syncing is gated behind PLAID_AUTO_SYNC_ENABLED (default
+// OFF) so a Plaid webhook can't drive billable auto-pulls. This suite asserts
+// the scheduling mechanism, so it opts in. The OFF behavior (ACK without
+// scheduling) is covered by its own case that flips this flag per-request.
+process.env.PLAID_AUTO_SYNC_ENABLED = "true";
 
 const app = express();
 app.use(express.json());
@@ -191,6 +196,30 @@ describe("POST /plaid/webhook — TRANSACTIONS events", () => {
     expect(res.status).toBe(200);
     await _flushPlaidSyncSchedulerForTests();
     expect(transactionsSyncCalls).toEqual([{ access_token: accessToken }]);
+  });
+
+  it("ACKs without scheduling a sync when PLAID_AUTO_SYNC_ENABLED is off", async () => {
+    // Cost guard: a webhook-driven pull is still a billable auto-pull, so
+    // with the flag off we 200 the webhook but never touch Plaid — the
+    // user's next manual Sync click picks up the waiting updates.
+    const { externalItemId } = await seedItem();
+    process.env.PLAID_AUTO_SYNC_ENABLED = "false";
+    try {
+      const res = await fetch(`${baseUrl}/plaid/webhook`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          webhook_type: "TRANSACTIONS",
+          webhook_code: "SYNC_UPDATES_AVAILABLE",
+          item_id: externalItemId,
+        }),
+      });
+      expect(res.status).toBe(200);
+      await _flushPlaidSyncSchedulerForTests();
+      expect(transactionsSyncCalls).toEqual([]);
+    } finally {
+      process.env.PLAID_AUTO_SYNC_ENABLED = "true";
+    }
   });
 
   it("coalesces a burst of SYNC_UPDATES_AVAILABLE webhooks into a single syncPlaidItem call", async () => {
