@@ -76,10 +76,15 @@ export function AccountTransactionRow({
   return (
     <div
       className={cn(
-        // Compact, single-line on wide screens; wraps to a second line on
-        // narrow ones instead of forcing a horizontal scrollbar. No fixed
-        // min-width anywhere — that's what caused the sideways scroll.
-        "flex flex-wrap lg:flex-nowrap items-center gap-x-3 gap-y-1 px-3 py-1.5 hover:bg-muted/30 transition-colors",
+        "px-3 py-1.5 hover:bg-muted/30 transition-colors",
+        // Narrow: wrap (never a horizontal scrollbar). Wide (xl+): a
+        // fixed-column grid so every row's source / category / bubbles /
+        // amount / actions line up in true columns. Only the merchant column
+        // flexes (1fr), so the fixed columns sit at the same x on every row.
+        // xl (not md) is the threshold so the fixed columns always have room.
+        "flex flex-wrap items-center gap-x-3 gap-y-1",
+        "xl:grid xl:gap-y-0 xl:items-center",
+        "xl:grid-cols-[1.75rem_minmax(0,1fr)_7rem_13.5rem_8rem_7rem_12.5rem]",
         dimmed && "opacity-50",
       )}
       data-testid={testId}
@@ -91,10 +96,8 @@ export function AccountTransactionRow({
         aria-label="Select"
         className="shrink-0"
       />
-      {/* Merchant absorbs the free space and truncates so the row never
-          grows wider than its container. Inline status chips (metaNode)
-          ride alongside it. */}
-      <div className="flex min-w-0 flex-1 basis-[160px] items-center gap-x-2 gap-y-0.5 flex-wrap">
+      {/* Merchant (flex column) + inline status chip (metaNode). */}
+      <div className="flex min-w-0 items-center gap-x-2 gap-y-0.5 flex-wrap">
         <span
           className="font-medium truncate max-w-full"
           title={tx.description}
@@ -104,14 +107,11 @@ export function AccountTransactionRow({
         <MerchantRenamePopover tx={tx} />
         {metaNode}
       </div>
-      {/* Card / source — least important, so it's the first thing dropped
-          on smaller screens. */}
-      {cardLabel != null && (
-        <div className="hidden xl:block shrink-0 max-w-[150px] truncate text-xs text-muted-foreground">
-          {cardLabel || "—"}
-        </div>
-      )}
-      <div className="shrink-0 flex items-center gap-1.5">
+      {/* Card / source */}
+      <div className="shrink-0 truncate text-xs text-muted-foreground">
+        {cardLabel || ""}
+      </div>
+      <div className="shrink-0 flex items-center gap-1.5 min-w-0">
         <CategoryPicker
           value={tx.categoryId ?? null}
           categories={categories}
@@ -121,8 +121,8 @@ export function AccountTransactionRow({
         {chipsNode}
       </div>
       {/* (#607) Bucket bubbles are hidden on transfer rows. */}
-      {!tx.isTransfer && (
-        <div className="shrink-0">
+      <div className="shrink-0">
+        {!tx.isTransfer && (
           <BucketBubbles
             flags={{
               weekly: tx.weeklyAllowance,
@@ -132,12 +132,12 @@ export function AccountTransactionRow({
             }}
             onToggle={onBucketToggle}
           />
-        </div>
-      )}
-      <div className="shrink-0 ml-auto text-right font-mono tabular-nums whitespace-nowrap">
+        )}
+      </div>
+      <div className="shrink-0 text-right font-mono tabular-nums whitespace-nowrap xl:justify-self-end">
         {amountNode}
       </div>
-      <div className="shrink-0 flex gap-0.5 items-center">
+      <div className="shrink-0 flex gap-0.5 items-center xl:justify-self-end">
         {/* Pending rows are restamped by Plaid on the next sync, so the date
             editor is hidden there to avoid a fix that silently reverts. */}
         {!hideDate && (

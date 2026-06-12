@@ -2477,28 +2477,27 @@ export default function TransactionsPage() {
                         tx.sentToReviewAt ? (
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon"
                             onClick={() => handleToggleReview(tx)}
                             disabled={unsendFromReview.isPending}
-                            title="Click to remove from Review"
+                            title="In Review — click to remove"
                             className="text-emerald-700 hover:text-emerald-800"
                             data-testid={`badge-in-review-${tx.id}`}
                             data-sent-to-review="true"
                           >
-                            ✓ in review
+                            <Inbox className="w-4 h-4" />
                           </Button>
                         ) : (
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon"
                             onClick={() => handleToggleReview(tx)}
                             disabled={sendToReview.isPending}
                             title="Send to Review"
                             data-testid={`button-send-review-${tx.id}`}
                             data-sent-to-review="false"
                           >
-                            <Send className="w-3.5 h-3.5 mr-1.5" />
-                            Review
+                            <Inbox className="w-4 h-4 text-muted-foreground" />
                           </Button>
                         )
                       }
@@ -2616,71 +2615,68 @@ export default function TransactionsPage() {
                         <>
                           {tx.forecastFlag ? (
                             <Button
-                              variant="outline"
-                              size="sm"
+                              variant="ghost"
+                              size="icon"
                               onClick={() => handleToggleForecast(tx)}
                               disabled={updateTx.isPending}
                               title="Remove from Forecast"
                               data-testid={`button-remove-forecast-${tx.id}`}
                             >
-                              <Send className="w-3.5 h-3.5 mr-1.5" />
-                              Remove
+                              <Send className="w-4 h-4 rotate-180 text-primary" />
                             </Button>
                           ) : !canSendToForecast(tx) ? null : tx.categoryId ? (
                             <Button
-                              variant="secondary"
-                              size="sm"
+                              variant="ghost"
+                              size="icon"
                               onClick={() => handleToggleForecast(tx)}
                               disabled={updateTx.isPending}
                               title="Send to Forecast"
                               data-testid={`button-send-forecast-${tx.id}`}
                             >
-                              <Send className="w-3.5 h-3.5 mr-1.5" />
-                              Send
+                              <Send className="w-4 h-4 text-primary" />
                             </Button>
                           ) : (
                             <Button
                               variant="ghost"
-                              size="sm"
+                              size="icon"
                               disabled
-                              title="Categorize this transaction first"
+                              title="Categorize this transaction first to send it to Forecast"
                               data-testid={`button-send-forecast-${tx.id}`}
                             >
-                              <Send className="w-3.5 h-3.5 mr-1.5" />
-                              Categorize first
+                              <Send className="w-4 h-4 text-muted-foreground/40" />
                             </Button>
                           )}
                           {tx.sentToReviewAt ? (
                             <Button
                               variant="ghost"
-                              size="sm"
+                              size="icon"
                               onClick={() => handleToggleReview(tx)}
                               disabled={unsendFromReview.isPending}
-                              title="Click to remove from Review"
+                              title="In Review — click to remove"
                               className="text-emerald-700 hover:text-emerald-800"
                               data-testid={`badge-in-review-${tx.id}`}
                               data-sent-to-review="true"
                             >
-                              ✓ in review
+                              <Inbox className="w-4 h-4" />
                             </Button>
                           ) : (
                             <Button
                               variant="ghost"
-                              size="sm"
+                              size="icon"
                               onClick={() => handleToggleReview(tx)}
                               disabled={sendToReview.isPending}
                               title="Send to Review"
                               data-testid={`button-send-review-${tx.id}`}
                               data-sent-to-review="false"
                             >
-                              <Send className="w-3.5 h-3.5 mr-1.5" />
-                              Review
+                              <Inbox className="w-4 h-4 text-muted-foreground" />
                             </Button>
                           )}
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleOpenEdit(tx)}
+                            title="Edit"
                             data-testid={`button-edit-tx-${tx.id}`}
                           >
                             <Edit2 className="w-4 h-4 text-muted-foreground" />
@@ -2689,6 +2685,7 @@ export default function TransactionsPage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDelete(tx.id)}
+                            title="Delete"
                           >
                             <Trash2 className="w-4 h-4 text-destructive" />
                           </Button>
