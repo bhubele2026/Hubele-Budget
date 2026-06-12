@@ -101,10 +101,20 @@ const ALWAYS_FRESH = {
 // projection that drives the "Lowest balance" numbers.
 queryClient.setQueryDefaults(["/api/forecast"], ALWAYS_FRESH);
 queryClient.setQueryDefaults(["/api/forecast/cash-signal"], ALWAYS_FRESH);
-// Transaction lists powering Chase / Amex / Debrief / Dashboard (and the
-// other transaction views) — these reflect Plaid syncs and edits that the
-// user expects to see without a manual refresh.
-queryClient.setQueryDefaults(["/api/transactions"], ALWAYS_FRESH);
+// Transaction lists powering Chase / Amex / Debrief / Dashboard. These used
+// to be ALWAYS_FRESH (refetch up to 5,000 rows on EVERY page mount) so live
+// Plaid syncs showed without a manual refresh. With background auto-sync now
+// off, transactions only change when the user Syncs or edits — and every one
+// of those paths already invalidates this key explicitly. So cache for a
+// couple of minutes instead: navigating between Chase/Amex/Debrief/Dashboard
+// is now instant (served from cache) rather than re-downloading the whole
+// list each time. keepPreviousData (root config) still avoids skeleton flash
+// on the occasional background revalidate.
+const TXN_CACHE = {
+  staleTime: 2 * 60_000,
+  refetchOnWindowFocus: false,
+} as const;
+queryClient.setQueryDefaults(["/api/transactions"], TXN_CACHE);
 // Weekly-debrief summaries (the list of weeks). Per-week detail keys are
 // distinct strings, so those opt in via per-call overrides on /debrief.
 queryClient.setQueryDefaults(["/api/debrief/weeks"], ALWAYS_FRESH);
