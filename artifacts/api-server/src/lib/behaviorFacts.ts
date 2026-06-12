@@ -151,8 +151,22 @@ const KEYWORD_BUCKETS: Record<Bucket, readonly string[]> = {
   ],
 };
 
+// Unambiguous coffee-shop brands — a charge at one of these IS a coffee
+// run regardless of size (two drinks + a pastry, or a group order, easily
+// clears $15). The generic coffee words ("coffee", "cafe", "espresso") are
+// NOT here because they also appear on a grocery bag of beans or a "coffee
+// table" furniture buy, so those keep the small-amount guard below.
+const COFFEE_BRAND_KEYWORDS: readonly string[] = [
+  "starbucks",
+  "dunkin",
+  "caribou",
+  "peet",
+  "biggby",
+];
+
 // Apply the stronger per-bucket signals on top of the keyword match.
-function matchesBucket(
+// Exported for unit testing of the per-bucket guards (e.g. coffee brands).
+export function matchesBucket(
   bucket: Bucket,
   merchant: string,
   categoryName: string | null,
@@ -169,10 +183,16 @@ function matchesBucket(
       return kw || categoryName === "Groceries";
     case "gasStation":
       return kw || c.includes("gas") || c.includes("fuel");
-    case "coffee":
-      // A coffee run is a small purchase — guard against a $60 bag of beans
-      // or a coffee-table furniture buy slipping into the streak math.
+    case "coffee": {
+      // A dedicated coffee-shop brand (Starbucks, Dunkin', etc.) counts as
+      // a coffee run even at $25 — only a high sanity cap drops absurd
+      // outliers (catering orders, gift-card reloads). The generic coffee
+      // words still need the small-amount guard so a $60 bag of beans or a
+      // "coffee table" furniture buy doesn't slip into the streak math.
+      const brand = COFFEE_BRAND_KEYWORDS.some((k) => m.includes(k));
+      if (brand) return amount < 100;
       return kw && amount < 15;
+    }
     case "amazon":
     case "onlineShopping":
       return kw; // merchant-match only
