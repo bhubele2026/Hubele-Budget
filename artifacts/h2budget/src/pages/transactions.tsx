@@ -27,6 +27,7 @@ import {
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
 import { RowDateControls } from "@/components/row-date-controls";
+import { AccountTransactionRow } from "@/components/account-page/transaction-row";
 import {
   useBulkRecategorizePrompt,
   bulkRuleFromRepointed,
@@ -1252,7 +1253,10 @@ export default function TransactionsPage() {
 
   const { offerBulkRecategorize, previewDialog } = useBulkRecategorizePrompt();
 
-  const handleQuickCategorize = async (tx: Transaction, categoryId: string) => {
+  const handleQuickCategorize = async (
+    tx: Transaction,
+    categoryId: string | null,
+  ) => {
     try {
       const updated = await updateTx.mutateAsync({
         id: tx.id,
@@ -2443,54 +2447,84 @@ export default function TransactionsPage() {
             onToggleAll={(on) => toggleDay(ids, on)}
             totalNode={dayNetNode}
           >
-            <div className="divide-y divide-border" data-testid="group-pending">
-              {items.map((tx) => {
-                const isIgnored =
-                  !!ignoreCatId && tx.categoryId === ignoreCatId;
-                return (
-                  <div
-                    key={tx.id}
-                    className={cn(
-                      "px-3 py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2 hover:bg-muted/30 transition-colors",
-                      (tx.forecastFlag || isIgnored) && "opacity-60 bg-muted/20",
-                      focusTxId === tx.id &&
-                        "ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/30",
-                    )}
-                    data-testid={`row-tx-${tx.id}`}
-                    data-pending="true"
-                  >
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <Checkbox
-                        checked={selected.has(tx.id)}
-                        onCheckedChange={() => toggleOne(tx.id)}
-                        aria-label="Select"
-                        className="mt-1"
-                        data-testid={`select-${tx.id}`}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline gap-2 mb-0.5 flex-wrap">
-                          <span
-                            className="font-medium text-foreground truncate"
-                            data-testid={`text-display-name-${tx.id}`}
+            <div className="overflow-x-auto">
+            <table
+              className="w-full text-sm min-w-[720px]"
+              data-testid="group-pending"
+            >
+              <tbody>
+                {items.map((tx) => {
+                  const isIgnored =
+                    !!ignoreCatId && tx.categoryId === ignoreCatId;
+                  return (
+                    <AccountTransactionRow
+                      key={tx.id}
+                      tx={tx}
+                      selected={selected.has(tx.id)}
+                      onToggleSelect={() => toggleOne(tx.id)}
+                      categories={categories ?? []}
+                      onCategoryChange={(id) => handleQuickCategorize(tx, id)}
+                      onBucketToggle={(b, next) =>
+                        handleToggleBucket(tx, b, next)
+                      }
+                      onQuickDate={(raw) => handleQuickDate(tx, raw)}
+                      disabled={updateTx.isPending}
+                      dimmed={tx.forecastFlag || isIgnored}
+                      hideDate
+                      cardLabel={formatTransactionSource(tx.source)}
+                      testId={`row-tx-${tx.id}`}
+                      rowData={{ "data-pending": "true" }}
+                      metaNode={
+                        <>
+                          <div
+                            className="text-[10px] text-muted-foreground/70 truncate"
+                            title={tx.description}
+                            data-testid={`text-raw-description-${tx.id}`}
                           >
-                            {tx.displayName || tx.description}
-                          </span>
-                          <MerchantRenamePopover tx={tx} />
-                        </div>
-                        <div
-                          className="text-[10px] text-muted-foreground/70 truncate mb-1"
-                          title={tx.description}
-                          data-testid={`text-raw-description-${tx.id}`}
-                        >
-                          {tx.description}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground mb-1">
-                          <span>
-                            {new Date(`${tx.occurredOn}T00:00:00`).toLocaleDateString(
-                              undefined,
-                              { month: "short", day: "numeric" },
-                            )}
-                          </span>
+                            {tx.description}
+                          </div>
+                          <div className="flex flex-wrap gap-1 items-center mt-1">
+                            <Badge
+                              variant="outline"
+                              className={`text-[11px] font-normal ${CHIP_BASE}`}
+                              data-testid={`badge-pending-${tx.id}`}
+                              title="Plaid reported this charge as pending — it will flip to posted automatically when the bank finalizes it."
+                            >
+                              Pending
+                            </Badge>
+                            {tx.forecastFlag &&
+                              (() => {
+                                const r = resolutionByTxnId.get(tx.id);
+                                const state =
+                                  r?.status === "matched"
+                                    ? {
+                                        attr: "matched",
+                                        label: "Matched to forecast",
+                                      }
+                                    : r?.status === "ignored_unforecasted" ||
+                                        r?.status === "unplanned"
+                                      ? { attr: "unplanned", label: "Unplanned" }
+                                      : {
+                                          attr: "in-review-bucket",
+                                          label: "In Review Bucket",
+                                        };
+                                return (
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[11px] font-normal ${CHIP_BASE}`}
+                                    data-testid={`badge-forecast-state-${tx.id}`}
+                                    data-forecast-state={state.attr}
+                                  >
+                                    <Inbox className="w-3 h-3 mr-1" />{" "}
+                                    {state.label}
+                                  </Badge>
+                                );
+                              })()}
+                          </div>
+                        </>
+                      }
+                      chipsNode={
+                        <div className="mt-1">
                           <MatchedRuleChip
                             categoryId={tx.categoryId}
                             matchedRuleId={tx.matchedRuleId}
@@ -2498,119 +2532,52 @@ export default function TransactionsPage() {
                             testIdSuffix={`pending-${tx.id}`}
                           />
                         </div>
-                        {/* (#740/#741/#742/#868) Single muted chip cluster:
-                            source + status (Pending / forecast-state) +
-                            category control + bucket toggles, all on one
-                            wrapping row in a calm muted-outline style. Shares
-                            the <TransactionRowChips /> cluster with the posted
-                            block. Inline amount + date editors are excluded on
-                            purpose (Plaid-controlled on pending rows and would
-                            silently get overwritten on the next sync). */}
-                        <div className="flex flex-wrap gap-1.5 items-center mt-1">
-                          <Badge
-                            variant="outline"
-                            className={`text-[11px] font-normal ${CHIP_BASE}`}
-                            data-testid={`text-source-${tx.id}`}
-                          >
-                            {formatTransactionSource(tx.source)}
-                          </Badge>
-                          <Badge
-                            variant="outline"
-                            className={`text-[11px] font-normal ${CHIP_BASE}`}
-                            data-testid={`badge-pending-${tx.id}`}
-                            title="Plaid reported this charge as pending — it will flip to posted automatically when the bank finalizes it."
-                          >
-                            Pending
-                          </Badge>
-                          {/* (#728) Pending rows are still subject to the
-                              forecast auto-matcher — this status chip tells
-                              the user whether a pending charge is already
-                              tracked against a forecast item or is a brand-new
-                              unplanned charge. Mirrors the posted block. */}
-                          {tx.forecastFlag && (() => {
-                            const r = resolutionByTxnId.get(tx.id);
-                            const state =
-                              r?.status === "matched"
-                                ? { attr: "matched", label: "Matched to forecast" }
-                                : r?.status === "ignored_unforecasted" ||
-                                    r?.status === "unplanned"
-                                  ? { attr: "unplanned", label: "Unplanned" }
-                                  : {
-                                      attr: "in-review-bucket",
-                                      label: "In Review Bucket",
-                                    };
-                            return (
-                              <Badge
-                                variant="outline"
-                                className={`text-[11px] font-normal ${CHIP_BASE}`}
-                                data-testid={`badge-forecast-state-${tx.id}`}
-                                data-forecast-state={state.attr}
-                              >
-                                <Inbox className="w-3 h-3 mr-1" /> {state.label}
-                              </Badge>
-                            );
-                          })()}
-                          <TransactionRowChips
-                            tx={tx}
-                            categories={categories ?? []}
-                            categoryById={categoryById}
-                            isPending={updateTx.isPending}
-                            onQuickCategorize={handleQuickCategorize}
-                            onClearTransfer={handleClearTransfer}
-                            onToggleBucket={handleToggleBucket}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "tabular-nums font-medium",
-                          moneyColorClass(parseSigned(tx.amount)),
-                        )}
-                        data-testid={`amount-${tx.id}`}
-                      >
-                        {formatCurrency(parseSigned(tx.amount))}
-                      </span>
-                      {/* (#762 — Phase B) Per-row Send-to-Review
-                          affordance on pending rows. Mirrors the
-                          posted-row affordance above — every Chase
-                          transaction (pending or posted) must surface
-                          either the "Send" button or the
-                          "✓ in review" badge so the user can promote
-                          a charge to the Review pipeline (or undo it)
-                          without waiting for it to flip to posted. */}
-                      {tx.sentToReviewAt ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleReview(tx)}
-                          disabled={unsendFromReview.isPending}
-                          title="Click to remove from Review"
-                          className="text-emerald-700 hover:text-emerald-800"
-                          data-testid={`badge-in-review-${tx.id}`}
-                          data-sent-to-review="true"
+                      }
+                      amountNode={
+                        <span
+                          className={cn(
+                            "tabular-nums font-medium",
+                            moneyColorClass(parseSigned(tx.amount)),
+                          )}
+                          data-testid={`amount-${tx.id}`}
                         >
-                          ✓ in review
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleReview(tx)}
-                          disabled={sendToReview.isPending}
-                          title="Send to Review"
-                          data-testid={`button-send-review-${tx.id}`}
-                          data-sent-to-review="false"
-                        >
-                          <Send className="w-3.5 h-3.5 mr-1.5" />
-                          Review
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                          {formatCurrency(parseSigned(tx.amount))}
+                        </span>
+                      }
+                      actionsNode={
+                        tx.sentToReviewAt ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleReview(tx)}
+                            disabled={unsendFromReview.isPending}
+                            title="Click to remove from Review"
+                            className="text-emerald-700 hover:text-emerald-800"
+                            data-testid={`badge-in-review-${tx.id}`}
+                            data-sent-to-review="true"
+                          >
+                            ✓ in review
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleReview(tx)}
+                            disabled={sendToReview.isPending}
+                            title="Send to Review"
+                            data-testid={`button-send-review-${tx.id}`}
+                            data-sent-to-review="false"
+                          >
+                            <Send className="w-3.5 h-3.5 mr-1.5" />
+                            Review
+                          </Button>
+                        )
+                      }
+                    />
+                  );
+                })}
+              </tbody>
+            </table>
             </div>
           </DayGroup>
         );
@@ -2646,219 +2613,188 @@ export default function TransactionsPage() {
             onToggleAll={(on) => toggleDay(ids, on)}
             totalNode={dayNetNode}
           >
-            <div className="divide-y divide-border">
-              {items.map((tx) => {
-                // (#629) Dim Ignore'd rows the same way forecast-sent rows
-                // are dimmed, so the bubble lights don't make a held-out
-                // line look "active". Purely visual — no pointer-events
-                // change, picker/bubbles/checkbox stay clickable.
-                const isIgnored =
-                  !!ignoreCatId && tx.categoryId === ignoreCatId;
-                return (
-                <div
-                  key={tx.id}
-                  className={cn(
-                    "px-3 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-muted/30 transition-colors",
-                    (tx.forecastFlag || isIgnored) && "opacity-60 bg-muted/20",
-                    focusTxId === tx.id &&
-                      "ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/30",
-                  )}
-                  data-testid={`row-tx-${tx.id}`}
-                  data-sent={tx.forecastFlag ? "true" : "false"}
-                  data-ignored={isIgnored ? "true" : "false"}
-                >
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <Checkbox
-                      checked={selected.has(tx.id)}
-                      onCheckedChange={() => toggleOne(tx.id)}
-                      aria-label="Select"
-                      className="mt-1"
-                      data-testid={`select-${tx.id}`}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2 mb-0.5 flex-wrap">
-                        <span
-                          className="font-medium text-foreground truncate"
-                          data-testid={`text-display-name-${tx.id}`}
-                        >
-                          {tx.displayName || tx.description}
-                        </span>
-                        <MerchantRenamePopover tx={tx} />
-                      </div>
-                      <div
-                        className="text-[10px] text-muted-foreground/70 truncate mb-1"
-                        title={tx.description}
-                        data-testid={`text-raw-description-${tx.id}`}
-                      >
-                        {tx.description}
-                      </div>
-                      {/* (#741/#742/#868) Single muted chip cluster shared with
-                          the pending block (see `<TransactionRowChips />`):
-                          source + status (forecast-state) chips lead, then the
-                          category control, matched-rule chip, transfer pill,
-                          and bucket toggles — all on one wrapping row in a calm
-                          muted-outline style. */}
-                      <div className="flex flex-wrap gap-1.5 items-center">
-                        <Badge
-                          variant="outline"
-                          className={`text-[11px] font-normal ${CHIP_BASE}`}
-                          data-testid={`text-source-${tx.id}`}
-                        >
-                          {formatTransactionSource(tx.source)}
-                        </Badge>
-                        {tx.forecastFlag && (() => {
-                          const r = resolutionByTxnId.get(tx.id);
-                          const state =
-                            r?.status === "matched"
-                              ? { attr: "matched", label: "Matched" }
-                              : r?.status === "ignored_unforecasted" ||
-                                  r?.status === "unplanned"
-                                ? { attr: "unplanned", label: "Unplanned" }
-                                : {
-                                    attr: "in-review-bucket",
-                                    label: "In Review Bucket",
-                                  };
-                          return (
-                            <Badge
-                              variant="outline"
-                              className={`text-[11px] font-normal ${CHIP_BASE}`}
-                              data-testid={`badge-forecast-state-${tx.id}`}
-                              data-forecast-state={state.attr}
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <tbody>
+                {items.map((tx) => {
+                  // (#629) Dim Ignore'd rows the same way forecast-sent rows
+                  // are dimmed, so the bubble lights don't make a held-out
+                  // line look "active".
+                  const isIgnored =
+                    !!ignoreCatId && tx.categoryId === ignoreCatId;
+                  return (
+                    <AccountTransactionRow
+                      key={tx.id}
+                      tx={tx}
+                      selected={selected.has(tx.id)}
+                      onToggleSelect={() => toggleOne(tx.id)}
+                      categories={categories ?? []}
+                      onCategoryChange={(id) => handleQuickCategorize(tx, id)}
+                      onBucketToggle={(b, next) =>
+                        handleToggleBucket(tx, b, next)
+                      }
+                      onQuickDate={(raw) => handleQuickDate(tx, raw)}
+                      disabled={updateTx.isPending}
+                      dimmed={tx.forecastFlag || isIgnored}
+                      cardLabel={formatTransactionSource(tx.source)}
+                      testId={`row-tx-${tx.id}`}
+                      rowData={{
+                        "data-sent": tx.forecastFlag ? "true" : "false",
+                        "data-ignored": isIgnored ? "true" : "false",
+                      }}
+                      metaNode={
+                        <>
+                          <div
+                            className="text-[10px] text-muted-foreground/70 truncate"
+                            title={tx.description}
+                            data-testid={`text-raw-description-${tx.id}`}
+                          >
+                            {tx.description}
+                          </div>
+                          {tx.forecastFlag &&
+                            (() => {
+                              const r = resolutionByTxnId.get(tx.id);
+                              const state =
+                                r?.status === "matched"
+                                  ? { attr: "matched", label: "Matched" }
+                                  : r?.status === "ignored_unforecasted" ||
+                                      r?.status === "unplanned"
+                                    ? { attr: "unplanned", label: "Unplanned" }
+                                    : {
+                                        attr: "in-review-bucket",
+                                        label: "In Review Bucket",
+                                      };
+                              return (
+                                <div className="mt-1">
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[11px] font-normal ${CHIP_BASE}`}
+                                    data-testid={`badge-forecast-state-${tx.id}`}
+                                    data-forecast-state={state.attr}
+                                  >
+                                    <Inbox className="w-3 h-3 mr-1" />{" "}
+                                    {state.label}
+                                  </Badge>
+                                </div>
+                              );
+                            })()}
+                        </>
+                      }
+                      chipsNode={
+                        <div className="mt-1">
+                          <MatchedRuleChip
+                            categoryId={tx.categoryId}
+                            matchedRuleId={tx.matchedRuleId}
+                            rules={mappingRules}
+                            testIdSuffix={tx.id}
+                          />
+                        </div>
+                      }
+                      amountNode={
+                        <div className="flex flex-col items-end">
+                          <InlineAmountEditor
+                            tx={tx}
+                            onSave={(raw) => handleQuickAmount(tx, raw)}
+                            onFlipKind={() => handleQuickFlipKind(tx)}
+                            disabled={updateTx.isPending}
+                          />
+                          {runningBalanceMap.has(tx.id) && (
+                            <span
+                              className="text-[11px] tabular-nums text-muted-foreground"
+                              data-testid={`text-running-balance-${tx.id}`}
                             >
-                              <Inbox className="w-3 h-3 mr-1" /> {state.label}
-                            </Badge>
-                          );
-                        })()}
-                        <TransactionRowChips
-                          tx={tx}
-                          categories={categories ?? []}
-                          categoryById={categoryById}
-                          isPending={updateTx.isPending}
-                          onQuickCategorize={handleQuickCategorize}
-                          onClearTransfer={handleClearTransfer}
-                          onToggleBucket={handleToggleBucket}
-                          matchedRuleChip={
-                            <MatchedRuleChip
-                              categoryId={tx.categoryId}
-                              matchedRuleId={tx.matchedRuleId}
-                              rules={mappingRules}
-                              testIdSuffix={tx.id}
-                            />
-                          }
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex flex-col items-end">
-                      <InlineAmountEditor
-                        tx={tx}
-                        onSave={(raw) => handleQuickAmount(tx, raw)}
-                        onFlipKind={() => handleQuickFlipKind(tx)}
-                        disabled={updateTx.isPending}
-                      />
-                      {runningBalanceMap.has(tx.id) && (
-                        <span
-                          className="text-[11px] tabular-nums text-muted-foreground"
-                          data-testid={`text-running-balance-${tx.id}`}
-                        >
-                          bal {formatCurrency(runningBalanceMap.get(tx.id)!)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex gap-1 items-center">
-                      <RowDateControls
-                        tx={tx}
-                        onMove={(raw) => handleQuickDate(tx, raw)}
-                        disabled={updateTx.isPending}
-                      />
-                      {tx.forecastFlag ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleToggleForecast(tx)}
-                          disabled={updateTx.isPending}
-                          title="Remove from Forecast"
-                          data-testid={`button-remove-forecast-${tx.id}`}
-                        >
-                          <Send className="w-3.5 h-3.5 mr-1.5" />
-                          Remove
-                        </Button>
-                      ) : !canSendToForecast(tx) ? null : tx.categoryId ? (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleToggleForecast(tx)}
-                          disabled={updateTx.isPending}
-                          title="Send to Forecast"
-                          data-testid={`button-send-forecast-${tx.id}`}
-                        >
-                          <Send className="w-3.5 h-3.5 mr-1.5" />
-                          Send
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled
-                          title="Categorize this transaction first"
-                          data-testid={`button-send-forecast-${tx.id}`}
-                        >
-                          <Send className="w-3.5 h-3.5 mr-1.5" />
-                          Categorize first
-                        </Button>
-                      )}
-                      {/* (#762 — Phase B) Per-row Send-to-Review
-                          affordance. Visible on every Chase row
-                          regardless of forecast state (the Review
-                          gate is independent of forecast inclusion).
-                          When already sent we render a click-to-undo
-                          "✓ in review" badge so the user can flip it
-                          back from the same surface without waiting
-                          for the toast's 5-second window. */}
-                      {tx.sentToReviewAt ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleReview(tx)}
-                          disabled={unsendFromReview.isPending}
-                          title="Click to remove from Review"
-                          className="text-emerald-700 hover:text-emerald-800"
-                          data-testid={`badge-in-review-${tx.id}`}
-                          data-sent-to-review="true"
-                        >
-                          ✓ in review
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleReview(tx)}
-                          disabled={sendToReview.isPending}
-                          title="Send to Review"
-                          data-testid={`button-send-review-${tx.id}`}
-                          data-sent-to-review="false"
-                        >
-                          <Send className="w-3.5 h-3.5 mr-1.5" />
-                          Review
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenEdit(tx)}
-                        data-testid={`button-edit-tx-${tx.id}`}
-                      >
-                        <Edit2 className="w-4 h-4 text-muted-foreground" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(tx.id)}>
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-                );
-              })}
+                              bal {formatCurrency(runningBalanceMap.get(tx.id)!)}
+                            </span>
+                          )}
+                        </div>
+                      }
+                      actionsNode={
+                        <>
+                          {tx.forecastFlag ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleToggleForecast(tx)}
+                              disabled={updateTx.isPending}
+                              title="Remove from Forecast"
+                              data-testid={`button-remove-forecast-${tx.id}`}
+                            >
+                              <Send className="w-3.5 h-3.5 mr-1.5" />
+                              Remove
+                            </Button>
+                          ) : !canSendToForecast(tx) ? null : tx.categoryId ? (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleToggleForecast(tx)}
+                              disabled={updateTx.isPending}
+                              title="Send to Forecast"
+                              data-testid={`button-send-forecast-${tx.id}`}
+                            >
+                              <Send className="w-3.5 h-3.5 mr-1.5" />
+                              Send
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled
+                              title="Categorize this transaction first"
+                              data-testid={`button-send-forecast-${tx.id}`}
+                            >
+                              <Send className="w-3.5 h-3.5 mr-1.5" />
+                              Categorize first
+                            </Button>
+                          )}
+                          {tx.sentToReviewAt ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleToggleReview(tx)}
+                              disabled={unsendFromReview.isPending}
+                              title="Click to remove from Review"
+                              className="text-emerald-700 hover:text-emerald-800"
+                              data-testid={`badge-in-review-${tx.id}`}
+                              data-sent-to-review="true"
+                            >
+                              ✓ in review
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleToggleReview(tx)}
+                              disabled={sendToReview.isPending}
+                              title="Send to Review"
+                              data-testid={`button-send-review-${tx.id}`}
+                              data-sent-to-review="false"
+                            >
+                              <Send className="w-3.5 h-3.5 mr-1.5" />
+                              Review
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenEdit(tx)}
+                            data-testid={`button-edit-tx-${tx.id}`}
+                          >
+                            <Edit2 className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(tx.id)}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </>
+                      }
+                    />
+                  );
+                })}
+              </tbody>
+            </table>
             </div>
           </DayGroup>
           </div>

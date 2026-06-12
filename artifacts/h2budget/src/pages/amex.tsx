@@ -16,6 +16,7 @@ import {
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { RowDateControls } from "@/components/row-date-controls";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
+import { AccountTransactionRow } from "@/components/account-page/transaction-row";
 import {
   useBulkRecategorizePrompt,
   bulkRuleFromRepointed,
@@ -2423,96 +2424,110 @@ export default function AmexPage() {
                       const isIgnored =
                         !!ignoreCatId && t.categoryId === ignoreCatId;
                       return (
-                      <tr
+                      <AccountTransactionRow
                         key={t.id}
-                        className={cn(
-                          "border-t hover:bg-muted/30 transition-colors",
-                          (t.reviewed || isIgnored) && "opacity-50",
-                        )}
-                        data-reviewed={t.reviewed ? "true" : "false"}
-                        data-ignored={isIgnored ? "true" : "false"}
-                        data-testid={`row-amex-${t.id}`}
-                      >
-                        <td className="px-3 py-2 w-8 align-top">
-                          <Checkbox
-                            checked={selected.has(t.id)}
-                            onCheckedChange={() => toggleOne(t.id)}
-                            aria-label="Select"
-                          />
-                        </td>
-                        <td className="px-3 py-2 align-top">
-                          <div className="flex items-center gap-1">
-                            <span
-                              className="font-medium truncate max-w-[420px]"
-                              title={t.description}
+                        tx={t}
+                        selected={selected.has(t.id)}
+                        onToggleSelect={() => toggleOne(t.id)}
+                        categories={categories ?? []}
+                        onCategoryChange={(id, remember) =>
+                          setRowCategory(t.id, id, remember)
+                        }
+                        onBucketToggle={(b, next) => onBubbleToggle(t, b, next)}
+                        onQuickDate={(raw) => handleQuickDate(t, raw)}
+                        disabled={updateTx.isPending}
+                        dimmed={t.reviewed || isIgnored}
+                        hideDate={t.pending}
+                        testId={`row-amex-${t.id}`}
+                        rowData={{
+                          "data-reviewed": t.reviewed ? "true" : "false",
+                          "data-ignored": isIgnored ? "true" : "false",
+                        }}
+                        cardLabel={
+                          (t.plaidAccountId &&
+                            cardLabelByPlaidAccountId.get(t.plaidAccountId)) ||
+                          null
+                        }
+                        metaNode={
+                          t.notes ? (
+                            <div
+                              className="text-[11px] text-muted-foreground truncate"
+                              title={t.notes}
                             >
-                              {t.displayName || t.description}
-                            </span>
-                            <MerchantRenamePopover tx={t} />
-                          </div>
-                          {t.notes && (
-                            <div className="text-[11px] text-muted-foreground truncate" title={t.notes}>
                               {t.notes}
                             </div>
-                          )}
-                        </td>
-                        <td
-                          className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap align-top"
-                          data-testid={`text-card-${t.id}`}
-                        >
-                          {(t.plaidAccountId &&
-                            cardLabelByPlaidAccountId.get(t.plaidAccountId)) ||
-                            "—"}
-                        </td>
-                        <td className="px-3 py-2 align-top">
-                          <CategoryPicker
-                            value={t.categoryId ?? null}
-                            categories={categories ?? []}
-                            description={t.description}
-                            onChange={(id, remember) =>
-                              setRowCategory(t.id, id, remember)
-                            }
-                          />
-                          {!t.isTransfer && t.isTransferUserOverridden && (
-                            <Badge
-                              variant="outline"
-                              className="mt-1 inline-flex items-center text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
-                              title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
-                              data-testid={`badge-transfer-overridden-cleared-${t.id}`}
-                            >
-                              Manually set
-                            </Badge>
-                          )}
-                          {t.isTransfer && (
-                            <Badge
-                              variant="outline"
-                              className="mt-1 inline-flex items-center gap-1 text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
-                              title={
-                                t.isTransferUserOverridden
-                                  ? "Manually set — won't be re-flagged on the next sync"
-                                  : "Excluded from budget actuals"
-                              }
-                              data-testid={`badge-transfer-${t.id}`}
-                            >
-                              Transfer
-                              {t.isTransferUserOverridden && (
-                                <span
-                                  aria-hidden="true"
-                                  data-testid={`badge-transfer-overridden-${t.id}`}
-                                  className="text-slate-500 -ml-0.5"
+                          ) : null
+                        }
+                        chipsNode={
+                          <>
+                            {!t.isTransfer && t.isTransferUserOverridden && (
+                              <Badge
+                                variant="outline"
+                                className="mt-1 inline-flex items-center text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
+                                title="You cleared the auto-Transfer flag on this row. Future syncs won't re-add it."
+                                data-testid={`badge-transfer-overridden-cleared-${t.id}`}
+                              >
+                                Manually set
+                              </Badge>
+                            )}
+                            {t.isTransfer && (
+                              <Badge
+                                variant="outline"
+                                className="mt-1 inline-flex items-center gap-1 text-[10px] font-normal border-border text-muted-foreground bg-muted/40"
+                                title={
+                                  t.isTransferUserOverridden
+                                    ? "Manually set — won't be re-flagged on the next sync"
+                                    : "Excluded from budget actuals"
+                                }
+                                data-testid={`badge-transfer-${t.id}`}
+                              >
+                                Transfer
+                                {t.isTransferUserOverridden && (
+                                  <span
+                                    aria-hidden="true"
+                                    data-testid={`badge-transfer-overridden-${t.id}`}
+                                    className="text-slate-500 -ml-0.5"
+                                  >
+                                    *
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  aria-label="Clear Transfer flag"
+                                  data-testid={`button-clear-transfer-${t.id}`}
+                                  className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-slate-200/60"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateTx.mutate(
+                                      { id: t.id, data: { isTransfer: false } },
+                                      {
+                                        onSuccess: () => {
+                                          qc.invalidateQueries({
+                                            queryKey: getListTransactionsQueryKey(),
+                                          });
+                                          qc.invalidateQueries({
+                                            queryKey: getGetBudgetMonthQueryKey(
+                                              `${t.occurredOn.slice(0, 7)}-01`,
+                                            ),
+                                          });
+                                        },
+                                      },
+                                    );
+                                  }}
                                 >
-                                  *
-                                </span>
-                              )}
-                              <button
-                                type="button"
-                                aria-label="Clear Transfer flag"
-                                data-testid={`button-clear-transfer-${t.id}`}
-                                className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-slate-200/60"
-                                onClick={(e) => {
-                                  e.stopPropagation();
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </Badge>
+                            )}
+                            <div className="mt-1">
+                              <ExternalCardChip
+                                t={t}
+                                onToggle={(v) =>
                                   updateTx.mutate(
-                                    { id: t.id, data: { isTransfer: false } },
+                                    {
+                                      id: t.id,
+                                      data: { isExternalCardPayment: v },
+                                    },
                                     {
                                       onSuccess: () => {
                                         qc.invalidateQueries({
@@ -2525,69 +2540,27 @@ export default function AmexPage() {
                                         });
                                       },
                                     },
-                                  );
-                                }}
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </Badge>
-                          )}
-                          <div className="mt-1">
-                            <ExternalCardChip
-                              t={t}
-                              onToggle={(v) =>
-                                updateTx.mutate(
-                                  {
-                                    id: t.id,
-                                    data: { isExternalCardPayment: v },
-                                  },
-                                  {
-                                    onSuccess: () => {
-                                      qc.invalidateQueries({
-                                        queryKey: getListTransactionsQueryKey(),
-                                      });
-                                      qc.invalidateQueries({
-                                        queryKey: getGetBudgetMonthQueryKey(
-                                          `${t.occurredOn.slice(0, 7)}-01`,
-                                        ),
-                                      });
-                                    },
-                                  },
-                                )
-                              }
-                              testIdSuffix={`${t.id}`}
-                            />
-                          </div>
-                          <div className="mt-1">
-                            <MatchedRuleChip
-                              categoryId={t.categoryId}
-                              matchedRuleId={t.matchedRuleId}
-                              rules={mappingRules}
-                              testIdSuffix={`amex-${t.id}`}
-                              variant="compact"
-                            />
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 align-top">
-                          <div className="flex items-center gap-2">
-                            {/* (#607) Hide bucket bubbles on transfer
-                                rows — see mobile layout above. */}
-                            {!t.isTransfer && (
-                              <BucketBubbles
-                                flags={{
-                                  weekly: t.weeklyAllowance,
-                                  monthly: t.monthlyAllowance,
-                                  unplanned: t.unplannedAllowance,
-                                  reimbursable: t.reimbursable,
-                                }}
-                                onToggle={(b, next) => onBubbleToggle(t, b, next)}
+                                  )
+                                }
+                                testIdSuffix={`${t.id}`}
                               />
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono tabular-nums whitespace-nowrap align-top">
+                            </div>
+                            <div className="mt-1">
+                              <MatchedRuleChip
+                                categoryId={t.categoryId}
+                                matchedRuleId={t.matchedRuleId}
+                                rules={mappingRules}
+                                testIdSuffix={`amex-${t.id}`}
+                                variant="compact"
+                              />
+                            </div>
+                          </>
+                        }
+                        amountNode={
                           <div className="flex flex-col items-end">
-                            <span className="font-semibold">{formatCurrency(parseAbs(t.amount))}</span>
+                            <span className="font-semibold">
+                              {formatCurrency(parseAbs(t.amount))}
+                            </span>
                             {runningBalanceMap.has(t.id) && (
                               <span
                                 className="text-[11px] text-muted-foreground"
@@ -2597,20 +2570,8 @@ export default function AmexPage() {
                               </span>
                             )}
                           </div>
-                        </td>
-                        <td className="px-3 py-2 align-top whitespace-nowrap text-right">
-                          {/* Pending rows are restamped by Plaid on the
-                              next sync, so hide the date editor there to
-                              avoid a fix that silently reverts. */}
-                          {!t.pending && (
-                            <RowDateControls
-                              tx={t}
-                              onMove={(raw) => handleQuickDate(t, raw)}
-                              disabled={updateTx.isPending}
-                            />
-                          )}
-                        </td>
-                      </tr>
+                        }
+                      />
                       );
                     })}
                   </tbody>
