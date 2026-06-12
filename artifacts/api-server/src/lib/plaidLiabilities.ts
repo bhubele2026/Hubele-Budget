@@ -68,17 +68,41 @@ export class PlaidLiabilitiesError extends Error {
   }
 }
 
-// Plaid returns INVALID_PRODUCT on /liabilities/get when the calling
-// client isn't approved for the liabilities product. That is an expected,
-// recoverable state for this app (we run with optional_products disabled
-// by default), so callers should treat it as "no liability data
-// available" rather than a hard error.
-function isLiabilitiesNotEnabled(e: unknown): boolean {
-  const ax = e as {
-    response?: { data?: { error_code?: string; error_type?: string } };
-  };
-  const code = ax?.response?.data?.error_code ?? "";
-  return code === "INVALID_PRODUCT" || code === "PRODUCTS_NOT_SUPPORTED";
+// Plaid rejects /liabilities/get when the calling client isn't approved for
+// the liabilities product. That is an expected, recoverable state for this
+// app (we run with optional_products disabled by default), so callers should
+// treat it as "no liability data available" rather than a hard error — and
+// it must NEVER flag the item as needs-reconnect, since transactions and
+// balances keep working fine. Plaid phrases this rejection a few different
+// ways (INVALID_PRODUCT, PRODUCTS_NOT_SUPPORTED, or a bare
+// "client does not have access to products: [...]" message that carries a
+// non-matching code), so we check the code list AND the message text. The
+// message backstop fixes the false "American Express needs reconnecting"
+// banner that the "client does not have access to..." variant was raising.
+export function isLiabilitiesNotEnabled(e: unknown): boolean {
+  const data = (e as {
+    response?: { data?: { error_code?: string; error_message?: string } };
+  })?.response?.data;
+  const code = data?.error_code ?? "";
+  if (
+    code === "INVALID_PRODUCT" ||
+    code === "PRODUCTS_NOT_SUPPORTED" ||
+    code === "PRODUCT_NOT_ENABLED" ||
+    code === "ADDITIONAL_CONSENT_REQUIRED"
+  ) {
+    return true;
+  }
+  // We're already inside the /liabilities/get failure handler, so any
+  // "client doesn't have access to / isn't authorized for this product"
+  // wording means liabilities simply aren't available — benign, not a login
+  // failure.
+  const msg = (data?.error_message ?? "").toLowerCase();
+  return (
+    msg.includes("does not have access to product") ||
+    msg.includes("not authorized to access") ||
+    msg.includes("is not supported") ||
+    msg.includes("are not supported")
+  );
 }
 
 export async function fetchLiabilitiesForItem(
