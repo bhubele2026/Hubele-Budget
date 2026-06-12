@@ -11,7 +11,7 @@ import {
   detectSubscriptionsFromTransactions,
   type DetectedSub,
 } from "@/lib/detectedSubscriptions";
-import { useToCancelList } from "@/hooks/useToCancelList";
+import { useToCancelList, toCancelKey } from "@/hooks/useToCancelList";
 
 /** Compact button that flags a subscription onto the "To cancel" list (or
  *  un-flags it). Kept here so both row types render an identical control. */
@@ -262,7 +262,7 @@ export function SubscriptionInsightsSection({
                       last {d.lastDate}
                     </div>
                     {(() => {
-                      const key = `detected:${d.merchant}-${d.cadence}`;
+                      const key = toCancelKey(d.merchant);
                       const marked = toCancel.has(key);
                       return (
                         <div className="mt-1.5 flex justify-end">
@@ -387,7 +387,7 @@ export function SubscriptionInsightsSection({
                         {formatCurrency(s.monthly)}/mo
                       </div>
                       {(() => {
-                        const key = `sub:${s.id}`;
+                        const key = toCancelKey(s.name);
                         const marked = toCancel.has(key);
                         return (
                           <div className="mt-1.5 flex justify-end">

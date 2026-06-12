@@ -14,7 +14,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useToCancelList } from "@/hooks/useToCancelList";
+import { useToCancelList, toCancelKey } from "@/hooks/useToCancelList";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -572,7 +572,8 @@ export default function AllowancesPage() {
   // treat it as a recurring monthly drain so the bucket's annual-savings
   // total is meaningful; the user can remove it if it was a one-off.
   const toCancel = useToCancelList();
-  const toCancelKeyFor = (t: Transaction) => `txn:${t.id}`;
+  const toCancelKeyFor = (t: Transaction) =>
+    toCancelKey(t.displayName || t.description);
   const handleToCancelTxn = (t: Transaction) => {
     const key = toCancelKeyFor(t);
     if (toCancel.has(key)) {
@@ -912,10 +913,10 @@ export default function AllowancesPage() {
                             b.key !== "weekly" ? changeCategory : undefined
                           }
                           onToCancel={
-                            b.key === "unplanned" ? handleToCancelTxn : undefined
+                            b.key !== "weekly" ? handleToCancelTxn : undefined
                           }
                           isToCancel={
-                            b.key === "unplanned"
+                            b.key !== "weekly"
                               ? (t) => toCancel.has(toCancelKeyFor(t))
                               : undefined
                           }

@@ -54,11 +54,11 @@ const SETTINGS_ITEM: NavItem = {
 const ALL_NAV = [...TOP_NAV, ...RAIL_NAV, SETTINGS_ITEM];
 
 const BRAND = (
-  <span className="flex items-baseline gap-1.5 select-none">
-    <span className="font-bold text-[17px] tracking-tight">H2</span>
-    <span className="font-light text-[15px] tracking-wide opacity-80">
-      Budget
+  <span className="flex items-center gap-2 select-none">
+    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-primary font-bold text-[13px] tracking-tight shadow-sm">
+      H2
     </span>
+    <span className="font-semibold text-[15px] tracking-tight">Budget</span>
   </span>
 );
 

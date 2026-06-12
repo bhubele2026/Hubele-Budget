@@ -21,18 +21,25 @@ export function AccountPageHeader({
   void accentBorderClass;
   return (
     <div className="flex items-start justify-between gap-4 flex-wrap">
-      <div className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground flex items-center gap-2.5">
-          {icon ? (
-            <span className={cn("inline-flex text-muted-foreground", iconClass)}>
-              {icon}
-            </span>
-          ) : null}
-          {title}
-        </h1>
-        {subtitle ? (
-          <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+      <div className="flex items-center gap-3 min-w-0">
+        {icon ? (
+          <span
+            className={cn(
+              "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border bg-card shadow-sm",
+              iconClass,
+            )}
+          >
+            {icon}
+          </span>
         ) : null}
+        <div className="min-w-0">
+          <h1 className="text-[1.7rem] font-semibold tracking-tight text-foreground leading-tight">
+            {title}
+          </h1>
+          {subtitle ? (
+            <p className="text-sm text-muted-foreground">{subtitle}</p>
+          ) : null}
+        </div>
       </div>
       {actions ? (
         <div className="flex items-start gap-2 flex-wrap">{actions}</div>

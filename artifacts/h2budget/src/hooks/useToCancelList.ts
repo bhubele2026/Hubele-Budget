@@ -23,6 +23,16 @@ export type ToCancelItem = {
 const STORAGE_KEY = "h2:to-cancel:v1";
 const CHANGE_EVENT = "h2:to-cancel:changed";
 
+/**
+ * Identity for a to-cancel entry — derived from the merchant/service NAME
+ * (normalized) rather than a transaction or subscription id, so flagging
+ * "Spotify" from the Subscriptions tab, the Monthly breakdown, or the
+ * Unplanned breakdown all point at the SAME entry. Mark it once, anywhere.
+ */
+export function toCancelKey(name: string): string {
+  return `m:${name.trim().toLowerCase().replace(/\s+/g, " ")}`;
+}
+
 function read(): ToCancelItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

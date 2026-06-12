@@ -48,16 +48,20 @@ export function StatChip({
         : formatCurrency(value as number);
   const body = (
     <div
-      className={cn("rounded-md border px-3 py-2", accent ?? "bg-card")}
+      className={cn(
+        "rounded-lg border px-4 py-3.5 flex flex-col gap-1.5 transition-colors hover:border-foreground/15",
+        accent ?? "bg-card",
+      )}
       data-testid={testId}
     >
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+      <div className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
         {label}
       </div>
       <div
         className={cn(
-          "font-mono tabular-nums font-semibold text-base",
-          (isLoading || isMissing) && "text-muted-foreground",
+          "tabular-nums font-semibold tracking-tight leading-none text-[1.65rem]",
+          (isLoading || isMissing) &&
+            "text-base font-normal text-muted-foreground",
           !(isLoading || isMissing) && valueClassName,
         )}
         data-testid={
@@ -73,21 +77,21 @@ export function StatChip({
         {display}
       </div>
       {isLoading ? (
-        <Skeleton className="h-3 w-16 mt-1" />
+        <Skeleton className="h-3 w-16" />
       ) : isMissing && unavailableHint ? (
-        <div className="text-[10px] leading-tight mt-0.5 text-muted-foreground">
+        <div className="text-[11px] leading-tight text-muted-foreground">
           {unavailableHint}
         </div>
       ) : null}
       {footer ? (
         <div
-          className="text-[10px] leading-tight mt-0.5 opacity-80"
+          className="text-[11px] leading-tight text-muted-foreground"
           data-testid={testId ? `${testId}-footer` : undefined}
         >
           {footer}
         </div>
       ) : null}
-      {action ? <div className="mt-1">{action}</div> : null}
+      {action ? <div className="mt-0.5">{action}</div> : null}
     </div>
   );
   if (!tooltip) return body;
@@ -119,16 +123,16 @@ export function StatChipUnavailable({
 }) {
   return (
     <div
-      className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900"
+      className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3.5 text-amber-900 flex flex-col gap-1.5"
       data-testid={testId}
     >
-      <div className="text-[10px] uppercase tracking-widest text-amber-700 flex items-center gap-1">
+      <div className="text-[11px] font-medium uppercase tracking-[0.1em] text-amber-700 flex items-center gap-1">
         <AlertTriangle className="h-3 w-3" /> {label}
       </div>
-      <div className="font-mono tabular-nums font-semibold text-base">
+      <div className="tabular-nums font-semibold text-lg leading-none">
         Unavailable
       </div>
-      <div className="text-[10px] leading-tight mt-0.5">{hint}</div>
+      <div className="text-[11px] leading-tight">{hint}</div>
     </div>
   );
 }
