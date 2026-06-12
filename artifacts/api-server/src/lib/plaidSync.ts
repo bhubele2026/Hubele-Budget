@@ -22,7 +22,10 @@ import {
 } from "./plaid";
 import { loadUserRules, categorize } from "./autoCategorize";
 import { expandItem, parseISO, addDays, fmtISO } from "./cashSignal";
-import { dedupeTransactionsForAccount } from "./dedupeTransactions";
+import {
+  dedupeTransactionsForAccount,
+  dedupeTransactionsAcrossAccountsForUser,
+} from "./dedupeTransactions";
 import { refreshAmexAnchor } from "./amexAnchor";
 import { logger } from "./logger";
 import {
@@ -1634,6 +1637,23 @@ export async function syncPlaidItem(
           "[plaid-sync] post-upsert dedupeTransactionsForAccount failed (non-fatal)",
         );
       }
+    }
+
+    // (Amex ··1009 / relink) Collapse CROSS-account duplicates too: a
+    // categorized "orphan" row whose account row was deleted on a reconnect
+    // (now preserved by the orphan-prune guard) plus its fresh live-linked
+    // twin. The per-account pass above can't see across two different
+    // account_ids; this merges the orphan's category/allowance flags onto the
+    // live-linked survivor and drops the orphan — so the user sees ONE
+    // categorized charge, not two. Short-circuits cheaply when nothing is
+    // orphaned. Non-fatal.
+    try {
+      await dedupeTransactionsAcrossAccountsForUser(ownerUserId);
+    } catch (e) {
+      logger.warn(
+        { userId, ownerUserId, itemRowId, err: e },
+        "[plaid-sync] post-upsert cross-account dedupe failed (non-fatal)",
+      );
     }
 
     // Auto-match: for each new checking txn, find a planned recurring event
