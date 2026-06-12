@@ -2433,14 +2433,14 @@ export default function AmexPage() {
                         data-ignored={isIgnored ? "true" : "false"}
                         data-testid={`row-amex-${t.id}`}
                       >
-                        <td className="px-3 py-3 w-8 align-top">
+                        <td className="px-3 py-2 w-8 align-top">
                           <Checkbox
                             checked={selected.has(t.id)}
                             onCheckedChange={() => toggleOne(t.id)}
                             aria-label="Select"
                           />
                         </td>
-                        <td className="px-3 py-3 align-top">
+                        <td className="px-3 py-2 align-top">
                           <div className="flex items-center gap-1">
                             <span
                               className="font-medium truncate max-w-[420px]"
@@ -2457,14 +2457,14 @@ export default function AmexPage() {
                           )}
                         </td>
                         <td
-                          className="px-3 py-3 text-xs text-muted-foreground whitespace-nowrap align-top"
+                          className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap align-top"
                           data-testid={`text-card-${t.id}`}
                         >
                           {(t.plaidAccountId &&
                             cardLabelByPlaidAccountId.get(t.plaidAccountId)) ||
                             "—"}
                         </td>
-                        <td className="px-3 py-3 align-top">
+                        <td className="px-3 py-2 align-top">
                           <CategoryPicker
                             value={t.categoryId ?? null}
                             categories={categories ?? []}
@@ -2568,7 +2568,7 @@ export default function AmexPage() {
                             />
                           </div>
                         </td>
-                        <td className="px-3 py-3 align-top">
+                        <td className="px-3 py-2 align-top">
                           <div className="flex items-center gap-2">
                             {/* (#607) Hide bucket bubbles on transfer
                                 rows — see mobile layout above. */}
@@ -2585,7 +2585,7 @@ export default function AmexPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-3 text-right font-mono tabular-nums whitespace-nowrap align-top">
+                        <td className="px-3 py-2 text-right font-mono tabular-nums whitespace-nowrap align-top">
                           <div className="flex flex-col items-end">
                             <span className="font-semibold">{formatCurrency(parseAbs(t.amount))}</span>
                             {runningBalanceMap.has(t.id) && (
@@ -2598,7 +2598,7 @@ export default function AmexPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-3 align-top whitespace-nowrap text-right">
+                        <td className="px-3 py-2 align-top whitespace-nowrap text-right">
                           {/* Pending rows are restamped by Plaid on the
                               next sync, so hide the date editor there to
                               avoid a fix that silently reverts. */}

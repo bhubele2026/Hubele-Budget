@@ -466,7 +466,7 @@ function CashFreedBanner({ transition }: { transition: PayoffTransition }) {
   return (
     <div
       data-testid={`cash-freed-${transition.debtId}`}
-      className="p-4 flex items-center justify-between gap-3 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border-l-4 border-orange-400 dark:border-orange-700"
+      className="p-4 flex items-center justify-between gap-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md"
     >
       <div className="flex items-center gap-3 min-w-0">
         <Badge
@@ -583,7 +583,7 @@ function PlanDropRow({
       }
       data-plan-key={`${row.itemId}|${row.date}`}
       data-testid={`plan-row-${row.itemId}-${row.date}`}
-      className={`w-full text-left p-4 flex items-center justify-between transition-colors cursor-pointer ${
+      className={`w-full text-left px-3 py-2 flex items-center justify-between transition-colors cursor-pointer ${
         isOverEligible
           ? "bg-primary/10 ring-2 ring-primary ring-inset"
           : isOverBlocked

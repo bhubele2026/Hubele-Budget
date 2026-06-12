@@ -2451,7 +2451,7 @@ export default function TransactionsPage() {
                   <div
                     key={tx.id}
                     className={cn(
-                      "px-3 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-muted/30 transition-colors",
+                      "px-3 py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2 hover:bg-muted/30 transition-colors",
                       (tx.forecastFlag || isIgnored) && "opacity-60 bg-muted/20",
                       focusTxId === tx.id &&
                         "ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/30",

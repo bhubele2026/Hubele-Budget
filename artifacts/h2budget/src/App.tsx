@@ -182,7 +182,7 @@ const clerkAppearance = {
   elements: {
     rootBox: "w-full flex justify-center",
     cardBox:
-      "bg-card rounded-2xl w-[440px] max-w-full overflow-hidden shadow-xl",
+      "bg-card rounded-lg w-[440px] max-w-full overflow-hidden shadow-lg",
     card: "!shadow-none !border-0 !bg-transparent !rounded-none",
     footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
     headerTitle: "text-foreground text-xl font-semibold",

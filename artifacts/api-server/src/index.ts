@@ -257,10 +257,25 @@ app.listen(port, (err) => {
     // POST /plaid/sync route and the post-link first sync are unaffected).
     // Set PLAID_AUTO_SYNC_ENABLED=true to restore background syncing. The
     // webhook-triggered sync honors the same flag (see routes/plaid.ts).
-    const autoSyncEnabled = process.env.PLAID_AUTO_SYNC_ENABLED === "true";
+    // (#plaid-bill) HARD KILL-SWITCH. The household was billed ~$500 by
+    // Plaid for background pulls and has repeatedly asked that banks sync
+    // ONLY when they click the in-app Sync button. We deliberately ignore
+    // the PLAID_AUTO_SYNC_ENABLED Secret here so a stale/forgotten "true"
+    // in the Replit environment can never silently re-enable the hourly
+    // cursor sync, the */10 forced-refresh loop, or the daily consent
+    // refresh — each of which makes billable Plaid calls. To ever restore
+    // background syncing, flip AUTO_SYNC_HARD_DISABLED to false (and the
+    // env var below is honored again). Typed as boolean (not a literal)
+    // so the gated block stays reachable to the compiler.
+    const AUTO_SYNC_HARD_DISABLED = true;
+    const autoSyncEnabled: boolean =
+      !AUTO_SYNC_HARD_DISABLED &&
+      process.env.PLAID_AUTO_SYNC_ENABLED === "true";
     if (!autoSyncEnabled) {
       logger.warn(
-        "PLAID_AUTO_SYNC_ENABLED is not 'true' — automatic Plaid syncing is OFF; banks pull only via the manual Sync button.",
+        AUTO_SYNC_HARD_DISABLED
+          ? "Automatic Plaid syncing is HARD-DISABLED in code (cost kill-switch). Banks pull ONLY via the manual Sync button, regardless of PLAID_AUTO_SYNC_ENABLED."
+          : "PLAID_AUTO_SYNC_ENABLED is not 'true' — automatic Plaid syncing is OFF; banks pull only via the manual Sync button.",
       );
     }
 

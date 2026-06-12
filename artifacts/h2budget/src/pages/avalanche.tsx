@@ -596,7 +596,7 @@ export default function AvalanchePage() {
     <div className="space-y-6">
       <DebtReauthBanner debts={debts} />
       {killedBanner && (
-        <div className="relative flex items-center gap-3 rounded-lg border border-emerald-300/60 bg-gradient-to-r from-emerald-50 to-amber-50 p-4 text-emerald-900 dark:border-emerald-700/60 dark:from-emerald-950/40 dark:to-amber-950/40 dark:text-emerald-100 animate-in fade-in slide-in-from-top-2">
+        <div className="relative flex items-center gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100 animate-in fade-in slide-in-from-top-2">
           <PartyPopper className="h-6 w-6 shrink-0 text-emerald-600 dark:text-emerald-400" />
           <div className="flex-1">
             <div className="font-semibold">Debt killed! 🎉</div>

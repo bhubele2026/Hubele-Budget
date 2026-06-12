@@ -133,7 +133,10 @@
   --app-font-sans: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --app-font-serif: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --app-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  --radius: 0.5rem;
+  /* (flatten/corporate) Tighter corners read more professional than the
+     softer 0.5rem. Propagates to every rounded-sm/md/lg/xl utility via the
+     @theme radius mapping above. */
+  --radius: 0.375rem;
 
   --shadow-2xs: 0 1px 1px 0 rgba(26, 34, 48, 0.04);
   --shadow-xs: 0 1px 2px 0 rgba(26, 34, 48, 0.05);

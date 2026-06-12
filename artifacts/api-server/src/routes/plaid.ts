@@ -1911,14 +1911,15 @@ router.post("/plaid/webhook", async (req, res): Promise<void> => {
       // the flag off we just ACK the webhook (200 below) and the user's
       // next manual Sync click picks up the waiting updates. Set the env
       // var to "true" to restore webhook-triggered background syncing.
-      if (process.env.PLAID_AUTO_SYNC_ENABLED === "true") {
-        scheduleSyncForItem(item.userId, item.id);
-      } else {
-        req.log?.info(
-          { item_id, webhook_code },
-          "[plaid-webhook] auto-sync disabled — ACKing without scheduling a pull",
-        );
-      }
+      // (#plaid-bill) HARD-DISABLED to match the cost kill-switch in
+      // index.ts. A webhook-driven pull is still an automatic (billable)
+      // pull, so we only ACK the webhook here; the user's next manual
+      // Sync click picks up whatever Plaid has waiting. The env var is
+      // intentionally ignored so a forgotten Secret can't re-enable it.
+      req.log?.info(
+        { item_id, webhook_code },
+        "[plaid-webhook] auto-sync hard-disabled — ACKing without scheduling a pull",
+      );
     }
   } else if (webhook_type === "ITEM") {
     if (webhook_code === "ERROR") {
