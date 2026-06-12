@@ -5,6 +5,8 @@ import {
   useSyncPlaidTransactions,
   getListPlaidItemsQueryKey,
   getListTransactionsQueryKey,
+  getGetForecastQueryKey,
+  getGetForecastCashSignalQueryKey,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -312,6 +314,15 @@ export function usePlaidSync() {
               qc.invalidateQueries({ queryKey: getListPlaidItemsQueryKey() });
               if (totals.added + totals.modified + totals.removed > 0) {
                 qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+                // New/changed transactions move the forecast + cash
+                // projection, so refresh those too. This is what lets us
+                // cache the forecast bundle between syncs (App.tsx) instead
+                // of refetching it on every page mount — the data is still
+                // correct because a sync that changes anything invalidates it.
+                qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
+                qc.invalidateQueries({
+                  queryKey: getGetForecastCashSignalQueryKey(),
+                });
               }
               // (#483) Refresh the Amex ending-balance tile after every
               // Plaid sync so the "Refresh from Plaid" button on the Amex

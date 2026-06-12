@@ -98,9 +98,20 @@ const ALWAYS_FRESH = {
 } as const;
 
 // Forecast bundle (all daysAhead/horizon variants) + the cash-signal
-// projection that drives the "Lowest balance" numbers.
-queryClient.setQueryDefaults(["/api/forecast"], ALWAYS_FRESH);
-queryClient.setQueryDefaults(["/api/forecast/cash-signal"], ALWAYS_FRESH);
+// projection. These were ALWAYS_FRESH — refetched on EVERY mount — which is
+// the main remaining navigation lag on Dashboard / Forecast / Reports (each
+// pulls the whole bundle). With background auto-sync off they only change on
+// an explicit Sync or edit, and both paths now invalidate these keys
+// (transaction mutations + runSync). A short 30s staleTime lets rapid
+// Dashboard↔Forecast↔Reports navigation reuse the cache, while any missed
+// invalidation self-heals within 30s. keepPreviousData still avoids a
+// skeleton flash on the background revalidate.
+const FORECAST_CACHE = {
+  staleTime: 30_000,
+  refetchOnWindowFocus: false,
+} as const;
+queryClient.setQueryDefaults(["/api/forecast"], FORECAST_CACHE);
+queryClient.setQueryDefaults(["/api/forecast/cash-signal"], FORECAST_CACHE);
 // Transaction lists powering Chase / Amex / Debrief / Dashboard. These used
 // to be ALWAYS_FRESH (refetch up to 5,000 rows on EVERY page mount) so live
 // Plaid syncs showed without a manual refresh. With background auto-sync now
