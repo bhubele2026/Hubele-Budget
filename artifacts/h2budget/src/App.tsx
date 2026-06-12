@@ -23,6 +23,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageErrorBoundary } from "@/components/page-error-boundary";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
 // a render-blocking chunk fetch before the user can even sign in.
@@ -217,10 +218,12 @@ function RouteFallback() {
 }
 
 function ProtectedShell() {
+  const [location] = useLocation();
   return (
     <>
       <Show when="signed-in">
         <AppLayout>
+          <PageErrorBoundary resetKey={location}>
           <Suspense fallback={<RouteFallback />}>
           <Switch>
             <Route path="/dashboard">
@@ -251,6 +254,7 @@ function ProtectedShell() {
             <Route component={NotFound} />
           </Switch>
           </Suspense>
+          </PageErrorBoundary>
         </AppLayout>
       </Show>
       <Show when="signed-out">
