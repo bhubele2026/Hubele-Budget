@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Pencil } from "lucide-react";
 import {
   useListTransactions,
   useGetSettings,
   useListCategories,
   useGetWeeklyDebrief,
   useUpdateTransaction,
+  useUpdateSettings,
   getListTransactionsQueryKey,
+  getGetSettingsQueryKey,
   type Transaction,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -26,6 +28,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -228,31 +236,40 @@ function BucketCard({
   planned,
   expanded,
   onToggle,
+  onSavePlanned,
 }: {
   name: string;
   actual: number;
   planned: number;
   expanded: boolean;
   onToggle: () => void;
+  onSavePlanned?: (amount: number) => void;
 }) {
   const variance = actual - planned;
   const over = variance > 0;
   const pct = planned > 0 ? Math.min(100, (actual / planned) * 100) : 0;
+  const slug = name.split(" ")[0].toLowerCase();
+  const [editOpen, setEditOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const save = () => {
+    const n = Number(draft);
+    if (Number.isFinite(n) && n >= 0) {
+      onSavePlanned?.(Math.round(n * 100) / 100);
+      setEditOpen(false);
+    }
+  };
   return (
-    <Card
-      className={cn(
-        "transition-colors",
-        expanded && "ring-2 ring-primary/40",
-      )}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full text-left focus:outline-none"
-        data-testid={`allowance-card-${name.split(" ")[0].toLowerCase()}`}
-        aria-expanded={expanded}
-      >
-        <CardContent className="p-5 space-y-3">
+    <Card className={cn("transition-colors", expanded && "ring-2 ring-primary/40")}>
+      <CardContent className="p-5 space-y-3">
+        {/* Header + actual are the expand toggle. The planned line below
+            stays outside the button so the edit popover isn't nested in it. */}
+        <button
+          type="button"
+          onClick={onToggle}
+          className="w-full text-left focus:outline-none"
+          data-testid={`allowance-card-${slug}`}
+          aria-expanded={expanded}
+        >
           <div className="flex items-center justify-between">
             <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
               {name}
@@ -264,31 +281,84 @@ function BucketCard({
               )}
             />
           </div>
-          <div className="text-3xl font-serif font-bold tabular-nums">
+          <div className="text-3xl font-bold tracking-tight tabular-nums mt-2">
             {formatCurrency(actual)}
           </div>
-          <div className="text-xs text-muted-foreground tabular-nums">
-            of {formatCurrency(planned)} planned
-          </div>
-          <Progress
-            value={pct}
-            className={over ? "[&>div]:bg-destructive" : ""}
-          />
-          <div
-            className={cn(
-              "text-sm font-medium tabular-nums",
-              over ? "text-destructive" : "text-emerald-700",
-            )}
-            data-testid={`allowance-variance-${name.split(" ")[0].toLowerCase()}`}
-          >
-            {planned <= 0
-              ? "No allowance set"
-              : over
-                ? `${formatCurrency(variance)} over`
-                : `${formatCurrency(Math.abs(variance))} under`}
-          </div>
-        </CardContent>
-      </button>
+        </button>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
+          <span>of {formatCurrency(planned)} planned</span>
+          {onSavePlanned && (
+            <Popover
+              open={editOpen}
+              onOpenChange={(o) => {
+                setEditOpen(o);
+                if (o) setDraft(planned > 0 ? planned.toFixed(2) : "");
+              }}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                  title="Edit planned amount"
+                  data-testid={`allowance-edit-planned-${slug}`}
+                >
+                  <Pencil className="h-3 w-3" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-3" align="start">
+                <div className="space-y-2">
+                  <div className="text-xs font-medium">
+                    Planned {name.toLowerCase()}
+                  </div>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        save();
+                      }
+                    }}
+                    placeholder="450.00"
+                    autoFocus
+                    data-testid={`input-planned-${slug}`}
+                  />
+                  <div className="flex justify-end gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEditOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={save} disabled={!draft.trim()}>
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
+        <Progress value={pct} className={over ? "[&>div]:bg-destructive" : ""} />
+        <div
+          className={cn(
+            "text-sm font-medium tabular-nums",
+            over ? "text-destructive" : "text-emerald-700",
+          )}
+          data-testid={`allowance-variance-${slug}`}
+        >
+          {planned <= 0
+            ? "No allowance set"
+            : over
+              ? `${formatCurrency(variance)} over`
+              : `${formatCurrency(Math.abs(variance))} under`}
+        </div>
+      </CardContent>
     </Card>
   );
 }
@@ -348,6 +418,30 @@ export default function AllowancesPage() {
   const updateTx = useUpdateTransaction();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const updateSettings = useUpdateSettings();
+
+  // Edit a bucket's PLANNED allowance amount inline (the "of $X planned"
+  // line). PATCHes the matching settings field.
+  const savePlanned = async (key: BucketKey, amount: number) => {
+    const val = amount.toFixed(2);
+    const data =
+      key === "weekly"
+        ? { weeklyAllowanceAmount: val }
+        : key === "monthly"
+          ? { monthlyAllowanceAmount: val }
+          : { unplannedAllowanceAmount: val };
+    try {
+      await updateSettings.mutateAsync({ data });
+      queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+      toast({ title: "Allowance updated" });
+    } catch (e) {
+      toast({
+        title: "Couldn't update",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
 
   // Move a transaction between the weekly sub-buckets (Groceries / Dining /
   // Entertainment / Misc) straight from the breakdown.
@@ -592,6 +686,7 @@ export default function AllowancesPage() {
             planned={planned[b.key]}
             expanded={expanded.has(b.key)}
             onToggle={() => toggle(b.key)}
+            onSavePlanned={(amount) => savePlanned(b.key, amount)}
           />
         ))}
       </div>
