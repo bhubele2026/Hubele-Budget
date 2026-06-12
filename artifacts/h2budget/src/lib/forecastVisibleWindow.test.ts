@@ -31,7 +31,7 @@ const baseOpts = {
 };
 
 describe("buildLineRegister visibleFromISO window", () => {
-  it("hides prior-month plan + bank rows from `rows` when visibleFromISO is today, but keeps them in allPlan/allBank", () => {
+  it("with lingerPastDuePlans, hides prior-month BANK rows but keeps past-due pending PLAN rows in `rows` (and all in allPlan/allBank)", () => {
     const events = [
       ev("rec-old", "2026-04-20", -100, "old bill"),
       ev("rec-new", "2026-05-20", -200, "new bill"),
@@ -46,6 +46,7 @@ describe("buildLineRegister visibleFromISO window", () => {
       events,
       txns,
       visibleFromISO: "2026-05-01",
+      lingerPastDuePlans: true,
     });
 
     // Visible rows exclude prior-month BANK rows; past-due pending
@@ -142,6 +143,7 @@ describe("buildLineRegister visibleFromISO window", () => {
       events,
       txns,
       visibleFromISO: "2026-05-15",
+      lingerPastDuePlans: true,
     });
     const dates = rows.map((r) => r.date).sort();
     // Bank row dated 2026-05-14 is hidden by visibleFromISO; the
@@ -184,11 +186,34 @@ describe("buildLineRegister visibleFromISO window", () => {
       resolutions,
       today: new Date("2026-05-27"),
       visibleFromISO: "2026-05-27",
+      lingerPastDuePlans: true,
     });
     const planRows = rows.filter((r) => r.kind === "plan");
     const labels = planRows.map((r) => (r as { label: string }).label).sort();
     // Past unmatched stays; future stays; matched does not.
     expect(labels).toEqual(["future", "past unmatched"]);
+  });
+
+  it("WITHOUT lingerPastDuePlans (default /forecast view), a past-due pending plan is hidden once today passes its date", () => {
+    // This is the #803 forward-looking default: the overall Forecast
+    // register drops pre-today plans. The Review page opts back in via
+    // lingerPastDuePlans (covered by the cases above).
+    const events = [
+      ev("rec-past-pending", "2026-05-10", -100, "past unmatched"),
+      ev("rec-future", "2026-05-20", -300, "future"),
+    ];
+    const { rows } = buildLineRegister({
+      ...baseOpts,
+      events,
+      txns: [],
+      visibleFromISO: "2026-05-15", // today
+    });
+    const planDates = rows
+      .filter((r) => r.kind === "plan")
+      .map((r) => r.date)
+      .sort();
+    // Past-due 2026-05-10 dropped; only the future plan remains.
+    expect(planDates).toEqual(["2026-05-20"]);
   });
 
   it("clamps visibleFromISO to fromISO when it is earlier than the window start", () => {

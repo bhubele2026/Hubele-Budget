@@ -142,8 +142,17 @@ export function buildLineRegister(opts: {
    *  without losing access to last month's data for the month-close /
    *  rescheduled-bucket flows. Clamped to fromISO if earlier. */
   visibleFromISO?: string | null;
+  /** When true, past-due *unresolved* plan occurrences (status
+   *  `pending_plan`, i.e. dated on/before today with no match/skip/missed
+   *  resolution) stay in the active register `rows` even when they fall
+   *  before `visibleFromISO`. This makes overdue planned bills "linger"
+   *  on the Review page until the user matches, skips, or marks them
+   *  missed — instead of silently dropping off the moment today passes
+   *  their date. The forward-looking /forecast (overall) view leaves this
+   *  off so it stays a clean "what's coming" register. Default false. */
+  lingerPastDuePlans?: boolean;
 }): { rows: LineRow[]; allPlan: PlanLine[]; allBank: BankLine[] } {
-  const { events, txns, resolutions, closedMonths, startBalance, fromISO, toISO, snapshotISO, visibleFromISO } = opts;
+  const { events, txns, resolutions, closedMonths, startBalance, fromISO, toISO, snapshotISO, visibleFromISO, lingerPastDuePlans } = opts;
   const today = opts.today ?? new Date();
   const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const fromMs = parseISO(fromISO);
@@ -261,7 +270,25 @@ export function buildLineRegister(opts: {
   // register and live in the Debrief instead. The "Look Back"
   // control still lets the user pull `visibleFromMs` earlier on
   // demand.
-  const visiblePlan = activePlan.filter((p) => inVisibleWindow(p.date));
+  //
+  // Opt-in re-linger (Review page): when `lingerPastDuePlans` is set, a
+  // past-due *unresolved* plan (`pending_plan`) stays in the register even
+  // if it's before `visibleFromMs`, so overdue bills hang on the Review
+  // list until the user matches/skips/marks-missed them. `activePlan`
+  // already excludes matched/skipped/missed rows, so this only re-surfaces
+  // genuinely still-owed occurrences. `future` rows (dated after today) are
+  // never lingered — only the upper-bound window applies to them.
+  const visiblePlan = activePlan.filter((p) => {
+    if (inVisibleWindow(p.date)) return true;
+    if (
+      lingerPastDuePlans &&
+      p.status === "pending_plan" &&
+      parseISO(p.date) >= fromMs
+    ) {
+      return true;
+    }
+    return false;
+  });
 
   const rows: LineRow[] = [];
   for (const b of visibleBank) {

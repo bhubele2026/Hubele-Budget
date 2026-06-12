@@ -1427,8 +1427,13 @@ export default function ForecastPage({
       // `register.allPlan`/`allBank`) keep working; we only narrow what
       // the user sees in the default view.
       visibleFromISO: deferredForecastFromDate,
+      // Review page only: keep overdue unresolved plans on the list until
+      // the user matches/skips/marks-missed them, instead of letting them
+      // drop off the moment today passes their date. The forward-looking
+      // /forecast (overall) view leaves this off.
+      lingerPastDuePlans: mode === "review",
     });
-  }, [data, closedMonths, today, debtLinks, payoffsByDebt, deferredForecastFromDate]);
+  }, [data, closedMonths, today, debtLinks, payoffsByDebt, deferredForecastFromDate, mode]);
 
   const bucket = useMemo(() => {
     if (!register || !data) return [];
