@@ -44,6 +44,12 @@ function ToCancelButton({
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+const fmtShort = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+
 const confidenceClass = (c: DetectedSub["confidence"]): string =>
   c === "high"
     ? "text-emerald-700 border-emerald-300 bg-emerald-50"
@@ -246,6 +252,11 @@ export function SubscriptionInsightsSection({
                       <span className="tabular-nums">
                         {formatCurrency(d.typical)} · {d.cadence} · ×{d.count}
                       </span>
+                      {d.nextDate && (
+                        <span className="tabular-nums">
+                          · next ~{fmtShort(d.nextDate)}
+                        </span>
+                      )}
                       {d.amountVaries && (
                         <span className="text-amber-700">amount varies</span>
                       )}
@@ -258,8 +269,8 @@ export function SubscriptionInsightsSection({
                         /yr
                       </span>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      last {d.lastDate}
+                    <div className="text-xs text-muted-foreground tabular-nums">
+                      {formatCurrency(d.monthly)}/mo
                     </div>
                     {(() => {
                       const key = toCancelKey(d.merchant);
