@@ -706,6 +706,24 @@ export async function buildBehaviorFacts(
       : null;
   }
 
+  // Manual Amazon anchor. The most recent Amazon order (2026-06-07) predates
+  // the switch to paying Amazon on the Amex, so no synced transaction matches
+  // it — seed the "days since last Amazon order" from that date so the card
+  // isn't blank. Going forward Amazon hits the Amex and the amazon keyword
+  // match picks real orders up automatically; any real Amazon txn on/after
+  // the anchor supersedes it (most-recent wins). lastAmount 0 → the card
+  // omits the dollar figure (there's no transaction behind the anchor).
+  const AMAZON_ANCHOR_DATE = "2026-06-07";
+  const amazonLatest = latestPerBucket.amazon;
+  if (!amazonLatest || amazonLatest.date < AMAZON_ANCHOR_DATE) {
+    daysSinceLast.amazon = {
+      days: daysBetween(AMAZON_ANCHOR_DATE, todayIso),
+      lastDate: AMAZON_ANCHOR_DATE,
+      lastMerchant: "Amazon",
+      lastAmount: 0,
+    };
+  }
+
   // --- Streaks (trackingStart..today) ------------------------------------
   const diningDays = new Set<string>();
   const coffeeDays = new Set<string>();

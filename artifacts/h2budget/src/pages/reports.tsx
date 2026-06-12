@@ -2994,10 +2994,13 @@ function BehaviorSection({ from, to }: { from: string; to: string }) {
 
   const daysValue = (e: typeof dsl.dining): string =>
     e ? `${e.days}` : "—";
-  const lastSub = (e: typeof dsl.dining, emptyMsg: string): string =>
-    e
-      ? `last: ${e.lastMerchant} · ${e.lastDate} · ${formatCurrency(e.lastAmount)}`
-      : emptyMsg;
+  const lastSub = (e: typeof dsl.dining, emptyMsg: string): string => {
+    if (!e) return emptyMsg;
+    // Omit the dollar figure when there's no real amount behind the entry
+    // (e.g. the manual Amazon anchor, which has no matching transaction).
+    const amountPart = e.lastAmount > 0 ? ` · ${formatCurrency(e.lastAmount)}` : "";
+    return `last: ${e.lastMerchant} · ${e.lastDate}${amountPart}`;
+  };
 
   return (
     <div className="space-y-6">
