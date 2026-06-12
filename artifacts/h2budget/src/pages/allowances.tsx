@@ -5,8 +5,11 @@ import {
   useGetSettings,
   useListCategories,
   useGetWeeklyDebrief,
+  useUpdateTransaction,
+  getListTransactionsQueryKey,
   type Transaction,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -16,7 +19,15 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
   SUB_BUCKETS,
@@ -102,10 +113,21 @@ type Group = {
 
 // ----- drill-down rows ------------------------------------------------
 
-function TxnRow({ t }: { t: Transaction }) {
+function TxnRow({
+  t,
+  subLabels,
+  onChangeBucket,
+}: {
+  t: Transaction;
+  subLabels?: Record<SubBucket, string>;
+  onChangeBucket?: (t: Transaction, sub: SubBucket) => void;
+}) {
+  const current: SubBucket = SUB_BUCKETS.includes(t.weeklyBucket as SubBucket)
+    ? (t.weeklyBucket as SubBucket)
+    : "misc";
   return (
     <div
-      className="flex items-baseline justify-between gap-3 px-3 py-1.5 pl-9 text-sm"
+      className="flex items-center justify-between gap-3 px-3 py-1.5 pl-9 text-sm"
       data-testid={`allowance-txn-${t.id}`}
     >
       <div className="flex items-baseline gap-3 min-w-0">
@@ -114,14 +136,45 @@ function TxnRow({ t }: { t: Transaction }) {
         </span>
         <span className="truncate">{t.description}</span>
       </div>
-      <span className="tabular-nums whitespace-nowrap font-mono">
-        {formatCurrency(expenseAmount(t))}
-      </span>
+      <div className="flex items-center gap-3 shrink-0">
+        {onChangeBucket && subLabels && (
+          <Select
+            value={current}
+            onValueChange={(v) => onChangeBucket(t, v as SubBucket)}
+          >
+            <SelectTrigger
+              className="h-7 w-[120px] text-xs"
+              aria-label="Allowance bucket"
+              data-testid={`allowance-bucket-select-${t.id}`}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SUB_BUCKETS.map((s) => (
+                <SelectItem key={s} value={s} className="text-xs">
+                  {subLabels[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <span className="tabular-nums whitespace-nowrap font-mono">
+          {formatCurrency(expenseAmount(t))}
+        </span>
+      </div>
     </div>
   );
 }
 
-function CategoryGroupRow({ group }: { group: Group }) {
+function CategoryGroupRow({
+  group,
+  subLabels,
+  onChangeBucket,
+}: {
+  group: Group;
+  subLabels?: Record<SubBucket, string>;
+  onChangeBucket?: (t: Transaction, sub: SubBucket) => void;
+}) {
   const [open, setOpen] = useState(false);
   const expandable = group.txns.length > 0;
   return (
@@ -155,7 +208,12 @@ function CategoryGroupRow({ group }: { group: Group }) {
       </CollapsibleTrigger>
       <CollapsibleContent>
         {group.txns.map((t) => (
-          <TxnRow key={t.id} t={t} />
+          <TxnRow
+            key={t.id}
+            t={t}
+            subLabels={subLabels}
+            onChangeBucket={onChangeBucket}
+          />
         ))}
       </CollapsibleContent>
     </Collapsible>
@@ -287,6 +345,29 @@ export default function AllowancesPage() {
   const { data: settings } = useGetSettings();
   const { data: categories } = useListCategories();
   const SUB_LABEL = useWeeklyBucketLabels();
+  const updateTx = useUpdateTransaction();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  // Move a transaction between the weekly sub-buckets (Groceries / Dining /
+  // Entertainment / Misc) straight from the breakdown.
+  const changeWeeklyBucket = async (t: Transaction, sub: SubBucket) => {
+    const current = SUB_BUCKETS.includes(t.weeklyBucket as SubBucket)
+      ? (t.weeklyBucket as SubBucket)
+      : "misc";
+    if (current === sub) return;
+    try {
+      await updateTx.mutateAsync({ id: t.id, data: { weeklyBucket: sub } });
+      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      toast({ title: `Moved to ${SUB_LABEL[sub]}` });
+    } catch (e) {
+      toast({
+        title: "Couldn't move",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
 
   const txnsQ = useListTransactions({
     from: windowStart,
@@ -559,7 +640,14 @@ export default function AllowancesPage() {
                       </div>
                     ) : (
                       groups.map((g) => (
-                        <CategoryGroupRow key={g.key} group={g} />
+                        <CategoryGroupRow
+                          key={g.key}
+                          group={g}
+                          subLabels={b.key === "weekly" ? SUB_LABEL : undefined}
+                          onChangeBucket={
+                            b.key === "weekly" ? changeWeeklyBucket : undefined
+                          }
+                        />
                       ))
                     )}
                   </div>
