@@ -15,7 +15,7 @@ const options: Array<{ value: Theme; label: string; icon: typeof Sun }> = [
   { value: "system", label: "System", icon: Monitor },
 ];
 
-export function ThemeToggle() {
+export function ThemeToggle({ className }: { className?: string } = {}) {
   const { theme, resolvedTheme, setTheme } = useTheme();
   const Icon = resolvedTheme === "dark" ? Moon : Sun;
 
@@ -25,7 +25,7 @@ export function ThemeToggle() {
         <Button
           variant="ghost"
           size="icon"
-          className="text-sidebar-foreground"
+          className={cn("text-sidebar-foreground", className)}
           aria-label="Toggle theme"
           data-testid="button-theme-toggle"
         >

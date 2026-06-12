@@ -97,7 +97,9 @@
   --popover-foreground: 218 30% 15%;
   --popover-border: 218 15% 85%;
 
-  --primary: 218 30% 15%;
+  /* Professional banking navy-blue — drives the top bar, primary buttons,
+     and active-nav accents. */
+  --primary: 214 60% 27%;
   --primary-foreground: 0 0% 100%;
 
   --secondary: 210 17% 96%;

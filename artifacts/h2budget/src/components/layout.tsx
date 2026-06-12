@@ -1,371 +1,285 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { UserButton } from "@clerk/react";
 import {
-  useGetUiPreferences,
-  useUpdateUiPreferences,
-  getGetUiPreferencesQueryKey,
-} from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  LayoutDashboard,
   Receipt,
   CreditCard,
-  CalendarDays,
-  PieChart,
-  Settings,
-  GitMerge,
-  TrendingUp,
-  BarChart3,
-  Flame,
-  Landmark,
-  Menu,
   Inbox,
+  TrendingUp,
   CalendarCheck,
+  BarChart3,
+  PieChart,
+  CalendarDays,
   Wallet,
-  PanelLeftClose,
-  PanelLeftOpen,
+  Landmark,
+  Flame,
+  Settings as SettingsIcon,
+  Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { H2Logo } from "@/components/h2-logo";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { useDebriefAwaitingCount } from "@/hooks/useDebriefAwaitingCount";
 import { AdvisorChat } from "@/components/advisor-chat";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-const SIDEBAR_COLLAPSED_KEY = "h2:sidebar-collapsed";
+type NavItem = { name: string; href: string; icon: typeof Receipt };
 
-const navItems = [
+// Top bar — plan & analyze sections.
+const TOP_NAV: NavItem[] = [
   { name: "Reports", href: "/reports", icon: BarChart3 },
-  { name: "Allowances", href: "/allowances", icon: Wallet },
-  { name: "Forecast", href: "/forecast", icon: TrendingUp },
-  { name: "Review", href: "/review", icon: Inbox },
-  { name: "Debrief", href: "/debrief", icon: CalendarCheck },
-  { name: "Chase", href: "/transactions", icon: Receipt },
-  { name: "American Express", href: "/amex", icon: CreditCard },
-  { name: "Avalanche", href: "/avalanche", icon: Flame },
-  { name: "Bills", href: "/bills", icon: CalendarDays },
   { name: "Budget", href: "/budget", icon: PieChart },
+  { name: "Bills", href: "/bills", icon: CalendarDays },
+  { name: "Allowances", href: "/allowances", icon: Wallet },
   { name: "Debts", href: "/debts", icon: Landmark },
-  { name: "Mapping Rules", href: "/mapping-rules", icon: GitMerge },
-  { name: "Settings", href: "/settings", icon: Settings },
+  { name: "Avalanche", href: "/avalanche", icon: Flame },
 ];
 
-function SidebarContents({
+// Left rail — accounts, reconciliation & periods.
+const RAIL_NAV: NavItem[] = [
+  { name: "Chase", href: "/transactions", icon: Receipt },
+  { name: "American Express", href: "/amex", icon: CreditCard },
+  { name: "Review", href: "/review", icon: Inbox },
+  { name: "Forecast", href: "/forecast", icon: TrendingUp },
+  { name: "Debrief", href: "/debrief", icon: CalendarCheck },
+];
+
+const SETTINGS_ITEM: NavItem = {
+  name: "Settings",
+  href: "/settings",
+  icon: SettingsIcon,
+};
+const ALL_NAV = [...TOP_NAV, ...RAIL_NAV, SETTINGS_ITEM];
+
+const BRAND = (
+  <span className="flex items-baseline gap-1.5 select-none">
+    <span className="font-bold text-[17px] tracking-tight">H2</span>
+    <span className="font-light text-[15px] tracking-wide opacity-80">
+      Budget
+    </span>
+  </span>
+);
+
+function MobileNav({
   location,
   onNavigate,
-  collapsed = false,
-  onToggleCollapse,
+  railBadge,
 }: {
   location: string;
-  onNavigate?: () => void;
-  collapsed?: boolean;
-  onToggleCollapse?: () => void;
+  onNavigate: () => void;
+  railBadge: (href: string) => number | null;
 }) {
-  const reviewCount = useReviewInboxCount();
-  const debriefCount = useDebriefAwaitingCount();
+  const groups: { label: string; items: NavItem[] }[] = [
+    { label: "Accounts & periods", items: RAIL_NAV },
+    { label: "Plan & analyze", items: TOP_NAV },
+    { label: "", items: [SETTINGS_ITEM] },
+  ];
   return (
-    <>
-      <div
-        className={cn(
-          "border-b border-sidebar-border flex items-center",
-          collapsed
-            ? "flex-col gap-2 px-2 py-4"
-            : "px-5 py-4 gap-2.5",
-        )}
-      >
-        <div
-          className={cn(
-            "flex items-center",
-            collapsed ? "justify-center" : "gap-2.5",
-          )}
-        >
-          <H2Logo className="w-8 h-8 rounded-md" />
-          {!collapsed && (
-            <div className="flex flex-col leading-tight">
-              <span className="font-semibold text-[15px] tracking-tight text-sidebar-foreground">
-                H2 Budget
-              </span>
-              <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                Family finance
-              </span>
-            </div>
-          )}
-        </div>
-        {onToggleCollapse && !collapsed && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="ml-auto text-sidebar-foreground shrink-0"
-            aria-label="Collapse sidebar"
-            data-testid="button-collapse-sidebar"
-            onClick={onToggleCollapse}
-          >
-            <PanelLeftClose className="w-4 h-4" />
-          </Button>
-        )}
-        {onToggleCollapse && collapsed && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-sidebar-foreground shrink-0"
-            aria-label="Expand sidebar"
-            data-testid="button-collapse-sidebar"
-            onClick={onToggleCollapse}
-          >
-            <PanelLeftOpen className="w-4 h-4" />
-          </Button>
-        )}
+    <div className="flex flex-col h-full bg-sidebar">
+      <div className="px-5 py-4 border-b border-sidebar-border text-sidebar-foreground">
+        {BRAND}
       </div>
-      <nav
-        className={cn(
-          "flex-1 space-y-1 overflow-y-auto",
-          collapsed ? "p-2" : "p-4",
-        )}
-      >
-        {navItems.map((item) => {
-          const isActive = location.startsWith(item.href);
-          const reviewBadge = item.href === "/review" && reviewCount > 0;
-          const debriefBadge = item.href === "/debrief" && debriefCount > 0;
-          const badgeCount = reviewBadge
-            ? reviewCount
-            : debriefBadge
-              ? debriefCount
-              : null;
-          const badgeTestId = reviewBadge
-            ? "badge-review-count"
-            : debriefBadge
-              ? "badge-debrief-count"
-              : undefined;
-          return (
-            <Link key={item.href} href={item.href}>
-              <span
-                onClick={onNavigate}
-                title={collapsed ? item.name : undefined}
-                className={cn(
-                  "flex items-center rounded-md transition-colors cursor-pointer text-sm",
-                  collapsed
-                    ? "justify-center px-2 py-2"
-                    : "gap-3 px-3 py-2",
-                  isActive
-                    ? "bg-sidebar-primary/10 text-sidebar-primary font-semibold"
-                    : "text-sidebar-foreground/80 font-medium hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                )}
-              >
-                <span className="relative flex items-center justify-center">
-                  <item.icon
-                    className={cn("w-4 h-4", isActive && "text-sidebar-primary")}
-                  />
-                  {collapsed && badgeCount !== null && (
+      <nav className="flex-1 overflow-y-auto p-3 space-y-4">
+        {groups.map((g, i) => (
+          <div key={g.label || `g-${i}`}>
+            {g.label && (
+              <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {g.label}
+              </div>
+            )}
+            <div className="space-y-0.5">
+              {g.items.map((item) => {
+                const active = location.startsWith(item.href);
+                const badge = railBadge(item.href);
+                return (
+                  <Link key={item.href} href={item.href}>
                     <span
-                      className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-sidebar"
-                      data-testid={badgeTestId}
-                    />
-                  )}
-                </span>
-                {!collapsed && (
-                  <>
-                    <span className="flex-1">{item.name}</span>
-                    {badgeCount !== null && (
-                      <Badge
-                        variant="outline"
-                        className="bg-amber-100 text-amber-900 border-amber-300 text-[10px] px-1.5 py-0 h-5 tabular-nums"
-                        data-testid={badgeTestId}
-                      >
-                        {badgeCount}
-                      </Badge>
-                    )}
-                  </>
-                )}
-              </span>
-            </Link>
-          );
-        })}
+                      onClick={onNavigate}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2 rounded-md text-sm cursor-pointer",
+                        active
+                          ? "bg-primary/10 text-primary font-semibold"
+                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent",
+                      )}
+                    >
+                      <item.icon className="w-4 h-4" />
+                      <span className="flex-1">{item.name}</span>
+                      {badge !== null && (
+                        <Badge
+                          variant="outline"
+                          className="bg-amber-100 text-amber-900 border-amber-300 text-[10px] px-1.5 py-0 h-5 tabular-nums"
+                        >
+                          {badge}
+                        </Badge>
+                      )}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
-      <div
-        className={cn(
-          "border-t border-sidebar-border flex",
-          collapsed
-            ? "flex-col items-center gap-2 p-2"
-            : "items-center justify-between p-4",
-        )}
-      >
-        {!collapsed && (
-          <span className="text-sm font-medium text-sidebar-foreground">
-            Account
-          </span>
-        )}
-        <div
-          className={cn(
-            "flex items-center gap-1",
-            collapsed && "flex-col",
-          )}
-        >
+      <div className="border-t border-sidebar-border p-4 flex items-center justify-between">
+        <span className="text-sm font-medium text-sidebar-foreground">
+          Account
+        </span>
+        <div className="flex items-center gap-1">
           <ThemeToggle />
           <UserButton />
         </div>
       </div>
-    </>
+    </div>
   );
-}
-
-function readStoredCollapsed(): string | null {
-  try {
-    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredCollapsed(value: boolean): void {
-  try {
-    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, value ? "1" : "0");
-  } catch {
-    // ignore persistence errors
-  }
 }
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const reviewCount = useReviewInboxCount();
+  const debriefCount = useDebriefAwaitingCount();
 
-  // localStorage is the fast first-paint fallback. If it holds a value we
-  // trust it immediately (it mirrors the server from the last session on
-  // this device), so first paint is correct with no flicker. Only when it's
-  // absent (a brand-new device / cleared storage) do we wait for the
-  // server's per-user value before painting the sidebar, which avoids a
-  // visible collapsed↔expanded switch on initial render.
-  const initialStored = readStoredCollapsed();
-  const [collapsed, setCollapsed] = useState<boolean>(initialStored === "1");
-  const [hydrated, setHydrated] = useState<boolean>(initialStored !== null);
-  const [animateWidth, setAnimateWidth] = useState<boolean>(false);
-
-  const queryClient = useQueryClient();
-  const { data: uiPreferences, isSuccess, isError } = useGetUiPreferences();
-  const updateUiPreferences = useUpdateUiPreferences();
-
-  // Once the user's saved preference loads from the server it wins over the
-  // localStorage fallback. A ref guards against a slow in-flight read
-  // clobbering a fresh toggle the user just made.
-  const serverSyncedRef = useRef(false);
-  useEffect(() => {
-    if (serverSyncedRef.current) return;
-    if (isSuccess) {
-      serverSyncedRef.current = true;
-      const serverValue = uiPreferences?.sidebarCollapsed;
-      if (typeof serverValue === "boolean") {
-        setCollapsed(serverValue);
-        writeStoredCollapsed(serverValue);
-      }
-      setHydrated(true);
-    } else if (isError) {
-      // No server value available — fall back to whatever we have locally.
-      serverSyncedRef.current = true;
-      setHydrated(true);
-    }
-  }, [isSuccess, isError, uiPreferences]);
-
-  // Enable the width transition only after the first hydrated paint so the
-  // initial server reconciliation snaps instantly (no animated sweep), while
-  // later user toggles still animate smoothly.
-  useEffect(() => {
-    if (!hydrated || animateWidth) return;
-    const id = requestAnimationFrame(() => setAnimateWidth(true));
-    return () => cancelAnimationFrame(id);
-  }, [hydrated, animateWidth]);
-
-  const toggleCollapsed = () => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      // Mark as synced so the in-flight server read can't clobber the choice
-      // the user just made.
-      serverSyncedRef.current = true;
-      setHydrated(true);
-      writeStoredCollapsed(next);
-      updateUiPreferences.mutate(
-        { data: { sidebarCollapsed: next } },
-        {
-          onSuccess: () => {
-            queryClient.invalidateQueries({
-              queryKey: getGetUiPreferencesQueryKey(),
-            });
-          },
-        },
-      );
-      return next;
-    });
+  const railBadge = (href: string): number | null => {
+    if (href === "/review" && reviewCount > 0) return reviewCount;
+    if (href === "/debrief" && debriefCount > 0) return debriefCount;
+    return null;
   };
 
-  const currentPageTitle =
-    navItems.find((item) => location.startsWith(item.href))?.name ?? "H2 Budget";
+  const currentTitle =
+    ALL_NAV.find((n) => location.startsWith(n.href))?.name ?? "H2 Budget";
 
   return (
-    <div className="h-screen overflow-hidden bg-background flex flex-col md:flex-row">
-      {/* Desktop sidebar. Until the per-user preference is hydrated (only
-          ever pending on a brand-new device with no localStorage hint) we
-          render the shell without committing to a collapsed/expanded state,
-          so the user never sees the wrong layout flash and switch. The width
-          transition is enabled one frame after hydration so the initial
-          server reconciliation snaps instantly instead of animating. */}
-      <aside
-        className={cn(
-          "hidden md:flex bg-sidebar border-r border-sidebar-border flex-col",
-          animateWidth && "transition-[width] duration-200 ease-in-out",
-          !hydrated ? "w-64 opacity-0" : collapsed ? "w-16" : "w-64",
-        )}
-        aria-hidden={!hydrated}
-      >
-        {hydrated && (
-          <SidebarContents
-            location={location}
-            collapsed={collapsed}
-            onToggleCollapse={toggleCollapsed}
-          />
-        )}
-      </aside>
+    <div className="h-screen overflow-hidden bg-background flex flex-col">
+      {/* ── Top bar: brand · plan-&-analyze nav · settings gear ───────────── */}
+      <header className="shrink-0 bg-primary text-primary-foreground shadow-sm">
+        <div className="flex items-center h-14 px-3 md:px-5 gap-1">
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden text-primary-foreground hover:bg-white/10"
+                aria-label="Open navigation menu"
+                data-testid="button-mobile-menu"
+              >
+                <Menu className="w-5 h-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="p-0 w-72 flex flex-col">
+              <MobileNav
+                location={location}
+                onNavigate={() => setMobileOpen(false)}
+                railBadge={railBadge}
+              />
+            </SheetContent>
+          </Sheet>
 
-      {/* Mobile top bar */}
-      <header className="md:hidden flex items-center justify-between gap-2 px-3 h-14 bg-sidebar border-b border-sidebar-border shrink-0">
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-sidebar-foreground shrink-0"
-              aria-label="Open navigation menu"
-              data-testid="button-mobile-menu"
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent
-            side="left"
-            className="p-0 w-72 bg-sidebar border-sidebar-border flex flex-col"
-          >
-            <SidebarContents
-              location={location}
-              onNavigate={() => setMobileOpen(false)}
-            />
-          </SheetContent>
-        </Sheet>
-        <div
-          className="flex-1 min-w-0 text-center font-semibold text-base tracking-tight text-sidebar-foreground truncate"
-          data-testid="text-mobile-page-title"
-        >
-          {currentPageTitle}
-        </div>
-        <div className="shrink-0 flex items-center gap-1">
-          <ThemeToggle />
-          <UserButton />
+          <Link href="/reports">
+            <span className="mr-2 md:mr-6 cursor-pointer">{BRAND}</span>
+          </Link>
+
+          <nav className="hidden md:flex items-center gap-0.5">
+            {TOP_NAV.map((item) => {
+              const active = location.startsWith(item.href);
+              return (
+                <Link key={item.href} href={item.href}>
+                  <span
+                    className={cn(
+                      "flex items-center gap-2 px-3 h-9 rounded-md text-sm cursor-pointer transition-colors",
+                      active
+                        ? "bg-white/15 text-white font-semibold"
+                        : "text-primary-foreground/75 hover:bg-white/10 hover:text-white",
+                    )}
+                    data-testid={`topnav-${item.href.slice(1)}`}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    {item.name}
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="ml-auto flex items-center gap-0.5">
+            {/* Mobile shows the current page title between brand and actions. */}
+            <span className="md:hidden mr-1 font-semibold truncate max-w-[40vw]">
+              {currentTitle}
+            </span>
+            <ThemeToggle className="text-primary-foreground hover:bg-white/10" />
+            <Link href="/settings">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Settings"
+                title="Settings"
+                data-testid="link-settings"
+                className={cn(
+                  "text-primary-foreground hover:bg-white/10",
+                  location.startsWith("/settings") && "bg-white/15",
+                )}
+              >
+                <SettingsIcon className="w-5 h-5" />
+              </Button>
+            </Link>
+            <UserButton />
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-        <div className="p-4 md:p-8 max-w-6xl mx-auto">{children}</div>
-      </main>
+      {/* ── Body: left rail (accounts/periods) + main ─────────────────────── */}
+      <div className="flex-1 min-h-0 flex">
+        <aside className="hidden md:flex flex-col w-52 shrink-0 border-r border-sidebar-border bg-sidebar py-4">
+          <div className="px-4 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Accounts &amp; periods
+          </div>
+          <nav className="px-2 space-y-0.5">
+            {RAIL_NAV.map((item) => {
+              const active = location.startsWith(item.href);
+              const badge = railBadge(item.href);
+              return (
+                <Link key={item.href} href={item.href}>
+                  <span
+                    className={cn(
+                      "relative flex items-center gap-3 px-3 py-2 rounded-md text-sm cursor-pointer transition-colors",
+                      active
+                        ? "bg-primary/10 text-primary font-semibold"
+                        : "text-sidebar-foreground/80 font-medium hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                    )}
+                    data-testid={`railnav-${item.href.slice(1)}`}
+                  >
+                    {active && (
+                      <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-primary" />
+                    )}
+                    <item.icon
+                      className={cn("w-4 h-4", active && "text-primary")}
+                    />
+                    <span className="flex-1">{item.name}</span>
+                    {badge !== null && (
+                      <Badge
+                        variant="outline"
+                        className="bg-amber-100 text-amber-900 border-amber-300 text-[10px] px-1.5 py-0 h-5 tabular-nums"
+                        data-testid={
+                          item.href === "/review"
+                            ? "badge-review-count"
+                            : "badge-debrief-count"
+                        }
+                      >
+                        {badge}
+                      </Badge>
+                    )}
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
+        </aside>
+
+        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+          <div className="p-4 md:p-8 max-w-6xl mx-auto">{children}</div>
+        </main>
+      </div>
       <AdvisorChat />
     </div>
   );

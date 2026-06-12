@@ -21,7 +21,7 @@ import {
   getListTransactionsQueryKey,
   getGetForecastQueryKey,
 } from "@workspace/api-client-react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { usePlaidSync, formatPlaidErrorForDisplay } from "@/hooks/use-plaid-sync";
 import { useQueryClient } from "@tanstack/react-query";
 import { ToastAction } from "@/components/ui/toast";
@@ -46,7 +46,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus } from "lucide-react";
+import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus, GitMerge, ChevronRight } from "lucide-react";
 import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import {
@@ -507,8 +507,28 @@ export default function SettingsPage() {
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-3xl font-serif font-bold text-foreground">Settings</h1>
-        <p className="text-muted-foreground mt-1">Configure allowances and import historical data.</p>
+        <p className="text-muted-foreground mt-1">Allowances, mapping rules, connected banks, and data import.</p>
       </div>
+
+      <Link href="/mapping-rules">
+        <Card
+          className="cursor-pointer transition-colors hover:bg-accent/40"
+          data-testid="card-mapping-rules"
+        >
+          <CardContent className="flex items-center gap-4 p-5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0">
+              <GitMerge className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold">Mapping Rules</div>
+              <p className="text-sm text-muted-foreground">
+                How merchants auto-categorize — review, add, and clean up your rules.
+              </p>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+          </CardContent>
+        </Card>
+      </Link>
 
       <OwnerInvitationsSection />
 
