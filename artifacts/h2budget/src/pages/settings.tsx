@@ -506,7 +506,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-3xl font-serif font-bold text-foreground">Settings</h1>
+        <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground">Settings</h1>
         <p className="text-muted-foreground mt-1">Allowances, mapping rules, connected banks, and data import.</p>
       </div>
 

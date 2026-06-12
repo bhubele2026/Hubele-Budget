@@ -779,7 +779,7 @@ export default function AllowancesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-serif font-bold text-foreground">
+        <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground">
           Allowances
         </h1>
         <p className="text-muted-foreground">

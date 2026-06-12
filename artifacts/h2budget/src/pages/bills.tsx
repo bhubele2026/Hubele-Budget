@@ -555,7 +555,7 @@ export default function BillsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-start gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-serif font-bold text-foreground tracking-tight">
+          <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground tracking-tight">
             Bills
           </h1>
           <p className="text-muted-foreground mt-1">

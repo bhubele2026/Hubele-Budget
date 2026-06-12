@@ -1937,7 +1937,7 @@ export default function MappingRulesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-serif font-bold text-foreground">
+        <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground">
           Mapping Rules
         </h1>
         <p className="text-muted-foreground mt-1">

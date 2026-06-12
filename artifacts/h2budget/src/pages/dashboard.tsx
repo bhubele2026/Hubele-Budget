@@ -2290,7 +2290,7 @@ export default function DashboardPage() {
   if (!data) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-serif font-bold text-foreground">Dashboard</h1>
+        <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground">Dashboard</h1>
         <Skeleton className="h-40 w-full" />
         <Skeleton className="h-40 w-full" />
       </div>

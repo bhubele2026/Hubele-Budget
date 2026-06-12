@@ -153,7 +153,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-screen overflow-hidden bg-background flex flex-col">
       {/* ── Top bar: brand · plan-&-analyze nav · settings gear ───────────── */}
-      <header className="shrink-0 bg-primary text-primary-foreground shadow-sm">
+      <header className="shrink-0 bg-primary text-primary-foreground border-b border-black/20 shadow-[inset_0_1px_0_0_hsl(0_0%_100%/0.08)]">
         <div className="flex items-center h-14">
           {/* Brand — desktop: pinned to the rail width (w-52) with matching
               padding so "H2 Budget" sits directly above the left rail and the

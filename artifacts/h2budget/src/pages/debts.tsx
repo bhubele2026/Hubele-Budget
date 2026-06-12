@@ -197,7 +197,7 @@ export default function DebtsPage() {
       <DebtReauthBanner debts={debts} />
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-serif font-bold text-foreground">Debt Avalanche</h1>
+          <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground">Debt Avalanche</h1>
           <p className="text-muted-foreground mt-1">Sorted by APR to minimize interest paid.</p>
         </div>
       </div>
