@@ -396,22 +396,40 @@ export async function dedupeTransactionsAcrossAccountsForUser(
   const usedExternalIds = usedAccts
     .map((a) => a.plaidAccountId)
     .filter((v): v is string => typeof v === "string" && v.length > 0);
-  if (usedExternalIds.length === 0) return report;
 
-  const live = await db
-    .select({ accountId: plaidAccountsTable.accountId })
-    .from(plaidAccountsTable)
+  // Plaid rows with NO account link at all (plaid_account_id IS NULL) are
+  // disconnected relink residue that never shows up in usedExternalIds —
+  // e.g. the "—" (no card) twin of a live card charge. Detect them so they
+  // still get collapsed instead of lingering on the All-cards view.
+  const [nullAcctRow] = await db
+    .select({ id: transactionsTable.id })
+    .from(transactionsTable)
     .where(
       and(
-        eq(plaidAccountsTable.userId, userId),
-        inArray(plaidAccountsTable.accountId, usedExternalIds),
+        eq(transactionsTable.userId, userId),
+        sql`${transactionsTable.source} like 'plaid:%'` as SQL<unknown>,
+        sql`${transactionsTable.plaidAccountId} is null` as SQL<unknown>,
       ),
-    );
+    )
+    .limit(1);
+  const hasNullAcctPlaidRow = !!nullAcctRow;
+
+  const live = usedExternalIds.length
+    ? await db
+        .select({ accountId: plaidAccountsTable.accountId })
+        .from(plaidAccountsTable)
+        .where(
+          and(
+            eq(plaidAccountsTable.userId, userId),
+            inArray(plaidAccountsTable.accountId, usedExternalIds),
+          ),
+        )
+    : [];
   const liveAccountIds = new Set<string>(live.map((l) => l.accountId));
   const orphanAccountIds = new Set<string>(
     usedExternalIds.filter((id) => !liveAccountIds.has(id)),
   );
-  if (orphanAccountIds.size === 0) return report;
+  if (orphanAccountIds.size === 0 && !hasNullAcctPlaidRow) return report;
 
   return await db.transaction(async (tx) => {
     // Only inspect Plaid-origin rows. Manual rows are user-authored and
@@ -467,31 +485,23 @@ export async function dedupeTransactionsAcrossAccountsForUser(
     //     non-orphan member is >= 24h (real same-day double charges
     //     land near-simultaneously; re-imported residue is hours/days
     //     after the original).
-    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    // Collapse a group when at least one row has NO live account link — an
+    // orphaned account_id (defunct link) OR a null account_id — and the
+    // group has at most one genuinely live-linked row. That's the relink-
+    // residue fingerprint: a real same-day double charge would have BOTH
+    // copies on the SAME live card (no orphan-like member), so it never
+    // matches here and is preserved. The merge keeps the live-linked
+    // survivor and folds the residue's category/allowance flags onto it.
+    // (Replaces the older 3+-copies-or-24h-spread heuristic, which missed a
+    // 2-copy same-day twin created by a same-day reconnect.)
+    const isOrphanLike = (r: TxnRow): boolean =>
+      !r.plaidAccountId || orphanAccountIds.has(r.plaidAccountId);
     const dupGroups = Array.from(groups.values()).filter((g) => {
       if (g.length < 2) return false;
-      const orphans = g.filter(
-        (r) => r.plaidAccountId && orphanAccountIds.has(r.plaidAccountId),
-      );
-      if (orphans.length === 0) return false;
-      if (g.length >= 3) return true;
-      const others = g.filter(
-        (r) => !r.plaidAccountId || !orphanAccountIds.has(r.plaidAccountId),
-      );
-      if (others.length === 0) return true; // all-orphan duplicates are still residue
-      const orphanTimes = orphans
-        .map((r) => r.createdAt?.getTime())
-        .filter((n): n is number => typeof n === "number");
-      const otherTimes = others
-        .map((r) => r.createdAt?.getTime())
-        .filter((n): n is number => typeof n === "number");
-      if (orphanTimes.length === 0 || otherTimes.length === 0) return false;
-      const minSpread = Math.min(
-        ...orphanTimes.flatMap((a) =>
-          otherTimes.map((b) => Math.abs(a - b)),
-        ),
-      );
-      return minSpread >= ONE_DAY_MS;
+      const orphanLike = g.filter(isOrphanLike);
+      if (orphanLike.length === 0) return false; // no residue → preserve
+      const liveCount = g.length - orphanLike.length;
+      return liveCount <= 1;
     });
     if (dupGroups.length === 0) return report;
 

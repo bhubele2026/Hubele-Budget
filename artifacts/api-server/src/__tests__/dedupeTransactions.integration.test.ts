@@ -67,7 +67,7 @@ async function seedAccount(): Promise<string> {
 
 async function insertTxn(
   values: Partial<typeof transactionsTable.$inferInsert> & {
-    plaidAccountId: string;
+    plaidAccountId: string | null;
     occurredOn: string;
     amount: string;
     description: string;
@@ -590,7 +590,7 @@ describe("dedupeTransactionsAcrossAccountsForUser (#475-followup)", () => {
     expect(remaining).toHaveLength(2);
   });
 
-  it("does NOT collapse a coincidental orphan+live pair created near-simultaneously (real twin charges, not relink residue)", async () => {
+  it("collapses an orphan+live twin even created same-day / near-simultaneously (it's relink residue — a real double charge would be on the SAME live card)", async () => {
     await cleanup();
     const live = await seedAccount();
     const orphan = `chase-orphan-${randomUUID().slice(0, 8)}`;
@@ -615,15 +615,54 @@ describe("dedupeTransactionsAcrossAccountsForUser (#475-followup)", () => {
         description: "STARBUCKS",
         source: "plaid:chase",
       },
-      new Date(t + 60 * 1000), // 1 minute apart — real twin charges
+      new Date(t + 60 * 1000), // 1 minute apart — old heuristic preserved
+      // this; the orphan-vs-live signal correctly treats it as residue.
     );
     const report = await dedupeTransactionsAcrossAccountsForUser(TEST_USER);
-    expect(report.duplicatesRemoved).toBe(0);
+    expect(report.duplicatesRemoved).toBe(1);
     const remaining = await db
       .select()
       .from(transactionsTable)
       .where(eq(transactionsTable.userId, TEST_USER));
-    expect(remaining).toHaveLength(2);
+    expect(remaining).toHaveLength(1);
+    // Survivor is the live-linked copy.
+    expect(remaining[0]!.plaidAccountId).toBe(live);
+  });
+
+  it("collapses a NULL-account twin of a live card charge (the '—' no-card duplicate)", async () => {
+    await cleanup();
+    const live = await seedAccount();
+    const t = Date.now();
+    await insertTxn(
+      {
+        plaidAccountId: null,
+        plaidTransactionId: "ptx-nullacct",
+        occurredOn: "2026-06-12",
+        amount: "-17.03",
+        description: "SUBWAY",
+        source: "plaid:amex",
+      },
+      new Date(t),
+    );
+    await insertTxn(
+      {
+        plaidAccountId: live,
+        plaidTransactionId: "ptx-live-sub",
+        occurredOn: "2026-06-12",
+        amount: "-17.03",
+        description: "SUBWAY",
+        source: "plaid:amex",
+      },
+      new Date(t + 60 * 1000),
+    );
+    const report = await dedupeTransactionsAcrossAccountsForUser(TEST_USER);
+    expect(report.duplicatesRemoved).toBe(1);
+    const remaining = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.plaidAccountId).toBe(live);
   });
 
   it("does NOT touch manual transactions even when they share a key", async () => {
