@@ -209,7 +209,7 @@ function SingleSeriesBalanceTrendChart({
                 data={window.series}
                 margin={{ top: 6, right: 12, bottom: 0, left: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" opacity={0.2} vertical={false} />
+                <CartesianGrid stroke="hsl(var(--border))" strokeOpacity={0.7} vertical={false} />
                 <XAxis
                   dataKey="x"
                   type="number"
@@ -296,7 +296,7 @@ function SingleSeriesBalanceTrendChart({
               data={data}
               margin={{ top: 6, right: 12, bottom: 0, left: 0 }}
             >
-              <CartesianGrid strokeDasharray="3 3" opacity={0.2} vertical={false} />
+              <CartesianGrid stroke="hsl(var(--border))" strokeOpacity={0.7} vertical={false} />
               <XAxis
                 dataKey="shortLabel"
                 tick={{ fontSize: 10 }}
@@ -384,7 +384,7 @@ function MultiSeriesBalanceTrendChart({
   todayISO,
   axisDates,
   actualColor = "hsl(var(--chart-1))",
-  forecastColor = "hsl(217 91% 60%)",
+  forecastColor = "hsl(214 55% 64%)",
   valueLabel = "Balance",
   testId = "card-balance-trend",
   collapsed,
@@ -463,7 +463,7 @@ function MultiSeriesBalanceTrendChart({
               data={merged}
               margin={{ top: 6, right: 12, bottom: 0, left: 0 }}
             >
-              <CartesianGrid strokeDasharray="3 3" opacity={0.2} vertical={false} />
+              <CartesianGrid stroke="hsl(var(--border))" strokeOpacity={0.7} vertical={false} />
               <XAxis
                 dataKey="date"
                 ticks={monthTicks}
