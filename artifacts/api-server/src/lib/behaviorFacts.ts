@@ -176,9 +176,16 @@ export function matchesBucket(
   const c = (categoryName ?? "").toLowerCase();
   const kw = KEYWORD_BUCKETS[bucket].some((k) => m.includes(k));
   switch (bucket) {
-    case "dining":
+    case "dining": {
+      // A coffee shop is coffee, NOT "dining out" — even Starbucks/Dunkin
+      // whose Plaid category is the combined "Dining & Coffee". Exclude any
+      // merchant that reads as a coffee place so the dining-out card and the
+      // no-dining streak don't count coffee runs.
+      const isCoffeePlace = KEYWORD_BUCKETS.coffee.some((k) => m.includes(k));
+      if (isCoffeePlace) return false;
       // Merchant OR category name signals dining.
       return kw || c.includes("dining");
+    }
     case "groceries":
       return kw || categoryName === "Groceries";
     case "gasStation":
@@ -198,17 +205,6 @@ export function matchesBucket(
       return kw; // merchant-match only
   }
 }
-
-// Categories that are "expected" recurring spend, NOT impulse buys.
-const NON_IMPULSE_CATEGORY_NAMES: ReadonlySet<string> = new Set([
-  "Groceries",
-  "Gas, Maintenance & Parking",
-  "Subscriptions",
-  "Utilities",
-  "Insurance",
-  "Mortgage (Lakeview)",
-  "Car Payments",
-]);
 
 // --- Output shape ----------------------------------------------------------
 export interface DaysSinceEntry {
@@ -388,13 +384,33 @@ const SUBSCRIPTION_FREQUENCIES: ReadonlySet<string> = new Set([
   "annual",
 ]);
 
+// "True subscription" detection for the Subscriptions card. A recurring
+// item counts as a subscription when it sits in a Subscriptions/Streaming
+// category OR its name matches a known subscription service. Everything
+// else — mortgage, HELOC, insurance, utilities, a groceries budget line —
+// is excluded so the card reflects Netflix/Spotify-style services, not
+// fixed bills.
+const SUBSCRIPTION_CATEGORY_PATTERN = /subscription|streaming/i;
+const SUBSCRIPTION_MERCHANT_PATTERN =
+  /netflix|spotify|hulu|disney\+?|hbo|\bmax\b|peacock|paramount|youtube|prime\s*video|amazon\s*prime|apple\s*(tv|music|arcade|one)|itunes|icloud|google\s*(one|storage|play)|dropbox|adobe|microsoft\s*365|office\s*365|audible|kindle\s*unlimited|patreon|substack|peloton|planet\s*fitness|\bgym\b|fitness|xbox|game\s*pass|playstation\s*(plus|now)|nintendo\s*(online|switch\s*online)|crunchyroll|sling|fubo|espn\+?|nytimes|new\s*york\s*times|\bwsj\b|wall\s*street\s*journal|the\s*athletic|canva|notion|chatgpt|openai|grammarly|1password|lastpass/i;
+
+export function isTrueSubscription(
+  name: string,
+  categoryName: string | null,
+): boolean {
+  if (categoryName && SUBSCRIPTION_CATEGORY_PATTERN.test(categoryName)) {
+    return true;
+  }
+  return SUBSCRIPTION_MERCHANT_PATTERN.test(name ?? "");
+}
+
 // (#879 — Biggest Splurge: discretionary only) A "splurge" should reflect
 // discretionary spend (shopping/dining/home-improvement/clothing/entertainment),
 // never a fixed obligation like mortgage, HELOC, a loan, rent, insurance,
 // utilities, taxes, or any debt/card payment. This pattern is matched against
 // a category name, a category group name, or the raw transaction description.
 export const FIXED_OBLIGATION_PATTERN =
-  /mortgage|heloc|home\s*equity|\bloan\b|\brent\b|insurance|\btax(es)?\b|utilit|\bdebt\b|card\s*payment/i;
+  /mortgage|heloc|home\s*equity|\bloan\b|\blease\b|\brent\b|insurance|\btax(es)?\b|utilit|\bdebt\b|car\s*payment|card\s*payment|auto\s*loan/i;
 
 export interface SplurgeCategoryInfo {
   name: string;
@@ -661,8 +677,15 @@ export async function buildBehaviorFacts(
     hourBuckets[hour].total += spend;
     hourBuckets[hour].count += 1;
 
-    // Impulse buys: small purchases outside the "expected recurring" set.
-    if (spend < 20 && !(cName && NON_IMPULSE_CATEGORY_NAMES.has(cName))) {
+    // Impulse / big-ticket buys: one-off discretionary purchases OVER $100 —
+    // the splurge-y stuff, not everyday food or routine bills. Reuses the
+    // biggest-splurge exclusion (no mortgage / car / HELOC / insurance /
+    // card payment) and also drops routine consumables (groceries, dining,
+    // coffee, gas) so a big grocery run or a nice dinner doesn't read as an
+    // impulse splurge.
+    const isRoutineConsumable =
+      !!cName && /grocer|dining|coffee|restaurant|gas|fuel/i.test(cName);
+    if (spend > 100 && !splurgeExcluded && !isRoutineConsumable) {
       impulseCount += 1;
       impulseTotal += spend;
       if (impulseMerchants.length < 3 && !impulseMerchants.includes(merchant)) {
@@ -774,13 +797,19 @@ export async function buildBehaviorFacts(
     .from(recurringItemsTable)
     .where(eq(recurringItemsTable.householdId, householdId));
 
+  // "True subscriptions only" — recurring SERVICES (streaming, software,
+  // memberships), NOT fixed bills like mortgage / HELOC / insurance /
+  // utilities and NOT variable spend like groceries & dining. Identify by a
+  // Subscriptions/Streaming category or a known subscription-service name;
+  // anything else (a mortgage line, a groceries budget) is excluded.
   const subs = recurring.filter(
     (r) =>
       r.active === "true" &&
       r.kind !== "income" &&
       r.kind !== "debt" &&
       !r.debtId &&
-      SUBSCRIPTION_FREQUENCIES.has(r.frequency),
+      SUBSCRIPTION_FREQUENCIES.has(r.frequency) &&
+      isTrueSubscription(r.name, catName(r.categoryId)),
   );
   let monthlyTotal = 0;
   const subRows = subs.map((r) => {

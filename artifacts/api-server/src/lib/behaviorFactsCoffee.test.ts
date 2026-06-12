@@ -33,3 +33,21 @@ describe("matchesBucket — coffee", () => {
     expect(matchesBucket("coffee", "Kwik Trip", "Gas", 5)).toBe(false);
   });
 });
+
+describe("matchesBucket — dining excludes coffee places", () => {
+  it("does NOT count a coffee shop as dining, even with a Dining & Coffee category", () => {
+    // The bug: Starbucks showed under "days since last dining out" because
+    // its combined "Dining & Coffee" category contains the word "dining".
+    expect(matchesBucket("dining", "Starbucks", "Dining & Coffee", 25)).toBe(
+      false,
+    );
+    expect(matchesBucket("dining", "Dunkin'", "Dining & Coffee", 8)).toBe(false);
+  });
+
+  it("still counts a real restaurant as dining (incl. via a combined category)", () => {
+    expect(matchesBucket("dining", "Culver's", "Dining & Coffee", 18)).toBe(
+      true,
+    );
+    expect(matchesBucket("dining", "Mario's Pizza", null, 30)).toBe(true);
+  });
+});
