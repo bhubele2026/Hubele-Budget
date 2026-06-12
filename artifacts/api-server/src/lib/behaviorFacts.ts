@@ -798,13 +798,37 @@ export async function buildBehaviorFacts(
   const incomeItems = recurring.filter(
     (r) => r.kind === "income" && r.active === "true",
   );
+  // The countdown should track actual paychecks only — not small/irregular
+  // family deposits like a Venmo "Mom — Verizon reimbursement". Real
+  // paychecks live in paycheck-named categories (e.g. "Brad's paycheck
+  // (KFI)", "Hannah's paycheck (Exact)"); the reimbursement does not. When
+  // any such category exists we restrict the countdown to those items.
+  // Otherwise (a user who never named an income category "paycheck") we
+  // fall back to an amount floor so small reimbursements still drop out
+  // — mirrors the avalanche scheduler's PAYCHECK_MIN.
+  const PAYCHECK_MIN_AMOUNT = 1000;
+  const isPaycheckCategory = (name: string | null): boolean =>
+    !!name && /paycheck|payroll|salary|wages/i.test(name);
+  const hasPaycheckCategory = incomeItems.some((r) =>
+    isPaycheckCategory(catName(r.categoryId)),
+  );
   const horizon = new Date(today);
   horizon.setDate(horizon.getDate() + 60);
   let nextPaycheck: BehaviorFacts["funFacts"]["nextPaycheckCountdown"] = null;
   for (const item of incomeItems) {
+    // Paycheck-category mode: only items in a paycheck-named category count.
+    if (hasPaycheckCategory && !isPaycheckCategory(catName(item.categoryId))) {
+      continue;
+    }
     const events = expandItem(item, today, horizon);
     for (const ev of events) {
       if (ev.date <= todayIso) continue; // strictly after today
+      // Amount-floor fallback (no paycheck-named categories on file): skip
+      // small/irregular deposits so a reimbursement can't masquerade as a
+      // paycheck.
+      if (!hasPaycheckCategory && Math.abs(ev.amount) <= PAYCHECK_MIN_AMOUNT) {
+        continue;
+      }
       const days = daysBetween(todayIso, ev.date);
       if (!nextPaycheck || ev.date < nextPaycheck.expectedDate) {
         nextPaycheck = {
