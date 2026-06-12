@@ -1776,7 +1776,7 @@ export default function AmexPage() {
         <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
         {/* (#806) Summary tiles are always visible; only the filter
             fields collapse, and that lives inside AccountFilterBar. */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 stagger-children">
           {endingBalance.source === "missing" ||
           (endingBalance.source !== "loading" &&
             endingBalance.value === null) ? (

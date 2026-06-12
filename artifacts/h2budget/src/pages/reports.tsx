@@ -515,7 +515,7 @@ function ReportsBalanceTiles({
       : `Lowest ${formatCurrency(lowest)} · buffer ${formatCurrency(buffer)}`;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
       <HeroTile
         label="Bank Balance"
         value={bankValue}

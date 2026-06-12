@@ -2000,7 +2000,7 @@ export default function TransactionsPage() {
 
       <div className="space-y-3">
         <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 stagger-children">
           {hasLinkedChecking ? (
             <StatChip
               label="Starting balance"
