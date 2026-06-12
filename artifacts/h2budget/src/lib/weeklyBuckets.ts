@@ -1,11 +1,18 @@
 import { useGetSettings, type Settings } from "@workspace/api-client-react";
 
-export const SUB_BUCKETS = ["groceries", "dining", "entertainment", "misc"] as const;
+export const SUB_BUCKETS = [
+  "groceries",
+  "dining",
+  "alcohol",
+  "entertainment",
+  "misc",
+] as const;
 export type SubBucket = (typeof SUB_BUCKETS)[number];
 
 export const DEFAULT_WEEKLY_BUCKET_LABELS: Record<SubBucket, string> = {
   groceries: "Groceries",
   dining: "Dining",
+  alcohol: "Alcohol",
   entertainment: "Entertainment",
   misc: "Misc",
 };

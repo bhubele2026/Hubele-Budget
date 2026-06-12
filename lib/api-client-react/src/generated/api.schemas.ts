@@ -28,6 +28,7 @@ export type TransactionWeeklyBucket =
 export const TransactionWeeklyBucket = {
   groceries: "groceries",
   dining: "dining",
+  alcohol: "alcohol",
   entertainment: "entertainment",
   misc: "misc",
 } as const;
@@ -155,6 +156,7 @@ export type CreateTransactionInputWeeklyBucket =
 export const CreateTransactionInputWeeklyBucket = {
   groceries: "groceries",
   dining: "dining",
+  alcohol: "alcohol",
   entertainment: "entertainment",
   misc: "misc",
 } as const;
@@ -202,6 +204,7 @@ export type TransactionInputWeeklyBucket =
 export const TransactionInputWeeklyBucket = {
   groceries: "groceries",
   dining: "dining",
+  alcohol: "alcohol",
   entertainment: "entertainment",
   misc: "misc",
 } as const;
@@ -1673,6 +1676,7 @@ matching rule has a category.
 export interface WeeklyBucketLabels {
   groceries?: string;
   dining?: string;
+  alcohol?: string;
   entertainment?: string;
   misc?: string;
 }

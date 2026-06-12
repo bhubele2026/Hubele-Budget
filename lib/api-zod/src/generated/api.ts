@@ -57,6 +57,7 @@ export const GetDashboardResponse = zod.object({
         .union([
           zod.literal("groceries"),
           zod.literal("dining"),
+          zod.literal("alcohol"),
           zod.literal("entertainment"),
           zod.literal("misc"),
           zod.literal(null),
@@ -170,6 +171,7 @@ export const ListTransactionsResponseItem = zod.object({
     .union([
       zod.literal("groceries"),
       zod.literal("dining"),
+      zod.literal("alcohol"),
       zod.literal("entertainment"),
       zod.literal("misc"),
       zod.literal(null),
@@ -247,6 +249,7 @@ export const CreateTransactionBody = zod.object({
     .union([
       zod.literal("groceries"),
       zod.literal("dining"),
+      zod.literal("alcohol"),
       zod.literal("entertainment"),
       zod.literal("misc"),
       zod.literal(null),
@@ -283,6 +286,7 @@ export const UpdateTransactionBody = zod.object({
     .union([
       zod.literal("groceries"),
       zod.literal("dining"),
+      zod.literal("alcohol"),
       zod.literal("entertainment"),
       zod.literal("misc"),
       zod.literal(null),
@@ -323,6 +327,7 @@ export const UpdateTransactionResponse = zod
       .union([
         zod.literal("groceries"),
         zod.literal("dining"),
+        zod.literal("alcohol"),
         zod.literal("entertainment"),
         zod.literal("misc"),
         zod.literal(null),
@@ -520,6 +525,7 @@ export const ClearTransferOverrideResponse = zod.object({
     .union([
       zod.literal("groceries"),
       zod.literal("dining"),
+      zod.literal("alcohol"),
       zod.literal("entertainment"),
       zod.literal("misc"),
       zod.literal(null),
@@ -796,6 +802,7 @@ export const BulkUpdateTransactionsBody = zod.object({
       .union([
         zod.literal("groceries"),
         zod.literal("dining"),
+        zod.literal("alcohol"),
         zod.literal("entertainment"),
         zod.literal("misc"),
         zod.literal(null),
@@ -2128,6 +2135,7 @@ export const GetSettingsResponse = zod.object({
           .object({
             groceries: zod.string().optional(),
             dining: zod.string().optional(),
+            alcohol: zod.string().optional(),
             entertainment: zod.string().optional(),
             misc: zod.string().optional(),
           })
@@ -2160,6 +2168,7 @@ export const UpdateSettingsBody = zod.object({
           .object({
             groceries: zod.string().optional(),
             dining: zod.string().optional(),
+            alcohol: zod.string().optional(),
             entertainment: zod.string().optional(),
             misc: zod.string().optional(),
           })
@@ -2192,6 +2201,7 @@ export const UpdateSettingsResponse = zod.object({
           .object({
             groceries: zod.string().optional(),
             dining: zod.string().optional(),
+            alcohol: zod.string().optional(),
             entertainment: zod.string().optional(),
             misc: zod.string().optional(),
           })
@@ -2243,6 +2253,7 @@ export const GetForecastResponse = zod.object({
         .union([
           zod.literal("groceries"),
           zod.literal("dining"),
+          zod.literal("alcohol"),
           zod.literal("entertainment"),
           zod.literal("misc"),
           zod.literal(null),

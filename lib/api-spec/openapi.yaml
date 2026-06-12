@@ -2205,7 +2205,7 @@ components:
         categoryId: { type: ["string", "null"] }
         forecastFlag: { type: boolean }
         weeklyAllowance: { type: boolean }
-        weeklyBucket: { type: ["string", "null"], enum: [groceries, dining, entertainment, misc, null] }
+        weeklyBucket: { type: ["string", "null"], enum: [groceries, dining, alcohol, entertainment, misc, null] }
         monthlyAllowance: { type: boolean }
         unplannedAllowance: { type: boolean }
         reimbursable: { type: boolean }
@@ -2310,7 +2310,7 @@ components:
         categoryId: { type: ["string", "null"] }
         forecastFlag: { type: boolean }
         weeklyAllowance: { type: boolean }
-        weeklyBucket: { type: ["string", "null"], enum: [groceries, dining, entertainment, misc, null] }
+        weeklyBucket: { type: ["string", "null"], enum: [groceries, dining, alcohol, entertainment, misc, null] }
         monthlyAllowance: { type: boolean }
         unplannedAllowance: { type: boolean }
         reimbursable: { type: boolean }
@@ -2334,7 +2334,7 @@ components:
         categoryId: { type: ["string", "null"] }
         forecastFlag: { type: boolean }
         weeklyAllowance: { type: boolean }
-        weeklyBucket: { type: ["string", "null"], enum: [groceries, dining, entertainment, misc, null] }
+        weeklyBucket: { type: ["string", "null"], enum: [groceries, dining, alcohol, entertainment, misc, null] }
         monthlyAllowance: { type: boolean }
         unplannedAllowance: { type: boolean }
         reimbursable: { type: boolean }
@@ -3599,6 +3599,7 @@ components:
       properties:
         groceries: { type: string }
         dining: { type: string }
+        alcohol: { type: string }
         entertainment: { type: string }
         misc: { type: string }
     DaysSinceTracker:
