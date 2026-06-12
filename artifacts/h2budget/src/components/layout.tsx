@@ -154,31 +154,42 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="h-screen overflow-hidden bg-background flex flex-col">
       {/* ── Top bar: brand · plan-&-analyze nav · settings gear ───────────── */}
       <header className="shrink-0 bg-primary text-primary-foreground shadow-sm">
-        <div className="flex items-center h-14 px-3 md:px-5 gap-1">
-          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="md:hidden text-primary-foreground hover:bg-white/10"
-                aria-label="Open navigation menu"
-                data-testid="button-mobile-menu"
-              >
-                <Menu className="w-5 h-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="p-0 w-72 flex flex-col">
-              <MobileNav
-                location={location}
-                onNavigate={() => setMobileOpen(false)}
-                railBadge={railBadge}
-              />
-            </SheetContent>
-          </Sheet>
-
+        <div className="flex items-center h-14">
+          {/* Brand — desktop: pinned to the rail width (w-52) with matching
+              padding so "H2 Budget" sits directly above the left rail and the
+              top-nav starts where the main content does. */}
           <Link href="/reports">
-            <span className="mr-2 md:mr-6 cursor-pointer">{BRAND}</span>
+            <span className="hidden md:flex items-center h-14 w-52 px-4 cursor-pointer">
+              {BRAND}
+            </span>
           </Link>
+
+          {/* Mobile: hamburger + brand */}
+          <div className="md:hidden flex items-center gap-1 pl-1">
+            <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-primary-foreground hover:bg-white/10"
+                  aria-label="Open navigation menu"
+                  data-testid="button-mobile-menu"
+                >
+                  <Menu className="w-5 h-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="p-0 w-72 flex flex-col">
+                <MobileNav
+                  location={location}
+                  onNavigate={() => setMobileOpen(false)}
+                  railBadge={railBadge}
+                />
+              </SheetContent>
+            </Sheet>
+            <Link href="/reports">
+              <span className="cursor-pointer">{BRAND}</span>
+            </Link>
+          </div>
 
           <nav className="hidden md:flex items-center gap-0.5">
             {TOP_NAV.map((item) => {
@@ -202,7 +213,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <div className="ml-auto flex items-center gap-0.5">
+          <div className="ml-auto flex items-center gap-0.5 pr-3 md:pr-5">
             {/* Mobile shows the current page title between brand and actions. */}
             <span className="md:hidden mr-1 font-semibold truncate max-w-[40vw]">
               {currentTitle}
