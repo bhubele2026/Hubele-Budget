@@ -223,7 +223,7 @@ function HeroTile({
         <div className="mt-1.5 flex items-baseline gap-2 flex-wrap">
           <div
             className={cn(
-              "text-[1.7rem] font-semibold tracking-tight tabular-nums truncate",
+              "text-[1.9rem] md:text-[2.1rem] font-semibold tracking-[-0.02em] tabular-nums truncate leading-none",
               toneClass,
             )}
           >

@@ -59,7 +59,7 @@ export function StatChip({
       </div>
       <div
         className={cn(
-          "tabular-nums font-semibold tracking-tight leading-none text-[1.65rem]",
+          "tabular-nums font-semibold tracking-[-0.02em] leading-none text-[1.9rem]",
           (isLoading || isMissing) &&
             "text-base font-normal text-muted-foreground",
           !(isLoading || isMissing) && valueClassName,
