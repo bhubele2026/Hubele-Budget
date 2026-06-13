@@ -29,6 +29,12 @@ export function todayISO(now: Date): string {
   return fmtISO(now);
 }
 
+/** ISO bounds of the Sun–Sat week containing `now`. */
+export function currentWeekBounds(now: Date): { startISO: string; endISO: string } {
+  const sun = sundayOf(now);
+  return { startISO: fmtISO(sun), endISO: fmtISO(addDays(sun, 6)) };
+}
+
 /**
  * Trailing run of COMPLETED weeks that all landed the same side of the weekly
  * allowance — `under` (good) or `over` (the roast). Walks back from last week

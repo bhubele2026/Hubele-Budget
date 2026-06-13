@@ -20,7 +20,9 @@ import {
   weeklyBudgetStreak,
   isoDaysAgo,
   todayISO,
+  currentWeekBounds,
 } from "@/lib/weeklyStreak";
+import { CategoryDonut } from "@/components/category-donut";
 import { useUser } from "@clerk/react";
 import { useCountUp } from "@/hooks/useCountUp";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -215,6 +217,26 @@ export default function CommandCenterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weeklyTxns]);
 
+  // This week's weekly-allowance pace (spend vs planned, this Sun–Sat).
+  const thisWeek = useMemo(() => {
+    const { startISO, endISO } = currentWeekBounds(now);
+    let spend = 0;
+    for (const t of weeklyTxns ?? []) {
+      if (!t.weeklyAllowance) continue;
+      if (t.occurredOn >= startISO && t.occurredOn <= endISO) {
+        const a = Number(t.amount) || 0;
+        if (a < 0) spend += -a;
+      }
+    }
+    const override = settings?.preferences?.weeklyAllowanceOverrides?.[startISO];
+    const planned =
+      override != null
+        ? Number(override)
+        : Number(settings?.weeklyAllowanceAmount) || 0;
+    return { spend, planned };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeklyTxns, settings]);
+
   const streak = useMemo(
     () =>
       weeklyBudgetStreak(
@@ -308,6 +330,53 @@ export default function CommandCenterPage() {
           sub="this month"
         />
       </div>
+
+      {/* This week's allowance pace */}
+      {thisWeek.planned > 0 ? (
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-baseline justify-between mb-2">
+              <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                This week&apos;s allowance
+              </span>
+              <span className="text-sm tabular-nums">
+                <span
+                  className={cn(
+                    "font-bold",
+                    thisWeek.spend > thisWeek.planned
+                      ? "text-[hsl(var(--negative))]"
+                      : "text-emerald-500",
+                  )}
+                >
+                  {formatCurrency(thisWeek.spend)}
+                </span>
+                <span className="text-muted-foreground">
+                  {" "}
+                  / {formatCurrency(thisWeek.planned)}
+                </span>
+              </span>
+            </div>
+            <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-[width] duration-700 ease-out",
+                  thisWeek.spend > thisWeek.planned
+                    ? "bg-[hsl(var(--negative))]"
+                    : "bg-emerald-500",
+                )}
+                style={{
+                  width: `${Math.min(100, (thisWeek.spend / thisWeek.planned) * 100)}%`,
+                }}
+              />
+            </div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              {thisWeek.spend > thisWeek.planned
+                ? `${formatCurrency(thisWeek.spend - thisWeek.planned)} over — ease up, you muppets.`
+                : `${formatCurrency(thisWeek.planned - thisWeek.spend)} left this week. Don't blow it. 😏`}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Spend-pace gauge */}
       <Card>
@@ -442,6 +511,9 @@ export default function CommandCenterPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      {/* Category donut */}
+      <CategoryDonut categories={dash?.topCategories ?? []} />
 
       {/* Him-vs-her scoreboard */}
       <SpendScoreboard entries={memberSpend} />
