@@ -1,12 +1,12 @@
 import { cn } from "@/lib/utils";
 
-// Real bank brand marks as crisp inline SVG — no CDN, no low-res favicon, no
-// broken-image fallback. They render identically sharp at any size and never
-// depend on the network (the old Clearbit-CDN version pulled a junky favicon,
-// which is the "crap logo" that kept showing up).
+// Matte, monochrome bank marks. Inline SVG (no CDN, always crisp) drawn in
+// `currentColor` so they pick up the surrounding text color — off-white on
+// the matte-black tiles, ink on light. No blue, no gloss: matte everything,
+// to match the rest of the app.
 
 export function ChaseLogo({ className }: { className?: string }) {
-  // Chase octagon: the blue mark with the square negative-space center.
+  // Chase octagon with the square negative-space center.
   return (
     <svg
       viewBox="0 0 32 32"
@@ -15,7 +15,7 @@ export function ChaseLogo({ className }: { className?: string }) {
       aria-label="Chase"
     >
       <path
-        fill="#117ACA"
+        fill="currentColor"
         fillRule="evenodd"
         clipRule="evenodd"
         d="M11.03 2.5h9.94l8.53 8.53v9.94l-8.53 8.53h-9.94L2.5 20.97v-9.94L11.03 2.5Zm2.22 10.75v5.5h5.5v-5.5h-5.5Z"
@@ -25,7 +25,7 @@ export function ChaseLogo({ className }: { className?: string }) {
 }
 
 export function AmexLogo({ className }: { className?: string }) {
-  // American Express: the iconic blue box with the wordmark.
+  // American Express: a matte outlined badge with the AMEX wordmark.
   return (
     <svg
       viewBox="0 0 32 32"
@@ -33,32 +33,28 @@ export function AmexLogo({ className }: { className?: string }) {
       role="img"
       aria-label="American Express"
     >
-      <rect x="2" y="6" width="28" height="20" rx="2.5" fill="#006FCF" />
+      <rect
+        x="2.5"
+        y="6.5"
+        width="27"
+        height="19"
+        rx="2.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
       <text
         x="16"
-        y="13.4"
+        y="16.4"
         textAnchor="middle"
         dominantBaseline="central"
         fontFamily="Arial, Helvetica, sans-serif"
-        fontSize="4.1"
+        fontSize="6.4"
         fontWeight="700"
-        letterSpacing="0.2"
-        fill="#fff"
+        letterSpacing="0.4"
+        fill="currentColor"
       >
-        AMERICAN
-      </text>
-      <text
-        x="16"
-        y="19.2"
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontFamily="Arial, Helvetica, sans-serif"
-        fontSize="4.1"
-        fontWeight="700"
-        letterSpacing="0.2"
-        fill="#fff"
-      >
-        EXPRESS
+        AMEX
       </text>
     </svg>
   );

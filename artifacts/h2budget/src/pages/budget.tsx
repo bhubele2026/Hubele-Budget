@@ -155,7 +155,7 @@ function SourceBadge({ kind }: { kind: SourceKind }) {
       className={cn(
         "text-[10px] font-normal uppercase tracking-wide",
         kind === "auto_bills" &&
-          "border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300",
+          "border-border text-muted-foreground dark:border-border dark:text-muted-foreground",
         kind === "auto_debts" &&
           "border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300",
       )}
@@ -1913,7 +1913,7 @@ function BudgetLineRow({
                 <span className="truncate">{line.categoryName}</span>
                 {opensInAmex ? (
                   <CreditCard
-                    className="w-3 h-3 shrink-0 text-blue-600 dark:text-blue-300"
+                    className="w-3 h-3 shrink-0 text-muted-foreground dark:text-muted-foreground"
                     aria-hidden="true"
                     data-testid={`icon-drilldown-amex-${line.categoryId}`}
                   />

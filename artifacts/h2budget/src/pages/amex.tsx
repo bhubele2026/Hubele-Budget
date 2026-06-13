@@ -1786,13 +1786,13 @@ export default function AmexPage() {
           (endingBalance.source !== "loading" &&
             endingBalance.value === null) ? (
             <div
-              className="rounded-md border border-dashed border-blue-300 bg-blue-50/60 px-3 py-2 text-blue-900 min-w-0"
+              className="rounded-md border border-dashed border-border bg-muted/60 px-3 py-2 text-foreground min-w-0"
               data-testid="stat-ending-balance"
             >
-              <div className="text-[10px] uppercase tracking-widest text-blue-700">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
                 Ending balance
               </div>
-              <div className="font-mono tabular-nums font-semibold text-base text-blue-900/70">
+              <div className="font-mono tabular-nums font-semibold text-base text-muted-foreground">
                 Not set
               </div>
               <div className="mt-1 flex flex-col gap-1 min-w-0">
@@ -1807,7 +1807,7 @@ export default function AmexPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-6 px-2 text-[11px] border-blue-400 text-blue-900 bg-white/70 hover:bg-white w-fit"
+                      className="h-6 px-2 text-[11px] border-border text-foreground bg-white/70 hover:bg-white w-fit"
                       data-testid="button-set-amex-balance"
                     >
                       Set Amex balance
@@ -1861,7 +1861,7 @@ export default function AmexPage() {
                 </Popover>
                 <Link
                   href="/debts"
-                  className="text-[10px] leading-tight text-blue-700 hover:text-blue-900 underline-offset-2 hover:underline"
+                  className="text-[10px] leading-tight text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
                   data-testid="link-amex-debts"
                 >
                   or link an Amex debt in Debts
@@ -1888,7 +1888,7 @@ export default function AmexPage() {
             <StatChip
               label="Ending balance"
               value={endingBalance.value ?? 0}
-              accent="bg-blue-50 text-blue-900 border-blue-200"
+              accent="bg-muted text-foreground border-border"
               footer={endingBalanceMeta?.footer}
               tooltip={endingBalanceMeta?.tooltip}
               testId="stat-ending-balance"
@@ -1912,7 +1912,7 @@ export default function AmexPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-6 px-2 text-[11px] border-blue-300 text-blue-900 bg-white/60 hover:bg-white"
+                        className="h-6 px-2 text-[11px] border-border text-foreground bg-white/60 hover:bg-white"
                         data-testid={
                           endingBalance.source === "anchor"
                             ? "button-edit-actual-balance"
@@ -2045,10 +2045,10 @@ export default function AmexPage() {
       {/* Bulk action bar */}
       {selected.size > 0 && (
         <div
-          className="sticky z-20 flex items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-2 shadow-sm"
+          className="sticky z-20 flex items-center gap-3 rounded-md border border-border bg-muted px-4 py-2 shadow-sm"
           style={{ top: "var(--pinned-pane-h, 0px)" }}
         >
-          <span className="text-sm font-medium text-blue-900">
+          <span className="text-sm font-medium text-foreground">
             {selected.size} selected
           </span>
           <BulkCategoryPicker
@@ -2056,7 +2056,7 @@ export default function AmexPage() {
             onPick={bulkSetCategory}
           />
           <div className="flex items-center gap-1">
-            <span className="text-xs text-blue-900 mr-1">Bucket:</span>
+            <span className="text-xs text-foreground mr-1">Bucket:</span>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetBucket("")}>
               —
             </Button>
@@ -2071,7 +2071,7 @@ export default function AmexPage() {
             </Button>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-xs text-blue-900 mr-1">Reimb:</span>
+            <span className="text-xs text-foreground mr-1">Reimb:</span>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => bulkSetReimbursable(true)}>
               Mark
             </Button>
@@ -2080,7 +2080,7 @@ export default function AmexPage() {
             </Button>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-xs text-blue-900 mr-1">Reviewed:</span>
+            <span className="text-xs text-foreground mr-1">Reviewed:</span>
             <Button
               size="sm"
               variant="outline"
@@ -2101,7 +2101,7 @@ export default function AmexPage() {
             </Button>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-xs text-blue-900 mr-1">Owed by:</span>
+            <span className="text-xs text-foreground mr-1">Owed by:</span>
             <Input
               placeholder="Owed by…"
               list={owedByListId}
@@ -2132,7 +2132,7 @@ export default function AmexPage() {
           </div>
           {bulkProgress.total > 0 && (
             <span
-              className="text-xs text-blue-900 font-mono tabular-nums"
+              className="text-xs text-foreground font-mono tabular-nums"
               data-testid="text-bulk-progress"
             >
               Updating {bulkProgress.done}/{bulkProgress.total}…
@@ -2574,7 +2574,7 @@ function BulkCategoryPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+        <Button size="sm" className="bg-primary hover:bg-primary/90">
           Set category
         </Button>
       </PopoverTrigger>

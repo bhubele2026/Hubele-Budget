@@ -56,7 +56,7 @@ const ALL_NAV = [...TOP_NAV, ...RAIL_NAV, SETTINGS_ITEM];
 
 const BRAND = (
   <span className="flex items-center gap-2 select-none">
-    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-primary font-bold text-[13px] tracking-tight shadow-sm">
+    <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[hsl(240_8%_8%)] text-[hsl(78_60%_56%)] font-bold text-[13px] tracking-tight border border-[hsl(78_38%_30%)]">
       H2
     </span>
     <span className="font-semibold text-[15px] tracking-tight">Budget</span>
@@ -154,7 +154,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-screen overflow-hidden bg-background flex flex-col">
       {/* ── Top bar: brand · plan-&-analyze nav · settings gear ───────────── */}
-      <header className="shrink-0 bg-gradient-to-r from-[hsl(214_66%_30%)] via-[hsl(214_64%_25%)] to-[hsl(216_60%_20%)] dark:from-[hsl(338_30%_12%)] dark:via-[hsl(330_16%_7%)] dark:to-[hsl(330_12%_5%)] text-white border-b border-black/25 dark:border-[hsl(344_40%_20%)] shadow-[inset_0_1px_0_0_hsl(0_0%_100%/0.1)] dark:shadow-[inset_0_1px_0_0_hsl(344_70%_60%/0.12)]">
+      <header className="shrink-0 bg-[hsl(240_6%_9%)] dark:bg-[hsl(240_8%_6%)] text-white border-b border-white/10 dark:border-[hsl(78_24%_16%)]">
         <div className="flex items-center h-14">
           {/* Brand — desktop: pinned to the rail width (w-52) with matching
               padding so "H2 Budget" sits directly above the left rail and the
