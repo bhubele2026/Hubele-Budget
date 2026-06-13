@@ -73,8 +73,11 @@ export function CancelFloater() {
     });
   };
 
-  if (active.length === 0 || !pos) return null;
+  // Always on screen — you said you always need to see it, so it stays put
+  // even when nothing is flagged yet (it just nudges you to flag something).
+  if (!pos) return null;
 
+  const isEmpty = active.length === 0;
   const totalAnnual = active.reduce((s, i) => s + i.annual, 0);
 
   return (
@@ -106,7 +109,22 @@ export function CancelFloater() {
             </button>
           </div>
 
-          <div className="max-h-72 overflow-auto divide-y divide-border">
+          <div className="max-h-72 overflow-auto">
+            {isEmpty ? (
+              <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                Nothing flagged yet. See a charge you'd rather not keep paying
+                for? Tap{" "}
+                <span className="font-medium text-amber-800 dark:text-amber-200">
+                  To cancel
+                </span>{" "}
+                on it — let&apos;s trim the fat and free up a little more for{" "}
+                <span className="italic text-amber-700 dark:text-amber-300">
+                  us
+                </span>
+                . 😏
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
             {active.map((i) => (
               <div
                 key={i.key}
@@ -138,10 +156,14 @@ export function CancelFloater() {
                 </button>
               </div>
             ))}
+              </div>
+            )}
           </div>
 
           <div className="px-3 py-2 text-xs text-muted-foreground border-t bg-muted/30">
-            {active.length} to kill · {formatCurrency(totalAnnual)}/yr at stake
+            {isEmpty
+              ? "Flag a charge to start the fun 😉"
+              : `${active.length} to kill · ${formatCurrency(totalAnnual)}/yr — that's more for date night 😉`}
           </div>
         </div>
       ) : (
