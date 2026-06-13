@@ -5,6 +5,7 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
+  Pressable,
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -21,7 +22,7 @@ import {
 import { colors, radius, formatCurrency } from "@/lib/theme";
 
 export default function AllowancesScreen() {
-  const { getToken } = useAuth();
+  const { getToken, signOut } = useAuth();
   const api = useMemo(() => createApi(getToken), [getToken]);
 
   const [settings, setSettings] = useState<Settings | undefined>();
@@ -68,8 +69,13 @@ export default function AllowancesScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.brand}>H2 Budget</Text>
-        <Text style={styles.title}>Allowances</Text>
+        <View>
+          <Text style={styles.brand}>H2 Budget</Text>
+          <Text style={styles.title}>Allowances</Text>
+        </View>
+        <Pressable onPress={() => signOut()} hitSlop={12}>
+          <Text style={styles.signOut}>Sign out</Text>
+        </Pressable>
       </View>
 
       <ScrollView
@@ -90,8 +96,9 @@ export default function AllowancesScreen() {
           </View>
         ) : (
           <>
-            <AllowanceCard status={status.weekly} />
-            <AllowanceCard status={status.monthly} />
+            <AllowanceCard status={status.weekly} pace />
+            <AllowanceCard status={status.monthly} pace />
+            <AllowanceCard status={status.unplanned} />
           </>
         )}
       </ScrollView>
@@ -99,10 +106,23 @@ export default function AllowancesScreen() {
   );
 }
 
-function AllowanceCard({ status }: { status: BucketStatus }) {
+function paceLabel(s: BucketStatus): { text: string; color: string } {
+  const threshold = Math.max(5, s.planned * 0.05);
+  if (s.pace > threshold) {
+    return { text: `${formatCurrency(s.pace)} ahead of pace`, color: colors.negative };
+  }
+  if (s.pace < -threshold) {
+    return { text: `${formatCurrency(-s.pace)} under pace`, color: colors.positive };
+  }
+  return { text: "On pace", color: colors.muted };
+}
+
+function AllowanceCard({ status, pace }: { status: BucketStatus; pace?: boolean }) {
   const over = status.variance > 0;
   const noPlan = status.planned <= 0;
   const pct = Math.max(0, Math.min(1, status.pct));
+  const elapsedPct = Math.max(0, Math.min(1, status.elapsed));
+  const p = paceLabel(status);
 
   return (
     <View style={styles.card}>
@@ -112,11 +132,13 @@ function AllowanceCard({ status }: { status: BucketStatus }) {
       </View>
 
       <Text style={styles.bigNumber}>{formatCurrency(status.spent)}</Text>
-      <Text style={styles.planned}>
-        of {formatCurrency(status.planned)} planned
-      </Text>
+      <Text style={styles.planned}>of {formatCurrency(status.planned)} planned</Text>
 
       <View style={styles.track}>
+        {/* Pace marker — where you'd be at an even pace */}
+        {pace && !noPlan && (
+          <View style={[styles.paceMarker, { left: `${elapsedPct * 100}%` }]} />
+        )}
         <View
           style={[
             styles.fill,
@@ -128,9 +150,17 @@ function AllowanceCard({ status }: { status: BucketStatus }) {
       {noPlan ? (
         <Text style={styles.noPlan}>No allowance set</Text>
       ) : (
-        <Text style={[styles.variance, { color: over ? colors.negative : colors.positive }]}>
-          {formatCurrency(Math.abs(status.variance))} {over ? "over" : "under"}
-        </Text>
+        <View style={styles.statusRow}>
+          <Text style={[styles.variance, { color: over ? colors.negative : colors.positive }]}>
+            {formatCurrency(Math.abs(status.variance))} {over ? "over" : "under"}
+          </Text>
+          {pace && (
+            <Text style={[styles.pace, { color: p.color }]}>
+              {p.text}
+              {status.daysLeft > 0 ? ` · ${status.daysLeft}d left` : ""}
+            </Text>
+          )}
+        </View>
       )}
     </View>
   );
@@ -143,9 +173,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 18,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
   },
   brand: { color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: "600", letterSpacing: 0.5 },
   title: { color: "#fff", fontSize: 28, fontWeight: "700", letterSpacing: -0.5, marginTop: 2 },
+  signOut: { color: "rgba(255,255,255,0.85)", fontSize: 14, fontWeight: "600", paddingBottom: 4 },
   scroll: { padding: 16, gap: 14 },
   center: { paddingTop: 60, alignItems: "center" },
   card: {
@@ -173,9 +207,26 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     overflow: "hidden",
     marginTop: 16,
+    position: "relative",
   },
   fill: { height: 8, borderRadius: 999 },
-  variance: { fontSize: 15, fontWeight: "700", marginTop: 12, fontVariant: ["tabular-nums"] },
+  paceMarker: {
+    position: "absolute",
+    top: -3,
+    width: 2,
+    height: 14,
+    backgroundColor: colors.faint,
+    zIndex: 2,
+  },
+  statusRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 12,
+    gap: 8,
+  },
+  variance: { fontSize: 15, fontWeight: "700", fontVariant: ["tabular-nums"] },
+  pace: { fontSize: 13, fontWeight: "600", fontVariant: ["tabular-nums"] },
   noPlan: { fontSize: 14, color: colors.negative, fontWeight: "600", marginTop: 12 },
   errorCard: {
     backgroundColor: colors.negativeBg,

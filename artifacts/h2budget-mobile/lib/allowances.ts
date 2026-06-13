@@ -28,26 +28,32 @@ function expense(t: Txn): number {
   return Math.abs(n);
 }
 
+export type BucketKey = "weekly" | "monthly" | "unplanned";
+
 export type BucketStatus = {
-  key: "weekly" | "monthly";
+  key: BucketKey;
   label: string;
   spent: number;
   planned: number;
   /** spent - planned; positive = over. */
   variance: number;
-  pct: number; // 0..1+
+  pct: number; // spent / planned
   rangeLabel: string;
+  /** Fraction of the period elapsed (0..1). 1 for unplanned (no time pacing). */
+  elapsed: number;
+  /** Planned * elapsed — what you'd have spent at an even pace. */
+  expectedByNow: number;
+  /** spent - expectedByNow; positive = spending faster than pace. */
+  pace: number;
+  /** Days left in the period (0 for unplanned). */
+  daysLeft: number;
 };
 
-/**
- * Compute the two figures that matter: this week's weekly-allowance spend and
- * this month's monthly-allowance spend, each vs its planned amount.
- */
 export function computeStatus(
   settings: Settings | undefined,
   txns: Txn[],
   now = new Date(),
-): { weekly: BucketStatus; monthly: BucketStatus } {
+): { weekly: BucketStatus; monthly: BucketStatus; unplanned: BucketStatus } {
   const weekStart = sundayOf(now);
   const weekEnd = new Date(weekStart.getTime() + 6 * DAY);
   const monthStart = firstOfMonth(now);
@@ -60,6 +66,7 @@ export function computeStatus(
 
   let weeklySpent = 0;
   let monthlySpent = 0;
+  let unplannedSpent = 0;
   for (const t of txns) {
     const amt = expense(t);
     if (amt === 0) continue;
@@ -69,37 +76,78 @@ export function computeStatus(
     if (t.monthlyAllowance && t.occurredOn >= mFrom && t.occurredOn <= mTo) {
       monthlySpent += amt;
     }
+    if (t.unplannedAllowance && t.occurredOn >= mFrom && t.occurredOn <= mTo) {
+      unplannedSpent += amt;
+    }
   }
 
   const weeklyPlanned = Number(settings?.weeklyAllowanceAmount) || 0;
   const monthlyPlanned = Number(settings?.monthlyAllowanceAmount) || 0;
+  const unplannedPlanned = Number(settings?.unplannedAllowanceAmount) || 0;
+
+  // Elapsed fraction (today counts as a full day toward pace).
+  const weekDayIdx = now.getDay(); // 0 Sun .. 6 Sat
+  const weekElapsed = (weekDayIdx + 1) / 7;
+  const daysInMonth = monthEnd.getDate();
+  const monthElapsed = now.getDate() / daysInMonth;
 
   const fmtRange = (a: Date, b: Date) => {
     const o: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
     return `${a.toLocaleDateString(undefined, o)} – ${b.toLocaleDateString(undefined, o)}`;
   };
 
+  const build = (
+    key: BucketKey,
+    label: string,
+    spent: number,
+    planned: number,
+    rangeLabel: string,
+    elapsed: number,
+    daysLeft: number,
+  ): BucketStatus => {
+    const expectedByNow = planned * elapsed;
+    return {
+      key,
+      label,
+      spent,
+      planned,
+      variance: spent - planned,
+      pct: planned > 0 ? spent / planned : 0,
+      rangeLabel,
+      elapsed,
+      expectedByNow,
+      pace: spent - expectedByNow,
+      daysLeft,
+    };
+  };
+
   return {
-    weekly: {
-      key: "weekly",
-      label: "Weekly",
-      spent: weeklySpent,
-      planned: weeklyPlanned,
-      variance: weeklySpent - weeklyPlanned,
-      pct: weeklyPlanned > 0 ? weeklySpent / weeklyPlanned : 0,
-      rangeLabel: fmtRange(weekStart, weekEnd),
-    },
-    monthly: {
-      key: "monthly",
-      label: "Monthly",
-      spent: monthlySpent,
-      planned: monthlyPlanned,
-      variance: monthlySpent - monthlyPlanned,
-      pct: monthlyPlanned > 0 ? monthlySpent / monthlyPlanned : 0,
-      rangeLabel: now.toLocaleDateString(undefined, {
-        month: "long",
-        year: "numeric",
-      }),
-    },
+    weekly: build(
+      "weekly",
+      "Weekly",
+      weeklySpent,
+      weeklyPlanned,
+      fmtRange(weekStart, weekEnd),
+      weekElapsed,
+      6 - weekDayIdx,
+    ),
+    monthly: build(
+      "monthly",
+      "Monthly",
+      monthlySpent,
+      monthlyPlanned,
+      now.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+      monthElapsed,
+      daysInMonth - now.getDate(),
+    ),
+    unplanned: build(
+      "unplanned",
+      "Unplanned",
+      unplannedSpent,
+      unplannedPlanned,
+      now.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+      1,
+      0,
+    ),
   };
 }
