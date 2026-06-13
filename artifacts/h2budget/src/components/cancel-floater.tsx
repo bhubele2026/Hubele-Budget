@@ -195,14 +195,20 @@ export function CancelFloater() {
           onClick={() => {
             if (!moved.current) setOpen(true);
           }}
-          className="flex items-center gap-2 rounded-md text-white shadow-2xl px-4 py-2.5 cursor-grab active:cursor-grabbing transition-transform hover:scale-105"
+          className="relative grid place-items-center h-12 w-12 rounded-full text-white shadow-2xl cursor-grab active:cursor-grabbing transition-transform hover:scale-110"
           style={{ background: RED_BAR, border: `2px solid ${RED}` }}
+          title="Cancel this shit"
           data-testid="cancel-floater-fab"
         >
-          <Ban className="w-4 h-4 animate-pulse" />
-          <span className="font-extrabold uppercase tracking-wide text-sm">
-            Cancel ({active.length})
-          </span>
+          <Ban className="w-5 h-5 animate-pulse" />
+          {active.length > 0 && (
+            <span
+              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full text-[10px] font-bold text-white"
+              style={{ background: "hsl(240 9% 7%)", border: `1px solid ${RED}` }}
+            >
+              {active.length}
+            </span>
+          )}
         </button>
       )}
     </div>

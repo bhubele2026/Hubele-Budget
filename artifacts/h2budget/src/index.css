@@ -91,9 +91,9 @@
   --sidebar-border: 220 14% 91%;
   --sidebar-primary: 240 6% 12%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 74 48% 90%;
-  --sidebar-accent-foreground: 78 55% 22%;
-  --sidebar-ring: 76 70% 40%;
+  --sidebar-accent: 214 44% 92%;
+  --sidebar-accent-foreground: 214 55% 30%;
+  --sidebar-ring: 214 70% 46%;
 
   --popover: 0 0% 100%;
   --popover-foreground: 222 32% 12%;
@@ -112,14 +112,14 @@
 
   /* Matte-volt-tinted highlight so hovers/active states read as one cohesive
      accent — no blue. */
-  --accent: 74 40% 92%;
-  --accent-foreground: 78 55% 22%;
+  --accent: 214 42% 93%;
+  --accent-foreground: 214 55% 30%;
 
   --destructive: 0 60% 42%;
   --destructive-foreground: 0 0% 100%;
 
   --input: 220 13% 88%;
-  --ring: 76 70% 38%;
+  --ring: 214 70% 44%;
 
   --positive: 160 60% 30%;
   --positive-foreground: 0 0% 100%;
@@ -130,7 +130,7 @@
 
   /* chart-1 = near-black balance line; 2 = matte volt; no blue. */
   --chart-1: 240 8% 18%;
-  --chart-2: 78 55% 45%;
+  --chart-2: 214 62% 50%;
   --chart-3: 216 14% 55%;
   --chart-4: 35 90% 48%;
   --chart-5: 262 45% 52%;
@@ -173,12 +173,11 @@
   --elevate-1: rgba(255,255,255, .035);
   --elevate-2: rgba(255,255,255, .07);
 
-  /* (matte-black · matte-volt) A dead-flat neutral matte-black canvas — no
-     gloss, no glow, no gradients — with ONE angry-90s acid-volt accent muted
-     to a MATTE finish (78 60% 55%, not screaming neon) so it has edge without
-     shine. NO BLUE anywhere. Volt drives buttons / links / active nav / the
-     chart line; +/- money stays emerald / red so the volt never reads as a
-     dollar amount. Corporate skeleton, 90s-kid attitude, matte everything. */
+  /* (matte-black · blue) A dead-flat neutral matte-black canvas — no gloss,
+     no glow, no gradients — with ONE clean blue accent (214 82% 62%) that cuts
+     against the black. Blue drives buttons / links / active nav / the logo /
+     the chart line; +/- money stays emerald / red so the accent never reads as
+     a dollar amount. Matte everything, blue on black. */
   --background: 240 6% 5%;
   --foreground: 60 6% 93%;
   --border: 240 5% 15%;
@@ -190,17 +189,17 @@
   --sidebar: 240 7% 6%;
   --sidebar-foreground: 60 5% 86%;
   --sidebar-border: 240 5% 15%;
-  --sidebar-primary: 78 60% 55%;
+  --sidebar-primary: 214 82% 62%;
   --sidebar-primary-foreground: 240 12% 6%;
-  --sidebar-accent: 78 24% 13%;
-  --sidebar-accent-foreground: 78 45% 74%;
-  --sidebar-ring: 78 60% 55%;
+  --sidebar-accent: 214 36% 15%;
+  --sidebar-accent-foreground: 214 55% 80%;
+  --sidebar-ring: 214 82% 62%;
 
   --popover: 240 6% 8%;
   --popover-foreground: 60 6% 93%;
   --popover-border: 240 5% 15%;
 
-  --primary: 78 60% 55%;
+  --primary: 214 82% 62%;
   --primary-foreground: 240 12% 6%;
 
   --secondary: 240 5% 14%;
@@ -209,14 +208,14 @@
   --muted: 240 5% 12%;
   --muted-foreground: 240 5% 62%;
 
-  --accent: 78 22% 14%;
-  --accent-foreground: 78 45% 74%;
+  --accent: 214 34% 16%;
+  --accent-foreground: 214 55% 80%;
 
   --destructive: 2 80% 58%;
   --destructive-foreground: 0 0% 100%;
 
   --input: 240 5% 19%;
-  --ring: 78 60% 55%;
+  --ring: 214 82% 62%;
 
   --positive: 150 60% 50%;
   --positive-foreground: 240 12% 6%;
@@ -226,7 +225,7 @@
   --warning-foreground: 240 12% 6%;
 
   /* chart-1 = volt (the balance line); 2 = light gray; 3 = emerald. */
-  --chart-1: 78 62% 59%;
+  --chart-1: 214 86% 66%;
   --chart-2: 240 6% 72%;
   --chart-3: 150 60% 52%;
   --chart-4: 40 96% 58%;

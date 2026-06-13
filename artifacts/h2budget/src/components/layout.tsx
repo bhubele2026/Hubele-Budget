@@ -56,7 +56,7 @@ const ALL_NAV = [...TOP_NAV, ...RAIL_NAV, SETTINGS_ITEM];
 
 const BRAND = (
   <span className="flex items-center gap-2 select-none">
-    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[hsl(240_8%_8%)] text-[hsl(78_60%_56%)] font-bold text-[11px] tracking-tight border border-[hsl(78_38%_30%)]">
+    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[hsl(240_8%_8%)] text-[hsl(214_85%_64%)] font-bold text-[11px] tracking-tight border border-[hsl(214_50%_40%)]">
       H2
     </span>
     <span className="font-semibold text-[13.5px] tracking-tight">Budget</span>
@@ -154,7 +154,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-screen overflow-hidden bg-background flex flex-col">
       {/* ── Top bar: brand · plan-&-analyze nav · settings gear ───────────── */}
-      <header className="shrink-0 bg-[hsl(240_6%_9%)] dark:bg-[hsl(240_8%_6%)] text-white border-b border-white/10 dark:border-[hsl(78_24%_16%)]">
+      <header className="shrink-0 bg-[hsl(240_6%_9%)] dark:bg-[hsl(240_8%_6%)] text-white border-b border-white/10 dark:border-[hsl(214_34%_20%)]">
         <div className="flex items-center h-11">
           {/* Brand — desktop: pinned to the rail width (w-52) with matching
               padding so "H2 Budget" sits directly above the left rail and the
