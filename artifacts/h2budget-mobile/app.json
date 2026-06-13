@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "H2 Budget",
+    "slug": "h2budget-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "h2budget",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hubele.h2budget"
+    },
+    "android": {
+      "package": "com.hubele.h2budget"
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "extra": {
+      "router": { "origin": false },
+      "apiBaseUrl": "https://hubele-budget.replit.app",
+      "clerkPublishableKey": "REPLACE_WITH_CLERK_PUBLISHABLE_KEY"
+    }
+  }
+}

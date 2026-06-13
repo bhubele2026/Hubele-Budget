@@ -36,6 +36,11 @@ minimumReleaseAgeExclude:
 
 packages:
   - artifacts/*
+  # The mobile app (Expo / React Native) is a STANDALONE project, installed
+  # with its own `npm install` — it must NOT join the pnpm workspace, or its
+  # React-18 / Expo deps collide with the catalog's pinned React 19 and break
+  # the web build.
+  - '!artifacts/h2budget-mobile'
   - lib/*
   - lib/integrations/*
   - scripts
