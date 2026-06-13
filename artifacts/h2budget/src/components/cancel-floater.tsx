@@ -111,7 +111,12 @@ export function CancelFloater() {
             </span>
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+              }}
               className="grid place-items-center h-6 w-6 rounded bg-black/20 text-white hover:bg-black/40 transition-colors"
               title="Minimize"
               aria-label="Minimize"
