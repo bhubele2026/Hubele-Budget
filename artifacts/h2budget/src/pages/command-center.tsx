@@ -29,6 +29,30 @@ import { MonthlyWrapped } from "@/components/monthly-wrapped";
 import { Confetti } from "@/components/confetti";
 import { PaceGauge } from "@/components/pace-gauge";
 import { SpendScoreboard } from "@/components/spend-scoreboard";
+import { FreedomMeter } from "@/components/freedom-meter";
+
+// A playful "money type" for the month, from the top spend category.
+function moneyPersona(cat: string | undefined): { label: string; emoji: string } {
+  const c = (cat || "").toLowerCase();
+  if (/dining|restaurant|coffee|doordash|takeout|food/.test(c))
+    return { label: "The Foodies", emoji: "🍔" };
+  if (/subscription|stream|netflix|spotify|hulu/.test(c))
+    return { label: "The Subscription Hoarders", emoji: "📺" };
+  if (/grocer/.test(c)) return { label: "The Home Chefs", emoji: "🥦" };
+  if (/amazon|shop|retail|clothing|target/.test(c))
+    return { label: "The Add-to-Cart Crew", emoji: "📦" };
+  if (/alcohol|bar|liquor|wine|beer/.test(c))
+    return { label: "The Happy Hour Heroes", emoji: "🍷" };
+  if (/travel|flight|hotel|airbnb|vacation/.test(c))
+    return { label: "The Jet Setters", emoji: "✈️" };
+  if (/gas|fuel|auto|car|uber|lyft/.test(c))
+    return { label: "The Road Warriors", emoji: "🚗" };
+  if (/pet|dog|cat|vet/.test(c)) return { label: "The Pet Parents", emoji: "🐾" };
+  if (/kid|child|daycare|school/.test(c))
+    return { label: "The Parents on Duty", emoji: "🍼" };
+  if (!c) return { label: "The Mystery Spenders", emoji: "🕵️" };
+  return { label: `The ${cat} Devotees`, emoji: "💸" };
+}
 
 function greetingFor(hour: number): string {
   if (hour < 5) return "Still up";
@@ -114,6 +138,8 @@ export default function CommandCenterPage() {
   const spend = dash ? Number(dash.monthlySpend) : 0;
   const totalDebt = dash ? Number(dash.totalDebt) : null;
   const paidThisMonth = dash ? Number(dash.paidThisMonth) : 0;
+  const paidLifetime = dash ? Number(dash.paidLifetime) : 0;
+  const persona = moneyPersona(dash?.topCategories?.[0]?.categoryName);
 
   // Projected checking balance: start at the bank snapshot and walk the
   // forward forecast events (already signed: income +, outflow −). Gives the
@@ -381,6 +407,41 @@ export default function CommandCenterPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Debt freedom meter */}
+      {dash ? (
+        <FreedomMeter
+          totalDebt={Number(dash.totalDebt) || 0}
+          paidLifetime={paidLifetime}
+          paidThisMonth={paidThisMonth}
+        />
+      ) : null}
+
+      {/* Spending personality */}
+      {dash?.topCategories?.[0] ? (
+        <Card>
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="text-4xl leading-none shrink-0" aria-hidden>
+              {persona.emoji}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                Your money type this month
+              </div>
+              <div className="text-lg font-bold tracking-tight">
+                {persona.label}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Most of it went to{" "}
+                <span className="text-foreground font-medium">
+                  {dash.topCategories[0].categoryName}
+                </span>{" "}
+                · {formatCurrency(Number(dash.topCategories[0].total) || 0)}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Him-vs-her scoreboard */}
       <SpendScoreboard entries={memberSpend} />
