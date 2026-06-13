@@ -1699,6 +1699,12 @@ export interface DaysSinceTracker {
 export interface SettingsPreferences {
   weeklyBucketLabels?: WeeklyBucketLabels;
   daysSinceTrackers?: DaysSinceTracker[];
+  /**
+   * Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO
+   * yyyy-mm-dd) → planned amount string. Household-scoped so both partners
+   * see the same per-week edit.
+   */
+  weeklyAllowanceOverrides?: { [key: string]: string };
 }
 
 /**

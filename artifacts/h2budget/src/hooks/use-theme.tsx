@@ -20,7 +20,9 @@ function getSystemTheme(): "light" | "dark" {
 }
 
 function readStoredTheme(): Theme {
-  if (typeof window === "undefined") return "system";
+  // Default to matte-black dark — the app opens in its premium look. Users
+  // can still switch to light/system via the toggle.
+  if (typeof window === "undefined") return "dark";
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === "light" || stored === "dark" || stored === "system") {
@@ -29,7 +31,7 @@ function readStoredTheme(): Theme {
   } catch {
     // ignore
   }
-  return "system";
+  return "dark";
 }
 
 function applyThemeClass(resolved: "light" | "dark") {

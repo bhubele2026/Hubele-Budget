@@ -173,59 +173,64 @@
   --elevate-1: rgba(255,255,255, .035);
   --elevate-2: rgba(255,255,255, .07);
 
-  /* (polish · dark) Deep navy-black canvas, subtly-lifted cards, hairline
-     borders, and a cohesive bright-navy accent — premium, not default. */
-  --background: 220 41% 7%;
-  --foreground: 213 24% 94%;
-  --border: 218 22% 16%;
+  /* (matte-black · sultry) A true matte-black canvas with a whisper of warm
+     rose worked into the surfaces, champagne-warm text, and a single sultry
+     rose accent that glows against the black. Reads corporate at a glance —
+     a little dangerous up close. The accent (rose) drives buttons / links /
+     active nav; +/- money still uses emerald / red, so the rose never gets
+     confused with an expense. */
+  --background: 330 9% 4.5%;
+  --foreground: 28 14% 93%;
+  --border: 330 10% 15%;
 
-  --card: 220 30% 10.5%;
-  --card-foreground: 213 24% 94%;
-  --card-border: 218 22% 16%;
+  --card: 330 10% 7.5%;
+  --card-foreground: 28 14% 93%;
+  --card-border: 330 10% 15%;
 
-  --sidebar: 220 41% 8%;
-  --sidebar-foreground: 214 18% 88%;
-  --sidebar-border: 218 22% 16%;
-  --sidebar-primary: 214 90% 62%;
-  --sidebar-primary-foreground: 220 41% 7%;
-  --sidebar-accent: 214 32% 17%;
-  --sidebar-accent-foreground: 214 45% 86%;
-  --sidebar-ring: 214 90% 62%;
+  --sidebar: 330 11% 5.5%;
+  --sidebar-foreground: 24 12% 86%;
+  --sidebar-border: 330 10% 15%;
+  --sidebar-primary: 344 80% 62%;
+  --sidebar-primary-foreground: 330 14% 6%;
+  --sidebar-accent: 338 26% 16%;
+  --sidebar-accent-foreground: 344 60% 87%;
+  --sidebar-ring: 344 80% 62%;
 
-  --popover: 220 30% 10.5%;
-  --popover-foreground: 213 24% 94%;
-  --popover-border: 218 22% 16%;
+  --popover: 330 10% 7.5%;
+  --popover-foreground: 28 14% 93%;
+  --popover-border: 330 10% 15%;
 
-  --primary: 214 90% 62%;
-  --primary-foreground: 220 41% 7%;
+  --primary: 344 80% 62%;
+  --primary-foreground: 330 14% 6%;
 
-  --secondary: 218 22% 15%;
-  --secondary-foreground: 214 18% 88%;
+  --secondary: 330 10% 14%;
+  --secondary-foreground: 24 12% 86%;
 
-  --muted: 218 22% 13%;
-  --muted-foreground: 216 16% 64%;
+  --muted: 330 9% 12%;
+  --muted-foreground: 24 9% 62%;
 
-  --accent: 214 32% 18%;
-  --accent-foreground: 214 45% 86%;
+  --accent: 338 26% 17%;
+  --accent-foreground: 344 60% 87%;
 
-  --destructive: 0 70% 58%;
+  --destructive: 4 74% 58%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 218 22% 20%;
-  --ring: 214 90% 62%;
+  --input: 330 10% 19%;
+  --ring: 344 80% 62%;
 
-  --positive: 152 55% 55%;
-  --positive-foreground: 220 41% 8%;
-  --negative: 0 72% 62%;
+  --positive: 150 52% 53%;
+  --positive-foreground: 330 14% 6%;
+  --negative: 6 78% 60%;
   --negative-foreground: 0 0% 100%;
-  --warning: 36 92% 60%;
-  --warning-foreground: 220 41% 8%;
+  --warning: 38 92% 62%;
+  --warning-foreground: 330 14% 6%;
 
-  --chart-1: 214 90% 64%;
-  --chart-2: 215 25% 75%;
-  --chart-3: 152 55% 55%;
-  --chart-4: 36 92% 60%;
-  --chart-5: 262 60% 72%;
+  /* chart-1 = sultry rose (the balance line); 2 = champagne; 3 = emerald. */
+  --chart-1: 344 84% 64%;
+  --chart-2: 32 42% 78%;
+  --chart-3: 150 52% 54%;
+  --chart-4: 38 92% 62%;
+  --chart-5: 286 56% 71%;
 
   --shadow-2xs: 0px 1px 2px 0px rgba(0,0,0,0.5);
   --shadow-xs: 0px 1px 2px 0px rgba(0,0,0,0.5);
@@ -270,6 +275,18 @@
   [data-money], .tabular-nums {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1, "cv11" 1;
+  }
+
+  /* (matte-black · sultry) Ambient rose candlelight — two faint radial glows
+     bled into the matte-black canvas so cards feel lit from off-screen rather
+     than sitting on flat black. Fixed to the viewport so it never scrolls or
+     paints over content (it's just the scroll container's own background). */
+  .dark main {
+    background-image:
+      radial-gradient(55rem 38rem at 90% -8%, hsl(344 72% 34% / 0.16), transparent 62%),
+      radial-gradient(48rem 34rem at -8% 108%, hsl(322 54% 28% / 0.12), transparent 60%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
   }
 }
 

@@ -2150,6 +2150,9 @@ export const GetSettingsResponse = zod.object({
             }),
           )
           .optional(),
+        weeklyAllowanceOverrides: zod
+          .record(zod.string(), zod.string())
+          .optional(),
       }),
       zod.null(),
     ])
@@ -2183,6 +2186,9 @@ export const UpdateSettingsBody = zod.object({
             }),
           )
           .optional(),
+        weeklyAllowanceOverrides: zod
+          .record(zod.string(), zod.string())
+          .optional(),
       }),
       zod.null(),
     ])
@@ -2215,6 +2221,9 @@ export const UpdateSettingsResponse = zod.object({
               matchValue: zod.string(),
             }),
           )
+          .optional(),
+        weeklyAllowanceOverrides: zod
+          .record(zod.string(), zod.string())
           .optional(),
       }),
       zod.null(),

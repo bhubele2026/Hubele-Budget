@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Ban, Split } from "lucide-react";
 import { SplitTransactionDialog } from "@/components/split-transaction-dialog";
 import {
@@ -449,20 +449,6 @@ export default function AllowancesPage() {
   const today = useMemo(() => new Date(), []);
   const [mode, setMode] = useState<Mode>("week");
   const [weekStart, setWeekStart] = useState<Date>(() => sundayOf(new Date()));
-  // Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO).
-  // Editing the weekly planned amount while viewing a specific week only
-  // changes THAT week — the global setting stays the default for every other
-  // week. Stored client-side so it needs no schema change.
-  const [weeklyOverrides, setWeeklyOverrides] = useState<
-    Record<string, number>
-  >(() => {
-    try {
-      const raw = localStorage.getItem("h2:weekly-allowance-overrides");
-      return raw ? (JSON.parse(raw) as Record<string, number>) : {};
-    } catch {
-      return {};
-    }
-  });
   const [monthStart, setMonthStart] = useState<Date>(() =>
     firstOfMonth(new Date()),
   );
@@ -525,26 +511,95 @@ export default function AllowancesPage() {
   const { toast } = useToast();
   const updateSettings = useUpdateSettings();
 
+  // Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO).
+  // Stored HOUSEHOLD-SIDE in settings.preferences so an edit by one partner
+  // shows up for the other (the old localStorage version only lived in the
+  // editor's own browser — which is why "my wife changed it and mine didn't").
+  const weeklyOverrides = useMemo<Record<string, number>>(() => {
+    const raw = settings?.preferences?.weeklyAllowanceOverrides ?? {};
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      const n = Number(v);
+      if (Number.isFinite(n)) out[k] = n;
+    }
+    return out;
+  }, [settings]);
+
+  // One-time lift of any legacy per-browser overrides up to the shared
+  // household record, so values entered before this fix aren't lost. Server
+  // values win on conflict; the local copy is cleared once pushed.
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (!settings || migratedRef.current) return;
+    migratedRef.current = true;
+    let local: Record<string, string> = {};
+    try {
+      const raw = localStorage.getItem("h2:weekly-allowance-overrides");
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, number>;
+        for (const [k, v] of Object.entries(parsed)) {
+          const n = Number(v);
+          if (Number.isFinite(n)) local[k] = n.toFixed(2);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    if (Object.keys(local).length === 0) return;
+    const serverOv = settings.preferences?.weeklyAllowanceOverrides ?? {};
+    const merged = { ...local, ...serverOv }; // server wins on conflict
+    if (Object.keys(merged).length === Object.keys(serverOv).length) {
+      try {
+        localStorage.removeItem("h2:weekly-allowance-overrides");
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    const nextPrefs = {
+      ...(settings.preferences ?? {}),
+      weeklyAllowanceOverrides: merged,
+    };
+    updateSettings
+      .mutateAsync({ data: { preferences: nextPrefs } })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+        try {
+          localStorage.removeItem("h2:weekly-allowance-overrides");
+        } catch {
+          /* ignore */
+        }
+      })
+      .catch(() => {
+        migratedRef.current = false; // let it retry on a later render
+      });
+  }, [settings, updateSettings, queryClient]);
+
   // Edit a bucket's PLANNED allowance amount inline (the "of $X planned"
   // line). PATCHes the matching settings field.
   const savePlanned = async (key: BucketKey, amount: number) => {
     // Weekly edit while viewing a specific week → override THIS week only,
     // leaving the global weekly default (and every other week) untouched.
+    // Persisted to the shared household settings so BOTH partners see it.
     if (key === "weekly" && mode === "week") {
       const wk = fmtISO(weekStart);
-      setWeeklyOverrides((prev) => {
-        const next = { ...prev, [wk]: amount };
-        try {
-          localStorage.setItem(
-            "h2:weekly-allowance-overrides",
-            JSON.stringify(next),
-          );
-        } catch {
-          /* ignore */
-        }
-        return next;
-      });
-      toast({ title: `Weekly allowance set for this week` });
+      const prevOverrides =
+        settings?.preferences?.weeklyAllowanceOverrides ?? {};
+      const nextPrefs = {
+        ...(settings?.preferences ?? {}),
+        weeklyAllowanceOverrides: { ...prevOverrides, [wk]: amount.toFixed(2) },
+      };
+      try {
+        await updateSettings.mutateAsync({ data: { preferences: nextPrefs } });
+        queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+        toast({ title: "Weekly allowance set for this week" });
+      } catch (e) {
+        toast({
+          title: "Couldn't update",
+          description: (e as Error).message,
+          variant: "destructive",
+        });
+      }
       return;
     }
     const val = amount.toFixed(2);
