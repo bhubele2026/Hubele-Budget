@@ -97,6 +97,58 @@ function expenseAmount(t: Transaction): number {
   return a < 0 ? -a : 0;
 }
 
+// How many COMPLETED weeks in a row, ending last week, did they blow the
+// weekly allowance? Walks back week-by-week from the last finished Sun–Sat
+// week and stops the first time a week came in at/under plan. This is the
+// deterministic spine of the "you went over AGAIN" roast — no AI required.
+function weeklyOverStreak(
+  txns: Transaction[],
+  weeklyAmt: number,
+  overrides: Record<string, number>,
+  today: Date,
+): number {
+  if (weeklyAmt <= 0) return 0;
+  let weekSun = addDays(sundayOf(today), -7); // last fully-completed week
+  let streak = 0;
+  for (let i = 0; i < 26; i++) {
+    const start = fmtISO(weekSun);
+    const end = fmtISO(addDays(weekSun, 6));
+    let spend = 0;
+    let any = false;
+    for (const t of txns) {
+      if (!t.weeklyAllowance) continue;
+      if (t.occurredOn >= start && t.occurredOn <= end) {
+        spend += expenseAmount(t);
+        any = true;
+      }
+    }
+    const planned = overrides[start] != null ? overrides[start] : weeklyAmt;
+    if (any && planned > 0 && spend > planned) {
+      streak++;
+      weekSun = addDays(weekSun, -7);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+// Escalating, multi-country trash talk for an over-budget streak. Earned and
+// true — only ever shown when the streak is real. Gets nastier the longer
+// they keep blowing it.
+function roastForStreak(n: number): string {
+  if (n <= 1) return "";
+  if (n === 2)
+    return "Two weeks straight over your weekly allowance. Not a great look, you muppets — tighten it up.";
+  if (n === 3)
+    return "THREE weeks over in a row. The number's right there and you keep ignoring it, you absolute wankers.";
+  if (n <= 5)
+    return `${n} weeks over, back to back. At this point the "budget" is decorative. Sort it out, you numpties.`;
+  if (n <= 9)
+    return `${n} weeks over. You're not budgeting, you're just spending like it's a personality. Proper skint behaviour, you drongos.`;
+  return `${n} WEEKS over budget in a row. Genuinely embarrassing — a broke-ass eejit with a piggy bank does better. Reel it in.`;
+}
+
 // ----- bucket config --------------------------------------------------
 
 type BucketKey = "weekly" | "monthly" | "unplanned";
@@ -796,6 +848,18 @@ export default function AllowancesPage() {
     return out;
   }, [windowTxns, monthScopeTxns]);
 
+  // The "you went over AGAIN" streak — drives the roast banner up top.
+  const overStreak = useMemo(
+    () =>
+      weeklyOverStreak(
+        txns,
+        Number(settings?.weeklyAllowanceAmount) || 0,
+        weeklyOverrides,
+        today,
+      ),
+    [txns, settings, weeklyOverrides, today],
+  );
+
   // Per-bucket drill-down groups. Weekly groups by its sub-bucket enum
   // (all four shown); monthly/unplanned group by category.
   const groupsByBucket = useMemo(() => {
@@ -884,6 +948,24 @@ export default function AllowancesPage() {
           Where the money actually goes. No judgment… ok, a little. 😏
         </p>
       </div>
+
+      {roastForStreak(overStreak) && (
+        <div
+          className="rounded-md border-2 px-4 py-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-1 duration-300"
+          style={{ background: "hsl(240 9% 7%)", borderColor: "hsl(0 82% 52%)" }}
+          data-testid="allowance-roast"
+        >
+          <Ban className="w-5 h-5 mt-0.5 shrink-0 text-[hsl(0_82%_62%)] animate-pulse" />
+          <div className="min-w-0">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-[hsl(0_82%_64%)]">
+              ⚠ Over budget · {overStreak} weeks running
+            </div>
+            <div className="text-sm font-bold text-white mt-1 leading-snug">
+              {roastForStreak(overStreak)}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Time-range selector */}
       <div className="flex flex-col items-center gap-3">
