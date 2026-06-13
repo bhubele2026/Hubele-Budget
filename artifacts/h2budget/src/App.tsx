@@ -34,6 +34,7 @@ import { SignInPage, SignUpPage } from "./pages/auth";
 // recharts) up front. Navigating to a route fetches just that route's
 // chunk, which is cached for subsequent visits. Behavior is unchanged —
 // a brief <Suspense> fallback shows while a route's chunk streams in.
+const CommandCenterPage = lazy(() => import("./pages/command-center"));
 const ForecastPage = lazy(() => import("./pages/forecast"));
 const ReportsPage = lazy(() => import("./pages/reports"));
 const DebtsPage = lazy(() => import("./pages/debts"));
@@ -199,7 +200,7 @@ function HomeRoute() {
   return (
     <>
       <Show when="signed-in">
-        <Redirect to="/reports" />
+        <Redirect to="/home" />
       </Show>
       <Show when="signed-out">
         <Redirect to="/sign-in" />
@@ -226,8 +227,9 @@ function ProtectedShell() {
           <PageErrorBoundary resetKey={location}>
           <Suspense fallback={<RouteFallback />}>
           <Switch>
+            <Route path="/home" component={CommandCenterPage} />
             <Route path="/dashboard">
-              <Redirect to="/reports" />
+              <Redirect to="/home" />
             </Route>
             <Route path="/forecast">
               <ForecastPage mode="overall" />

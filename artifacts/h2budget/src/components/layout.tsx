@@ -7,6 +7,7 @@ import {
   Inbox,
   TrendingUp,
   CalendarCheck,
+  LayoutDashboard,
   BarChart3,
   PieChart,
   CalendarDays,
@@ -30,6 +31,7 @@ type NavItem = { name: string; href: string; icon: typeof Receipt };
 
 // Top bar — plan & analyze sections.
 const TOP_NAV: NavItem[] = [
+  { name: "Home", href: "/home", icon: LayoutDashboard },
   { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Budget", href: "/budget", icon: PieChart },
   { name: "Bills", href: "/bills", icon: CalendarDays },
@@ -159,7 +161,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Brand — desktop: pinned to the rail width (w-52) with matching
               padding so "H2 Budget" sits directly above the left rail and the
               top-nav starts where the main content does. */}
-          <Link href="/reports">
+          <Link href="/home">
             <span className="hidden md:flex items-center h-11 w-52 px-4 cursor-pointer">
               {BRAND}
             </span>
@@ -187,7 +189,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 />
               </SheetContent>
             </Sheet>
-            <Link href="/reports">
+            <Link href="/home">
               <span className="cursor-pointer">{BRAND}</span>
             </Link>
           </div>

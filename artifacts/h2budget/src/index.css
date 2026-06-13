@@ -298,6 +298,15 @@
   .stagger-children > * {
     animation: h2-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
+
+  /* Confetti fall (used by <Confetti />). Drifts sideways + spins while it
+     drops the full viewport height, then fades. */
+  @keyframes cc-fall {
+    to {
+      transform: translate(var(--cc-drift, 0), 100vh) rotate(var(--cc-rot, 360deg));
+      opacity: 0;
+    }
+  }
   .stagger-children > *:nth-child(1) {
     animation-delay: 40ms;
   }
