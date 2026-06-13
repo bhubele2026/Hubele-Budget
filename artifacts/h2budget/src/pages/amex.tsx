@@ -101,9 +101,11 @@ import { AmexLogo } from "@/components/brand-logos";
 import { buildBalanceWindow } from "@/lib/amexBalanceWindow";
 
 // The "American Express" page is really the credit-cards view. Apple Card
-// rows (source "plaid:apple-card") are folded in here so they show alongside
-// the Amex cards without renaming the page.
-const AMEX_SOURCES = ["amex", "plaid:amex", "plaid:apple-card"];
+// rows are folded in here so they show alongside the Amex cards without
+// renaming the page — both the Plaid form ("plaid:apple-card", if it ever
+// links) and the FinanceKit/manual form ("apple-card", how it'll actually
+// arrive from the iOS app).
+const AMEX_SOURCES = ["amex", "plaid:amex", "plaid:apple-card", "apple-card"];
 
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
