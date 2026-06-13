@@ -2513,12 +2513,15 @@ export async function syncAllForUser(
     .select({ id: plaidItemsTable.id })
     .from(plaidItemsTable)
     .where(eq(plaidItemsTable.householdId, householdId));
-  const out: SyncResult[] = [];
-  // (#671) Per-item promise chain so a /plaid/sync click that lands
-  // while a webhook-triggered sync is already in flight for the same
-  // item queues behind it instead of racing the cursor.
-  for (const it of items)
-    out.push(await syncPlaidItemSerialized(actorUserId, it.id, opts));
+  // (#speed) Run every item's sync in PARALLEL. The serialization inside
+  // syncPlaidItemSerialized is keyed per-item (itemRowId), so distinct items
+  // never race each other — only a same-item concurrent webhook sync queues
+  // behind this one. A household with Chase + Amex now waits for ONE live bank
+  // refresh window, not the sum of both back-to-back.
+  // (#671) Per-item promise chain still guards same-item concurrency.
+  const out = await Promise.all(
+    items.map((it) => syncPlaidItemSerialized(actorUserId, it.id, opts)),
+  );
   return out;
 }
 

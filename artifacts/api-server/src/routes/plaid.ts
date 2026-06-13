@@ -2336,27 +2336,32 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
           .select({ id: plaidItemsTable.id })
           .from(plaidItemsTable)
           .where(eq(plaidItemsTable.householdId, req.householdId!));
-    for (const it of itemsToRefresh) {
-      const r = await refreshPlaidAccountsForItem({
-        userId: req.userId!,
-        itemRowId: it.id,
-        logger: req.log,
-      });
-      if (r.inserted > 0 || r.error) {
-        req.log.info(
-          {
-            plaidItemRowId: it.id,
-            upserted: r.upserted,
-            inserted: r.inserted,
-            updated: r.updated,
-            refreshError: r.error,
-          },
-          r.inserted > 0
-            ? "[plaid-sync] pre-prune account refresh re-materialized previously-missing plaid_accounts rows"
-            : "[plaid-sync] pre-prune account refresh skipped or partial",
-        );
-      }
-    }
+    // (#speed) Refresh every item's accounts in PARALLEL — each is an
+    // independent best-effort Plaid balance/directory call, so there's no
+    // reason to wait for them one at a time before the prune.
+    await Promise.all(
+      itemsToRefresh.map(async (it) => {
+        const r = await refreshPlaidAccountsForItem({
+          userId: req.userId!,
+          itemRowId: it.id,
+          logger: req.log,
+        });
+        if (r.inserted > 0 || r.error) {
+          req.log.info(
+            {
+              plaidItemRowId: it.id,
+              upserted: r.upserted,
+              inserted: r.inserted,
+              updated: r.updated,
+              refreshError: r.error,
+            },
+            r.inserted > 0
+              ? "[plaid-sync] pre-prune account refresh re-materialized previously-missing plaid_accounts rows"
+              : "[plaid-sync] pre-prune account refresh skipped or partial",
+          );
+        }
+      }),
+    );
     await pruneOrphanPlaidTransactionsForHousehold(req.householdId!);
     const results = itemId
       ? [
@@ -2382,29 +2387,33 @@ router.post("/plaid/sync", requireAuth, async (req, res): Promise<void> => {
     // without the liabilities product enabled). Each call is best-
     // effort: a per-item failure must not 500 the sync response since
     // the transactions sync already succeeded.
-    for (const r of results) {
-      if (r.error) continue;
-      if (!r.plaidItemRowId) continue;
-      const [hasLiabilityAcct] = await db
-        .select({ id: plaidAccountsTable.id })
-        .from(plaidAccountsTable)
-        .where(
-          and(
-            eq(plaidAccountsTable.itemId, r.plaidItemRowId),
-            sql`(${plaidAccountsTable.type} in ('credit','loan') or ${plaidAccountsTable.liabilityKind} is not null)`,
-          ),
-        )
-        .limit(1);
-      if (!hasLiabilityAcct) continue;
-      try {
-        await fetchLiabilitiesForItem(req.userId!, r.plaidItemRowId);
-      } catch (liabErr) {
-        req.log.warn(
-          { err: liabErr, plaidItemRowId: r.plaidItemRowId },
-          "fetchLiabilitiesForItem after /plaid/sync failed — Ending Balance tile may stay stale until next refresh",
-        );
-      }
-    }
+    // (#speed) Fetch liabilities for every synced item in PARALLEL — each is
+    // an independent best-effort per-item call; no need to serialize them.
+    await Promise.all(
+      results.map(async (r) => {
+        if (r.error) return;
+        if (!r.plaidItemRowId) return;
+        const [hasLiabilityAcct] = await db
+          .select({ id: plaidAccountsTable.id })
+          .from(plaidAccountsTable)
+          .where(
+            and(
+              eq(plaidAccountsTable.itemId, r.plaidItemRowId),
+              sql`(${plaidAccountsTable.type} in ('credit','loan') or ${plaidAccountsTable.liabilityKind} is not null)`,
+            ),
+          )
+          .limit(1);
+        if (!hasLiabilityAcct) return;
+        try {
+          await fetchLiabilitiesForItem(req.userId!, r.plaidItemRowId);
+        } catch (liabErr) {
+          req.log.warn(
+            { err: liabErr, plaidItemRowId: r.plaidItemRowId },
+            "fetchLiabilitiesForItem after /plaid/sync failed — Ending Balance tile may stay stale until next refresh",
+          );
+        }
+      }),
+    );
     // (#662) Roll the per-item silent-drop count up into a top-level
     // total so the toast layer can eventually distinguish "0 added —
     // nothing new" from "0 added — N rows filtered by the first-sync

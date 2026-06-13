@@ -36,6 +36,25 @@ export function SyncButton({
   const { data: plaidItems } = useListPlaidItems();
   const { runSync, isPending } = usePlaidSync();
 
+  // (#speed) Elapsed-time progress while a sync is in flight. The sync is a
+  // single request (no per-account stream), so this is an honest "live bank
+  // refresh takes ~30s" indicator: the bar fills toward ~95% over 30s and the
+  // seconds tick up, so it never looks frozen. Resets when the sync ends.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!isPending) {
+      setElapsed(0);
+      return;
+    }
+    const start = Date.now();
+    const id = window.setInterval(
+      () => setElapsed((Date.now() - start) / 1000),
+      250,
+    );
+    return () => window.clearInterval(id);
+  }, [isPending]);
+  const syncPct = Math.min(95, (elapsed / 30) * 100);
+
   const { mostRecent, hasAnyItems, hasFilteredItems, latestError, reauthItems } =
     useMemo(() => {
       const allItems = plaidItems ?? [];
@@ -139,7 +158,21 @@ export function SyncButton({
           {isPending ? "Syncing…" : "Sync"}
         </Button>
       </div>
-      <span className="text-[10px] text-muted-foreground mt-1">{relative}</span>
+      {isPending ? (
+        <div className="w-[180px] mt-1" data-testid="sync-progress">
+          <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+              style={{ width: `${syncPct}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-muted-foreground mt-0.5 block">
+            Pulling live from your bank… {Math.round(elapsed)}s
+          </span>
+        </div>
+      ) : (
+        <span className="text-[10px] text-muted-foreground mt-1">{relative}</span>
+      )}
       {displayError ? (
         <span
           className="text-[10px] text-destructive mt-0.5 flex items-center gap-1 max-w-[220px] truncate"
