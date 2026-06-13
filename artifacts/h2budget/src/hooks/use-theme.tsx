@@ -19,11 +19,20 @@ function getSystemTheme(): "light" | "dark" {
     : "light";
 }
 
+const MATTE_FORCE_KEY = "h2:matte-forced:v1";
+
 function readStoredTheme(): Theme {
-  // Default to matte-black dark — the app opens in its premium look. Users
-  // can still switch to light/system via the toggle.
+  // Matte black is this app's whole identity. Default to dark, AND do a
+  // ONE-TIME snap: anyone carrying a legacy light/system preference gets
+  // flipped to matte black exactly once so the app *opens* matte. After that
+  // their explicit choice (including re-picking Light) is fully respected.
   if (typeof window === "undefined") return "dark";
   try {
+    if (!window.localStorage.getItem(MATTE_FORCE_KEY)) {
+      window.localStorage.setItem(MATTE_FORCE_KEY, "1");
+      window.localStorage.setItem(STORAGE_KEY, "dark");
+      return "dark";
+    }
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === "light" || stored === "dark" || stored === "system") {
       return stored;
