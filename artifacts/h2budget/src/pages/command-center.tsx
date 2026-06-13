@@ -20,6 +20,7 @@ import { cn, formatCurrency } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { MonthlyWrapped } from "@/components/monthly-wrapped";
 import { Confetti } from "@/components/confetti";
+import { PaceGauge } from "@/components/pace-gauge";
 
 function greetingFor(hour: number): string {
   if (hour < 5) return "Still up";
@@ -81,8 +82,14 @@ export default function CommandCenterPage() {
 
   const { user } = useUser();
   const who = user?.firstName?.trim() || "Hubeles";
-  const hour = new Date().getHours();
-  const greeting = greetingFor(hour);
+  const now = new Date();
+  const greeting = greetingFor(now.getHours());
+  const dayOfMonth = now.getDate();
+  const daysInMonth = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0,
+  ).getDate();
 
   const cashNow = forecast?.bankSnapshot?.balance
     ? Number(forecast.bankSnapshot.balance)
@@ -230,6 +237,18 @@ export default function CommandCenterPage() {
           sub="this month"
         />
       </div>
+
+      {/* Spend-pace gauge */}
+      <Card>
+        <CardContent className="p-5">
+          <PaceGauge
+            spend={spend}
+            income={income}
+            dayOfMonth={dayOfMonth}
+            daysInMonth={daysInMonth}
+          />
+        </CardContent>
+      </Card>
 
       {/* Forecast line that draws itself in */}
       <Card>
