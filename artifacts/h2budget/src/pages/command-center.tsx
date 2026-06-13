@@ -14,6 +14,7 @@ import {
   useGetDashboard,
   useGetAdvisorNudge,
 } from "@workspace/api-client-react";
+import { useUser } from "@clerk/react";
 import { useCountUp } from "@/hooks/useCountUp";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -78,6 +79,8 @@ export default function CommandCenterPage() {
   const [wrappedOpen, setWrappedOpen] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
 
+  const { user } = useUser();
+  const who = user?.firstName?.trim() || "Hubeles";
   const hour = new Date().getHours();
   const greeting = greetingFor(hour);
 
@@ -177,7 +180,7 @@ export default function CommandCenterPage() {
       {/* Greeting + savage AI line */}
       <div>
         <h1 className="text-[1.9rem] md:text-[2.2rem] font-bold tracking-tight text-foreground leading-tight">
-          {greeting}, Hubeles.
+          {greeting}, {who}.
         </h1>
         <div className="mt-1.5 flex items-start gap-2">
           <Sparkles className="w-4 h-4 mt-1 shrink-0 text-primary" />
