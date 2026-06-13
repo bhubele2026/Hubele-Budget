@@ -2431,8 +2431,9 @@ export default function TransactionsPage() {
                       testId={`row-tx-${tx.id}`}
                       rowData={{ "data-pending": "true" }}
                       metaNode={
-                        tx.forecastFlag
-                          ? (() => {
+                        tx.forecastFlag ? (
+                          tx.sentToReviewAt ? (
+                            (() => {
                               const r = resolutionByTxnId.get(tx.id);
                               const state =
                                 r?.status === "matched"
@@ -2455,7 +2456,21 @@ export default function TransactionsPage() {
                                 </Badge>
                               );
                             })()
-                          : null
+                          ) : (
+                            // Honest state: forecast-flagged but NOT yet sent to
+                            // the Review pipeline (sentToReviewAt is null). Until
+                            // sent it will NOT appear on the Review page, so say
+                            // so instead of a misleading "In Review".
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] font-normal ${CHIP_BASE} text-muted-foreground`}
+                              data-testid={`badge-not-in-review-${tx.id}`}
+                              data-forecast-state="not-sent"
+                            >
+                              Not in review
+                            </Badge>
+                          )
+                        ) : null
                       }
                       amountNode={
                         <span
@@ -2492,7 +2507,7 @@ export default function TransactionsPage() {
                             data-testid={`button-send-review-${tx.id}`}
                             data-sent-to-review="false"
                           >
-                            <Inbox className="w-4 h-4 text-muted-foreground" />
+                            <Inbox className="w-4 h-4 text-primary" />
                           </Button>
                         )
                       }
@@ -2562,8 +2577,9 @@ export default function TransactionsPage() {
                         "data-ignored": isIgnored ? "true" : "false",
                       }}
                       metaNode={
-                        tx.forecastFlag
-                          ? (() => {
+                        tx.forecastFlag ? (
+                          tx.sentToReviewAt ? (
+                            (() => {
                               const r = resolutionByTxnId.get(tx.id);
                               const state =
                                 r?.status === "matched"
@@ -2586,7 +2602,21 @@ export default function TransactionsPage() {
                                 </Badge>
                               );
                             })()
-                          : null
+                          ) : (
+                            // Honest state: forecast-flagged but NOT yet sent to
+                            // the Review pipeline (sentToReviewAt is null). Until
+                            // sent it will NOT appear on the Review page, so say
+                            // so instead of a misleading "In Review".
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] font-normal ${CHIP_BASE} text-muted-foreground`}
+                              data-testid={`badge-not-in-review-${tx.id}`}
+                              data-forecast-state="not-sent"
+                            >
+                              Not in review
+                            </Badge>
+                          )
+                        ) : null
                       }
                       amountNode={
                         <div className="flex flex-col items-end">
@@ -2628,7 +2658,7 @@ export default function TransactionsPage() {
                               title="Send to Forecast"
                               data-testid={`button-send-forecast-${tx.id}`}
                             >
-                              <Send className="w-4 h-4 text-primary" />
+                              <Inbox className="w-4 h-4 text-primary" />
                             </Button>
                           ) : (
                             <Button
@@ -2664,7 +2694,7 @@ export default function TransactionsPage() {
                               data-testid={`button-send-review-${tx.id}`}
                               data-sent-to-review="false"
                             >
-                              <Inbox className="w-4 h-4 text-muted-foreground" />
+                              <Inbox className="w-4 h-4 text-primary" />
                             </Button>
                           )}
                           <Button
