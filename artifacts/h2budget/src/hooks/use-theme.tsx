@@ -66,11 +66,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return () => mql.removeEventListener("change", handler);
   }, []);
 
-  // Matte black is this app's signature — so "system" resolves to dark, not
-  // the OS setting. The only way out of matte is to explicitly pick Light.
-  // (systemTheme is still tracked so the toggle UI can show it.)
-  void systemTheme;
-  const resolvedTheme = theme === "light" ? "light" : "dark";
+  // "system" follows the OS; "light"/"dark" are explicit. (Matte black is
+  // still the first-run default + one-time snap in readStoredTheme — but once
+  // you pick System it genuinely tracks your OS, light or dark.)
+  const resolvedTheme = theme === "system" ? systemTheme : theme;
 
   useEffect(() => {
     applyThemeClass(resolvedTheme);
