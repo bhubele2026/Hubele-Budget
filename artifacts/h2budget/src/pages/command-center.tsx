@@ -424,6 +424,7 @@ export default function CommandCenterPage() {
         blurb={health.blurb}
       />
 
+      <div className="grid lg:grid-cols-2 gap-4 items-start">
       {/* This week's allowance pace */}
       {thisWeek.planned > 0 ? (
         <Card>
@@ -505,6 +506,8 @@ export default function CommandCenterPage() {
           ) : null}
         </CardContent>
       </Card>
+
+      </div>
 
       {/* Forecast line that draws itself in */}
       <Card>
@@ -593,6 +596,7 @@ export default function CommandCenterPage() {
         </CardContent>
       </Card>
 
+      <div className="grid lg:grid-cols-2 gap-4 items-start">
       {/* Debt freedom meter */}
       {dash ? (
         <FreedomMeter
@@ -703,6 +707,8 @@ export default function CommandCenterPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      </div>
 
       {/* Badges + Wrapped */}
       <div className="flex flex-wrap items-center gap-2">
