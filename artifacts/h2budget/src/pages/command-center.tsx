@@ -38,6 +38,7 @@ import {
 } from "@/lib/weeklyStreak";
 import { CategoryDonut } from "@/components/category-donut";
 import { HealthScore } from "@/components/health-score";
+import { SavingsGoal } from "@/components/savings-goal";
 import { useUser } from "@clerk/react";
 import { useCountUp } from "@/hooks/useCountUp";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -639,6 +640,9 @@ export default function CommandCenterPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Savings goal */}
+      <SavingsGoal />
 
       <div className="grid lg:grid-cols-2 gap-4 items-start">
       {/* Debt freedom meter */}
