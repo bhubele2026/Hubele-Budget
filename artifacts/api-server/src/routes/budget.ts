@@ -838,23 +838,12 @@ async function reconcileMay2026Amounts(
         ),
       );
 
-    // Upsert avalanche manualExtra to the canonical $6,225.00 for this household.
-    // Use ON CONFLICT to be safe against concurrent reconciles racing the
-    // initial INSERT (the dashboard fires multiple parallel month requests).
-    await tx
-      .insert(avalancheSettingsTable)
-      .values({
-        userId: householdOwnerId,
-        householdId,
-        manualExtra: MAY_2026_AVALANCHE_MANUAL_EXTRA,
-      })
-      .onConflictDoUpdate({
-        target: avalancheSettingsTable.userId,
-        set: {
-          manualExtra: MAY_2026_AVALANCHE_MANUAL_EXTRA,
-          updatedAt: new Date(),
-        },
-      });
+    // NOTE: This seed used to force avalancheSettings.manualExtra to a
+    // hardcoded $6,225.00, which silently clobbered the user's own avalanche
+    // "extra payment" amount (e.g. their $2k) every time the May-2026 budget
+    // reconcile ran — and surfaced as a giant "Avalanche extra payment" row on
+    // the Forecast. The user controls that number via the Avalanche slider, so
+    // the seed must NOT touch it. Override removed intentionally.
 
     const nextPrefs = { ...(prefs ?? {}), budgetMay2026AmountsV1: true };
     if (s) {
