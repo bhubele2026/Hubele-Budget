@@ -224,6 +224,12 @@ export type { PlaidTxn, RemovedTransaction };
 const SLUG_OVERRIDES: Record<string, string> = {
   "american express": "amex",
   "amex": "amex",
+  // Apple Card (issued by Goldman Sachs) — pin to a stable slug so its rows
+  // carry source "plaid:apple-card" and can be folded into the Amex/cards
+  // page without renaming anything.
+  "apple card": "apple-card",
+  "apple": "apple-card",
+  "goldman sachs": "apple-card",
 };
 
 export function institutionSlug(name: string | null | undefined): string {
