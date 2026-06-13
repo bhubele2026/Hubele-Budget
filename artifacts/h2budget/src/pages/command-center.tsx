@@ -296,6 +296,15 @@ export default function CommandCenterPage() {
     };
   }, [healthScore]);
 
+  // End-of-month projection: extrapolate current spend to the full month.
+  const projectedNet = useMemo(() => {
+    const elapsed = daysInMonth > 0 ? dayOfMonth / daysInMonth : 0;
+    if (elapsed <= 0.05 || income <= 0) return null;
+    const projectedSpend = spend / elapsed;
+    return income - projectedSpend;
+  }, [spend, income, dayOfMonth, daysInMonth]);
+  const monthName = now.toLocaleDateString("en-US", { month: "long" });
+
   const nudgeMsg =
     nudge?.enabled && nudge.message ? nudge.message : null;
   const sevColor =
@@ -471,6 +480,29 @@ export default function CommandCenterPage() {
             dayOfMonth={dayOfMonth}
             daysInMonth={daysInMonth}
           />
+          {projectedNet != null ? (
+            <div className="mt-4 pt-3 border-t border-border text-sm">
+              <span className="text-muted-foreground">
+                At this rate you finish {monthName} at{" "}
+              </span>
+              <span
+                className={cn(
+                  "font-bold tabular-nums",
+                  projectedNet >= 0
+                    ? "text-emerald-500"
+                    : "text-[hsl(var(--negative))]",
+                )}
+              >
+                {projectedNet >= 0 ? "+" : ""}
+                {formatCurrency(projectedNet)}
+              </span>
+              <span className="text-muted-foreground">
+                {projectedNet >= 0
+                  ? " — keep it up. 😏"
+                  : " — pump the brakes. 🛑"}
+              </span>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
