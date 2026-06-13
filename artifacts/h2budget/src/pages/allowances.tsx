@@ -204,7 +204,7 @@ function TxnRow({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-xs"
+            className="h-7 px-2 text-xs w-[74px] justify-center shrink-0"
             onClick={() => onSplit(t)}
             data-testid={`allowance-split-${t.id}`}
             title="Split this purchase across weekly buckets"
@@ -218,7 +218,7 @@ function TxnRow({
             type="button"
             variant={isToCancel ? "secondary" : "ghost"}
             size="sm"
-            className="h-7 px-2 text-xs"
+            className="h-7 px-2 text-xs w-[96px] justify-center shrink-0"
             onClick={() => onToCancel(t)}
             data-testid={`allowance-to-cancel-${t.id}`}
             title={
@@ -231,7 +231,7 @@ function TxnRow({
             {isToCancel ? "On list" : "To cancel"}
           </Button>
         )}
-        <span className="tabular-nums whitespace-nowrap font-mono">
+        <span className="tabular-nums whitespace-nowrap font-mono w-24 text-right shrink-0">
           {formatCurrency(expenseAmount(t))}
         </span>
       </div>
