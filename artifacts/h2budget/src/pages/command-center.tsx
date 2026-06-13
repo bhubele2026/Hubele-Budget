@@ -23,6 +23,7 @@ import {
   currentWeekBounds,
 } from "@/lib/weeklyStreak";
 import { CategoryDonut } from "@/components/category-donut";
+import { HealthScore } from "@/components/health-score";
 import { useUser } from "@clerk/react";
 import { useCountUp } from "@/hooks/useCountUp";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -249,6 +250,51 @@ export default function CommandCenterPage() {
     [weeklyTxns, settings],
   );
 
+  // Gamified financial-health score (0–100) from the real signals on screen.
+  const healthScore = useMemo(() => {
+    let s = 50;
+    if (netMonth != null && income > 0) {
+      const r = netMonth / income;
+      s += r >= 0.2 ? 20 : r > 0 ? 10 : r > -0.1 ? -8 : -18;
+    } else if (netMonth != null) {
+      s += netMonth > 0 ? 10 : -12;
+    }
+    if (lowPoint != null) s += lowPoint > 0 ? 15 : -12;
+    if (runwayDays != null && runwayDays < 14) s -= 10;
+    if (paidThisMonth > 0) s += 6;
+    if (streak.direction === "under") s += Math.min(15, streak.weeks * 5);
+    else if (streak.direction === "over") s -= Math.min(15, streak.weeks * 5);
+    if (thisWeek.planned > 0) s += thisWeek.spend <= thisWeek.planned ? 8 : -8;
+    return Math.max(2, Math.min(100, Math.round(s)));
+  }, [netMonth, income, lowPoint, runwayDays, paidThisMonth, streak, thisWeek]);
+
+  const health = useMemo(() => {
+    const s = healthScore;
+    if (s >= 80)
+      return {
+        color: "hsl(150 60% 45%)",
+        label: "Thriving",
+        blurb: "You two are running this like pros. Don't get cocky.",
+      };
+    if (s >= 60)
+      return {
+        color: "hsl(214 82% 62%)",
+        label: "Solid",
+        blurb: "Good shape — a couple tweaks and you're untouchable.",
+      };
+    if (s >= 40)
+      return {
+        color: "hsl(40 95% 55%)",
+        label: "Shaky",
+        blurb: "Wobbling. Tighten the spend before it bites, you muppets.",
+      };
+    return {
+      color: "hsl(0 75% 60%)",
+      label: "Critical",
+      blurb: "Flashing red light. Sort it out before it sorts you.",
+    };
+  }, [healthScore]);
+
   const nudgeMsg =
     nudge?.enabled && nudge.message ? nudge.message : null;
   const sevColor =
@@ -330,6 +376,14 @@ export default function CommandCenterPage() {
           sub="this month"
         />
       </div>
+
+      {/* Financial health score */}
+      <HealthScore
+        score={healthScore}
+        label={health.label}
+        color={health.color}
+        blurb={health.blurb}
+      />
 
       {/* This week's allowance pace */}
       {thisWeek.planned > 0 ? (
