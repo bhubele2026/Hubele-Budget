@@ -23,6 +23,7 @@ import {
   type Debt,
 } from "@workspace/api-client-react";
 import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
+import { BillsHealthCheck } from "@/components/bills-health-check";
 import { formatBillRowAmount } from "@/lib/billsRowAmount";
 import { computePayoffsByDebt, filterDebtMinRowsByPayoff } from "@/lib/forecastDebts";
 import { Lock, PartyPopper } from "lucide-react";
@@ -595,6 +596,8 @@ export default function BillsPage() {
           </Button>
         </div>
       </div>
+
+      <BillsHealthCheck summary={summary} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
