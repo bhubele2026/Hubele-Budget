@@ -121,6 +121,7 @@ export default function CommandCenterPage() {
   });
   const [wrappedOpen, setWrappedOpen] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
+  const [openStreak, setOpenStreak] = useState(0);
 
   const { user } = useUser();
   const who = user?.firstName?.trim() || "Hubeles";
@@ -303,6 +304,35 @@ export default function CommandCenterPage() {
       : nudge?.severity === "warn"
         ? "text-amber-500"
         : "text-primary";
+
+  // Daily check-in streak — consecutive days the app was opened. Pure
+  // localStorage; resets if a day is skipped.
+  useEffect(() => {
+    const KEY = "h2:open-streak:v1";
+    const iso = (dd: Date) =>
+      `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, "0")}-${String(
+        dd.getDate(),
+      ).padStart(2, "0")}`;
+    try {
+      const t = new Date();
+      const tISO = iso(t);
+      const yISO = iso(new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1));
+      const raw = localStorage.getItem(KEY);
+      const prev = raw
+        ? (JSON.parse(raw) as { last: string; count: number })
+        : null;
+      let count: number;
+      if (prev?.last === tISO) {
+        count = prev.count;
+      } else {
+        count = prev?.last === yISO ? prev.count + 1 : 1;
+        localStorage.setItem(KEY, JSON.stringify({ last: tISO, count }));
+      }
+      setOpenStreak(count);
+    } catch {
+      setOpenStreak(1);
+    }
+  }, []);
 
   // Celebrate a net-positive month — confetti once per session per month so it
   // feels like a reward, not a nag.
@@ -566,6 +596,47 @@ export default function CommandCenterPage() {
         </Card>
       ) : null}
 
+      {/* Latest activity */}
+      {(dash?.recentTransactions?.length ?? 0) > 0 ? (
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium mb-2">
+              Latest activity
+            </div>
+            <div className="divide-y divide-border">
+              {dash!.recentTransactions.slice(0, 5).map((t) => {
+                const a = Number(t.amount) || 0;
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center justify-between gap-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">
+                        {t.description || "Transaction"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {t.occurredOn}
+                        {t.member ? ` · ${t.member}` : ""}
+                      </div>
+                    </div>
+                    <div
+                      className={cn(
+                        "text-sm font-semibold tabular-nums shrink-0",
+                        a >= 0 ? "text-emerald-500" : "text-foreground",
+                      )}
+                    >
+                      {a >= 0 ? "+" : ""}
+                      {formatCurrency(a)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Category donut */}
       <CategoryDonut categories={dash?.topCategories ?? []} />
 
@@ -603,6 +674,12 @@ export default function CommandCenterPage() {
 
       {/* Badges + Wrapped */}
       <div className="flex flex-wrap items-center gap-2">
+        {openStreak >= 2 ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-500">
+            <Flame className="w-3.5 h-3.5" />
+            {openStreak}-day check-in streak
+          </span>
+        ) : null}
         {streak.weeks >= 2 ? (
           <span
             className={cn(
