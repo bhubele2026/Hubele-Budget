@@ -8,7 +8,21 @@ import {
   ReferenceLine,
   Tooltip as RechartsTooltip,
 } from "recharts";
-import { Flame, Trophy, PiggyBank, Sparkles, TrendingUp } from "lucide-react";
+import { Link } from "wouter";
+import {
+  Flame,
+  Trophy,
+  PiggyBank,
+  Sparkles,
+  TrendingUp,
+  Wallet,
+  CalendarDays,
+  Receipt,
+  CreditCard,
+  BarChart3,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { SyncButton } from "@/components/sync-button";
 import {
   useGetForecast,
   useGetDashboard,
@@ -56,6 +70,17 @@ function moneyPersona(cat: string | undefined): { label: string; emoji: string }
   if (!c) return { label: "The Mystery Spenders", emoji: "🕵️" };
   return { label: `The ${cat} Devotees`, emoji: "💸" };
 }
+
+const MONEY_TIPS = [
+  "Cancel one subscription you forgot you had. Future you says thanks.",
+  "A 24-hour rule on anything over $100 kills most impulse buys.",
+  "Date night at home beats $120 out. Light a candle, you animals. 😏",
+  "Pay the highest-APR debt first. Math doesn't care about your feelings.",
+  "Check this app BEFORE you spend, not after. Revolutionary, I know.",
+  "Groceries > takeout. Your wallet and your jeans both agree.",
+  "Name every dollar a job before the month starts. Idle cash wanders.",
+  "Brag to each other when you come in under. Make it a competition.",
+];
 
 function greetingFor(hour: number): string {
   if (hour < 5) return "Still up";
@@ -374,6 +399,25 @@ export default function CommandCenterPage() {
               "Pull a sync and I'll tell you how you're really doing."}
           </p>
         </div>
+      </div>
+
+      {/* Quick actions */}
+      <div className="flex flex-wrap items-center gap-2">
+        <SyncButton />
+        {[
+          { href: "/allowances", label: "Allowances", icon: Wallet },
+          { href: "/bills", label: "Bills", icon: CalendarDays },
+          { href: "/transactions", label: "Chase", icon: Receipt },
+          { href: "/amex", label: "Amex", icon: CreditCard },
+          { href: "/reports", label: "Reports", icon: BarChart3 },
+        ].map((a) => (
+          <Link key={a.href} href={a.href}>
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <a.icon className="w-4 h-4" />
+              {a.label}
+            </Button>
+          </Link>
+        ))}
       </div>
 
       {/* Big count-up numbers */}
@@ -750,6 +794,14 @@ export default function CommandCenterPage() {
         >
           <Sparkles className="w-3.5 h-3.5" /> View this month, Wrapped
         </button>
+      </div>
+
+      {/* Daily money tip */}
+      <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
+        <span className="text-base leading-none">💡</span>
+        <span className="text-muted-foreground">
+          {MONEY_TIPS[(dayOfMonth - 1) % MONEY_TIPS.length]}
+        </span>
       </div>
 
       <MonthlyWrapped
