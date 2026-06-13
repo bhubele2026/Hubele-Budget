@@ -56,10 +56,10 @@ const ALL_NAV = [...TOP_NAV, ...RAIL_NAV, SETTINGS_ITEM];
 
 const BRAND = (
   <span className="flex items-center gap-2 select-none">
-    <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[hsl(240_8%_8%)] text-[hsl(78_60%_56%)] font-bold text-[13px] tracking-tight border border-[hsl(78_38%_30%)]">
+    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[hsl(240_8%_8%)] text-[hsl(78_60%_56%)] font-bold text-[11px] tracking-tight border border-[hsl(78_38%_30%)]">
       H2
     </span>
-    <span className="font-semibold text-[15px] tracking-tight">Budget</span>
+    <span className="font-semibold text-[13.5px] tracking-tight">Budget</span>
   </span>
 );
 
@@ -155,12 +155,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="h-screen overflow-hidden bg-background flex flex-col">
       {/* ── Top bar: brand · plan-&-analyze nav · settings gear ───────────── */}
       <header className="shrink-0 bg-[hsl(240_6%_9%)] dark:bg-[hsl(240_8%_6%)] text-white border-b border-white/10 dark:border-[hsl(78_24%_16%)]">
-        <div className="flex items-center h-14">
+        <div className="flex items-center h-11">
           {/* Brand — desktop: pinned to the rail width (w-52) with matching
               padding so "H2 Budget" sits directly above the left rail and the
               top-nav starts where the main content does. */}
           <Link href="/reports">
-            <span className="hidden md:flex items-center h-14 w-52 px-4 cursor-pointer">
+            <span className="hidden md:flex items-center h-11 w-52 px-4 cursor-pointer">
               {BRAND}
             </span>
           </Link>
@@ -199,7 +199,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <Link key={item.href} href={item.href}>
                   <span
                     className={cn(
-                      "flex items-center gap-2 px-3 h-9 rounded-md text-sm cursor-pointer transition-colors",
+                      "flex items-center gap-1.5 px-2.5 h-8 rounded-md text-[13px] cursor-pointer transition-colors",
                       active
                         ? "bg-white/15 text-white font-semibold"
                         : "text-white/75 hover:bg-white/10 hover:text-white",
