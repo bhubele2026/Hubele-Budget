@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Ban } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Ban, Split } from "lucide-react";
+import { SplitTransactionDialog } from "@/components/split-transaction-dialog";
 import {
   useListTransactions,
   useGetSettings,
@@ -130,6 +131,7 @@ function TxnRow({
   onChangeCategory,
   onToCancel,
   isToCancel,
+  onSplit,
 }: {
   t: Transaction;
   subLabels?: Record<SubBucket, string>;
@@ -138,6 +140,7 @@ function TxnRow({
   onChangeCategory?: (t: Transaction, categoryId: string) => void;
   onToCancel?: (t: Transaction) => void;
   isToCancel?: boolean;
+  onSplit?: (t: Transaction) => void;
 }) {
   const current: SubBucket = SUB_BUCKETS.includes(t.weeklyBucket as SubBucket)
     ? (t.weeklyBucket as SubBucket)
@@ -196,6 +199,20 @@ function TxnRow({
             </SelectContent>
           </Select>
         )}
+        {onSplit && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => onSplit(t)}
+            data-testid={`allowance-split-${t.id}`}
+            title="Split this purchase across weekly buckets"
+          >
+            <Split className="w-3.5 h-3.5 mr-1.5" />
+            Split
+          </Button>
+        )}
         {onToCancel && (
           <Button
             type="button"
@@ -230,6 +247,7 @@ function CategoryGroupRow({
   onChangeCategory,
   onToCancel,
   isToCancel,
+  onSplit,
 }: {
   group: Group;
   subLabels?: Record<SubBucket, string>;
@@ -238,6 +256,7 @@ function CategoryGroupRow({
   onChangeCategory?: (t: Transaction, categoryId: string) => void;
   onToCancel?: (t: Transaction) => void;
   isToCancel?: (t: Transaction) => boolean;
+  onSplit?: (t: Transaction) => void;
 }) {
   const [open, setOpen] = useState(false);
   const expandable = group.txns.length > 0;
@@ -281,6 +300,7 @@ function CategoryGroupRow({
             onChangeCategory={onChangeCategory}
             onToCancel={onToCancel}
             isToCancel={isToCancel?.(t)}
+            onSplit={onSplit}
           />
         ))}
       </CollapsibleContent>
@@ -754,6 +774,8 @@ export default function AllowancesPage() {
   }, [windowTxns, monthScopeTxns, SUB_LABEL, catNameById]);
 
   const [expanded, setExpanded] = useState<Set<BucketKey>>(new Set());
+  // (#split) Transaction being split across weekly buckets, if any.
+  const [splitTx, setSplitTx] = useState<Transaction | null>(null);
   const toggle = (key: BucketKey) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -920,6 +942,7 @@ export default function AllowancesPage() {
                               ? (t) => toCancel.has(toCancelKeyFor(t))
                               : undefined
                           }
+                          onSplit={setSplitTx}
                         />
                       ))
                     )}
@@ -963,6 +986,14 @@ export default function AllowancesPage() {
           })}
         </CardContent>
       </Card>
+
+      <SplitTransactionDialog
+        tx={splitTx}
+        open={!!splitTx}
+        onOpenChange={(o) => {
+          if (!o) setSplitTx(null);
+        }}
+      />
     </div>
   );
 }
