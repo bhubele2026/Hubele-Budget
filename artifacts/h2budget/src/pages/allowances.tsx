@@ -310,6 +310,19 @@ function CategoryGroupRow({
 
 // ----- bucket summary card --------------------------------------------
 
+// A little trash talk. Reacts to how much of the planned allowance is spent —
+// fun, but also a real at-a-glance gut check. Keeps it light and just-for-us.
+function funVerdict(actual: number, planned: number): string | null {
+  if (planned <= 0) return null;
+  const r = actual / planned;
+  if (r <= 0.4) return "Barely made a dent. Look at you two 😎";
+  if (r <= 0.75) return "Cruising — plenty left for fun 🟢";
+  if (r < 0.95) return "Cutting it close. Eyes on it 👀";
+  if (r <= 1.05) return "Riiight on the line. Hold steady 😅";
+  if (r <= 1.2) return "Over it. Easy there, tiger 😬";
+  return "Whoa. Date night's officially BYO 🙈";
+}
+
 function BucketCard({
   name,
   actual,
@@ -438,6 +451,14 @@ function BucketCard({
               ? `${formatCurrency(variance)} over`
               : `${formatCurrency(Math.abs(variance))} under`}
         </div>
+        {funVerdict(actual, planned) && (
+          <div
+            className="text-xs italic text-muted-foreground"
+            data-testid={`allowance-verdict-${slug}`}
+          >
+            {funVerdict(actual, planned)}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -860,7 +881,7 @@ export default function AllowancesPage() {
           Allowances
         </h1>
         <p className="text-muted-foreground">
-          Weekly, monthly, and unplanned spend — reviewed.
+          Where the money actually goes. No judgment… ok, a little. 😏
         </p>
       </div>
 
