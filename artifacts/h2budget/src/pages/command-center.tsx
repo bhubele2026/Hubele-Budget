@@ -13,7 +13,14 @@ import {
   useGetForecast,
   useGetDashboard,
   useGetAdvisorNudge,
+  useGetSettings,
+  useListTransactions,
 } from "@workspace/api-client-react";
+import {
+  weeklyBudgetStreak,
+  isoDaysAgo,
+  todayISO,
+} from "@/lib/weeklyStreak";
 import { useUser } from "@clerk/react";
 import { useCountUp } from "@/hooks/useCountUp";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -77,6 +84,13 @@ export default function CommandCenterPage() {
   const { data: forecast, isLoading: fLoading } = useGetForecast({ days: 90 });
   const { data: dash, isLoading: dLoading } = useGetDashboard();
   const { data: nudge } = useGetAdvisorNudge();
+  const { data: settings } = useGetSettings();
+  const nowRef = new Date();
+  const { data: weeklyTxns } = useListTransactions({
+    from: isoDaysAgo(nowRef, 90),
+    to: todayISO(nowRef),
+    limit: 3000,
+  });
   const [wrappedOpen, setWrappedOpen] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
 
@@ -155,6 +169,18 @@ export default function CommandCenterPage() {
       out.push({ icon: Flame, label: "Stays in the green" });
     return out;
   }, [netMonth, paidThisMonth, income, spend, lowPoint]);
+
+  const streak = useMemo(
+    () =>
+      weeklyBudgetStreak(
+        weeklyTxns ?? [],
+        Number(settings?.weeklyAllowanceAmount) || 0,
+        settings?.preferences?.weeklyAllowanceOverrides ?? undefined,
+        now,
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [weeklyTxns, settings],
+  );
 
   const nudgeMsg =
     nudge?.enabled && nudge.message ? nudge.message : null;
@@ -339,6 +365,21 @@ export default function CommandCenterPage() {
 
       {/* Badges + Wrapped */}
       <div className="flex flex-wrap items-center gap-2">
+        {streak.weeks >= 2 ? (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold border",
+              streak.direction === "under"
+                ? "bg-emerald-500/15 text-emerald-500 border-emerald-500/30"
+                : "bg-[hsl(var(--negative)/0.15)] text-[hsl(var(--negative))] border-[hsl(var(--negative)/0.3)]",
+            )}
+            data-testid="weekly-streak-chip"
+          >
+            <Flame className="w-3.5 h-3.5" />
+            {streak.weeks} weeks{" "}
+            {streak.direction === "under" ? "under budget" : "over budget"}
+          </span>
+        ) : null}
         {badges.map((b) => (
           <span
             key={b.label}
