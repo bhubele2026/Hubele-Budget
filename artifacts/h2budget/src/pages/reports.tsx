@@ -36,6 +36,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { CategoryPicker } from "@/components/category-picker";
+import { useCountUp } from "@/hooks/useCountUp";
 import { SubscriptionInsightsSection } from "@/components/subscription-insights";
 import { useToast } from "@/hooks/use-toast";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
@@ -214,6 +215,15 @@ function HeroTile({
           ? "text-[hsl(var(--warning))]"
           : "text-foreground";
   void icon;
+  // (#wow) Count currency figures up on load; pass non-currency values
+  // (dates, "Not Yet", "∞") through untouched.
+  const numericTarget = useMemo(() => {
+    if (!value.includes("$")) return null;
+    const n = Number(value.replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(n) ? n : null;
+  }, [value]);
+  const counted = useCountUp(numericTarget);
+  const displayValue = numericTarget != null ? formatCurrency(counted) : value;
   return (
     <Card className="rounded-lg" title={tooltip}>
       <CardContent className="p-4">
@@ -227,7 +237,7 @@ function HeroTile({
               toneClass,
             )}
           >
-            {value}
+            {displayValue}
           </div>
           {badge && (
             <Badge variant="secondary" className="tabular-nums shrink-0">

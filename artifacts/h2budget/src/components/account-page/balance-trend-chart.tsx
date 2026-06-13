@@ -270,7 +270,9 @@ function SingleSeriesBalanceTrendChart({
                   dot={{ r: 2.5, stroke: color, fill: "hsl(var(--background))", strokeWidth: 1.5 }}
                   activeDot={{ r: 4 }}
                   connectNulls={false}
-                  isAnimationActive={false}
+                  isAnimationActive={true}
+                  animationDuration={1100}
+                  animationEasing="ease-out"
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -336,7 +338,9 @@ function SingleSeriesBalanceTrendChart({
                 strokeWidth={2}
                 dot={{ r: 2.5, stroke: color, fill: "hsl(var(--background))", strokeWidth: 1.5 }}
                 activeDot={{ r: 4 }}
-                isAnimationActive={false}
+                isAnimationActive={true}
+                  animationDuration={1100}
+                  animationEasing="ease-out"
               />
               {data
                 .filter((p) => p.isSelected)
@@ -604,7 +608,9 @@ function MultiSeriesBalanceTrendChart({
                 dot={false}
                 activeDot={{ r: 4 }}
                 connectNulls
-                isAnimationActive={false}
+                isAnimationActive={true}
+                  animationDuration={1100}
+                  animationEasing="ease-out"
               />
               <Line
                 type="monotone"
@@ -615,7 +621,9 @@ function MultiSeriesBalanceTrendChart({
                 dot={false}
                 activeDot={{ r: 4 }}
                 connectNulls
-                isAnimationActive={false}
+                isAnimationActive={true}
+                  animationDuration={1100}
+                  animationEasing="ease-out"
               />
             </LineChart>
           </ResponsiveContainer>
