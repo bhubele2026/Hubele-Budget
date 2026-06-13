@@ -49,6 +49,43 @@ export function Confetti({
       size: 5 + Math.round(Math.random() * 5),
     }));
     setPieces(arr);
+
+    // Haptic buzz (mobile) + a soft C-major arpeggio "ding". Best-effort:
+    // autoplay policy may block audio outside a user gesture, which is fine.
+    try {
+      navigator.vibrate?.([18, 40, 28]);
+    } catch {
+      /* ignore */
+    }
+    try {
+      const AC =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (AC) {
+        const ctx = new AC();
+        [523.25, 659.25, 783.99].forEach((f, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "triangle";
+          osc.frequency.value = f;
+          const t0 = ctx.currentTime + i * 0.06;
+          gain.gain.setValueAtTime(0.0001, t0);
+          gain.gain.exponentialRampToValueAtTime(0.12, t0 + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.5);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t0);
+          osc.stop(t0 + 0.55);
+        });
+        window.setTimeout(() => {
+          void ctx.close().catch(() => {});
+        }, 1400);
+      }
+    } catch {
+      /* ignore */
+    }
+
     const t = window.setTimeout(() => setPieces([]), 3800);
     return () => window.clearTimeout(t);
   }, [fire, count]);

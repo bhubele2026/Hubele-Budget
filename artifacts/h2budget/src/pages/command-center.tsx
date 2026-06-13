@@ -28,6 +28,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MonthlyWrapped } from "@/components/monthly-wrapped";
 import { Confetti } from "@/components/confetti";
 import { PaceGauge } from "@/components/pace-gauge";
+import { SpendScoreboard } from "@/components/spend-scoreboard";
 
 function greetingFor(hour: number): string {
   if (hour < 5) return "Still up";
@@ -169,6 +170,24 @@ export default function CommandCenterPage() {
       out.push({ icon: Flame, label: "Stays in the green" });
     return out;
   }, [netMonth, paidThisMonth, income, spend, lowPoint]);
+
+  // This-month spend grouped by household member → the scoreboard.
+  const memberSpend = useMemo(() => {
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const map = new Map<string, number>();
+    for (const t of weeklyTxns ?? []) {
+      if (!t.occurredOn || !t.occurredOn.startsWith(ym)) continue;
+      const a = Number(t.amount) || 0;
+      if (a >= 0) continue; // spend only
+      if (t.reimbursable) continue;
+      const who = (t.member ?? "").trim() || "Unassigned";
+      map.set(who, (map.get(who) ?? 0) + -a);
+    }
+    return [...map.entries()]
+      .map(([name, spend]) => ({ name, spend }))
+      .sort((a, b) => b.spend - a.spend);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeklyTxns]);
 
   const streak = useMemo(
     () =>
@@ -362,6 +381,9 @@ export default function CommandCenterPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Him-vs-her scoreboard */}
+      <SpendScoreboard entries={memberSpend} />
 
       {/* What's coming — next bills at a glance */}
       {(dash?.upcomingBills?.length ?? 0) > 0 ? (

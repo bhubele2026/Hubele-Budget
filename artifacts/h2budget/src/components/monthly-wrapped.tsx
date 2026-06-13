@@ -18,6 +18,15 @@ function monthLabel(): string {
   return new Date().toLocaleDateString("en-US", { month: "long" });
 }
 
+// Soft full-slide color wash per tone — drama without leaving matte.
+function toneWash(t: "good" | "bad" | "neutral"): string {
+  if (t === "good")
+    return "radial-gradient(120% 95% at 0% 0%, hsl(150 60% 45% / 0.18), transparent 62%)";
+  if (t === "bad")
+    return "radial-gradient(120% 95% at 0% 0%, hsl(0 80% 60% / 0.18), transparent 62%)";
+  return "radial-gradient(120% 95% at 0% 0%, hsl(214 82% 62% / 0.18), transparent 62%)";
+}
+
 function verdict(net: number, income: number): string {
   if (income <= 0) return "Sync your accounts and let's see the real damage.";
   if (net >= income * 0.2)
@@ -82,9 +91,15 @@ export function MonthlyWrapped({
   const topCat = d?.topCategories?.[0] ?? null;
 
   // Build the slide list from whatever data we actually have.
-  const slides = useMemo<{ kicker: string; body: ReactNode }[]>(() => {
-    const s: { kicker: string; body: ReactNode }[] = [];
+  type Slide = {
+    kicker: string;
+    body: ReactNode;
+    tone: "good" | "bad" | "neutral";
+  };
+  const slides = useMemo<Slide[]>(() => {
+    const s: Slide[] = [];
     s.push({
+      tone: "neutral",
       kicker: `${monthLabel()}, Wrapped`,
       body: (
         <div className="space-y-2">
@@ -98,15 +113,18 @@ export function MonthlyWrapped({
       ),
     });
     s.push({
+      tone: "good",
       kicker: "You brought in",
       body: <HugeMoney value={income} tone="good" />,
     });
     s.push({
+      tone: "bad",
       kicker: "You spent",
       body: <HugeMoney value={spend} tone="bad" />,
     });
     if (biggest)
       s.push({
+        tone: "bad",
         kicker: "Your biggest single hit",
         body: (
           <div className="space-y-2">
@@ -120,6 +138,7 @@ export function MonthlyWrapped({
       });
     if (topCat)
       s.push({
+        tone: "neutral",
         kicker: "Where it went most",
         body: (
           <div className="space-y-2">
@@ -131,10 +150,12 @@ export function MonthlyWrapped({
         ),
       });
     s.push({
+      tone: net >= 0 ? "good" : "bad",
       kicker: net >= 0 ? "You came out ahead" : "You came up short",
       body: <HugeMoney value={net} tone={net >= 0 ? "good" : "bad"} />,
     });
     s.push({
+      tone: net >= 0 ? "good" : "bad",
       kicker: "The verdict",
       body: (
         <p className="text-xl md:text-2xl font-semibold leading-snug">
@@ -210,7 +231,8 @@ export function MonthlyWrapped({
               <button
                 type="button"
                 onClick={() => setStep((s) => Math.min(last, s + 1))}
-                className="w-full text-left min-h-[230px] flex flex-col justify-center"
+                className="w-full text-left min-h-[244px] flex flex-col justify-center rounded-xl px-5 py-6 transition-[background] duration-500"
+                style={{ background: toneWash(cur.tone) }}
                 data-testid={`wrapped-slide-${step}`}
               >
                 <div
