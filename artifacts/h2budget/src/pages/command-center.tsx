@@ -15,6 +15,7 @@ import {
   PiggyBank,
   Sparkles,
   TrendingUp,
+  TrendingDown,
   Wallet,
   CalendarDays,
   Receipt,
@@ -264,6 +265,27 @@ export default function CommandCenterPage() {
     return { spend, planned };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weeklyTxns, settings]);
+
+  // This month vs last month at the SAME point in the month (fair pace
+  // comparison): spend through today's day-of-month, both months.
+  const momCompare = useMemo(() => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const ymThis = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const ymPrev = `${prev.getFullYear()}-${pad(prev.getMonth() + 1)}`;
+    let cur = 0;
+    let last = 0;
+    for (const t of weeklyTxns ?? []) {
+      const a = Number(t.amount) || 0;
+      if (a >= 0 || t.reimbursable || !t.occurredOn) continue;
+      const day = Number(t.occurredOn.slice(8, 10));
+      if (t.occurredOn.startsWith(ymThis)) cur += -a;
+      else if (t.occurredOn.startsWith(ymPrev) && day <= dayOfMonth) last += -a;
+    }
+    const pctChange = last > 0 ? ((cur - last) / last) * 100 : null;
+    return { cur, last, pctChange };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeklyTxns, dayOfMonth]);
 
   const streak = useMemo(
     () =>
@@ -675,6 +697,42 @@ export default function CommandCenterPage() {
                 </span>{" "}
                 · {formatCurrency(Number(dash.topCategories[0].total) || 0)}
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* This vs last month */}
+      {momCompare.pctChange != null ? (
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+              Vs last month · same point
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              {momCompare.pctChange > 0 ? (
+                <TrendingUp className="w-5 h-5 text-[hsl(var(--negative))]" />
+              ) : (
+                <TrendingDown className="w-5 h-5 text-emerald-500" />
+              )}
+              <span
+                className={cn(
+                  "text-2xl font-bold tabular-nums",
+                  momCompare.pctChange > 0
+                    ? "text-[hsl(var(--negative))]"
+                    : "text-emerald-500",
+                )}
+              >
+                {momCompare.pctChange > 0 ? "+" : ""}
+                {Math.round(momCompare.pctChange)}%
+              </span>
+            </div>
+            <div className="text-sm text-muted-foreground mt-0.5">
+              {formatCurrency(momCompare.cur)} so far vs{" "}
+              {formatCurrency(momCompare.last)} by this day last month —{" "}
+              {momCompare.pctChange > 0
+                ? "spending faster, watch it. 👀"
+                : "spending less. Nice. 🟢"}
             </div>
           </CardContent>
         </Card>
