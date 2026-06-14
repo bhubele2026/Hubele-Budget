@@ -77,6 +77,7 @@ type BudgetLineWithActual = {
   plannedSource?: PlannedSource | null;
 };
 import { Card, CardContent } from "@/components/ui/card";
+import { AiInsightBar } from "@/components/ai-insight-bar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -943,6 +944,8 @@ export default function BudgetPage() {
           </Button>
         </div>
       </div>
+
+      <AiInsightBar />
 
       <div className="flex flex-wrap gap-2">
         <SourceBadge kind="manual" />
