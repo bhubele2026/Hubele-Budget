@@ -3,6 +3,7 @@ import { Target, Plus, X, PartyPopper } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Confetti } from "@/components/confetti";
 import { cn, formatCurrency } from "@/lib/utils";
 
 const KEY = "h2:savings-goal:v1";
@@ -18,6 +19,7 @@ export function SavingsGoal() {
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
   const [add, setAdd] = useState("");
+  const [justWon, setJustWon] = useState(false);
 
   useEffect(() => {
     try {
@@ -91,7 +93,9 @@ export function SavingsGoal() {
   const addAmt = Number(add);
 
   return (
-    <Card>
+    <>
+      <Confetti fire={justWon} />
+      <Card>
       <CardContent className="p-5">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium truncate">
@@ -143,10 +147,13 @@ export function SavingsGoal() {
               size="sm"
               onClick={() => {
                 if (addAmt > 0) {
-                  persist({
-                    ...goal,
-                    saved: Math.round((goal.saved + addAmt) * 100) / 100,
-                  });
+                  const next = Math.round((goal.saved + addAmt) * 100) / 100;
+                  // Crossed the finish line on this contribution → celebrate.
+                  if (goal.saved < goal.target && next >= goal.target) {
+                    setJustWon(true);
+                    window.setTimeout(() => setJustWon(false), 4200);
+                  }
+                  persist({ ...goal, saved: next });
                   setAdd("");
                 }
               }}
@@ -161,6 +168,7 @@ export function SavingsGoal() {
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </>
   );
 }
