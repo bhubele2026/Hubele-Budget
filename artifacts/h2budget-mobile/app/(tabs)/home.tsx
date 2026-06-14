@@ -240,9 +240,18 @@ export default function HomeScreen() {
             ],
           }}
         >
-        <Text style={s.greeting}>
-          {greeting}, {who}.
-        </Text>
+        <View>
+          <Text style={s.greeting}>
+            {greeting}, {who}.
+          </Text>
+          <Text style={s.dateline}>
+            {new Date().toLocaleDateString("en-US", {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+            })}
+          </Text>
+        </View>
 
         {streak.weeks >= 2 ? (
           <View
@@ -348,6 +357,12 @@ const s = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: -0.5,
     marginTop: 4,
+  },
+  dateline: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 2,
   },
   nudge: {
     backgroundColor: colors.card,
