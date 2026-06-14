@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -6,7 +6,9 @@ import {
   RefreshControl,
   ActivityIndicator,
   StyleSheet,
+  Animated,
 } from "react-native";
+import { useCountUp } from "@/lib/useCountUp";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import {
@@ -149,6 +151,19 @@ export default function HomeScreen() {
   const debt = dash ? Number(dash.totalDebt) : 0;
   const paid = dash ? Number(dash.paidThisMonth) : 0;
   const topCat = dash?.topCategories?.[0];
+  const netShown = useCountUp(net);
+
+  // Smooth entrance — fade + rise once content is ready.
+  const enter = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!loading) {
+      Animated.timing(enter, {
+        toValue: 1,
+        duration: 480,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [loading, enter]);
 
   if (loading) {
     return (
@@ -170,6 +185,20 @@ export default function HomeScreen() {
           />
         }
       >
+        <Animated.View
+          style={{
+            gap: 14,
+            opacity: enter,
+            transform: [
+              {
+                translateY: enter.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [14, 0],
+                }),
+              },
+            ],
+          }}
+        >
         <Text style={s.greeting}>
           {greeting}, {who}.
         </Text>
@@ -193,7 +222,7 @@ export default function HomeScreen() {
             ]}
           >
             {net >= 0 ? "+" : ""}
-            {formatCurrency(net)}
+            {formatCurrency(netShown)}
           </Text>
           <Text style={s.sub}>
             {formatCurrency(income)} in · {formatCurrency(spend)} out
@@ -228,6 +257,7 @@ export default function HomeScreen() {
         <Text style={s.tip}>
           💡 Check this before you spend, not after. Revolutionary, I know.
         </Text>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
