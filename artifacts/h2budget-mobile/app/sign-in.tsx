@@ -51,7 +51,9 @@ export default function SignIn() {
           <Text style={styles.logoText}>H2</Text>
         </View>
         <Text style={styles.title}>H2 Budget</Text>
-        <Text style={styles.subtitle}>Sign in to see your allowances.</Text>
+        <Text style={styles.subtitle}>
+          Where your money has nowhere to hide.
+        </Text>
 
         <TextInput
           style={styles.input}
@@ -92,13 +94,15 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 14,
-    backgroundColor: colors.navy,
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: colors.navy,
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",
     marginBottom: 4,
   },
-  logoText: { color: "#fff", fontSize: 22, fontWeight: "800" },
+  logoText: { color: colors.navy, fontSize: 22, fontWeight: "800" },
   title: { fontSize: 26, fontWeight: "700", color: colors.text, textAlign: "center" },
   subtitle: { fontSize: 14, color: colors.muted, textAlign: "center", marginBottom: 12 },
   input: {
