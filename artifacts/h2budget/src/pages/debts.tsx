@@ -7,6 +7,7 @@ import {
 } from "@workspace/api-client-react";
 import type { Debt, DebtBalanceHistoryEntry } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AiInsightBar } from "@/components/ai-insight-bar";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
@@ -201,6 +202,8 @@ export default function DebtsPage() {
           <p className="text-muted-foreground mt-1">Sorted by APR to minimize interest paid.</p>
         </div>
       </div>
+
+      <AiInsightBar />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {sortedDebts.map((debt) => {
