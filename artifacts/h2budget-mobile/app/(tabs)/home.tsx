@@ -9,7 +9,21 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth, useUser } from "@clerk/clerk-expo";
-import { createApi, type Dashboard, type Nudge } from "@/lib/api";
+import {
+  createApi,
+  type Dashboard,
+  type Nudge,
+  type Settings,
+  type Txn,
+} from "@/lib/api";
+import {
+  computeStatus,
+  sundayOf,
+  firstOfMonth,
+  lastOfMonth,
+  iso,
+  type BucketStatus,
+} from "@/lib/allowances";
 import { colors, radius, fonts, formatCurrency } from "@/lib/theme";
 
 function greetingFor(h: number): string {
@@ -43,6 +57,38 @@ function Stat({
   );
 }
 
+function PaceBar({ st }: { st: BucketStatus }) {
+  const over = st.spent > st.planned;
+  const pct = st.planned > 0 ? Math.min(1, st.spent / st.planned) : 0;
+  const c = over ? colors.negative : colors.positive;
+  return (
+    <View style={s.card}>
+      <View style={s.paceHead}>
+        <Text style={s.label}>{st.label}</Text>
+        <Text style={[s.paceAmt, fonts.tabular]}>
+          <Text style={{ color: c }}>{formatCurrency(st.spent)}</Text>
+          <Text style={{ color: colors.muted }}>
+            {" "}
+            / {formatCurrency(st.planned)}
+          </Text>
+        </Text>
+      </View>
+      <View style={s.track}>
+        <View
+          style={[s.fill, { width: `${Math.round(pct * 100)}%`, backgroundColor: c }]}
+        />
+      </View>
+      <Text style={s.sub}>
+        {st.planned <= 0
+          ? "No allowance set"
+          : over
+            ? `${formatCurrency(st.variance)} over — ease up.`
+            : `${formatCurrency(-st.variance)} left.`}
+      </Text>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const { getToken } = useAuth();
   const { user } = useUser();
@@ -50,23 +96,40 @@ export default function HomeScreen() {
 
   const [dash, setDash] = useState<Dashboard | undefined>();
   const [nudge, setNudge] = useState<Nudge | undefined>();
+  const [settings, setSettings] = useState<Settings | undefined>();
+  const [txns, setTxns] = useState<Txn[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [d, n] = await Promise.all([
+      const now = new Date();
+      const weekStart = sundayOf(now);
+      const mStart = firstOfMonth(now);
+      const mEnd = lastOfMonth(now);
+      const from = iso(weekStart < mStart ? weekStart : mStart);
+      const to = iso(mEnd);
+      const [d, n, s, t] = await Promise.all([
         api.getDashboard(),
         api.getNudge().catch(() => undefined),
+        api.getSettings(),
+        api.getTransactions(from, to),
       ]);
       setDash(d);
       setNudge(n);
+      setSettings(s);
+      setTxns(t);
     } catch {
       /* surfaced on next pull */
     } finally {
       setLoading(false);
     }
   }, [api]);
+
+  const status = useMemo(
+    () => computeStatus(settings, txns),
+    [settings, txns],
+  );
 
   useEffect(() => {
     load();
@@ -116,6 +179,9 @@ export default function HomeScreen() {
             <Text style={s.nudgeText}>✨ {nudge.message}</Text>
           </View>
         ) : null}
+
+        <PaceBar st={status.weekly} />
+        <PaceBar st={status.monthly} />
 
         <View style={s.netCard}>
           <Text style={s.label}>Net this month</Text>
@@ -233,4 +299,18 @@ const s = StyleSheet.create({
   catName: { color: colors.text, fontSize: 16, fontWeight: "700" },
   catAmt: { color: colors.text, fontSize: 16, fontWeight: "700" },
   tip: { color: colors.faint, fontSize: 13, marginTop: 4, lineHeight: 19 },
+  paceHead: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginBottom: 8,
+  },
+  paceAmt: { fontSize: 14, fontWeight: "700" },
+  track: {
+    height: 9,
+    borderRadius: 999,
+    backgroundColor: colors.trackBg,
+    overflow: "hidden",
+  },
+  fill: { height: "100%", borderRadius: 999 },
 });
