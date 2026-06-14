@@ -24,6 +24,7 @@ import {
 } from "@workspace/api-client-react";
 import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
 import { BillsHealthCheck } from "@/components/bills-health-check";
+import { AiInsightBar } from "@/components/ai-insight-bar";
 import { formatBillRowAmount } from "@/lib/billsRowAmount";
 import { computePayoffsByDebt, filterDebtMinRowsByPayoff } from "@/lib/forecastDebts";
 import { Lock, PartyPopper } from "lucide-react";
@@ -596,6 +597,8 @@ export default function BillsPage() {
           </Button>
         </div>
       </div>
+
+      <AiInsightBar />
 
       <BillsHealthCheck summary={summary} />
 

@@ -36,6 +36,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { CategoryPicker } from "@/components/category-picker";
+import { AiInsightBar } from "@/components/ai-insight-bar";
 import { useCountUp } from "@/hooks/useCountUp";
 import { SubscriptionInsightsSection } from "@/components/subscription-insights";
 import { useToast } from "@/hooks/use-toast";
@@ -662,6 +663,8 @@ export default function ReportsPage() {
         </p>
         <div className="border-t border-border mt-5" />
       </div>
+
+      <AiInsightBar />
 
       {/* (Play B) At-a-glance balance tiles — formerly the Dashboard */}
       <ReportsBalanceTiles forecast={forecast} />

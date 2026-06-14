@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Ban, Split } from "lucide-react";
 import { SplitTransactionDialog } from "@/components/split-transaction-dialog";
+import { AiInsightBar } from "@/components/ai-insight-bar";
 import {
   useListTransactions,
   useGetSettings,
@@ -948,6 +949,8 @@ export default function AllowancesPage() {
           Where the money actually goes. No judgment… ok, a little. 😏
         </p>
       </div>
+
+      <AiInsightBar />
 
       {roastForStreak(overStreak) && (
         <div
