@@ -14,6 +14,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import { createApi, type Category, type Txn } from "@/lib/api";
 import { firstOfMonth, lastOfMonth, iso } from "@/lib/allowances";
 import { colors, radius, formatCurrency } from "@/lib/theme";
+import { Skeleton } from "@/components/Skeleton";
 
 export default function CategorizeScreen() {
   const { getToken } = useAuth();
@@ -101,8 +102,10 @@ export default function CategorizeScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.navy} />
+        <View style={{ padding: 16, gap: 10 }}>
+          {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+            <Skeleton key={i} style={{ height: 62 }} />
+          ))}
         </View>
       ) : error ? (
         <Text style={styles.error}>{error}</Text>
