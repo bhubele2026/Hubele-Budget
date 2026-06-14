@@ -5,7 +5,12 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "h2budget",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0B0D",
+    "splash": {
+      "backgroundColor": "#0B0B0D",
+      "resizeMode": "contain"
+    },
     "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
