@@ -116,16 +116,15 @@ function MarketingHero() {
       </div>
 
       <div className="space-y-6 max-w-md">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-foreground">
-          A household ledger, considered
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+          The household, handled
         </p>
-        <h1 className="text-4xl xl:text-5xl font-semibold tracking-tight text-foreground leading-[1.05]">
-          The quiet shape of your family&apos;s money.
+        <h1 className="text-4xl xl:text-5xl font-bold tracking-tight text-foreground leading-[1.05]">
+          Where your money has nowhere to hide.
         </h1>
         <p className="text-base text-muted-foreground leading-relaxed">
-          Connect every account, plan the month ahead, and watch the debt
-          payoff arc with the same calm precision a good ledger always
-          deserved.
+          Every account, every dollar, every &ldquo;where did THAT go&rdquo; —
+          tracked, forecast, and roasted. Built for the two of you.
         </p>
       </div>
 
@@ -133,17 +132,17 @@ function MarketingHero() {
         <HeroBullet
           icon={<LineChart className="w-4 h-4" />}
           title="Forecast, not guesswork"
-          body="Bills, paychecks, and bucket transfers projected out as a single running balance."
+          body="See the dips before they hit — bills, paychecks, and buckets as one running balance."
         />
         <HeroBullet
           icon={<Layers className="w-4 h-4" />}
-          title="Buckets that actually balance"
-          body="Reimbursements, shared cards, and credit-card payments stay reconciled by design."
+          title="A coach that won't sugarcoat it"
+          body="Over budget? You'll hear about it. Crushing it? You'll hear about that too."
         />
         <HeroBullet
           icon={<ShieldCheck className="w-4 h-4" />}
-          title="Invite-only by default"
-          body="Just your household. No public sign-ups, no shared workspaces."
+          title="Just the two of you"
+          body="Invite-only. No public sign-ups, no nosy in-laws."
         />
       </dl>
     </div>
@@ -184,8 +183,7 @@ function MobileBrandHeader() {
           H2 Budget
         </h1>
         <p className="text-sm text-muted-foreground max-w-xs">
-          A considered household ledger — forecast, balance, and pay off
-          debt with intent.
+          Your money, forecast and roasted. Built for the two of you.
         </p>
       </div>
     </div>
@@ -237,8 +235,8 @@ export function SignInPage() {
     <AuthLayout
       intro={{
         eyebrow: "Welcome back",
-        title: "Sign in to your household",
-        body: "Pick up wherever you left off — the month, the buckets, and the running balance are right where you left them.",
+        title: "Let's see the damage.",
+        body: "Pick up right where you left off — the month, the buckets, and the running balance are waiting.",
       }}
     >
       <SignIn
