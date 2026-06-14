@@ -59,6 +59,36 @@ function Stat({
   );
 }
 
+function SkelBlock({ style }: { style?: object }) {
+  const pulse = useRef(new Animated.Value(0.45)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 720,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0.45,
+          duration: 720,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return (
+    <Animated.View
+      style={[
+        { height: 16, borderRadius: 12, backgroundColor: colors.card, opacity: pulse },
+        style,
+      ]}
+    />
+  );
+}
+
 function PaceBar({ st }: { st: BucketStatus }) {
   const over = st.spent > st.planned;
   const pct = st.planned > 0 ? Math.min(1, st.spent / st.planned) : 0;
@@ -167,8 +197,17 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={s.center}>
-        <ActivityIndicator color={colors.navy} />
+      <SafeAreaView style={s.safe} edges={["top"]}>
+        <View style={[s.scroll]}>
+          <SkelBlock style={{ height: 30, width: "55%", marginTop: 4 }} />
+          <SkelBlock style={{ height: 72 }} />
+          <SkelBlock style={{ height: 72 }} />
+          <SkelBlock style={{ height: 130 }} />
+          <View style={s.row}>
+            <SkelBlock style={{ height: 78, flex: 1 }} />
+            <SkelBlock style={{ height: 78, flex: 1 }} />
+          </View>
+        </View>
       </SafeAreaView>
     );
   }
