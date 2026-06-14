@@ -2,6 +2,49 @@ import type { Settings, Txn } from "./api";
 
 const DAY = 86_400_000;
 
+export type WeeklyStreak = { weeks: number; direction: "under" | "over" | "none" };
+
+/**
+ * Trailing run of COMPLETED weeks that all landed the same side of the weekly
+ * allowance — `under` (good) or `over`. Walks back from last week, stops at the
+ * first week that flips direction or has no spend.
+ */
+export function weeklyStreak(
+  txns: Txn[],
+  weeklyAmt: number,
+  now = new Date(),
+): WeeklyStreak {
+  if (weeklyAmt <= 0) return { weeks: 0, direction: "none" };
+  const isoOf = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate(),
+    ).padStart(2, "0")}`;
+  let weekSun = new Date(sundayOf(now).getTime() - 7 * DAY); // last completed week
+  let direction: "under" | "over" | "none" = "none";
+  let weeks = 0;
+  for (let i = 0; i < 26; i++) {
+    const start = isoOf(weekSun);
+    const end = isoOf(new Date(weekSun.getTime() + 6 * DAY));
+    let spend = 0;
+    let any = false;
+    for (const t of txns) {
+      if (!t.weeklyAllowance || t.reimbursable) continue;
+      if (t.occurredOn >= start && t.occurredOn <= end) {
+        const a = Number(t.amount) || 0;
+        if (a < 0) spend += -a;
+        any = true;
+      }
+    }
+    if (!any) break;
+    const thisDir: "under" | "over" = spend > weeklyAmt ? "over" : "under";
+    if (direction === "none") direction = thisDir;
+    if (thisDir !== direction) break;
+    weeks++;
+    weekSun = new Date(weekSun.getTime() - 7 * DAY);
+  }
+  return weeks > 0 ? { weeks, direction } : { weeks: 0, direction: "none" };
+}
+
 /** Sunday that opens the week containing `d` (local). */
 export function sundayOf(d: Date): Date {
   const out = new Date(d.getFullYear(), d.getMonth(), d.getDate());

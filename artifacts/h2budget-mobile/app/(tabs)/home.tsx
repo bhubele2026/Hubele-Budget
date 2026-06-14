@@ -20,8 +20,7 @@ import {
 } from "@/lib/api";
 import {
   computeStatus,
-  sundayOf,
-  firstOfMonth,
+  weeklyStreak,
   lastOfMonth,
   iso,
   type BucketStatus,
@@ -136,11 +135,10 @@ export default function HomeScreen() {
   const load = useCallback(async () => {
     try {
       const now = new Date();
-      const weekStart = sundayOf(now);
-      const mStart = firstOfMonth(now);
-      const mEnd = lastOfMonth(now);
-      const from = iso(weekStart < mStart ? weekStart : mStart);
-      const to = iso(mEnd);
+      // Pull ~9 weeks so the weekly streak has history; the pace bars still
+      // scope to this week / month internally via computeStatus.
+      const from = iso(new Date(now.getTime() - 62 * 86_400_000));
+      const to = iso(lastOfMonth(now));
       const [d, n, s, t] = await Promise.all([
         api.getDashboard(),
         api.getNudge().catch(() => undefined),
@@ -161,6 +159,10 @@ export default function HomeScreen() {
   const status = useMemo(
     () => computeStatus(settings, txns),
     [settings, txns],
+  );
+  const streak = useMemo(
+    () => weeklyStreak(txns, Number(settings?.weeklyAllowanceAmount) || 0),
+    [txns, settings],
   );
 
   useEffect(() => {
@@ -241,6 +243,35 @@ export default function HomeScreen() {
         <Text style={s.greeting}>
           {greeting}, {who}.
         </Text>
+
+        {streak.weeks >= 2 ? (
+          <View
+            style={[
+              s.streakChip,
+              {
+                borderColor:
+                  streak.direction === "under"
+                    ? colors.positive
+                    : colors.negative,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                s.streakText,
+                {
+                  color:
+                    streak.direction === "under"
+                      ? colors.positive
+                      : colors.negative,
+                },
+              ]}
+            >
+              🔥 {streak.weeks} weeks{" "}
+              {streak.direction === "under" ? "under budget" : "over budget"}
+            </Text>
+          </View>
+        ) : null}
 
         {nudge?.enabled && nudge.message ? (
           <View style={s.nudge}>
@@ -375,6 +406,14 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   paceAmt: { fontSize: 14, fontWeight: "700" },
+  streakChip: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  streakText: { fontSize: 13, fontWeight: "700" },
   track: {
     height: 9,
     borderRadius: 999,
