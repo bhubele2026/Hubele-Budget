@@ -23,7 +23,7 @@
     "extra": {
       "router": { "origin": false },
       "apiBaseUrl": "https://hubele-budget.replit.app",
-      "clerkPublishableKey": "REPLACE_WITH_CLERK_PUBLISHABLE_KEY"
+      "clerkPublishableKey": ""
     }
   }
 }
