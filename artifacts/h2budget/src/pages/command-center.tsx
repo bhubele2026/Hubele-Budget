@@ -287,6 +287,32 @@ export default function CommandCenterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weeklyTxns, dayOfMonth]);
 
+  // Biggest single expense this month — named and shamed.
+  const biggestSplurge = useMemo(() => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const ym = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+    let worst: {
+      desc: string;
+      amt: number;
+      member: string | null;
+      date: string;
+    } | null = null;
+    for (const t of weeklyTxns ?? []) {
+      const a = Number(t.amount) || 0;
+      if (a >= 0 || t.reimbursable || !t.occurredOn?.startsWith(ym)) continue;
+      if (!worst || a < worst.amt) {
+        worst = {
+          desc: t.description || "Something",
+          amt: a,
+          member: t.member ?? null,
+          date: t.occurredOn,
+        };
+      }
+    }
+    return worst;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeklyTxns]);
+
   const streak = useMemo(
     () =>
       weeklyBudgetStreak(
@@ -697,6 +723,40 @@ export default function CommandCenterPage() {
                 </span>{" "}
                 · {formatCurrency(Number(dash.topCategories[0].total) || 0)}
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* Biggest splurge this month */}
+      {biggestSplurge ? (
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+              Biggest splurge this month
+            </div>
+            <div className="mt-1.5 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-lg font-bold truncate">
+                  {biggestSplurge.desc}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {biggestSplurge.date}
+                  {biggestSplurge.member ? ` · ${biggestSplurge.member}` : ""}
+                </div>
+              </div>
+              <div className="text-2xl font-extrabold tabular-nums text-[hsl(var(--negative))] shrink-0">
+                {formatCurrency(biggestSplurge.amt)}
+              </div>
+            </div>
+            <div className="mt-1.5 text-sm text-muted-foreground">
+              {-biggestSplurge.amt > 500
+                ? "Absolutely unhinged. 😳"
+                : -biggestSplurge.amt > 200
+                  ? "Bold move. 😬"
+                  : -biggestSplurge.amt > 100
+                    ? "Noted. 👀"
+                    : "Eh — we've seen worse from you two."}
             </div>
           </CardContent>
         </Card>
