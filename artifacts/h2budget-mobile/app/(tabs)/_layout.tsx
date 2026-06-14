@@ -17,6 +17,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      initialRouteName="home"
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
@@ -28,6 +29,12 @@ export default function TabsLayout() {
         tabBarShowLabel: false,
       }}
     >
+      <Tabs.Screen
+        name="home"
+        options={{
+          tabBarIcon: ({ focused }) => <TabIcon label="Home" focused={focused} />,
+        }}
+      />
       <Tabs.Screen
         name="index"
         options={{

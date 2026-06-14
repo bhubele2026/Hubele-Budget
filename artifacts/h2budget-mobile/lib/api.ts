@@ -27,6 +27,22 @@ export type Txn = {
 
 export type Category = { id: string; name: string };
 
+export type Dashboard = {
+  totalDebt: string;
+  monthlyIncome: string;
+  monthlySpend: string;
+  netCashflow: string;
+  paidThisMonth: string;
+  paidLifetime: string;
+  topCategories: { categoryName: string; total: string }[];
+};
+
+export type Nudge = {
+  enabled: boolean;
+  severity?: "info" | "warn" | "alert";
+  message?: string;
+};
+
 /**
  * Thin API client against the existing H2 Budget backend. Every call carries
  * the Clerk session token (Bearer) so `requireAuth` on the server accepts it.
@@ -52,6 +68,8 @@ export function createApi(getToken: () => Promise<string | null>) {
 
   return {
     getSettings: () => req<Settings>("/settings"),
+    getDashboard: () => req<Dashboard>("/dashboard"),
+    getNudge: () => req<Nudge>("/advisor/nudge"),
     getCategories: () => req<Category[]>("/categories"),
     getTransactions: (from: string, to: string) =>
       req<Txn[]>(`/transactions?from=${from}&to=${to}&limit=5000`),
