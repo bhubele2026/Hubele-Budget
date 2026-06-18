@@ -1,0 +1,103 @@
+name: CI
+
+# Phase 1 guardrail: run typecheck + the full test suites on every push and
+# PR so nothing silently breaks. ~180 test files had no automated runner
+# before this. Fail the build on any failure; never weaken a test to go green.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pin a single pnpm + node across jobs.
+  PNPM_VERSION: 9.15.9
+  NODE_VERSION: 22
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+
+  web-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Web unit tests (jsdom — no DB)
+        run: pnpm --filter ./artifacts/h2budget run test
+
+  api-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: h2budget_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/h2budget_test
+      # api-server integration tests force a sandbox Plaid env via their own
+      # setup file; Clerk middleware just needs a syntactically-valid key.
+      CLERK_PUBLISHABLE_KEY: pk_test_ci-placeholder
+      CLERK_SECRET_KEY: sk_test_ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: API integration tests (pushes schema via pretest)
+        run: pnpm --filter ./artifacts/api-server run test
+
+  # Playwright e2e needs a booted app + Clerk test credentials + browsers.
+  # Opt-in until those secrets/profile exist (set repo variable E2E_ENABLED=true)
+  # so a credentials gap doesn't block every PR. This is deferral, not a
+  # weakened test — the suite still runs, just once it can actually pass.
+  e2e:
+    if: ${{ vars.E2E_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter ./artifacts/h2budget exec playwright install --with-deps
+      - run: pnpm --filter ./artifacts/h2budget run test:e2e
