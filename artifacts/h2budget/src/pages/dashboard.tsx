@@ -292,7 +292,7 @@ function WeeklyMonthlySection({
   const isFutureWeek = viewWeekStart > currentWeekStart;
 
   const { totals, total, weekTxns } = useMemo(() => {
-    const t: Record<SubBucket, number> = { groceries: 0, dining: 0, entertainment: 0, misc: 0 };
+    const t: Record<SubBucket, number> = { groceries: 0, dining: 0, alcohol: 0, entertainment: 0, misc: 0 };
     let sum = 0;
     const list: Transaction[] = [];
     for (const tx of transactions) {

@@ -109,7 +109,11 @@ export function detectSubscriptionsFromTransactions(
       continue;
     const key = normalizeMerchant(rawName);
     if (!key) continue;
-    const g = groups.get(key) ?? { dates: [], amounts: [], names: new Map() };
+    const g = groups.get(key) ?? {
+      dates: [] as string[],
+      amounts: [] as number[],
+      names: new Map<string, number>(),
+    };
     g.dates.push(t.occurredOn.slice(0, 10));
     g.amounts.push(Math.abs(amt));
     g.names.set(rawName, (g.names.get(rawName) ?? 0) + 1);

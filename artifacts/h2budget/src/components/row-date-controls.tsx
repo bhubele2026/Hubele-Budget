@@ -46,7 +46,7 @@ export function RowDateControls({
   disabled,
 }: {
   tx: Transaction;
-  onMove: (nextISO: string) => Promise<boolean>;
+  onMove: (nextISO: string) => void | Promise<boolean>;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);

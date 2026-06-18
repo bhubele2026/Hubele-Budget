@@ -38,7 +38,7 @@ export type AccountTransactionRowProps = {
   categories: { id: string; name: string }[];
   onCategoryChange: (id: string | null, rememberPattern?: string | null) => void;
   onBucketToggle: (bucket: BucketKey, next: boolean) => void;
-  onQuickDate: (raw: string) => void;
+  onQuickDate: (raw: string) => void | Promise<boolean>;
   disabled?: boolean;
   /** Dim the row (reviewed / ignored / forecast-sent). */
   dimmed?: boolean;

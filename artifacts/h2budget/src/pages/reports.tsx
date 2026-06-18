@@ -377,7 +377,10 @@ function AdvisorSummaryCard({
     [tab, rangeDays, monthOffset],
   );
   const { data, isLoading } = useGetReportsAdvisorSummary(params, {
-    query: { enabled: show },
+    query: {
+      enabled: show,
+      queryKey: getGetReportsAdvisorSummaryQueryKey(params),
+    },
   });
 
   const handleRefresh = async () => {
