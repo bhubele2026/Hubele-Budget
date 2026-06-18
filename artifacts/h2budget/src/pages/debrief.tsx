@@ -49,6 +49,7 @@ import type { RecurringItemInput } from "@workspace/api-zod";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -1531,6 +1532,51 @@ function CategoryVarianceTable({
       ),
     [buckets],
   );
+
+  // Per-category show/hide filter. The variance table can list 20+ rows
+  // (loans, uncategorized buckets, every income line); most users only
+  // track a handful. `visibleKeys === null` means "show all" (default);
+  // once the user customizes, we persist the explicit set of category
+  // keys to keep on this device. A row's key is its categoryId, or
+  // "_uncat" for the null/unmapped bucket.
+  const STORAGE_KEY = "h2:debrief:visibleCats";
+  const keyOf = (b: WeeklyDebriefCategoryBucket): string =>
+    b.categoryId ?? "_uncat";
+  const [visibleKeys, setVisibleKeys] = useState<Set<string> | null>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? new Set<string>(arr) : null;
+    } catch {
+      return null;
+    }
+  });
+  const persistVisible = (next: Set<string> | null) => {
+    setVisibleKeys(next);
+    try {
+      if (next === null) localStorage.removeItem(STORAGE_KEY);
+      else localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
+    } catch {
+      /* ignore quota / disabled storage */
+    }
+  };
+  const allKeys = useMemo(() => sorted.map(keyOf), [sorted]);
+  const toggleKey = (key: string, checked: boolean) => {
+    const base = visibleKeys ? new Set(visibleKeys) : new Set(allKeys);
+    if (checked) base.add(key);
+    else base.delete(key);
+    // If everything ends up checked, drop the filter back to "show all".
+    persistVisible(allKeys.every((k) => base.has(k)) ? null : base);
+  };
+  const visible = useMemo(
+    () =>
+      visibleKeys
+        ? sorted.filter((b) => visibleKeys.has(keyOf(b)))
+        : sorted,
+    [sorted, visibleKeys],
+  );
+  const filterActive = visibleKeys !== null;
   return (
     <Card>
       <Collapsible open={open} onOpenChange={setOpen}>
@@ -1541,7 +1587,11 @@ function CategoryVarianceTable({
                 {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 Category variance
               </CardTitle>
-              <span className="text-xs text-muted-foreground">{sorted.length} categories</span>
+              <span className="text-xs text-muted-foreground">
+                {filterActive
+                  ? `${visible.length} of ${sorted.length} categories`
+                  : `${sorted.length} categories`}
+              </span>
             </div>
           </CardHeader>
         </CollapsibleTrigger>
@@ -1550,6 +1600,63 @@ function CategoryVarianceTable({
             {sorted.length === 0 ? (
               <div className="text-sm text-muted-foreground py-4 text-center">No category activity this week.</div>
             ) : (
+              <>
+              <div className="flex items-center justify-end pb-3">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      data-testid="debrief-category-filter"
+                    >
+                      {filterActive ? `Filtered · ${visible.length}` : "Customize"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-64 p-0">
+                    <div className="flex items-center justify-between px-3 py-2 border-b">
+                      <span className="text-xs font-medium">Show categories</span>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          className="text-[11px] text-primary hover:underline"
+                          onClick={() => persistVisible(null)}
+                        >
+                          All
+                        </button>
+                        <button
+                          type="button"
+                          className="text-[11px] text-primary hover:underline"
+                          onClick={() => persistVisible(new Set())}
+                        >
+                          None
+                        </button>
+                      </div>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto py-1">
+                      {sorted.map((b) => {
+                        const key = keyOf(b);
+                        const name = b.categoryId
+                          ? (catNameById.get(b.categoryId) ?? "Uncategorized")
+                          : "Uncategorized";
+                        const checked = !visibleKeys || visibleKeys.has(key);
+                        return (
+                          <label
+                            key={key}
+                            className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(c) => toggleKey(key, c === true)}
+                            />
+                            <span className="truncate">{name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1560,7 +1667,16 @@ function CategoryVarianceTable({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sorted.map((b, i) => {
+                  {visible.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={4}
+                        className="text-center text-sm text-muted-foreground py-4"
+                      >
+                        All categories hidden — click Customize to pick what to show.
+                      </TableCell>
+                    </TableRow>
+                  ) : visible.map((b, i) => {
                     const name = b.categoryId ? (catNameById.get(b.categoryId) ?? "Uncategorized") : "Uncategorized";
                     const v = Number(b.varianceAmount);
                     // Income: positive variance (earned more) = green;
@@ -1622,6 +1738,7 @@ function CategoryVarianceTable({
                   })}
                 </TableBody>
               </Table>
+              </>
             )}
           </CardContent>
         </CollapsibleContent>
