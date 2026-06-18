@@ -13,6 +13,7 @@ import { backfillOrphanPlaidItems } from "./lib/plaidOrphanItemCleanup";
 import { maybeAlertOnSiblingCleanup } from "./lib/plaidMalformedSiblingCleanupAlert";
 import { prunePlaidSyncAttempts } from "./lib/plaidSyncAttempts";
 import { getPlaidEnv } from "./lib/plaid";
+import { validateEnv } from "./lib/env";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
 import { runStartupPendingNotesBackfill } from "./lib/startupPendingNotesBackfill";
@@ -33,33 +34,16 @@ import "./lib/advisorCategoryTools";
 //     any Plaid var they must set all three (and PLAID_ENV must be a
 //     valid value). With nothing set, the server still starts so people
 //     can run the app without Plaid for local dev.
-const isProd = process.env.NODE_ENV === "production";
-const anyPlaid =
-  process.env.PLAID_CLIENT_ID || process.env.PLAID_SECRET || process.env.PLAID_ENV;
-
-if (isProd) {
-  if (!process.env.PLAID_CLIENT_ID || !process.env.PLAID_SECRET || !process.env.PLAID_ENV) {
-    throw new Error(
-      "Plaid is not configured for production. PLAID_CLIENT_ID, PLAID_SECRET, and PLAID_ENV are all required when NODE_ENV=production.",
-    );
-  }
-  const env = getPlaidEnv();
-  if (env !== "production") {
-    throw new Error(
-      `Refusing to start: NODE_ENV=production but PLAID_ENV="${env}". Set PLAID_ENV=production for the deployed app.`,
-    );
-  }
-  logger.info({ plaidEnv: env }, "Plaid configured");
-  validatePlaidRedirectUri();
-} else if (anyPlaid) {
-  if (!process.env.PLAID_CLIENT_ID || !process.env.PLAID_SECRET) {
-    throw new Error(
-      "Plaid is partially configured. PLAID_CLIENT_ID, PLAID_SECRET, and PLAID_ENV must all be set together.",
-    );
-  }
-  // Throws if PLAID_ENV is missing or invalid.
-  const env = getPlaidEnv();
-  logger.info({ plaidEnv: env }, "Plaid configured");
+// Fail-fast: validate the whole environment once, here, before we bind a
+// port. Aggregates every missing/invalid required var (DATABASE_URL, Clerk
+// keys, PORT) plus the Plaid production/all-or-nothing rules into a single
+// readable error. (8-phase plan, Phase 1.)
+const cfg = validateEnv();
+const anyPlaid = cfg.PLAID_CLIENT_ID || cfg.PLAID_SECRET || cfg.PLAID_ENV;
+if (anyPlaid) {
+  // validateEnv already proved the trio is consistent; log + check the
+  // OAuth redirect path (a warn-only concern, separate from boot gating).
+  logger.info({ plaidEnv: getPlaidEnv() }, "Plaid configured");
   validatePlaidRedirectUri();
 }
 
@@ -95,19 +79,8 @@ function validatePlaidRedirectUri(): void {
   }
 }
 
-const rawPort = process.env["PORT"];
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
+// PORT was validated (present + positive integer) by validateEnv() above.
+const port = cfg.PORT as number;
 
 app.listen(port, (err) => {
   if (err) {
