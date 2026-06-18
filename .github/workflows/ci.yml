@@ -14,9 +14,10 @@ concurrency:
 
 env:
   # Match Replit's toolchain (Node 24 + pnpm 10) so the committed lockfile's
-  # `overrides` snapshot validates under --frozen-lockfile. A 9.x pnpm
-  # normalizes overrides differently and trips ERR_PNPM_LOCKFILE_CONFIG_MISMATCH.
-  PNPM_VERSION: latest
+  # `overrides` snapshot validates under --frozen-lockfile. pnpm 9 normalizes
+  # overrides differently (ERR_PNPM_LOCKFILE_CONFIG_MISMATCH); pnpm 11 ignores
+  # the onlyBuiltDependencies allowlist and hard-fails on build scripts.
+  PNPM_VERSION: 10.34.3
   NODE_VERSION: 24
 
 jobs:
@@ -31,14 +32,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-      # Frozen: install the committed lockfile exactly, preserving the
-      # single-version pins (zod, react, vite…) the singleton-deps guard
-      # enforces. Requires the matching pnpm major (10) — see env note.
-      # strict-dep-builds=false: pnpm 10 hard-errors on un-approved build
-      # scripts; in non-interactive CI we downgrade that to a warning.
-      # Packages we actually need built (esbuild, @swc/core…) are already
-      # in onlyBuiltDependencies in pnpm-workspace.yaml.
-      - run: pnpm install --frozen-lockfile --config.strict-dep-builds=false
+      # Write CI-only pnpm settings to .npmrc BEFORE install so they also
+      # apply to pnpm's verify-deps-before-run auto-reinstall on `pnpm run`:
+      #  - strict-dep-builds=false: don't hard-fail on un-approved build
+      #    scripts (e.g. @clerk/shared); esbuild/@swc ARE built via the
+      #    onlyBuiltDependencies allowlist in pnpm-workspace.yaml.
+      #  - verify-deps-before-run=false: skip the pre-`run` auto-reinstall.
+      - run: |
+          printf '\nstrict-dep-builds=false\nverify-deps-before-run=false\n' >> .npmrc
+          pnpm install --frozen-lockfile
       - run: pnpm run typecheck
 
   web-tests:
@@ -52,14 +54,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-      # Frozen: install the committed lockfile exactly, preserving the
-      # single-version pins (zod, react, vite…) the singleton-deps guard
-      # enforces. Requires the matching pnpm major (10) — see env note.
-      # strict-dep-builds=false: pnpm 10 hard-errors on un-approved build
-      # scripts; in non-interactive CI we downgrade that to a warning.
-      # Packages we actually need built (esbuild, @swc/core…) are already
-      # in onlyBuiltDependencies in pnpm-workspace.yaml.
-      - run: pnpm install --frozen-lockfile --config.strict-dep-builds=false
+      # Write CI-only pnpm settings to .npmrc BEFORE install so they also
+      # apply to pnpm's verify-deps-before-run auto-reinstall on `pnpm run`:
+      #  - strict-dep-builds=false: don't hard-fail on un-approved build
+      #    scripts (e.g. @clerk/shared); esbuild/@swc ARE built via the
+      #    onlyBuiltDependencies allowlist in pnpm-workspace.yaml.
+      #  - verify-deps-before-run=false: skip the pre-`run` auto-reinstall.
+      - run: |
+          printf '\nstrict-dep-builds=false\nverify-deps-before-run=false\n' >> .npmrc
+          pnpm install --frozen-lockfile
       - name: Web unit tests (jsdom — no DB)
         run: pnpm --filter ./artifacts/h2budget run test
 
@@ -94,14 +97,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-      # Frozen: install the committed lockfile exactly, preserving the
-      # single-version pins (zod, react, vite…) the singleton-deps guard
-      # enforces. Requires the matching pnpm major (10) — see env note.
-      # strict-dep-builds=false: pnpm 10 hard-errors on un-approved build
-      # scripts; in non-interactive CI we downgrade that to a warning.
-      # Packages we actually need built (esbuild, @swc/core…) are already
-      # in onlyBuiltDependencies in pnpm-workspace.yaml.
-      - run: pnpm install --frozen-lockfile --config.strict-dep-builds=false
+      # Write CI-only pnpm settings to .npmrc BEFORE install so they also
+      # apply to pnpm's verify-deps-before-run auto-reinstall on `pnpm run`:
+      #  - strict-dep-builds=false: don't hard-fail on un-approved build
+      #    scripts (e.g. @clerk/shared); esbuild/@swc ARE built via the
+      #    onlyBuiltDependencies allowlist in pnpm-workspace.yaml.
+      #  - verify-deps-before-run=false: skip the pre-`run` auto-reinstall.
+      - run: |
+          printf '\nstrict-dep-builds=false\nverify-deps-before-run=false\n' >> .npmrc
+          pnpm install --frozen-lockfile
       - name: API integration tests (pushes schema via pretest)
         run: pnpm --filter ./artifacts/api-server run test
 
@@ -121,13 +125,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-      # Frozen: install the committed lockfile exactly, preserving the
-      # single-version pins (zod, react, vite…) the singleton-deps guard
-      # enforces. Requires the matching pnpm major (10) — see env note.
-      # strict-dep-builds=false: pnpm 10 hard-errors on un-approved build
-      # scripts; in non-interactive CI we downgrade that to a warning.
-      # Packages we actually need built (esbuild, @swc/core…) are already
-      # in onlyBuiltDependencies in pnpm-workspace.yaml.
-      - run: pnpm install --frozen-lockfile --config.strict-dep-builds=false
+      # Write CI-only pnpm settings to .npmrc BEFORE install so they also
+      # apply to pnpm's verify-deps-before-run auto-reinstall on `pnpm run`:
+      #  - strict-dep-builds=false: don't hard-fail on un-approved build
+      #    scripts (e.g. @clerk/shared); esbuild/@swc ARE built via the
+      #    onlyBuiltDependencies allowlist in pnpm-workspace.yaml.
+      #  - verify-deps-before-run=false: skip the pre-`run` auto-reinstall.
+      - run: |
+          printf '\nstrict-dep-builds=false\nverify-deps-before-run=false\n' >> .npmrc
+          pnpm install --frozen-lockfile
       - run: pnpm --filter ./artifacts/h2budget exec playwright install --with-deps
       - run: pnpm --filter ./artifacts/h2budget run test:e2e
