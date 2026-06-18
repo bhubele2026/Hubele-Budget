@@ -685,7 +685,9 @@ function DebriefPageActive({
   const openItemsCount = snapshot?.openItemsCount ?? 0;
 
   // Pending Chase txns for this week: intersect Plaid txns (this week)
-  // with the snapshot's bank-txn ids, filter to sentToReviewAt==null.
+  // with the snapshot's bank-txn ids. Single-flow restore — the old
+  // sent_to_review gate is gone, so "pending to triage" is just the
+  // week's forecast-flagged bank rows.
   const snapshotTxnIds = useMemo(
     () => new Set((snapshot?.transactions ?? []).map((t) => t.txnId)),
     [snapshot],
@@ -693,7 +695,7 @@ function DebriefPageActive({
   const pendingBankTxns = useMemo(() => {
     if (!txnQ.data) return [];
     return txnQ.data.filter(
-      (t) => !t.sentToReviewAt && snapshotTxnIds.has(t.id),
+      (t) => t.forecastFlag && snapshotTxnIds.has(t.id),
     );
   }, [txnQ.data, snapshotTxnIds]);
 

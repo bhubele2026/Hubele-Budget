@@ -380,15 +380,15 @@ router.get("/forecast", requireAuth, async (req, res): Promise<void> => {
         eq(transactionsTable.forecastFlag, true),
         gte(transactionsTable.occurredOn, fromISO),
         lte(transactionsTable.occurredOn, toISO),
-        // (#762 — Phase B) Manual Send-to-Review gate. Until the user
-        // explicitly promotes a transaction via POST
-        // /transactions/send-to-review the row stays invisible to the
-        // Review pipeline. The Chase / Amex / source-of-truth surfaces
-        // are unaffected — they continue to read straight from
-        // /transactions. Historical rows whose grandfather backfill
-        // hasn't run yet (separate follow-up task) will appear
-        // missing here on purpose during the bake period.
-        sql`${transactionsTable.sentToReviewAt} is not null`,
+        // Original single-flow design (Task #6 Review inbox / Task #33
+        // "Forecast mirrors checking" / Task #67 Forecast Inbox flow):
+        // a checking row that's forecast-flagged IS in the Review
+        // pipeline — full stop. The #762 "Phase B" manual
+        // sent_to_review_at second gate is intentionally removed; it
+        // split one action into two, hid forecast-flagged rows from
+        // Review until a second click, and got repeatedly patched
+        // around (#812 backlog clear, "Chase txns not appearing in
+        // review queues"). Send to Forecast = in Review = on the curve.
       ),
     );
   const txns = txnsAll.filter((t) => isBankRow(t.source, t.plaidAccountId));

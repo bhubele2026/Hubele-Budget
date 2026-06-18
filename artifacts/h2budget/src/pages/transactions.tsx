@@ -2333,26 +2333,10 @@ export default function TransactionsPage() {
           >
             Remove from Forecast
           </Button>
-          {/* (#762 — Phase B) Bulk Send-to-Review. The label reports
-              only the count that will actually be promoted (rows
-              already in Review are filtered out by `bulkSendToReview`
-              before the request). */}
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => bulkSendToReview()}
-            disabled={sendToReview.isPending}
-            data-testid="bulk-send-review"
-          >
-            <Send className="w-3.5 h-3.5 mr-1.5" />
-            Send{(() => {
-              const n = Array.from(selected).filter((id) => {
-                const t = filtered.find((x) => x.id === id);
-                return t && t.sentToReviewAt == null;
-              }).length;
-              return n > 0 ? ` ${n}` : "";
-            })()} to Review
-          </Button>
+          {/* Single-flow restore: "Send to Forecast" IS "in Review" now.
+              The separate bulk Send-to-Review button (#762 Phase B) is
+              gone — a forecast-flagged row shows up in the Review tab
+              and on the curve immediately. */}
           <Button variant="ghost" size="sm" onClick={clearSelection} className="ml-auto">
             Clear
           </Button>
@@ -2432,44 +2416,33 @@ export default function TransactionsPage() {
                       rowData={{ "data-pending": "true" }}
                       metaNode={
                         tx.forecastFlag ? (
-                          tx.sentToReviewAt ? (
-                            (() => {
-                              const r = resolutionByTxnId.get(tx.id);
-                              const state =
-                                r?.status === "matched"
-                                  ? { attr: "matched", label: "Matched" }
-                                  : r?.status === "ignored_unforecasted" ||
-                                      r?.status === "unplanned"
-                                    ? { attr: "unplanned", label: "Unplanned" }
-                                    : {
-                                        attr: "in-review-bucket",
-                                        label: "In Review",
-                                      };
-                              return (
-                                <Badge
-                                  variant="outline"
-                                  className={`text-[10px] font-normal ${CHIP_BASE}`}
-                                  data-testid={`badge-forecast-state-${tx.id}`}
-                                  data-forecast-state={state.attr}
-                                >
-                                  <Inbox className="w-3 h-3 mr-1" /> {state.label}
-                                </Badge>
-                              );
-                            })()
-                          ) : (
-                            // Honest state: forecast-flagged but NOT yet sent to
-                            // the Review pipeline (sentToReviewAt is null). Until
-                            // sent it will NOT appear on the Review page, so say
-                            // so instead of a misleading "In Review".
-                            <Badge
-                              variant="outline"
-                              className={`text-[10px] font-normal ${CHIP_BASE} text-muted-foreground`}
-                              data-testid={`badge-not-in-review-${tx.id}`}
-                              data-forecast-state="not-sent"
-                            >
-                              Not in review
-                            </Badge>
-                          )
+                          (() => {
+                            // Single-flow restore: forecast-flagged === in the
+                            // Review pipeline. Show the real triage state
+                            // (Matched / Unplanned / In Review) — no separate
+                            // sent_to_review gate, no "Not in review" half-state.
+                            const r = resolutionByTxnId.get(tx.id);
+                            const state =
+                              r?.status === "matched"
+                                ? { attr: "matched", label: "Matched" }
+                                : r?.status === "ignored_unforecasted" ||
+                                    r?.status === "unplanned"
+                                  ? { attr: "unplanned", label: "Unplanned" }
+                                  : {
+                                      attr: "in-review-bucket",
+                                      label: "In Review",
+                                    };
+                            return (
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] font-normal ${CHIP_BASE}`}
+                                data-testid={`badge-forecast-state-${tx.id}`}
+                                data-forecast-state={state.attr}
+                              >
+                                <Inbox className="w-3 h-3 mr-1" /> {state.label}
+                              </Badge>
+                            );
+                          })()
                         ) : null
                       }
                       amountNode={
@@ -2484,30 +2457,37 @@ export default function TransactionsPage() {
                         </span>
                       }
                       actionsNode={
-                        tx.sentToReviewAt ? (
+                        tx.forecastFlag ? (
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleToggleReview(tx)}
-                            disabled={unsendFromReview.isPending}
-                            title="In Review — click to remove"
-                            className="text-emerald-700 hover:text-emerald-800"
-                            data-testid={`badge-in-review-${tx.id}`}
-                            data-sent-to-review="true"
+                            onClick={() => handleToggleForecast(tx)}
+                            disabled={updateTx.isPending}
+                            title="Remove from Forecast"
+                            data-testid={`button-remove-forecast-${tx.id}`}
                           >
-                            <Inbox className="w-4 h-4" />
+                            <Send className="w-4 h-4 rotate-180 text-primary" />
+                          </Button>
+                        ) : !canSendToForecast(tx) ? null : tx.categoryId ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleToggleForecast(tx)}
+                            disabled={updateTx.isPending}
+                            title="Send to Forecast"
+                            data-testid={`button-send-forecast-${tx.id}`}
+                          >
+                            <Inbox className="w-4 h-4 text-primary" />
                           </Button>
                         ) : (
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleToggleReview(tx)}
-                            disabled={sendToReview.isPending}
-                            title="Send to Review"
-                            data-testid={`button-send-review-${tx.id}`}
-                            data-sent-to-review="false"
+                            disabled
+                            title="Categorize this transaction first to send it to Forecast"
+                            data-testid={`button-send-forecast-${tx.id}`}
                           >
-                            <Inbox className="w-4 h-4 text-primary" />
+                            <Send className="w-4 h-4 text-muted-foreground/40" />
                           </Button>
                         )
                       }
@@ -2578,44 +2558,33 @@ export default function TransactionsPage() {
                       }}
                       metaNode={
                         tx.forecastFlag ? (
-                          tx.sentToReviewAt ? (
-                            (() => {
-                              const r = resolutionByTxnId.get(tx.id);
-                              const state =
-                                r?.status === "matched"
-                                  ? { attr: "matched", label: "Matched" }
-                                  : r?.status === "ignored_unforecasted" ||
-                                      r?.status === "unplanned"
-                                    ? { attr: "unplanned", label: "Unplanned" }
-                                    : {
-                                        attr: "in-review-bucket",
-                                        label: "In Review",
-                                      };
-                              return (
-                                <Badge
-                                  variant="outline"
-                                  className={`text-[10px] font-normal ${CHIP_BASE}`}
-                                  data-testid={`badge-forecast-state-${tx.id}`}
-                                  data-forecast-state={state.attr}
-                                >
-                                  <Inbox className="w-3 h-3 mr-1" /> {state.label}
-                                </Badge>
-                              );
-                            })()
-                          ) : (
-                            // Honest state: forecast-flagged but NOT yet sent to
-                            // the Review pipeline (sentToReviewAt is null). Until
-                            // sent it will NOT appear on the Review page, so say
-                            // so instead of a misleading "In Review".
-                            <Badge
-                              variant="outline"
-                              className={`text-[10px] font-normal ${CHIP_BASE} text-muted-foreground`}
-                              data-testid={`badge-not-in-review-${tx.id}`}
-                              data-forecast-state="not-sent"
-                            >
-                              Not in review
-                            </Badge>
-                          )
+                          (() => {
+                            // Single-flow restore: forecast-flagged === in the
+                            // Review pipeline. Show the real triage state
+                            // (Matched / Unplanned / In Review) — no separate
+                            // sent_to_review gate, no "Not in review" half-state.
+                            const r = resolutionByTxnId.get(tx.id);
+                            const state =
+                              r?.status === "matched"
+                                ? { attr: "matched", label: "Matched" }
+                                : r?.status === "ignored_unforecasted" ||
+                                    r?.status === "unplanned"
+                                  ? { attr: "unplanned", label: "Unplanned" }
+                                  : {
+                                      attr: "in-review-bucket",
+                                      label: "In Review",
+                                    };
+                            return (
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] font-normal ${CHIP_BASE}`}
+                                data-testid={`badge-forecast-state-${tx.id}`}
+                                data-forecast-state={state.attr}
+                              >
+                                <Inbox className="w-3 h-3 mr-1" /> {state.label}
+                              </Badge>
+                            );
+                          })()
                         ) : null
                       }
                       amountNode={
@@ -2669,32 +2638,6 @@ export default function TransactionsPage() {
                               data-testid={`button-send-forecast-${tx.id}`}
                             >
                               <Send className="w-4 h-4 text-muted-foreground/40" />
-                            </Button>
-                          )}
-                          {tx.sentToReviewAt ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleToggleReview(tx)}
-                              disabled={unsendFromReview.isPending}
-                              title="In Review — click to remove"
-                              className="text-emerald-700 hover:text-emerald-800"
-                              data-testid={`badge-in-review-${tx.id}`}
-                              data-sent-to-review="true"
-                            >
-                              <Inbox className="w-4 h-4" />
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleToggleReview(tx)}
-                              disabled={sendToReview.isPending}
-                              title="Send to Review"
-                              data-testid={`button-send-review-${tx.id}`}
-                              data-sent-to-review="false"
-                            >
-                              <Inbox className="w-4 h-4 text-primary" />
                             </Button>
                           )}
                           <Button
