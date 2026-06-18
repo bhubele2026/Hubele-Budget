@@ -8,10 +8,12 @@ import { and, eq, gte, lte, or, sql, isNull, inArray } from "drizzle-orm";
 import {
   db,
   budgetCategoriesTable,
+  dashboardBudgetsTable,
   forecastResolutionsTable,
   forecastSettingsTable,
   plaidAccountsTable,
   recurringItemsTable,
+  settingsTable,
   transactionsTable,
   type DebriefActionsSummary,
   type DebriefVarianceCategoryBucket,
@@ -641,6 +643,61 @@ export async function computeWeekVariance(
       source: t.source ?? null,
     });
   }
+  // (Weekly Allowance pool) Groceries — like the other weekly sub-buckets
+  // (dining, alcohol, entertainment, misc) — isn't a recurring plan item, so
+  // it would otherwise show $0 Planned in the category variance even though
+  // the household runs a weekly allowance. Per the owner's call, surface the
+  // weekly allowance pool as the Groceries category's Planned (groceries is
+  // the primary/canonical weekly sub-bucket). Resolve the amount exactly the
+  // way the Dashboard's weekly cap does — a per-month dashboard_budgets
+  // override, else the Settings weekly allowance. It's already a weekly
+  // figure, so there's no proration. Added to plannedExpenses too so the
+  // headline planned total stays coherent with the category rows.
+  {
+    const monthKey = weekStart.slice(0, 7); // YYYY-MM (matches dashboard periodKey)
+    const [weeklyOverride] = await db
+      .select({ amount: dashboardBudgetsTable.amount })
+      .from(dashboardBudgetsTable)
+      .where(
+        and(
+          eq(dashboardBudgetsTable.householdId, householdId),
+          eq(dashboardBudgetsTable.bucket, "weekly"),
+          eq(dashboardBudgetsTable.periodKey, monthKey),
+        ),
+      );
+    const [settingsAllowanceRow] = ownerUserId
+      ? await db
+          .select({ amount: settingsTable.weeklyAllowanceAmount })
+          .from(settingsTable)
+          .where(eq(settingsTable.userId, ownerUserId))
+      : [];
+    const weeklyAllowance =
+      Number(weeklyOverride?.amount ?? settingsAllowanceRow?.amount ?? 0) || 0;
+    if (weeklyAllowance > 0) {
+      const grocRows = await db
+        .select({
+          id: budgetCategoriesTable.id,
+          name: budgetCategoriesTable.name,
+        })
+        .from(budgetCategoriesTable)
+        .where(eq(budgetCategoriesTable.householdId, householdId));
+      const groc = grocRows.find((c) =>
+        c.name.trim().toLowerCase().startsWith("grocer"),
+      );
+      if (groc && !excludedCategoryIds.has(groc.id)) {
+        const acc = ensure(groc.id);
+        acc.planned += weeklyAllowance;
+        acc.plannedItems.push({
+          recurringItemId: null,
+          name: "Weekly allowance",
+          amount: weeklyAllowance,
+          forecastDate: weekStart,
+        });
+        plannedExpenses += weeklyAllowance;
+      }
+    }
+  }
+
   const byCategory: DebriefVarianceCategoryBucket[] = [];
   for (const [categoryId, acc] of cat.entries()) {
     byCategory.push({
