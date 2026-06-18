@@ -34,7 +34,11 @@ jobs:
       # Frozen: install the committed lockfile exactly, preserving the
       # single-version pins (zod, react, vite…) the singleton-deps guard
       # enforces. Requires the matching pnpm major (10) — see env note.
-      - run: pnpm install --frozen-lockfile
+      # strict-dep-builds=false: pnpm 10 hard-errors on un-approved build
+      # scripts; in non-interactive CI we downgrade that to a warning.
+      # Packages we actually need built (esbuild, @swc/core…) are already
+      # in onlyBuiltDependencies in pnpm-workspace.yaml.
+      - run: pnpm install --frozen-lockfile --config.strict-dep-builds=false
       - run: pnpm run typecheck
 
   web-tests:
@@ -51,7 +55,11 @@ jobs:
       # Frozen: install the committed lockfile exactly, preserving the
       # single-version pins (zod, react, vite…) the singleton-deps guard
       # enforces. Requires the matching pnpm major (10) — see env note.
-      - run: pnpm install --frozen-lockfile
+      # strict-dep-builds=false: pnpm 10 hard-errors on un-approved build
+      # scripts; in non-interactive CI we downgrade that to a warning.
+      # Packages we actually need built (esbuild, @swc/core…) are already
+      # in onlyBuiltDependencies in pnpm-workspace.yaml.
+      - run: pnpm install --frozen-lockfile --config.strict-dep-builds=false
       - name: Web unit tests (jsdom — no DB)
         run: pnpm --filter ./artifacts/h2budget run test
 
@@ -89,7 +97,11 @@ jobs:
       # Frozen: install the committed lockfile exactly, preserving the
       # single-version pins (zod, react, vite…) the singleton-deps guard
       # enforces. Requires the matching pnpm major (10) — see env note.
-      - run: pnpm install --frozen-lockfile
+      # strict-dep-builds=false: pnpm 10 hard-errors on un-approved build
+      # scripts; in non-interactive CI we downgrade that to a warning.
+      # Packages we actually need built (esbuild, @swc/core…) are already
+      # in onlyBuiltDependencies in pnpm-workspace.yaml.
+      - run: pnpm install --frozen-lockfile --config.strict-dep-builds=false
       - name: API integration tests (pushes schema via pretest)
         run: pnpm --filter ./artifacts/api-server run test
 
@@ -112,6 +124,10 @@ jobs:
       # Frozen: install the committed lockfile exactly, preserving the
       # single-version pins (zod, react, vite…) the singleton-deps guard
       # enforces. Requires the matching pnpm major (10) — see env note.
-      - run: pnpm install --frozen-lockfile
+      # strict-dep-builds=false: pnpm 10 hard-errors on un-approved build
+      # scripts; in non-interactive CI we downgrade that to a warning.
+      # Packages we actually need built (esbuild, @swc/core…) are already
+      # in onlyBuiltDependencies in pnpm-workspace.yaml.
+      - run: pnpm install --frozen-lockfile --config.strict-dep-builds=false
       - run: pnpm --filter ./artifacts/h2budget exec playwright install --with-deps
       - run: pnpm --filter ./artifacts/h2budget run test:e2e
