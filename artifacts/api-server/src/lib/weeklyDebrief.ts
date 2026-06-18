@@ -8,6 +8,7 @@ import { and, eq, gte, lte, or, sql, isNull, inArray } from "drizzle-orm";
 import {
   db,
   budgetCategoriesTable,
+  budgetLinesTable,
   dashboardBudgetsTable,
   forecastResolutionsTable,
   forecastSettingsTable,
@@ -643,58 +644,131 @@ export async function computeWeekVariance(
       source: t.source ?? null,
     });
   }
-  // (Weekly Allowance pool) Groceries — like the other weekly sub-buckets
-  // (dining, alcohol, entertainment, misc) — isn't a recurring plan item, so
-  // it would otherwise show $0 Planned in the category variance even though
-  // the household runs a weekly allowance. Per the owner's call, surface the
-  // weekly allowance pool as the Groceries category's Planned (groceries is
-  // the primary/canonical weekly sub-bucket). Resolve the amount exactly the
-  // way the Dashboard's weekly cap does — a per-month dashboard_budgets
-  // override, else the Settings weekly allowance. It's already a weekly
-  // figure, so there's no proration. Added to plannedExpenses too so the
-  // headline planned total stays coherent with the category rows.
+  // -- Per-category weekly Planned for discretionary spend ------------
+  // Bills & income are recurring, event-based plan items (already added
+  // above: a bill due this week shows its full amount in that week).
+  // Everything else — Groceries, Dining, Shopping, Subscriptions, Pets,
+  // Entertainment, Childcare... — is continuous discretionary spend with
+  // no "event", so it would otherwise read $0 Planned and look like 100%
+  // overspend. Pull each such category's monthly budget from the Budget
+  // page (budget_lines) and slice it to THIS Sun–Sat week by daily
+  // proration (so a week straddling a month boundary draws each day from
+  // that day's own month). Categories backed by a recurring item are left
+  // event-based so we never prorate a bill or double-count. Groceries
+  // falls back to the Weekly Allowance pool when it has no Budget-page
+  // line, preserving the allowance view. Adds flow into plannedExpenses
+  // too so the headline planned total stays coherent with the rows.
   {
-    const monthKey = weekStart.slice(0, 7); // YYYY-MM (matches dashboard periodKey)
-    const [weeklyOverride] = await db
-      .select({ amount: dashboardBudgetsTable.amount })
-      .from(dashboardBudgetsTable)
-      .where(
-        and(
-          eq(dashboardBudgetsTable.householdId, householdId),
-          eq(dashboardBudgetsTable.bucket, "weekly"),
-          eq(dashboardBudgetsTable.periodKey, monthKey),
-        ),
-      );
-    const [settingsAllowanceRow] = ownerUserId
-      ? await db
-          .select({ amount: settingsTable.weeklyAllowanceAmount })
-          .from(settingsTable)
-          .where(eq(settingsTable.userId, ownerUserId))
-      : [];
-    const weeklyAllowance =
-      Number(weeklyOverride?.amount ?? settingsAllowanceRow?.amount ?? 0) || 0;
-    if (weeklyAllowance > 0) {
-      const grocRows = await db
+    // Bill/income categories: anything with a recurring item. These stay
+    // event-based and are never prorated.
+    const billCats = new Set<string | null>(recurring.map((r) => r.categoryId));
+
+    // Income categories never count as planned *expense*.
+    const catMetaRows = await db
+      .select({
+        id: budgetCategoriesTable.id,
+        name: budgetCategoriesTable.name,
+        kind: budgetCategoriesTable.kind,
+      })
+      .from(budgetCategoriesTable)
+      .where(eq(budgetCategoriesTable.householdId, householdId));
+    const incomeCats = new Set(
+      catMetaRows.filter((c) => c.kind === "income").map((c) => c.id),
+    );
+    const grocId =
+      catMetaRows.find((c) => c.name.trim().toLowerCase().startsWith("grocer"))
+        ?.id ?? null;
+
+    // Daily-prorated monthly-budget share per category across the 7 days.
+    const monthCache = new Map<string, Map<string, number>>();
+    const loadMonthLines = async (monthStart: string) => {
+      const cached = monthCache.get(monthStart);
+      if (cached) return cached;
+      const m = new Map<string, number>();
+      const rows = await db
         .select({
-          id: budgetCategoriesTable.id,
-          name: budgetCategoriesTable.name,
+          categoryId: budgetLinesTable.categoryId,
+          planned: budgetLinesTable.plannedAmount,
         })
-        .from(budgetCategoriesTable)
-        .where(eq(budgetCategoriesTable.householdId, householdId));
-      const groc = grocRows.find((c) =>
-        c.name.trim().toLowerCase().startsWith("grocer"),
-      );
-      if (groc && !excludedCategoryIds.has(groc.id)) {
-        const acc = ensure(groc.id);
-        acc.planned += weeklyAllowance;
-        acc.plannedItems.push({
-          recurringItemId: null,
-          name: "Weekly allowance",
-          amount: weeklyAllowance,
-          forecastDate: weekStart,
-        });
-        plannedExpenses += weeklyAllowance;
+        .from(budgetLinesTable)
+        .where(
+          and(
+            eq(budgetLinesTable.householdId, householdId),
+            eq(budgetLinesTable.monthStart, monthStart),
+          ),
+        );
+      for (const r of rows) {
+        if (r.categoryId) m.set(r.categoryId, Number(r.planned) || 0);
       }
+      monthCache.set(monthStart, m);
+      return m;
+    };
+    const weekShare = new Map<string, number>();
+    for (let i = 0; i < 7; i++) {
+      const dayIso = fmtISO(addDays(parseISO(weekStart), i));
+      const monthStart = `${dayIso.slice(0, 7)}-01`;
+      const [y, mo] = dayIso.split("-").map(Number);
+      const daysInMonth = new Date(y, mo, 0).getDate();
+      const lines = await loadMonthLines(monthStart);
+      for (const [categoryId, monthly] of lines.entries()) {
+        if (monthly === 0) continue;
+        weekShare.set(
+          categoryId,
+          (weekShare.get(categoryId) ?? 0) + monthly / daysInMonth,
+        );
+      }
+    }
+
+    const addPlanned = (categoryId: string, amount: number, label: string) => {
+      if (amount <= 0) return;
+      const acc = ensure(categoryId);
+      acc.planned += amount;
+      acc.plannedItems.push({
+        recurringItemId: null,
+        name: label,
+        amount,
+        forecastDate: weekStart,
+      });
+      plannedExpenses += amount;
+    };
+
+    for (const [categoryId, share] of weekShare.entries()) {
+      if (excludedCategoryIds.has(categoryId)) continue;
+      if (billCats.has(categoryId)) continue; // bill/income — event-based
+      if (incomeCats.has(categoryId)) continue; // never a planned expense
+      addPlanned(categoryId, share, "Weekly budget");
+    }
+
+    // Groceries fallback: if it has no Budget-page line, use the Weekly
+    // Allowance pool (resolved the same way the Dashboard's weekly cap is:
+    // a per-month dashboard_budgets override, else Settings weekly allowance).
+    if (
+      grocId &&
+      !excludedCategoryIds.has(grocId) &&
+      !billCats.has(grocId) &&
+      !incomeCats.has(grocId) &&
+      (weekShare.get(grocId) ?? 0) === 0
+    ) {
+      const monthKey = weekStart.slice(0, 7);
+      const [weeklyOverride] = await db
+        .select({ amount: dashboardBudgetsTable.amount })
+        .from(dashboardBudgetsTable)
+        .where(
+          and(
+            eq(dashboardBudgetsTable.householdId, householdId),
+            eq(dashboardBudgetsTable.bucket, "weekly"),
+            eq(dashboardBudgetsTable.periodKey, monthKey),
+          ),
+        );
+      const [settingsAllowanceRow] = ownerUserId
+        ? await db
+            .select({ amount: settingsTable.weeklyAllowanceAmount })
+            .from(settingsTable)
+            .where(eq(settingsTable.userId, ownerUserId))
+        : [];
+      const weeklyAllowance =
+        Number(weeklyOverride?.amount ?? settingsAllowanceRow?.amount ?? 0) || 0;
+      addPlanned(grocId, weeklyAllowance, "Weekly allowance");
     }
   }
 
