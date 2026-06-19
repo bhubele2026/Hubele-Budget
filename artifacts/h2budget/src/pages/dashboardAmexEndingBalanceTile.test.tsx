@@ -165,6 +165,7 @@ vi.mock("@workspace/api-client-react", () => {
     useGetForecast: () => ({ data: undefined }),
     useListTransactions: () => ({ data: sharedTxns, isLoading: false }),
     useListCategories: () => ({ data: [] }),
+    usePutMerchantAlias: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
     useListDebts: () => ({ data: debtsState }),
     useListMappingRules: () => ({ data: [], isLoading: false }),
     useListWeeklySettlements: () => ({ data: [], isLoading: false }),
@@ -207,6 +208,20 @@ vi.mock("@workspace/api-client-react", () => {
       isPending: false,
     }),
     getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
+    // MerchantRenamePopover (rendered inside the Amex page transaction rows)
+    // imports these merchant-alias hooks at module load; the mock must
+    // export them or it throws "No <hook> export is defined".
+    // (usePutMerchantAlias is already exported above.)
+    useDeleteMerchantAlias: () => ({
+      mutateAsync: async () => undefined,
+      mutate: () => undefined,
+      isPending: false,
+    }),
+    useSuggestMerchantName: () => ({
+      mutateAsync: async () => undefined,
+      mutate: () => undefined,
+      isPending: false,
+    }),
     customFetch: async (url: string) => {
       if (url === "/api/amex/anchor") return anchorState;
       return undefined;

@@ -269,6 +269,16 @@ const scrollIntoViewMock = vi.fn();
 
 beforeEach(() => {
   cleanup();
+  sessionStorage.clear();
+  // The forecast register hides plan rows before `forecastFromDate`
+  // (`visibleFromISO`), which defaults to today unless the user has the
+  // look-back panel open with a stored past date. Our rent fixture lands
+  // on 2026-05-01, before the frozen "today" of mid-May, so without this
+  // it would be filtered out of the visible register. Seed the stored
+  // from-date + look-back-open flag (mirroring forecastHorizonSwitchPerf)
+  // so the May-1 plan row stays in the active window.
+  sessionStorage.setItem("h2budget:forecastFromDate", "2026-05-01");
+  sessionStorage.setItem("h2budget:forecastLookbackOpen", "true");
   scrollIntoViewMock.mockClear();
   // Anchor "today" inside May 2026 so the page's default monthFilter
   // (derived from `useMemo(() => new Date(), [])`) lines up with the

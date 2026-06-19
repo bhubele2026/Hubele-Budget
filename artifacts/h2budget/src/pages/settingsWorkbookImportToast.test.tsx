@@ -44,6 +44,7 @@ vi.mock("@/hooks/use-plaid-sync", () => ({
 
 vi.mock("wouter", () => ({
   useLocation: () => ["/settings", navigateFn] as const,
+  Link: ({ children }: { children?: unknown }) => children ?? null,
 }));
 
 vi.mock("@workspace/api-client-react", () => {

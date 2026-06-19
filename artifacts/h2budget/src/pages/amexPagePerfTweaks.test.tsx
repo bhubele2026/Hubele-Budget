@@ -196,29 +196,9 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("Amex page perf tweaks", () => {
-  it("shows the cap-hit hint when the month query returns ≥ 1000 rows", async () => {
-    // Park the rows on a date far outside the selected month so the
-    // page's `monthScoped` filter keeps the visible list empty — we
-    // only need `monthAll.length` to clear the cap to surface the
-    // hint, not to render 1000 rows.
-    state.monthTxns = Array.from({ length: 1000 }, (_, i) =>
-      makeTxn({ id: `tx-cap-${i}`, occurredOn: "1900-01-01", postedOn: "1900-01-01" }),
-    );
-    renderPage();
-    await waitFor(() => {
-      const hint = screen.getByTestId("text-month-cap-hit");
-      expect(hint.textContent ?? "").toMatch(/Showing first 1000/);
-    });
-  });
-
-  it("does not show the cap-hit hint when the month query returns fewer rows", async () => {
-    state.monthTxns = [makeTxn()];
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getAllByText(/STARBUCKS/).length).toBeGreaterThan(0);
-    });
-    expect(screen.queryByTestId("text-month-cap-hit")).toBeNull();
-  });
+  // The month-cap-hit hint lived in the AccountFilterBar, which was removed
+  // from the Amex page; its two cases are dropped as obsolete (the test-id
+  // no longer renders anywhere in source).
 
   it("shows the bulk progress chip while a bulk action is in flight", async () => {
     // Two visible transactions so we can select one and run a bulk
