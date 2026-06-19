@@ -68,3 +68,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Claude Code agent worktrees (transient)
+.claude/worktrees/
