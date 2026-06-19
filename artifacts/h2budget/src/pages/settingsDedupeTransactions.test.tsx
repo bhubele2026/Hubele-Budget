@@ -125,7 +125,6 @@ vi.mock("@workspace/api-client-react", () => {
     // Hooks SettingsPage (and its unconditionally-rendered children) call at
     // render time that were added after this test was first written.
     useClearPlaidItemRefreshDisabled: () => mutation,
-    useUpdatePlaidImportCutoffDate: () => mutation,
     useGetDuplicateTransactionCount: () => ({ data: undefined }),
     getGetDuplicateTransactionCountQueryKey: () => ["duplicate-count"],
     // OwnerBankHealthSweepSection renders unconditionally in SettingsPage.
