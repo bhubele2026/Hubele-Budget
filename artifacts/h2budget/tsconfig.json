@@ -20,6 +20,9 @@
     },
     {
       "path": "../../lib/api-zod"
+    },
+    {
+      "path": "../../lib/avalanche-core"
     }
   ]
 }

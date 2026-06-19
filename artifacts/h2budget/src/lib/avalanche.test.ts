@@ -3,6 +3,10 @@ import {
   simulate,
   simulateMinimumsOnly,
   identifyUnderwater,
+  round2,
+  targetIndex,
+  CENTS,
+  MAX_MONTHS,
   type SimDebt,
 } from "./avalanche";
 
@@ -198,5 +202,80 @@ describe("simulateMinimumsOnly", () => {
     });
     expect(sim.ranOutOfTime).toBe(true);
     expect(Number.isFinite(sim.monthsToFreedom)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Golden-master assertions for the engine now living in
+// @workspace/avalanche-core (exercised here through the @/lib/avalanche shim).
+// Expected values are HAND-DERIVED, not guessed — they lock the shared math
+// so the client shim and the server reuse can never silently drift.
+// ---------------------------------------------------------------------------
+
+describe("avalanche-core shared primitives (via shim)", () => {
+  it("re-exports the shared constants", () => {
+    expect(CENTS).toBe(0.005);
+    expect(MAX_MONTHS).toBe(600);
+  });
+
+  it("round2 rounds to two decimals like the sim does", () => {
+    expect(round2(23.745)).toBe(23.75);
+    expect(round2(7.499)).toBe(7.5);
+    expect(round2(100)).toBe(100);
+  });
+
+  it("targetIndex applies the shared avalanche/snowball tie-break", () => {
+    const rows = [
+      { apr: 0.1, balance: 500 },
+      { apr: 0.3, balance: 2000 },
+    ];
+    expect(targetIndex(rows, "avalanche")).toBe(1); // highest APR
+    expect(targetIndex(rows, "snowball")).toBe(0); // smallest balance
+    expect(targetIndex([{ apr: 0.2, balance: 0 }], "avalanche")).toBe(-1); // dead
+  });
+});
+
+describe("simulate — hand-derived golden cases (via shim)", () => {
+  it("single 0% debt whose min equals its balance pays off in exactly month 1", () => {
+    // apr 0 => no interest; min(100, 100) = 100 paid => balance 0 in month 1.
+    const debt: SimDebt = { id: "a", name: "A", apr: 0, balance: 100, minPayment: 100 };
+    const r = simulate({ debts: [debt], extraPerMonth: 0, strategy: "avalanche" });
+    expect(r.ranOutOfTime).toBe(false);
+    expect(r.monthsToFreedom).toBe(1);
+    expect(r.months).toHaveLength(1);
+    expect(r.months[0]!.totalInterest).toBe(0);
+    expect(r.months[0]!.totalMinsPaid).toBe(100);
+    expect(r.months[0]!.totalBalanceEnd).toBe(0);
+    expect(r.totalInterestPaid).toBe(0);
+    expect(r.killedOrder.map((k) => k.id)).toEqual(["a"]);
+  });
+
+  it("a single underwater debt with no extra runs out of time (Infinity)", () => {
+    // 5000 * 0.3499/12 ≈ 145.79 monthly interest >> $33 min => grows forever.
+    const debt: SimDebt = {
+      id: "uw", name: "Underwater", apr: 0.3499, balance: 5000, minPayment: 33,
+    };
+    const r = simulate({ debts: [debt], extraPerMonth: 0, strategy: "avalanche" });
+    expect(r.ranOutOfTime).toBe(true);
+    expect(r.monthsToFreedom).toBe(Infinity);
+    expect(r.debtFreeDate).toBeNull();
+  });
+
+  it("a minPayment=0, 0% debt with no extra never converges (balance stuck)", () => {
+    const debt: SimDebt = { id: "z", name: "Zero", apr: 0, balance: 1000, minPayment: 0 };
+    const r = simulate({ debts: [debt], extraPerMonth: 0, strategy: "avalanche" });
+    expect(r.ranOutOfTime).toBe(true);
+    expect(r.monthsToFreedom).toBe(Infinity);
+  });
+
+  it("avalanche vs snowball pick different month-1 targets", () => {
+    // A = high APR/high balance, B = low APR/low balance, mins = 0. $50 extra
+    // dents but never kills either, so the first target is unambiguous.
+    const A: SimDebt = { id: "A", name: "A", apr: 0.3, balance: 2000, minPayment: 0 };
+    const B: SimDebt = { id: "B", name: "B", apr: 0.1, balance: 500, minPayment: 0 };
+    const av = simulate({ debts: [A, B], extraPerMonth: 50, strategy: "avalanche" });
+    const sb = simulate({ debts: [A, B], extraPerMonth: 50, strategy: "snowball" });
+    expect(av.months[0]!.activeTargetId).toBe("A");
+    expect(sb.months[0]!.activeTargetId).toBe("B");
   });
 });

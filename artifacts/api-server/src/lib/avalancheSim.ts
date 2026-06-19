@@ -1,11 +1,19 @@
-// Minimal server-side avalanche payoff simulator. Used by the Bills /
+// Minimal server-side avalanche payoff helpers. Used by the Bills /
 // Forecast / cash-signal endpoints to know how many months the user's
 // "Avalanche extra payment" continues before all debts are predicted
-// paid off. Mirrors the client-side `simulate()` (artifacts/h2budget/
-// src/lib/avalanche.ts) — same rounding, same target-selection rule,
-// same MAX_MONTHS guard — but trimmed to only the data we need here.
+// paid off. The simulation math itself now lives in the shared, isomorphic
+// @workspace/avalanche-core engine (the same one the client uses), so the
+// rounding, target-selection rule, and MAX_MONTHS guard cannot drift apart.
+// This module keeps only the DB-coupled glue (DebtRow → sim input shape).
 
 import { debtsTable } from "@workspace/db";
+import {
+  simulate,
+  CENTS,
+  targetIndex,
+  type SimDebt,
+  type Strategy,
+} from "@workspace/avalanche-core";
 
 type DebtRow = typeof debtsTable.$inferSelect;
 
@@ -16,29 +24,7 @@ export type SimInputDebt = {
   minPayment: number;
 };
 
-const CENTS = 0.005;
-const MAX_MONTHS = 600;
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-function targetIndex(rows: { balance: number; apr: number }[]): number {
-  let bestIdx = -1;
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    if (r.balance <= CENTS) continue;
-    if (bestIdx === -1) {
-      bestIdx = i;
-      continue;
-    }
-    const best = rows[bestIdx];
-    if (r.apr > best.apr || (r.apr === best.apr && r.balance < best.balance)) {
-      bestIdx = i;
-    }
-  }
-  return bestIdx;
-}
+const AVALANCHE: Strategy = "avalanche";
 
 /**
  * Run the avalanche simulation for `debts` with `extraPerMonth` of extra
@@ -52,40 +38,26 @@ export function monthsUntilAvalanchePayoff(
   debts: SimInputDebt[],
   extraPerMonth: number,
 ): number | null {
-  const work = debts
+  // Same pre-filter the server has always applied: a debt only participates
+  // if it has a live balance AND a positive minimum payment.
+  const work: SimDebt[] = debts
     .filter((d) => d.balance > CENTS && d.minPayment > 0)
     .map((d) => ({
       id: d.id,
+      name: d.id,
       apr: d.apr,
       balance: d.balance,
       minPayment: d.minPayment,
     }));
   if (work.length === 0) return 0;
-  const extra = Math.max(0, extraPerMonth || 0);
 
-  for (let m = 1; m <= MAX_MONTHS; m++) {
-    let pool = extra;
-    for (const d of work) {
-      if (d.balance <= CENTS) {
-        pool += d.minPayment;
-        continue;
-      }
-      const interest = round2(d.balance * (d.apr / 12));
-      d.balance = round2(d.balance + interest);
-      const pay = Math.min(d.minPayment, d.balance);
-      d.balance = round2(d.balance - pay);
-    }
-    while (pool > CENTS) {
-      const idx = targetIndex(work);
-      if (idx === -1) break;
-      const d = work[idx];
-      const pay = Math.min(pool, d.balance);
-      d.balance = round2(d.balance - pay);
-      pool = round2(pool - pay);
-    }
-    if (work.every((d) => d.balance <= CENTS)) return m;
-  }
-  return null;
+  const sim = simulate({
+    debts: work,
+    extraPerMonth,
+    strategy: AVALANCHE,
+  });
+  if (sim.ranOutOfTime) return null;
+  return sim.monthsToFreedom;
 }
 
 /**
@@ -106,6 +78,7 @@ export function resolveAvalancheTargetDebt(
       balance: Number(d.balance) || 0,
       apr: Number(d.apr) || 0,
     })),
+    AVALANCHE,
   );
   if (idx === -1) return null;
   const d = active[idx];
