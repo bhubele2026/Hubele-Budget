@@ -22,10 +22,10 @@ function getSystemTheme(): "light" | "dark" {
 const MATTE_FORCE_KEY = "h2:matte-forced:v1";
 
 function readStoredTheme(): Theme {
-  // Matte black is this app's whole identity. Default to dark, AND do a
-  // ONE-TIME snap: anyone carrying a legacy light/system preference gets
-  // flipped to matte black exactly once so the app *opens* matte. After that
-  // their explicit choice (including re-picking Light) is fully respected.
+  // ObsidianGlass (frosted-glass dark) is this app's whole identity. Default
+  // to dark, AND do a ONE-TIME snap: anyone carrying a legacy light/system
+  // preference gets flipped to dark exactly once so the app *opens* dark.
+  // After that their explicit choice (including re-picking Light) is respected.
   if (typeof window === "undefined") return "dark";
   try {
     if (!window.localStorage.getItem(MATTE_FORCE_KEY)) {

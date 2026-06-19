@@ -58,7 +58,7 @@ const ALL_NAV = [...TOP_NAV, ...RAIL_NAV, SETTINGS_ITEM];
 
 const BRAND = (
   <span className="flex items-center gap-2 select-none">
-    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[hsl(240_8%_8%)] text-[hsl(214_85%_64%)] font-bold text-[11px] tracking-tight border border-[hsl(214_50%_40%)]">
+    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-[#1e2230] to-[#0e1116] text-[hsl(255_92%_76%)] font-bold text-[11px] tracking-tight border border-[#2d3345]">
       H2
     </span>
     <span className="font-semibold text-[13.5px] tracking-tight">Budget</span>
@@ -156,7 +156,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-screen overflow-hidden bg-background flex flex-col">
       {/* ── Top bar: brand · plan-&-analyze nav · settings gear ───────────── */}
-      <header className="shrink-0 bg-[hsl(240_6%_9%)] dark:bg-[hsl(240_8%_6%)] text-white border-b border-white/10 dark:border-[hsl(214_34%_20%)]">
+      <header className="shrink-0 bg-[#0e1116] text-[#f3f4f6] border-b border-[#1e2230]">
         <div className="flex items-center h-11">
           {/* Brand — desktop: pinned to the rail width (w-52) with matching
               padding so "H2 Budget" sits directly above the left rail and the
@@ -174,7 +174,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-white hover:bg-white/10"
+                  className="text-[#f3f4f6] hover:bg-[#13161c]"
                   aria-label="Open navigation menu"
                   data-testid="button-mobile-menu"
                 >
@@ -203,8 +203,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     className={cn(
                       "flex items-center gap-1.5 px-2.5 h-8 rounded-md text-[13px] cursor-pointer transition-colors",
                       active
-                        ? "bg-white/15 text-white font-semibold"
-                        : "text-white/75 hover:bg-white/10 hover:text-white",
+                        ? "bg-[#13161c] text-[#f3f4f6] font-semibold ring-1 ring-[#7c3aed]/40"
+                        : "text-[#8e95a3] hover:bg-[#13161c] hover:text-[#f3f4f6]",
                     )}
                     data-testid={`topnav-${item.href.slice(1)}`}
                   >
@@ -221,7 +221,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="md:hidden mr-1 font-semibold truncate max-w-[40vw]">
               {currentTitle}
             </span>
-            <ThemeToggle className="text-white hover:bg-white/10" />
+            <ThemeToggle className="text-[#f3f4f6] hover:bg-[#13161c]" />
             <Link href="/settings">
               <Button
                 variant="ghost"
@@ -230,8 +230,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 title="Settings"
                 data-testid="link-settings"
                 className={cn(
-                  "text-white hover:bg-white/10",
-                  location.startsWith("/settings") && "bg-white/15",
+                  "text-[#f3f4f6] hover:bg-[#13161c]",
+                  location.startsWith("/settings") &&
+                    "bg-[#13161c] ring-1 ring-[#7c3aed]/40",
                 )}
               >
                 <SettingsIcon className="w-5 h-5" />

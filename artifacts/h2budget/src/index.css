@@ -76,72 +76,73 @@
   --elevate-1: rgba(26, 34, 48, .03);
   --elevate-2: rgba(26, 34, 48, .06);
 
-  /* (polish · foundation) Premium neutral ramp: pure-white cards floating
-     on a clean light-gray canvas, hairline borders, crisp text. */
-  --background: 220 16% 96%;
-  --foreground: 222 32% 12%;
-  --border: 220 13% 90%;
+  /* (ObsidianGlass · light) A cohesive cool slate-tinted light mode that
+     echoes the dark hero: white cards on a faintly violet-cool slate canvas,
+     hairline slate borders, and the SAME violet accent (262°) so light mode
+     reads as the same product, just inverted. Dark is still the hero. */
+  --background: 228 24% 96%;
+  --foreground: 224 30% 12%;
+  --border: 226 18% 88%;
 
   --card: 0 0% 100%;
-  --card-foreground: 222 32% 12%;
-  --card-border: 220 14% 91%;
+  --card-foreground: 224 30% 12%;
+  --card-border: 226 18% 89%;
 
   --sidebar: 0 0% 100%;
-  --sidebar-foreground: 222 18% 28%;
-  --sidebar-border: 220 14% 91%;
-  --sidebar-primary: 240 6% 12%;
+  --sidebar-foreground: 224 16% 30%;
+  --sidebar-border: 226 18% 89%;
+  --sidebar-primary: 262 83% 58%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 214 44% 92%;
-  --sidebar-accent-foreground: 214 55% 30%;
-  --sidebar-ring: 214 70% 46%;
+  --sidebar-accent: 262 44% 95%;
+  --sidebar-accent-foreground: 262 55% 38%;
+  --sidebar-ring: 262 83% 58%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 222 32% 12%;
-  --popover-border: 220 14% 91%;
+  --popover-foreground: 224 30% 12%;
+  --popover-border: 226 18% 89%;
 
-  /* (matte-black · volt · light) No blue. Primary is near-black so buttons
-     and active nav read hard/corporate; volt shows up as ring + highlights. */
-  --primary: 240 6% 12%;
+  /* (ObsidianGlass · light) Violet primary so buttons / active nav / focus
+     ring match the dark hero's accent. */
+  --primary: 262 83% 58%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 220 14% 95%;
-  --secondary-foreground: 222 22% 22%;
+  --secondary: 226 20% 94%;
+  --secondary-foreground: 224 24% 22%;
 
-  --muted: 220 14% 94%;
-  --muted-foreground: 216 13% 44%;
+  --muted: 226 20% 93%;
+  --muted-foreground: 222 12% 44%;
 
-  /* Matte-volt-tinted highlight so hovers/active states read as one cohesive
-     accent — no blue. */
-  --accent: 214 42% 93%;
-  --accent-foreground: 214 55% 30%;
+  /* Violet-tinted highlight so hovers/active states read as one cohesive
+     accent that matches dark mode. */
+  --accent: 262 44% 95%;
+  --accent-foreground: 262 55% 38%;
 
   --destructive: 0 60% 42%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 220 13% 88%;
-  --ring: 214 70% 44%;
+  --input: 226 18% 86%;
+  --ring: 262 83% 58%;
 
-  --positive: 160 60% 30%;
+  --positive: 160 84% 30%;
   --positive-foreground: 0 0% 100%;
   --negative: 0 60% 42%;
   --negative-foreground: 0 0% 100%;
-  --warning: 35 92% 40%;
+  --warning: 25 92% 44%;
   --warning-foreground: 30 25% 12%;
 
-  /* chart-1 = near-black balance line; 2 = matte volt; no blue. */
-  --chart-1: 240 8% 18%;
-  --chart-2: 214 62% 50%;
-  --chart-3: 216 14% 55%;
-  --chart-4: 35 90% 48%;
-  --chart-5: 262 45% 52%;
+  /* chart-1 = violet balance line; 2 = slate; 3 = emerald; 4 = orange. */
+  --chart-1: 262 70% 54%;
+  --chart-2: 222 14% 50%;
+  --chart-3: 160 70% 36%;
+  --chart-4: 25 90% 48%;
+  --chart-5: 262 45% 60%;
 
   --app-font-sans: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --app-font-serif: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --app-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  /* (flatten/corporate) Tighter corners read more professional than the
-     softer 0.5rem. Propagates to every rounded-sm/md/lg/xl utility via the
-     @theme radius mapping above. */
-  --radius: 0.375rem;
+  /* (ObsidianGlass) Softer rounded-xl glass corners. Propagates to every
+     rounded-sm/md/lg/xl utility via the @theme radius mapping above. */
+  --radius: 0.625rem;
 
   --shadow-2xs: 0 1px 1px 0 rgba(26, 34, 48, 0.04);
   --shadow-xs: 0 1px 2px 0 rgba(26, 34, 48, 0.05);
@@ -173,63 +174,63 @@
   --elevate-1: rgba(255,255,255, .035);
   --elevate-2: rgba(255,255,255, .07);
 
-  /* (matte-black · blue) A dead-flat neutral matte-black canvas — no gloss,
-     no glow, no gradients — with ONE clean blue accent (214 82% 62%) that cuts
-     against the black. Blue drives buttons / links / active nav / the logo /
-     the chart line; +/- money stays emerald / red so the accent never reads as
-     a dollar amount. Matte everything, blue on black. */
-  --background: 240 6% 5%;
-  --foreground: 60 6% 93%;
-  --border: 240 5% 15%;
+  /* (ObsidianGlass) A frosted-glass fintech canvas. Outer void #07080b, app
+     panel #0e1116, glass cards graduate #13161c → #0e1116 behind a hairline
+     #1e2230 border (raised edges #2d3345). Violet #7c3aed is the single accent
+     — selection, focus glow, primary actions / active nav. +/- money stays
+     emerald / red so the accent never reads as a dollar amount. */
+  --background: 222 22% 7%;     /* #0e1116 app/panel */
+  --foreground: 220 14% 96%;    /* #f3f4f6 headings */
+  --border: 226 22% 15%;        /* #1e2230 hairline */
 
-  --card: 240 6% 8%;
-  --card-foreground: 60 6% 93%;
-  --card-border: 240 5% 15%;
+  --card: 224 18% 9%;           /* #13161c top of glass gradient */
+  --card-foreground: 220 14% 96%;
+  --card-border: 226 22% 15%;   /* #1e2230 */
 
-  --sidebar: 240 7% 6%;
-  --sidebar-foreground: 60 5% 86%;
-  --sidebar-border: 240 5% 15%;
-  --sidebar-primary: 214 82% 62%;
-  --sidebar-primary-foreground: 240 12% 6%;
-  --sidebar-accent: 214 36% 15%;
-  --sidebar-accent-foreground: 214 55% 80%;
-  --sidebar-ring: 214 82% 62%;
+  --sidebar: 222 22% 7%;        /* #0e1116 panel */
+  --sidebar-foreground: 219 9% 60%;   /* #8e95a3 idle nav */
+  --sidebar-border: 226 22% 15%;      /* #1e2230 dividers */
+  --sidebar-primary: 262 83% 58%;     /* #7c3aed violet */
+  --sidebar-primary-foreground: 220 14% 96%;
+  --sidebar-accent: 224 18% 11%;      /* #13161c hover row */
+  --sidebar-accent-foreground: 220 14% 96%;  /* #f3f4f6 active nav */
+  --sidebar-ring: 262 83% 58%;
 
-  --popover: 240 6% 8%;
-  --popover-foreground: 60 6% 93%;
-  --popover-border: 240 5% 15%;
+  --popover: 224 18% 9%;        /* #13161c */
+  --popover-foreground: 220 14% 96%;
+  --popover-border: 226 22% 15%;
 
-  --primary: 214 82% 62%;
-  --primary-foreground: 240 12% 6%;
+  --primary: 262 83% 58%;       /* #7c3aed violet */
+  --primary-foreground: 220 14% 96%;  /* #f3f4f6 */
 
-  --secondary: 240 5% 14%;
-  --secondary-foreground: 60 5% 86%;
+  --secondary: 226 22% 15%;     /* #1e2230 */
+  --secondary-foreground: 220 14% 96%;
 
-  --muted: 240 5% 12%;
-  --muted-foreground: 240 5% 62%;
+  --muted: 224 18% 11%;         /* #13161c */
+  --muted-foreground: 219 9% 60%;     /* #8e95a3 body */
 
-  --accent: 214 34% 16%;
-  --accent-foreground: 214 55% 80%;
+  --accent: 224 18% 14%;        /* raised glass row */
+  --accent-foreground: 255 92% 76%;   /* #a78bfa violet tint */
 
   --destructive: 2 80% 58%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 240 5% 19%;
-  --ring: 214 82% 62%;
+  --input: 226 22% 15%;         /* #1e2230 */
+  --ring: 262 83% 58%;          /* #7c3aed focus glow */
 
-  --positive: 150 60% 50%;
-  --positive-foreground: 240 12% 6%;
+  --positive: 160 94% 30%;      /* #059669 emerald */
+  --positive-foreground: 0 0% 100%;
   --negative: 2 82% 61%;
   --negative-foreground: 0 0% 100%;
-  --warning: 40 96% 58%;
-  --warning-foreground: 240 12% 6%;
+  --warning: 25 95% 53%;        /* #f97316 orange */
+  --warning-foreground: 220 14% 96%;
 
-  /* chart-1 = volt (the balance line); 2 = light gray; 3 = emerald. */
-  --chart-1: 214 86% 66%;
-  --chart-2: 240 6% 72%;
-  --chart-3: 150 60% 52%;
-  --chart-4: 40 96% 58%;
-  --chart-5: 280 60% 70%;
+  /* chart-1 = violet balance line; 2 = body gray; 3 = emerald; 4 = orange. */
+  --chart-1: 262 83% 64%;
+  --chart-2: 219 9% 62%;
+  --chart-3: 160 84% 39%;
+  --chart-4: 25 95% 53%;
+  --chart-5: 255 92% 76%;
 
   --shadow-2xs: 0px 1px 2px 0px rgba(0,0,0,0.5);
   --shadow-xs: 0px 1px 2px 0px rgba(0,0,0,0.5);
@@ -276,9 +277,22 @@
     font-feature-settings: "tnum" 1, "cv11" 1;
   }
 
-  /* (matte-black · matte-volt) No ambient glow on purpose — matte means
-     dead-flat. The canvas stays a single solid matte-black with no radial
-     light, no sheen. Depth comes only from flat tonal steps (bg < card). */
+  /* (ObsidianGlass) Slim frosted scrollbar in dark mode so the chrome reads
+     as part of the glass UI rather than the OS default. */
+  .dark ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .dark ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: #1e2230;
+    border-radius: 3px;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #2d3345;
+  }
 }
 
 @layer utilities {
@@ -372,6 +386,34 @@
   .recharts-reference-line line {
     stroke: hsl(var(--border));
   }
+  /* (ObsidianGlass) Frosted-glass surface. The dark mode gradient + hairline
+     border + deep ambient shadow that defines the card look app-wide. In
+     light mode it degrades to a flat white surface so light stays clean. */
+  .glass-surface {
+    border: 1px solid hsl(var(--card-border));
+    box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.08);
+  }
+  .dark .glass-surface {
+    background-image: linear-gradient(180deg, #13161c 0%, #0e1116 100%);
+    box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.5);
+  }
+
+  /* (ObsidianGlass) Emphasis ring — violet glow for the hero / review-inbox
+     card. Apply alongside .glass-surface on cards that should pull focus. */
+  .focus-glow {
+    box-shadow:
+      0 0 0 1px rgba(124, 58, 237, 0.3),
+      0 0 20px rgba(124, 58, 237, 0.1);
+    border-color: rgba(124, 58, 237, 0.4);
+  }
+  .dark .focus-glow {
+    box-shadow:
+      0 0 0 1px rgba(124, 58, 237, 0.3),
+      0 0 20px rgba(124, 58, 237, 0.1),
+      0 4px 24px -1px rgba(0, 0, 0, 0.5);
+    border-color: rgba(124, 58, 237, 0.4);
+  }
+
   .no-default-hover-elevate {}
   .no-default-active-elevate {}
 
