@@ -208,6 +208,24 @@ beforeAll(async () => {
   // in Clerk.
   const app = express();
   app.use(express.json());
+  // The /plaid/sync handler logs through the request-scoped `req.log`
+  // (provided by pino-http in the real app.ts). This bare test app has
+  // no pino-http, so without a stub `req.log` is undefined and the
+  // pre-prune account-refresh block (which logs whenever
+  // refreshPlaidAccountsForItem returns an error — and it always does
+  // here because this test's Plaid mock omits accountsGet) throws
+  // "Cannot read properties of undefined (reading 'info')", which the
+  // route's catch turns into a 500. Inject the same no-op logger stub
+  // the sibling plaidRouter integration tests use.
+  app.use((req: { log?: unknown }, _res, next) => {
+    req.log = {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      debug: () => {},
+    };
+    next();
+  });
   app.use("/api", plaidRouter);
   await new Promise<void>((resolve) => {
     server = app.listen(0, () => resolve());

@@ -230,9 +230,12 @@ function renderPage() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
   });
+  // The inbox drag-to-match surface (inbox cards, drag hints, plan
+  // drop rows) only renders in review mode; "overall" mode shows a
+  // "Go to Review" banner instead. Render the review surface directly.
   return render(
     <QueryClientProvider client={qc}>
-      <ForecastPage />
+      <ForecastPage mode="review" />
     </QueryClientProvider>,
   );
 }

@@ -269,9 +269,12 @@ function renderPage() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
   });
+  // The per-card "Choose a planned" dropdown (and its "No planned
+  // items this month" fallback) lives inside the bank inbox card,
+  // which only renders in review mode. Render the review surface.
   return render(
     <QueryClientProvider client={qc}>
-      <ForecastPage />
+      <ForecastPage mode="review" />
     </QueryClientProvider>,
   );
 }
