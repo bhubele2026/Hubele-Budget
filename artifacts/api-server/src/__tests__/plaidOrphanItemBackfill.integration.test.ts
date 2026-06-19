@@ -194,6 +194,25 @@ describe("(#650) backfillOrphanPlaidItems", () => {
     expect(await userItemIds(TEST_USER)).toEqual(new Set([survivor.id]));
   });
 
+  it("never reaps a LIVE link: two real logins at the same institution, BOTH with accounts, are both preserved", async () => {
+    // The genuine "two Chase logins" case where BOTH items are live (each
+    // owns its own accounts). Neither is an orphan — both have accounts —
+    // so the sweep must scan zero orphans and delete nothing. Guards
+    // against a false positive that would archive a healthy live link
+    // just because a same-institution sibling exists.
+    const liveA = await insertItem({ user: TEST_USER, household: TEST_HOUSEHOLD_ID });
+    await attachAccount(liveA.id, TEST_USER, TEST_HOUSEHOLD_ID);
+    const liveB = await insertItem({ user: TEST_USER, household: TEST_HOUSEHOLD_ID });
+    await attachAccount(liveB.id, TEST_USER, TEST_HOUSEHOLD_ID);
+
+    const summary = await runScoped();
+
+    expect(summary.scannedOrphans).toBe(0);
+    expect(summary.removedOrphans).toBe(0);
+    expect(summary.skippedNoHealthySibling).toBe(0);
+    expect(await userItemIds(TEST_USER)).toEqual(new Set([liveA.id, liveB.id]));
+  });
+
   it("does not cross users: user X orphan never reaped by user Y's healthy item", async () => {
     const otherHealthy = await insertItem({ user: OTHER_USER, household: OTHER_HOUSEHOLD_ID });
     await attachAccount(otherHealthy.id, OTHER_USER, OTHER_HOUSEHOLD_ID);

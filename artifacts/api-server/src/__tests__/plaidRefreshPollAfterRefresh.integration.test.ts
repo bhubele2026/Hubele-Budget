@@ -439,4 +439,64 @@ describe("(#671) poll-after-refresh in syncPlaidItem", () => {
     // Exactly one /transactions/sync call → one response consumed.
     expect(transactionsSyncResponses.length).toBe(1);
   });
+
+  it("(idempotency) running a forceRefresh sync TWICE with the same added payload never duplicates the row", async () => {
+    // The user-driven Sync button (forceRefresh=true) is the most
+    // dangerous idempotency surface: it re-asks Plaid to re-fetch, which
+    // after a cursor reset / re-link can re-deliver an already-imported
+    // posting in the `added` array. The onConflictDoUpdate on
+    // plaid_transaction_id must keep the second run a no-op (zero new
+    // rows) so a double-click or a back-to-back refresh can never inflate
+    // spending with a phantom duplicate.
+    const { itemRowId, externalAccountId } = await seedItem();
+    const fixedTxnId = `txn-fixed-${randomUUID()}`;
+    const fixedAddedResp = (): SyncResp => ({
+      added: [
+        {
+          transaction_id: fixedTxnId,
+          account_id: externalAccountId,
+          amount: 88.88,
+          date: "2026-05-16",
+          pending: false,
+          name: "Stable Posting",
+        },
+      ],
+      modified: [],
+      removed: [],
+      next_cursor: "c-stable",
+      has_more: false,
+    });
+
+    // First forceRefresh: the posting lands.
+    transactionsSyncResponses.push(fixedAddedResp());
+    const first = await syncPlaidItem(TEST_USER, itemRowId, {
+      forceRefresh: true,
+    });
+    expect(first.error ?? null).toBeNull();
+    expect(first.added).toBe(1);
+
+    let rows = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(rows).toHaveLength(1);
+    const firstRowId = rows[0]!.id;
+
+    // Second forceRefresh re-delivers the SAME posting (same
+    // transaction_id). Must upsert in place — no second row.
+    transactionsSyncResponses.push(fixedAddedResp());
+    const second = await syncPlaidItem(TEST_USER, itemRowId, {
+      forceRefresh: true,
+    });
+    expect(second.error ?? null).toBeNull();
+
+    rows = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, TEST_USER));
+    expect(rows).toHaveLength(1);
+    // Same row, refreshed in place — not a delete+reinsert.
+    expect(rows[0]!.id).toBe(firstRowId);
+    expect(rows[0]!.plaidTransactionId).toBe(fixedTxnId);
+  });
 });

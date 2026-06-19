@@ -270,4 +270,79 @@ describe("computeBankReconcile", () => {
     );
     expect(result.forecastEnd).toBe(950);
   });
+
+  it("partial match leaves a residual: bank cleared LESS than the planned bill ⇒ non-zero gap, does not reconcile-to-zero", () => {
+    // A planned bill of -100 the user matched to a bank txn that only
+    // cleared -60 (e.g. a partial payment, or matched the wrong/smaller
+    // charge). The planned bill is NOT fully satisfied: the reconcile gap
+    // must surface the -40 residual and refuse to read as a clean
+    // (gap === 0) reconcile. This is the inverse of the existing
+    // overshoot ("matched-amount drift") case and the key guard that
+    // reconcile-to-zero only fires at EXACTLY zero.
+    const bank = bankLine({
+      id: "b1",
+      date: "2026-05-05",
+      amount: -60,
+      status: "matched",
+    });
+    const plan = planLine({
+      itemId: "rent",
+      date: "2026-05-05",
+      amount: -100,
+      label: "Rent",
+      status: "matched",
+      matchedTxnId: "b1",
+    });
+    const result = computeBankReconcile(
+      baseInput({
+        allBank: [bank],
+        allPlan: [plan],
+        settingsStartingBalance: 1000,
+        // Bank actually shows 1000 + (-60) = 940 so the ONLY drift is the
+        // matched-amount residual, isolating the partial-match signal.
+        bankSnapshot: { at: "2026-05-15T00:00:00.000Z", balance: 940 },
+      }),
+    );
+    // plan(-100) - bank(-60) = -40 residual.
+    expect(result.matchedAmountDelta).toBe(-40);
+    expect(result.startingBalanceDelta).toBe(0);
+    expect(result.gap).toBe(40);
+    expect(result.gap).not.toBe(0); // must NOT reconcile-to-zero
+    expect(result.contributors).toHaveLength(1);
+    expect(result.contributors[0]?.kind).toBe("matched");
+    expect(result.largestContributor?.kind).toBe("matched");
+  });
+
+  it("reconcile-to-zero only fires at EXACTLY zero: a sub-0.01 residual collapses to a clean gap", () => {
+    // A penny-rounding residual below the 0.01 reporting threshold must
+    // collapse to gap === 0 (clean reconcile) and contribute no row —
+    // the boundary that keeps floating-point dust from blocking a clean
+    // month while a real partial residual (prior test) still surfaces.
+    const bank = bankLine({
+      id: "b1",
+      date: "2026-05-05",
+      amount: -100.004,
+      status: "matched",
+    });
+    const plan = planLine({
+      itemId: "rent",
+      date: "2026-05-05",
+      amount: -100,
+      label: "Rent",
+      status: "matched",
+      matchedTxnId: "b1",
+    });
+    const result = computeBankReconcile(
+      baseInput({
+        allBank: [bank],
+        allPlan: [plan],
+        settingsStartingBalance: 1000,
+        // 1000 + (-100.004) rounds to 899.996 → 900.00 at 2dp.
+        bankSnapshot: { at: "2026-05-15T00:00:00.000Z", balance: 900 },
+      }),
+    );
+    expect(result.gap).toBe(0);
+    expect(result.contributors).toEqual([]);
+    expect(result.largestContributor).toBeNull();
+  });
 });

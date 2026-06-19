@@ -1597,7 +1597,22 @@ export async function syncPlaidItem(
                 }
               : {}),
             ...(debtId ? { debtId } : {}),
-            ...(isChecking && !cat.isTransfer ? { forecastFlag: true } : {}),
+            // (#479 follow-up) Re-set forecastFlag for checking rows on
+            // every sync — EXCEPT when the user has manually flagged this
+            // row as a transfer (`is_transfer_user_overridden=true` AND
+            // the row currently `is_transfer`). The forecast register
+            // (`filterForecastTxns`) includes a row purely on
+            // `forecastFlag && isBankTxn` and does NOT re-check
+            // `isTransfer`, so force-setting `forecastFlag=true` here would
+            // drag a user-flagged transfer back into the running balance
+            // and fake reconcile slack on the next sync. The same CASE
+            // guard the `isTransfer` / allowance re-sets use keeps the
+            // user's override sticky across syncs.
+            ...(isChecking && !cat.isTransfer
+              ? {
+                  forecastFlag: sql`CASE WHEN ${transactionsTable.isTransferUserOverridden} AND ${transactionsTable.isTransfer} THEN ${transactionsTable.forecastFlag} ELSE TRUE END`,
+                }
+              : {}),
           },
         })
         .returning({ id: transactionsTable.id });
