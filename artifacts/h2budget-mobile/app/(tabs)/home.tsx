@@ -17,6 +17,9 @@ import {
   type Nudge,
   type Settings,
   type Txn,
+  type Debt,
+  type AvalancheSettings,
+  type AmexAnchor,
 } from "@/lib/api";
 import {
   computeStatus,
@@ -25,7 +28,15 @@ import {
   iso,
   type BucketStatus,
 } from "@/lib/allowances";
-import { colors, radius, fonts, formatCurrency } from "@/lib/theme";
+import { nextMoves, type NextMove } from "@/lib/avalanche";
+import {
+  colors,
+  radius,
+  fonts,
+  formatCurrency,
+  formatPct,
+  formatPayoffMonth,
+} from "@/lib/theme";
 
 function greetingFor(h: number): string {
   if (h < 5) return "Still up";
@@ -120,6 +131,33 @@ function PaceBar({ st }: { st: BucketStatus }) {
   );
 }
 
+function NextMoveCard({ move, index }: { move: NextMove; index: number }) {
+  const isFirst = index === 0;
+  return (
+    <View style={[s.moveCard, isFirst && s.moveCardFirst]}>
+      <View style={s.moveHead}>
+        <View style={[s.moveRank, isFirst && s.moveRankFirst]}>
+          <Text style={[s.moveRankText, isFirst && s.moveRankTextFirst]}>
+            #{index + 1}
+          </Text>
+        </View>
+        <Text style={s.moveBy}>PAY OFF BY {formatPayoffMonth(move.date)}</Text>
+      </View>
+      <Text style={s.moveName} numberOfLines={1}>
+        {move.name}
+      </Text>
+      <Text style={[s.moveMeta, fonts.tabular]}>
+        {formatPct(move.apr)} APR · {formatCurrency(move.balance)} balance
+      </Text>
+      <Text style={s.moveFreesLabel}>FREES UP</Text>
+      <Text style={[s.moveFrees, fonts.tabular]}>
+        {formatCurrency(move.minFreed)}
+        <Text style={s.moveFreesUnit}>/mo</Text>
+      </Text>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const { getToken } = useAuth();
   const { user } = useUser();
@@ -129,6 +167,9 @@ export default function HomeScreen() {
   const [nudge, setNudge] = useState<Nudge | undefined>();
   const [settings, setSettings] = useState<Settings | undefined>();
   const [txns, setTxns] = useState<Txn[]>([]);
+  const [debts, setDebts] = useState<Debt[] | undefined>();
+  const [avalanche, setAvalanche] = useState<AvalancheSettings | undefined>();
+  const [amex, setAmex] = useState<AmexAnchor | undefined>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -139,16 +180,22 @@ export default function HomeScreen() {
       // scope to this week / month internally via computeStatus.
       const from = iso(new Date(now.getTime() - 62 * 86_400_000));
       const to = iso(lastOfMonth(now));
-      const [d, n, s, t] = await Promise.all([
+      const [d, n, s, t, dbt, av, ax] = await Promise.all([
         api.getDashboard(),
         api.getNudge().catch(() => undefined),
         api.getSettings(),
         api.getTransactions(from, to),
+        api.getDebts().catch(() => undefined),
+        api.getAvalancheSettings().catch(() => undefined),
+        api.getAmexAnchor().catch(() => undefined),
       ]);
       setDash(d);
       setNudge(n);
       setSettings(s);
       setTxns(t);
+      setDebts(dbt);
+      setAvalanche(av);
+      setAmex(ax);
     } catch {
       /* surfaced on next pull */
     } finally {
@@ -163,6 +210,10 @@ export default function HomeScreen() {
   const streak = useMemo(
     () => weeklyStreak(txns, Number(settings?.weeklyAllowanceAmount) || 0),
     [txns, settings],
+  );
+  const moves = useMemo(
+    () => nextMoves(debts, avalanche, 3),
+    [debts, avalanche],
   );
 
   useEffect(() => {
@@ -184,6 +235,10 @@ export default function HomeScreen() {
   const paid = dash ? Number(dash.paidThisMonth) : 0;
   const topCat = dash?.topCategories?.[0];
   const netShown = useCountUp(net);
+  const amexBal =
+    amex && amex.source !== "missing" && amex.amexEndingBalance != null
+      ? amex.amexEndingBalance
+      : null;
 
   // Smooth entrance — fade + rise once content is ready.
   const enter = useRef(new Animated.Value(0)).current;
@@ -321,6 +376,36 @@ export default function HomeScreen() {
           />
         </View>
 
+        {amexBal != null ? (
+          <View style={s.card}>
+            <Text style={s.label}>Amex ending balance</Text>
+            <Text style={[s.amexNum, fonts.tabular]}>
+              {formatCurrency(amexBal)}
+            </Text>
+            <Text style={s.sub}>
+              {amex?.source === "plaid"
+                ? "Live from Plaid"
+                : amex?.source === "debt"
+                  ? "From your debt row"
+                  : amex?.source === "anchor"
+                    ? "From saved anchor"
+                    : "Calculated from transactions"}
+            </Text>
+          </View>
+        ) : null}
+
+        {moves.length > 0 ? (
+          <View style={{ gap: 10 }}>
+            <View style={s.moveSectionHead}>
+              <Text style={s.moveKicker}>AVALANCHE PLAN · KILL ORDER</Text>
+              <Text style={s.moveTitle}>Your next 3 moves</Text>
+            </View>
+            {moves.map((m, i) => (
+              <NextMoveCard key={m.id} move={m} index={i} />
+            ))}
+          </View>
+        ) : null}
+
         {topCat ? (
           <View style={s.card}>
             <Text style={s.label}>Top category this month</Text>
@@ -436,4 +521,68 @@ const s = StyleSheet.create({
     overflow: "hidden",
   },
   fill: { height: "100%", borderRadius: 999 },
+  amexNum: {
+    color: colors.text,
+    fontSize: 26,
+    fontWeight: "800",
+    marginTop: 6,
+    letterSpacing: -0.5,
+  },
+  moveSectionHead: { marginTop: 2 },
+  moveKicker: {
+    color: colors.warning,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.4,
+  },
+  moveTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+    marginTop: 2,
+  },
+  moveCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: 16,
+    gap: 6,
+  },
+  moveCardFirst: { borderColor: colors.text, borderWidth: 2 },
+  moveHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  moveRank: {
+    backgroundColor: colors.trackBg,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  moveRankFirst: { backgroundColor: colors.text, borderColor: colors.text },
+  moveRankText: { color: colors.text, fontSize: 12, fontWeight: "800" },
+  moveRankTextFirst: { color: colors.bg },
+  moveBy: {
+    color: colors.muted,
+    fontSize: 10.5,
+    fontWeight: "700",
+    letterSpacing: 1,
+  },
+  moveName: { color: colors.text, fontSize: 17, fontWeight: "800" },
+  moveMeta: { color: colors.muted, fontSize: 13 },
+  moveFreesLabel: {
+    color: colors.muted,
+    fontSize: 10.5,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginTop: 6,
+  },
+  moveFrees: {
+    color: colors.positive,
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  moveFreesUnit: { color: colors.muted, fontSize: 13, fontWeight: "500" },
 });

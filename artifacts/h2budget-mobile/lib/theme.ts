@@ -37,3 +37,15 @@ export function formatCurrency(n: number): string {
     })
   );
 }
+
+/** APR is stored as a decimal (0.2499 → "24.99%"). Mirrors web `fmtPct`. */
+export function formatPct(p: number, digits = 2): string {
+  return `${(p * 100).toFixed(digits)}%`;
+}
+
+/** "Mar 2027" — payoff month label. Mirrors web `fmtPayoffMonth` (uppercased). */
+export function formatPayoffMonth(d: Date): string {
+  return d
+    .toLocaleString("en-US", { month: "short", year: "numeric" })
+    .toUpperCase();
+}

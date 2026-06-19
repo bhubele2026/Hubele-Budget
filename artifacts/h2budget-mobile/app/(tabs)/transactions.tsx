@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
+  TextInput,
   FlatList,
   Pressable,
   Modal,
@@ -27,6 +28,7 @@ export default function CategorizeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState<Txn | null>(null);
   const [onlyUncat, setOnlyUncat] = useState(true);
+  const [catQuery, setCatQuery] = useState("");
 
   const load = useCallback(async () => {
     setError(null);
@@ -77,7 +79,24 @@ export default function CategorizeScreen() {
     }
   };
 
+  const uncatCount = useMemo(
+    () => txns.filter((t) => !t.categoryId).length,
+    [txns],
+  );
   const visible = onlyUncat ? txns.filter((t) => !t.categoryId) : txns;
+
+  // Filter the picker's category list by the search box. Mirrors the web
+  // transactions page's category search so a long list stays usable on phone.
+  const pickerCats = useMemo(() => {
+    const q = catQuery.trim().toLowerCase();
+    if (!q) return cats;
+    return cats.filter((c) => c.name.toLowerCase().includes(q));
+  }, [cats, catQuery]);
+
+  const openPicker = (tx: Txn) => {
+    setCatQuery("");
+    setPicking(tx);
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -91,7 +110,9 @@ export default function CategorizeScreen() {
           onPress={() => setOnlyUncat(true)}
           style={[styles.chip, onlyUncat && styles.chipOn]}
         >
-          <Text style={[styles.chipText, onlyUncat && styles.chipTextOn]}>Needs a category</Text>
+          <Text style={[styles.chipText, onlyUncat && styles.chipTextOn]}>
+            Needs a category{uncatCount > 0 ? ` (${uncatCount})` : ""}
+          </Text>
         </Pressable>
         <Pressable
           onPress={() => setOnlyUncat(false)}
@@ -121,7 +142,7 @@ export default function CategorizeScreen() {
             <Text style={styles.empty}>All caught up — nothing to categorize.</Text>
           }
           renderItem={({ item }) => (
-            <Pressable style={styles.row} onPress={() => setPicking(item)}>
+            <Pressable style={styles.row} onPress={() => openPicker(item)}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.merchant} numberOfLines={1}>
                   {item.displayName || item.description}
@@ -140,10 +161,23 @@ export default function CategorizeScreen() {
             <Text style={styles.sheetTitle} numberOfLines={1}>
               {picking?.displayName || picking?.description}
             </Text>
+            <TextInput
+              style={styles.search}
+              placeholder="Search categories"
+              placeholderTextColor={colors.faint}
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={catQuery}
+              onChangeText={setCatQuery}
+            />
             <FlatList
-              data={cats}
+              data={pickerCats}
               keyExtractor={(c) => c.id}
+              keyboardShouldPersistTaps="handled"
               style={{ maxHeight: 380 }}
+              ListEmptyComponent={
+                <Text style={styles.noMatch}>No categories match.</Text>
+              }
               renderItem={({ item }) => (
                 <Pressable
                   style={styles.catRow}
@@ -207,6 +241,18 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   sheetTitle: { fontSize: 16, fontWeight: "700", color: colors.text, marginBottom: 8 },
+  search: {
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: colors.text,
+    marginBottom: 8,
+  },
+  noMatch: { color: colors.muted, paddingVertical: 16, textAlign: "center" },
   catRow: {
     paddingVertical: 14,
     borderBottomWidth: 1,
