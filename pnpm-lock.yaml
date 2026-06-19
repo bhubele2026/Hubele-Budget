@@ -245,7 +245,7 @@ importers:
         version: 3.1.0
       vitest:
         specifier: ^4.1.5
-        version: 4.1.5(@types/node@25.3.5)(jiti@2.6.1)(jsdom@29.1.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.1.5(@types/node@25.3.5)(jsdom@29.1.1)(vite@7.3.2(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2))
 
   artifacts/h2budget:
     dependencies:
@@ -277,6 +277,9 @@ importers:
         specifier: ^4.1.1
         version: 4.1.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
     devDependencies:
+      '@axe-core/playwright':
+        specifier: 4.11.3
+        version: 4.11.3(playwright-core@1.59.1)
       '@clerk/backend':
         specifier: ^3.4.4
         version: 3.4.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -492,7 +495,7 @@ importers:
         version: 7.3.2(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2)
       vitest:
         specifier: ^4.1.5
-        version: 4.1.5(@types/node@25.3.5)(jiti@2.6.1)(jsdom@29.1.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.1.5(@types/node@25.3.5)(jsdom@29.1.1)(vite@7.3.2(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2))
       wouter:
         specifier: ^3.3.5
         version: 3.9.0(react@19.1.0)
@@ -769,6 +772,11 @@ packages:
 
   '@asamuzakjp/nwsapi@2.3.9':
     resolution: {integrity: sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q==}
+
+  '@axe-core/playwright@4.11.3':
+    resolution: {integrity: sha512-h/kfksv4F0cVIDlKpT4700OehdRgpvuVskuQ2nb7/JmtWUXpe9ftHAPtwyXGvVSsa6SJ64A9ER7Zrzc/sIvC4w==}
+    peerDependencies:
+      playwright-core: '>= 1.0.0'
 
   '@babel/code-frame@7.29.0':
     resolution: {integrity: sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw==}
@@ -2119,6 +2127,10 @@ packages:
   atomic-sleep@1.0.0:
     resolution: {integrity: sha512-kNOjDqAh7px0XWNI+4QbzoiR/nTkHAWNud2uvnJquD1/x5a7EQZMJT0AczqK0Qn67oY/TTQ1LbUKajZpp3I9tQ==}
     engines: {node: '>=8.0.0'}
+
+  axe-core@4.11.4:
+    resolution: {integrity: sha512-KunSNx+TVpkAw/6ULfhnx+HWRecjqZGTOyquAoWHYLRSdK1tB5Ihce1ZW+UY3fj33bYAFWPu7W/GRSmmrCGuxA==}
+    engines: {node: '>=4'}
 
   axios@1.15.2:
     resolution: {integrity: sha512-wLrXxPtcrPTsNlJmKjkPnNPK2Ihe0hn0wGSaTEiHRPxwjvJwT3hKmXF4dpqxmPO9SoNb2FsYXj/xEo0gHN+D5A==}
@@ -3828,6 +3840,7 @@ packages:
       '@vitest/ui': 4.1.5
       happy-dom: '*'
       jsdom: '*'
+      vite: ^7.3.2
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
@@ -3957,6 +3970,11 @@ snapshots:
   '@asamuzakjp/generational-cache@1.0.1': {}
 
   '@asamuzakjp/nwsapi@2.3.9': {}
+
+  '@axe-core/playwright@4.11.3(playwright-core@1.59.1)':
+    dependencies:
+      axe-core: 4.11.4
+      playwright-core: 1.59.1
 
   '@babel/code-frame@7.29.0':
     dependencies:
@@ -5467,6 +5485,8 @@ snapshots:
   asynckit@0.4.0: {}
 
   atomic-sleep@1.0.0: {}
+
+  axe-core@4.11.4: {}
 
   axios@1.15.2:
     dependencies:
@@ -7006,7 +7026,7 @@ snapshots:
       tsx: 4.21.0
       yaml: 2.8.2
 
-  vitest@4.1.5(@types/node@25.3.5)(jiti@2.6.1)(jsdom@29.1.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2):
+  vitest@4.1.5(@types/node@25.3.5)(jsdom@29.1.1)(vite@7.3.2(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2)):
     dependencies:
       '@vitest/expect': 4.1.5
       '@vitest/mocker': 4.1.5(vite@7.3.2(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2))
@@ -7032,17 +7052,7 @@ snapshots:
       '@types/node': 25.3.5
       jsdom: 29.1.1
     transitivePeerDependencies:
-      - jiti
-      - less
-      - lightningcss
       - msw
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - terser
-      - tsx
-      - yaml
 
   w3c-xmlserializer@5.0.0:
     dependencies:

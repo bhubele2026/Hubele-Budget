@@ -572,6 +572,7 @@ export default function BillsPage() {
               onClick={() => changeMonth(-1)}
               disabled={atFloor}
               aria-disabled={atFloor}
+              aria-label="Previous month"
               title={atFloor ? "April 2026 is the earliest month" : undefined}
               data-testid="button-prev-month"
             >
@@ -587,6 +588,7 @@ export default function BillsPage() {
               variant="ghost"
               size="icon"
               onClick={() => changeMonth(1)}
+              aria-label="Next month"
               data-testid="button-next-month"
             >
               <ChevronRight className="w-5 h-5" />

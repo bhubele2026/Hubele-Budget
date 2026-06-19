@@ -24,7 +24,6 @@ import {
   type MappingRule,
   type CreateTransactionInput,
 } from "@workspace/api-client-react";
-import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
 import { RowDateControls } from "@/components/row-date-controls";
 import { AccountTransactionRow } from "@/components/account-page/transaction-row";
@@ -40,27 +39,8 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, cn, moneyColorClass } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -74,17 +54,11 @@ import {
   Trash2,
   Send,
   Inbox,
-  Wand2,
   Landmark,
   RefreshCw,
   CalendarDays,
   X,
 } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { isBankTxn } from "@/lib/forecastMatch";
 import { ruleActionMessage } from "@/lib/ruleActionMessage";
 import { useRuleActionUndo } from "@/lib/useRuleActionUndo";
@@ -105,14 +79,6 @@ import {
   computeRunningBalances,
   sortNewestFirst,
 } from "@/lib/runningBalance";
-import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-} from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { ToastAction } from "@/components/ui/toast";
@@ -137,67 +103,15 @@ import {
   type BalanceSeriesPoint,
 } from "@/components/account-page";
 import { ChaseLogo } from "@/components/brand-logos";
-
-const formSchema = z.object({
-  occurredOn: z.string().min(1, "Date is required"),
-  description: z.string().min(1, "Description is required"),
-  amount: z.string().min(1, "Amount is required"),
-  kind: z.enum(["expense", "income"]).default("expense"),
-  categoryId: z.string().nullable().optional(),
-  weeklyAllowance: z.boolean().default(false),
-  monthlyAllowance: z.boolean().default(false),
-  unplannedAllowance: z.boolean().default(false),
-  reimbursable: z.boolean().default(false),
-  reimbursed: z.boolean().default(false),
-  // (#479) Edit-dialog toggle that mirrors the row-level "Transfer" pill.
-  // Sent on PATCH only when the value differs from the row's existing
-  // `isTransfer`, so opening the dialog on a non-transfer row and saving
-  // unrelated fields doesn't silently set `isTransferUserOverridden`.
-  isTransfer: z.boolean().default(false),
-});
-
-/**
- * Mirrors the server-side `matchRule` (autoCategorize.ts) for the
- * Add-Transaction dialog's live "as you type" auto-pick. Walks the user's
- * mapping rules in priority-descending order and returns the rule whose
- * pattern matches the description (only rules with a non-null categoryId
- * count, matching server semantics). Returns null when nothing fires.
- *
- * Kept inline rather than imported from `@workspace/api-server` because
- * the client artifact doesn't depend on the api-server package and the
- * pure matching logic is small enough to duplicate.
- */
-function matchRuleClient(
-  description: string,
-  rules: readonly MappingRule[] | undefined,
-): MappingRule | null {
-  if (!description || !rules?.length) return null;
-  const hay = description.toLowerCase();
-  const sorted = [...rules].sort((a, b) => b.priority - a.priority);
-  for (const r of sorted) {
-    if (!r.categoryId) continue;
-    const needle = r.pattern.toLowerCase();
-    if (!needle) continue;
-    let hit = false;
-    if (r.matchType === "exact") hit = hay === needle;
-    else if (r.matchType === "starts_with") hit = hay.startsWith(needle);
-    else hit = hay.includes(needle);
-    if (hit) return r;
-  }
-  return null;
-}
-
-type FormValues = z.infer<typeof formSchema>;
-
-function normalizeAmount(raw: string, kind: "expense" | "income"): string {
-  const num = Math.abs(parseFloat(raw));
-  if (Number.isNaN(num)) return raw;
-  return (kind === "income" ? num : -num).toFixed(2);
-}
-
-function parseSigned(amount: string | number): number {
-  return Number(amount) || 0;
-}
+import {
+  formSchema,
+  matchRuleClient,
+  normalizeAmount,
+  parseSigned,
+  type FormValues,
+} from "./transactions/transactionsShared";
+import { InlineAmountEditor } from "./transactions/InlineAmountEditor";
+import { TransactionEditDialog } from "./transactions/TransactionEditDialog";
 
 // Task #451 — Render a transaction's `source` (e.g. `plaid:chase`,
 // `amex`, `manual`) as a calm, human-readable label for the
@@ -2111,7 +2025,7 @@ export default function TransactionsPage() {
             value={effectiveAccountKey}
             onValueChange={(v) => setSelectedAccountKey(v)}
           >
-            <SelectTrigger className="h-7 text-xs w-64" data-testid="select-chase-account">
+            <SelectTrigger aria-label="View account" className="h-7 text-xs w-64" data-testid="select-chase-account">
               <SelectValue />
             </SelectTrigger>
             <SelectContent data-testid="chase-account-options">
@@ -2151,159 +2065,22 @@ export default function TransactionsPage() {
         />
       )}
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>{editingTx ? "Edit Transaction" : "New Transaction"}</DialogTitle>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField control={form.control} name="occurredOn" render={({ field }) => (
-                <FormItem><FormLabel>Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={form.control} name="description" render={({ field }) => (
-                <FormItem><FormLabel>Description</FormLabel><FormControl><Input placeholder="Trader Joe's" {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField
-                control={form.control}
-                name="categoryId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <FormControl>
-                      <NewTransactionCategoryPicker
-                        value={field.value ?? null}
-                        onChange={(next) => {
-                          categoryManuallyPickedRef.current = true;
-                          field.onChange(next);
-                        }}
-                        categories={categories ?? []}
-                        autoMatchedRule={
-                          editingTx ? editingMatchedRule : dialogAutoMatchedRule
-                        }
-                        mappingRules={mappingRules}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid grid-cols-3 gap-3">
-                <FormField control={form.control} name="kind" render={({ field }) => (
-                  <FormItem className="col-span-1"><FormLabel>Kind</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        <SelectItem value="expense">Expense</SelectItem>
-                        <SelectItem value="income">Income</SelectItem>
-                      </SelectContent>
-                    </Select><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="amount" render={({ field }) => (
-                  <FormItem className="col-span-2"><FormLabel>Amount</FormLabel><FormControl><Input type="number" step="0.01" min="0" placeholder="42.50" {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-              </div>
-              {(() => {
-                // (#607) When the picked category is the system-managed
-                // Transfer row, hide Weekly/Monthly/Unplanned/Transfer
-                // toggles — the server flips isTransfer=true and clears
-                // all three allowance flags on save, so showing them
-                // would be misleading. The Transfer toggle is also
-                // implied true in that case and would just be a no-op.
-                const watchedCategoryId = form.watch("categoryId");
-                const transferCat = (categories ?? []).find(
-                  (c) => c.name === "Transfer",
-                );
-                const isPickedTransfer =
-                  !!transferCat && watchedCategoryId === transferCat.id;
-                return (
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField control={form.control} name="reimbursable" render={({ field }) => (
-                      <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Reimbursable</FormLabel></FormItem>
-                    )} />
-                    <FormField control={form.control} name="reimbursed" render={({ field }) => (
-                      <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Reimbursed</FormLabel></FormItem>
-                    )} />
-                    {!isPickedTransfer && (
-                      <>
-                        <FormField control={form.control} name="weeklyAllowance" render={({ field }) => (
-                          <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Weekly Allow</FormLabel></FormItem>
-                        )} />
-                        <FormField control={form.control} name="monthlyAllowance" render={({ field }) => (
-                          <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Monthly Allow</FormLabel></FormItem>
-                        )} />
-                        <FormField control={form.control} name="unplannedAllowance" render={({ field }) => (
-                          <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Unplanned Allow</FormLabel></FormItem>
-                        )} />
-                        <FormField control={form.control} name="isTransfer" render={({ field }) => (
-                          <FormItem className="flex items-center gap-2 space-y-0">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                                data-testid="checkbox-is-transfer"
-                              />
-                            </FormControl>
-                            <FormLabel>Transfer</FormLabel>
-                          </FormItem>
-                        )} />
-                      </>
-                    )}
-                  </div>
-                );
-              })()}
-              {editingTx?.isTransferUserOverridden && (
-                <div
-                  className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"
-                  data-testid="transfer-override-hint"
-                >
-                  <div>
-                    <div className="font-medium text-slate-700">
-                      Transfer status manually set
-                    </div>
-                    <div className="mt-0.5 text-slate-500">
-                      Future bank syncs won't re-flag this row from the description
-                      heuristic. Reset to let auto-detection take over again.
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    data-testid="button-reset-transfer-override"
-                    disabled={clearTransferOverride.isPending}
-                    onClick={() => {
-                      const id = editingTx.id;
-                      clearTransferOverride.mutate(
-                        { id },
-                        {
-                          onSuccess: () => {
-                            queryClient.invalidateQueries({
-                              queryKey: getListTransactionsQueryKey(),
-                            });
-                            setEditingTx((prev) =>
-                              prev && prev.id === id
-                                ? { ...prev, isTransferUserOverridden: false }
-                                : prev,
-                            );
-                            toast({ title: "Reset to auto" });
-                          },
-                        },
-                      );
-                    }}
-                  >
-                    Reset to auto
-                  </Button>
-                </div>
-              )}
-              <div className="flex justify-end pt-4">
-                <Button type="submit" disabled={createTx.isPending || updateTx.isPending}>Save</Button>
-              </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <TransactionEditDialog
+        isDialogOpen={isDialogOpen}
+        setIsDialogOpen={setIsDialogOpen}
+        editingTx={editingTx}
+        setEditingTx={setEditingTx}
+        form={form}
+        onSubmit={onSubmit}
+        categories={categories}
+        categoryManuallyPickedRef={categoryManuallyPickedRef}
+        editingMatchedRule={editingMatchedRule}
+        dialogAutoMatchedRule={dialogAutoMatchedRule}
+        mappingRules={mappingRules}
+        clearTransferOverride={clearTransferOverride}
+        createTx={createTx}
+        updateTx={updateTx}
+      />
 
       {previewDialog}
 
@@ -2667,242 +2444,6 @@ export default function TransactionsPage() {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-/**
- * Task #454 — Inline amount editor surfaced as the row's amount label.
- * Clicking the amount opens a small popover with a numeric input that
- * routes through `handleQuickAmount` (same `updateTx` PATCH path as
- * the Edit dialog). Sign / currency formatting is preserved by
- * `normalizeAmount` so an expense stays an expense and an income
- * stays an income — only the magnitude changes. Submitting an
- * unchanged value is a no-op (no toast, no PATCH).
- */
-function InlineAmountEditor({
-  tx,
-  onSave,
-  onFlipKind,
-  disabled,
-}: {
-  tx: Transaction;
-  onSave: (raw: string) => Promise<boolean>;
-  onFlipKind?: () => Promise<boolean>;
-  disabled?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const initial = Math.abs(parseSigned(tx.amount)).toFixed(2);
-  const [draft, setDraft] = useState(initial);
-  useEffect(() => {
-    if (open) setDraft(Math.abs(parseSigned(tx.amount)).toFixed(2));
-  }, [open, tx.amount]);
-  const submit = async () => {
-    const ok = await onSave(draft);
-    if (ok) setOpen(false);
-  };
-  const isCurrentlyIncome = parseSigned(tx.amount) >= 0;
-  const flip = async () => {
-    if (!onFlipKind) return;
-    const ok = await onFlipKind();
-    if (ok) setOpen(false);
-  };
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          disabled={disabled}
-          className={cn(
-            "font-medium tabular-nums whitespace-nowrap cursor-pointer rounded px-1 -mx-1 hover:bg-muted/40 transition-colors",
-            parseSigned(tx.amount) > 0
-              ? "text-[hsl(var(--positive))]"
-              : "text-foreground",
-          )}
-          title="Edit amount"
-          data-testid={`amount-${tx.id}`}
-        >
-          {formatCurrency(tx.amount)}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-56 p-3" align="end">
-        <div className="space-y-2">
-          <label
-            htmlFor={`inline-amount-input-${tx.id}`}
-            className="text-xs text-muted-foreground"
-          >
-            New amount
-          </label>
-          <Input
-            id={`inline-amount-input-${tx.id}`}
-            data-testid={`input-inline-amount-${tx.id}`}
-            type="number"
-            step="0.01"
-            min="0"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void submit();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                setOpen(false);
-              }
-            }}
-            autoFocus
-          />
-          <div className="flex justify-end gap-2 pt-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setOpen(false)}
-              data-testid={`button-cancel-inline-amount-${tx.id}`}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => void submit()}
-              disabled={disabled}
-              data-testid={`button-save-inline-amount-${tx.id}`}
-            >
-              Save
-            </Button>
-          </div>
-          <div className="text-[11px] text-muted-foreground">
-            {isCurrentlyIncome
-              ? "Positive (income) — sign preserved."
-              : "Negative (expense) — sign preserved."}
-          </div>
-          {onFlipKind && (
-            <div className="border-t pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => void flip()}
-                disabled={disabled}
-                data-testid={`button-flip-kind-${tx.id}`}
-                title={
-                  isCurrentlyIncome
-                    ? "Flip to expense"
-                    : "Flip to income"
-                }
-              >
-                {isCurrentlyIncome ? "Mark as expense" : "Mark as income"}
-              </Button>
-            </div>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/**
- * Category combobox surfaced inside the Add-Transaction dialog (Task #230).
- * Shows the live auto-pick under the trigger as a `MatchedRuleChip` so the
- * user can see *why* a category was suggested (and click straight to the
- * Mapping Rules page to inspect the rule). Picking from the list flips the
- * parent's "manually picked" flag so subsequent description edits stop
- * overwriting the explicit choice. A "Clear" affordance lets the user
- * deliberately submit the row uncategorized — POST /transactions treats an
- * explicit `categoryId: null` as authoritative and skips the auto-pick.
- */
-function NewTransactionCategoryPicker({
-  value,
-  onChange,
-  categories,
-  autoMatchedRule,
-  mappingRules,
-}: {
-  value: string | null;
-  onChange: (next: string | null) => void;
-  categories: { id: string; name: string }[];
-  autoMatchedRule: MappingRule | null;
-  mappingRules: readonly MappingRule[] | undefined;
-}) {
-  const [open, setOpen] = useState(false);
-  const selected = useMemo(
-    () => categories.find((c) => c.id === value) ?? null,
-    [categories, value],
-  );
-  // Surface the chip whenever the live auto-pick attributes the current
-  // value to a rule — same semantics as the Transactions / Amex row chip.
-  const matchedRuleId =
-    autoMatchedRule && autoMatchedRule.categoryId === value
-      ? autoMatchedRule.id
-      : null;
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-2">
-        <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              role="combobox"
-              aria-expanded={open}
-              className="flex-1 justify-between font-normal"
-              data-testid="combobox-new-tx-category"
-            >
-              {selected ? (
-                <span className="truncate">{selected.name}</span>
-              ) : (
-                <span className="text-muted-foreground">Uncategorized</span>
-              )}
-              <Wand2 className="w-3.5 h-3.5 ml-2 shrink-0 text-muted-foreground" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Search category…" />
-              <CommandList>
-                <CommandEmpty>No category</CommandEmpty>
-                <CommandGroup>
-                  {categories.map((c) => (
-                    <CommandItem
-                      key={c.id}
-                      value={c.name}
-                      onSelect={() => {
-                        onChange(c.id);
-                        setOpen(false);
-                      }}
-                      data-testid={`option-new-tx-category-${c.id}`}
-                    >
-                      {c.name}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-        {value && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-9 px-2 text-xs text-muted-foreground"
-            onClick={() => onChange(null)}
-            data-testid="button-new-tx-category-clear"
-            title="Leave uncategorized"
-          >
-            Clear
-          </Button>
-        )}
-      </div>
-      <div className="min-h-[18px]">
-        <MatchedRuleChip
-          categoryId={value}
-          matchedRuleId={matchedRuleId}
-          rules={mappingRules}
-          testIdSuffix="new-tx-dialog"
-          variant="compact"
-        />
-      </div>
     </div>
   );
 }
