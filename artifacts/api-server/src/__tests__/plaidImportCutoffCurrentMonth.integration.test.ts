@@ -5,6 +5,7 @@ import {
   beforeAll,
   afterAll,
   beforeEach,
+  afterEach,
   vi,
 } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -109,9 +110,22 @@ beforeAll(async () => {
 afterAll(async () => {
   await cleanup();
 });
+// Pin "now" to mid-May 2026 so the current-month clamp is deterministic.
+// `autoDetectCutoffsForItem` / `computeImportCutoffForAccount` read the
+// real `new Date()` internally (no injectable clock on that path), so
+// without this the May-2026 fixtures only pass when the suite happens to
+// run during May 2026 — every other month the "prior month" rolls and the
+// clamp ceiling moves, breaking the hardcoded 2026-04-30 expectations.
+const PINNED_NOW = new Date("2026-05-07T12:00:00Z");
+
 beforeEach(async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(PINNED_NOW);
   await cleanup();
   nextSyncResponse = { added: [], modified: [], removed: [] };
+});
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 async function seedChaseChecking(opts: {

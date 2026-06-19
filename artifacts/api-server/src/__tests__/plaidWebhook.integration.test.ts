@@ -87,10 +87,12 @@ process.env.PLAID_WEBHOOK_VERIFICATION_DISABLED = "true";
 // fired mid-burst, started one sync, and the late webhooks queued a
 // trailing rerun — yielding two syncPlaidItem calls instead of one.
 process.env.PLAID_SYNC_DEBOUNCE_MS = "60000";
-// Webhook-triggered syncing is gated behind PLAID_AUTO_SYNC_ENABLED (default
-// OFF) so a Plaid webhook can't drive billable auto-pulls. This suite asserts
-// the scheduling mechanism, so it opts in. The OFF behavior (ACK without
-// scheduling) is covered by its own case that flips this flag per-request.
+// (#plaid-bill) Webhook-triggered syncing is now HARD-DISABLED in the route
+// to match the cost kill-switch in index.ts: a webhook-driven pull is still
+// a billable automatic pull, so SYNC_UPDATES_AVAILABLE is ACKed without ever
+// scheduling a sync, and PLAID_AUTO_SYNC_ENABLED is intentionally ignored on
+// that path. We still set it "true" here to prove the kill-switch wins even
+// when the env var is on. (User-reauth heals like LOGIN_REPAIRED still sync.)
 process.env.PLAID_AUTO_SYNC_ENABLED = "true";
 
 const app = express();
@@ -181,8 +183,13 @@ beforeEach(async () => {
 });
 
 describe("POST /plaid/webhook — TRANSACTIONS events", () => {
-  it("triggers syncPlaidItem on SYNC_UPDATES_AVAILABLE for the matching item", async () => {
-    const { externalItemId, accessToken } = await seedItem();
+  it("ACKs SYNC_UPDATES_AVAILABLE without pulling — webhook-driven sync is hard-disabled (cost kill-switch)", async () => {
+    // (#plaid-bill) A webhook-driven pull is still a billable automatic
+    // pull, so the SYNC_UPDATES_AVAILABLE handler is HARD-DISABLED to match
+    // the kill-switch in index.ts: it 200s the webhook but schedules no
+    // sync, regardless of PLAID_AUTO_SYNC_ENABLED. The user's next manual
+    // Sync click picks up whatever Plaid has waiting.
+    const { externalItemId } = await seedItem();
 
     const res = await fetch(`${baseUrl}/plaid/webhook`, {
       method: "POST",
@@ -195,7 +202,7 @@ describe("POST /plaid/webhook — TRANSACTIONS events", () => {
     });
     expect(res.status).toBe(200);
     await _flushPlaidSyncSchedulerForTests();
-    expect(transactionsSyncCalls).toEqual([{ access_token: accessToken }]);
+    expect(transactionsSyncCalls).toEqual([]);
   });
 
   it("ACKs without scheduling a sync when PLAID_AUTO_SYNC_ENABLED is off", async () => {
@@ -222,11 +229,12 @@ describe("POST /plaid/webhook — TRANSACTIONS events", () => {
     }
   });
 
-  it("coalesces a burst of SYNC_UPDATES_AVAILABLE webhooks into a single syncPlaidItem call", async () => {
+  it("ACKs a burst of SYNC_UPDATES_AVAILABLE webhooks (200 each) without pulling — kill-switch", async () => {
     // Plaid commonly fires SYNC_UPDATES_AVAILABLE several times in quick
-    // succession (one per transaction batch). The webhook handler debounces
-    // these per-item so we only advance the cursor once.
-    const { externalItemId, accessToken } = await seedItem();
+    // succession (one per transaction batch). With webhook-driven sync
+    // hard-disabled (#plaid-bill), every one of them is ACKed 200 and NO
+    // billable /transactions/sync pull is scheduled.
+    const { externalItemId } = await seedItem();
 
     const burst = await Promise.all(
       Array.from({ length: 5 }).map(() =>
@@ -244,14 +252,14 @@ describe("POST /plaid/webhook — TRANSACTIONS events", () => {
     for (const r of burst) expect(r.status).toBe(200);
 
     await _flushPlaidSyncSchedulerForTests();
-    expect(transactionsSyncCalls).toEqual([{ access_token: accessToken }]);
+    expect(transactionsSyncCalls).toEqual([]);
   });
 
-  it("dedupes per item — concurrent webhooks for two items each yield exactly one sync", async () => {
+  it("ACKs concurrent webhooks for two items without pulling either — kill-switch", async () => {
     const a = await seedItem();
     const b = await seedItem();
 
-    await Promise.all(
+    const responses = await Promise.all(
       [a, a, a, b, b].map((seed) =>
         fetch(`${baseUrl}/plaid/webhook`, {
           method: "POST",
@@ -264,10 +272,11 @@ describe("POST /plaid/webhook — TRANSACTIONS events", () => {
         }),
       ),
     );
+    for (const r of responses) expect(r.status).toBe(200);
 
     await _flushPlaidSyncSchedulerForTests();
-    const tokens = transactionsSyncCalls.map((c) => c.access_token).sort();
-    expect(tokens).toEqual([a.accessToken, b.accessToken].sort());
+    // Webhook-driven sync is hard-disabled — no pull for either item.
+    expect(transactionsSyncCalls).toEqual([]);
   });
 
   it("ignores TRANSACTIONS webhook codes we do not handle (e.g. RECURRING_*)", async () => {

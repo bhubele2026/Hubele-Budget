@@ -556,12 +556,15 @@ describe("computeCashSignal — snapshot anchoring", () => {
     expect(eventDates).not.toContain("2026-06-01");
   });
 
-  it("(#681) production May-15/May-16 scenario: two past-due pendings drag to today+1", async () => {
-    // User's production screenshot: today=2026-05-16, bank=$4,871.20
-    // (snapshot taken 2026-05-14, before the planned dates), Verizon
-    // -$400 and PlayStation -$18.98 both planned 2026-05-15 with no
-    // resolution. Day-0 must equal the bank balance, day-1 must drop
-    // by $418.98. Plans are POST-snapshot, so the (#681) drag fires.
+  it("(#681/#751) production May-15/May-16 scenario: two past-due pendings drag to next business day", async () => {
+    // User's production screenshot: today=2026-05-16 (a Saturday),
+    // bank=$4,871.20 (snapshot taken 2026-05-14, before the planned
+    // dates), Verizon -$400 and PlayStation -$18.98 both planned
+    // 2026-05-15 with no resolution. Day-0 must equal the bank
+    // balance. Plans are POST-snapshot, so the (#681) drag fires —
+    // but (#751) snaps the drag target to the next BUSINESS day, so
+    // it lands on Mon 2026-05-18 (skipping the Sun 05-17 weekend),
+    // dropping by $418.98 there.
     vi.setSystemTime(new Date("2026-05-16T12:00:00Z"));
     await setSettings({
       balance: "4871.20",
@@ -593,18 +596,24 @@ describe("computeCashSignal — snapshot anchoring", () => {
       date: "2026-05-16",
       balance: "4871.20",
     });
+    // Day 1 (Sun 05-17) stays flat — the drag target skips the weekend.
     expect(sig.daily?.[1]).toEqual({
       date: "2026-05-17",
+      balance: "4871.20",
+    });
+    // Day 2 (Mon 05-18) absorbs the full $418.98 drag.
+    expect(sig.daily?.[2]).toEqual({
+      date: "2026-05-18",
       balance: "4452.22",
     });
-    expect(sig.lowestDate).toBe("2026-05-17");
+    expect(sig.lowestDate).toBe("2026-05-18");
     expect(sig.lowestProjected).toBe("4452.22");
-    // Both dragged events surface on 05-17 with their original 05-15
+    // Both dragged events surface on 05-18 with their original 05-15
     // date preserved for the "Pending plans dragging this day" UI.
-    const draggedOn17 = (sig.events ?? []).filter(
-      (e) => e.date === "2026-05-17" && e.originalDate === "2026-05-15",
+    const draggedOn18 = (sig.events ?? []).filter(
+      (e) => e.date === "2026-05-18" && e.originalDate === "2026-05-15",
     );
-    expect(draggedOn17.length).toBe(2);
+    expect(draggedOn18.length).toBe(2);
   });
 
   it("(#681) the hop target follows real time — same plans land on day after today", async () => {
@@ -651,10 +660,11 @@ describe("computeCashSignal — snapshot anchoring", () => {
     expect(eventDates.filter((d) => d === "2026-05-18").length).toBe(2);
   });
 
-  it("(#681) marking a past-due pending 'missed' clears its drag", async () => {
-    // Same May-15/16 scenario, but the Verizon plan now has a
-    // 'missed' resolution. Only PlayStation continues to drag onto
-    // today+1; the day-1 dip is $18.98, not $418.98.
+  it("(#681/#751) marking a past-due pending 'missed' clears its drag", async () => {
+    // Same May-15/16 scenario (today=Sat 05-16), but the Verizon plan
+    // now has a 'missed' resolution. Only PlayStation continues to
+    // drag onto the next business day (Mon 05-18); that dip is $18.98,
+    // not $418.98.
     vi.setSystemTime(new Date("2026-05-16T12:00:00Z"));
     await setSettings({
       balance: "4871.20",
@@ -692,15 +702,20 @@ describe("computeCashSignal — snapshot anchoring", () => {
       date: "2026-05-16",
       balance: "4871.20",
     });
+    // Day 1 (Sun 05-17) flat; day 2 (Mon 05-18) takes the $18.98 drag.
     expect(sig.daily?.[1]).toEqual({
       date: "2026-05-17",
+      balance: "4871.20",
+    });
+    expect(sig.daily?.[2]).toEqual({
+      date: "2026-05-18",
       balance: "4852.22",
     });
-    const draggedOn17 = (sig.events ?? []).filter(
-      (e) => e.date === "2026-05-17",
+    const draggedOn18 = (sig.events ?? []).filter(
+      (e) => e.date === "2026-05-18",
     );
-    expect(draggedOn17.length).toBe(1);
-    expect(draggedOn17[0].amount).toBe("-18.98");
+    expect(draggedOn18.length).toBe(1);
+    expect(draggedOn18[0].amount).toBe("-18.98");
   });
 
   it("(#681) future window with snapshot: drag-target before fromDate flows into startingBalance", async () => {
@@ -737,11 +752,12 @@ describe("computeCashSignal — snapshot anchoring", () => {
     expect(sig.projectedExpenses).toBe("0.00");
   });
 
-  it("(#681) no-snapshot variant: past-due expense still drags by today+1", async () => {
+  it("(#681/#751) no-snapshot variant: past-due expense still drags by next business day", async () => {
     // Code-review regression: the (#681) drag must work even when
     // there is no bank snapshot. With no snapshot, the anchor falls
-    // back to today, dragCutoff = today, and a plan dated yesterday
-    // must still hop onto today+1.
+    // back to today (Sat 05-16), dragCutoff = today, and a plan dated
+    // yesterday must still hop forward — to the next BUSINESS day
+    // (Mon 05-18, skipping the weekend) per (#751).
     vi.setSystemTime(new Date("2026-05-16T12:00:00Z"));
     // No bankSnapshot → fall back to legacy startingBalance. The
     // (#681) drag must still apply, anchored on today.
@@ -759,17 +775,22 @@ describe("computeCashSignal — snapshot anchoring", () => {
       horizonDays: 30,
     });
 
-    // Day 0 = startingBalance; day 1 absorbs the dragged expense.
+    // Day 0 = startingBalance; the dragged expense lands on the next
+    // business day (Mon 05-18), so day 1 (Sun 05-17) stays flat.
     expect(sig.daily?.[0]).toEqual({
       date: "2026-05-16",
       balance: "1000.00",
     });
     expect(sig.daily?.[1]).toEqual({
       date: "2026-05-17",
+      balance: "1000.00",
+    });
+    expect(sig.daily?.[2]).toEqual({
+      date: "2026-05-18",
       balance: "800.00",
     });
     const dragged = (sig.events ?? []).find(
-      (e) => e.date === "2026-05-17" && e.originalDate === "2026-05-15",
+      (e) => e.date === "2026-05-18" && e.originalDate === "2026-05-15",
     );
     expect(dragged?.amount).toBe("-200.00");
   });
@@ -1428,19 +1449,25 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
       date: "2026-05-16",
       balance: "4871.20",
     });
-    // Day 1 drops by ONLY Verizon ($400), NOT by Mortgage ($2,085.79).
+    // Day 1 (Sun 05-17) flat — the drag target skips the weekend.
     expect(sig.daily?.[1]).toEqual({
       date: "2026-05-17",
+      balance: "4871.20",
+    });
+    // Day 2 (Mon 05-18) drops by ONLY Verizon ($400), NOT by
+    // Mortgage ($2,085.79).
+    expect(sig.daily?.[2]).toEqual({
+      date: "2026-05-18",
       balance: "4471.20",
     });
     // The Mortgage Amex-matched plan does NOT appear in the
     // "Pending plans dragging this day" tooltip.
-    const draggedOn17 = (sig.events ?? []).filter(
-      (e) => e.date === "2026-05-17",
+    const draggedOn18 = (sig.events ?? []).filter(
+      (e) => e.date === "2026-05-18",
     );
-    expect(draggedOn17.length).toBe(1);
-    expect(draggedOn17[0].label).toBe("Verizon Wireless");
-    expect(draggedOn17[0].amount).toBe("-400.00");
+    expect(draggedOn18.length).toBe(1);
+    expect(draggedOn18[0].label).toBe("Verizon Wireless");
+    expect(draggedOn18[0].amount).toBe("-400.00");
   });
 
   it("(#687) synthetic debt-min on the snapshot date IS surfaced as a dragging pending plan (matches the register)", async () => {
@@ -1507,14 +1534,19 @@ describe("computeCashSignal — matched-txn bank filtering", () => {
       date: "2026-05-16",
       balance: "4871.20",
     });
-    // Day 1 drops by ALL THREE: 400 + 18.98 + 33 = 451.98.
+    // Day 1 (Sun 05-17) flat — the drag target skips the weekend.
     expect(sig.daily?.[1]).toEqual({
       date: "2026-05-17",
+      balance: "4871.20",
+    });
+    // Day 2 (Mon 05-18) drops by ALL THREE: 400 + 18.98 + 33 = 451.98.
+    expect(sig.daily?.[2]).toEqual({
+      date: "2026-05-18",
       balance: "4419.22",
     });
-    // All three plans appear in the drag tooltip on 05-17.
+    // All three plans appear in the drag tooltip on 05-18.
     const draggedLabels = (sig.events ?? [])
-      .filter((e) => e.date === "2026-05-17" && e.originalDate === "2026-05-15")
+      .filter((e) => e.date === "2026-05-18" && e.originalDate === "2026-05-15")
       .map((e) => e.label)
       .sort();
     expect(draggedLabels).toEqual([

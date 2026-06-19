@@ -160,19 +160,25 @@ describe("May 2026 budget amounts reconciliation (task #106)", () => {
     expect(groupTotal("Insurance & Health")).toBeCloseTo(345.13, 2);
     expect(groupTotal("Food")).toBeCloseTo(920.0, 2);
     expect(groupTotal("Transportation")).toBeCloseTo(1574.35, 2);
-    // Avalanche group's "Avalanche payment" line should reflect manualExtra.
+    // Avalanche group's "Avalanche payment" line mirrors manualExtra. The
+    // May-2026 reconcile intentionally NO LONGER force-sets manualExtra (it
+    // used to clobber the user's own avalanche slider with a hardcoded
+    // $6,225 and surface a giant Forecast row), so the managed line — and
+    // therefore the group total — defaults to $0.00.
     expect(groupTotal("Avalanche — Extra to Highest APR")).toBeCloseTo(
-      6225.0,
+      0.0,
       2,
     );
 
-    // 5. Avalanche manualExtra setting should be set to 6225.00.
+    // 5. Avalanche manualExtra is NOT touched by the May-2026 reconcile.
+    // The managed-line sync (ensureSettings) creates the row at the $0
+    // default; the user controls the real value via the Avalanche slider.
     const [av] = await db
       .select()
       .from(avalancheSettingsTable)
       .where(eq(avalancheSettingsTable.userId, TEST_USER));
     expect(av).toBeTruthy();
-    expect(parseFloat(av!.manualExtra)).toBeCloseTo(6225.0, 2);
+    expect(parseFloat(av!.manualExtra)).toBeCloseTo(0.0, 2);
 
     // 6. The per-user flag should be set so reconciliation is a no-op next time.
     const [s] = await db

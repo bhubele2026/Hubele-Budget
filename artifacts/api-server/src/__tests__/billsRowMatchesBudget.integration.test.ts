@@ -131,8 +131,13 @@ describe("Bills row hint matches Budget budgeted column (#492)", () => {
         set: { preferences: { budgetMay2026AmountsV1: true } },
       });
 
-    // Bills page: per-row monthlyAmount used for the "/mo" hint.
-    const billsRes = await fetch(`${baseUrl}/bills/summary`);
+    // Bills page: per-row monthlyAmount used for the "/mo" hint. Pin the
+    // viewed month to May 2026 via ?month= so the calendar expansion uses
+    // the SAME window as the Budget page below — otherwise bills/summary
+    // defaults to the real current month and the biweekly Brad line
+    // expands to a different number of paydays, making this a
+    // wall-clock-dependent (flaky) comparison. (#500)
+    const billsRes = await fetch(`${baseUrl}/bills/summary?month=${MONTH}`);
     expect(billsRes.status).toBe(200);
     const billsBody = (await billsRes.json()) as {
       income: Array<{
