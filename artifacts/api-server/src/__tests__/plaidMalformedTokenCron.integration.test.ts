@@ -118,7 +118,15 @@ describe("(#372) daily bank-login health check cron registration", () => {
     expect(malformed!.options?.timezone).toBe("UTC");
   });
 
-  it("fires before the 03:17 consent refresh in registration order", () => {
+  it("is registered as a top-level daily cron, independent of the auto-sync kill-switch", () => {
+    // The daily malformed-token sweep is a pure read/flag pass that makes
+    // NO billable Plaid pull, so it lives OUTSIDE the `if (autoSyncEnabled)`
+    // block — it must keep running even though the hard cost kill-switch
+    // (AUTO_SYNC_HARD_DISABLED) gates off the hourly sync, the forced-
+    // refresh loop, AND the daily consent refresh. The consent refresh
+    // ("17 3 * * *") makes billable /item/get calls, so it now sits inside
+    // the kill-switched block and is NOT registered in the default
+    // configuration this suite boots under.
     const malformedIdx = scheduleCalls.findIndex(
       (c) => c.expression === "2 3 * * *",
     );
@@ -126,18 +134,14 @@ describe("(#372) daily bank-login health check cron registration", () => {
       (c) => c.expression === "17 3 * * *",
     );
     expect(malformedIdx).toBeGreaterThanOrEqual(0);
-    expect(consentIdx).toBeGreaterThanOrEqual(0);
-    // 03:02 < 03:17 by clock (and the daily sweep should be registered to
-    // run ahead of the consent refresh so a freshly flagged item is
-    // already in needs-reconnect when consent refresh walks it).
+    // Consent refresh is gated off by the billing kill-switch.
+    expect(consentIdx).toBe(-1);
+    // The sweep keeps its documented 03:02 UTC slot.
     const [malformedMin, malformedHour] = malformed_parts(
       scheduleCalls[malformedIdx]!.expression,
     );
-    const [consentMin, consentHour] = malformed_parts(
-      scheduleCalls[consentIdx]!.expression,
-    );
-    expect(malformedHour).toBe(consentHour);
-    expect(malformedMin).toBeLessThan(consentMin);
+    expect(malformedHour).toBe(3);
+    expect(malformedMin).toBe(2);
   });
 
   it("invoking the handler calls flagMalformedAccessTokens exactly once", async () => {
