@@ -176,7 +176,15 @@ describe("(#410) /plaid/exchange cross-item dedupe", () => {
         householdId: TEST_HOUSEHOLD_ID,
         itemId: oldItem.id,
         accountId: oldAccountIdText,
-        name: "Total Checking",
+        // (#754) Same display name Plaid returns for this physical
+        // account on the re-link below. The cross-item dedupe now
+        // requires a name match before collapsing onto a prior row —
+        // two distinct cards can legitimately share a mask, so a
+        // differently-named incoming account is intentionally NOT
+        // merged. A real re-link of the same account always surfaces
+        // the same Plaid display name, which is what this fixture
+        // models.
+        name: "Chase Total Checking",
         mask: "5526",
         type: "depository",
         subtype: "checking",
@@ -184,10 +192,10 @@ describe("(#410) /plaid/exchange cross-item dedupe", () => {
       .returning();
 
     // Now simulate a re-link: the new exchange returns a *brand-new*
-    // item_id and accountsGet returns the same physical account but
-    // with a *brand-new* account_id text. Without the cross-item
-    // guard, this would create a sibling plaid_accounts row and the
-    // user would see Chase ··5526 twice in the picker.
+    // item_id and accountsGet returns the same physical account (same
+    // name + mask) but with a *brand-new* account_id text. Without the
+    // cross-item guard, this would create a sibling plaid_accounts row
+    // and the user would see Chase ··5526 twice in the picker.
     nextExchangeItemId = `new-item-${randomUUID().slice(0, 8)}`;
     nextExchangeAccessToken = `access-sandbox-${randomUUID()}`;
     const newAccountIdText = `new-acct-${randomUUID().slice(0, 8)}`;

@@ -35,7 +35,55 @@ vi.mock("react-plaid-link", () => ({
 }));
 vi.mock("@/components/plaid-link-button", () => ({
   PlaidLinkButton: () => null,
+  // (#863) DebtPlaidActions imports these storage-key constants for its
+  // stale-token cleanup handler. They aren't load-bearing for these
+  // render-time assertions, but the mock must expose them or the named
+  // imports resolve to `undefined`.
+  PLAID_LINK_TOKEN_STORAGE_KEY: "h2budget:plaidLinkToken",
+  PLAID_RETURN_TO_STORAGE_KEY: "h2budget:plaidReturnTo",
 }));
+
+// (#863) The refresh + unlink controls now live inside a Radix
+// DropdownMenu ("⋯" overflow). Radix only mounts DropdownMenuContent
+// once the trigger is opened, which jsdom's pointer-capture model
+// makes awkward to drive. Swap in a render-everything shim so the
+// in-menu items (button-debt-refresh / button-debt-unlink) are always
+// in the DOM, exactly as before the overflow-menu refactor — without
+// weakening what the tests assert.
+vi.mock("@/components/ui/dropdown-menu", () => {
+  type Kids = { children?: React.ReactNode };
+  const Passthrough = ({ children }: Kids) => <>{children}</>;
+  return {
+    DropdownMenu: Passthrough,
+    DropdownMenuTrigger: Passthrough,
+    DropdownMenuContent: Passthrough,
+    DropdownMenuGroup: Passthrough,
+    DropdownMenuPortal: Passthrough,
+    DropdownMenuSub: Passthrough,
+    DropdownMenuSubContent: Passthrough,
+    DropdownMenuRadioGroup: Passthrough,
+    DropdownMenuLabel: Passthrough,
+    DropdownMenuShortcut: Passthrough,
+    DropdownMenuSeparator: () => null,
+    DropdownMenuItem: ({
+      children,
+      onClick,
+      disabled,
+      ...rest
+    }: {
+      children?: React.ReactNode;
+      onClick?: (e: React.MouseEvent) => void;
+      disabled?: boolean;
+    } & Record<string, unknown>) => (
+      <button type="button" onClick={onClick} disabled={disabled} {...rest}>
+        {children}
+      </button>
+    ),
+    DropdownMenuCheckboxItem: Passthrough,
+    DropdownMenuRadioItem: Passthrough,
+    DropdownMenuSubTrigger: Passthrough,
+  };
+});
 
 import { DebtPlaidActions } from "./debt-plaid-link";
 import type { Debt } from "@workspace/api-client-react";

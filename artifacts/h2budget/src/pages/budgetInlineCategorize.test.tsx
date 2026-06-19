@@ -100,7 +100,13 @@ vi.mock("@workspace/api-client-react", () => ({
     isPending: false,
   }),
   getBudgetMonth: vi.fn(async () => budgetMonth),
-  getGetBudgetMonthQueryKey: (m: string) => ["/api/budget/months", m],
+  // Mirror the real codegen shape: a single-element key with the month
+  // embedded after a slash (`/api/budget/months/<month>`). The page's
+  // `invalidate()` matches budget-month queries via a predicate that
+  // checks `queryKey[0].startsWith("/api/budget/months/")`, so the key
+  // shape has to be faithful for the predicate assertion below to mean
+  // anything.
+  getGetBudgetMonthQueryKey: (m: string) => [`/api/budget/months/${m}`],
   getListCategoriesQueryKey: () => ["/api/categories"],
   getListTransactionsQueryKey: () => ["/api/transactions"],
 }));
@@ -281,17 +287,28 @@ describe("Budget inline categorize popover (#90/#280)", () => {
       });
     });
 
-    const invalidatedKeys = invalidateSpy.mock.calls.map(
-      (c) => (c[0] as { queryKey: unknown }).queryKey,
-    );
     // On success the page invalidates both the transactions list (so the
     // newly-assigned row leaves the uncategorized pool everywhere it
-    // surfaces) and the current month's budget query (so actuals refresh).
+    // surfaces) and the budget-month queries (so actuals refresh).
+    const invalidateArgs = invalidateSpy.mock.calls.map(
+      (c) => c[0] as { queryKey?: unknown; predicate?: (q: unknown) => boolean },
+    );
+
+    // Transactions list is invalidated by its exact key.
+    const invalidatedKeys = invalidateArgs.map((a) => a.queryKey);
     expect(invalidatedKeys).toContainEqual(["/api/transactions"]);
-    expect(invalidatedKeys).toContainEqual([
-      "/api/budget/months",
-      TEST_MONTH,
-    ]);
+
+    // The budget months are invalidated via a predicate (the page
+    // invalidates *every* cached budget-month so prefetched neighbors
+    // don't go stale), not a single exact key. Assert that at least one
+    // such predicate matches the current month's budget-month query key.
+    const budgetMonthKey = ["/api/budget/months/" + TEST_MONTH];
+    const predicateMatchesCurrentMonth = invalidateArgs.some(
+      (a) =>
+        typeof a.predicate === "function" &&
+        a.predicate({ queryKey: budgetMonthKey } as never),
+    );
+    expect(predicateMatchesCurrentMonth).toBe(true);
   });
 
   it("excludes transactions from other months and transfers from the popover", async () => {

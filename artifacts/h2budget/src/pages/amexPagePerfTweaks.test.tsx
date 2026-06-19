@@ -94,6 +94,7 @@ vi.mock("@workspace/api-client-react", () => {
   const TransactionWeeklyBucket = {
     groceries: "groceries",
     dining: "dining",
+    alcohol: "alcohol",
     entertainment: "entertainment",
     misc: "misc",
   } as const;

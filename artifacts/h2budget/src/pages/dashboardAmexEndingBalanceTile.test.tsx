@@ -316,14 +316,15 @@ describe("Dashboard Amex ending-balance tile (#574)", () => {
         accounts: [{ id: "plaid-acct-amex-1", mask: "1001" }],
       },
     ];
-    // Server anchor is also present but the linked debt should win
-    // on both surfaces. Set the server anchor to a wildly different
-    // value so a regression that quietly falls back to it would be
-    // visible in the assertion failure.
+    // (#651) The Amex page now trusts the server-resolved anchor FIRST
+    // (it prefers the live Plaid liability balance over a cached debt
+    // row). To exercise the linked-debt path on BOTH surfaces — and keep
+    // the dashboard tile and Amex header in parity — the server anchor
+    // must be genuinely absent here so both fall through to the debt.
     anchorState = {
-      amexEndingBalance: 9999,
+      amexEndingBalance: null,
       asOf: `${thisMonthStart}T00:00:00.000Z`,
-      source: "anchor",
+      source: "missing",
     };
     const dashValue = await readDashboardTile();
     const amexValue = await readAmexHeader();
@@ -336,6 +337,14 @@ describe("Dashboard Amex ending-balance tile (#574)", () => {
     // Two physical Amex cards under one Plaid item, each with its
     // own debt row. Both surfaces should sum the linked debts (1500
     // + 800 = 2300) before walking the current-month txns.
+    // (#651) Server anchor absent so both surfaces exercise the
+    // linked-debt aggregation path (the Amex page is otherwise
+    // server-anchor-first) and stay in parity with the dashboard tile.
+    anchorState = {
+      amexEndingBalance: null,
+      asOf: `${thisMonthStart}T00:00:00.000Z`,
+      source: "missing",
+    };
     sharedTxns[0].plaidAccountId = "plaid-acct-amex-1";
     sharedTxns[1].plaidAccountId = "plaid-acct-amex-2";
     debtsState = [
@@ -379,6 +388,14 @@ describe("Dashboard Amex ending-balance tile (#574)", () => {
     // `plaid_accounts` row id. The dedupe step must collapse them
     // down to a single most-recently-updated debt instead of summing
     // — and both surfaces must collapse the same way.
+    // (#651) Server anchor absent so both surfaces resolve via the
+    // deduped linked debt (the Amex page is otherwise server-anchor-
+    // first) and the tile/header stay in parity.
+    anchorState = {
+      amexEndingBalance: null,
+      asOf: `${thisMonthStart}T00:00:00.000Z`,
+      source: "missing",
+    };
     sharedTxns[0].plaidAccountId = "plaid-acct-amex-old";
     sharedTxns[1].plaidAccountId = "plaid-acct-amex-new";
     debtsState = [

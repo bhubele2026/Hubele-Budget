@@ -47,6 +47,7 @@ vi.mock("@workspace/api-client-react", () => {
   const TransactionWeeklyBucket = {
     groceries: "groceries",
     dining: "dining",
+    alcohol: "alcohol",
     entertainment: "entertainment",
     misc: "misc",
   } as const;
@@ -86,6 +87,16 @@ vi.mock("@workspace/api-client-react", () => {
       mutateAsync: async () => ({ added: 0, modified: 0, removed: 0 }),
       isPending: false,
     }),
+    // (#806 follow-up) usePlaidSync (called by PostLinkProgressBanner,
+    // which the Amex page renders live) and the banner itself read these
+    // query-key factories. A missing export resolves to `undefined` and
+    // crashes the first sync/`ready` effect — so provide stable arrays.
+    getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
+    getGetForecastQueryKey: () => ["/api/forecast"],
+    getGetForecastCashSignalQueryKey: () => ["/api/forecast/cash-signal"],
+    getListPlaidLiabilityAccountsQueryKey: () => ["/api/plaid/liabilities"],
+    getListDebtsQueryKey: () => ["/api/debts"],
+    getGetDashboardQueryKey: () => ["/api/dashboard"],
     customFetch: async () => undefined,
   };
 });

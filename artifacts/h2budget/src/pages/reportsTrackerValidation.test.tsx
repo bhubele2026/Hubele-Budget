@@ -126,6 +126,22 @@ vi.mock("@workspace/api-client-react", () => {
     getGetReportsAdvisorSummaryQueryKey: () => ["/api/reports/advisor-summary"],
     getGetReportsSpendingFactsQueryKey: () => ["/api/reports/spending-facts"],
     getListTransactionsQueryKey: () => ["/api/transactions"],
+    // AdvisorSummaryCard.handleRefresh imports this plain async API fn at
+    // module load; only invoked on the (un-clicked) refresh button here.
+    getReportsAdvisorSummary: async () => undefined,
+    // <AiInsightBar /> renders unconditionally above the tabs and reads the
+    // cached advisor nudge. Undefined data -> the bar renders nothing.
+    useGetAdvisorNudge: () => ({ data: undefined, isLoading: false }),
+    // SubscriptionInsightsSection renders live in the Behavior tab (Tabs is
+    // stubbed to a passthrough, so every TabsContent mounts). It mutates via
+    // useCreateRecurringItem and references these two query-key factories.
+    useCreateRecurringItem: () => ({
+      mutate: vi.fn(),
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    }),
+    getGetBillsSummaryQueryKey: () => ["/api/bills/summary"],
+    getListRecurringItemsQueryKey: () => ["/api/recurring-items"],
   };
 });
 

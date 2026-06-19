@@ -50,7 +50,11 @@ const LEGACY_KEY = "h2budget:dashboardIncludeAllSources";
 function tx(over: Partial<Transaction>): Transaction {
   return {
     id: "t",
-    occurredOn: "2025-05-10",
+    // today in renderBuckets is 2025-05-15 (Thursday); sundayOf → 2025-05-11,
+    // so the visible week is May 11–17. The weekly row list is scoped to that
+    // window, so fixtures must fall inside it (and inside the May month) for
+    // `row-weekly-*` to render. 2025-05-15 satisfies both.
+    occurredOn: "2025-05-15",
     description: "x",
     amount: "-10",
     source: "amex",

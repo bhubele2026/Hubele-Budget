@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
@@ -185,7 +185,27 @@ beforeEach(() => {
   // today and the May plan rows fall out of the visible window. Open it so
   // the stored 2026-05-01 anchor is respected.
   sessionStorage.setItem("h2budget:forecastLookbackOpen", "true");
+  // Seed the saved horizon preference to 90. The cold-load default is now
+  // 30 DAYS (intentional, commit bd293339), but the stored-preference
+  // branch in ForecastPage is still honored, so this puts the page on the
+  // 90-day tab — exactly the precondition this test exercises (the data
+  // hook seeded from 90, then a click switches it to 365).
+  sessionStorage.setItem("h2budget:forecastHorizonDays", "90");
+  // Anchor "today" inside May 2026. The plan register is filtered by
+  // `monthFilter`, which defaults to `currentMonth` derived from
+  // `useMemo(() => new Date(), [])`. The stored from-date only moves the
+  // data-fetch window, not the register's month bucket, so without a
+  // frozen clock today (June 2026+) makes monthFilter "2026-06" and every
+  // May-2026 plan row is filtered out. Freeze to mid-May so the fixture
+  // stays in the active month. Only Date is faked so React/RTL scheduling
+  // keeps working.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 4, 15, 12, 0, 0));
   lastHorizonDays.value = -1;
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("Forecast — horizon tab switching is instant (#618)", () => {

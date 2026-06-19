@@ -523,9 +523,12 @@ describe("computeCashSignal — snapshot anchoring", () => {
   it("drag-to-today: when fromDate > today, post-snapshot pre-from plans flow to roll-forward (NOT to today, NOT to fromDate)", async () => {
     // Locks the "view chart starting from a future date" branch.
     // Setup: snapshot on 04-01, today=05-14 (pinned), fromDate=06-01.
-    // A plan dated 04-15 is AFTER the snapshot but BEFORE fromDate;
+    // A plan dated 04-30 is AFTER the snapshot but BEFORE fromDate;
     // it must be consumed by the pre-window roll-forward into
     // startingBalance, not dragged to today (05-14) or fromDate (06-01).
+    // (#803) The plan sits within the 14-day drag-lookback floor
+    // (today − 14 = 04-30) so it isn't dropped as a zombie; its drag
+    // target (05-15) lands before fromDate and folds into starting.
     await setSettings({
       balance: "1000",
       at: new Date("2026-04-01T12:00:00Z"),
@@ -533,7 +536,7 @@ describe("computeCashSignal — snapshot anchoring", () => {
     });
     await addRecurring({
       frequency: "onetime",
-      anchorDate: "2026-04-15",
+      anchorDate: "2026-04-30",
       amount: "300",
     });
 
@@ -551,7 +554,7 @@ describe("computeCashSignal — snapshot anchoring", () => {
     });
     expect(sig.projectedExpenses).toBe("0.00");
     const eventDates = (sig.events ?? []).map((e) => e.date);
-    expect(eventDates).not.toContain("2026-04-15");
+    expect(eventDates).not.toContain("2026-04-30");
     expect(eventDates).not.toContain("2026-05-14");
     expect(eventDates).not.toContain("2026-06-01");
   });
@@ -722,10 +725,11 @@ describe("computeCashSignal — snapshot anchoring", () => {
     // Code-review regression: the (#681) drag must apply
     // independent of the chart window. snapshot=04-01, today=05-14,
     // fromDate=06-01 (a future window that does NOT contain today).
-    // A 04-15 plan drags to today+1 = 05-15, which is before
+    // A 04-30 plan drags to today+1 = 05-15, which is before
     // fromDate, so the pre-window roll-forward consumes it into
     // startingBalance. Same plan must NOT appear in one window and
-    // disappear in another.
+    // disappear in another. (#803) 04-30 is exactly on the 14-day
+    // drag-lookback floor (today − 14), so the drag still fires.
     await setSettings({
       balance: "1000",
       at: new Date("2026-04-01T12:00:00Z"),
@@ -734,7 +738,7 @@ describe("computeCashSignal — snapshot anchoring", () => {
     await addRecurring({
       kind: "expense",
       frequency: "onetime",
-      anchorDate: "2026-04-15",
+      anchorDate: "2026-04-30",
       amount: "300",
     });
 
@@ -841,10 +845,12 @@ describe("computeCashSignal — snapshot anchoring", () => {
   it("(#681) when today is in-window, past-due expenses drag to today+1 instead of rolling forward", async () => {
     // snapshot=04-01, today=05-14 (PINNED_NOW), fromDate=05-01,
     // horizon=30 → toDate=05-31, so today is INSIDE the window.
-    // A 04-15 expense is past-due-as-of-today; under (#681) it must
+    // A 04-30 expense is past-due-as-of-today; under (#681) it must
     // drag to today+1 (05-15) so the user can still see it weighing
     // on the projection, rather than being silently consumed into
-    // startingBalance by the pre-window roll-forward.
+    // startingBalance by the pre-window roll-forward. (#803) 04-30 is
+    // exactly on the 14-day drag-lookback floor (today − 14), so it
+    // still drags rather than being dropped as a zombie.
     await setSettings({
       balance: "1000",
       at: new Date("2026-04-01T12:00:00Z"),
@@ -852,7 +858,7 @@ describe("computeCashSignal — snapshot anchoring", () => {
     });
     await addRecurring({
       frequency: "onetime",
-      anchorDate: "2026-04-15",
+      anchorDate: "2026-04-30",
       amount: "300",
     });
 
@@ -870,7 +876,7 @@ describe("computeCashSignal — snapshot anchoring", () => {
     expect(sig.lowestDate).toBe("2026-05-15");
     const eventDates = (sig.events ?? []).map((e) => e.date);
     expect(eventDates).toContain("2026-05-15");
-    expect(eventDates).not.toContain("2026-04-15");
+    expect(eventDates).not.toContain("2026-04-30");
   });
 });
 
@@ -939,9 +945,14 @@ describe("computeCashSignal — matched resolution suppression", () => {
   });
 
   it("does not suppress unmatched ('pending'/other status) resolutions", async () => {
+    // Snapshot on TODAY (05-14) so both monthly occurrences (05-15 and
+    // 06-15) are post-today — that keeps the (#803) drag-lookback floor
+    // and the (#681) drag rule inert, isolating the one behavior under
+    // test: a non-'matched' resolution status must NOT suppress the
+    // occurrence.
     await setSettings({
       balance: "1000",
-      at: new Date("2026-04-01T12:00:00Z"),
+      at: new Date("2026-05-14T12:00:00Z"),
       cashBuffer: "0",
     });
     const item = await addRecurring({ dayOfMonth: 15, amount: "200" });
@@ -952,16 +963,16 @@ describe("computeCashSignal — matched resolution suppression", () => {
       userId: TEST_USER,
       householdId: TEST_HOUSEHOLD_ID,
       recurringItemId: item.id,
-      occurrenceDate: "2026-04-15",
+      occurrenceDate: "2026-05-15",
       status: "pending",
     });
 
     const sig = await computeCashSignal(TEST_HOUSEHOLD_ID, TEST_USER, {
-      fromDate: "2026-04-01",
+      fromDate: "2026-05-14",
       horizonDays: 60,
     });
 
-    // Both 04-15 and 05-15 should apply: 1000 - 200 - 200 = 600.
+    // Both 05-15 and 06-15 should apply: 1000 - 200 - 200 = 600.
     expect(sig.endingBalance).toBe("600.00");
     expect(sig.projectedExpenses).toBe("400.00");
   });

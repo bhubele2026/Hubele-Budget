@@ -125,7 +125,9 @@ vi.mock("@workspace/api-client-react", () => {
     // Hooks SettingsPage (and its unconditionally-rendered children) call at
     // render time that were added after this test was first written.
     useClearPlaidItemRefreshDisabled: () => mutation,
-    useGetDuplicateTransactionCount: () => ({ data: undefined }),
+    // The Clean-up button is gated behind `duplicateCount > 0`, so the
+    // read-only count must report a non-zero number for the row to render.
+    useGetDuplicateTransactionCount: () => ({ data: { duplicateCount: 3 } }),
     getGetDuplicateTransactionCountQueryKey: () => ["duplicate-count"],
     // OwnerBankHealthSweepSection renders unconditionally in SettingsPage.
     useGetMe: () => ({ data: { isOwner: false }, isLoading: false }),

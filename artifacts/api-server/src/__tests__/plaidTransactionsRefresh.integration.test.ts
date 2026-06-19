@@ -74,15 +74,25 @@ vi.mock("../lib/plaid", async () => {
       },
       transactionsSync: async ({
         access_token,
+        cursor,
       }: {
         access_token: string;
+        cursor?: string;
       }) => {
         syncCalls.push({ access_token, calledAt: Date.now() });
+        // (#717) Model real Plaid cursor semantics so the
+        // poll-after-refresh loop terminates: the seeded item starts at
+        // cursor "prev-cursor", so the FIRST walk delivers the staged
+        // batch and advances the cursor to "cursor-1". Every subsequent
+        // walk re-reads from "cursor-1" and must come back empty (the
+        // feed is drained) — otherwise the #717 retry loop keeps
+        // re-walking on every non-empty drain and `syncCalls` balloons.
+        const drained = cursor === "cursor-1";
         return {
           data: {
-            added: nextSyncResponse.added,
-            modified: nextSyncResponse.modified,
-            removed: nextSyncResponse.removed,
+            added: drained ? [] : nextSyncResponse.added,
+            modified: drained ? [] : nextSyncResponse.modified,
+            removed: drained ? [] : nextSyncResponse.removed,
             next_cursor: "cursor-1",
             has_more: false,
           },
@@ -97,6 +107,12 @@ vi.mock("../lib/plaid", async () => {
     }),
   };
 });
+
+// (#717) Near-instant poll backoffs so the confirm-settled empty drain
+// fires immediately instead of burning the real 1.5s+ schedule and
+// slowing the suite. The drain modelled in the transactionsSync mock
+// above is what bounds the loop to two walks on a successful refresh.
+process.env.PLAID_REFRESH_POLL_DELAYS_MS = "5,5";
 
 import {
   db,
@@ -223,13 +239,21 @@ describe("(#665) /transactions/refresh on user-triggered Sync", () => {
 
     expect(refreshCalls.length).toBe(1);
     expect(refreshCalls[0]!.access_token).toBe(accessToken);
-    expect(syncCalls.length).toBe(1);
+    // (#717) A successful forceRefresh whose first cursor walk returns
+    // rows polls one extra empty drain to confirm Plaid finished
+    // ingesting — so the contract is exactly TWO /transactions/sync
+    // calls (the row-delivering walk + the confirm-settled empty
+    // drain), not one. The drain is modelled in the transactionsSync
+    // mock (subsequent walks from the advanced cursor come back empty).
+    expect(syncCalls.length).toBe(2);
     // Refresh must precede sync — Plaid's contract is: refresh, then
     // the next sync sees the freshly-pulled rows.
     expect(refreshCalls[0]!.calledAt).toBeLessThanOrEqual(
       syncCalls[0]!.calledAt,
     );
     expect(body.items[0]!.refreshAttempted).toBe(true);
+    // Only the first walk delivered the row; the confirm-settled empty
+    // drain added nothing, so the user-facing `added` count is 1.
     expect(body.items[0]!.added).toBe(1);
 
     // (#728) The pending row that flowed through must be persisted

@@ -95,6 +95,19 @@ vi.mock("@workspace/api-client-react", () => {
     // PlaidSyncHistory renders once per linked Plaid item.
     useListPlaidSyncAttempts: () => ({ data: undefined, isLoading: false, isError: false }),
     getListPlaidSyncAttemptsQueryKey: (id: string) => ["plaid-sync-attempts", id],
+    // PlaidReconnectButton is imported (and conditionally rendered) by
+    // SettingsPage — both on a "Needs reconnect" bank tile and inside the
+    // #707 disconnect-guard dialog. Its module-level imports from
+    // @workspace/api-client-react must all resolve at render time or the
+    // mock throws "No <hook>/<key> export is defined".
+    useCreatePlaidLinkToken: () => mutation,
+    useExchangePlaidPublicToken: () => mutation,
+    getGetBillsSummaryQueryKey: () => ["bills-summary"],
+    getGetDashboardQueryKey: () => ["dashboard"],
+    getListDebtsQueryKey: () => ["debts"],
+    // MerchantRenamePopover's usePutMerchantAlias — exported here for
+    // mock completeness so this module-level name always resolves.
+    usePutMerchantAlias: () => mutation,
   };
 });
 
