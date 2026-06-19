@@ -901,6 +901,7 @@ export default function BudgetPage() {
               onClick={() => changeMonth(-1)}
               disabled={atFloor}
               aria-disabled={atFloor}
+              aria-label="Previous month"
               title={atFloor ? "April 2026 is the earliest month" : undefined}
               data-testid="button-prev-month"
             >
@@ -913,6 +914,7 @@ export default function BudgetPage() {
               variant="ghost"
               size="icon"
               onClick={() => changeMonth(1)}
+              aria-label="Next month"
               data-testid="button-next-month"
             >
               <ChevronRight className="w-5 h-5" />
@@ -2100,6 +2102,7 @@ function BudgetLineRow({
                   onClick={() => onTogglePin(line.categoryId, line.pinned)}
                   disabled={pinDisabled || monthPinned}
                   data-testid={`button-toggle-pin-${line.categoryId}`}
+                  aria-label={line.pinned ? "Unpin this line" : "Pin this line"}
                   title={
                     monthPinned
                       ? "This month is pinned — unpin the month to control individual lines."
@@ -2128,6 +2131,7 @@ function BudgetLineRow({
                   onClick={() => setRenameDraft(line.categoryName)}
                   disabled={renaming}
                   data-testid={`button-rename-${line.categoryId}`}
+                  aria-label="Rename this envelope"
                   title="Rename this envelope"
                 >
                   <Pencil className="w-3 h-3" />
@@ -2142,6 +2146,7 @@ function BudgetLineRow({
                     onClick={() => onMove(line.categoryId, "up")}
                     disabled={!canMoveUp || renaming}
                     data-testid={`button-move-up-${line.categoryId}`}
+                    aria-label="Move up"
                     title="Move up"
                   >
                     <ChevronUp className="w-3 h-3" />
@@ -2153,6 +2158,7 @@ function BudgetLineRow({
                     onClick={() => onMove(line.categoryId, "down")}
                     disabled={!canMoveDown || renaming}
                     data-testid={`button-move-down-${line.categoryId}`}
+                    aria-label="Move down"
                     title="Move down"
                   >
                     <ChevronDown className="w-3 h-3" />
@@ -2165,6 +2171,7 @@ function BudgetLineRow({
                 className="h-6 w-6 text-muted-foreground hover:text-foreground transition-opacity opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
                 onClick={() => onDelete(line.categoryId)}
                 data-testid={`button-delete-${line.categoryId}`}
+                aria-label="Delete this line"
                 title={
                   isReadOnly
                     ? "Delete this auto-pulled line (re-seeding will restore it)"

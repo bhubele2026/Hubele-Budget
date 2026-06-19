@@ -53,11 +53,8 @@ import {
   Plus,
   Trash2,
   Search,
-  Pencil,
   Check,
   X,
-  ArrowUp,
-  ArrowDown,
   Beaker,
   GripVertical,
   ChevronDown,
@@ -70,7 +67,6 @@ import {
   PointerSensor,
   TouchSensor,
   KeyboardSensor,
-  useDroppable,
   useSensor,
   useSensors,
   closestCenter,
@@ -81,14 +77,15 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  useSortable,
   arrayMove,
   verticalListSortingStrategy,
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-
-const CATEGORY_DROP_PREFIX = "category:";
+import {
+  CategoryDropTarget,
+  CATEGORY_DROP_PREFIX,
+} from "./mapping-rules/CategoryDropTarget";
+import { SortableRuleRow } from "./mapping-rules/SortableRuleRow";
 
 // Task #244 — persist "I've already reviewed this batch" across reloads
 // and repeat clicks of the post-sync / post-import toast's "View" link.
@@ -199,232 +196,6 @@ const ruleCollisionDetection: CollisionDetection = (args) => {
   if (pointerHits.length > 0) return pointerHits;
   return closestCenter(args);
 };
-
-function CategoryDropTarget({
-  category,
-  isCurrent,
-  isDragActive,
-}: {
-  category: Category;
-  isCurrent: boolean;
-  isDragActive: boolean;
-}) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: `${CATEGORY_DROP_PREFIX}${category.id}`,
-    data: { kind: "category", categoryId: category.id },
-  });
-  const showHover = isOver && isDragActive;
-  return (
-    <button
-      ref={setNodeRef}
-      type="button"
-      tabIndex={-1}
-      aria-label={`Drop rule onto ${category.name}`}
-      data-testid={`category-drop-${category.id}`}
-      data-drop-over={showHover ? "true" : undefined}
-      className={`px-2.5 py-1 rounded-full border text-xs whitespace-nowrap transition-colors select-none ${
-        showHover
-          ? "bg-primary text-primary-foreground border-primary ring-2 ring-primary/40"
-          : isCurrent
-            ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200"
-            : "bg-muted/40 border-border text-foreground hover:bg-muted"
-      }`}
-    >
-      {category.name}
-    </button>
-  );
-}
-
-type RuleRowProps = {
-  rule: MappingRule;
-  category: Category | null;
-  isFirst: boolean;
-  isLast: boolean;
-  isMatched: boolean;
-  isWinner: boolean;
-  reorderDisabled: boolean;
-  dragDisabled: boolean;
-  // Task #192 deep-link support: when set, the row is the target of a
-  // ?focus=<ruleId> navigation from a transaction's "rule: <pattern>" chip.
-  // `isFocused` is deterministic (purely from the URL param) — this is what
-  // tests assert on via data-focused. `isHighlighted` is the transient
-  // visual ring that fades after a few seconds. `setFocusRef` is the
-  // callback ref the parent uses to scroll the row into view; it's
-  // composed with the dnd-kit setNodeRef so both can coexist.
-  isFocused: boolean;
-  isHighlighted: boolean;
-  setFocusRef: ((el: HTMLDivElement | null) => void) | null;
-  isSelected: boolean;
-  onToggleSelected: (id: string) => void;
-  onMove: (id: string, direction: -1 | 1) => void;
-  onStartEdit: (rule: MappingRule) => void;
-  onDelete: (id: string) => void;
-};
-
-function SortableRuleRow({
-  rule,
-  category,
-  isFirst,
-  isLast,
-  isMatched,
-  isWinner,
-  reorderDisabled,
-  dragDisabled,
-  isFocused,
-  isHighlighted,
-  setFocusRef,
-  isSelected,
-  onToggleSelected,
-  onMove,
-  onStartEdit,
-  onDelete,
-}: RuleRowProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    setActivatorNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: rule.id, disabled: dragDisabled });
-
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 10 : undefined,
-    position: "relative",
-    opacity: isDragging ? 0.6 : 1,
-  };
-
-  const stateBg = isHighlighted
-    ? "ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-950/30"
-    : isWinner
-      ? "bg-emerald-50 dark:bg-emerald-950/30"
-      : isMatched
-        ? "bg-amber-50 dark:bg-amber-950/20"
-        : "";
-
-  return (
-    <div
-      ref={(el) => {
-        setNodeRef(el);
-        if (setFocusRef) setFocusRef(el);
-      }}
-      style={style}
-      className={`flex items-center gap-2 px-4 py-2 hover:bg-muted/30 transition-colors ${stateBg} ${
-        isDragging ? "shadow-lg ring-2 ring-primary/40 bg-card" : ""
-      }`}
-      data-testid={`rule-row-${rule.id}`}
-      data-focused={isFocused ? "true" : undefined}
-      data-selected={isSelected ? "true" : undefined}
-    >
-      <Checkbox
-        checked={isSelected}
-        onCheckedChange={() => onToggleSelected(rule.id)}
-        aria-label={`Select rule ${rule.pattern}`}
-        data-testid={`rule-select-${rule.id}`}
-      />
-      <button
-        ref={setActivatorNodeRef}
-        type="button"
-        {...listeners}
-        {...attributes}
-        disabled={dragDisabled}
-        className={`touch-none flex items-center justify-center h-8 w-6 text-muted-foreground hover:text-foreground ${
-          dragDisabled
-            ? "opacity-40 cursor-not-allowed"
-            : "cursor-grab active:cursor-grabbing"
-        }`}
-        title={
-          dragDisabled
-            ? "Clear the search to drag"
-            : "Drag to reorder (use arrow keys when focused)"
-        }
-        aria-label={`Drag to reorder ${rule.pattern}`}
-        data-testid={`rule-drag-${rule.id}`}
-      >
-        <GripVertical className="w-4 h-4" />
-      </button>
-      <div className="flex flex-col">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-5 w-6"
-          disabled={isFirst || reorderDisabled}
-          onClick={() => onMove(rule.id, -1)}
-          data-testid={`rule-up-${rule.id}`}
-          title={
-            dragDisabled
-              ? "Clear the search to reorder"
-              : "Move up"
-          }
-        >
-          <ArrowUp className="w-3 h-3" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-5 w-6"
-          disabled={isLast || reorderDisabled}
-          onClick={() => onMove(rule.id, 1)}
-          data-testid={`rule-down-${rule.id}`}
-          title={
-            dragDisabled
-              ? "Clear the search to reorder"
-              : "Move down"
-          }
-        >
-          <ArrowDown className="w-3 h-3" />
-        </Button>
-      </div>
-      <Badge
-        variant="outline"
-        className="font-mono text-[10px] tabular-nums w-12 justify-center"
-        data-testid={`rule-priority-${rule.id}`}
-      >
-        {rule.priority}
-      </Badge>
-      <span className="font-mono text-xs bg-muted/60 px-2 py-0.5 rounded truncate flex-[2] min-w-0">
-        {rule.pattern}
-      </span>
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-        {rule.matchType.replace("_", " ")}
-      </span>
-      <span
-        className={`text-xs flex-1 min-w-0 truncate ${
-          category ? "" : "italic text-muted-foreground"
-        }`}
-        data-testid={`rule-category-${rule.id}`}
-      >
-        {category?.name ?? "Uncategorized"}
-      </span>
-      {isWinner && (
-        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-[10px]">
-          Winner
-        </Badge>
-      )}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7"
-        onClick={() => onStartEdit(rule)}
-        data-testid={`rule-edit-btn-${rule.id}`}
-      >
-        <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7"
-        onClick={() => onDelete(rule.id)}
-        data-testid={`rule-delete-${rule.id}`}
-      >
-        <Trash2 className="w-3.5 h-3.5 text-destructive" />
-      </Button>
-    </div>
-  );
-}
 
 export default function MappingRulesPage() {
   const { data: rules, isLoading: rulesLoading } = useListMappingRules();
@@ -1956,7 +1727,7 @@ export default function MappingRulesPage() {
             <div className="flex-1 w-full space-y-1">
               <label className="text-xs font-medium">If description</label>
               <Select value={matchType} onValueChange={setMatchType}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="If description match type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1973,12 +1744,13 @@ export default function MappingRulesPage() {
                 value={pattern}
                 onChange={(e) => setPattern(e.target.value)}
                 data-testid="input-add-pattern"
+                aria-label="Text pattern"
               />
             </div>
             <div className="flex-1 w-full space-y-1">
               <label className="text-xs font-medium">Assign to Category</label>
               <Select value={categoryId} onValueChange={setCategoryId}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Assign to category">
                   <SelectValue placeholder="Select Category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -2095,6 +1867,7 @@ export default function MappingRulesPage() {
                 if (e.key === "Enter") handleRunTest();
               }}
               data-testid="input-test-description"
+              aria-label="Test a description"
             />
             <div className="flex gap-2">
               <Button
@@ -2194,6 +1967,7 @@ export default function MappingRulesPage() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-9"
           data-testid="input-search-rules"
+          aria-label="Search rules by pattern, category, or match type"
         />
         {searchQuery && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
@@ -2305,6 +2079,7 @@ export default function MappingRulesPage() {
                         <SelectTrigger
                           className="h-7 w-[180px] text-xs"
                           data-testid="rule-bulk-change-category"
+                          aria-label="Change category for selected rules"
                         >
                           <SelectValue placeholder="Change category…" />
                         </SelectTrigger>
@@ -2472,13 +2247,17 @@ export default function MappingRulesPage() {
                                   }
                                   className="h-8 text-sm font-mono"
                                   autoFocus
+                                  aria-label="Rule pattern"
                                 />
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <Select
                                     value={editMatchType}
                                     onValueChange={setEditMatchType}
                                   >
-                                    <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px]">
+                                    <SelectTrigger
+                                      className="h-8 text-xs flex-1 min-w-[120px]"
+                                      aria-label="Rule match type"
+                                    >
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -2500,6 +2279,7 @@ export default function MappingRulesPage() {
                                     <SelectTrigger
                                       className="h-8 text-xs flex-[2] min-w-[160px]"
                                       data-testid={`rule-edit-category-${rule.id}`}
+                                      aria-label="Rule category"
                                     >
                                       <SelectValue />
                                     </SelectTrigger>
@@ -2526,6 +2306,7 @@ export default function MappingRulesPage() {
                                       }
                                       className="h-8 w-20 text-xs"
                                       data-testid={`rule-edit-priority-${rule.id}`}
+                                      aria-label="Rule priority"
                                     />
                                   </div>
                                   <Button
@@ -2539,6 +2320,7 @@ export default function MappingRulesPage() {
                                       updateRule.isPending
                                     }
                                     data-testid={`rule-save-${rule.id}`}
+                                    aria-label="Save rule"
                                   >
                                     <Check className="w-4 h-4 text-emerald-600" />
                                   </Button>
@@ -2547,6 +2329,7 @@ export default function MappingRulesPage() {
                                     size="icon"
                                     className="h-8 w-8"
                                     onClick={cancelEdit}
+                                    aria-label="Cancel editing rule"
                                   >
                                     <X className="w-4 h-4" />
                                   </Button>

@@ -994,6 +994,7 @@ export default function SettingsPage() {
                         )
                       }
                       disabled={deletePlaidItem.isPending}
+                      aria-label="Unlink bank connection"
                       data-testid={`button-unlink-${item.id}`}
                     >
                       <Trash2 className="w-4 h-4 text-destructive" />
@@ -1156,6 +1157,7 @@ export default function SettingsPage() {
                 variant="ghost"
                 size="icon"
                 onClick={() => removeTracker(t.id)}
+                aria-label="Remove tracker"
                 data-testid={`button-remove-tracker-${t.id}`}
               >
                 <Trash2 className="w-4 h-4 text-destructive" />

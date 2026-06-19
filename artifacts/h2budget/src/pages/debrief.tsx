@@ -859,6 +859,7 @@ function DebriefPageActive({
               <div>
                 <Label className="text-xs">Name</Label>
                 <Input
+                  aria-label="Name"
                   value={addBillSeed.name}
                   onChange={(e) =>
                     setAddBillSeed({ ...addBillSeed, name: e.target.value })
@@ -870,6 +871,7 @@ function DebriefPageActive({
                 <div>
                   <Label className="text-xs">Amount</Label>
                   <Input
+                    aria-label="Amount"
                     type="number"
                     step="0.01"
                     min="0"
@@ -890,7 +892,7 @@ function DebriefPageActive({
                       })
                     }
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-label="Type"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="bill">Bill (expense)</SelectItem>
                       <SelectItem value="income">Income</SelectItem>
@@ -910,7 +912,7 @@ function DebriefPageActive({
                       })
                     }
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-label="Frequency"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="monthly">Monthly</SelectItem>
                       <SelectItem value="semimonthly">Semi-monthly</SelectItem>
@@ -925,6 +927,7 @@ function DebriefPageActive({
                   <div>
                     <Label className="text-xs">Day of month</Label>
                     <Input
+                      aria-label="Day of month"
                       type="number"
                       min="1"
                       max="31"
@@ -946,6 +949,11 @@ function DebriefPageActive({
                       {addBillSeed.frequency === "onetime" ? "Date" : "Anchor date"}
                     </Label>
                     <Input
+                      aria-label={
+                        addBillSeed.frequency === "onetime"
+                          ? "Date"
+                          : "Anchor date"
+                      }
                       type="date"
                       value={addBillSeed.anchorDate}
                       onChange={(e) =>

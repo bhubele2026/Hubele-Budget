@@ -446,6 +446,7 @@ function BucketCard({
                   variant="ghost"
                   size="icon"
                   className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                  aria-label="Edit planned amount"
                   title="Edit planned amount"
                   data-testid={`allowance-edit-planned-${slug}`}
                 >

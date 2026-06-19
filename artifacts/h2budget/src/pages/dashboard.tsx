@@ -1935,6 +1935,7 @@ export function DashboardMonthlyBuckets({
             className="h-8 w-8 rounded-full"
             onClick={() => setMonthOffset((m) => m - 1)}
             disabled={isAtFloor}
+            aria-label="Previous month"
             data-testid="button-month-prev"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -1950,6 +1951,7 @@ export function DashboardMonthlyBuckets({
             size="icon"
             className="h-8 w-8 rounded-full"
             onClick={() => setMonthOffset((m) => m + 1)}
+            aria-label="Next month"
             data-testid="button-month-next"
           >
             <ChevronRight className="h-4 w-4" />
