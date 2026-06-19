@@ -1053,6 +1053,10 @@ export interface DebriefVarianceSnapshot {
     plannedNet: string;
     actualNet: string;
     varianceNet: string;
+    // (M47) Dollars freed this week to throw at the debt avalanche:
+    // max(0, actualIncome − actualExpenses − weekly allowance). Added
+    // additively; older snapshots without it fall back to "0.00" in the UI.
+    freedForAvalanche: string;
   };
   plans: DebriefVariancePlanItem[];
   transactions: DebriefVarianceTxnItem[];
