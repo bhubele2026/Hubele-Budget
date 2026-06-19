@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   render,
   screen,
@@ -245,6 +245,7 @@ vi.mock("@workspace/api-client-react", () => {
     useCreateRecurringItem: noopMutation,
     useGetAvalancheSettings: () => ({ data: undefined }),
     useGetAvalancheExtra: () => ({ data: undefined }),
+    useGetForecastAvalancheSchedule: () => ({ data: undefined, isLoading: false }),
     getGetForecastQueryKey: () => ["forecast"],
     getGetForecastCashSignalQueryKey: () => ["forecast-cash-signal"],
     getListTransactionsQueryKey: () => ["transactions"],
@@ -269,12 +270,22 @@ const scrollIntoViewMock = vi.fn();
 beforeEach(() => {
   cleanup();
   scrollIntoViewMock.mockClear();
+  // Anchor "today" inside May 2026 so the page's default monthFilter
+  // (derived from `useMemo(() => new Date(), [])`) lines up with the
+  // May-2026 fixture. Only Date is faked so requestAnimationFrame and
+  // promise scheduling in the tests below keep working normally.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 4, 15, 12, 0, 0));
   // jsdom doesn't implement scrollIntoView; install a stub so the
   // requestAnimationFrame callback inside `jumpToPlan` doesn't throw and
   // we can also assert the row was scrolled into view.
   (
     Element.prototype as unknown as { scrollIntoView: typeof scrollIntoViewMock }
   ).scrollIntoView = scrollIntoViewMock;
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("Forecast — big-bill marker click jumps to plan row (#335 / #388)", () => {

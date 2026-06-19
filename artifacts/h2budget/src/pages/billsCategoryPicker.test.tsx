@@ -130,6 +130,9 @@ vi.mock("@workspace/api-client-react", () => ({
   useListCategories: () => ({ data: categories }),
   useGetAvalancheSettings: () => ({ data: undefined }),
   useGetAvalancheExtra: () => ({ data: undefined }),
+  // <AiInsightBar> (rendered at the top of the Bills page) reads the
+  // advisor nudge; the mock has to expose it or the page fails to render.
+  useGetAdvisorNudge: () => ({ data: undefined }),
   useCreateRecurringItem: () => noopMutation,
   useUpdateRecurringItem: () => ({
     mutate: (

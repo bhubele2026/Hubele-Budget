@@ -69,6 +69,9 @@ vi.mock("@/hooks/use-toast", () => ({
 
 vi.mock("@workspace/api-client-react", () => ({
   useGetBudgetMonth: () => ({ data: budgetMonth, isLoading: false }),
+  // <AiInsightBar> is rendered unconditionally at the top of BudgetPage and
+  // reads the advisor nudge; the mock must expose it or render throws.
+  useGetAdvisorNudge: () => ({ data: undefined, isLoading: false }),
   useListCategories: () => ({ data: categories, isLoading: false }),
   useUpsertBudgetLine: () => noopMutation,
   useCreateCategory: () => noopMutation,
@@ -83,6 +86,7 @@ vi.mock("@workspace/api-client-react", () => ({
     mutateAsync: vi.fn(async () => undefined),
     isPending: false,
   }),
+  getBudgetMonth: vi.fn(async () => budgetMonth),
   getGetBudgetMonthQueryKey: (m: string) => ["/api/budget/months", m],
   getListCategoriesQueryKey: () => ["/api/categories"],
   getListTransactionsQueryKey: () => ["/api/transactions"],

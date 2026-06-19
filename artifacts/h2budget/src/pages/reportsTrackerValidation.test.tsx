@@ -91,6 +91,41 @@ vi.mock("@workspace/api-client-react", () => {
     useListRecurringItems: () => empty,
     useGetForecast: () => ({ data: undefined }),
     useGetSettings: () => ({ data: SETTINGS, isLoading: false }),
+    // The Reports page mounts several report-facts/advisor cards alongside
+    // the behavior-tracker tile under test. Each must be present in the mock
+    // or render throws "No useX export is defined". The tiles guard on
+    // isLoading/isError/empty data, so undefined data is safe here.
+    useGetDashboard: () => ({ data: undefined, isLoading: false }),
+    useGetForecastCashSignal: () => ({ data: undefined, isLoading: false }),
+    useListPlaidLiabilityAccounts: () => empty,
+    useGetReportsAdvisorSummary: () => ({
+      data: undefined,
+      isLoading: false,
+      isError: false,
+    }),
+    useGetReportsBehaviorFacts: () => ({
+      data: undefined,
+      isLoading: false,
+      isError: false,
+    }),
+    useGetReportsBudgetFacts: () => ({
+      data: undefined,
+      isLoading: false,
+      isError: false,
+    }),
+    useGetReportsSpendingFacts: () => ({
+      data: undefined,
+      isLoading: false,
+      isError: false,
+    }),
+    useUpdateTransaction: () => ({
+      mutate: vi.fn(),
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    }),
+    getGetReportsAdvisorSummaryQueryKey: () => ["/api/reports/advisor-summary"],
+    getGetReportsSpendingFactsQueryKey: () => ["/api/reports/spending-facts"],
+    getListTransactionsQueryKey: () => ["/api/transactions"],
   };
 });
 

@@ -63,6 +63,8 @@ vi.mock("@workspace/api-client-react", () => ({
   useSyncPlaidTransactions: () => ({ mutate: mutateMock, isPending: false }),
   getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
   getListTransactionsQueryKey: () => ["/api/transactions"],
+  getGetForecastQueryKey: () => ["/api/forecast"],
+  getGetForecastCashSignalQueryKey: () => ["/api/forecast/cash-signal"],
 }));
 
 // (#357) The Reconnect ToastAction now dispatches a window event instead of

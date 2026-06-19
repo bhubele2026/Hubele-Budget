@@ -6,6 +6,8 @@ import React from "react";
 vi.mock("@workspace/api-client-react", () => ({
   useListPlaidItems: () => ({ data: [], isLoading: false }),
   useCreatePlaidUpdateLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreatePlaidLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  useExchangePlaidPublicToken: () => ({ mutate: vi.fn(), isPending: false }),
   useDismissPlaidExpirationWarning: () => ({
     mutate: vi.fn(),
     mutateAsync: vi.fn().mockResolvedValue(undefined),

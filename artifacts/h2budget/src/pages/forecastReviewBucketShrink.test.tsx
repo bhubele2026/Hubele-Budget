@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
@@ -155,6 +155,12 @@ vi.mock("@workspace/api-client-react", () => {
     getListRecurringItemsQueryKey: () => ["recurring-items"],
     getGetBillsSummaryQueryKey: () => ["bills-summary"],
     getGetDashboardQueryKey: () => ["dashboard"],
+    // AvalancheScheduleCard renders inside ForecastPage's loaded branch and
+    // calls useGetForecastAvalancheSchedule at render; the refresh handler
+    // also reaches for the imperative fetcher + query-key helper.
+    useGetForecastAvalancheSchedule: () => ({ data: undefined, isLoading: false }),
+    getForecastAvalancheSchedule: async () => ({}),
+    getGetForecastAvalancheScheduleQueryKey: () => ["avalanche-schedule"],
   };
 });
 
@@ -176,6 +182,16 @@ beforeEach(() => {
   sessionStorage.clear();
   localStorage.clear();
   sessionStorage.setItem("h2budget:forecastFromDate", "2026-05-01");
+  // The Review Bucket filters by the month picker, which defaults to the
+  // current month. The fixture's matched resolutions are all in May 2026,
+  // so pin "today" to mid-May 2026 to keep the default monthFilter aligned
+  // with the fixture (the test predates the current calendar month).
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-05-15T12:00:00.000Z"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("Forecast — Review Bucket shrink + total (#602)", () => {

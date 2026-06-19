@@ -1273,9 +1273,10 @@ function BillGroupCard({
                       ) : linkedCategory ? (
                         <span
                           className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                          title={`${linkedCategory.groupName} · ${linkedCategory.name}`}
                           data-testid={`chip-category-${item.id}`}
                         >
-                          {linkedCategory.groupName} · {linkedCategory.name}
+                          {linkedCategory.name}
                         </span>
                       ) : (
                         <button

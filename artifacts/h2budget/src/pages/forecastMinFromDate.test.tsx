@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   render,
   screen,
@@ -158,6 +158,15 @@ vi.mock("@workspace/api-client-react", () => {
     getGetForecastQueryKey: () => ["forecast"],
     getGetForecastCashSignalQueryKey: () => ["forecast-cash-signal"],
     getListTransactionsQueryKey: () => ["transactions"],
+    getListRecurringItemsQueryKey: () => ["recurring-items"],
+    getGetBillsSummaryQueryKey: () => ["bills-summary"],
+    getGetDashboardQueryKey: () => ["dashboard"],
+    // AvalancheScheduleCard renders inside ForecastPage's loaded branch and
+    // calls useGetForecastAvalancheSchedule at render; the refresh handler
+    // also reaches for the imperative fetcher + query-key helper.
+    useGetForecastAvalancheSchedule: () => ({ data: undefined, isLoading: false }),
+    getForecastAvalancheSchedule: async () => ({}),
+    getGetForecastAvalancheScheduleQueryKey: () => ["avalanche-schedule"],
   };
 });
 
@@ -175,6 +184,7 @@ function renderPage() {
 }
 
 const FORECAST_FROM_KEY = "h2budget:forecastFromDate";
+const FORECAST_LOOKBACK_OPEN_KEY = "h2budget:forecastLookbackOpen";
 const MIN_FROM = "2026-05-01";
 
 beforeEach(() => {
@@ -184,6 +194,23 @@ beforeEach(() => {
   } catch {
     /* no-op */
   }
+  // The "Forecast from" input now lives inside the collapsible Look-back
+  // panel, which is closed by default; open it so the input renders. Opening
+  // it (wasOpen=true) is also what tells ForecastPage to honor a stored
+  // start date instead of snapping forward to today.
+  try {
+    sessionStorage.setItem(FORECAST_LOOKBACK_OPEN_KEY, "true");
+  } catch {
+    /* no-op */
+  }
+  // Pin "today" to the app start date so the empty-storage default
+  // (todayISO()) equals the MIN_FROM floor this test asserts against.
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(`${MIN_FROM}T12:00:00.000Z`));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("Forecast — 'Forecast from' anchored at 2026-05-01 (#418)", () => {

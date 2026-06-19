@@ -147,6 +147,28 @@ vi.mock("@workspace/api-client-react", () => {
       isPending: false,
     }),
     getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
+    // Query-key helpers + mutations pulled in transitively by usePlaidSync,
+    // PostLinkProgressBanner and MerchantRenamePopover (rendered per row).
+    getListPlaidLiabilityAccountsQueryKey: () => ["/api/plaid/liabilities"],
+    getListDebtsQueryKey: () => ["/api/debts"],
+    getGetDashboardQueryKey: () => ["/api/dashboard"],
+    getGetForecastQueryKey: () => ["/api/forecast"],
+    getGetForecastCashSignalQueryKey: () => ["/api/forecast/cash-signal"],
+    usePutMerchantAlias: () => ({
+      mutate: () => undefined,
+      mutateAsync: async () => undefined,
+      isPending: false,
+    }),
+    useDeleteMerchantAlias: () => ({
+      mutate: () => undefined,
+      mutateAsync: async () => undefined,
+      isPending: false,
+    }),
+    useSuggestMerchantName: () => ({
+      mutate: () => undefined,
+      mutateAsync: async () => undefined,
+      isPending: false,
+    }),
     customFetch: async () => undefined,
   };
 });

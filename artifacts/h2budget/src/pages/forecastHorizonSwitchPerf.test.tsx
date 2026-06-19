@@ -153,6 +153,12 @@ vi.mock("@workspace/api-client-react", () => {
     getListRecurringItemsQueryKey: () => ["recurring-items"],
     getGetBillsSummaryQueryKey: () => ["bills-summary"],
     getGetDashboardQueryKey: () => ["dashboard"],
+    // AvalancheScheduleCard renders inside ForecastPage's loaded branch and
+    // calls useGetForecastAvalancheSchedule at render; the refresh handler
+    // also reaches for the imperative fetcher + query-key helper.
+    useGetForecastAvalancheSchedule: () => ({ data: undefined, isLoading: false }),
+    getForecastAvalancheSchedule: async () => ({}),
+    getGetForecastAvalancheScheduleQueryKey: () => ["avalanche-schedule"],
   };
 });
 
@@ -174,6 +180,11 @@ beforeEach(() => {
   sessionStorage.clear();
   localStorage.clear();
   sessionStorage.setItem("h2budget:forecastFromDate", "2026-05-01");
+  // ForecastPage only honors a stored from-date when the (collapsible)
+  // Look-back panel was previously opened; otherwise it snaps forward to
+  // today and the May plan rows fall out of the visible window. Open it so
+  // the stored 2026-05-01 anchor is respected.
+  sessionStorage.setItem("h2budget:forecastLookbackOpen", "true");
   lastHorizonDays.value = -1;
 });
 

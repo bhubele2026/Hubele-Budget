@@ -10,6 +10,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useLinkDebtToPlaid: () => ({ mutate: vi.fn(), isPending: false }),
   useUnlinkDebtFromPlaid: () => ({ mutate: vi.fn(), isPending: false }),
   useRefreshDebtFromPlaid: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreateDebtFromPlaidAccount: () => ({ mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false }),
   useCreatePlaidUpdateLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
   // (#654) plaid-reconnect-listener also calls useCreatePlaidLinkToken
   // for the fresh-link fallback when the server returns 409+relink.

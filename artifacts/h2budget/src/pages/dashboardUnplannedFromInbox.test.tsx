@@ -11,6 +11,21 @@ vi.mock("@workspace/api-client-react", async () => {
     useDeleteDashboardBudget: () => ({ mutate: () => {}, isPending: false }),
     getListDashboardBudgetsQueryKey: () => ["budgets"],
     useGetSettings: () => ({ data: undefined, isLoading: false }),
+    // The WK/MO section (WeeklyMonthlySection) mounted by
+    // DashboardMonthlyBuckets reads weekly settlements + the close/reopen
+    // mutations; the mock must expose them or render throws.
+    useListWeeklySettlements: () => ({ data: [], isLoading: false }),
+    useCloseOutWeek: () => ({
+      mutate: () => {},
+      mutateAsync: async () => undefined,
+      isPending: false,
+    }),
+    useReopenWeek: () => ({
+      mutate: () => {},
+      mutateAsync: async () => undefined,
+      isPending: false,
+    }),
+    getListWeeklySettlementsQueryKey: () => ["/api/weekly-settlements"],
   };
 });
 

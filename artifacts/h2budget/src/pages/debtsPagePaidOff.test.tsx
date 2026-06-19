@@ -82,6 +82,7 @@ vi.mock("@workspace/api-client-react", () => {
     useGetAvalancheExtra: () => ({
       data: { amount: "0", source: "manual", availableMoney: 0 },
     }),
+    useGetAdvisorNudge: () => ({ data: undefined }),
   };
 });
 

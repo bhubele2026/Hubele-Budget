@@ -29,6 +29,8 @@ vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 vi.mock("@workspace/api-client-react", () => ({
   useCreatePlaidUpdateLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreatePlaidLinkToken: () => ({ mutate: vi.fn(), isPending: false }),
+  useExchangePlaidPublicToken: () => ({ mutate: vi.fn(), isPending: false }),
   getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
   getListTransactionsQueryKey: () => ["/api/transactions"],
   getListDebtsQueryKey: () => ["/api/debts"],

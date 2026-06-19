@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   render,
   screen,
@@ -216,6 +216,8 @@ vi.mock("@workspace/api-client-react", () => {
     useListRecurringItems: () => ({ data: [], isLoading: false }),
     useGetAvalancheSettings: () => ({ data: undefined }),
     useGetAvalancheExtra: () => ({ data: undefined }),
+    useCreateRecurringItem: noopMutation,
+    useGetForecastAvalancheSchedule: () => ({ data: undefined, isLoading: false }),
     getGetForecastQueryKey: () => ["forecast"],
     getGetForecastCashSignalQueryKey: () => ["forecast-cash-signal"],
     getListTransactionsQueryKey: () => ["transactions"],
@@ -267,6 +269,16 @@ beforeEach(() => {
   toastMock.mockClear();
   upsertMutate.mockClear();
   localStorage.clear();
+  // Anchor "today" inside May 2026 so the page's default monthFilter
+  // (derived from `useMemo(() => new Date(), [])`) matches the May-2026
+  // fixture and the planned rows under test render. Only Date is faked so
+  // the synchronous dnd handlers and act() flushes keep working.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 4, 15, 12, 0, 0));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("Forecast — drag inbox expense onto planned to match (#456)", () => {

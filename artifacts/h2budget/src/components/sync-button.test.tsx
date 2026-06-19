@@ -44,6 +44,13 @@ vi.mock("@workspace/api-client-react", () => ({
   useSyncPlaidTransactions: () => ({ mutate: mutateMock, isPending: false }),
   getListPlaidItemsQueryKey: () => ["/api/plaid/items"],
   getListTransactionsQueryKey: () => ["/api/transactions"],
+  // usePlaidSync (real, unmocked here) and PlaidReconnectButton invalidate
+  // these query keys after a sync/reconnect, so the mock must expose them.
+  getListDebtsQueryKey: () => ["/api/debts"],
+  getGetBillsSummaryQueryKey: () => ["/api/bills/summary"],
+  getGetForecastQueryKey: () => ["/api/forecast"],
+  getGetForecastCashSignalQueryKey: () => ["/api/forecast/cash-signal"],
+  getGetDashboardQueryKey: () => ["/api/dashboard"],
   // Stub the update-link-token mutation used by PlaidReconnectButton so we
   // don't need to mount real react-plaid-link in these unit tests.
   useCreatePlaidUpdateLinkToken: () => ({

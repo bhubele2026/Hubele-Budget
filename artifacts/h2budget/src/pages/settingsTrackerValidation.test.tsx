@@ -61,6 +61,20 @@ vi.mock("@workspace/api-client-react", () => {
     getGetPlaidEnvironmentQueryKey: () => ["plaid-env"],
     getListPlaidItemsQueryKey: () => ["plaid-items"],
     getListTransactionsQueryKey: () => ["transactions"],
+    getGetForecastQueryKey: () => ["forecast"],
+    // Hooks SettingsPage (and its unconditionally-rendered children) call at
+    // render time that were added after this test was first written.
+    useClearPlaidItemRefreshDisabled: () => mutation,
+    useUpdatePlaidImportCutoffDate: () => mutation,
+    useDedupeTransactions: () => mutation,
+    useGetDuplicateTransactionCount: () => ({ data: undefined }),
+    getGetDuplicateTransactionCountQueryKey: () => ["duplicate-count"],
+    // OwnerBankHealthSweepSection renders unconditionally in SettingsPage.
+    useGetMe: () => ({ data: { isOwner: false }, isLoading: false }),
+    useRunPlaidMalformedTokenSweep: () => mutation,
+    // PlaidSyncHistory renders once per linked Plaid item.
+    useListPlaidSyncAttempts: () => ({ data: undefined, isLoading: false, isError: false }),
+    getListPlaidSyncAttemptsQueryKey: (id: string) => ["plaid-sync-attempts", id],
   };
 });
 

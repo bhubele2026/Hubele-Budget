@@ -172,6 +172,8 @@ vi.mock("@workspace/api-client-react", () => {
     useListRecurringItems: () => empty,
     useGetAvalancheSettings: () => ({ data: undefined }),
     useGetAvalancheExtra: () => ({ data: undefined }),
+    useCreateRecurringItem: noopMutation,
+    useGetForecastAvalancheSchedule: () => ({ data: undefined, isLoading: false }),
     getGetForecastQueryKey: () => ["forecast"],
     getGetForecastCashSignalQueryKey: () => ["forecast-cash-signal"],
     getListTransactionsQueryKey: () => ["transactions"],

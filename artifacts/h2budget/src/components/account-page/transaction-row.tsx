@@ -108,8 +108,11 @@ export function AccountTransactionRow({
         {metaNode}
       </div>
       {/* Card / source */}
-      <div className="shrink-0 truncate text-xs text-muted-foreground">
-        {cardLabel || ""}
+      <div
+        className="shrink-0 truncate text-xs text-muted-foreground"
+        data-testid={`text-card-${tx.id}`}
+      >
+        {cardLabel || "—"}
       </div>
       <div className="shrink-0 flex items-center gap-1.5 min-w-0">
         <CategoryPicker

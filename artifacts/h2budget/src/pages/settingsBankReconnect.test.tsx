@@ -93,12 +93,29 @@ vi.mock("@workspace/api-client-react", () => {
     useCleanupNonProdPlaidItems: () => mutation,
     useRefreshPlaidConsentExpirations: () => mutation,
     useListCategories: () => CATEGORIES_RESULT,
+    // OwnerBankHealthSweepSection (rendered for real) reads these; returning
+    // no `me` keeps isOwner=false so the section renders null.
+    useGetMe: () => ({ data: undefined, isLoading: false }),
+    useRunPlaidMalformedTokenSweep: () => mutation,
     useCreatePlaidUpdateLinkToken: () => mutation,
+    // PlaidReconnectButton (rendered for real in this page) also pulls these.
+    useCreatePlaidLinkToken: () => mutation,
+    useExchangePlaidPublicToken: () => mutation,
+    // Dedupe / refresh-disabled / import-cutoff controls SettingsPage renders.
+    useClearPlaidItemRefreshDisabled: () => mutation,
+    useDedupeTransactions: () => mutation,
+    useGetDuplicateTransactionCount: () => ({ data: undefined }),
+    useUpdatePlaidImportCutoffDate: () => mutation,
     getGetSettingsQueryKey: () => ["settings"],
     getListDashboardBudgetsQueryKey: () => ["dashboard-budgets"],
     getGetPlaidEnvironmentQueryKey: () => ["plaid-env"],
     getListPlaidItemsQueryKey: () => ["plaid-items"],
     getListTransactionsQueryKey: () => ["transactions"],
+    getGetDuplicateTransactionCountQueryKey: () => ["duplicate-count"],
+    getGetForecastQueryKey: () => ["forecast"],
+    getListDebtsQueryKey: () => ["debts"],
+    getGetBillsSummaryQueryKey: () => ["bills-summary"],
+    getGetDashboardQueryKey: () => ["dashboard"],
     useListPlaidSyncAttempts: () => ({ data: undefined, isLoading: false, isError: false }),
     getListPlaidSyncAttemptsQueryKey: (id: string) => ["plaid-sync-attempts", id],
   };

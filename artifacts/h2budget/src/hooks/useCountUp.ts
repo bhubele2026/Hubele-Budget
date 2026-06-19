@@ -16,11 +16,19 @@ export function useCountUp(
   useEffect(() => {
     if (target == null || !Number.isFinite(target)) return;
 
+    // Jump straight to the target (no animation) when the user prefers
+    // reduced motion, OR when we're not in a real browser (no matchMedia /
+    // no requestAnimationFrame — e.g. SSR or jsdom under test). Animating
+    // from 0 in those environments would leave the value stuck at 0 because
+    // the rAF tick never runs synchronously.
+    const noBrowserAnimation =
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function" ||
+      typeof window.requestAnimationFrame !== "function";
     const reduce =
-      typeof window !== "undefined" &&
-      typeof window.matchMedia === "function" &&
+      !noBrowserAnimation &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
+    if (noBrowserAnimation || reduce) {
       setVal(target);
       fromRef.current = target;
       return;

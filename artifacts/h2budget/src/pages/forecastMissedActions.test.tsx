@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   render,
   screen,
@@ -229,9 +229,21 @@ beforeEach(() => {
   deleteMutate.mockClear();
   sessionStorage.clear();
   localStorage.clear();
+  // Pin "today" to 2026-05-29 — the date this fixture was authored against.
+  // The Missed bucket, the visible plan register, and the today..+30 move
+  // window are all relative to "today"; with the late-May fixture this keeps
+  // Rent (05-30) and HELOC (05-31) inside the window and the May Missed
+  // bucket as the default month. `shouldAdvanceTime` lets React's scheduler
+  // (useDeferredValue) keep ticking so the register settles on mount.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(new Date("2026-05-29T12:00:00.000Z"));
   // Pin the active month to May 2026 so the May fixture's bucket is the
   // one rendered.
   sessionStorage.setItem("h2budget:forecastFromDate", "2026-05-01");
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("Forecast — Missed bucket actions (#480)", () => {

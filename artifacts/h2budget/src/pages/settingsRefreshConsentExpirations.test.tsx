@@ -128,6 +128,17 @@ vi.mock("@workspace/api-client-react", () => {
     getListTransactionsQueryKey: () => ["transactions"],
     useListPlaidSyncAttempts: () => ({ data: undefined, isLoading: false, isError: false }),
     getListPlaidSyncAttemptsQueryKey: (id: string) => ["plaid-sync-attempts", id],
+    getGetForecastQueryKey: () => ["forecast"],
+    // Hooks SettingsPage (and its unconditionally-rendered children) call at
+    // render time that were added after this test was first written.
+    useClearPlaidItemRefreshDisabled: () => mutation,
+    useUpdatePlaidImportCutoffDate: () => mutation,
+    useDedupeTransactions: () => mutation,
+    useGetDuplicateTransactionCount: () => ({ data: undefined }),
+    getGetDuplicateTransactionCountQueryKey: () => ["duplicate-count"],
+    // OwnerBankHealthSweepSection renders unconditionally in SettingsPage.
+    useGetMe: () => ({ data: { isOwner: false }, isLoading: false }),
+    useRunPlaidMalformedTokenSweep: () => mutation,
   };
 });
 

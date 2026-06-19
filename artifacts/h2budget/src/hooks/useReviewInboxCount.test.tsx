@@ -76,7 +76,9 @@ describe("useReviewInboxCount (#751)", () => {
     expect(result.current).toBe(2);
   });
 
-  it("adds a past-due plan from last month with no resolution → 2 + 1 = 3", () => {
+  it("(#803 revert) a past-due plan from last month does NOT add to the badge", () => {
+    // The badge no longer counts plan rows — plan reconciliation moved to
+    // the Weekly Debrief. Only the 2 current-month bank txns count.
     mockData.current = baseBundle({
       transactions: [
         bankTxn("t1", CUR_MONTH_TXN_DATE),
@@ -85,10 +87,10 @@ describe("useReviewInboxCount (#751)", () => {
       events: [planEvent("p-old", PREV_MONTH_ISO)],
     });
     const { result } = renderHook(() => useReviewInboxCount());
-    expect(result.current).toBe(3);
+    expect(result.current).toBe(2);
   });
 
-  it("a matched past-due plan does not increase the count", () => {
+  it("(#803 revert) plan rows — matched or not — never change the count", () => {
     mockData.current = baseBundle({
       transactions: [
         bankTxn("t1", CUR_MONTH_TXN_DATE),
@@ -109,8 +111,8 @@ describe("useReviewInboxCount (#751)", () => {
       ],
     });
     const { result } = renderHook(() => useReviewInboxCount());
-    // 2 bank + 1 past-due pending (the matched one is excluded).
-    expect(result.current).toBe(3);
+    // Only the 2 bank txns count; plan rows are ignored entirely.
+    expect(result.current).toBe(2);
   });
 
   it("future plans never count toward the badge", () => {
@@ -125,13 +127,37 @@ describe("useReviewInboxCount (#751)", () => {
       ],
     });
     const { result } = renderHook(() => useReviewInboxCount());
-    // 2 bank + 1 past-due pending; future is ignored.
-    expect(result.current).toBe(3);
+    // Only the 2 current-month bank txns count; all plan rows are ignored.
+    expect(result.current).toBe(2);
   });
 
-  it("a past-due plan dated today still counts (boundary)", () => {
+  it("(#803 revert) a past-due plan dated today does NOT count", () => {
+    // No bank txns, only a plan row dated today — the badge is 0 because
+    // plan rows no longer feed the count.
     mockData.current = baseBundle({
       events: [planEvent("p-today", TODAY_ISO)],
+    });
+    const { result } = renderHook(() => useReviewInboxCount());
+    expect(result.current).toBe(0);
+  });
+
+  it("matched current-month bank txns are excluded from the count", () => {
+    // A bank txn whose id is referenced by a resolution.matchedTxnId is
+    // already triaged, so it must not inflate the badge.
+    mockData.current = baseBundle({
+      transactions: [
+        bankTxn("t1", CUR_MONTH_TXN_DATE),
+        bankTxn("t2", CUR_MONTH_TXN_DATE_2),
+      ],
+      resolutions: [
+        {
+          id: "r1",
+          recurringItemId: "p-x",
+          occurrenceDate: CUR_MONTH_TXN_DATE,
+          status: "matched",
+          matchedTxnId: "t1",
+        },
+      ],
     });
     const { result } = renderHook(() => useReviewInboxCount());
     expect(result.current).toBe(1);

@@ -42,6 +42,21 @@ vi.mock("@workspace/api-client-react", () => {
     useUpsertDashboardBudget: () => ({ mutate: noop, isPending: false }),
     useDeleteDashboardBudget: () => ({ mutate: noop, isPending: false }),
     useUpdateTransaction: () => ({ mutate: noop, mutateAsync: async () => undefined }),
+    // WeeklyMonthlySection (mounted by DashboardMonthlyBuckets) reads weekly
+    // settlements plus the close/reopen mutations — without them the render
+    // throws "No useListWeeklySettlements export is defined on the mock".
+    useListWeeklySettlements: () => ({ data: [], isLoading: false }),
+    useCloseOutWeek: () => ({
+      mutate: noop,
+      mutateAsync: async () => undefined,
+      isPending: false,
+    }),
+    useReopenWeek: () => ({
+      mutate: noop,
+      mutateAsync: async () => undefined,
+      isPending: false,
+    }),
+    getListWeeklySettlementsQueryKey: () => ["/api/weekly-settlements"],
     getListDashboardBudgetsQueryKey: (args: DashListArgs) => ["dash", args],
     getListTransactionsQueryKey: () => ["txns"],
   };
