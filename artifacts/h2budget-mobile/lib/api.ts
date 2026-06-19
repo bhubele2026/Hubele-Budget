@@ -43,6 +43,33 @@ export type Nudge = {
   message?: string;
 };
 
+// Mirror of GET /api/debts (only the fields the mobile glance reads). The
+// server returns many more Plaid-status fields; we keep the contract loose.
+export type Debt = {
+  id: string;
+  name: string;
+  apr: string;
+  balance: string;
+  minPayment: string;
+  status: string;
+};
+
+// Mirror of GET /api/avalanche/settings.
+export type AvalancheSettings = {
+  strategy: "avalanche" | "snowball";
+  extraSource: string;
+  extraBudgetCategoryId: string | null;
+  manualExtra: string;
+  budgetMode: string;
+};
+
+// Mirror of GET /api/amex/anchor.
+export type AmexAnchor = {
+  amexEndingBalance: number | null;
+  asOf: string;
+  source: "plaid" | "debt" | "anchor" | "computed" | "missing";
+};
+
 /**
  * Thin API client against the existing H2 Budget backend. Every call carries
  * the Clerk session token (Bearer) so `requireAuth` on the server accepts it.
@@ -78,6 +105,10 @@ export function createApi(getToken: () => Promise<string | null>) {
         method: "PATCH",
         body: JSON.stringify({ categoryId }),
       }),
+    getDebts: () => req<Debt[]>("/debts"),
+    getAvalancheSettings: () =>
+      req<AvalancheSettings>("/avalanche/settings"),
+    getAmexAnchor: () => req<AmexAnchor>("/amex/anchor"),
   };
 }
 
