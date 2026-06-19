@@ -653,10 +653,16 @@ describe("(#367) /plaid/exchange relink self-heal", () => {
     expect(healed.lastSyncErrorCode).toBeNull();
     expect(healed.accessToken).toBe(nextExchangeAccessToken);
 
-    // Backfill called /transactions/get with start = day after
-    // lastBankTxOn (2026-04-25 → 2026-04-26), scoped to this account.
+    // Backfill called /transactions/get, scoped to this account. The relink
+    // path now runs the gap-backfill in two phases: first the force-refresh
+    // initial sync's stale-cursor fallback (empty cursor delta + healthy
+    // row) pulls /transactions/get and ADOPTS the manual 2026-05-02 outage
+    // row in place (attaching plaid_account_id), then the explicit post-
+    // relink gap-backfill runs. By that second call the newest Plaid-account
+    // row on file is the just-adopted 2026-05-02 row, so the start anchor is
+    // the day after it (2026-05-03). `lastGetCall` captures that final call.
     expect(lastGetCall).not.toBeNull();
-    expect(lastGetCall!.start_date).toBe("2026-04-26");
+    expect(lastGetCall!.start_date).toBe("2026-05-03");
     expect(lastGetCall!.account_ids).toEqual([externalAcctId]);
 
     // No duplicates: the manual row was adopted, not re-inserted.

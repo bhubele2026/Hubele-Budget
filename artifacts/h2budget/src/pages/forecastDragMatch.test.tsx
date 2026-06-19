@@ -269,6 +269,14 @@ beforeEach(() => {
   toastMock.mockClear();
   upsertMutate.mockClear();
   localStorage.clear();
+  // The forecast register hides plan rows before `forecastFromDate`
+  // (visibleFromISO), which defaults to today unless a stored past date +
+  // look-back-open flag are present. The rent fixture lands on 2026-05-01,
+  // before the frozen "today" of mid-May, so seed the from-date (mirroring
+  // forecastBigBillJump) to keep the May-1 plan rows in the active window.
+  sessionStorage.clear();
+  sessionStorage.setItem("h2budget:forecastFromDate", "2026-05-01");
+  sessionStorage.setItem("h2budget:forecastLookbackOpen", "true");
   // Anchor "today" inside May 2026 so the page's default monthFilter
   // (derived from `useMemo(() => new Date(), [])`) matches the May-2026
   // fixture and the planned rows under test render. Only Date is faked so

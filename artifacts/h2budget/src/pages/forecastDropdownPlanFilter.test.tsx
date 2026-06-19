@@ -309,6 +309,13 @@ beforeEach(() => {
   cleanup();
   forecastData = { ...FORECAST_BASE };
   upsertMutate.mockClear();
+  // The forecast register hides plan rows before `forecastFromDate`
+  // (visibleFromISO), which defaults to today. Seed the from-date to the
+  // month start + look-back-open (mirroring forecastBigBillJump) so the
+  // bank card + in-window plans render and the dropdown filter can run.
+  sessionStorage.clear();
+  sessionStorage.setItem("h2budget:forecastFromDate", "2026-05-01");
+  sessionStorage.setItem("h2budget:forecastLookbackOpen", "true");
   // Anchor "today" at May 11, 2026 — same as the unit-test fixture so
   // end-of-month (May 31) > today + 21d (Jun 1), meaning a Jun 1 plan
   // is in-window but Jun 2 is not. Use modern fake timers so
