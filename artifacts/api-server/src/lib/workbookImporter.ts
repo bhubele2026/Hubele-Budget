@@ -13,6 +13,7 @@ import {
 } from "@workspace/db";
 import { categorize, type RuleRow } from "./autoCategorize";
 import { refreshAmexAnchor } from "./amexAnchor";
+import { captureImportSnapshot } from "./importSnapshot";
 
 type Row = (string | number | Date | null)[];
 
@@ -143,6 +144,11 @@ export type ImportRuleAttribution = {
 
 export type ImportResult = {
   counts: Record<string, number>;
+  // Id of the pre-import safety snapshot taken before the destructive wipe.
+  // Surfaced so the client can offer a one-click "Undo this import" that hits
+  // POST /api/import/snapshots/:id/restore. Undefined only if snapshotting was
+  // explicitly skipped (e.g. internal seed paths).
+  snapshotId?: string;
   // Per-rule attribution breakdown for transactions auto-categorized by the
   // user's mapping_rules during this import. Mirrors the Plaid sync result so
   // the client can render the same "Auto-categorized N: X via 'STARBUCKS', Y
@@ -158,6 +164,7 @@ export async function importWorkbook(
   householdId: string,
   wb: XLSX.WorkBook,
   batchId: string,
+  opts?: { filename?: string | null },
 ): Promise<ImportResult> {
   const REQUIRED = [
     "Debt Tracker",
@@ -221,6 +228,16 @@ export async function importWorkbook(
         t.categoryId,
       );
     }
+
+    // Pre-import safety snapshot. Capture EVERYTHING we're about to wipe
+    // (inside this same transaction, so backup+wipe+import are atomic) so an
+    // accidental import is recoverable via POST /api/import/snapshots/:id/restore.
+    const snapshotId = await captureImportSnapshot(tx as unknown as typeof db, {
+      userId,
+      householdId,
+      importBatchId: batchId,
+      filename: opts?.filename ?? null,
+    });
 
     // Wipe existing user data so re-imports are deterministic
     await tx.delete(transactionsTable).where(eq(transactionsTable.userId, userId));
@@ -589,6 +606,6 @@ export async function importWorkbook(
       attributionCounts.values(),
     ).sort((a, b) => b.count - a.count);
 
-    return { counts, ruleAttributions };
+    return { counts, ruleAttributions, snapshotId };
   });
 }

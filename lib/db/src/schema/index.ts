@@ -1258,3 +1258,41 @@ export const advisorMemoryTable = pgTable(
     householdIdx: index("advisor_memory_household_idx").on(t.householdId, t.createdAt),
   }),
 );
+
+// Pre-import safety net. POST /api/import/workbook is per-user DESTRUCTIVE:
+// it wipes the user's transactions, budget lines/months, recurring items,
+// mapping rules, monthly snapshots, debts, and categories inside a single
+// transaction before re-seeding from the workbook. An accidental import (wrong
+// file, partial workbook) is therefore unrecoverable from the app alone.
+//
+// To make it recoverable, the import route snapshots ALL of the soon-to-be-
+// wiped rows into `payload` BEFORE the wipe, and a one-click restore endpoint
+// replays them. `payload` is the raw `$inferSelect` rows keyed by table name;
+// amounts stay strings exactly as stored, so a restore is byte-for-byte.
+export const importSnapshotsTable = pgTable(
+  "import_snapshots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // The actor (req.userId) whose per-user data was snapshotted. The wipe and
+    // restore are both scoped by this user_id, matching the importer.
+    userId: text("user_id").notNull(),
+    householdId: uuid("household_id").references(() => householdsTable.id, {
+      onDelete: "cascade",
+    }),
+    // The import batch this snapshot was taken for (the import that wiped the
+    // data). Lets the UI tie "Restore" to a specific import.
+    importBatchId: uuid("import_batch_id"),
+    filename: text("filename"),
+    // Per-table arrays of the pre-import rows, e.g.
+    // { transactions: [...], budgetLines: [...], ... }. Stored verbatim.
+    payload: jsonb("payload").notNull(),
+    // Lifecycle: 'available' (can be restored), 'restored' (already replayed).
+    status: text("status").notNull().default("available"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    restoredAt: timestamp("restored_at", { withTimezone: true }),
+  },
+  (t) => ({
+    userIdx: index("import_snapshots_user_idx").on(t.userId, t.createdAt),
+  }),
+);
+export type ImportSnapshot = typeof importSnapshotsTable.$inferSelect;

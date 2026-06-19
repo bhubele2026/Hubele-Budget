@@ -1,5 +1,7 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
@@ -42,7 +44,29 @@ app.use(
 
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
+// CORS: origin:true reflects the request's Origin header back, which is
+// INTENTIONAL here. This API is fronted by the same deployment as the SPA
+// and is only ever called from the app's own origin (plus the Clerk proxy);
+// credentials:true requires a concrete origin (the spec forbids "*" with
+// credentials), so reflecting the caller's origin is the supported pattern
+// for a first-party app. Do NOT tighten this to a hard-coded host without
+// also updating the Replit/preview/custom-domain origins, or the SPA breaks.
 app.use(cors({ credentials: true, origin: true }));
+
+// Security headers. helmet only SETS response headers — it never parses or
+// blocks the request body, so it is safe to register before the raw-body
+// capture and JSON parsers below. contentSecurityPolicy is DISABLED on
+// purpose: the SPA is served from the same origin and helmet's default CSP
+// (default-src 'self') would block inline styles/scripts and the Clerk
+// widget, breaking the app. crossOriginEmbedderPolicy is left off so
+// third-party embeds (Plaid Link, Clerk) keep working.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }),
+);
+
 // Plaid webhooks are JWT-signed and the JWT carries a SHA-256 of the raw
 // request body, so we MUST capture the unparsed bytes for that one route
 // before express.json() turns the body into a JS object. `type: () => true`
@@ -53,6 +77,27 @@ app.use(
 );
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
+
+// Basic abuse limiter for the JSON API. Registered AFTER the body parsers
+// (so raw-body capture and JSON parsing are untouched) and scoped to /api
+// so it never throttles the SPA's static assets or the Clerk proxy. The
+// Plaid webhook is EXEMPTED — Plaid retries aggressively and a 429 there
+// would drop legitimate bank updates; that route is already authenticated
+// by its signed JWT. Limits are deliberately generous (a logged-in app
+// session makes many XHRs); this exists to blunt scripted abuse, not to
+// rate-shape normal use. Window/cap are env-tunable for ops.
+const rateWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000;
+const rateMax = Number(process.env.RATE_LIMIT_MAX) || 600;
+app.use(
+  "/api",
+  rateLimit({
+    windowMs: rateWindowMs,
+    max: rateMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.path === "/plaid/webhook" || req.path === "/health",
+  }),
+);
 
 app.use(
   clerkMiddleware((req) => ({
