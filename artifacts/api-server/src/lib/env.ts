@@ -1,25 +1,23 @@
 /**
  * Centralized, fail-fast environment configuration. (8-phase plan, Phase 1.)
  *
- * Before this module, ~70 `process.env.X` reads were scattered across the
- * server and only Plaid was validated at boot — a typo'd or missing var
- * surfaced as a confusing failure on the first request that happened to
- * need it. Here we parse `process.env` once, with a single Zod schema, so:
- *
  *   - `env`           — a typed, coerced snapshot, safe to import anywhere.
- *                       Lenient on purpose so importing it (incl. in tests)
- *                       never throws; numeric/boolean coercion happens here.
- *   - `validateEnv()` — the strict boot gate. Aggregates EVERY missing or
- *                       invalid required var into one readable error and
- *                       throws. Call this once, at server boot, BEFORE
- *                       `app.listen`. A bad config fails at boot, not on the
- *                       first request.
+ *                       The parse NEVER throws (no enum/range refinements), so
+ *                       importing this module can't crash the process.
+ *   - `validateEnv()` — the strict boot gate. Enforces ONLY what the original
+ *                       boot path enforced — PORT (present + positive) and the
+ *                       Plaid production / all-or-nothing rules — and throws a
+ *                       single aggregated, readable error. DATABASE_URL is
+ *                       validated by the db package itself; Clerk keys are
+ *                       handled by the Clerk middleware — neither is forced
+ *                       here, so this gate can't break a previously-booting
+ *                       deploy.
  *
  * Money is never read here. Keep this module dependency-light (zod only).
  */
 import { z } from "zod";
 
-/** "true"/"1"/"yes" → true; everything else (incl. unset) → false. */
+/** "true"/"1"/"yes"/"on" → true; everything else (incl. unset) → false. */
 const boolish = z
   .string()
   .optional()
@@ -28,21 +26,27 @@ const boolish = z
     return ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
   });
 
-/** Optional positive integer from a string env var. */
+/**
+ * Optional number from a string env var. NEVER throws — blank/non-numeric →
+ * undefined. No range refinement: env vars like `*_MS=0` are legitimate and
+ * must not crash boot. (Range checks that matter, e.g. PORT, live in
+ * validateEnv.)
+ */
 const intish = z
   .string()
   .optional()
-  .transform((v) => (v == null || v.trim() === "" ? undefined : Number(v)))
-  .refine((v) => v == null || (Number.isFinite(v) && v > 0), {
-    message: "must be a positive integer",
+  .transform((v) => {
+    if (v == null || v.trim() === "") return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
   });
 
 const PLAID_ENVS = ["sandbox", "development", "production"] as const;
 
 /**
- * Lenient schema — used for the always-importable `env` snapshot. Required
- * invariants are enforced separately in `validateEnv()` so that importing
- * `env` (e.g. from a unit test that pulls in a route) never explodes.
+ * Lenient schema for the always-importable `env` snapshot. Every field is
+ * optional/coerced and NOTHING throws on parse (PLAID_ENV is a plain string
+ * here; its allowed values are checked in validateEnv, not at parse time).
  */
 const lenient = z.object({
   NODE_ENV: z.string().default("development"),
@@ -66,7 +70,7 @@ const lenient = z.object({
 
   PLAID_CLIENT_ID: z.string().optional(),
   PLAID_SECRET: z.string().optional(),
-  PLAID_ENV: z.enum(PLAID_ENVS).optional(),
+  PLAID_ENV: z.string().optional(),
   PLAID_REDIRECT_URI: z.string().optional(),
   PLAID_WEBHOOK_URL: z.string().optional(),
   PLAID_OPTIONAL_PRODUCTS_CSV: z.string().optional(),
@@ -82,39 +86,28 @@ const lenient = z.object({
   ENABLE_APRIL_CHASE_SEED: boolish,
   APRIL_CHASE_SEED_HOUSEHOLD_ALLOWLIST: z.string().optional(),
 
-  // Error monitoring (Phase 1 follow-up). Absent → monitoring disabled.
   SENTRY_DSN: z.string().optional(),
 });
 
 export type Env = z.infer<typeof lenient>;
 
 /**
- * Typed, coerced snapshot of the environment. Safe to import anywhere; does
- * NOT enforce required-ness (that's `validateEnv`). Prefer this over raw
- * `process.env.X` reads so coercion/typing is consistent.
+ * Typed, coerced snapshot of the environment. Safe to import anywhere; the
+ * parse cannot throw. Prefer this over raw `process.env.X` reads.
  */
-export const env: Env = lenient.parse(process.env);
+export const env: Env = lenient.safeParse(process.env).data ?? lenient.parse({});
 
 /**
- * Strict boot gate. Throws a single aggregated error naming every missing or
- * invalid required var. Plaid rules mirror the historical boot behavior:
- *   - production: PLAID_CLIENT_ID + PLAID_SECRET + PLAID_ENV all required,
- *     and PLAID_ENV must be "production" (never serve sandbox data live).
+ * Strict boot gate. Throws a single aggregated error if PORT is missing/invalid
+ * or Plaid is misconfigured. Mirrors the ORIGINAL boot validation exactly — it
+ * does not add new required vars, so it cannot break a deploy that booted
+ * before. Plaid rules:
+ *   - production: PLAID_CLIENT_ID + PLAID_SECRET + PLAID_ENV all required, and
+ *     PLAID_ENV must be "production" (never serve sandbox data live).
  *   - non-production: all-or-nothing — set all three or none.
  */
 export function validateEnv(raw: NodeJS.ProcessEnv = process.env): Env {
   const problems: string[] = [];
-
-  const require = (key: keyof Env, why?: string) => {
-    const v = raw[key as string];
-    if (!v || v.trim() === "") {
-      problems.push(`  - ${key} is required${why ? ` (${why})` : ""}`);
-    }
-  };
-
-  require("DATABASE_URL", "Postgres connection string");
-  require("CLERK_PUBLISHABLE_KEY", "auth");
-  require("CLERK_SECRET_KEY", "auth");
 
   const rawPort = raw.PORT;
   if (!rawPort || rawPort.trim() === "") {
@@ -132,7 +125,7 @@ export function validateEnv(raw: NodeJS.ProcessEnv = process.env): Env {
       );
     } else if (raw.PLAID_ENV !== "production") {
       problems.push(
-        `  - PLAID_ENV must be "production" when NODE_ENV=production (got "${raw.PLAID_ENV}") — refusing to serve sandbox data live`,
+        `  - PLAID_ENV must be "production" when NODE_ENV=production (got "${raw.PLAID_ENV}")`,
       );
     }
   } else if (anyPlaid) {
@@ -140,7 +133,9 @@ export function validateEnv(raw: NodeJS.ProcessEnv = process.env): Env {
       problems.push(
         "  - Plaid is partially configured: set PLAID_CLIENT_ID, PLAID_SECRET, and PLAID_ENV together, or none",
       );
-    } else if (!PLAID_ENVS.includes(raw.PLAID_ENV as (typeof PLAID_ENVS)[number])) {
+    } else if (
+      !PLAID_ENVS.includes(raw.PLAID_ENV as (typeof PLAID_ENVS)[number])
+    ) {
       problems.push(
         `  - PLAID_ENV must be one of ${PLAID_ENVS.join(", ")} (got "${raw.PLAID_ENV}")`,
       );
