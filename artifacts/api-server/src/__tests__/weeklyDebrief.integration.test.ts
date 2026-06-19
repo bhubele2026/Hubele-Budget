@@ -26,6 +26,7 @@ import {
   plaidItemsTable,
   weeklyDebriefsTable,
   budgetCategoriesTable,
+  settingsTable,
 } from "@workspace/db";
 import { createTestHousehold } from "./_helpers/testHousehold";
 import {
@@ -68,6 +69,7 @@ async function cleanup(): Promise<void> {
   await db
     .delete(budgetCategoriesTable)
     .where(eq(budgetCategoriesTable.userId, TEST_USER));
+  await db.delete(settingsTable).where(eq(settingsTable.userId, TEST_USER));
 }
 
 beforeAll(async () => {
@@ -243,8 +245,67 @@ describe("computeWeekVariance", () => {
     expect(snap.totals.actualExpenses).toBe("1512.00");
     // Open items = 2 unmatched plans + 2 unreviewed unplanned txns
     expect(snap.openItemsCount).toBe(4);
+    // (#M47) Freed for the avalanche = max(0, actualIncome −
+    // actualExpenses − reservedAllowance). Income $25 < expenses $1512
+    // and no allowance set, so the week freed nothing → floored at 0.
+    expect(snap.totals.freedForAvalanche).toBe("0.00");
     // Reference unused recurring var so eslint is happy
     void salary;
+  });
+
+  it("(#M47) freedForAvalanche = surplus minus reserved weekly allowance, floored at 0", async () => {
+    const externalAcct = await setupCheckingAccount();
+    // Reserve a $100 weekly allowance for the household.
+    await db.insert(settingsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      weeklyAllowanceAmount: "100.00",
+    });
+    // Bank txns in the prior week: $1000 income, $300 expense.
+    // Surplus = $700; freed = 700 − 100 allowance = $600.
+    await db.insert(transactionsTable).values([
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-18",
+        occurredAt: "2026-05-18T12:00:00Z",
+        description: "Paycheck",
+        amount: "1000.00",
+        plaidAccountId: externalAcct,
+        source: "plaid",
+      },
+      {
+        userId: TEST_USER,
+        householdId: TEST_HOUSEHOLD_ID,
+        occurredOn: "2026-05-19",
+        occurredAt: "2026-05-19T12:00:00Z",
+        description: "Groceries",
+        amount: "-300.00",
+        plaidAccountId: externalAcct,
+        source: "plaid",
+      },
+    ]);
+
+    const snap = await computeWeekVariance(TEST_HOUSEHOLD_ID, PRIOR_WEEK);
+    expect(snap.totals.actualIncome).toBe("1000.00");
+    expect(snap.totals.actualExpenses).toBe("300.00");
+    expect(snap.totals.freedForAvalanche).toBe("600.00");
+
+    // Bump expenses so the surplus is smaller than the reserved
+    // allowance — freed must floor at 0 (can't free negative ammo).
+    await db.insert(transactionsTable).values({
+      userId: TEST_USER,
+      householdId: TEST_HOUSEHOLD_ID,
+      occurredOn: "2026-05-20",
+      occurredAt: "2026-05-20T12:00:00Z",
+      description: "Big bill",
+      amount: "-950.00",
+      plaidAccountId: externalAcct,
+      source: "plaid",
+    });
+    const snap2 = await computeWeekVariance(TEST_HOUSEHOLD_ID, PRIOR_WEEK);
+    // Surplus now 1000 − 1250 = −250; minus allowance → still floored at 0.
+    expect(snap2.totals.freedForAvalanche).toBe("0.00");
   });
 
   it("income matched within ±7 days counts as matched_on_time with $0 variance", async () => {

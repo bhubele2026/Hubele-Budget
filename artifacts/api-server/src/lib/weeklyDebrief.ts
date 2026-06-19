@@ -207,6 +207,38 @@ export async function computeWeekVariance(
   );
   const isBankRow = makeIsBankRow(configuredCheckingExternalId);
 
+  // (#M47) Weekly Allowance reserve for THIS week. This is the cash the
+  // household has set aside for discretionary spend (groceries / fun) —
+  // money that is NOT free to throw at debt even when the week runs a
+  // surplus. Resolved the same way the Dashboard's weekly cap is: a
+  // per-month dashboard_budgets "weekly" override, else the owner's
+  // Settings weekly allowance. Computed once here so both the
+  // "freed for the avalanche" figure and the Groceries plan fallback
+  // below read the same number.
+  const weeklyAllowanceMonthKey = weekStart.slice(0, 7);
+  const [weeklyAllowanceOverrideRow] = await db
+    .select({ amount: dashboardBudgetsTable.amount })
+    .from(dashboardBudgetsTable)
+    .where(
+      and(
+        eq(dashboardBudgetsTable.householdId, householdId),
+        eq(dashboardBudgetsTable.bucket, "weekly"),
+        eq(dashboardBudgetsTable.periodKey, weeklyAllowanceMonthKey),
+      ),
+    );
+  const [weeklyAllowanceSettingsRow] = ownerUserId
+    ? await db
+        .select({ amount: settingsTable.weeklyAllowanceAmount })
+        .from(settingsTable)
+        .where(eq(settingsTable.userId, ownerUserId))
+    : [];
+  const weeklyAllowance =
+    Number(
+      weeklyAllowanceOverrideRow?.amount ??
+        weeklyAllowanceSettingsRow?.amount ??
+        0,
+    ) || 0;
+
   // Transactions whose pending-date (or fallback occurredOn) falls in
   // the week. We need a wider SQL filter than just occurredOn because
   // a row with occurredAt = Saturday but occurredOn = Monday belongs
@@ -749,25 +781,9 @@ export async function computeWeekVariance(
       !incomeCats.has(grocId) &&
       (weekShare.get(grocId) ?? 0) === 0
     ) {
-      const monthKey = weekStart.slice(0, 7);
-      const [weeklyOverride] = await db
-        .select({ amount: dashboardBudgetsTable.amount })
-        .from(dashboardBudgetsTable)
-        .where(
-          and(
-            eq(dashboardBudgetsTable.householdId, householdId),
-            eq(dashboardBudgetsTable.bucket, "weekly"),
-            eq(dashboardBudgetsTable.periodKey, monthKey),
-          ),
-        );
-      const [settingsAllowanceRow] = ownerUserId
-        ? await db
-            .select({ amount: settingsTable.weeklyAllowanceAmount })
-            .from(settingsTable)
-            .where(eq(settingsTable.userId, ownerUserId))
-        : [];
-      const weeklyAllowance =
-        Number(weeklyOverride?.amount ?? settingsAllowanceRow?.amount ?? 0) || 0;
+      // (#M47) Reuse the weekly allowance resolved once at the top of
+      // computeWeekVariance — same number the freed-for-avalanche figure
+      // sets aside.
       addPlanned(grocId, weeklyAllowance, "Weekly allowance");
     }
   }
@@ -807,6 +823,17 @@ export async function computeWeekVariance(
   const plannedNet = plannedIncome - plannedExpenses;
   const actualNet = actualIncome - actualExpenses;
 
+  // (#M47) Freed for the avalanche: the actual cash this week left over
+  // to throw at debt. It's the week's real surplus (actual income minus
+  // actual expenses) AFTER reserving the weekly allowance the household
+  // set aside for discretionary spend, floored at 0 — you can't free
+  // negative ammo. Top-line cash flow is Chase-only (bankTxns), same as
+  // actualIncome/actualExpenses.
+  const freedForAvalanche = Math.max(
+    0,
+    actualIncome - actualExpenses - weeklyAllowance,
+  );
+
   return {
     weekStart,
     weekEnd,
@@ -819,6 +846,7 @@ export async function computeWeekVariance(
       plannedNet: money(plannedNet),
       actualNet: money(actualNet),
       varianceNet: money(actualNet - plannedNet),
+      freedForAvalanche: money(freedForAvalanche),
     },
     plans: planItems,
     transactions: txnItems,

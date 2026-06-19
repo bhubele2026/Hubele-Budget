@@ -156,6 +156,23 @@ function money(n: number | string, opts: { signed?: boolean } = {}): string {
   return formatted;
 }
 
+// (#M47) The "freed for the avalanche" figure lives on the snapshot's
+// totals (computed server-side: max(0, actualIncome − actualExpenses −
+// reserved weekly allowance)). The generated `WeeklyDebriefTotals` type
+// predates this field, so read it defensively — fall back to deriving
+// it from the cash-flow totals (no allowance reserved) when an older
+// snapshot lacks it.
+function freedForAvalanche(
+  totals: NonNullable<WeeklyDebriefDetail["varianceSnapshot"]>["totals"],
+): number {
+  const raw = (totals as { freedForAvalanche?: string }).freedForAvalanche;
+  if (raw != null) return Number(raw) || 0;
+  return Math.max(
+    0,
+    Number(totals.actualIncome) - Number(totals.actualExpenses),
+  );
+}
+
 // ----- page -----------------------------------------------------------
 
 export default function DebriefPage() {
@@ -736,6 +753,8 @@ function DebriefPageActive({
             </Card>
           ) : (
             <>
+              <FreedForAvalancheBanner snapshot={snapshot} />
+
               <VarianceSummaryCard
                 snapshot={snapshot}
                 byCategory={snapshot.byCategory}
@@ -969,6 +988,69 @@ function DebriefPageActive({
 // =====================================================================
 // Subcomponents
 // =====================================================================
+
+// (#M47) "Freed for the avalanche" — the loud, matte-black headline stat
+// telling you exactly how much ammo this week freed up to throw at debt.
+// It's the week's real surplus (actual income − actual expenses) after
+// setting aside the reserved weekly allowance, floored at 0. Computed
+// server-side and read off the snapshot totals so the figure matches the
+// avalanche page's intent without recomputing it here.
+function FreedForAvalancheBanner({
+  snapshot,
+}: {
+  snapshot: NonNullable<WeeklyDebriefDetail["varianceSnapshot"]>;
+}) {
+  const freed = freedForAvalanche(snapshot.totals);
+  const hasAmmo = freed > 0;
+  return (
+    <Card
+      className={cn(
+        "border-2",
+        hasAmmo
+          ? "border-emerald-500/60 bg-zinc-950 text-zinc-50"
+          : "border-zinc-700 bg-zinc-950 text-zinc-300",
+      )}
+      data-testid="freed-for-avalanche"
+    >
+      <CardContent className="flex items-center justify-between gap-4 py-5">
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className={cn(
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+              hasAmmo ? "bg-emerald-500/20 text-emerald-400" : "bg-zinc-800 text-zinc-500",
+            )}
+          >
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[11px] uppercase tracking-widest text-zinc-400">
+              Freed for the avalanche this week
+            </div>
+            <div className="text-sm text-zinc-400">
+              {hasAmmo
+                ? "Surplus left after your allowance — go bury a balance."
+                : "Nothing left to throw this week. The avalanche waits."}
+            </div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div
+            className={cn(
+              "text-3xl font-bold tabular-nums tracking-tight",
+              hasAmmo ? "text-emerald-400" : "text-zinc-500",
+            )}
+            data-testid="freed-for-avalanche-amount"
+          >
+            {money(freed)}
+          </div>
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500">
+            {hasAmmo ? "freed for the kill" : "no ammo"}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function WeekHeader({ detail }: { detail: WeeklyDebriefDetail }) {
   return (
@@ -1788,16 +1870,52 @@ function ActionPanel({
   // unplanned ones (acknowledged or matched txns are already used).
   const candidateTxns = openUnplanned;
 
-  const [openPlans, setOpenPlans] = useState(true);
-  const [openUnp, setOpenUnp] = useState(true);
-  const [openPending, setOpenPending] = useState(true);
+  // (#M28) The Debrief's action surface defaults to ONLY the open items
+  // that need a decision: unmatched plans to match/skip/mark-missed and
+  // still-open unplanned charges to triage. Everything else — already
+  // resolved plans, already-acknowledged charges, and the full list of
+  // this week's pending bank rows — is secondary and starts collapsed so
+  // the user sees the decisions first, not the whole week. No data is
+  // dropped: collapsed sections stay one click away.
+  const openItemsCount = unmatchedPlans.length + openUnplanned.length;
+  // A decision section auto-opens only when it actually has open items;
+  // an empty "all resolved" section starts collapsed so it doesn't
+  // compete with the real work. "Pending bank transactions" is the
+  // whole-week list (not a decision) — always secondary, starts closed.
+  const [openPlans, setOpenPlans] = useState(unmatchedPlans.length > 0);
+  const [openUnp, setOpenUnp] = useState(openUnplanned.length > 0);
+  const [openPending, setOpenPending] = useState(false);
 
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Action panel</CardTitle>
+        <CardTitle className="text-base flex items-center justify-between gap-2">
+          <span>Decisions to make</span>
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-[10px] px-1.5 py-0 h-5 tabular-nums",
+              openItemsCount > 0
+                ? "bg-amber-100 text-amber-900 border-amber-300"
+                : "bg-emerald-100 text-emerald-900 border-emerald-300",
+            )}
+            data-testid="action-panel-open-count"
+          >
+            {openItemsCount} open
+          </Badge>
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {openItemsCount === 0 && (
+          <div
+            className="flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+            data-testid="action-panel-all-clear"
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            Nothing needs a decision — every plan is resolved and every
+            charge triaged. Lock the week.
+          </div>
+        )}
         <SectionShell
           title="Unmatched plans"
           count={unmatchedPlans.length}
@@ -1861,6 +1979,9 @@ function ActionPanel({
           )}
         </SectionShell>
 
+        {/* (#M28) Secondary: the full week of pending bank rows. Not a
+            decision the lock waits on — starts collapsed so the
+            decisions above stay front and center. */}
         <SectionShell
           title="Pending bank transactions"
           count={pendingBankTxns.length}
