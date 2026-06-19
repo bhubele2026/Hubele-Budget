@@ -107,6 +107,21 @@ export interface RestoreResult {
   counts: Record<string, number>;
 }
 
+// Snapshot rows are stored as JSONB, so Date values come back as ISO-8601
+// strings. Drizzle's `timestamp` columns expect a Date on insert (they call
+// .toISOString()), so revive full datetime strings to Date. Date-only columns
+// (`date`, stored "YYYY-MM-DD") must stay strings — the `T` guard skips them.
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+function reviveSnapshotRow(
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[k] = typeof v === "string" && ISO_DATETIME.test(v) ? new Date(v) : v;
+  }
+  return out;
+}
+
 /**
  * Replay a snapshot: wipe whatever the user has NOW (which is the post-import
  * data, or a partially-failed import) and re-insert the snapshotted rows
@@ -158,7 +173,7 @@ export async function restoreImportSnapshot(
       for (let i = 0; i < rows.length; i += CHUNK) {
         const chunk = rows.slice(i, i + CHUNK);
         if (chunk.length === 0) continue;
-        await tx.insert(table).values(chunk as any);
+        await tx.insert(table).values(chunk.map(reviveSnapshotRow) as any);
         inserted += chunk.length;
       }
       counts[key] = inserted;
