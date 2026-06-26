@@ -98,6 +98,7 @@ import {
   type WindowConfig,
 } from "@/components/account-page";
 import { AmexLogo } from "@/components/brand-logos";
+import { AmexCardBand } from "@/components/amex-card-band";
 import { buildBalanceWindow } from "@/lib/amexBalanceWindow";
 
 // The "American Express" page is really the credit-cards view. Apple Card
@@ -211,7 +212,15 @@ export default function AmexPage() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [memberFilter, setMemberFilter] = useState<string>("all");
-  const [cardFilter, setCardFilter] = useState<string>("all");
+  // Honor `?accountId=<external Plaid account_id>` deep-links (the Kill Stack
+  // rows + Home/Allowance per-card drills land here pre-filtered to one card).
+  const [cardFilter, setCardFilter] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const a = new URLSearchParams(window.location.search).get("accountId");
+      if (a) return a;
+    }
+    return "all";
+  });
   // (#495) "Hide reviewed" filter — once a row is marked reviewed via the
   // RV bubble it's just clutter, so let users collapse the list down to
   // what's still pending. Persisted to localStorage so it survives a
@@ -2034,6 +2043,11 @@ export default function AmexPage() {
       </div>
 
       </div>
+
+      {/* Per-card brand band — statement balance + this-week charges + % cleared
+          ring for Blue/Silver/Gold. Tapping a tile filters the register to that
+          card (drill); All clears it. Mirrors the cardFilter pill above. */}
+      <AmexCardBand selected={cardFilter} onSelect={setCardFilter} />
 
       <BalanceTrendChart
         caption="Ending balance — forward 12 months"

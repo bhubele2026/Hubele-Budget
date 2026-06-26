@@ -103,6 +103,7 @@ import {
   type BalanceSeriesPoint,
 } from "@/components/account-page";
 import { ChaseLogo } from "@/components/brand-logos";
+import { ChaseInsightStrip } from "@/components/chase-insight-strip";
 import {
   formSchema,
   matchRuleClient,
@@ -2051,6 +2052,9 @@ export default function TransactionsPage() {
       )}
 
       </div>
+
+      {/* Week-over-week spend + category mix — leads the visual story. */}
+      <ChaseInsightStrip txns={transactions ?? []} categories={categories ?? []} />
 
       {balanceTrend && (
         <BalanceTrendChart
