@@ -26,6 +26,7 @@ import type {
   AdvisorUndoResponse,
   AmexAnchor,
   AmexAnchorInput,
+  AmexWeeklyPayoff,
   AprilChaseSeedResult,
   AvalancheExtra,
   AvalancheSchedule,
@@ -79,6 +80,7 @@ import type {
   ForecastResolutionInput,
   ForecastSettings,
   ForecastSettingsInput,
+  GetAmexWeeklyPayoffParams,
   GetBillsSummaryParams,
   GetForecastAvalancheScheduleParams,
   GetForecastCashSignalParams,
@@ -6612,6 +6614,106 @@ export const useDeleteAmexAnchor = <
 > => {
   return useMutation(getDeleteAmexAnchorMutationOptions(options));
 };
+
+/**
+ * @summary Per-card weekly charges to pay (Blue/Silver/Gold) for one week.
+ */
+export const getGetAmexWeeklyPayoffUrl = (
+  params?: GetAmexWeeklyPayoffParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/amex/weekly-payoff?${stringifiedParams}`
+    : `/api/amex/weekly-payoff`;
+};
+
+export const getAmexWeeklyPayoff = async (
+  params?: GetAmexWeeklyPayoffParams,
+  options?: RequestInit,
+): Promise<AmexWeeklyPayoff> => {
+  return customFetch<AmexWeeklyPayoff>(getGetAmexWeeklyPayoffUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAmexWeeklyPayoffQueryKey = (
+  params?: GetAmexWeeklyPayoffParams,
+) => {
+  return [`/api/amex/weekly-payoff`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAmexWeeklyPayoffQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAmexWeeklyPayoff>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAmexWeeklyPayoffParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAmexWeeklyPayoff>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAmexWeeklyPayoffQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAmexWeeklyPayoff>>
+  > = ({ signal }) =>
+    getAmexWeeklyPayoff(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAmexWeeklyPayoff>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAmexWeeklyPayoffQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAmexWeeklyPayoff>>
+>;
+export type GetAmexWeeklyPayoffQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Per-card weekly charges to pay (Blue/Silver/Gold) for one week.
+ */
+
+export function useGetAmexWeeklyPayoff<
+  TData = Awaited<ReturnType<typeof getAmexWeeklyPayoff>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAmexWeeklyPayoffParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAmexWeeklyPayoff>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAmexWeeklyPayoffQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 export const getListDashboardBudgetsUrl = (
   params?: ListDashboardBudgetsParams,

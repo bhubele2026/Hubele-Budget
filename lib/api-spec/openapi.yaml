@@ -1393,6 +1393,25 @@ paths:
                 properties:
                   ok: { type: boolean }
 
+  /amex/weekly-payoff:
+    get:
+      operationId: getAmexWeeklyPayoff
+      tags: [amex]
+      summary: Per-card weekly charges to pay (Blue/Silver/Gold) for one week.
+      parameters:
+        - in: query
+          name: weekStart
+          description: >-
+            Sunday of the target week (YYYY-MM-DD). Defaults to the last
+            fully-completed Sun–Sat week when omitted.
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AmexWeeklyPayoff" }
+
   /dashboard-budgets:
     get:
       operationId: listDashboardBudgets
@@ -4492,6 +4511,54 @@ components:
       properties:
         balance: { type: number }
         asOf: { type: ["string", "null"] }
+
+    AmexWeeklyPayoffCard:
+      type: object
+      required:
+        [
+          accountId,
+          plaidAccountId,
+          debtId,
+          name,
+          brand,
+          weekCharges,
+          chargeCount,
+          statementBalance,
+          pctOfStatementThisWeek,
+          topMerchant,
+        ]
+      properties:
+        accountId: { type: string }
+        plaidAccountId: { type: ["string", "null"] }
+        debtId: { type: ["string", "null"] }
+        name: { type: string }
+        brand: { type: string, enum: [blue, silver, gold] }
+        weekCharges: { type: number }
+        chargeCount: { type: integer }
+        statementBalance: { type: number }
+        pctOfStatementThisWeek: { type: number }
+        topMerchant:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [name, amount]
+              properties:
+                name: { type: string }
+                amount: { type: number }
+    AmexWeeklyPayoff:
+      type: object
+      required:
+        [weekStart, weekEnd, cards, combinedWeekCharges, combinedStatementBalance]
+      properties:
+        weekStart: { type: string }
+        weekEnd: { type: string }
+        cards:
+          type: array
+          items: { $ref: "#/components/schemas/AmexWeeklyPayoffCard" }
+        combinedWeekCharges: { type: number }
+        combinedStatementBalance: { type: number }
+        directive: { type: ["string", "null"] }
+        directiveSource: { type: string, enum: [ai, fallback] }
 
     DashboardBudget:
       type: object

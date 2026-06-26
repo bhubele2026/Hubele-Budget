@@ -1,10 +1,21 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import {
   db,
   debtsTable,
   transactionsTable,
   settingsTable,
+  plaidAccountsTable,
+  plaidItemsTable,
+  budgetCategoriesTable,
 } from "@workspace/db";
+import {
+  isRealSpend,
+  spendAmount,
+  type SpendContext,
+} from "./spendingFilter";
+import { cleanMerchant } from "./merchantNameExtract";
+import { weekStartFor, weekEndFor } from "./weeklyDebrief";
+import { parseISO, fmtISO, addDays } from "./cashSignal";
 
 /**
  * Source values that count as Amex when computing the anchor. The legacy
@@ -176,4 +187,254 @@ export async function refreshAmexAnchor(
   }
 
   return { changed: true, updatedDebt, balance, asOf, txnCount };
+}
+
+// ---------------------------------------------------------------------------
+// (#weekly-payoff) Per-card weekly payoff engine — what to pay, per physical
+// Amex card (Blue / Silver / Gold), for one Sun–Sat week.
+// ---------------------------------------------------------------------------
+
+export type AmexBrand = "blue" | "silver" | "gold";
+
+/**
+ * Classify a physical Amex card into its brand identity from its display name
+ * (and mask, defensively). Mirrors the name-regex matching style used by the
+ * anchor resolution above (#748).
+ */
+export function classifyAmexBrand(
+  name: string | null | undefined,
+  mask: string | null | undefined,
+): AmexBrand {
+  const s = `${name ?? ""} ${mask ?? ""}`;
+  if (/blue/i.test(s)) return "blue";
+  if (/platinum/i.test(s)) return "silver";
+  if (/gold/i.test(s)) return "gold";
+  // NOTE: unmatched Amex cards default to silver (neutral Platinum-style)
+  // rather than dropping out of the stack entirely.
+  return "silver";
+}
+
+export interface AmexWeeklyPayoffCard {
+  accountId: string; // external Plaid account_id
+  plaidAccountId: string | null; // internal plaid_accounts.id UUID
+  debtId: string | null;
+  name: string;
+  brand: AmexBrand;
+  weekCharges: number;
+  chargeCount: number;
+  statementBalance: number;
+  pctOfStatementThisWeek: number;
+  topMerchant: { name: string; amount: number } | null;
+}
+
+export interface AmexWeeklyPayoff {
+  weekStart: string;
+  weekEnd: string;
+  cards: AmexWeeklyPayoffCard[];
+  combinedWeekCharges: number;
+  combinedStatementBalance: number;
+}
+
+/** Default `weekStart` = the Sunday of the last fully-completed Sun–Sat week. */
+export function lastCompletedWeekStart(today: Date = new Date()): string {
+  const thisWeekSunday = weekStartFor(today);
+  return fmtISO(addDays(parseISO(thisWeekSunday), -7));
+}
+
+/**
+ * Compute, for each physical Amex card, the real charges that landed in the
+ * given week + statement context. Read-only. `weekCharges` reuses the exact
+ * `isRealSpend` / `spendAmount` definition the Spending report uses — card
+ * payments, transfers, and debt-category rows are excluded, never recomputed
+ * here.
+ */
+export async function computeWeeklyPayoff(
+  householdId: string,
+  weekStartArg?: string,
+): Promise<AmexWeeklyPayoff> {
+  const weekStart =
+    weekStartArg && /^\d{4}-\d{2}-\d{2}$/.test(weekStartArg)
+      ? weekStartFor(weekStartArg)
+      : lastCompletedWeekStart();
+  const weekEnd = weekEndFor(weekStart);
+
+  // --- Discover the physical Amex credit cards -----------------------------
+  // One Amex Plaid item = up to three physical cards (#748). Restrict to
+  // credit-card sub-accounts so Membership Rewards / savings / loan
+  // sub-accounts on the same login never enter the stack (mirrors the
+  // anchor route's #651/#689 filter).
+  const cardRows = await db
+    .select({
+      accountId: plaidAccountsTable.accountId,
+      internalId: plaidAccountsTable.id,
+      name: plaidAccountsTable.name,
+      mask: plaidAccountsTable.mask,
+      liabilityBalance: plaidAccountsTable.liabilityBalance,
+    })
+    .from(plaidAccountsTable)
+    .innerJoin(plaidItemsTable, eq(plaidAccountsTable.itemId, plaidItemsTable.id))
+    .where(
+      and(
+        eq(plaidAccountsTable.householdId, householdId),
+        sql`${plaidItemsTable.institutionSlug} ~* '(amex|american[-_\\s]*express)'`,
+        sql`${plaidAccountsTable.type} = 'credit'`,
+        sql`(${plaidAccountsTable.liabilityKind} is null or ${plaidAccountsTable.liabilityKind} = 'credit')`,
+      ),
+    );
+
+  if (cardRows.length === 0) {
+    return {
+      weekStart,
+      weekEnd,
+      cards: [],
+      combinedWeekCharges: 0,
+      combinedStatementBalance: 0,
+    };
+  }
+
+  const externalIds = cardRows.map((c) => c.accountId).filter((v): v is string => !!v);
+  const internalIds = cardRows.map((c) => c.internalId);
+
+  // --- SpendContext (categories + debt linkage), same shape as the reports
+  //     pipeline so isRealSpend behaves identically. ---------------------
+  const cats = await db
+    .select({
+      id: budgetCategoriesTable.id,
+      name: budgetCategoriesTable.name,
+      debtId: budgetCategoriesTable.debtId,
+      kind: budgetCategoriesTable.kind,
+    })
+    .from(budgetCategoriesTable)
+    .where(eq(budgetCategoriesTable.householdId, householdId));
+  const categoriesById = new Map<
+    string,
+    { name: string; debtId: string | null; kind: string }
+  >();
+  const debtCategoryIds = new Set<string>();
+  for (const c of cats) {
+    categoriesById.set(c.id, { name: c.name, debtId: c.debtId, kind: c.kind });
+    if (c.debtId) debtCategoryIds.add(c.id);
+  }
+  const ctx: SpendContext = { categoriesById, debtCategoryIds };
+
+  // --- Per-card debt rows (for statement fallback + debtId) -----------------
+  const debtRows =
+    internalIds.length > 0
+      ? await db
+          .select({
+            id: debtsTable.id,
+            balance: debtsTable.balance,
+            plaidAccountId: debtsTable.plaidAccountId,
+          })
+          .from(debtsTable)
+          .where(
+            and(
+              eq(debtsTable.householdId, householdId),
+              inArray(debtsTable.plaidAccountId, internalIds),
+            ),
+          )
+      : [];
+  const debtByInternalId = new Map<string, { id: string; balance: string }>();
+  for (const d of debtRows) {
+    if (d.plaidAccountId) debtByInternalId.set(d.plaidAccountId, { id: d.id, balance: d.balance });
+  }
+
+  // --- This week's transactions on these cards -----------------------------
+  // `transactions.plaid_account_id` stores the EXTERNAL Plaid account_id
+  // string (see routes/amex.ts #748), so we key on the external ids.
+  const txns =
+    externalIds.length > 0
+      ? await db
+          .select({
+            plaidAccountId: transactionsTable.plaidAccountId,
+            amount: transactionsTable.amount,
+            source: transactionsTable.source,
+            isTransfer: transactionsTable.isTransfer,
+            categoryId: transactionsTable.categoryId,
+            description: transactionsTable.description,
+          })
+          .from(transactionsTable)
+          .where(
+            and(
+              eq(transactionsTable.householdId, householdId),
+              inArray(transactionsTable.plaidAccountId, externalIds),
+              gte(transactionsTable.occurredOn, weekStart),
+              lte(transactionsTable.occurredOn, weekEnd),
+            ),
+          )
+      : [];
+
+  type Agg = { charges: number; count: number; top: { name: string; amount: number } | null };
+  const byCard = new Map<string, Agg>();
+  for (const ext of externalIds) byCard.set(ext, { charges: 0, count: 0, top: null });
+  for (const t of txns) {
+    if (!t.plaidAccountId) continue;
+    const agg = byCard.get(t.plaidAccountId);
+    if (!agg) continue;
+    if (!isRealSpend(
+      {
+        amount: t.amount,
+        source: t.source,
+        isTransfer: t.isTransfer,
+        categoryId: t.categoryId,
+        description: t.description,
+      },
+      ctx,
+    )) {
+      continue;
+    }
+    const amt = spendAmount({
+      amount: t.amount,
+      source: t.source,
+      isTransfer: t.isTransfer,
+      categoryId: t.categoryId,
+      description: t.description,
+    });
+    agg.charges += amt;
+    agg.count += 1;
+    if (!agg.top || amt > agg.top.amount) {
+      agg.top = { name: cleanMerchant(t.description), amount: amt };
+    }
+  }
+
+  // --- Assemble per-card payoff rows ---------------------------------------
+  const cards: AmexWeeklyPayoffCard[] = cardRows.map((c) => {
+    const agg = byCard.get(c.accountId) ?? { charges: 0, count: 0, top: null };
+    const debt = debtByInternalId.get(c.internalId) ?? null;
+    const liability = c.liabilityBalance != null ? Number(c.liabilityBalance) : NaN;
+    const statementBalance = Number.isFinite(liability)
+      ? liability
+      : debt
+        ? Number(debt.balance) || 0
+        : 0;
+    const pct =
+      statementBalance > 0
+        ? Math.max(0, Math.min(1, agg.charges / statementBalance))
+        : 0;
+    return {
+      accountId: c.accountId,
+      plaidAccountId: c.internalId,
+      debtId: debt?.id ?? null,
+      name: c.name ?? "American Express",
+      brand: classifyAmexBrand(c.name, c.mask),
+      weekCharges: Math.round(agg.charges * 100) / 100,
+      chargeCount: agg.count,
+      statementBalance: Math.round(statementBalance * 100) / 100,
+      pctOfStatementThisWeek: pct,
+      topMerchant: agg.top
+        ? { name: agg.top.name, amount: Math.round(agg.top.amount * 100) / 100 }
+        : null,
+    };
+  });
+
+  // Stable, friendly order: Blue, Silver, Gold.
+  const order: Record<AmexBrand, number> = { blue: 0, silver: 1, gold: 2 };
+  cards.sort((a, b) => order[a.brand] - order[b.brand]);
+
+  const combinedWeekCharges =
+    Math.round(cards.reduce((s, c) => s + c.weekCharges, 0) * 100) / 100;
+  const combinedStatementBalance =
+    Math.round(cards.reduce((s, c) => s + c.statementBalance, 0) * 100) / 100;
+
+  return { weekStart, weekEnd, cards, combinedWeekCharges, combinedStatementBalance };
 }

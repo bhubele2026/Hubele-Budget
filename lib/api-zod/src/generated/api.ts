@@ -3159,6 +3159,47 @@ export const DeleteAmexAnchorResponse = zod.object({
   ok: zod.boolean(),
 });
 
+/**
+ * @summary Per-card weekly charges to pay (Blue/Silver/Gold) for one week.
+ */
+export const GetAmexWeeklyPayoffQueryParams = zod.object({
+  weekStart: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Sunday of the target week (YYYY-MM-DD). Defaults to the last fully-completed Sun–Sat week when omitted.",
+    ),
+});
+
+export const GetAmexWeeklyPayoffResponse = zod.object({
+  weekStart: zod.string(),
+  weekEnd: zod.string(),
+  cards: zod.array(
+    zod.object({
+      accountId: zod.string(),
+      plaidAccountId: zod.string().nullable(),
+      debtId: zod.string().nullable(),
+      name: zod.string(),
+      brand: zod.enum(["blue", "silver", "gold"]),
+      weekCharges: zod.number(),
+      chargeCount: zod.number(),
+      statementBalance: zod.number(),
+      pctOfStatementThisWeek: zod.number(),
+      topMerchant: zod.union([
+        zod.null(),
+        zod.object({
+          name: zod.string(),
+          amount: zod.number(),
+        }),
+      ]),
+    }),
+  ),
+  combinedWeekCharges: zod.number(),
+  combinedStatementBalance: zod.number(),
+  directive: zod.string().nullish(),
+  directiveSource: zod.enum(["ai", "fallback"]).optional(),
+});
+
 export const ListDashboardBudgetsQueryParams = zod.object({
   bucket: zod.coerce.string().optional(),
   periodKey: zod.coerce.string().optional(),

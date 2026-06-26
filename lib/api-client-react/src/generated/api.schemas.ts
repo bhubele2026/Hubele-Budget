@@ -2547,6 +2547,54 @@ export interface AmexAnchorInput {
   asOf?: string | null;
 }
 
+export type AmexWeeklyPayoffCardBrand =
+  (typeof AmexWeeklyPayoffCardBrand)[keyof typeof AmexWeeklyPayoffCardBrand];
+
+export const AmexWeeklyPayoffCardBrand = {
+  blue: "blue",
+  silver: "silver",
+  gold: "gold",
+} as const;
+
+export type AmexWeeklyPayoffCardTopMerchant = null | {
+  name: string;
+  amount: number;
+};
+
+export interface AmexWeeklyPayoffCard {
+  accountId: string;
+  /** @nullable */
+  plaidAccountId: string | null;
+  /** @nullable */
+  debtId: string | null;
+  name: string;
+  brand: AmexWeeklyPayoffCardBrand;
+  weekCharges: number;
+  chargeCount: number;
+  statementBalance: number;
+  pctOfStatementThisWeek: number;
+  topMerchant: AmexWeeklyPayoffCardTopMerchant;
+}
+
+export type AmexWeeklyPayoffDirectiveSource =
+  (typeof AmexWeeklyPayoffDirectiveSource)[keyof typeof AmexWeeklyPayoffDirectiveSource];
+
+export const AmexWeeklyPayoffDirectiveSource = {
+  ai: "ai",
+  fallback: "fallback",
+} as const;
+
+export interface AmexWeeklyPayoff {
+  weekStart: string;
+  weekEnd: string;
+  cards: AmexWeeklyPayoffCard[];
+  combinedWeekCharges: number;
+  combinedStatementBalance: number;
+  /** @nullable */
+  directive?: string | null;
+  directiveSource?: AmexWeeklyPayoffDirectiveSource;
+}
+
 export interface DashboardBudget {
   id: string;
   bucket: string;
@@ -3415,6 +3463,13 @@ export type CloseForecastMonthBody = {
 
 export type DeleteAmexAnchor200 = {
   ok: boolean;
+};
+
+export type GetAmexWeeklyPayoffParams = {
+  /**
+   * Sunday of the target week (YYYY-MM-DD). Defaults to the last fully-completed Sun–Sat week when omitted.
+   */
+  weekStart?: string;
 };
 
 export type ListDashboardBudgetsParams = {

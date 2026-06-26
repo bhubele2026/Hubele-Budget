@@ -53,7 +53,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         forecastFlag: zod.ZodBoolean;
         weeklyAllowance: zod.ZodBoolean;
-        weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
+        weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"alcohol">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
         monthlyAllowance: zod.ZodBoolean;
         unplannedAllowance: zod.ZodBoolean;
         reimbursable: zod.ZodBoolean;
@@ -94,7 +94,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
-        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -125,7 +125,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
-        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -211,7 +211,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
-        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -269,7 +269,7 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
-        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -345,7 +345,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     forecastFlag: zod.ZodBoolean;
     weeklyAllowance: zod.ZodBoolean;
-    weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
+    weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"alcohol">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
     monthlyAllowance: zod.ZodBoolean;
     unplannedAllowance: zod.ZodBoolean;
     reimbursable: zod.ZodBoolean;
@@ -386,7 +386,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
-    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -417,7 +417,7 @@ export declare const ListTransactionsResponseItem: zod.ZodObject<{
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
-    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -439,7 +439,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     forecastFlag: zod.ZodBoolean;
     weeklyAllowance: zod.ZodBoolean;
-    weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
+    weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"alcohol">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
     monthlyAllowance: zod.ZodBoolean;
     unplannedAllowance: zod.ZodBoolean;
     reimbursable: zod.ZodBoolean;
@@ -480,7 +480,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
-    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -511,7 +511,7 @@ export declare const ListTransactionsResponse: zod.ZodArray<zod.ZodObject<{
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
-    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -532,7 +532,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     forecastFlag: zod.ZodOptional<zod.ZodBoolean>;
     weeklyAllowance: zod.ZodOptional<zod.ZodBoolean>;
-    weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
+    weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"alcohol">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
     monthlyAllowance: zod.ZodOptional<zod.ZodBoolean>;
     unplannedAllowance: zod.ZodOptional<zod.ZodBoolean>;
     reimbursable: zod.ZodOptional<zod.ZodBoolean>;
@@ -554,7 +554,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     categoryId?: string | null | undefined;
     forecastFlag?: boolean | undefined;
     weeklyAllowance?: boolean | undefined;
-    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
     monthlyAllowance?: boolean | undefined;
     unplannedAllowance?: boolean | undefined;
     reimbursable?: boolean | undefined;
@@ -576,7 +576,7 @@ export declare const CreateTransactionBody: zod.ZodObject<{
     categoryId?: string | null | undefined;
     forecastFlag?: boolean | undefined;
     weeklyAllowance?: boolean | undefined;
-    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
     monthlyAllowance?: boolean | undefined;
     unplannedAllowance?: boolean | undefined;
     reimbursable?: boolean | undefined;
@@ -606,7 +606,7 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     forecastFlag: zod.ZodOptional<zod.ZodBoolean>;
     weeklyAllowance: zod.ZodOptional<zod.ZodBoolean>;
-    weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
+    weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"alcohol">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
     monthlyAllowance: zod.ZodOptional<zod.ZodBoolean>;
     unplannedAllowance: zod.ZodOptional<zod.ZodBoolean>;
     reimbursable: zod.ZodOptional<zod.ZodBoolean>;
@@ -629,7 +629,7 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     categoryId?: string | null | undefined;
     forecastFlag?: boolean | undefined;
     weeklyAllowance?: boolean | undefined;
-    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
     monthlyAllowance?: boolean | undefined;
     unplannedAllowance?: boolean | undefined;
     reimbursable?: boolean | undefined;
@@ -652,7 +652,7 @@ export declare const UpdateTransactionBody: zod.ZodObject<{
     categoryId?: string | null | undefined;
     forecastFlag?: boolean | undefined;
     weeklyAllowance?: boolean | undefined;
-    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
     monthlyAllowance?: boolean | undefined;
     unplannedAllowance?: boolean | undefined;
     reimbursable?: boolean | undefined;
@@ -677,7 +677,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     forecastFlag: zod.ZodBoolean;
     weeklyAllowance: zod.ZodBoolean;
-    weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
+    weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"alcohol">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
     monthlyAllowance: zod.ZodBoolean;
     unplannedAllowance: zod.ZodBoolean;
     reimbursable: zod.ZodBoolean;
@@ -718,7 +718,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
-    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -749,7 +749,7 @@ export declare const UpdateTransactionResponse: zod.ZodIntersection<zod.ZodObjec
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
-    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -929,7 +929,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     forecastFlag: zod.ZodBoolean;
     weeklyAllowance: zod.ZodBoolean;
-    weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
+    weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"alcohol">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
     monthlyAllowance: zod.ZodBoolean;
     unplannedAllowance: zod.ZodBoolean;
     reimbursable: zod.ZodBoolean;
@@ -970,7 +970,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
-    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -1001,7 +1001,7 @@ export declare const ClearTransferOverrideResponse: zod.ZodObject<{
     occurredAt?: string | null | undefined;
     account?: string | null | undefined;
     categoryId?: string | null | undefined;
-    weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+    weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
     sentToReviewAt?: string | null | undefined;
     notes?: string | null | undefined;
     member?: string | null | undefined;
@@ -1204,7 +1204,7 @@ export declare const BulkUpdateTransactionsBody: zod.ZodObject<{
         categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         forecastFlag: zod.ZodOptional<zod.ZodBoolean>;
         weeklyAllowance: zod.ZodOptional<zod.ZodBoolean>;
-        weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
+        weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"alcohol">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
         monthlyAllowance: zod.ZodOptional<zod.ZodBoolean>;
         unplannedAllowance: zod.ZodOptional<zod.ZodBoolean>;
         reimbursable: zod.ZodOptional<zod.ZodBoolean>;
@@ -1227,7 +1227,7 @@ export declare const BulkUpdateTransactionsBody: zod.ZodObject<{
         categoryId?: string | null | undefined;
         forecastFlag?: boolean | undefined;
         weeklyAllowance?: boolean | undefined;
-        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
         monthlyAllowance?: boolean | undefined;
         unplannedAllowance?: boolean | undefined;
         reimbursable?: boolean | undefined;
@@ -1250,7 +1250,7 @@ export declare const BulkUpdateTransactionsBody: zod.ZodObject<{
         categoryId?: string | null | undefined;
         forecastFlag?: boolean | undefined;
         weeklyAllowance?: boolean | undefined;
-        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
         monthlyAllowance?: boolean | undefined;
         unplannedAllowance?: boolean | undefined;
         reimbursable?: boolean | undefined;
@@ -1276,7 +1276,7 @@ export declare const BulkUpdateTransactionsBody: zod.ZodObject<{
         categoryId?: string | null | undefined;
         forecastFlag?: boolean | undefined;
         weeklyAllowance?: boolean | undefined;
-        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
         monthlyAllowance?: boolean | undefined;
         unplannedAllowance?: boolean | undefined;
         reimbursable?: boolean | undefined;
@@ -1302,7 +1302,7 @@ export declare const BulkUpdateTransactionsBody: zod.ZodObject<{
         categoryId?: string | null | undefined;
         forecastFlag?: boolean | undefined;
         weeklyAllowance?: boolean | undefined;
-        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
         monthlyAllowance?: boolean | undefined;
         unplannedAllowance?: boolean | undefined;
         reimbursable?: boolean | undefined;
@@ -4213,16 +4213,19 @@ export declare const GetSettingsResponse: zod.ZodObject<{
         weeklyBucketLabels: zod.ZodOptional<zod.ZodObject<{
             groceries: zod.ZodOptional<zod.ZodString>;
             dining: zod.ZodOptional<zod.ZodString>;
+            alcohol: zod.ZodOptional<zod.ZodString>;
             entertainment: zod.ZodOptional<zod.ZodString>;
             misc: zod.ZodOptional<zod.ZodString>;
         }, "strip", zod.ZodTypeAny, {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         }, {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         }>>;
@@ -4242,10 +4245,12 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             label: string;
             matchValue: string;
         }>, "many">>;
+        weeklyAllowanceOverrides: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         } | undefined;
@@ -4255,10 +4260,12 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             label: string;
             matchValue: string;
         }[] | undefined;
+        weeklyAllowanceOverrides?: Record<string, string> | undefined;
     }, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         } | undefined;
@@ -4268,6 +4275,7 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             label: string;
             matchValue: string;
         }[] | undefined;
+        weeklyAllowanceOverrides?: Record<string, string> | undefined;
     }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     weeklyAllowanceAmount: string;
@@ -4278,6 +4286,7 @@ export declare const GetSettingsResponse: zod.ZodObject<{
         weeklyBucketLabels?: {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         } | undefined;
@@ -4287,6 +4296,7 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             label: string;
             matchValue: string;
         }[] | undefined;
+        weeklyAllowanceOverrides?: Record<string, string> | undefined;
     } | null | undefined;
 }, {
     weeklyAllowanceAmount: string;
@@ -4297,6 +4307,7 @@ export declare const GetSettingsResponse: zod.ZodObject<{
         weeklyBucketLabels?: {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         } | undefined;
@@ -4306,6 +4317,7 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             label: string;
             matchValue: string;
         }[] | undefined;
+        weeklyAllowanceOverrides?: Record<string, string> | undefined;
     } | null | undefined;
 }>;
 export declare const UpdateSettingsBody: zod.ZodObject<{
@@ -4317,16 +4329,19 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
         weeklyBucketLabels: zod.ZodOptional<zod.ZodObject<{
             groceries: zod.ZodOptional<zod.ZodString>;
             dining: zod.ZodOptional<zod.ZodString>;
+            alcohol: zod.ZodOptional<zod.ZodString>;
             entertainment: zod.ZodOptional<zod.ZodString>;
             misc: zod.ZodOptional<zod.ZodString>;
         }, "strip", zod.ZodTypeAny, {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         }, {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         }>>;
@@ -4346,10 +4361,12 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             label: string;
             matchValue: string;
         }>, "many">>;
+        weeklyAllowanceOverrides: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         } | undefined;
@@ -4359,10 +4376,12 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             label: string;
             matchValue: string;
         }[] | undefined;
+        weeklyAllowanceOverrides?: Record<string, string> | undefined;
     }, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         } | undefined;
@@ -4372,6 +4391,7 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             label: string;
             matchValue: string;
         }[] | undefined;
+        weeklyAllowanceOverrides?: Record<string, string> | undefined;
     }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     weeklyAllowanceAmount?: string | undefined;
@@ -4382,6 +4402,7 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
         weeklyBucketLabels?: {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         } | undefined;
@@ -4391,6 +4412,7 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             label: string;
             matchValue: string;
         }[] | undefined;
+        weeklyAllowanceOverrides?: Record<string, string> | undefined;
     } | null | undefined;
 }, {
     weeklyAllowanceAmount?: string | undefined;
@@ -4401,6 +4423,7 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
         weeklyBucketLabels?: {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         } | undefined;
@@ -4410,6 +4433,7 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             label: string;
             matchValue: string;
         }[] | undefined;
+        weeklyAllowanceOverrides?: Record<string, string> | undefined;
     } | null | undefined;
 }>;
 export declare const UpdateSettingsResponse: zod.ZodObject<{
@@ -4421,16 +4445,19 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
         weeklyBucketLabels: zod.ZodOptional<zod.ZodObject<{
             groceries: zod.ZodOptional<zod.ZodString>;
             dining: zod.ZodOptional<zod.ZodString>;
+            alcohol: zod.ZodOptional<zod.ZodString>;
             entertainment: zod.ZodOptional<zod.ZodString>;
             misc: zod.ZodOptional<zod.ZodString>;
         }, "strip", zod.ZodTypeAny, {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         }, {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         }>>;
@@ -4450,10 +4477,12 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             label: string;
             matchValue: string;
         }>, "many">>;
+        weeklyAllowanceOverrides: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         } | undefined;
@@ -4463,10 +4492,12 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             label: string;
             matchValue: string;
         }[] | undefined;
+        weeklyAllowanceOverrides?: Record<string, string> | undefined;
     }, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         } | undefined;
@@ -4476,6 +4507,7 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             label: string;
             matchValue: string;
         }[] | undefined;
+        weeklyAllowanceOverrides?: Record<string, string> | undefined;
     }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     weeklyAllowanceAmount: string;
@@ -4486,6 +4518,7 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
         weeklyBucketLabels?: {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         } | undefined;
@@ -4495,6 +4528,7 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             label: string;
             matchValue: string;
         }[] | undefined;
+        weeklyAllowanceOverrides?: Record<string, string> | undefined;
     } | null | undefined;
 }, {
     weeklyAllowanceAmount: string;
@@ -4505,6 +4539,7 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
         weeklyBucketLabels?: {
             groceries?: string | undefined;
             dining?: string | undefined;
+            alcohol?: string | undefined;
             entertainment?: string | undefined;
             misc?: string | undefined;
         } | undefined;
@@ -4514,6 +4549,7 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             label: string;
             matchValue: string;
         }[] | undefined;
+        weeklyAllowanceOverrides?: Record<string, string> | undefined;
     } | null | undefined;
 }>;
 export declare const GetForecastQueryParams: zod.ZodObject<{
@@ -4555,7 +4591,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         categoryId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         forecastFlag: zod.ZodBoolean;
         weeklyAllowance: zod.ZodBoolean;
-        weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
+        weeklyBucket: zod.ZodOptional<zod.ZodNullable<zod.ZodUnion<[zod.ZodLiteral<"groceries">, zod.ZodLiteral<"dining">, zod.ZodLiteral<"alcohol">, zod.ZodLiteral<"entertainment">, zod.ZodLiteral<"misc">, zod.ZodLiteral<null>]>>>;
         monthlyAllowance: zod.ZodBoolean;
         unplannedAllowance: zod.ZodBoolean;
         reimbursable: zod.ZodBoolean;
@@ -4596,7 +4632,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
-        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -4627,7 +4663,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
-        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -4942,7 +4978,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
-        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -5073,7 +5109,7 @@ export declare const GetForecastResponse: zod.ZodObject<{
         occurredAt?: string | null | undefined;
         account?: string | null | undefined;
         categoryId?: string | null | undefined;
-        weeklyBucket?: "groceries" | "dining" | "entertainment" | "misc" | null | undefined;
+        weeklyBucket?: "groceries" | "dining" | "alcohol" | "entertainment" | "misc" | null | undefined;
         sentToReviewAt?: string | null | undefined;
         notes?: string | null | undefined;
         member?: string | null | undefined;
@@ -5793,16 +5829,34 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         label: zod.ZodString;
         avgPerDay: zod.ZodNumber;
         total: zod.ZodNumber;
+        topMerchants: zod.ZodArray<zod.ZodObject<{
+            name: zod.ZodString;
+            total: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            total: number;
+            name: string;
+        }, {
+            total: number;
+            name: string;
+        }>, "many">;
     }, "strip", zod.ZodTypeAny, {
         total: number;
         label: string;
         dow: number;
         avgPerDay: number;
+        topMerchants: {
+            total: number;
+            name: string;
+        }[];
     }, {
         total: number;
         label: string;
         dow: number;
         avgPerDay: number;
+        topMerchants: {
+            total: number;
+            name: string;
+        }[];
     }>, "many">;
     monthlyTrends: zod.ZodArray<zod.ZodObject<{
         month: zod.ZodString;
@@ -5897,6 +5951,10 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         label: string;
         dow: number;
         avgPerDay: number;
+        topMerchants: {
+            total: number;
+            name: string;
+        }[];
     }[];
     monthlyTrends: {
         total: number;
@@ -5961,6 +6019,10 @@ export declare const GetReportsSpendingFactsResponse: zod.ZodObject<{
         label: string;
         dow: number;
         avgPerDay: number;
+        topMerchants: {
+            total: number;
+            name: string;
+        }[];
     }[];
     monthlyTrends: {
         total: number;
@@ -7426,6 +7488,117 @@ export declare const DeleteAmexAnchorResponse: zod.ZodObject<{
     ok: boolean;
 }, {
     ok: boolean;
+}>;
+/**
+ * @summary Per-card weekly charges to pay (Blue/Silver/Gold) for one week.
+ */
+export declare const GetAmexWeeklyPayoffQueryParams: zod.ZodObject<{
+    weekStart: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    weekStart?: string | undefined;
+}, {
+    weekStart?: string | undefined;
+}>;
+export declare const GetAmexWeeklyPayoffResponse: zod.ZodObject<{
+    weekStart: zod.ZodString;
+    weekEnd: zod.ZodString;
+    cards: zod.ZodArray<zod.ZodObject<{
+        accountId: zod.ZodString;
+        plaidAccountId: zod.ZodNullable<zod.ZodString>;
+        debtId: zod.ZodNullable<zod.ZodString>;
+        name: zod.ZodString;
+        brand: zod.ZodEnum<["blue", "silver", "gold"]>;
+        weekCharges: zod.ZodNumber;
+        chargeCount: zod.ZodNumber;
+        statementBalance: zod.ZodNumber;
+        pctOfStatementThisWeek: zod.ZodNumber;
+        topMerchant: zod.ZodUnion<[zod.ZodNull, zod.ZodObject<{
+            name: zod.ZodString;
+            amount: zod.ZodNumber;
+        }, "strip", zod.ZodTypeAny, {
+            amount: number;
+            name: string;
+        }, {
+            amount: number;
+            name: string;
+        }>]>;
+    }, "strip", zod.ZodTypeAny, {
+        plaidAccountId: string | null;
+        debtId: string | null;
+        name: string;
+        accountId: string;
+        brand: "blue" | "silver" | "gold";
+        weekCharges: number;
+        chargeCount: number;
+        statementBalance: number;
+        pctOfStatementThisWeek: number;
+        topMerchant: {
+            amount: number;
+            name: string;
+        } | null;
+    }, {
+        plaidAccountId: string | null;
+        debtId: string | null;
+        name: string;
+        accountId: string;
+        brand: "blue" | "silver" | "gold";
+        weekCharges: number;
+        chargeCount: number;
+        statementBalance: number;
+        pctOfStatementThisWeek: number;
+        topMerchant: {
+            amount: number;
+            name: string;
+        } | null;
+    }>, "many">;
+    combinedWeekCharges: zod.ZodNumber;
+    combinedStatementBalance: zod.ZodNumber;
+    directive: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    directiveSource: zod.ZodOptional<zod.ZodEnum<["ai", "fallback"]>>;
+}, "strip", zod.ZodTypeAny, {
+    weekStart: string;
+    weekEnd: string;
+    cards: {
+        plaidAccountId: string | null;
+        debtId: string | null;
+        name: string;
+        accountId: string;
+        brand: "blue" | "silver" | "gold";
+        weekCharges: number;
+        chargeCount: number;
+        statementBalance: number;
+        pctOfStatementThisWeek: number;
+        topMerchant: {
+            amount: number;
+            name: string;
+        } | null;
+    }[];
+    combinedWeekCharges: number;
+    combinedStatementBalance: number;
+    directive?: string | null | undefined;
+    directiveSource?: "ai" | "fallback" | undefined;
+}, {
+    weekStart: string;
+    weekEnd: string;
+    cards: {
+        plaidAccountId: string | null;
+        debtId: string | null;
+        name: string;
+        accountId: string;
+        brand: "blue" | "silver" | "gold";
+        weekCharges: number;
+        chargeCount: number;
+        statementBalance: number;
+        pctOfStatementThisWeek: number;
+        topMerchant: {
+            amount: number;
+            name: string;
+        } | null;
+    }[];
+    combinedWeekCharges: number;
+    combinedStatementBalance: number;
+    directive?: string | null | undefined;
+    directiveSource?: "ai" | "fallback" | undefined;
 }>;
 export declare const ListDashboardBudgetsQueryParams: zod.ZodObject<{
     bucket: zod.ZodOptional<zod.ZodString>;
@@ -11804,12 +11977,12 @@ export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
         error: zod.ZodNullable<zod.ZodString>;
     }, "strip", zod.ZodTypeAny, {
         error: string | null;
-        channel: "skipped" | "email" | "log";
+        channel: "email" | "skipped" | "log";
         reason: string | null;
         recipient: string | null;
     }, {
         error: string | null;
-        channel: "skipped" | "email" | "log";
+        channel: "email" | "skipped" | "log";
         reason: string | null;
         recipient: string | null;
     }>, zod.ZodNull]>;
@@ -11823,7 +11996,7 @@ export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
     }[];
     alert: {
         error: string | null;
-        channel: "skipped" | "email" | "log";
+        channel: "email" | "skipped" | "log";
         reason: string | null;
         recipient: string | null;
     } | null;
@@ -11837,7 +12010,7 @@ export declare const RunPlaidMalformedTokenSweepResponse: zod.ZodObject<{
     }[];
     alert: {
         error: string | null;
-        channel: "skipped" | "email" | "log";
+        channel: "email" | "skipped" | "log";
         reason: string | null;
         recipient: string | null;
     } | null;
@@ -12279,16 +12452,16 @@ export declare const ListInvitationsResponseItem: zod.ZodObject<{
     emailAddress: string;
     createdAt: number;
     updatedAt: number;
-    revoked?: boolean | null | undefined;
     url?: string | null | undefined;
+    revoked?: boolean | null | undefined;
 }, {
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
     emailAddress: string;
     createdAt: number;
     updatedAt: number;
-    revoked?: boolean | null | undefined;
     url?: string | null | undefined;
+    revoked?: boolean | null | undefined;
 }>;
 export declare const ListInvitationsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodString;
@@ -12304,16 +12477,16 @@ export declare const ListInvitationsResponse: zod.ZodArray<zod.ZodObject<{
     emailAddress: string;
     createdAt: number;
     updatedAt: number;
-    revoked?: boolean | null | undefined;
     url?: string | null | undefined;
+    revoked?: boolean | null | undefined;
 }, {
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
     emailAddress: string;
     createdAt: number;
     updatedAt: number;
-    revoked?: boolean | null | undefined;
     url?: string | null | undefined;
+    revoked?: boolean | null | undefined;
 }>, "many">;
 /**
  * @summary Send a new invitation by email (owner only).
@@ -12349,16 +12522,16 @@ export declare const RevokeInvitationResponse: zod.ZodObject<{
     emailAddress: string;
     createdAt: number;
     updatedAt: number;
-    revoked?: boolean | null | undefined;
     url?: string | null | undefined;
+    revoked?: boolean | null | undefined;
 }, {
     status: "pending" | "accepted" | "revoked" | "expired";
     id: string;
     emailAddress: string;
     createdAt: number;
     updatedAt: number;
-    revoked?: boolean | null | undefined;
     url?: string | null | undefined;
+    revoked?: boolean | null | undefined;
 }>;
 /**
  * @summary Resend a pending invitation (owner only). Revokes the existing invite and creates a new one for the same email.
