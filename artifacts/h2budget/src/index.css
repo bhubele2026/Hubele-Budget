@@ -416,29 +416,21 @@
   /* (ObsidianGlass) Frosted-glass surface. The dark mode gradient + hairline
      border + deep ambient shadow that defines the card look app-wide. In
      light mode it degrades to a flat white surface so light stays clean. */
+  /* Bank-grade flat: elevation is a hairline border + (in dark) a faint bg
+     tint — never a blur shadow. */
   .glass-surface {
     border: 1px solid hsl(var(--card-border));
-    box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.08);
   }
   .dark .glass-surface {
     background-image: linear-gradient(180deg, #13161c 0%, #0e1116 100%);
-    box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.5);
   }
 
-  /* (ObsidianGlass) Emphasis ring — violet glow for the hero / review-inbox
-     card. Apply alongside .glass-surface on cards that should pull focus. */
+  /* Emphasis: a 1px accent (violet) border only — no glow/blur. */
   .focus-glow {
-    box-shadow:
-      0 0 0 1px rgba(124, 58, 237, 0.3),
-      0 0 20px rgba(124, 58, 237, 0.1);
-    border-color: rgba(124, 58, 237, 0.4);
+    border-color: rgba(124, 58, 237, 0.55);
   }
   .dark .focus-glow {
-    box-shadow:
-      0 0 0 1px rgba(124, 58, 237, 0.3),
-      0 0 20px rgba(124, 58, 237, 0.1),
-      0 4px 24px -1px rgba(0, 0, 0, 0.5);
-    border-color: rgba(124, 58, 237, 0.4);
+    border-color: rgba(124, 58, 237, 0.55);
   }
 
   .no-default-hover-elevate {}

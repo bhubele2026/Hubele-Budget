@@ -15,6 +15,7 @@ import {
   simulateWithSolvableFallback,
   sortDebts,
   fmtMonth,
+  fmtPct,
   type SimDebt,
   type Strategy,
 } from "@/lib/avalanche";
@@ -276,7 +277,7 @@ export default function DebtsPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">APR</span>
-                    <span className="text-sm font-medium">{debt.apr}%</span>
+                    <span className="text-sm font-medium">{fmtPct(Number(debt.apr))}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Min Payment</span>

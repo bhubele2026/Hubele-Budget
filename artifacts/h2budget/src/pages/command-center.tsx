@@ -444,7 +444,7 @@ export default function CommandCenterPage() {
       <Confetti fire={celebrate} />
 
       {/* ── Hero: the debt thesis ──────────────────────────────────────── */}
-      <Card className="shadow-sm">
+      <Card className="focus-glow">
         <CardContent className="p-5 md:p-6">
           <div className="grid gap-5 md:grid-cols-2 md:items-center">
             <div>
