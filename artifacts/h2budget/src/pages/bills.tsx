@@ -25,6 +25,8 @@ import {
 import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
 import { BillsHealthCheck } from "@/components/bills-health-check";
 import { AiInsightBar } from "@/components/ai-insight-bar";
+import { StatTile, StatTileRow } from "@/components/stat-tile";
+import { TrendingUp, Receipt, Landmark, Scale } from "lucide-react";
 import { formatBillRowAmount } from "@/lib/billsRowAmount";
 import { computePayoffsByDebt, filterDebtMinRowsByPayoff } from "@/lib/forecastDebts";
 import { Lock, PartyPopper } from "lucide-react";
@@ -605,6 +607,35 @@ export default function BillsPage() {
           </Button>
         </div>
       </div>
+
+      {/* At-a-glance monthly summary — Net is the hero. */}
+      <StatTileRow>
+        <StatTile
+          label="Income"
+          value={<MoneyText amount={incomeMonthly} />}
+          sub="monthly in"
+          icon={<TrendingUp className="h-4 w-4" />}
+        />
+        <StatTile
+          label="Bills & expenses"
+          value={<MoneyText amount={-billsMonthly} abs />}
+          sub="recurring out"
+          icon={<Receipt className="h-4 w-4" />}
+        />
+        <StatTile
+          label="Debt minimums"
+          value={<MoneyText amount={debtMin} abs />}
+          sub="monthly mins"
+          icon={<Landmark className="h-4 w-4" />}
+        />
+        <StatTile
+          active
+          label={net >= 0 ? "Net · left over" : "Net · shortfall"}
+          value={<MoneyText amount={net} signed />}
+          sub={net >= 0 ? "breathing room" : "tighten up"}
+          icon={<Scale className="h-4 w-4" />}
+        />
+      </StatTileRow>
 
       <AiInsightBar />
 

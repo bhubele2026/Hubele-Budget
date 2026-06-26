@@ -79,6 +79,7 @@ type BudgetLineWithActual = {
 import { Card, CardContent } from "@/components/ui/card";
 import { AiInsightBar } from "@/components/ai-insight-bar";
 import { RingStat, StackBar, MoneyText } from "@/components/viz";
+import { PillBadge } from "@/components/pill-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -939,9 +940,21 @@ export default function BudgetPage() {
             </div>
           </div>
         );
+        const status =
+          pctSpent > 100
+            ? { tone: "danger" as const, label: "Over budget" }
+            : pctSpent > 90
+              ? { tone: "warning" as const, label: "At risk" }
+              : { tone: "good" as const, label: "On track" };
         return (
           <Card data-testid="budget-summary">
             <CardContent className="p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                  This month
+                </span>
+                <PillBadge tone={status.tone}>{status.label}</PillBadge>
+              </div>
               <div className="flex flex-wrap items-center gap-6">
                 <RingStat
                   value={pctSpent / 100}
