@@ -33,13 +33,12 @@ import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import {
   resolveAmexRevolvingBalance,
   describeReportsAmexTileSub,
-  AMEX_BALANCE_DISTINCTION,
   cashBufferStatusMeta,
   type CashSignalStatus,
 } from "@/lib/reportsBalances";
 import { formatCurrency } from "@/lib/utils";
 import { fmtISO } from "@/lib/reportsAnalytics";
-import { HeroTile } from "./shared";
+import { StatTile, StatTileRow } from "@/components/stat-tile";
 
 export const RANGES = [
   { value: "30", label: "Last 30 days" },
@@ -324,40 +323,42 @@ export function ReportsBalanceTiles({
       ? "Set a checking balance on Forecast"
       : `Lowest ${formatCurrency(lowest)} · buffer ${formatCurrency(buffer)}`;
 
+  // GET OUT OF DEBT is the spine — Total Debt wears the hero gradient.
+  const amexValueNode =
+    amex.found && amex.total > 0 ? (
+      <span className="text-[hsl(var(--negative))]">{amexValue}</span>
+    ) : (
+      amexValue
+    );
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
-      <HeroTile
+    <StatTileRow>
+      <StatTile
+        label="Total Debt"
+        value={totalDebtValue}
+        sub={totalDebtSub}
+        active
+        icon={<TrendingDown className="w-4 h-4" />}
+      />
+      <StatTile
         label="Bank Balance"
         value={bankValue}
         sub={bankSub}
         icon={<PiggyBank className="w-4 h-4" />}
       />
-      <HeroTile
-        label="Amex (Blue Cash + Platinum)"
-        value={amexValue}
+      <StatTile
+        label="Amex"
+        value={amexValueNode}
         sub={amexSub}
-        tone={amex.found && amex.total > 0 ? "bad" : "default"}
         icon={<CreditCard className="w-4 h-4" />}
-        action={
-          amexNoCardLinked ? { label: "Link your Amex", href: "/amex" } : undefined
-        }
-        tooltip={amex.found ? AMEX_BALANCE_DISTINCTION.reportsTooltip : undefined}
+        href={amexNoCardLinked ? "/amex" : undefined}
       />
-      <HeroTile
-        label="Total Debt"
-        value={totalDebtValue}
-        sub={totalDebtSub}
-        tone={dashboard != null && Number(dashboard.totalDebt) > 0 ? "bad" : "default"}
-        icon={<TrendingDown className="w-4 h-4" />}
-      />
-      <HeroTile
-        label="Cash Buffer Status"
+      <StatTile
+        label="Cash Buffer"
         value={statusMeta.label}
         sub={cashSub}
-        tone={statusMeta.tone}
         icon={<PiggyBank className="w-4 h-4" />}
       />
-    </div>
+    </StatTileRow>
   );
 }
 
