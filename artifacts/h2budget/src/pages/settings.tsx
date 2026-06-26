@@ -49,6 +49,7 @@ import { useToast } from "@/hooks/use-toast";
 import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus, GitMerge, ChevronRight } from "lucide-react";
 import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import { CoachVoiceCard } from "@/components/coach-voice-card";
 import {
   formatPreparingElapsed,
   formatRelativeTimeFromNow,
@@ -533,6 +534,8 @@ export default function SettingsPage() {
       <OwnerInvitationsSection />
 
       <OwnerBankHealthSweepSection />
+
+      <CoachVoiceCard />
 
       <Card>
         <CardHeader>
