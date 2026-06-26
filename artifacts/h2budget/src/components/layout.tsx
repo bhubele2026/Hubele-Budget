@@ -31,6 +31,7 @@ import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { useDebriefAwaitingCount } from "@/hooks/useDebriefAwaitingCount";
 import { AdvisorChat } from "@/components/advisor-chat";
 import { CancelFloater } from "@/components/cancel-floater";
+import { CommandPalette } from "@/components/command-palette";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 type NavItem = { name: string; href: string; icon: typeof Receipt };
@@ -297,6 +298,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
       <AdvisorChat />
       <CancelFloater />
+      <CommandPalette />
     </div>
   );
 }
