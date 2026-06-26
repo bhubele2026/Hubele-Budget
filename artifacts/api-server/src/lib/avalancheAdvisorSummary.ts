@@ -14,6 +14,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AvalancheAdvisorSummary } from "@workspace/db";
 import { logger } from "./logger";
+import { VOICE_SYSTEM } from "./advisorVoice";
 import {
   type AvalancheScheduleFacts,
   shortDate,
@@ -43,20 +44,19 @@ function money(n: number): string {
 // Prompt construction
 // ---------------------------------------------------------------------------
 
-const SYSTEM_PROMPT = `You write a short, concrete summary for a household budgeting app's "Avalanche extra-payment schedule" card.
+const SYSTEM_PROMPT = `${VOICE_SYSTEM}
 
-The app has already computed a deterministic schedule of extra debt payments across the next ~12 months. Each payment lands in a safe paycheck-to-paycheck window where the projected checking balance stays comfortably above the user's cash buffer. Your job is ONLY to narrate these facts in plain language.
+TASK: Narrate the household budget app's "Avalanche extra-payment schedule" card. The app has already computed a deterministic schedule of extra debt payments over the next ~12 months, each landing in a safe paycheck-to-paycheck window where the projected balance stays above the cash buffer. Narrate these facts — never compute or invent.
 
 Output requirements:
 - Respond with ONLY a JSON object, no markdown fence, no preamble.
 - Schema: {"summary": string, "paymentsText": string[]}
-- summary: 3-5 sentences. Name the avalanche-target debt (the highest-APR debt the extra payments attack). Reference REAL dates and amounts from the FACTS only. End the summary with the total across all payments.
-- paymentsText: EXACTLY one short string per proposed payment, in the SAME ORDER as the FACTS list them. Each is one short phrase like "Pay $750 on Jun 16 after Brad's paycheck". Use the real date and amount for that payment.
+- summary: 3-5 sentences. Name the avalanche-target debt (the highest-APR debt the extra payments attack). Use REAL dates and amounts from the FACTS only. End with the total across all payments. Hype the progress — Brad and Hannah are ambushing the debt.
+- paymentsText: EXACTLY one short string per proposed payment, in the SAME ORDER as the FACTS list them. Each is one short phrase like "Throw $750 at it on Jun 16 after Brad's paycheck". Use the real date and amount.
 
-Style:
-- Direct, non-judgmental, concrete. The user is technical and dislikes filler.
+Rules:
 - Whole dollars only (no cents).
-- NEVER invent numbers or dates. Only use values present in the FACTS block.
+- NEVER invent numbers or dates — only values present in the FACTS block. The sass is the wrapper; the figures are sacred.
 - If there are zero proposed payments, return an empty paymentsText array and a one-sentence summary explaining no safe windows were found.`;
 
 function formatFactsForPrompt(facts: AvalancheScheduleFacts): string {

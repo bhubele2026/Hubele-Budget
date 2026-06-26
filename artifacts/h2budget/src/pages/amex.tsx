@@ -99,6 +99,7 @@ import {
 } from "@/components/account-page";
 import { AmexLogo } from "@/components/brand-logos";
 import { AmexCardBand } from "@/components/amex-card-band";
+import { AiInsightBar } from "@/components/ai-insight-bar";
 import { buildBalanceWindow } from "@/lib/amexBalanceWindow";
 
 // The "American Express" page is really the credit-cards view. Apple Card
@@ -2044,9 +2045,8 @@ export default function AmexPage() {
 
       </div>
 
-      {/* Per-card brand band — statement balance + this-week charges + % cleared
-          ring for Blue/Silver/Gold. Tapping a tile filters the register to that
-          card (drill); All clears it. Mirrors the cardFilter pill above. */}
+      {/* Sassy AI one-liner + per-card brand band. */}
+      <AiInsightBar />
       <AmexCardBand selected={cardFilter} onSelect={setCardFilter} />
 
       <BalanceTrendChart

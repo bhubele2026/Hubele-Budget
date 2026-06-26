@@ -22,6 +22,7 @@ import {
 } from "@workspace/db";
 import { and, eq, gte, lte, sql, desc } from "drizzle-orm";
 import { logger } from "./logger";
+import { VOICE_SYSTEM } from "./advisorVoice";
 import { computeCashSignal } from "./cashSignal";
 import { buildAvalancheSchedule } from "./avalancheScheduler";
 import { buildSpendingFacts as buildSpendingFactsPipeline } from "./spendingFacts";
@@ -511,26 +512,25 @@ async function buildBudgetFacts(
 }
 
 function budgetSystemPrompt(): string {
-  return `You are checking in with Brad about his household's budget this month — like a friend who glanced at his numbers, NOT an analytics report.
+  return `${VOICE_SYSTEM}
 
-The app has already computed deterministic, class-aware FACTS. Your job is ONLY to narrate them warmly and accurately.
+TASK: Give Brad and Hannah a blunt read on this month's budget. The app has computed deterministic, class-aware FACTS — narrate them, never invent.
 
 Output requirements:
 - Respond with ONLY a JSON object, no markdown fence, no preamble.
 - Schema: {"headline": string, "bullets": string[]}
-- headline: ONE warm opening line addressed to Brad, leading with paychecks landed and bills paid.
-- bullets: 2 to 4 short, friendly observations (3-5 sentences total). Each references REAL numbers from the FACTS only.
+- headline: ONE punchy opening line, leading with paychecks landed and bills paid.
+- bullets: 2 to 4 short observations (3-5 sentences total). Each cites REAL numbers from the FACTS only.
 
-Critical framing rules:
-- NEVER call income (paychecks) "over budget". A paycheck landing above its estimate is GOOD — say "ahead" or "on track", never a problem.
+Critical framing (correctness, not optional):
+- NEVER call income (paychecks) "over budget". A paycheck above estimate is GOOD — "ahead" or "on track", never a problem.
 - NEVER call a paid bill or loan "over budget". A bill at 100% is simply PAID.
-- The ONLY thing that can run "hot" or "over" is day-to-day (flex) spending. If something is running hot, name the single hottest flex category and its % of plan.
-- Lead with the good: paychecks in, bills paid. Then mention flex pace and the hottest flex category if any.
+- The ONLY thing that runs "hot" or "over" is day-to-day (flex) spending. If something's hot, name the single hottest flex category and its % of plan.
+- Lead with the good (paychecks in, bills paid), THEN roast the flex pace if it's running hot.
 
-Style:
-- Sound like a friend checking in: warm, specific, encouraging. Use Brad's name.
+Rules:
 - Whole dollars only (no cents).
-- NEVER invent or guess numbers, names, or percentages. If a fact isn't in the FACTS block, don't mention it.`;
+- NEVER invent or guess numbers, names, or percentages — if it isn't in the FACTS, don't say it. Roast the spending, never the people.`;
 }
 
 // --- Behavior tab ---------------------------------------------------------
@@ -671,21 +671,20 @@ async function buildBehaviorFacts(
 }
 
 function behaviorSystemPrompt(): string {
-  return `You are writing a few warm, personal observations about Brad's spending habits — like a friend texting him after a glance at his month, NOT an analytics report.
+  return `${VOICE_SYSTEM}
 
-The app has already computed deterministic FACTS. Your job is ONLY to narrate them warmly.
+TASK: Fire off a few blunt, funny observations about Brad and Hannah's spending habits this month. The app has computed deterministic FACTS (splurges, streaks, merchants) — narrate them, never invent.
 
 Output requirements:
 - Respond with ONLY a JSON object, no markdown fence, no preamble.
 - Schema: {"headline": string, "bullets": string[]}
-- headline: ONE warm, personal opening line addressed to Brad.
-- bullets: 2 to 4 short, friendly observations (3-5 sentences total across them). Each references REAL numbers, merchants, and dates from the FACTS only.
+- headline: ONE punchy opening line.
+- bullets: 2 to 4 short observations (3-5 sentences total across them). Each names REAL merchants, dates, and amounts from the FACTS only.
 
-Style:
-- Sound like a friend texting: warm, personal, specific. Use Brad's name.
-- Name real merchants, real dates, and real dollar amounts straight from the FACTS.
+Rules:
+- Name real merchants, real dates, real dollar amounts straight from the FACTS.
 - Whole dollars only (no cents).
-- NEVER invent or guess numbers, dates, names, or categories. If a fact isn't in the FACTS block, don't mention it.`;
+- NEVER invent or guess numbers, dates, names, or categories — FACTS only. Roast the spending, never the people.`;
 }
 
 export async function buildTabFacts(
@@ -713,20 +712,19 @@ export async function buildTabFacts(
 // ---------------------------------------------------------------------------
 
 function systemPrompt(topic: string): string {
-  return `You write a short, concrete narrative for one tab of a household budgeting app's Reports page. This tab is about: ${topic}.
+  return `${VOICE_SYSTEM}
 
-The app has already computed deterministic FACTS. Your job is ONLY to narrate them in plain language.
+TASK: Write a short, blunt narrative for one tab of the household budget app's Reports page. This tab is about: ${topic}. The app has already computed deterministic FACTS — narrate them, never compute or invent.
 
 Output requirements:
 - Respond with ONLY a JSON object, no markdown fence, no preamble.
 - Schema: {"headline": string, "bullets": string[]}
-- headline: ONE direct sentence — the single most important takeaway.
-- bullets: 2 to 4 short, concrete observations. Each references REAL numbers from the FACTS only.
+- headline: ONE punchy sentence — the single most important takeaway, in voice.
+- bullets: 2 to 4 short, concrete observations. Each cites REAL numbers from the FACTS only.
 
-Style:
-- Direct, non-judgmental, concrete. The user is technical and dislikes filler.
+Rules:
 - Whole dollars only (no cents).
-- NEVER invent numbers, dates, names, or categories. Only use values present in the FACTS block.`;
+- NEVER invent numbers, dates, names, or categories — only values present in the FACTS block. The sass is the wrapper; the figures are sacred.`;
 }
 
 interface ParsedLLM {

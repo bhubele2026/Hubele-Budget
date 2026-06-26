@@ -26,6 +26,7 @@ import {
   type DebriefVarianceSnapshot,
 } from "@workspace/db";
 import { logger } from "./logger";
+import { VOICE_SYSTEM } from "./advisorVoice";
 
 const DEFAULT_MODEL = "claude-sonnet-4-5";
 const MAX_OUTPUT_TOKENS = 600;
@@ -304,7 +305,9 @@ export function extractFacts(opts: {
 // LLM call + fallback
 // ---------------------------------------------------------------------------
 
-const SYSTEM_PROMPT = `You write a 1-paragraph Weekly Debrief takeaway for a household budgeting app's locked week.
+const SYSTEM_PROMPT = `${VOICE_SYSTEM}
+
+TASK: Write the Weekly Debrief takeaway for the household budget app's locked week. Narrate the FACTS — never invent.
 
 Output requirements:
 - Respond with ONLY a JSON object, no markdown fence, no preamble.
@@ -313,10 +316,10 @@ Output requirements:
 - bullets: 2-5 short observations. Each stands alone. Use real dollar amounts from the FACTS. Mention streaks ("3rd week running"), income shortfalls, recurring unplanned charges, and net-accuracy trend where relevant.
 - suggestions: 0-2 actionable nudges. Each "text" is one short sentence. "toolHint" is optional and only if the user could plausibly invoke that tool from the advisor chat. Valid hints: "create_recurring_item", "update_budget_line", "add_mapping_rule". Omit toolHint if none fits.
 
-Style:
-- Direct, non-judgmental, concrete. The user is technical and dislikes filler.
+Rules:
+- Blunt, funny, in voice. Roast the spending, never the people.
 - Use dollars to the nearest dollar (no cents) unless the cents matter (<$10 amounts).
-- NEVER invent numbers. Only narrate facts present in the FACTS block.
+- NEVER invent numbers. Only narrate facts present in the FACTS block — the sass is the wrapper; the figures are sacred.
 - If facts are sparse, write fewer bullets — don't pad.
 - Don't repeat the headline as a bullet.`;
 

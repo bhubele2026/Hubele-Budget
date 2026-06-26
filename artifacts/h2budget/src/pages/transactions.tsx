@@ -104,6 +104,7 @@ import {
 } from "@/components/account-page";
 import { ChaseLogo } from "@/components/brand-logos";
 import { ChaseInsightStrip } from "@/components/chase-insight-strip";
+import { AiInsightBar } from "@/components/ai-insight-bar";
 import {
   formSchema,
   matchRuleClient,
@@ -2053,7 +2054,8 @@ export default function TransactionsPage() {
 
       </div>
 
-      {/* Week-over-week spend + category mix — leads the visual story. */}
+      {/* Sassy AI one-liner + week-over-week spend + category mix. */}
+      <AiInsightBar />
       <ChaseInsightStrip txns={transactions ?? []} categories={categories ?? []} />
 
       {balanceTrend && (

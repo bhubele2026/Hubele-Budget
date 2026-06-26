@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DrillBreadcrumb } from "@/components/drill-breadcrumb";
+import { AiInsightBar } from "@/components/ai-insight-bar";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
 import {
   resolveAmexRevolvingBalance,
@@ -417,6 +418,7 @@ export function ReportShell({
         <p className="text-muted-foreground mt-1 text-sm">{blurb}</p>
         <div className="border-t border-border mt-5" />
       </div>
+      <AiInsightBar />
       {children}
     </div>
   );

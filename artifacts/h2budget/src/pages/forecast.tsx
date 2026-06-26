@@ -48,6 +48,7 @@ import {
   Label as RechartsLabel,
 } from "recharts";
 import { DeltaPill } from "@/components/viz";
+import { AiInsightBar } from "@/components/ai-insight-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2011,6 +2012,8 @@ export default function ForecastPage({
       </div>
 
       {mode === "overall" && (<>
+      {/* Sassy AI one-liner */}
+      <AiInsightBar />
       {/* KPI tiles */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card data-testid="kpi-lowest-point">
