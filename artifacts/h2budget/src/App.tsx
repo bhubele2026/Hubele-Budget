@@ -37,6 +37,11 @@ import { SignInPage, SignUpPage } from "./pages/auth";
 const CommandCenterPage = lazy(() => import("./pages/command-center"));
 const ForecastPage = lazy(() => import("./pages/forecast"));
 const ReportsPage = lazy(() => import("./pages/reports"));
+const ReportsDebtPage = lazy(() => import("./pages/reports/DebtPage"));
+const ReportsCashFlowPage = lazy(() => import("./pages/reports/CashFlowPage"));
+const ReportsSpendingPage = lazy(() => import("./pages/reports/SpendingPage"));
+const ReportsBudgetPage = lazy(() => import("./pages/reports/BudgetPage"));
+const ReportsBehaviorPage = lazy(() => import("./pages/reports/BehaviorPage"));
 const DebtsPage = lazy(() => import("./pages/debts"));
 const AvalanchePage = lazy(() => import("./pages/avalanche"));
 const AmexPage = lazy(() => import("./pages/amex"));
@@ -240,6 +245,11 @@ function ProtectedShell() {
             <Route path="/debrief" component={DebriefPage} />
             <Route path="/debrief/:week" component={DebriefPage} />
             <Route path="/reports" component={ReportsPage} />
+            <Route path="/reports/debt" component={ReportsDebtPage} />
+            <Route path="/reports/cashflow" component={ReportsCashFlowPage} />
+            <Route path="/reports/spending" component={ReportsSpendingPage} />
+            <Route path="/reports/budget" component={ReportsBudgetPage} />
+            <Route path="/reports/behavior" component={ReportsBehaviorPage} />
             <Route path="/transactions" component={TransactionsPage} />
             <Route path="/amex" component={AmexPage} />
             <Route path="/debts" component={DebtsPage} />
