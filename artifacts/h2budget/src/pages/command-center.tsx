@@ -83,17 +83,6 @@ function moneyPersona(cat: string | undefined): { label: string; emoji: string }
   return { label: `The ${cat} Devotees`, emoji: "💸" };
 }
 
-const MONEY_TIPS = [
-  "Cancel one subscription you forgot you had. Future you says thanks.",
-  "A 24-hour rule on anything over $100 kills most impulse buys.",
-  "Date night at home beats $120 out. Light a candle, you animals. 😏",
-  "Pay the highest-APR debt first. Math doesn't care about your feelings.",
-  "Check this app BEFORE you spend, not after. Revolutionary, I know.",
-  "Groceries > takeout. Your wallet and your jeans both agree.",
-  "Name every dollar a job before the month starts. Idle cash wanders.",
-  "Brag to each other when you come in under. Make it a competition.",
-];
-
 function greetingFor(hour: number): string {
   if (hour < 5) return "Still up";
   if (hour < 12) return "Good morning";
@@ -915,14 +904,6 @@ export default function CommandCenterPage() {
         >
           <Sparkles className="w-3.5 h-3.5" /> View this month, Wrapped
         </button>
-      </div>
-
-      {/* Daily money tip */}
-      <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-        <span className="text-base leading-none">💡</span>
-        <span className="text-muted-foreground">
-          {MONEY_TIPS[(dayOfMonth - 1) % MONEY_TIPS.length]}
-        </span>
       </div>
 
       <MonthlyWrapped open={wrappedOpen} onOpenChange={setWrappedOpen} dashboard={dash ?? null} />
