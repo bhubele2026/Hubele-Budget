@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { useToCancelList, toCancelKey } from "@/hooks/useToCancelList";
 import { KillStack } from "@/components/kill-stack";
 import { RingStat, MiniBars } from "@/components/viz";
+import { PillBadge } from "@/components/pill-badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Collapsible,
@@ -573,18 +574,25 @@ function BucketCard({
             </Popover>
           )}
         </div>
-        <div
-          className={cn(
-            "text-sm font-medium tabular-nums",
-            over ? "text-destructive" : "text-emerald-700",
+        <div className="flex items-center gap-2">
+          {planned > 0 && (
+            <PillBadge tone={over ? "danger" : "good"}>
+              {over ? "Over" : "Under"}
+            </PillBadge>
           )}
-          data-testid={`allowance-variance-${slug}`}
-        >
-          {planned <= 0
-            ? "No allowance set"
-            : over
-              ? `${formatCurrency(variance)} over`
-              : `${formatCurrency(Math.abs(variance))} under`}
+          <div
+            className={cn(
+              "text-sm font-medium tabular-nums",
+              over ? "text-destructive" : "text-emerald-700",
+            )}
+            data-testid={`allowance-variance-${slug}`}
+          >
+            {planned <= 0
+              ? "No allowance set"
+              : over
+                ? `${formatCurrency(variance)} over`
+                : `${formatCurrency(Math.abs(variance))} under`}
+          </div>
         </div>
         {funVerdict(actual, planned) && (
           <div

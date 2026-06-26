@@ -1079,20 +1079,20 @@ function WeekHeader({ detail }: { detail: WeeklyDebriefDetail }) {
 function StatusBadge({ detail }: { detail: WeeklyDebriefDetail }) {
   if (detail.status === "locked") {
     return (
-      <Badge className="bg-emerald-100 text-emerald-900 border-emerald-300" data-testid="badge-status-locked">
+      <Badge className="rounded-full bg-emerald-100 text-emerald-900 border-emerald-300" data-testid="badge-status-locked">
         <Lock className="w-3 h-3 mr-1" /> Locked
       </Badge>
     );
   }
   if (detail.status === "in_progress") {
     return (
-      <Badge variant="outline" className="bg-sky-50 text-sky-900 border-sky-300" data-testid="badge-status-inprogress">
+      <Badge variant="outline" className="rounded-full bg-sky-50 text-sky-900 border-sky-300" data-testid="badge-status-inprogress">
         In progress
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="bg-amber-100 text-amber-900 border-amber-300" data-testid="badge-status-awaiting">
+    <Badge variant="outline" className="rounded-full bg-amber-100 text-amber-900 border-amber-300" data-testid="badge-status-awaiting">
       <AlertCircle className="w-3 h-3 mr-1" /> Awaiting review
     </Badge>
   );
