@@ -2152,7 +2152,10 @@ export const GetSettingsResponse = zod.object({
           .optional(),
         weeklyAllowanceOverrides: zod
           .record(zod.string(), zod.string())
-          .optional(),
+          .optional()
+          .describe(
+            "Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit.",
+          ),
       }),
       zod.null(),
     ])
@@ -2188,7 +2191,10 @@ export const UpdateSettingsBody = zod.object({
           .optional(),
         weeklyAllowanceOverrides: zod
           .record(zod.string(), zod.string())
-          .optional(),
+          .optional()
+          .describe(
+            "Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit.",
+          ),
       }),
       zod.null(),
     ])
@@ -2224,7 +2230,10 @@ export const UpdateSettingsResponse = zod.object({
           .optional(),
         weeklyAllowanceOverrides: zod
           .record(zod.string(), zod.string())
-          .optional(),
+          .optional()
+          .describe(
+            "Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit.",
+          ),
       }),
       zod.null(),
     ])

@@ -9,6 +9,7 @@
 export interface WeeklyBucketLabels {
   groceries?: string;
   dining?: string;
+  alcohol?: string;
   entertainment?: string;
   misc?: string;
 }

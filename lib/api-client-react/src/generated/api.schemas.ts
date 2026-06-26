@@ -1696,15 +1696,18 @@ export interface DaysSinceTracker {
   matchValue: string;
 }
 
+/**
+ * Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit.
+ */
+export type SettingsPreferencesWeeklyAllowanceOverrides = {
+  [key: string]: string;
+};
+
 export interface SettingsPreferences {
   weeklyBucketLabels?: WeeklyBucketLabels;
   daysSinceTrackers?: DaysSinceTracker[];
-  /**
-   * Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO
-   * yyyy-mm-dd) → planned amount string. Household-scoped so both partners
-   * see the same per-week edit.
-   */
-  weeklyAllowanceOverrides?: { [key: string]: string };
+  /** Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit. */
+  weeklyAllowanceOverrides?: SettingsPreferencesWeeklyAllowanceOverrides;
 }
 
 /**

@@ -16,6 +16,7 @@ export type TransactionInputWeeklyBucket =
 export const TransactionInputWeeklyBucket = {
   groceries: "groceries",
   dining: "dining",
+  alcohol: "alcohol",
   entertainment: "entertainment",
   misc: "misc",
 } as const;

@@ -12,6 +12,7 @@ export type CreateTransactionInputWeeklyBucket = (typeof CreateTransactionInputW
 export declare const CreateTransactionInputWeeklyBucket: {
     readonly groceries: "groceries";
     readonly dining: "dining";
+    readonly alcohol: "alcohol";
     readonly entertainment: "entertainment";
     readonly misc: "misc";
 };

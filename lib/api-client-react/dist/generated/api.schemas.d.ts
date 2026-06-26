@@ -23,6 +23,7 @@ export type TransactionWeeklyBucket = (typeof TransactionWeeklyBucket)[keyof typ
 export declare const TransactionWeeklyBucket: {
     readonly groceries: "groceries";
     readonly dining: "dining";
+    readonly alcohol: "alcohol";
     readonly entertainment: "entertainment";
     readonly misc: "misc";
 };
@@ -145,6 +146,7 @@ export type CreateTransactionInputWeeklyBucket = (typeof CreateTransactionInputW
 export declare const CreateTransactionInputWeeklyBucket: {
     readonly groceries: "groceries";
     readonly dining: "dining";
+    readonly alcohol: "alcohol";
     readonly entertainment: "entertainment";
     readonly misc: "misc";
 };
@@ -187,6 +189,7 @@ export type TransactionInputWeeklyBucket = (typeof TransactionInputWeeklyBucket)
 export declare const TransactionInputWeeklyBucket: {
     readonly groceries: "groceries";
     readonly dining: "dining";
+    readonly alcohol: "alcohol";
     readonly entertainment: "entertainment";
     readonly misc: "misc";
 };
@@ -1506,6 +1509,7 @@ export interface TestMappingRulesResult {
 export interface WeeklyBucketLabels {
     groceries?: string;
     dining?: string;
+    alcohol?: string;
     entertainment?: string;
     misc?: string;
 }
@@ -1520,9 +1524,17 @@ export interface DaysSinceTracker {
     matchType: DaysSinceTrackerMatchType;
     matchValue: string;
 }
+/**
+ * Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit.
+ */
+export type SettingsPreferencesWeeklyAllowanceOverrides = {
+    [key: string]: string;
+};
 export interface SettingsPreferences {
     weeklyBucketLabels?: WeeklyBucketLabels;
     daysSinceTrackers?: DaysSinceTracker[];
+    /** Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit. */
+    weeklyAllowanceOverrides?: SettingsPreferencesWeeklyAllowanceOverrides;
 }
 /**
  * Per-user (not per-household) UI preferences for the signed-in user.
@@ -1817,11 +1829,16 @@ export type SpendingFactsDailyBucketsItem = {
     total: number;
     count: number;
 };
+export type SpendingFactsDayOfWeekItemTopMerchantsItem = {
+    name: string;
+    total: number;
+};
 export type SpendingFactsDayOfWeekItem = {
     dow: number;
     label: string;
     avgPerDay: number;
     total: number;
+    topMerchants: SpendingFactsDayOfWeekItemTopMerchantsItem[];
 };
 export type SpendingFactsMonthlyTrendsItemByTopCategoryItem = {
     name: string;

@@ -5,10 +5,12 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { SpendingFactsDayOfWeekItemTopMerchantsItem } from "./spendingFactsDayOfWeekItemTopMerchantsItem";
 export type SpendingFactsDayOfWeekItem = {
     dow: number;
     label: string;
     avgPerDay: number;
     total: number;
+    topMerchants: SpendingFactsDayOfWeekItemTopMerchantsItem[];
 };
 //# sourceMappingURL=spendingFactsDayOfWeekItem.d.ts.map

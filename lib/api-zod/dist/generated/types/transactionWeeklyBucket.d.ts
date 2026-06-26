@@ -12,6 +12,7 @@ export type TransactionWeeklyBucket = (typeof TransactionWeeklyBucket)[keyof typ
 export declare const TransactionWeeklyBucket: {
     readonly groceries: "groceries";
     readonly dining: "dining";
+    readonly alcohol: "alcohol";
     readonly entertainment: "entertainment";
     readonly misc: "misc";
 };

@@ -6,15 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DaysSinceTracker } from "./daysSinceTracker";
+import type { SettingsPreferencesWeeklyAllowanceOverrides } from "./settingsPreferencesWeeklyAllowanceOverrides";
 import type { WeeklyBucketLabels } from "./weeklyBucketLabels";
 
 export interface SettingsPreferences {
   weeklyBucketLabels?: WeeklyBucketLabels;
   daysSinceTrackers?: DaysSinceTracker[];
-  /**
-   * Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO
-   * yyyy-mm-dd) → planned amount string. Household-scoped so both partners
-   * see the same per-week edit.
-   */
-  weeklyAllowanceOverrides?: { [key: string]: string };
+  /** Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit. */
+  weeklyAllowanceOverrides?: SettingsPreferencesWeeklyAllowanceOverrides;
 }
