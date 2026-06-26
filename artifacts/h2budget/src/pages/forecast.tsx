@@ -47,6 +47,7 @@ import {
   ReferenceDot,
   Label as RechartsLabel,
 } from "recharts";
+import { DeltaPill } from "@/components/viz";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2046,10 +2047,25 @@ export default function ForecastPage({
             <div className="text-2xl font-bold tabular-nums">
               {formatCurrency(proj?.endingBalance ?? "0")}
             </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              {proj?.endingDate
-                ? `on ${formatDate(proj.endingDate)}`
-                : `${horizonDays}-day horizon`}
+            <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
+              <span>
+                {proj?.endingDate
+                  ? `on ${formatDate(proj.endingDate)}`
+                  : `${horizonDays}-day horizon`}
+              </span>
+              {(() => {
+                // Projected change over the horizon vs the current bank balance.
+                const startBal = Number(data?.bankSnapshot?.balance);
+                const endBal = Number(proj?.endingBalance);
+                if (
+                  !Number.isFinite(startBal) ||
+                  startBal === 0 ||
+                  !Number.isFinite(endBal)
+                )
+                  return null;
+                const pct = ((endBal - startBal) / Math.abs(startBal)) * 100;
+                return <DeltaPill value={pct} />;
+              })()}
             </div>
           </CardContent>
         </Card>
