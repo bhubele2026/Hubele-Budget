@@ -40,6 +40,8 @@ import { CategoryDonut } from "@/components/category-donut";
 import { HealthScore } from "@/components/health-score";
 import { SavingsGoal } from "@/components/savings-goal";
 import { DrillCard } from "@/components/drill-card";
+import { StatTile, StatTileRow } from "@/components/stat-tile";
+import { PillBadge } from "@/components/pill-badge";
 import { KillStack } from "@/components/kill-stack";
 import { Sparkline, StackBar, RingStat, HeatStrip, MiniBars, MoneyText } from "@/components/viz";
 import { useUser } from "@clerk/react";
@@ -438,51 +440,90 @@ export default function CommandCenterPage() {
   }, [netMonth]);
 
   const amexOwed = payoff?.combinedStatementBalance ?? null;
+  const cashNow =
+    forecast?.bankSnapshot?.balance != null ? Number(forecast.bankSnapshot.balance) : null;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <Confetti fire={celebrate} />
 
-      {/* ── Hero: the debt thesis ──────────────────────────────────────── */}
-      <Card className="focus-glow">
-        <CardContent className="p-5 md:p-6">
-          <div className="grid gap-5 md:grid-cols-2 md:items-center">
-            <div>
-              <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                {greeting}, {who} · total debt remaining
-              </div>
-              <div className="mt-1 text-[2.6rem] md:text-[3.1rem] font-bold tracking-[-0.02em] tabular-nums leading-none text-foreground">
-                {dLoading || totalDebt == null ? "—" : formatCurrency(debtCountUp)}
-              </div>
-              <div className="mt-2 text-sm text-muted-foreground">
-                {debtFree
-                  ? `Debt-free around ${debtFree.label} at this month's pace · ${formatCurrency(paidThisMonth)} paid so far`
-                  : totalDebt != null && totalDebt <= 0
-                    ? "Debt-free. Absolute legends."
-                    : "Throw something at the avalanche this month to set a free-by date."}
-              </div>
-              <div className="mt-3 flex items-start gap-2">
-                <Sparkles className={cn("w-4 h-4 mt-0.5 shrink-0", sevColor)} />
-                <p className={cn("text-sm font-medium leading-snug", sevColor)}>
-                  {nudgeMsg ?? "Pull a sync and I'll tell you how you're really doing."}
-                </p>
-              </div>
-              <div className="mt-4">
-                <SyncButton />
-              </div>
+      {/* ── At-a-glance StatTile row (active hero = the debt spine) ──────── */}
+      <StatTileRow>
+        <StatTile
+          active
+          icon={<Flame className="w-4 h-4" />}
+          label={`${greeting}, ${who} · debt remaining`}
+          value={dLoading || totalDebt == null ? "—" : formatCurrency(debtCountUp)}
+          sub={
+            debtFree
+              ? `Debt-free ~${debtFree.label} at this pace`
+              : totalDebt != null && totalDebt <= 0
+                ? "Debt-free. Absolute legends."
+                : "Set a free-by date — hit the avalanche."
+          }
+        />
+        <StatTile
+          icon={<PiggyBank className="w-4 h-4" />}
+          label="Cash on hand"
+          value={cashNow != null ? <MoneyText amount={cashNow} /> : "—"}
+          sub={forecast?.bankSnapshot?.name ?? "Checking"}
+          href="/transactions"
+        />
+        <StatTile
+          icon={netMonth != null && netMonth < 0 ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
+          label="Net this month"
+          value={netMonth != null ? <MoneyText amount={netMonth} colored signed /> : "—"}
+          sub={dash ? `${formatCurrency(income)} in · ${formatCurrency(spend)} out` : undefined}
+          href="/reports"
+        />
+        <StatTile
+          icon={<Trophy className="w-4 h-4" />}
+          label="Paid to debt"
+          value={<MoneyText amount={paidThisMonth} />}
+          sub="this month"
+          href="/avalanche"
+        />
+      </StatTileRow>
+
+      {/* ── The loud spine: road out + freedom meter ────────────────────── */}
+      <div className="grid lg:grid-cols-2 gap-4 items-stretch">
+        <Card className="focus-glow">
+          <CardContent className="p-5 md:p-6 flex flex-col h-full">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+              Your road out of debt
             </div>
-            <div>
-              {dash ? (
-                <FreedomMeter
-                  totalDebt={Number(dash.totalDebt) || 0}
-                  paidLifetime={paidLifetime}
-                  paidThisMonth={paidThisMonth}
-                />
-              ) : null}
+            <div className="mt-1 text-2xl md:text-[1.9rem] font-bold tracking-tight leading-tight">
+              {debtFree
+                ? `Debt-free around ${debtFree.label}`
+                : totalDebt != null && totalDebt <= 0
+                  ? "You're debt-free. Absolute legends. 🎉"
+                  : "Throw money at the avalanche to set your free-by date."}
             </div>
-          </div>
-        </CardContent>
-      </Card>
+            {debtFree && (
+              <div className="mt-1 text-sm text-muted-foreground">
+                ~{debtFree.months} month{debtFree.months === 1 ? "" : "s"} to go ·{" "}
+                {formatCurrency(paidThisMonth)} paid so far this month
+              </div>
+            )}
+            <div className="mt-3 flex items-start gap-2">
+              <Sparkles className={cn("w-4 h-4 mt-0.5 shrink-0", sevColor)} />
+              <p className={cn("text-sm font-medium leading-snug", sevColor)}>
+                {nudgeMsg ?? "Pull a sync and I'll tell you how you're really doing."}
+              </p>
+            </div>
+            <div className="mt-auto pt-4">
+              <SyncButton />
+            </div>
+          </CardContent>
+        </Card>
+        {dash ? (
+          <FreedomMeter
+            totalDebt={Number(dash.totalDebt) || 0}
+            paidLifetime={paidLifetime}
+            paidThisMonth={paidThisMonth}
+          />
+        ) : null}
+      </div>
 
       {/* ── The five command boxes ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-4 stagger-children">
@@ -762,8 +803,13 @@ export default function CommandCenterPage() {
         {momCompare.pctChange != null ? (
           <Card>
             <CardContent className="p-5">
-              <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                Vs last month · same point
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                  Vs last month · same point
+                </div>
+                <PillBadge tone={momCompare.pctChange > 0 ? "danger" : "good"}>
+                  {momCompare.pctChange > 0 ? "Spending faster" : "On track"}
+                </PillBadge>
               </div>
               <div className="mt-1.5 flex items-center gap-2">
                 {momCompare.pctChange > 0 ? (
