@@ -49,6 +49,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { RingStat, Sparkline, MoneyText } from "@/components/viz";
 import {
   simulate,
   simulateWithSolvableFallback,
@@ -660,8 +661,59 @@ export default function AvalanchePage() {
         <div className="border-t border-border mt-5" />
       </div>
 
-      {/* Stat strip + underwater + progress — kept tight so the top of the
-          page reads as one connected section instead of disjoint slabs. */}
+      {/* Visual hero — payoff progress ring + the debt-decline runway, with a
+          weekly framing of the extra. Leads the section; the stat strip below
+          stays as the compact data detail. */}
+      <Card className="rounded-lg">
+        <CardContent className="p-4 flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-3 shrink-0">
+            <RingStat
+              value={progressPct / 100}
+              size={72}
+              stroke={7}
+              color="hsl(var(--primary))"
+              centerSub="crushed"
+            />
+            <div>
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                Debt-free
+              </div>
+              <div className="text-2xl font-bold tabular-nums leading-none mt-0.5">
+                {sim.ranOutOfTime
+                  ? "∞"
+                  : sim.debtFreeDate
+                    ? fmtMonth(sim.debtFreeDate)
+                    : "—"}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {sim.ranOutOfTime
+                  ? "raise the extra to break through"
+                  : `${sim.monthsToFreedom} mo · ≈ ${fmtMoney((totalExtra * 12) / 52)}/wk extra`}
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            {chartData.length > 1 ? (
+              <>
+                <Sparkline
+                  data={chartData.map((d) => d.balance)}
+                  variant="area"
+                  color="hsl(var(--negative))"
+                  height={48}
+                />
+                <div className="mt-1 flex justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <span>
+                    <MoneyText amount={totalBalance} /> now
+                  </span>
+                  <span>→ $0</span>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Stat strip — compact data detail beneath the visual hero. */}
       <div className="space-y-3">
       <div className="grid grid-cols-2 md:grid-cols-4">
         <StatStripCell label="Total debt" value={fmtMoneyCompact(totalBalance)} />
@@ -690,19 +742,6 @@ export default function AvalanchePage() {
         />
       </div>
 
-      {/* Progress row */}
-      <div>
-        <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
-          <span>Progress</span>
-          <span className="tabular-nums">{progressPct.toFixed(1)}%</span>
-        </div>
-        <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full bg-foreground rounded-full transition-all"
-            style={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }}
-          />
-        </div>
-      </div>
       </div>
 
       {/* This month — full plan amount + target debt(s) + projected kill date. */}

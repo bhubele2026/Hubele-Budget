@@ -25,13 +25,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { TimeRangeToggle } from "@/components/time-range-toggle";
+import { rangeForMode, rangeDays as rangeDaysOf, type RangeMode } from "@/lib/timeRange";
 import { DrillBreadcrumb } from "@/components/drill-breadcrumb";
 import { AiInsightBar } from "@/components/ai-insight-bar";
 import { deriveEffectiveSnapshot } from "@/lib/effectiveSnapshot";
@@ -53,6 +48,15 @@ export const RANGES = [
   { value: "180", label: "Last 6 months" },
   { value: "365", label: "Last 12 months" },
 ];
+
+/**
+ * Day-span for a Wk/Mo/Yr mode, fed into useReportsData(rangeDays). Weekly-
+ * first: "wk" is the default everywhere and resolves to the current Sun–Sat
+ * week's span; mo/yr are opt-in.
+ */
+export function daysForMode(mode: RangeMode): number {
+  return rangeDaysOf(rangeForMode(mode));
+}
 
 /**
  * Shared data layer for every Reports drill page. Each routed sub-page calls
@@ -180,6 +184,28 @@ export function AdvisorSummaryCard({
     }
   };
 
+  // Collapsed = a slim one-line prompt, not a big empty card (no dead space).
+  if (!show) {
+    return (
+      <div
+        className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[0.03] px-4 py-2.5"
+        data-testid={`card-advisor-${tab}`}
+      >
+        <span className="text-sm font-medium text-muted-foreground">
+          What this means — get the blunt read on these numbers.
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShow(true)}
+          data-testid={`button-advisor-generate-${tab}`}
+        >
+          Explain
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <Card data-testid={`card-advisor-${tab}`} className="border-primary/20 bg-primary/[0.03]">
       <CardHeader className="pb-2">
@@ -210,16 +236,7 @@ export function AdvisorSummaryCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {!show ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShow(true)}
-            data-testid={`button-advisor-generate-${tab}`}
-          >
-            Explain these numbers
-          </Button>
-        ) : isLoading || !data ? (
+        {isLoading || !data ? (
           <p className="text-sm text-muted-foreground flex items-center gap-2">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             Reading your numbers…
@@ -344,16 +361,16 @@ export function ReportsBalanceTiles({
   );
 }
 
-/** Range select + compare-to-previous toggle, shared by sub-pages that need it. */
+/** Weekly-first Wk/Mo/Yr toggle + compare switch, shared by sub-pages. */
 export function ReportsRangeControls({
-  rangeDays,
-  setRangeDays,
+  mode,
+  setMode,
   compareToPrev,
   setCompareToPrev,
   showCompare = true,
 }: {
-  rangeDays: string;
-  setRangeDays: (v: string) => void;
+  mode: RangeMode;
+  setMode: (m: RangeMode) => void;
   compareToPrev?: boolean;
   setCompareToPrev?: (v: boolean) => void;
   showCompare?: boolean;
@@ -364,18 +381,7 @@ export function ReportsRangeControls({
         <Label className="text-xs uppercase tracking-widest text-muted-foreground">
           Range
         </Label>
-        <Select value={rangeDays} onValueChange={setRangeDays}>
-          <SelectTrigger className="w-44 h-9" aria-label="Report date range">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {RANGES.map((r) => (
-              <SelectItem key={r.value} value={r.value}>
-                {r.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <TimeRangeToggle value={mode} onChange={setMode} />
       </div>
       {showCompare && setCompareToPrev && (
         <div className="flex items-center gap-2">

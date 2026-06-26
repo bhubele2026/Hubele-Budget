@@ -8,6 +8,7 @@ import {
 import type { Debt, DebtBalanceHistoryEntry } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AiInsightBar } from "@/components/ai-insight-bar";
+import { RingStat, MoneyText } from "@/components/viz";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
@@ -210,6 +211,11 @@ export default function DebtsPage() {
         {sortedDebts.map((debt) => {
           const balanceNum = Number(debt.balance);
           const paidOff = isPaidOff(balanceNum);
+          const originalNum = Number(debt.originalBalance ?? 0);
+          const paidRatio =
+            originalNum > 0
+              ? Math.max(0, Math.min(1, (originalNum - balanceNum) / originalNum))
+              : 0;
           const isTarget = !paidOff && planTargetIds.has(debt.id);
           const { date: payoffDate, reason: payoffReason } = payoffFor(debt.id);
           const payoffLabel = payoffDate ? fmtMonth(payoffDate) : "—";
@@ -231,7 +237,14 @@ export default function DebtsPage() {
                   <p className="text-xs text-muted-foreground">{debt.type || "General"}</p>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex flex-col items-center justify-center text-center py-4 gap-1">
+                  <div className="flex flex-col items-center justify-center text-center py-3 gap-2">
+                    <RingStat
+                      value={1}
+                      size={68}
+                      stroke={7}
+                      color="hsl(var(--positive))"
+                      centerText="✓"
+                    />
                     <div
                       className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400"
                       data-testid="debt-card-paid-off-headline"
@@ -270,10 +283,37 @@ export default function DebtsPage() {
                 <p className="text-xs text-muted-foreground">{debt.type || "General"}</p>
               </CardHeader>
               <CardContent>
+                <div className="flex items-center gap-3 mb-3">
+                  <RingStat
+                    value={paidRatio}
+                    size={56}
+                    stroke={6}
+                    color={isTarget ? "hsl(var(--primary))" : "hsl(var(--chart-2))"}
+                    centerSub="paid"
+                  />
+                  <div className="min-w-0 text-xs text-muted-foreground leading-snug">
+                    {originalNum > 0 ? (
+                      <>
+                        <span className="font-semibold text-foreground tabular-nums">
+                          {Math.round(paidRatio * 100)}%
+                        </span>{" "}
+                        crushed of{" "}
+                        <MoneyText
+                          amount={originalNum}
+                          className="text-foreground"
+                        />
+                      </>
+                    ) : (
+                      "Tracking payoff from here"
+                    )}
+                  </div>
+                </div>
                 <div className="space-y-2 mt-2">
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Balance</span>
-                    <span className="text-sm font-medium">{formatCurrency(debt.balance)}</span>
+                    <span className="text-sm font-medium tabular-nums">
+                      <MoneyText amount={balanceNum} />
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">APR</span>

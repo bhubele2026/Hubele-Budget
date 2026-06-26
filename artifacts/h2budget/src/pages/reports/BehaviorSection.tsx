@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, cn } from "@/lib/utils";
 import { Trophy, Calendar, Sparkles, Flame } from "lucide-react";
+import { MiniBars } from "@/components/viz";
 import { H2_PALETTE } from "@/lib/reportsAnalytics";
 import {
   ResponsiveContainer,
@@ -22,25 +23,6 @@ import {
   tooltipMoney,
   tooltipStyle,
 } from "./shared";
-
-// (#851 Phase 2) Tone for a "days since last" tile. The dining/coffee tiles
-// read recent activity as normal (green) and a long gap as notable; the Amazon
-// tile is inverted — a long gap means resisting the impulse, so it greens out.
-function daysSinceTone(
-  bucket: "dining" | "coffee" | "amazon",
-  days: number | null,
-): "default" | "good" | "amber" | "bad" {
-  if (days === null) return "default";
-  if (bucket === "amazon") {
-    if (days >= 14) return "good";
-    if (days >= 7) return "amber";
-    return "bad";
-  }
-  // dining + coffee
-  if (days <= 7) return "good";
-  if (days <= 14) return "amber";
-  return "bad";
-}
 
 const DOW_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
@@ -118,13 +100,6 @@ export function BehaviorSection({ from, to }: { from: string; to: string }) {
 
   const daysValue = (e: typeof dsl.dining): string =>
     e ? `${e.days}` : "—";
-  const lastSub = (e: typeof dsl.dining, emptyMsg: string): string => {
-    if (!e) return emptyMsg;
-    // Omit the dollar figure when there's no real amount behind the entry
-    // (e.g. the manual Amazon anchor, which has no matching transaction).
-    const amountPart = e.lastAmount > 0 ? ` · ${formatCurrency(e.lastAmount)}` : "";
-    return `last: ${e.lastMerchant} · ${e.lastDate}${amountPart}`;
-  };
 
   return (
     <div className="space-y-6">
@@ -141,27 +116,38 @@ export function BehaviorSection({ from, to }: { from: string; to: string }) {
         </p>
       )}
 
-      {/* Six-tile grid — three "days since last", three fun facts. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <HeroTile
-          label="Days since last dining out"
-          value={daysValue(dsl.dining)}
-          sub={lastSub(dsl.dining, "No dining out in this window.")}
-          tone={daysSinceTone("dining", dsl.dining?.days ?? null)}
-        />
-        <HeroTile
-          label="Days since last Amazon order"
-          value={daysValue(dsl.amazon)}
-          sub={lastSub(dsl.amazon, "No Amazon orders in this window.")}
-          tone={daysSinceTone("amazon", dsl.amazon?.days ?? null)}
-        />
-        <HeroTile
-          label="Days since last coffee shop"
-          value={daysValue(dsl.coffee)}
-          sub={lastSub(dsl.coffee, "No coffee runs in this window.")}
-          tone={daysSinceTone("coffee", dsl.coffee?.days ?? null)}
-        />
+      {/* "Days since last…" as a bar strip — replaces the three flat tiles. */}
+      <Card>
+        <CardContent className="p-5">
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium mb-3">
+            Days since last…
+          </div>
+          <MiniBars
+            height={44}
+            accent="hsl(var(--chart-1))"
+            data={[
+              { value: dsl.dining?.days ?? 0, label: `Dining — ${daysValue(dsl.dining)}`, color: "hsl(var(--chart-1))" },
+              { value: dsl.amazon?.days ?? 0, label: `Amazon — ${daysValue(dsl.amazon)}`, color: "hsl(var(--chart-4))" },
+              { value: dsl.coffee?.days ?? 0, label: `Coffee — ${daysValue(dsl.coffee)}`, color: "hsl(var(--chart-3))" },
+            ]}
+          />
+          <div className="mt-2 grid grid-cols-3 text-center">
+            {([
+              ["Dining", dsl.dining],
+              ["Amazon", dsl.amazon],
+              ["Coffee", dsl.coffee],
+            ] as const).map(([label, e]) => (
+              <div key={label}>
+                <div className="text-sm font-semibold tabular-nums">{daysValue(e)}</div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
+      {/* Fun-fact tiles. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <HeroTile
           label="Biggest splurge"
           value={ff.biggestSplurge ? formatCurrency(ff.biggestSplurge.amount) : "—"}

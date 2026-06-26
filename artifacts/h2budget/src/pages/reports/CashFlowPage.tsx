@@ -4,13 +4,17 @@ import {
   AdvisorSummaryCard,
   ReportShell,
   ReportsRangeControls,
+  daysForMode,
 } from "./reportsShared";
+import { type RangeMode } from "@/lib/timeRange";
 import { CashFlowSection } from "./CashFlowSection";
 
 export default function CashFlowPage() {
-  const [rangeDays, setRangeDays] = useState("30");
+  // Weekly-first: opens on the current week; Mo/Yr are opt-in.
+  const [mode, setMode] = useState<RangeMode>("wk");
   const [compareToPrev, setCompareToPrev] = useState(false);
-  const d = useReportsData(Number(rangeDays), 0);
+  const rangeDays = daysForMode(mode);
+  const d = useReportsData(rangeDays, 0);
   if (d.txnsLoading) return null;
   return (
     <ReportShell
@@ -19,16 +23,16 @@ export default function CashFlowPage() {
       blurb="What came in, what went out, and the shape of the gap between them."
     >
       <ReportsRangeControls
-        rangeDays={rangeDays}
-        setRangeDays={setRangeDays}
+        mode={mode}
+        setMode={setMode}
         compareToPrev={compareToPrev}
         setCompareToPrev={setCompareToPrev}
       />
-      <AdvisorSummaryCard tab="cashflow" rangeDays={Number(rangeDays)} monthOffset={0} />
+      <AdvisorSummaryCard tab="cashflow" rangeDays={rangeDays} monthOffset={0} />
       <CashFlowSection
         txns={d.rangeTxns}
         prevTxns={d.prevRangeTxns}
-        rangeDays={Number(rangeDays)}
+        rangeDays={rangeDays}
         compareToPrev={compareToPrev}
         catNameById={d.catNameById}
         excludedCategoryIds={d.excludedCategoryIds}

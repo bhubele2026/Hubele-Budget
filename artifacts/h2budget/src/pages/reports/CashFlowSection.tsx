@@ -6,7 +6,7 @@ import type {
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
-import { TrendingUp, TrendingDown, PiggyBank } from "lucide-react";
+import { RingStat, StackBar, DeltaPill, MoneyText } from "@/components/viz";
 import {
   H2_PALETTE,
   CHART_SERIES,
@@ -32,7 +32,6 @@ import {
   Tooltip,
   Legend,
   ReferenceLine,
-  HeroTile,
   SectionHeader,
   ChartCard,
   tooltipMoney,
@@ -209,34 +208,68 @@ export function CashFlowSection({
         blurb="The pulse of your accounts — what came in, what left, and what stuck around."
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <HeroTile
-          label="Avg monthly income"
-          value={formatCurrency(kpis.avgIncome)}
-          tone="good"
-          icon={<TrendingUp className="w-4 h-4" />}
-          delta={incomeDelta}
-        />
-        <HeroTile
-          label="Avg monthly expense"
-          value={formatCurrency(kpis.avgExpense)}
-          tone="bad"
-          icon={<TrendingDown className="w-4 h-4" />}
-          delta={expenseDelta}
-        />
-        <HeroTile
-          label="Avg monthly net"
-          value={formatCurrency(kpis.avgNet)}
-          tone={kpis.avgNet >= 0 ? "good" : "bad"}
-          icon={<PiggyBank className="w-4 h-4" />}
-          delta={netDelta}
-        />
-        <HeroTile
-          label="Savings rate"
-          value={`${kpis.savingsRatePct.toFixed(1)}%`}
-          tone="amber"
-          delta={savingsDelta}
-        />
+      {/* Visual summary — savings ring + in/out split + figures with deltas,
+          replacing the old flat number-tile row. */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card>
+          <CardContent className="p-5 flex items-center gap-4">
+            <RingStat
+              value={Math.max(0, Math.min(1, kpis.savingsRatePct / 100))}
+              size={66}
+              color={kpis.savingsRatePct >= 0 ? "hsl(var(--positive))" : "hsl(var(--negative))"}
+              centerText={`${kpis.savingsRatePct.toFixed(0)}%`}
+              centerSub="saved"
+            />
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                Savings rate
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">of income kept</div>
+              {savingsDelta && Number.isFinite(savingsDelta.pct) && (
+                <DeltaPill value={savingsDelta.pct} className="mt-1.5" />
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="lg:col-span-2">
+          <CardContent className="p-5">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium mb-3">
+              In vs out · monthly avg
+            </div>
+            <StackBar
+              segments={[
+                { label: "Income", value: kpis.avgIncome, color: "hsl(var(--positive))" },
+                { label: "Expense", value: kpis.avgExpense, color: "hsl(var(--negative))" },
+              ]}
+              showLegend={false}
+            />
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              <div>
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Income</div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <MoneyText amount={kpis.avgIncome} className="font-semibold" />
+                  {incomeDelta && Number.isFinite(incomeDelta.pct) && <DeltaPill value={incomeDelta.pct} />}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Expense</div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <MoneyText amount={kpis.avgExpense} className="font-semibold" />
+                  {expenseDelta && Number.isFinite(expenseDelta.pct) && (
+                    <DeltaPill value={expenseDelta.pct} invert />
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Net</div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <MoneyText amount={kpis.avgNet} colored className="font-semibold" />
+                  {netDelta && Number.isFinite(netDelta.pct) && <DeltaPill value={netDelta.pct} />}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <ChartCard

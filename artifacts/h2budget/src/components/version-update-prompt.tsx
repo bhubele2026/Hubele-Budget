@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import {
   useGetVersion,
   getGetVersionQueryKey,
@@ -28,6 +29,12 @@ const POLL_INTERVAL_MS = 90_000;
 export function VersionUpdatePrompt() {
   const enabled = import.meta.env.PROD && APP_VERSION !== "dev";
   const [outdated, setOutdated] = useState(false);
+  const [location] = useLocation();
+  // Latch the route the banner first appeared on. Once a new version is live,
+  // the very next client-side navigation hard-reloads onto the fresh bundle —
+  // so the user never lands on a stale-bundle "old shell" of another route.
+  // This stays safe (never reloads mid-input on the current page).
+  const latchLocRef = useRef<string | null>(null);
 
   const { data } = useGetVersion({
     query: {
@@ -53,6 +60,20 @@ export function VersionUpdatePrompt() {
     }
   }, [data?.version, enabled]);
 
+  // When outdated, latch the current route; the next navigation away from it
+  // forces a full reload onto the new bundle.
+  useEffect(() => {
+    if (outdated && latchLocRef.current === null) {
+      latchLocRef.current = location;
+    } else if (
+      outdated &&
+      latchLocRef.current !== null &&
+      location !== latchLocRef.current
+    ) {
+      window.location.reload();
+    }
+  }, [outdated, location]);
+
   if (!outdated) return null;
 
   return (
@@ -61,7 +82,7 @@ export function VersionUpdatePrompt() {
       data-testid="version-update-banner"
       className="fixed inset-x-0 bottom-0 z-[100] flex justify-center px-4 pb-4"
     >
-      <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-lg">
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
         <RefreshCw className="h-4 w-4 text-muted-foreground" aria-hidden />
         <span className="text-sm text-foreground">
           A new version is available.

@@ -47,7 +47,7 @@ import {
   ReferenceDot,
   Label as RechartsLabel,
 } from "recharts";
-import { DeltaPill } from "@/components/viz";
+import { DeltaPill, Sparkline, StackBar, RingStat, MoneyText } from "@/components/viz";
 import { AiInsightBar } from "@/components/ai-insight-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -185,6 +185,9 @@ function fireConfetti() {
 
 type HorizonOpt = { label: string; days: number };
 const HORIZON_OPTS: HorizonOpt[] = [
+  // Weekly-first: the household lives by the week, so the forecast opens on a
+  // 7-day horizon by default; longer horizons stay one click away.
+  { label: "THIS WEEK", days: 7 },
   { label: "30 DAYS", days: 30 },
   { label: "90 DAYS", days: 90 },
   { label: "120 DAYS", days: 120 },
@@ -227,9 +230,9 @@ export default function ForecastPage({
       const n = v ? Number(v) : NaN;
       return Number.isFinite(n) && HORIZON_OPTS.some((h) => h.days === n)
         ? n
-        : 30;
+        : 7;
     } catch {
-      return 30;
+      return 7;
     }
   });
   // (#650 follow-up) Default the chart to start at TODAY so the
@@ -2014,95 +2017,122 @@ export default function ForecastPage({
       {mode === "overall" && (<>
       {/* Sassy AI one-liner */}
       <AiInsightBar />
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card data-testid="kpi-lowest-point">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground">
-              Lowest Point
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              className={`text-2xl font-bold tabular-nums ${
-                Number.isFinite(lowestNum) &&
-                lowestNum < Number(proj?.cashBuffer ?? 0)
-                  ? "text-destructive"
-                  : ""
-              }`}
-            >
-              {Number.isFinite(lowestNum)
-                ? formatCurrency(lowestNum)
-                : formatCurrency(0)}
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              {proj?.lowestDate ? `on ${formatDate(proj.lowestDate)}` : "—"}
-            </div>
-          </CardContent>
-        </Card>
-        <Card data-testid="kpi-ending-balance">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground">
-              Ending Balance
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums">
-              {formatCurrency(proj?.endingBalance ?? "0")}
-            </div>
-            <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
-              <span>
-                {proj?.endingDate
-                  ? `on ${formatDate(proj.endingDate)}`
-                  : `${horizonDays}-day horizon`}
-              </span>
-              {(() => {
-                // Projected change over the horizon vs the current bank balance.
-                const startBal = Number(data?.bankSnapshot?.balance);
-                const endBal = Number(proj?.endingBalance);
-                if (
-                  !Number.isFinite(startBal) ||
-                  startBal === 0 ||
-                  !Number.isFinite(endBal)
-                )
-                  return null;
-                const pct = ((endBal - startBal) / Math.abs(startBal)) * 100;
-                return <DeltaPill value={pct} />;
-              })()}
-            </div>
-          </CardContent>
-        </Card>
-        <Card data-testid="kpi-projected-income">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground">
-              Projected Income
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums text-[hsl(var(--positive))]">
-              {formatCurrency(proj?.projectedIncome ?? "0")}
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              over {horizonDays} days
-            </div>
-          </CardContent>
-        </Card>
-        <Card data-testid="kpi-projected-expenses">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground">
-              Projected Expenses
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums">
-              {formatCurrency(proj?.projectedExpenses ?? "0")}
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              over {horizonDays} days
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* KPI tiles — each carries a real visual, not just a number. */}
+      {(() => {
+        const balSeries = dailySeries.map((d) => d.balance);
+        const startBal = Number(data?.bankSnapshot?.balance);
+        const endBal = Number(proj?.endingBalance);
+        const endDeltaPct =
+          Number.isFinite(startBal) && startBal !== 0 && Number.isFinite(endBal)
+            ? ((endBal - startBal) / Math.abs(startBal)) * 100
+            : null;
+        const inc = Number(proj?.projectedIncome) || 0;
+        const exp = Number(proj?.projectedExpenses) || 0;
+        const dipsBelowBuffer =
+          Number.isFinite(lowestNum) && lowestNum < Number(proj?.cashBuffer ?? 0);
+        const expRatio = inc > 0 ? exp / inc : exp > 0 ? 1 : 0;
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card data-testid="kpi-lowest-point">
+              <CardContent className="p-4">
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                  Lowest Point
+                </div>
+                <div className="mt-1 text-2xl font-bold">
+                  <MoneyText
+                    amount={Number.isFinite(lowestNum) ? lowestNum : 0}
+                    className={dipsBelowBuffer ? "text-[hsl(var(--negative))]" : ""}
+                  />
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {proj?.lowestDate ? `on ${formatDate(proj.lowestDate)}` : "—"}
+                </div>
+                {balSeries.length > 1 && (
+                  <Sparkline
+                    data={balSeries}
+                    variant="area"
+                    color={dipsBelowBuffer ? "hsl(var(--negative))" : "hsl(var(--chart-3))"}
+                    height={30}
+                    className="mt-2"
+                  />
+                )}
+              </CardContent>
+            </Card>
+            <Card data-testid="kpi-ending-balance">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                    Ending Balance
+                  </span>
+                  {endDeltaPct != null && <DeltaPill value={endDeltaPct} />}
+                </div>
+                <div className="mt-1 text-2xl font-bold">
+                  <MoneyText amount={proj?.endingBalance ?? 0} />
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {proj?.endingDate
+                    ? `on ${formatDate(proj.endingDate)}`
+                    : `${horizonDays}-day horizon`}
+                </div>
+                {balSeries.length > 1 && (
+                  <Sparkline
+                    data={balSeries}
+                    variant="line"
+                    color="hsl(var(--chart-1))"
+                    height={30}
+                    className="mt-2"
+                  />
+                )}
+              </CardContent>
+            </Card>
+            <Card data-testid="kpi-projected-income">
+              <CardContent className="p-4">
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                  In vs Out
+                </div>
+                <div className="mt-1 text-2xl font-bold text-[hsl(var(--positive))]">
+                  <MoneyText amount={inc} />
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  income over {horizonDays}d
+                </div>
+                <StackBar
+                  className="mt-2"
+                  legendMax={2}
+                  showLegend={false}
+                  segments={[
+                    { label: "Income", value: inc, color: "hsl(var(--positive))" },
+                    { label: "Expenses", value: exp, color: "hsl(var(--negative))" },
+                  ]}
+                />
+              </CardContent>
+            </Card>
+            <Card data-testid="kpi-projected-expenses">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <RingStat
+                    value={Math.min(1, expRatio)}
+                    size={52}
+                    color={expRatio > 1 ? "hsl(var(--negative))" : "hsl(var(--primary))"}
+                    centerSub="of in"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                      Projected Out
+                    </div>
+                    <div className="mt-0.5 text-xl font-bold">
+                      <MoneyText amount={exp} />
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      over {horizonDays}d
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* (#683) Past-due plans dragging tomorrow — discoverable summary */}
       {draggingPlans.length > 0 && draggingTargetDate && (

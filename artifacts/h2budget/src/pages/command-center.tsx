@@ -41,7 +41,7 @@ import { HealthScore } from "@/components/health-score";
 import { SavingsGoal } from "@/components/savings-goal";
 import { DrillCard } from "@/components/drill-card";
 import { KillStack } from "@/components/kill-stack";
-import { Sparkline, StackBar, RingStat, HeatStrip, MoneyText } from "@/components/viz";
+import { Sparkline, StackBar, RingStat, HeatStrip, MiniBars, MoneyText } from "@/components/viz";
 import { useUser } from "@clerk/react";
 import { useCountUp } from "@/hooks/useCountUp";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -789,6 +789,23 @@ export default function CommandCenterPage() {
                 {momCompare.pctChange > 0
                   ? "spending faster, watch it. 👀"
                   : "spending less. Nice. 🟢"}
+              </div>
+              <div className="mt-3">
+                <MiniBars
+                  height={36}
+                  data={[
+                    { value: momCompare.last, label: `Last month: ${formatCurrency(momCompare.last)}`, color: "hsl(var(--muted-foreground))" },
+                    {
+                      value: momCompare.cur,
+                      label: `This month: ${formatCurrency(momCompare.cur)}`,
+                      color: momCompare.pctChange > 0 ? "hsl(var(--negative))" : "hsl(var(--positive))",
+                    },
+                  ]}
+                />
+                <div className="mt-1 flex justify-between text-[9px] uppercase tracking-wider text-muted-foreground">
+                  <span>Last</span>
+                  <span>This</span>
+                </div>
               </div>
             </CardContent>
           </Card>

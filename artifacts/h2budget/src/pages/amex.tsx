@@ -100,6 +100,8 @@ import {
 import { AmexLogo } from "@/components/brand-logos";
 import { AmexCardBand } from "@/components/amex-card-band";
 import { AiInsightBar } from "@/components/ai-insight-bar";
+import { TimeRangeToggle } from "@/components/time-range-toggle";
+import { currentWeekRange, type RangeMode } from "@/lib/timeRange";
 import { buildBalanceWindow } from "@/lib/amexBalanceWindow";
 
 // The "American Express" page is really the credit-cards view. Apple Card
@@ -213,6 +215,11 @@ export default function AmexPage() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [memberFilter, setMemberFilter] = useState<string>("all");
+  // Weekly-first: the ledger defaults to the CURRENT week within the loaded
+  // month; Mo/Yr widen it back to the whole month. (The Amex balance chart is
+  // an inherently forward-12-month projection, so the toggle scopes the
+  // ledger, not that chart.)
+  const [rangeMode, setRangeMode] = useState<RangeMode>("wk");
   // Honor `?accountId=<external Plaid account_id>` deep-links (the Kill Stack
   // rows + Home/Allowance per-card drills land here pre-filtered to one card).
   const [cardFilter, setCardFilter] = useState<string>(() => {
@@ -551,8 +558,16 @@ export default function AmexPage() {
   // Apply client-side filters.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    // Weekly-first: when viewing the current month in Wk mode, scope the
+    // ledger to this Sun–Sat week. On a past month (no "this week" in it) or
+    // in Mo/Yr mode, fall back to the full loaded month.
+    const weekR =
+      rangeMode === "wk" && compareMonth(selectedMonth, currentMonth) === 0
+        ? currentWeekRange()
+        : null;
     return monthScoped.filter((t) => {
       const k = t.occurredOn.slice(0, 10);
+      if (weekR && (k < weekR.from || k > weekR.to)) return false;
       if (from && k < from) return false;
       if (to && k > to) return false;
       if (memberFilter !== "all" && (t.member ?? "") !== memberFilter)
@@ -571,7 +586,7 @@ export default function AmexPage() {
       }
       return true;
     });
-  }, [monthScoped, search, memberFilter, cardFilter, categoryFilter, categoryById, from, to, hideReviewed]);
+  }, [monthScoped, search, memberFilter, cardFilter, categoryFilter, categoryById, from, to, hideReviewed, rangeMode, selectedMonth, currentMonth]);
 
   // Group by day (descending). Within each day, sort newest-first via
   // the canonical comparator so the per-row "bal $X" running statement
@@ -1744,51 +1759,15 @@ export default function AmexPage() {
           }
         />
 
-      {/* (#748) Promote the card switcher to a prominent segmented
-          pill row directly under the page title. Hidden when only a
-          single card is linked (no need for a one-pill selector). */}
-      {cardFilterOptions.length > 1 && (
-        <div
-          className="flex items-center gap-2 flex-wrap"
-          data-testid="amex-card-pills"
-          role="tablist"
-          aria-label="Amex card filter"
-        >
-          <Button
-            type="button"
-            size="sm"
-            variant={cardFilter === "all" ? "default" : "outline"}
-            className="h-8 rounded-full px-3"
-            onClick={() => setCardFilter("all")}
-            role="tab"
-            aria-selected={cardFilter === "all"}
-            data-testid="button-card-filter-all"
-          >
-            All cards
-            <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px]">
-              {cardFilterOptions.length}
-            </Badge>
-          </Button>
-          {cardFilterOptions.map((o) => (
-            <Button
-              key={o.value}
-              type="button"
-              size="sm"
-              variant={cardFilter === o.value ? "default" : "outline"}
-              className="h-8 rounded-full px-3"
-              onClick={() => setCardFilter(o.value)}
-              role="tab"
-              aria-selected={cardFilter === o.value}
-              data-testid={`button-card-filter-${o.value}`}
-            >
-              {o.label}
-            </Button>
-          ))}
-        </div>
-      )}
+      {/* (#748 → drill) The card switcher is no longer a tablist — the
+          per-card brand tiles (AmexCardBand, below) ARE the selector now;
+          tapping a tile filters the ledger to that card. */}
 
       <div className="space-y-3">
-        <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
+          <TimeRangeToggle value={rangeMode} onChange={setRangeMode} />
+        </div>
         {/* (#806) Summary tiles are always visible; only the filter
             fields collapse, and that lives inside AccountFilterBar. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 stagger-children">
@@ -2045,9 +2024,15 @@ export default function AmexPage() {
 
       </div>
 
-      {/* Sassy AI one-liner + per-card brand band. */}
+      {/* Per-card weekly cards are the PRIMARY view — tap a tile to filter
+          the ledger to that card (drill). */}
+      <div>
+        <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium mb-2">
+          Per-card · this week
+        </div>
+        <AmexCardBand selected={cardFilter} onSelect={setCardFilter} />
+      </div>
       <AiInsightBar />
-      <AmexCardBand selected={cardFilter} onSelect={setCardFilter} />
 
       <BalanceTrendChart
         caption="Ending balance — forward 12 months"

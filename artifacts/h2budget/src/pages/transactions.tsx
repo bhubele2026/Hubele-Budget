@@ -35,6 +35,9 @@ import {
 } from "@/hooks/use-bulk-recategorize-prompt";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
+import { TimeRangeToggle } from "@/components/time-range-toggle";
+import { rangeForMode, type RangeMode } from "@/lib/timeRange";
+import { Sparkline, StackBar, DeltaPill, MoneyText } from "@/components/viz";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, cn, moneyColorClass } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -67,7 +70,6 @@ import {
   TransactionRowChips,
   CHIP_BASE,
 } from "@/components/transaction-row-chips";
-import { chaseMonthTotals } from "@/lib/chaseScope";
 import {
   makeChaseBalanceAtEndOf,
   makeChaseBalanceAtEndOfDate,
@@ -93,12 +95,9 @@ import {
   BalanceTrendChart,
   DayGroup,
   MonthNavigator,
-  StatChip,
-  StatChipUnavailable,
   monthKeyOf,
   monthKeyFromISO,
   compareMonth,
-  shiftMonth,
   type MonthKey,
   type BalanceSeriesPoint,
 } from "@/components/account-page";
@@ -460,6 +459,8 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  // Weekly-first: the summary + balance trend lead with THIS week. Mo/Yr opt-in.
+  const [rangeMode, setRangeMode] = useState<RangeMode>("wk");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const categoryUrlApplied = useRef(false);
@@ -574,15 +575,6 @@ export default function TransactionsPage() {
     });
   }, [monthScoped, search, from, to, sourceFilter, memberFilter, categoryFilter, categoryById]);
 
-  // ---- Per-month money in/out & balance math ----
-  // (#443) `chaseMonthTotals` is the single source of truth for the bubble
-  // math — it re-applies the month filter at compute time so we cannot
-  // accidentally regress to counting cross-month rows here.
-  const monthTotals = useMemo(
-    () => chaseMonthTotals(filtered, selectedMonth),
-    [filtered, selectedMonth],
-  );
-
   // (#475) Anchor + per-month balance math is shared with the
   // dashboard's "Chase ending balance" tile via `makeChaseBalanceAtEndOf`,
   // so the two surfaces always agree for any month. The closure
@@ -601,10 +593,6 @@ export default function TransactionsPage() {
     () => balanceAtEndOf(selectedMonth),
     [balanceAtEndOf, selectedMonth],
   );
-  const startingBalance = useMemo(
-    () => balanceAtEndOf(shiftMonth(selectedMonth, -1)),
-    [balanceAtEndOf, selectedMonth],
-  );
 
   // Date-bucketed sibling of `balanceAtEndOf`, used by the actual-vs-
   // forecast trend chart to get the end-of-week (Sun–Sat) checking
@@ -618,6 +606,49 @@ export default function TransactionsPage() {
       }),
     [effectiveSnapshot, chaseTransactions],
   );
+
+  // ---- Weekly-first range summary (the household lives by the week) ----
+  // Computed straight from chaseTransactions scoped to the selected range, so
+  // it always populates from the same data the ledger renders — sidestepping
+  // the month-scoped totals path that could read $0.00 on an empty month.
+  const range = useMemo(() => rangeForMode(rangeMode), [rangeMode]);
+  const rangeTotals = useMemo(() => {
+    let moneyIn = 0;
+    let moneyOut = 0;
+    for (const t of chaseTransactions) {
+      const k = t.occurredOn.slice(0, 10);
+      if (k < range.from || k > range.to) continue;
+      const a = Number(t.amount) || 0;
+      if (a >= 0) moneyIn += a;
+      else moneyOut += -a;
+    }
+    return { moneyIn, moneyOut, net: moneyIn - moneyOut };
+  }, [chaseTransactions, range]);
+  // Start/end checking balance + a daily balance sparkline (sampled so a year
+  // view never renders 365 points).
+  const rangeBalances = useMemo(() => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const start = new Date(`${range.from}T00:00:00`);
+    const end = new Date(`${range.to}T00:00:00`);
+    const totalDays = Math.max(
+      1,
+      Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1,
+    );
+    const step = totalDays > 40 ? Math.ceil(totalDays / 40) : 1;
+    const series: number[] = [];
+    for (let i = 0; i < totalDays; i += step) {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      const b = balanceAtEndOfDate(iso(d));
+      if (b != null) series.push(b);
+    }
+    const dayBefore = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1);
+    return {
+      series,
+      startBal: balanceAtEndOfDate(iso(dayBefore)),
+      endBal: balanceAtEndOfDate(range.to),
+    };
+  }, [range, balanceAtEndOfDate]);
 
   // The forward-looking actual-vs-forecast trend chart series. Window:
   // start = max(2026-05-01, current month start); end = today + 12 months.
@@ -1910,67 +1941,111 @@ export default function TransactionsPage() {
       />
 
       <div className="space-y-3">
-        <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 stagger-children">
-          {hasLinkedChecking ? (
-            <StatChip
-              label="Starting balance"
-              value={startingBalance}
-              loading={!transactions}
-              unavailableHint="No snapshot for this month yet."
-              testId="stat-starting-balance"
-            />
-          ) : (
-            <StatChipUnavailable
-              label="Starting balance"
-              hint="Connect a checking account to see the balance."
-              testId="stat-starting-balance"
-            />
+        {/* Weekly-first range control. Month stepper only when in Month mode. */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <TimeRangeToggle value={rangeMode} onChange={setRangeMode} />
+            <span className="text-sm font-medium tabular-nums text-muted-foreground">
+              {range.label}
+            </span>
+          </div>
+          {rangeMode === "mo" && (
+            <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
           )}
-          {/* (#464) Pass `loading={!transactions}` so these tiles render
-              an explicit "Loading…" affordance instead of a misleading
-              $0.00 if the underlying transactions query hasn't resolved
-              yet — matches the hardened Amex Ending balance tile from
-              #455. */}
-          <StatChip
-            label="Money in"
-            value={transactions ? monthTotals.moneyIn : null}
-            loading={!transactions}
-            valueClassName="text-[hsl(var(--positive))]"
-            testId="stat-money-in"
-          />
-          <StatChip
-            label="Money out"
-            value={transactions ? monthTotals.moneyOut : null}
-            loading={!transactions}
-            valueClassName="text-[hsl(var(--negative))]"
-            testId="stat-money-out"
-          />
-          {hasLinkedChecking ? (
-            <StatChip
-              label="Ending balance"
-              value={endingBalance}
-              loading={!transactions}
-              unavailableHint="No snapshot for this month yet."
-              accent="bg-emerald-50 text-emerald-900 border-emerald-200"
-              testId="stat-ending-balance"
-            />
-          ) : (
-            <StatChipUnavailable
-              label="Ending balance"
-              hint="Connect a checking account to see the balance."
-              testId="stat-ending-balance"
-            />
-          )}
-          <StatChip
-            label="Net change"
-            value={transactions ? monthTotals.netChange : null}
-            loading={!transactions}
-            valueClassName={moneyColorClass(monthTotals.netChange)}
-            signed
-            testId="stat-net-change"
-          />
         </div>
+
+        {hasLinkedChecking ? (
+          <div className="grid gap-4 lg:grid-cols-2 stagger-children">
+            {/* Money in vs out + net */}
+            <Card>
+              <CardContent className="p-5">
+                <div className="flex items-baseline justify-between gap-2 mb-3">
+                  <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                    Money in vs out
+                  </span>
+                  <DeltaPill
+                    value={
+                      rangeBalances.startBal && rangeBalances.startBal !== 0
+                        ? (rangeTotals.net / Math.abs(rangeBalances.startBal)) * 100
+                        : 0
+                    }
+                  />
+                </div>
+                <StackBar
+                  segments={[
+                    { label: "In", value: rangeTotals.moneyIn, color: "hsl(var(--positive))" },
+                    { label: "Out", value: rangeTotals.moneyOut, color: "hsl(var(--negative))" },
+                  ]}
+                  legendMax={2}
+                />
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Net
+                  </span>
+                  <MoneyText
+                    amount={rangeTotals.net}
+                    colored
+                    signed
+                    className="text-xl font-bold"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Checking balance trend across the range */}
+            <Card>
+              <CardContent className="p-5">
+                <div className="flex items-baseline justify-between gap-2 mb-2">
+                  <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                    Checking balance
+                  </span>
+                  <MoneyText
+                    amount={rangeBalances.endBal ?? endingBalance ?? 0}
+                    className="text-xl font-bold"
+                  />
+                </div>
+                {rangeBalances.series.length > 1 ? (
+                  <Sparkline
+                    data={rangeBalances.series}
+                    variant="area"
+                    color={
+                      (rangeBalances.endBal ?? 0) < 0
+                        ? "hsl(var(--negative))"
+                        : "hsl(var(--chart-1))"
+                    }
+                    height={40}
+                  />
+                ) : (
+                  <div className="h-10 grid place-items-center text-xs text-muted-foreground">
+                    Not enough history for a trend yet
+                  </div>
+                )}
+                <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                  <span>
+                    Start{" "}
+                    <MoneyText
+                      amount={rangeBalances.startBal ?? 0}
+                      className="text-foreground"
+                    />
+                  </span>
+                  <span>
+                    End{" "}
+                    <MoneyText
+                      amount={rangeBalances.endBal ?? 0}
+                      className="text-foreground"
+                    />
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="p-5 text-sm text-muted-foreground">
+              Connect a checking account to see your weekly money flow.
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* (cleanup) The verbose "Plaid · Chase ··5526 · Current balance …

@@ -29,6 +29,9 @@ import { formatBillRowAmount } from "@/lib/billsRowAmount";
 import { computePayoffsByDebt, filterDebtMinRowsByPayoff } from "@/lib/forecastDebts";
 import { Lock, PartyPopper } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { MoneyText } from "@/components/viz";
+import { TimeRangeToggle } from "@/components/time-range-toggle";
+import { rangeForMode, type RangeMode } from "@/lib/timeRange";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -230,6 +233,9 @@ export default function BillsPage() {
     const tm = thisMonthStart();
     return tm < MIN_BILLS_MONTH ? MIN_BILLS_MONTH : tm;
   });
+
+  // Weekly-first: the "Due ___" lead window. Opens on this week; Mo/Yr opt-in.
+  const [dueMode, setDueMode] = useState<RangeMode>("wk");
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -565,7 +571,7 @@ export default function BillsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-4 bg-card px-4 py-2 rounded-md shadow-sm border border-border">
+          <div className="flex items-center gap-4 bg-card px-4 py-2 rounded-md border border-border">
             <Button
               variant="ghost"
               size="icon"
@@ -601,6 +607,75 @@ export default function BillsPage() {
       </div>
 
       <AiInsightBar />
+
+      {/* Weekly-first lead: exactly what's due in the selected window (this
+          week by default). The monthly detail lives below. */}
+      {(() => {
+        const dueRange = rangeForMode(dueMode);
+        const dueRows = billRows.filter(
+          (r) =>
+            r.nextOccurrence &&
+            r.nextOccurrence >= dueRange.from &&
+            r.nextOccurrence <= dueRange.to,
+        );
+        const dueTotal = dueRows.reduce(
+          (s, r) => s + Math.abs(Number(r.item.amount) || 0),
+          0,
+        );
+        const windowWord =
+          dueMode === "wk" ? "this week" : dueMode === "mo" ? "this month" : "this year";
+        return (
+          <Card className="focus-glow" data-testid="bills-due-lead">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                    Due {windowWord}
+                  </div>
+                  <MoneyText amount={-dueTotal} className="text-2xl font-bold" />
+                  <div className="text-xs text-muted-foreground tabular-nums">
+                    {dueRows.length} item{dueRows.length === 1 ? "" : "s"} · {dueRange.label}
+                  </div>
+                </div>
+                <TimeRangeToggle value={dueMode} onChange={setDueMode} />
+              </div>
+              {dueRows.length ? (
+                <div className="divide-y divide-border">
+                  {dueRows.map((r) => {
+                    const pill = formatDatePill(r.nextOccurrence);
+                    return (
+                      <div
+                        key={r.item.id}
+                        className="flex items-center justify-between gap-3 py-2"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {pill && (
+                            <span className="flex flex-col items-center justify-center rounded-md border border-border px-2 py-1 leading-none shrink-0">
+                              <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                                {pill.month}
+                              </span>
+                              <span className="text-sm font-bold tabular-nums">{pill.day}</span>
+                            </span>
+                          )}
+                          <span className="truncate text-sm font-medium">{r.item.name}</span>
+                        </div>
+                        <MoneyText
+                          amount={-Math.abs(Number(r.item.amount) || 0)}
+                          className="font-semibold shrink-0"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-4 text-sm text-muted-foreground">
+                  Nothing due {windowWord} — breathe. Don't get used to it.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       <BillsHealthCheck summary={summary} />
 

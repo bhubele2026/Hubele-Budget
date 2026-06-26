@@ -78,6 +78,7 @@ type BudgetLineWithActual = {
 };
 import { Card, CardContent } from "@/components/ui/card";
 import { AiInsightBar } from "@/components/ai-insight-bar";
+import { RingStat, StackBar, MoneyText } from "@/components/viz";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -164,50 +165,6 @@ function SourceBadge({ kind }: { kind: SourceKind }) {
     >
       {SOURCE_LABEL[kind]}
     </Badge>
-  );
-}
-
-function SummaryTile({
-  label,
-  budget,
-  actual,
-  isPercent,
-  testId,
-}: {
-  label: string;
-  budget: string;
-  actual: string;
-  isPercent?: boolean;
-  testId?: string;
-}) {
-  const fmt = (s: string) =>
-    isPercent ? `${parseFloat(s).toFixed(1)}%` : formatCurrency(s);
-  return (
-    <Card data-testid={testId}>
-      <CardContent className="p-4">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">
-          {label}
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div className="space-y-0.5">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Budget
-            </div>
-            <div className="font-mono font-semibold tabular-nums">
-              {fmt(budget)}
-            </div>
-          </div>
-          <div className="space-y-0.5 text-right">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Actual
-            </div>
-            <div className="font-mono font-semibold tabular-nums">
-              {fmt(actual)}
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -894,7 +851,7 @@ export default function BudgetPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-4 bg-card px-4 py-2 rounded-md shadow-sm border border-border">
+          <div className="flex items-center gap-4 bg-card px-4 py-2 rounded-md border border-border">
             <Button
               variant="ghost"
               size="icon"
@@ -955,35 +912,70 @@ export default function BudgetPage() {
         <SourceBadge kind="auto_bills" />
       </div>
 
-      {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 stagger-children">
-          <SummaryTile
-            label="Income"
-            budget={summary.income.budget}
-            actual={summary.income.actual}
-            testId="tile-income"
-          />
-          <SummaryTile
-            label="Expenses"
-            budget={summary.expenses.budget}
-            actual={summary.expenses.actual}
-            testId="tile-expenses"
-          />
-          <SummaryTile
-            label="Net"
-            budget={summary.net.budget}
-            actual={summary.net.actual}
-            testId="tile-net"
-          />
-          <SummaryTile
-            label="% Spent"
-            budget={summary.percentSpent.budget}
-            actual={summary.percentSpent.actual}
-            isPercent
-            testId="tile-percent-spent"
-          />
-        </div>
-      )}
+      {summary && (() => {
+        // Visual summary replaces the flat tile row: a "% spent" ring, the
+        // three real figures, an income-vs-expense split bar, and a weekly
+        // pace line (the weekly-first lens on this monthly plan).
+        const pctSpent = parseFloat(summary.percentSpent.actual) || 0;
+        const incomeActual = parseFloat(summary.income.actual) || 0;
+        const incomeBudget = parseFloat(summary.income.budget) || 0;
+        const expActual = parseFloat(summary.expenses.actual) || 0;
+        const expBudget = parseFloat(summary.expenses.budget) || 0;
+        const netActual = parseFloat(summary.net.actual) || 0;
+        const weeklyExpenseBudget = expBudget > 0 ? (expBudget * 7) / 30.44 : 0;
+        const figure = (
+          label: string,
+          actual: number,
+          budget: number,
+          colored?: boolean,
+        ) => (
+          <div className="min-w-0" data-testid={`tile-${label.toLowerCase()}`}>
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+              {label}
+            </div>
+            <MoneyText amount={actual} colored={colored} className="text-lg font-bold" />
+            <div className="text-[11px] text-muted-foreground tabular-nums">
+              of {formatCurrency(budget)}
+            </div>
+          </div>
+        );
+        return (
+          <Card data-testid="budget-summary">
+            <CardContent className="p-5">
+              <div className="flex flex-wrap items-center gap-6">
+                <RingStat
+                  value={pctSpent / 100}
+                  size={76}
+                  stroke={7}
+                  color={pctSpent > 100 ? "hsl(var(--negative))" : "hsl(var(--primary))"}
+                  centerSub="spent"
+                />
+                <div className="grid grid-cols-3 gap-x-8 gap-y-2 flex-1 min-w-[16rem]">
+                  {figure("Income", incomeActual, incomeBudget)}
+                  {figure("Expenses", expActual, expBudget)}
+                  {figure("Net", netActual, parseFloat(summary.net.budget) || 0, true)}
+                </div>
+              </div>
+              <div className="mt-4">
+                <StackBar
+                  showLegend={false}
+                  segments={[
+                    { label: "Income", value: incomeActual, color: "hsl(var(--positive))" },
+                    { label: "Expenses", value: expActual, color: "hsl(var(--negative))" },
+                  ]}
+                />
+              </div>
+              <div className="mt-3 text-xs text-muted-foreground">
+                That's ≈{" "}
+                <span className="font-medium text-foreground tabular-nums">
+                  {formatCurrency(weeklyExpenseBudget)}/week
+                </span>{" "}
+                budgeted for expenses — this week is the one to win.
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       <div className="space-y-4">
         {groups.map((group) => {

@@ -4,13 +4,17 @@ import {
   AdvisorSummaryCard,
   ReportShell,
   ReportsRangeControls,
+  daysForMode,
 } from "./reportsShared";
+import { type RangeMode } from "@/lib/timeRange";
 import { SpendingSection } from "./SpendingSection";
 import { fmtISO } from "@/lib/reportsAnalytics";
 
 export default function SpendingPage() {
-  const [rangeDays, setRangeDays] = useState("30");
-  const d = useReportsData(Number(rangeDays), 0);
+  // Weekly-first: opens on the current week; Mo/Yr are opt-in.
+  const [mode, setMode] = useState<RangeMode>("wk");
+  const rangeDays = daysForMode(mode);
+  const d = useReportsData(rangeDays, 0);
   if (d.txnsLoading) return null;
   return (
     <ReportShell
@@ -18,12 +22,8 @@ export default function SpendingPage() {
       title="Spending"
       blurb="Where it all went — by category, by merchant, by day."
     >
-      <ReportsRangeControls
-        rangeDays={rangeDays}
-        setRangeDays={setRangeDays}
-        showCompare={false}
-      />
-      <AdvisorSummaryCard tab="spending" rangeDays={Number(rangeDays)} monthOffset={0} />
+      <ReportsRangeControls mode={mode} setMode={setMode} showCompare={false} />
+      <AdvisorSummaryCard tab="spending" rangeDays={rangeDays} monthOffset={0} />
       <SpendingSection
         from={fmtISO(d.fromDate)}
         to={fmtISO(d.today)}
