@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Ban, Split } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Ban, Split, Flame } from "lucide-react";
 import { SplitTransactionDialog } from "@/components/split-transaction-dialog";
 import { AiInsightBar } from "@/components/ai-insight-bar";
 import {
@@ -17,7 +17,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToCancelList, toCancelKey } from "@/hooks/useToCancelList";
-import { Progress } from "@/components/ui/progress";
+import { KillStack } from "@/components/kill-stack";
+import { RingStat, MiniBars } from "@/components/viz";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Collapsible,
@@ -148,6 +149,78 @@ function roastForStreak(n: number): string {
   if (n <= 9)
     return `${n} weeks over. You're not budgeting, you're just spending like it's a personality. Proper skint behaviour, you drongos.`;
   return `${n} WEEKS over budget in a row. Genuinely embarrassing — a broke-ass eejit with a piggy bank does better. Reel it in.`;
+}
+
+// The positive counterpart to roastForStreak — how many COMPLETED weeks in a
+// row, ending last week, they came in AT or UNDER the weekly allowance. Same
+// deterministic walk-back; drives the "look at you" hype banner.
+function weeklyUnderStreak(
+  txns: Transaction[],
+  weeklyAmt: number,
+  overrides: Record<string, number>,
+  today: Date,
+): number {
+  if (weeklyAmt <= 0) return 0;
+  let weekSun = addDays(sundayOf(today), -7);
+  let streak = 0;
+  for (let i = 0; i < 26; i++) {
+    const start = fmtISO(weekSun);
+    const end = fmtISO(addDays(weekSun, 6));
+    let spend = 0;
+    let any = false;
+    for (const t of txns) {
+      if (!t.weeklyAllowance) continue;
+      if (t.occurredOn >= start && t.occurredOn <= end) {
+        spend += expenseAmount(t);
+        any = true;
+      }
+    }
+    const planned = overrides[start] != null ? overrides[start] : weeklyAmt;
+    if (any && planned > 0 && spend <= planned) {
+      streak++;
+      weekSun = addDays(weekSun, -7);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+// Earned praise for an under-budget streak — same affectionate register as the
+// roast, just pointed the other way. Only ever shown when the streak is real.
+function praiseForStreak(n: number): string {
+  if (n <= 1) return "";
+  if (n === 2)
+    return "Two weeks under budget. Look at you, fiscally responsible adults. 🟢";
+  if (n <= 4)
+    return `${n} weeks under, back to back. Genuinely brilliant — keep the receipts, you legends.`;
+  return `${n} weeks under budget in a row. Frankly showing off now. Don't you dare slip.`;
+}
+
+// Last N completed Sun–Sat weeks' over/under variance (spend − planned) for
+// the weekly allowance — the data behind the 8-week drill bars. Oldest first.
+function weeklyVarianceSeries(
+  txns: Transaction[],
+  weeklyAmt: number,
+  overrides: Record<string, number>,
+  today: Date,
+  weeks = 8,
+): { weekSun: Date; weekISO: string; variance: number }[] {
+  const last = addDays(sundayOf(today), -7);
+  const out: { weekSun: Date; weekISO: string; variance: number }[] = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const ws = addDays(last, -7 * i);
+    const start = fmtISO(ws);
+    const end = fmtISO(addDays(ws, 6));
+    let spend = 0;
+    for (const t of txns) {
+      if (!t.weeklyAllowance) continue;
+      if (t.occurredOn >= start && t.occurredOn <= end) spend += expenseAmount(t);
+    }
+    const planned = overrides[start] != null ? overrides[start] : weeklyAmt;
+    out.push({ weekSun: ws, weekISO: start, variance: spend - (planned || 0) });
+  }
+  return out;
 }
 
 // ----- bucket config --------------------------------------------------
@@ -393,7 +466,7 @@ function BucketCard({
 }) {
   const variance = actual - planned;
   const over = variance > 0;
-  const pct = planned > 0 ? Math.min(100, (actual / planned) * 100) : 0;
+  const ratio = planned > 0 ? actual / planned : 0;
   const slug = name.split(" ")[0].toLowerCase();
   const [editOpen, setEditOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -427,8 +500,17 @@ function BucketCard({
               )}
             />
           </div>
-          <div className="text-3xl font-bold tracking-tight tabular-nums mt-2">
-            {formatCurrency(actual)}
+          <div className="mt-2 flex items-center gap-3">
+            <RingStat
+              value={ratio}
+              size={56}
+              stroke={6}
+              color={over ? "hsl(var(--negative))" : "hsl(var(--positive))"}
+              centerSub="used"
+            />
+            <div className="text-3xl font-bold tracking-tight tabular-nums">
+              {formatCurrency(actual)}
+            </div>
           </div>
         </button>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
@@ -491,7 +573,6 @@ function BucketCard({
             </Popover>
           )}
         </div>
-        <Progress value={pct} className={over ? "[&>div]:bg-destructive" : ""} />
         <div
           className={cn(
             "text-sm font-medium tabular-nums",
@@ -862,6 +943,31 @@ export default function AllowancesPage() {
     [txns, settings, weeklyOverrides, today],
   );
 
+  // The positive counterpart — drives the "look at you" hype banner.
+  const underStreak = useMemo(
+    () =>
+      weeklyUnderStreak(
+        txns,
+        Number(settings?.weeklyAllowanceAmount) || 0,
+        weeklyOverrides,
+        today,
+      ),
+    [txns, settings, weeklyOverrides, today],
+  );
+
+  // Last 8 completed weeks' over/under — the drill bars under the week nav.
+  const varianceSeries = useMemo(
+    () =>
+      weeklyVarianceSeries(
+        txns,
+        Number(settings?.weeklyAllowanceAmount) || 0,
+        weeklyOverrides,
+        today,
+        8,
+      ),
+    [txns, settings, weeklyOverrides, today],
+  );
+
   // Per-bucket drill-down groups. Weekly groups by its sub-bucket enum
   // (all four shown); monthly/unplanned group by category.
   const groupsByBucket = useMemo(() => {
@@ -951,9 +1057,12 @@ export default function AllowancesPage() {
         </p>
       </div>
 
+      {/* Hannah-first: exactly what to pay for last week, big and per-card. */}
+      <KillStack emphasize />
+
       <AiInsightBar />
 
-      {roastForStreak(overStreak) && (
+      {roastForStreak(overStreak) ? (
         <div
           className="rounded-md border-2 px-4 py-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-1 duration-300"
           style={{ background: "hsl(240 9% 7%)", borderColor: "hsl(0 82% 52%)" }}
@@ -969,7 +1078,22 @@ export default function AllowancesPage() {
             </div>
           </div>
         </div>
-      )}
+      ) : praiseForStreak(underStreak) ? (
+        <div
+          className="rounded-md border-2 border-[hsl(var(--positive)/0.5)] bg-[hsl(var(--positive)/0.08)] px-4 py-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-1 duration-300"
+          data-testid="allowance-praise"
+        >
+          <Flame className="w-5 h-5 mt-0.5 shrink-0 text-[hsl(var(--positive))]" />
+          <div className="min-w-0">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-[hsl(var(--positive))]">
+              🟢 Under budget · {underStreak} weeks running
+            </div>
+            <div className="text-sm font-bold mt-1 leading-snug">
+              {praiseForStreak(underStreak)}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Time-range selector */}
       <div className="flex flex-col items-center gap-3">
@@ -1022,6 +1146,37 @@ export default function AllowancesPage() {
           </Button>
         </div>
       </div>
+
+      {/* 8-week over/under drill — click a bar to jump to that week. */}
+      {mode === "week" &&
+        Number(settings?.weeklyAllowanceAmount) > 0 &&
+        varianceSeries.some((s) => s.variance !== 0) && (
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex items-baseline justify-between mb-3">
+                <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                  Last 8 weeks · over / under
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  Green = under · red = over · tap to jump
+                </span>
+              </div>
+              <MiniBars
+                height={48}
+                activeIndex={varianceSeries.findIndex((s) => s.weekISO === weekStartISO)}
+                onBarClick={(i) => setWeekStart(varianceSeries[i].weekSun)}
+                data={varianceSeries.map((s) => ({
+                  value: s.variance,
+                  label: `${formatWeekRange(s.weekSun)} · ${s.variance > 0 ? "+" : ""}${formatCurrency(s.variance)}`,
+                  color:
+                    s.variance > 0
+                      ? "hsl(var(--negative))"
+                      : "hsl(var(--positive))",
+                }))}
+              />
+            </CardContent>
+          </Card>
+        )}
 
       {/* Bucket summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 stagger-children">
