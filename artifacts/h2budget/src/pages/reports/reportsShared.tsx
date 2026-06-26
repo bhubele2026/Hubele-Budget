@@ -418,7 +418,13 @@ export function ReportShell({
   return (
     <div className="space-y-6">
       <div>
-        <DrillBreadcrumb items={[{ label: "Reports", href: "/reports" }, { label: crumb }]} />
+        <DrillBreadcrumb
+          items={[
+            { label: "Dashboard", href: "/home" },
+            { label: "Reports", href: "/reports" },
+            { label: crumb },
+          ]}
+        />
         <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground mt-1 leading-tight">
           {title}
         </h1>

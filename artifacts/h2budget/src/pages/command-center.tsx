@@ -486,7 +486,7 @@ export default function CommandCenterPage() {
       </StatTileRow>
 
       {/* ── The loud spine: road out + freedom meter ────────────────────── */}
-      <div className="grid lg:grid-cols-2 gap-4 items-stretch">
+      <div className="grid lg:grid-cols-2 gap-4 items-start">
         <Card className="focus-glow">
           <CardContent className="p-5 md:p-6 flex flex-col h-full">
             <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">

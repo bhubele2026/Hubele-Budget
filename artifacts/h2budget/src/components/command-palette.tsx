@@ -27,7 +27,7 @@ import {
 type Dest = { name: string; href: string; icon: typeof Receipt; keywords?: string };
 
 const PRIMARY: Dest[] = [
-  { name: "Home", href: "/home", icon: LayoutDashboard, keywords: "command center dashboard" },
+  { name: "Dashboard", href: "/home", icon: LayoutDashboard, keywords: "home command center" },
   { name: "Overview / Reports", href: "/reports", icon: BarChart3, keywords: "reports analytics" },
   { name: "Chase", href: "/transactions", icon: Receipt, keywords: "bank checking transactions" },
   { name: "Amex", href: "/amex", icon: CreditCard, keywords: "american express card kill stack" },

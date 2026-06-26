@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { UserButton } from "@clerk/react";
 import {
+  Home,
   Receipt,
   CreditCard,
   Inbox,
@@ -40,6 +41,7 @@ type NavItem = { name: string; href: string; icon: typeof Receipt };
 // hub; the account pages and forecast sit beside it. Everything else is one
 // click away in the More overflow.
 const PRIMARY_NAV: NavItem[] = [
+  { name: "Dashboard", href: "/home", icon: Home },
   { name: "Overview", href: "/reports", icon: BarChart3 },
   { name: "Chase", href: "/transactions", icon: Receipt },
   { name: "Amex", href: "/amex", icon: CreditCard },
@@ -291,7 +293,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           top bar's primary row + More overflow) ──────────────────────────── */}
       <div className="flex-1 min-h-0 flex">
         <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-          <div className="p-4 md:p-8 max-w-[1240px] mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="p-4 md:p-8 max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
             {children}
           </div>
         </main>
