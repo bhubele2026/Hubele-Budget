@@ -73,6 +73,13 @@ catalog:
 
 autoInstallPeers: false
 
+# Non-interactive deploy: Replit's autoscale build has no TTY, so pnpm cannot
+# prompt before purging a node_modules left by a different pnpm version. Allow
+# the clean purge + reinstall instead of aborting
+# (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY). Mirrored in .npmrc.
+confirmModulesPurge: false
+verifyDepsBeforeRun: false
+
 onlyBuiltDependencies:
   - '@swc/core'
   - esbuild
