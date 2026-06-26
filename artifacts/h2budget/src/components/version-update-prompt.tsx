@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import {
   useGetVersion,
@@ -26,15 +26,25 @@ import { RefreshCw } from "lucide-react";
 //     (APP_VERSION === "dev"), so we never poll or prompt there.
 const POLL_INTERVAL_MS = 90_000;
 
+// Once-per-session latch so a persistent build-id mismatch can never spin in
+// a reload loop — we self-heal a stale bundle exactly once, then fall back to
+// the manual banner if it's somehow still stale after that reload.
+const SELF_RELOAD_KEY = "h2:version-self-reloaded";
+
+function isTyping(): boolean {
+  const ae = document.activeElement as HTMLElement | null;
+  return (
+    !!ae &&
+    (ae.tagName === "INPUT" ||
+      ae.tagName === "TEXTAREA" ||
+      ae.isContentEditable === true)
+  );
+}
+
 export function VersionUpdatePrompt() {
   const enabled = import.meta.env.PROD && APP_VERSION !== "dev";
   const [outdated, setOutdated] = useState(false);
   const [location] = useLocation();
-  // Latch the route the banner first appeared on. Once a new version is live,
-  // the very next client-side navigation hard-reloads onto the fresh bundle —
-  // so the user never lands on a stale-bundle "old shell" of another route.
-  // This stays safe (never reloads mid-input on the current page).
-  const latchLocRef = useRef<string | null>(null);
 
   const { data } = useGetVersion({
     query: {
@@ -60,18 +70,27 @@ export function VersionUpdatePrompt() {
     }
   }, [data?.version, enabled]);
 
-  // When outdated, latch the current route; the next navigation away from it
-  // forces a full reload onto the new bundle.
+  // Self-heal a stale bundle: when a newer version is live, silently reload
+  // onto it — ONCE per session, and never while the user is typing. Re-runs on
+  // navigation, so if we held off because an input was focused, the next route
+  // change heals it. This is what stops the "old shell" + "new version" toast
+  // from ever lingering (the served index.html can be browser-cached, so a tab
+  // can boot a stale bundle; this reloads it the moment it's safe).
   useEffect(() => {
-    if (outdated && latchLocRef.current === null) {
-      latchLocRef.current = location;
-    } else if (
-      outdated &&
-      latchLocRef.current !== null &&
-      location !== latchLocRef.current
-    ) {
-      window.location.reload();
+    if (!outdated) return;
+    let already = false;
+    try {
+      already = sessionStorage.getItem(SELF_RELOAD_KEY) === "1";
+    } catch {
+      /* sessionStorage unavailable — fall through to the manual banner */
     }
+    if (already || isTyping()) return; // healed once already, or don't interrupt typing
+    try {
+      sessionStorage.setItem(SELF_RELOAD_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    window.location.reload();
   }, [outdated, location]);
 
   if (!outdated) return null;
