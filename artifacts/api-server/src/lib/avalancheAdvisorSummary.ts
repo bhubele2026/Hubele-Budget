@@ -40,6 +40,17 @@ function money(n: number): string {
   return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
+// Year-qualified date for the PROMPT facts only. shortDate() (used in the UI
+// fallback) is year-less ("Jun 16"); handing the model year-less dates made it
+// invent a year in prose ("July 2024" inside a 2026 plan). Always give the LLM
+// the full year so it can't hallucinate one.
+function fullDate(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+  if (!m) return iso ?? "";
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 // ---------------------------------------------------------------------------
 // Prompt construction
 // ---------------------------------------------------------------------------
@@ -73,7 +84,7 @@ function formatFactsForPrompt(facts: AvalancheScheduleFacts): string {
   lines.push(`Current bank balance: ${money(facts.bankBalance)}`);
   lines.push(
     `Lowest projected balance AFTER applying the schedule: ${money(facts.lowestPostScheduleBalance)}` +
-      (facts.lowestPostScheduleDate ? ` on ${shortDate(facts.lowestPostScheduleDate)}` : ""),
+      (facts.lowestPostScheduleDate ? ` on ${fullDate(facts.lowestPostScheduleDate)}` : ""),
   );
   lines.push(`Total across all payments: ${money(facts.totalProposed)}`);
   lines.push(`Number of payments: ${facts.proposedPayments.length}`);
@@ -81,7 +92,7 @@ function formatFactsForPrompt(facts: AvalancheScheduleFacts): string {
   lines.push("PROPOSED PAYMENTS (in order):");
   facts.proposedPayments.forEach((p, i) => {
     lines.push(
-      `  ${i + 1}. ${money(p.amount)} on ${shortDate(p.date)} ` +
+      `  ${i + 1}. ${money(p.amount)} on ${fullDate(p.date)} ` +
         `(after ${p.paycheckAnchor}; window low ${money(p.lowestBetweenThisAndNextPaycheck)}, ` +
         `headroom ${money(p.headroom)}, confidence ${p.confidence})`,
     );
