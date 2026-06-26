@@ -49,6 +49,8 @@ import {
 } from "recharts";
 import { DeltaPill, Sparkline, StackBar, RingStat, MoneyText } from "@/components/viz";
 import { AiInsightBar } from "@/components/ai-insight-bar";
+import { StatTile, StatTileRow } from "@/components/stat-tile";
+import { PillBadge } from "@/components/pill-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2032,105 +2034,85 @@ export default function ForecastPage({
           Number.isFinite(lowestNum) && lowestNum < Number(proj?.cashBuffer ?? 0);
         const expRatio = inc > 0 ? exp / inc : exp > 0 ? 1 : 0;
         return (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card data-testid="kpi-lowest-point">
-              <CardContent className="p-4">
-                <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                  Lowest Point
-                </div>
-                <div className="mt-1 text-2xl font-bold">
-                  <MoneyText
-                    amount={Number.isFinite(lowestNum) ? lowestNum : 0}
-                    className={dipsBelowBuffer ? "text-[hsl(var(--negative))]" : ""}
-                  />
-                </div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  {proj?.lowestDate ? `on ${formatDate(proj.lowestDate)}` : "—"}
-                </div>
-                {balSeries.length > 1 && (
-                  <Sparkline
-                    data={balSeries}
-                    variant="area"
-                    color={dipsBelowBuffer ? "hsl(var(--negative))" : "hsl(var(--chart-3))"}
-                    height={30}
-                    className="mt-2"
-                  />
-                )}
-              </CardContent>
-            </Card>
-            <Card data-testid="kpi-ending-balance">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                    Ending Balance
+          <StatTileRow>
+            <div data-testid="kpi-lowest-point" className="h-full">
+              <StatTile
+                active={dipsBelowBuffer}
+                label="Lowest Point"
+                value={<MoneyText amount={Number.isFinite(lowestNum) ? lowestNum : 0} />}
+                sub={
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span>{proj?.lowestDate ? `on ${formatDate(proj.lowestDate)}` : "—"}</span>
+                    <PillBadge tone={dipsBelowBuffer ? "danger" : "good"}>
+                      {dipsBelowBuffer ? "At risk" : "On track"}
+                    </PillBadge>
                   </span>
-                  {endDeltaPct != null && <DeltaPill value={endDeltaPct} />}
-                </div>
-                <div className="mt-1 text-2xl font-bold">
-                  <MoneyText amount={proj?.endingBalance ?? 0} />
-                </div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  {proj?.endingDate
-                    ? `on ${formatDate(proj.endingDate)}`
-                    : `${horizonDays}-day horizon`}
-                </div>
-                {balSeries.length > 1 && (
-                  <Sparkline
-                    data={balSeries}
-                    variant="line"
-                    color="hsl(var(--chart-1))"
-                    height={30}
-                    className="mt-2"
-                  />
-                )}
-              </CardContent>
-            </Card>
-            <Card data-testid="kpi-projected-income">
-              <CardContent className="p-4">
-                <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                  In vs Out
-                </div>
-                <div className="mt-1 text-2xl font-bold text-[hsl(var(--positive))]">
-                  <MoneyText amount={inc} />
-                </div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  income over {horizonDays}d
-                </div>
-                <StackBar
-                  className="mt-2"
-                  legendMax={2}
-                  showLegend={false}
-                  segments={[
-                    { label: "Income", value: inc, color: "hsl(var(--positive))" },
-                    { label: "Expenses", value: exp, color: "hsl(var(--negative))" },
-                  ]}
-                />
-              </CardContent>
-            </Card>
-            <Card data-testid="kpi-projected-expenses">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <RingStat
-                    value={Math.min(1, expRatio)}
-                    size={52}
-                    color={expRatio > 1 ? "hsl(var(--negative))" : "hsl(var(--primary))"}
-                    centerSub="of in"
-                  />
-                  <div className="min-w-0">
-                    <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                      Projected Out
-                    </div>
-                    <div className="mt-0.5 text-xl font-bold">
-                      <MoneyText amount={exp} />
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      over {horizonDays}d
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                }
+              />
+            </div>
+            <div data-testid="kpi-ending-balance" className="h-full">
+              <StatTile
+                label="Ending Balance"
+                value={<MoneyText amount={proj?.endingBalance ?? 0} />}
+                sub={
+                  <span className="flex flex-col gap-1.5">
+                    <span className="flex items-center gap-2">
+                      <span>
+                        {proj?.endingDate
+                          ? `on ${formatDate(proj.endingDate)}`
+                          : `${horizonDays}-day horizon`}
+                      </span>
+                      {endDeltaPct != null && <DeltaPill value={endDeltaPct} />}
+                    </span>
+                    {balSeries.length > 1 && (
+                      <Sparkline
+                        data={balSeries}
+                        variant="line"
+                        color="hsl(var(--chart-1))"
+                        height={28}
+                      />
+                    )}
+                  </span>
+                }
+              />
+            </div>
+            <div data-testid="kpi-projected-income" className="h-full">
+              <StatTile
+                label="In vs Out"
+                value={<MoneyText amount={inc} className="text-[hsl(var(--positive))]" />}
+                sub={
+                  <span className="flex flex-col gap-1.5">
+                    <span>income over {horizonDays}d</span>
+                    <StackBar
+                      legendMax={2}
+                      showLegend={false}
+                      segments={[
+                        { label: "Income", value: inc, color: "hsl(var(--positive))" },
+                        { label: "Expenses", value: exp, color: "hsl(var(--negative))" },
+                      ]}
+                    />
+                  </span>
+                }
+              />
+            </div>
+            <div data-testid="kpi-projected-expenses" className="h-full">
+              <StatTile
+                label="Projected Out"
+                value={<MoneyText amount={exp} />}
+                sub={
+                  <span className="flex items-center gap-3">
+                    <RingStat
+                      value={Math.min(1, expRatio)}
+                      size={44}
+                      color={expRatio > 1 ? "hsl(var(--negative))" : "hsl(var(--primary))"}
+                      centerSub="of in"
+                    />
+                    <span>over {horizonDays}d</span>
+                  </span>
+                }
+              />
+            </div>
+          </StatTileRow>
         );
       })()}
 
@@ -2823,15 +2805,9 @@ export default function ForecastPage({
                 <CardTitle className="flex items-center gap-2 flex-wrap">
                   <Landmark className="w-4 h-4" />
                   Inbox from Chase · {monthFilter}
-                  <Badge variant="outline" className="text-[10px] ml-1">
-                    {bankReconcile.pending} pending
-                  </Badge>
-                  <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
-                    {bankReconcile.matched} matched
-                  </Badge>
-                  <Badge variant="outline" className="text-[10px]">
-                    {bankReconcile.unplanned} unplanned
-                  </Badge>
+                  <PillBadge tone="warning">{bankReconcile.pending} pending</PillBadge>
+                  <PillBadge tone="good">{bankReconcile.matched} matched</PillBadge>
+                  <PillBadge tone="neutral">{bankReconcile.unplanned} unplanned</PillBadge>
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   {bankReconcile.hasBank && !bankReconcile.isPriorMonth && (
