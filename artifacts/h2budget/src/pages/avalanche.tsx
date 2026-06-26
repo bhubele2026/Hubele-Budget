@@ -27,7 +27,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -50,6 +49,7 @@ import {
 } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { RingStat, Sparkline, MoneyText } from "@/components/viz";
+import { PillBadge } from "@/components/pill-badge";
 import {
   simulate,
   simulateWithSolvableFallback,
@@ -1348,9 +1348,9 @@ export default function AvalanchePage() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 min-w-0">
                                 {isTarget && (
-                                  <Badge className="shrink-0" variant="default">
+                                  <PillBadge tone="info" className="shrink-0">
                                     Target
-                                  </Badge>
+                                  </PillBadge>
                                 )}
                                 <span className="truncate" title={d.name}>
                                   {d.name}

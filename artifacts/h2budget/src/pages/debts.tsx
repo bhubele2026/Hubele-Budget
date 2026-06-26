@@ -9,6 +9,7 @@ import type { Debt, DebtBalanceHistoryEntry } from "@workspace/api-client-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AiInsightBar } from "@/components/ai-insight-bar";
 import { RingStat, MoneyText } from "@/components/viz";
+import { PillBadge } from "@/components/pill-badge";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
@@ -207,6 +208,37 @@ export default function DebtsPage() {
 
       <AiInsightBar />
 
+      {/* Debt status grid — one cell per card, colored by state. */}
+      {sortedDebts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-card-border bg-card p-3">
+          <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium mr-1">
+            Cards
+          </span>
+          {sortedDebts.map((debt) => {
+            const paid = isPaidOff(Number(debt.balance));
+            const target = !paid && planTargetIds.has(debt.id);
+            const color = paid
+              ? "hsl(var(--positive))"
+              : target
+                ? "hsl(var(--primary))"
+                : "hsl(var(--chart-2))";
+            return (
+              <span
+                key={debt.id}
+                className="h-3 w-3 rounded-sm"
+                style={{ background: color }}
+                title={`${debt.name}: ${paid ? "paid off" : target ? "target" : "active"}`}
+              />
+            );
+          })}
+          <span className="ml-auto flex items-center gap-3 text-[10px] uppercase tracking-wider text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[hsl(var(--positive))]" />Paid</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-primary" />Target</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[hsl(var(--chart-2))]" />Active</span>
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {sortedDebts.map((debt) => {
           const balanceNum = Number(debt.balance);
@@ -231,8 +263,9 @@ export default function DebtsPage() {
                 data-debt-id={debt.id}
               >
                 <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-start gap-2">
                     <CardTitle className="text-lg">{debt.name}</CardTitle>
+                    <PillBadge tone="good">Paid off</PillBadge>
                   </div>
                   <p className="text-xs text-muted-foreground">{debt.type || "General"}</p>
                 </CardHeader>
@@ -276,9 +309,9 @@ export default function DebtsPage() {
           return (
             <Card key={debt.id} className={isTarget ? "border-primary" : ""}>
               <CardHeader className="pb-2">
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start gap-2">
                   <CardTitle className="text-lg">{debt.name}</CardTitle>
-                  {isTarget && <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded">Target</span>}
+                  {isTarget && <PillBadge tone="info">Target</PillBadge>}
                 </div>
                 <p className="text-xs text-muted-foreground">{debt.type || "General"}</p>
               </CardHeader>
