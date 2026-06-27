@@ -41,31 +41,31 @@ export function StatTile({
   const body = (
     <div
       className={cn(
-        "stat-card group relative flex h-full min-h-[120px] flex-col justify-between gap-5 p-4 text-left",
+        "stat-card group relative flex h-full min-h-[136px] flex-col justify-between gap-5 p-4 text-left",
         grad,
         active && "ring-2 ring-white/70",
         interactive && "cursor-pointer",
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="relative z-10 flex items-start justify-between gap-2">
         {icon && (
-          <span className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-white/20 text-white backdrop-blur-sm">
+          <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-white/20 text-white backdrop-blur-sm [&_svg]:h-5 [&_svg]:w-5">
             {icon}
           </span>
         )}
         {interactive && (
-          <ChevronRight className="h-4 w-4 shrink-0 text-white/75 transition-transform group-hover:translate-x-0.5" />
+          <ChevronRight className="h-5 w-5 shrink-0 text-white/80 transition-transform group-hover:translate-x-0.5" />
         )}
       </div>
-      <div>
-        <div className="text-[11px] font-medium uppercase tracking-widest text-white/75">
+      <div className="relative z-10">
+        <div className="text-[11px] font-semibold uppercase tracking-widest text-white/80">
           {label}
         </div>
-        <div className="mt-1 text-2xl md:text-[1.7rem] font-bold tabular-nums leading-none text-white">
+        <div className="mt-1 text-[2rem] md:text-[2.4rem] font-bold tabular-nums leading-none text-white drop-shadow-sm">
           {value}
         </div>
-        {sub && <div className="mt-1.5 text-xs text-white/75">{sub}</div>}
+        {sub && <div className="mt-1.5 text-xs text-white/80">{sub}</div>}
       </div>
     </div>
   );

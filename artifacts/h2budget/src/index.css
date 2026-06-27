@@ -528,6 +528,41 @@
   }
   /* Vibrant jewel-tone gradients — saturated mid-tones so white text stays
      crisp across each tile (no washed-out yellow/lime fields). */
+  /* (Refreshing Summer · FUN) Savage roast card — a hot red→coral→pink gradient
+     with a slow white sheen sweeping across. Loud on purpose. */
+  .roast-card {
+    background-image: linear-gradient(120deg, hsl(344 84% 54%), hsl(8 90% 56%) 46%, hsl(330 82% 56%) 100%);
+    border: none;
+  }
+  .roast-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.22) 48%, transparent 66%);
+    transform: translateX(-120%);
+    animation: card-sheen 4.5s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes card-sheen {
+    0%   { transform: translateX(-120%); }
+    55%  { transform: translateX(120%); }
+    100% { transform: translateX(120%); }
+  }
+  /* A slow gentle sheen on the gradient KPI tiles too — alive, summery. */
+  .stat-card { position: relative; overflow: hidden; }
+  .stat-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.16) 50%, transparent 65%);
+    transform: translateX(-130%);
+    animation: card-sheen 6s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .roast-card::after, .stat-card::after { animation: none; opacity: 0; }
+  }
+
   .tile-grad-0 { background-image: linear-gradient(135deg, hsl(199 86% 54%), hsl(193 84% 44%) 55%, hsl(214 80% 48%)); }
   .tile-grad-1 { background-image: linear-gradient(135deg, hsl(38 94% 52%), hsl(22 92% 52%) 52%, hsl(348 84% 58%)); }
   .tile-grad-2 { background-image: linear-gradient(135deg, hsl(160 68% 42%), hsl(180 74% 40%) 52%, hsl(196 84% 48%)); }
