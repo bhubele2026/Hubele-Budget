@@ -99,11 +99,11 @@
      warm, playful and clean — the "fun" daytime counterpart to the dark mode. */
   --background: 192 68% 95%;
   --foreground: 202 84% 12%;
-  --border: 193 40% 84%;
+  --border: 193 46% 81%;
 
   --card: 45 60% 99%;
   --card-foreground: 202 74% 13%;
-  --card-border: 193 38% 86%;
+  --card-border: 192 58% 78%;
 
   --sidebar: 192 60% 97%;
   --sidebar-foreground: 202 30% 30%;
@@ -209,11 +209,11 @@
      as a dollar amount. */
   --background: 201 58% 10%;     /* lively teal-navy panel */
   --foreground: 190 40% 96%;     /* airy sky-white headings */
-  --border: 199 40% 22%;         /* teal hairline */
+  --border: 198 44% 25%;         /* teal hairline */
 
   --card: 200 50% 13%;           /* top of glass gradient */
   --card-foreground: 190 40% 96%;
-  --card-border: 199 40% 22%;
+  --card-border: 196 56% 31%;
 
   --sidebar: 201 58% 10%;        /* panel */
   --sidebar-foreground: 195 20% 68%;  /* idle nav */
@@ -294,21 +294,30 @@
     font-feature-settings: "cv11", "ss01", "ss03", "calt";
     line-height: 1.5;
     letter-spacing: -0.005em;
-    /* (Refreshing Summer · light) A sunny sky→gold canvas wash so the whole
-       app feels warm and alive instead of flat. Fixed so it doesn't scroll. */
+    /* (Refreshing Summer · light) A bold, multi-color sunshine wash — sky,
+       gold, mint and a kiss of coral — so the whole app feels like a bright
+       summer day. Fixed so it doesn't scroll. */
     background-image:
-      radial-gradient(1200px 600px at 12% -8%, hsl(192 80% 88% / 0.9), transparent 60%),
-      radial-gradient(1100px 620px at 100% 0%, hsl(45 95% 86% / 0.85), transparent 58%),
-      radial-gradient(900px 700px at 50% 120%, hsl(198 78% 88% / 0.7), transparent 60%);
+      radial-gradient(1100px 560px at 8% -8%, hsl(192 85% 82% / 0.95), transparent 58%),
+      radial-gradient(1000px 560px at 100% -4%, hsl(45 96% 80% / 0.92), transparent 56%),
+      radial-gradient(900px 520px at 96% 100%, hsl(344 90% 86% / 0.7), transparent 56%),
+      radial-gradient(1000px 640px at 30% 116%, hsl(168 72% 82% / 0.78), transparent 60%),
+      radial-gradient(900px 600px at 50% 50%, hsl(198 80% 85% / 0.5), transparent 65%);
     background-attachment: fixed;
   }
-  /* (Refreshing Summer · night) Cooler ocean-dusk wash — teal + a faint coral
-     sunset glow over the deep canvas. */
+  /* (Refreshing Summer · night) Richer ocean-dusk wash — teal, a coral sunset
+     glow, and a violet-free indigo deep so the dark canvas still has color. */
   .dark body {
     background-image:
-      radial-gradient(1200px 640px at 8% -10%, hsl(193 78% 22% / 0.55), transparent 60%),
-      radial-gradient(1000px 600px at 100% 0%, hsl(344 70% 30% / 0.32), transparent 56%),
-      radial-gradient(1000px 720px at 50% 120%, hsl(199 70% 20% / 0.5), transparent 60%);
+      radial-gradient(1100px 600px at 6% -10%, hsl(191 82% 26% / 0.6), transparent 58%),
+      radial-gradient(950px 560px at 100% -4%, hsl(344 74% 34% / 0.4), transparent 56%),
+      radial-gradient(900px 540px at 96% 102%, hsl(45 80% 36% / 0.26), transparent 56%),
+      radial-gradient(1000px 660px at 32% 118%, hsl(199 76% 24% / 0.55), transparent 60%);
+  }
+
+  /* Sunny text selection. */
+  ::selection {
+    background: hsl(45 96% 60% / 0.45);
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -317,7 +326,19 @@
     line-height: 1.15;
     letter-spacing: -0.012em;
   }
-  h1 { letter-spacing: -0.018em; font-weight: 700; }
+  /* (Refreshing Summer) Page titles ride a teal→sky→cyan gradient — colorful
+     yet legible in both light and dark (no light-on-white gold). */
+  h1 {
+    letter-spacing: -0.018em;
+    font-weight: 700;
+    background-image: linear-gradient(100deg, hsl(192 84% 41%), hsl(199 86% 48%) 48%, hsl(182 78% 40%));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .dark h1 {
+    background-image: linear-gradient(100deg, hsl(191 86% 58%), hsl(198 88% 64%) 48%, hsl(176 80% 56%));
+  }
   h2 { letter-spacing: -0.014em; font-weight: 600; }
   h3 { letter-spacing: -0.01em; }
 

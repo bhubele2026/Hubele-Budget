@@ -12,7 +12,9 @@ const buttonVariants = cva(
       variant: {
         default:
            // @replit: no hover, and add primary border
-           "bg-primary text-primary-foreground border border-primary-border shadow-sm",
+           // (Refreshing Summer) vivid teal→cyan gradient so every primary
+           // action pops with summer color.
+           "bg-gradient-to-br from-primary to-[hsl(186_84%_45%)] text-primary-foreground border border-primary-border shadow-sm",
         destructive:
           "bg-destructive text-destructive-foreground shadow-sm border-destructive-border",
         outline:
