@@ -324,7 +324,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           top bar's primary row + More overflow) ──────────────────────────── */}
       <div className="flex-1 min-h-0 flex">
         <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-          <div className="p-4 md:p-8 max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="p-3 md:p-5 max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
             {children}
           </div>
         </main>

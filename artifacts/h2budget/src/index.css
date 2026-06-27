@@ -189,9 +189,9 @@
 
   --tracking-normal: 0em;
   /* (Refreshing Summer · tight) Shrink the base spacing unit so every
-     padding / gap / margin tightens app-wide — denser, sexier, less wasted
+     padding / gap / margin tightens app-wide — denser, sexier, far less wasted
      space. */
-  --spacing: 0.215rem;
+  --spacing: 0.2rem;
 
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
@@ -509,6 +509,31 @@
     background-image: linear-gradient(120deg, hsl(191 84% 44%) 0%, hsl(198 84% 56%) 48%, hsl(45 98% 56%) 100%);
     border-image: none;
   }
+
+  /* (Refreshing Summer · FUN) Juicy gradient KPI tiles — each its own vibrant
+     diagonal summer gradient. White text, a soft lifted shadow, and rounded
+     corners even though the rest of the app is square: these are the hero
+     moment of the page. Lift + saturate on hover. */
+  .stat-card {
+    border-radius: 1.25rem;
+    color: #fff;
+    border: none;
+    box-shadow: 0 12px 30px -12px rgba(4, 41, 63, 0.42);
+    transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+  }
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 40px -12px rgba(4, 41, 63, 0.52);
+    filter: saturate(1.08);
+  }
+  /* Vibrant jewel-tone gradients — saturated mid-tones so white text stays
+     crisp across each tile (no washed-out yellow/lime fields). */
+  .tile-grad-0 { background-image: linear-gradient(135deg, hsl(199 86% 54%), hsl(193 84% 44%) 55%, hsl(214 80% 48%)); }
+  .tile-grad-1 { background-image: linear-gradient(135deg, hsl(38 94% 52%), hsl(22 92% 52%) 52%, hsl(348 84% 58%)); }
+  .tile-grad-2 { background-image: linear-gradient(135deg, hsl(160 68% 42%), hsl(180 74% 40%) 52%, hsl(196 84% 48%)); }
+  .tile-grad-3 { background-image: linear-gradient(135deg, hsl(344 86% 60%), hsl(322 78% 56%) 50%, hsl(280 72% 60%)); }
+  .tile-grad-4 { background-image: linear-gradient(135deg, hsl(248 74% 62%), hsl(220 84% 56%) 52%, hsl(190 86% 46%)); }
+  .tile-grad-5 { background-image: linear-gradient(135deg, hsl(14 88% 56%), hsl(348 84% 56%) 52%, hsl(322 76% 56%)); }
   /* Gradient headline text for a happy, summery accent on big titles/numbers. */
   .text-sunny {
     background-image: linear-gradient(100deg, hsl(192 84% 42%), hsl(198 84% 50%) 45%, hsl(38 96% 50%));

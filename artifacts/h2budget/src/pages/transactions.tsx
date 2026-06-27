@@ -1908,7 +1908,7 @@ export default function TransactionsPage() {
 
   return (
     <div
-      className="space-y-6"
+      className="space-y-3"
       style={{ ["--pinned-pane-h" as string]: `${paneH}px` } as React.CSSProperties}
     >
       {/* (#357) Suppress the global Plaid re-auth banner while the user
@@ -1959,7 +1959,7 @@ export default function TransactionsPage() {
         </div>
 
         {hasLinkedChecking ? (
-          <div className="grid gap-4 lg:grid-cols-2 stagger-children">
+          <div className="grid gap-3 lg:grid-cols-2 items-start stagger-children">
             {/* Money in vs out + net */}
             <Card>
               <CardContent className="p-5">
