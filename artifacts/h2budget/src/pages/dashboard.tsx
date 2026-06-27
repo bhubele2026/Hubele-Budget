@@ -2004,7 +2004,7 @@ export default function DashboardPage() {
   // Pull all Chase activity so end-of-month balances roll correctly between
   // the bank snapshot's anchor month and any past month displayed in the
   // dashboard's monthly snapshot.
-  const { data: allTxns } = useListTransactions({ limit: 5000 });
+  const { data: allTxns } = useListTransactions({ limit: 100 });
 
   const bankSnapshot = forecastData?.bankSnapshot ?? null;
   // (#475) Use the same per-account snapshot resolution + scoping the

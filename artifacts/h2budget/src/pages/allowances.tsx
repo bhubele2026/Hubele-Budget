@@ -895,7 +895,9 @@ export default function AllowancesPage() {
   const txnsQ = useListTransactions({
     from: fetchFrom,
     to: fetchTo,
-    limit: 5000,
+    // (#perf-3) Scoped to the week+month window already; bound the cap so it
+    // can never balloon. A single month won't approach this.
+    limit: 500,
   });
   const txns = txnsQ.data ?? [];
 

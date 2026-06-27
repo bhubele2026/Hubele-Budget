@@ -105,7 +105,9 @@ export default function CommandCenterPage() {
   const { data: weeklyTxns } = useListTransactions({
     from: isoDaysAgo(nowRef, 90),
     to: todayISO(nowRef),
-    limit: 3000,
+    // (#perf-3) Scoped to 90 days already; bound the cap (90 days won't reach
+    // it for any realistic household).
+    limit: 1000,
   });
   const [wrappedOpen, setWrappedOpen] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
