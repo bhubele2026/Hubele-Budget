@@ -161,7 +161,11 @@ export default function TransactionsPage() {
   const { data: transactions, isLoading } = useListTransactions({ limit: 5000 });
   const { data: categories } = useListCategories();
   const { data: mappingRules } = useListMappingRules();
-  const { data: forecastData } = useGetForecast();
+  // (#perf-2) Share the same {days:90} forecast key as Home/Reports so the
+  // ambient forecast bundle is fetched once and reused, not twice under two
+  // keys (no-params vs days:90). The Forecast page keeps its own interactive
+  // horizon query.
+  const { data: forecastData } = useGetForecast({ days: 90 });
   // Stable "today" (YYYY-MM-DD) used as the actual/forecast split anchor
   // and as the projection's `fromDate` so the dashed forecast line starts
   // at today and the cash-signal series aligns with the chart window.

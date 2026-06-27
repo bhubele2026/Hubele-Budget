@@ -76,15 +76,24 @@ export function useReportsData(rangeDays: number, monthOffset: number) {
     d.setDate(d.getDate() - rangeDays);
     return d;
   }, [fromDate, rangeDays]);
-  const yearAgo = useMemo(() => {
+  // (#perf-3) Fetch only the window the page actually aggregates: the selected
+  // range + its previous period (for the compare), with a 95-day floor so the
+  // behavior page's subscription enrichment still has context, capped at the
+  // prior 365-day max so the Yr view is unchanged. The default Wk/Mo views now
+  // pull ~95 days instead of a full year (the old 1.57 MB / limit=5000 fetch).
+  // rangeTxns / prevRangeTxns are byte-identical — same rows, just scoped at the
+  // server instead of filtered from a year client-side.
+  const fetchFromDate = useMemo(() => {
+    const span = Math.min(Math.max(rangeDays * 2 + 7, 95), 365);
     const d = new Date(today);
-    d.setDate(d.getDate() - 365);
+    d.setDate(d.getDate() - span);
     return d;
-  }, [today]);
+  }, [today, rangeDays]);
 
   const { data: txns, isLoading: txnsLoading } = useListTransactions({
-    from: fmtISO(yearAgo),
-    limit: 5000,
+    from: fmtISO(fetchFromDate),
+    to: fmtISO(today),
+    limit: 2000,
   });
   const { data: categories } = useListCategories();
   const { data: debts } = useListDebts();

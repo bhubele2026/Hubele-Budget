@@ -99,11 +99,6 @@ const queryClient = new QueryClient({
 // We scope this with setQueryDefaults by query-key prefix so LOW-churn
 // queries (categories, recurring items, debts, forecast settings, closed
 // months, etc.) keep their existing 5-min cache behavior untouched.
-const ALWAYS_FRESH = {
-  staleTime: 0,
-  refetchOnMount: "always",
-  refetchOnWindowFocus: true,
-} as const;
 
 // Forecast bundle (all daysAhead/horizon variants) + the cash-signal
 // projection. These were ALWAYS_FRESH — refetched on EVERY mount — which is
@@ -134,9 +129,36 @@ const TXN_CACHE = {
   refetchOnWindowFocus: false,
 } as const;
 queryClient.setQueryDefaults(["/api/transactions"], TXN_CACHE);
-// Weekly-debrief summaries (the list of weeks). Per-week detail keys are
-// distinct strings, so those opt in via per-call overrides on /debrief.
-queryClient.setQueryDefaults(["/api/debrief/weeks"], ALWAYS_FRESH);
+// Amex weekly-payoff is derived from transactions; it only changes on a sync
+// or a transaction edit, both of which invalidate it. Cache like transactions
+// so the Kill Stack (Home + Allowance) doesn't re-tally on every nav.
+queryClient.setQueryDefaults(["/api/amex/weekly-payoff"], TXN_CACHE);
+// Weekly-debrief summaries (the list of weeks + per-week detail). Was
+// ALWAYS_FRESH — refetched on EVERY Allowances/Debrief mount (the audit's
+// repeated /debrief/weeks calls). Debrief data only changes when a week is
+// locked/settled (which invalidates the key), so cache like transactions.
+queryClient.setQueryDefaults(["/api/debrief/weeks"], TXN_CACHE);
+
+// (#perf-1) Slow-changing reference data: settings, categories, mapping rules,
+// debts (+ balance history), recurring items, avalanche/forecast settings, and
+// linked Plaid accounts. These change only via explicit user edits, every one
+// of which invalidates its key — so cache generously (30 min) and reuse across
+// the whole app instead of refetching the same data on every page mount.
+const SLOW_CACHE = { staleTime: 30 * 60_000, refetchOnWindowFocus: false } as const;
+for (const key of [
+  "/api/settings",
+  "/api/budget/categories",
+  "/api/mapping-rules",
+  "/api/debts",
+  "/api/recurring-items",
+  "/api/avalanche/settings",
+  "/api/avalanche/extra",
+  "/api/forecast/settings",
+  "/api/plaid/items",
+  "/api/plaid/liability-accounts",
+]) {
+  queryClient.setQueryDefaults([key], SLOW_CACHE);
+}
 
 // (#755) Expose the React Query client on `window` so end-to-end tests can
 // simulate a mid-session recovery import (insert rows into the DB out-of-
