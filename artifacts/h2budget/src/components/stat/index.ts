@@ -5,6 +5,8 @@ export { StatusPill } from "./status-pill";
 export { TrendSparkline, type TrendPoint } from "./trend-sparkline";
 export { FillMeter } from "./fill-meter";
 export { WhyExpander } from "./why-expander";
+export { SectionHeader } from "./section-header";
+export { Callout } from "./callout";
 export {
   spendStatus,
   progressStatus,

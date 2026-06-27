@@ -53,6 +53,7 @@ const MappingRulesPage = lazy(() => import("./pages/mapping-rules"));
 const DebriefPage = lazy(() => import("./pages/debrief"));
 const SettingsPage = lazy(() => import("./pages/settings"));
 const PlaidOAuthPage = lazy(() => import("./pages/plaid-oauth"));
+const DevComponentsPage = lazy(() => import("./pages/dev-components"));
 const NotFound = lazy(() => import("./pages/not-found"));
 
 const queryClient = new QueryClient({
@@ -263,6 +264,9 @@ function ProtectedShell() {
             <Route path="/mapping-rules" component={MappingRulesPage} />
             <Route path="/settings" component={SettingsPage} />
             <Route path="/plaid-oauth" component={PlaidOAuthPage} />
+            {import.meta.env.DEV && (
+              <Route path="/dev/components" component={DevComponentsPage} />
+            )}
             <Route component={NotFound} />
           </Switch>
           </Suspense>
