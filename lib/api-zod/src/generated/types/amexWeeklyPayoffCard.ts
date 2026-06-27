@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AmexWeeklyPayoffCardBrand } from "./amexWeeklyPayoffCardBrand";
+import type { AmexWeeklyPayoffCardCadence } from "./amexWeeklyPayoffCardCadence";
 import type { AmexWeeklyPayoffCardTopMerchant } from "./amexWeeklyPayoffCardTopMerchant";
 
 export interface AmexWeeklyPayoffCard {
@@ -16,6 +17,10 @@ export interface AmexWeeklyPayoffCard {
   debtId: string | null;
   name: string;
   brand: AmexWeeklyPayoffCardBrand;
+  cadence: AmexWeeklyPayoffCardCadence;
+  periodLabel: string;
+  /** @nullable */
+  displayName: string | null;
   weekCharges: number;
   chargeCount: number;
   statementBalance: number;

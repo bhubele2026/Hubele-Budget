@@ -220,6 +220,9 @@ export interface AmexWeeklyPayoffCard {
   debtId: string | null;
   name: string;
   brand: AmexBrand;
+  cadence: "weekly" | "monthly";
+  periodLabel: string;
+  displayName: string | null;
   weekCharges: number;
   chargeCount: number;
   statementBalance: number;
@@ -251,12 +254,42 @@ export function lastCompletedWeekStart(today: Date = new Date()): string {
 export async function computeWeeklyPayoff(
   householdId: string,
   weekStartArg?: string,
+  ownerUserId?: string,
 ): Promise<AmexWeeklyPayoff> {
   const weekStart =
     weekStartArg && /^\d{4}-\d{2}-\d{2}$/.test(weekStartArg)
       ? weekStartFor(weekStartArg)
       : lastCompletedWeekStart();
   const weekEnd = weekEndFor(weekStart);
+
+  // Monthly-cadence cards bill over the calendar month of the selected week.
+  const ws = parseISO(weekStart);
+  const monthStart = fmtISO(new Date(ws.getFullYear(), ws.getMonth(), 1));
+  const monthEnd = fmtISO(new Date(ws.getFullYear(), ws.getMonth() + 1, 0));
+  // One query window covering both the week and the month (a week can straddle
+  // a month boundary) feeds weekly and monthly cards alike.
+  const queryStart = monthStart < weekStart ? monthStart : weekStart;
+  const queryEnd = monthEnd > weekEnd ? monthEnd : weekEnd;
+
+  // Per-card config (cadence + display name) from the owner's settings.
+  // Grouping/display metadata only — never changes a charge amount.
+  let cadenceMap: Record<string, string> = {};
+  let nameMap: Record<string, string> = {};
+  if (ownerUserId) {
+    const [s] = await db
+      .select({ preferences: settingsTable.preferences })
+      .from(settingsTable)
+      .where(eq(settingsTable.userId, ownerUserId));
+    const prefs = (s?.preferences as Record<string, unknown> | null | undefined) ?? {};
+    cadenceMap = (prefs.amexCardCadence as Record<string, string>) ?? {};
+    nameMap = (prefs.amexCardNames as Record<string, string>) ?? {};
+  }
+  const cadenceFor = (accountId: string): "weekly" | "monthly" =>
+    cadenceMap[accountId] === "monthly" ? "monthly" : "weekly";
+  const windowFor = (accountId: string) =>
+    cadenceFor(accountId) === "monthly"
+      ? { start: monthStart, end: monthEnd }
+      : { start: weekStart, end: weekEnd };
 
   // --- Discover the physical Amex credit cards -----------------------------
   // One Amex Plaid item = up to three physical cards (#748). Restrict to
@@ -347,6 +380,7 @@ export async function computeWeeklyPayoff(
       ? await db
           .select({
             plaidAccountId: transactionsTable.plaidAccountId,
+            occurredOn: transactionsTable.occurredOn,
             amount: transactionsTable.amount,
             source: transactionsTable.source,
             isTransfer: transactionsTable.isTransfer,
@@ -358,8 +392,8 @@ export async function computeWeeklyPayoff(
             and(
               eq(transactionsTable.householdId, householdId),
               inArray(transactionsTable.plaidAccountId, externalIds),
-              gte(transactionsTable.occurredOn, weekStart),
-              lte(transactionsTable.occurredOn, weekEnd),
+              gte(transactionsTable.occurredOn, queryStart),
+              lte(transactionsTable.occurredOn, queryEnd),
             ),
           )
       : [];
@@ -371,6 +405,9 @@ export async function computeWeeklyPayoff(
     if (!t.plaidAccountId) continue;
     const agg = byCard.get(t.plaidAccountId);
     if (!agg) continue;
+    // Only count charges inside THIS card's billing window (week or month).
+    const win = windowFor(t.plaidAccountId);
+    if (t.occurredOn < win.start || t.occurredOn > win.end) continue;
     if (!isRealSpend(
       {
         amount: t.amount,
@@ -411,12 +448,17 @@ export async function computeWeeklyPayoff(
       statementBalance > 0
         ? Math.max(0, Math.min(1, agg.charges / statementBalance))
         : 0;
+    const cadence = cadenceFor(c.accountId);
     return {
       accountId: c.accountId,
       plaidAccountId: c.internalId,
       debtId: debt?.id ?? null,
       name: c.name ?? "American Express",
       brand: classifyAmexBrand(c.name, c.mask),
+      cadence,
+      periodLabel: cadence === "monthly" ? "this month" : "this week",
+      displayName: nameMap[c.accountId] ?? null,
+      // weekCharges = real charges in this card's billing window (week or month).
       weekCharges: Math.round(agg.charges * 100) / 100,
       chargeCount: agg.count,
       statementBalance: Math.round(statementBalance * 100) / 100,
@@ -431,8 +473,14 @@ export async function computeWeeklyPayoff(
   const order: Record<AmexBrand, number> = { blue: 0, silver: 1, gold: 2 };
   cards.sort((a, b) => order[a.brand] - order[b.brand]);
 
+  // The combined "to pay this week" total is the WEEKLY cards only; monthly
+  // cards are surfaced separately (their charges sit until month-end).
   const combinedWeekCharges =
-    Math.round(cards.reduce((s, c) => s + c.weekCharges, 0) * 100) / 100;
+    Math.round(
+      cards
+        .filter((c) => c.cadence === "weekly")
+        .reduce((s, c) => s + c.weekCharges, 0) * 100,
+    ) / 100;
   const combinedStatementBalance =
     Math.round(cards.reduce((s, c) => s + c.statementBalance, 0) * 100) / 100;
 

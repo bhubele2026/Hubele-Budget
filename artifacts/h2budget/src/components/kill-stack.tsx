@@ -48,6 +48,11 @@ function fmtTxnDate(iso: string): string {
   const [, m, d] = iso.split("-");
   return `${Number(m)}/${Number(d)}`;
 }
+/** First + last day of the calendar month containing a YYYY-MM-DD. */
+function monthBoundsOf(iso: string): { start: string; end: string } {
+  const [y, m] = iso.split("-").map(Number);
+  return { start: `${y}-${pad(m)}-01`, end: isoOf(new Date(y, m, 0)) };
+}
 
 function fmtWeekRange(start: string, end: string): string {
   const f = (iso: string) => {
@@ -61,19 +66,29 @@ function KillRow({
   card,
   tier,
   txns,
+  periodStart,
+  periodEnd,
   onMove,
 }: {
   card: AmexWeeklyPayoffCard;
   tier: AmexTier;
   txns: Transaction[];
+  periodStart: string;
+  periodEnd: string;
   onMove: (t: Transaction, nextISO: string) => Promise<boolean>;
 }) {
   const color = brandColor(tier);
   const hasCharges = card.weekCharges > 0;
   const pctCleared = Math.round((card.pctOfStatementThisWeek || 0) * 100);
-  // This card's charges in the week (outflows), biggest first.
+  const label = card.displayName || BRAND_LABEL[tier] || card.name;
+  // This card's charges inside its billing window (week or month), biggest first.
   const charges = [...txns]
-    .filter((t) => (Number(t.amount) || 0) < 0)
+    .filter(
+      (t) =>
+        (Number(t.amount) || 0) < 0 &&
+        t.occurredOn >= periodStart &&
+        t.occurredOn <= periodEnd,
+    )
     .sort((a, b) => (Number(a.amount) || 0) - (Number(b.amount) || 0));
   return (
     <div
@@ -95,9 +110,7 @@ function KillRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
-            <span className="text-sm font-semibold">
-              {BRAND_LABEL[tier] ?? card.name}
-            </span>
+            <span className="text-sm font-semibold">{label}</span>
           </div>
           <div className="mt-0.5 truncate text-xs text-muted-foreground">
             {card.chargeCount > 0
@@ -115,7 +128,7 @@ function KillRow({
           </div>
           <MoneyText amount={card.weekCharges} className="text-xl font-bold" />
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            this week
+            {card.periodLabel}
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
@@ -196,11 +209,12 @@ export function KillStack({
 
   // The week's Amex transactions, fetched once and split per card for the
   // "Transactions" expanders. Read-only; no money recomputed.
-  const txnParams = {
-    from: data?.weekStart ?? "",
-    to: data?.weekEnd ?? "",
-    limit: 500,
-  };
+  // Fetch over the month containing the week so both weekly cards (week
+  // window) and monthly cards (month window) have their charges available.
+  const month = data?.weekStart ? monthBoundsOf(data.weekStart) : null;
+  const txnFrom = month && month.start < (data?.weekStart ?? "") ? month.start : data?.weekStart ?? "";
+  const txnTo = month && month.end > (data?.weekEnd ?? "") ? month.end : data?.weekEnd ?? "";
+  const txnParams = { from: txnFrom, to: txnTo, limit: 500 };
   const { data: weekTxns } = useListTransactions(txnParams, {
     query: {
       enabled: Boolean(data?.weekStart),
@@ -250,12 +264,21 @@ export function KillStack({
   };
 
   const TIER_ORDER: Record<AmexTier, number> = { blue: 0, silver: 1, gold: 2 };
-  const cards = [...(data?.cards ?? [])].sort(
+  const allCards = [...(data?.cards ?? [])].sort(
     (a, b) =>
       TIER_ORDER[effectiveBrand(a.accountId, a.brand, brandOverrides)] -
       TIER_ORDER[effectiveBrand(b.accountId, b.brand, brandOverrides)],
   );
+  // Weekly cards live in the box; monthly cards sit separately beneath it.
+  const cards = allCards.filter((c) => c.cadence !== "monthly");
+  const monthlyCards = allCards.filter((c) => c.cadence === "monthly");
   const hasCards = cards.length > 0;
+  // A card's billing window — weekly cards use the selected week, monthly cards
+  // the calendar month — for filtering its transaction list.
+  const periodFor = (card: AmexWeeklyPayoffCard) =>
+    card.cadence === "monthly" && month
+      ? month
+      : { start: data?.weekStart ?? "", end: data?.weekEnd ?? "" };
 
   // Week navigation bounds: can't go past the last completed week.
   const latest = lastCompletedSunday();
@@ -263,6 +286,7 @@ export function KillStack({
   const atLatest = curWeek >= latest;
 
   return (
+    <div className="space-y-4">
     <Card
       className={cn(emphasize && "focus-glow", className)}
       data-testid="kill-stack"
@@ -325,15 +349,20 @@ export function KillStack({
           </div>
         ) : hasCards ? (
           <div className="space-y-2">
-            {cards.map((c) => (
-              <KillRow
-                key={c.accountId}
-                card={c}
-                tier={effectiveBrand(c.accountId, c.brand, brandOverrides)}
-                txns={txnsByCard.get(c.accountId) ?? []}
-                onMove={moveTxn}
-              />
-            ))}
+            {cards.map((c) => {
+              const p = periodFor(c);
+              return (
+                <KillRow
+                  key={c.accountId}
+                  card={c}
+                  tier={effectiveBrand(c.accountId, c.brand, brandOverrides)}
+                  txns={txnsByCard.get(c.accountId) ?? []}
+                  periodStart={p.start}
+                  periodEnd={p.end}
+                  onMove={moveTxn}
+                />
+              );
+            })}
           </div>
         ) : (
           <div className="rounded-lg border border-dashed border-card-border px-4 py-6 text-sm text-muted-foreground">
@@ -346,5 +375,50 @@ export function KillStack({
         )}
       </CardContent>
     </Card>
+
+    {monthlyCards.length > 0 && (
+      <Card data-testid="kill-stack-monthly">
+        <CardContent className="p-5 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                Monthly cards · pay at month-end
+              </div>
+              {month && (
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {fmtTxnDate(month.start)} – {fmtTxnDate(month.end)}
+                </div>
+              )}
+            </div>
+            <div className="text-right">
+              <MoneyText
+                amount={monthlyCards.reduce((s, c) => s + c.weekCharges, 0)}
+                className="text-2xl font-bold leading-none"
+              />
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
+                this month
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {monthlyCards.map((c) => {
+              const p = periodFor(c);
+              return (
+                <KillRow
+                  key={c.accountId}
+                  card={c}
+                  tier={effectiveBrand(c.accountId, c.brand, brandOverrides)}
+                  txns={txnsByCard.get(c.accountId) ?? []}
+                  periodStart={p.start}
+                  periodEnd={p.end}
+                  onMove={moveTxn}
+                />
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    )}
+    </div>
   );
 }
