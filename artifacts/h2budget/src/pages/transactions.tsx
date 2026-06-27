@@ -791,11 +791,35 @@ export default function TransactionsPage() {
   // settling?" at a glance. Pinning them keeps the lifecycle
   // explicit. Totals on monthly tiles still include these rows
   // (they're real money) — only the visual grouping changes.
-  const pendingItems = useMemo(
-    () =>
-      filtered.filter((t) => t.pending).slice().sort(compareNewestFirst),
-    [filtered],
-  );
+  // Pending is "live money still settling", so surface ALL of it for this
+  // account regardless of the selected week/month window. Plaid drifts pending
+  // occurredOn (often stamps "today" even when it'll post earlier), so scoping
+  // pending to the viewed week/month silently hid settling charges — the exact
+  // "I know I'm missing expenses" symptom. Honor only the NON-date filters
+  // (search / source / member / category) so those still scope it; never the
+  // date window. Display-only: monthly tile totals still come from `filtered`.
+  const pendingItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return chaseTransactions
+      .filter((t) => {
+        if (!t.pending) return false;
+        if (sourceFilter !== "all" && t.source !== sourceFilter) return false;
+        if (memberFilter !== "all" && (t.member ?? "") !== memberFilter)
+          return false;
+        if (categoryFilter !== "all") {
+          if (categoryFilter === "uncategorized") {
+            if (t.categoryId) return false;
+          } else if (t.categoryId !== categoryFilter) return false;
+        }
+        if (q) {
+          const hay = `${t.description} ${categoryById.get(t.categoryId ?? "") ?? ""}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .slice()
+      .sort(compareNewestFirst);
+  }, [chaseTransactions, search, sourceFilter, memberFilter, categoryFilter, categoryById]);
   const groups = useMemo(() => {
     const map = new Map<string, Transaction[]>();
     for (const t of filtered) {
