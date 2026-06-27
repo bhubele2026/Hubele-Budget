@@ -78,10 +78,14 @@
   --font-mono: var(--app-font-mono);
   --font-display: var(--app-font-display);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* (Refreshing Summer · flat) Square everything box-like. rounded-full stays
+     round for genuine circles (dots, avatars, rings, toggles). */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
 }
 
 :root {
@@ -171,17 +175,23 @@
      rounded-sm/md/lg/xl utility via the @theme radius mapping above. */
   --radius: 0.875rem;
 
-  --shadow-2xs: 0 1px 1px 0 rgba(26, 34, 48, 0.04);
-  --shadow-xs: 0 1px 2px 0 rgba(26, 34, 48, 0.05);
-  --shadow-sm: 0 1px 2px 0 rgba(26, 34, 48, 0.05), 0 1px 1px 0 rgba(26, 34, 48, 0.03);
-  --shadow: 0 1px 3px 0 rgba(26, 34, 48, 0.07), 0 1px 2px -1px rgba(26, 34, 48, 0.04);
-  --shadow-md: 0 4px 12px -2px rgba(26, 34, 48, 0.08), 0 2px 4px -2px rgba(26, 34, 48, 0.05);
-  --shadow-lg: 0 12px 24px -8px rgba(26, 34, 48, 0.12), 0 4px 8px -4px rgba(26, 34, 48, 0.06);
-  --shadow-xl: 0 20px 32px -12px rgba(26, 34, 48, 0.16), 0 8px 12px -6px rgba(26, 34, 48, 0.08);
-  --shadow-2xl: 0 32px 64px -16px rgba(26, 34, 48, 0.22);
-  
+  /* (Refreshing Summer · flat) No ambient card depth — surfaces are defined by
+     crisp borders, not shadows. Only overlays (popover/dialog/dropdown, which
+     use shadow-lg/xl) keep a clean shadow so they read above the page. */
+  --shadow-2xs: none;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-md: none;
+  --shadow-lg: 0 8px 24px -8px rgba(4, 41, 63, 0.18);
+  --shadow-xl: 0 12px 32px -10px rgba(4, 41, 63, 0.22);
+  --shadow-2xl: 0 16px 40px -12px rgba(4, 41, 63, 0.28);
+
   --tracking-normal: 0em;
-  --spacing: 0.25rem;
+  /* (Refreshing Summer · tight) Shrink the base spacing unit so every
+     padding / gap / margin tightens app-wide — denser, sexier, less wasted
+     space. */
+  --spacing: 0.215rem;
 
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
@@ -266,14 +276,14 @@
   --card-silver: 200 16% 64%;
   --card-gold: 45 98% 62%;
 
-  --shadow-2xs: 0px 1px 2px 0px rgba(0,0,0,0.5);
-  --shadow-xs: 0px 1px 2px 0px rgba(0,0,0,0.5);
-  --shadow-sm: 0px 1px 2px 0px rgba(0,0,0,0.5), 0px 1px 2px -1px rgba(0,0,0,0.5);
-  --shadow: 0px 1px 3px 0px rgba(0,0,0,0.5), 0px 1px 2px -1px rgba(0,0,0,0.5);
-  --shadow-md: 0px 4px 6px -1px rgba(0,0,0,0.5), 0px 2px 4px -1px rgba(0,0,0,0.5);
-  --shadow-lg: 0px 10px 15px -3px rgba(0,0,0,0.5), 0px 4px 6px -2px rgba(0,0,0,0.5);
-  --shadow-xl: 0px 20px 25px -5px rgba(0,0,0,0.5), 0px 10px 10px -5px rgba(0,0,0,0.5);
-  --shadow-2xl: 0px 25px 50px -12px rgba(0,0,0,0.5);
+  --shadow-2xs: none;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-md: none;
+  --shadow-lg: 0px 10px 24px -8px rgba(0,0,0,0.6);
+  --shadow-xl: 0px 16px 32px -10px rgba(0,0,0,0.65);
+  --shadow-2xl: 0px 20px 44px -12px rgba(0,0,0,0.7);
 }
 
 @layer base {
@@ -459,45 +469,45 @@
   /* (Refreshing Summer) Sea-glass surface. The dark mode teal-navy gradient +
      hairline border + deep ambient shadow that defines the card look app-wide.
      In light mode it degrades to a flat white surface so light stays clean. */
+  /* (Refreshing Summer · flat + color) A flat card surface — solid fill, no
+     shadow, square corners. Color comes from a bold gradient border (teal →
+     sky → gold → coral) that pops against the sunny canvas. Square corners let
+     border-image render crisply. */
   .glass-surface {
-    border: 1px solid hsl(var(--card-border));
-    box-shadow:
-      0 1px 2px rgba(4, 41, 63, 0.05),
-      0 10px 24px -14px rgba(4, 41, 63, 0.16);
+    border: 1.5px solid transparent;
+    border-image: linear-gradient(120deg, hsl(192 84% 44%), hsl(198 84% 56%) 38%, hsl(45 98% 54%) 70%, hsl(344 86% 62%)) 1;
   }
   .dark .glass-surface {
-    background-image: linear-gradient(180deg, #0e2433 0%, #091b28 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    border: 1.5px solid transparent;
+    border-image: linear-gradient(120deg, hsl(191 84% 56%), hsl(198 86% 64%) 38%, hsl(45 98% 60%) 70%, hsl(344 88% 68%)) 1;
   }
 
-  /* Emphasis ring — a 1px teal border + a brighter, happier teal halo. */
+  /* Emphasis ring — a flat 2px teal accent border (no blur halo). */
   .focus-glow {
-    border-color: rgba(20, 175, 205, 0.7);
-    box-shadow: 0 0 0 1px rgba(20, 175, 205, 0.28), 0 12px 28px -12px rgba(20, 175, 205, 0.42);
+    border-color: hsl(var(--primary));
+    box-shadow: inset 0 0 0 1px hsl(var(--primary));
   }
   .dark .focus-glow {
-    border-color: rgba(36, 196, 226, 0.7);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(36, 196, 226, 0.34), 0 12px 28px -14px rgba(36, 196, 226, 0.4);
+    border-color: hsl(var(--primary));
+    box-shadow: inset 0 0 0 1px hsl(var(--primary));
   }
 
-  /* (Refreshing Summer) A vivid tropical-ocean hero for the active StatTile:
-     bright teal → sky → cyan with a sunny gold glow in the top corner. White
-     text stays crisp across the field. */
+  /* (Refreshing Summer · flat + color) A bold flat color block for the active
+     StatTile: vivid teal → sky → coral, square, no shadow. White text. */
   .stat-hero {
-    background-image:
-      radial-gradient(120% 120% at 100% 0%, hsl(45 98% 60% / 0.38), transparent 46%),
-      linear-gradient(135deg, hsl(191 85% 40%) 0%, hsl(198 84% 47%) 55%, hsl(186 82% 50%) 100%);
+    background-image: linear-gradient(120deg, hsl(191 84% 42%) 0%, hsl(198 84% 48%) 50%, hsl(344 80% 56%) 100%);
     color: #fff;
     border-color: transparent;
+    border-image: none;
   }
   .stat-hero .stat-hero-muted {
-    color: rgba(255, 255, 255, 0.78);
+    color: rgba(255, 255, 255, 0.82);
   }
 
-  /* (Refreshing Summer) A reusable sunny banner gradient — teal → sky → gold,
-     for celebratory/hero surfaces that want the full summer pop. */
+  /* (Refreshing Summer) A reusable bold banner gradient — teal → sky → gold. */
   .sunny-gradient {
-    background-image: linear-gradient(120deg, hsl(191 84% 44%) 0%, hsl(198 82% 56%) 48%, hsl(45 98% 56%) 100%);
+    background-image: linear-gradient(120deg, hsl(191 84% 44%) 0%, hsl(198 84% 56%) 48%, hsl(45 98% 56%) 100%);
+    border-image: none;
   }
   /* Gradient headline text for a happy, summery accent on big titles/numbers. */
   .text-sunny {
