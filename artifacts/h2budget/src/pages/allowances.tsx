@@ -18,8 +18,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToCancelList, toCancelKey } from "@/hooks/useToCancelList";
 import { KillStack } from "@/components/kill-stack";
-import { RingStat, MiniBars } from "@/components/viz";
-import { PillBadge } from "@/components/pill-badge";
+import { MiniBars } from "@/components/viz";
+import {
+  RingMeter,
+  StatusPill,
+  FillMeter,
+  WhyExpander,
+  TrendSparkline,
+  spendStatus,
+  type TrendPoint,
+} from "@/components/stat";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Collapsible,
@@ -142,14 +150,14 @@ function weeklyOverStreak(
 function roastForStreak(n: number): string {
   if (n <= 1) return "";
   if (n === 2)
-    return "Two weeks straight over your weekly allowance. Not a great look, you muppets — tighten it up.";
+    return "Two weeks over your weekly allowance. Let's not make it a habit — tighten it up and that's days off the payoff date.";
   if (n === 3)
-    return "THREE weeks over in a row. The number's right there and you keep ignoring it, you absolute wankers.";
+    return "Three weeks over in a row. The number's right there — rein it in and put the difference on the cards.";
   if (n <= 5)
-    return `${n} weeks over, back to back. At this point the "budget" is decorative. Sort it out, you numpties.`;
+    return `${n} weeks over, back to back. Time to make the budget mean something — small cuts now, big payoff later.`;
   if (n <= 9)
-    return `${n} weeks over. You're not budgeting, you're just spending like it's a personality. Proper skint behaviour, you drongos.`;
-  return `${n} WEEKS over budget in a row. Genuinely embarrassing — a broke-ass eejit with a piggy bank does better. Reel it in.`;
+    return `${n} weeks over. You're better than this — trim the easy wins and you'll feel it on the debt.`;
+  return `${n} weeks over budget in a row. Deep breath, reset the week — every dollar back is a dollar off the debt.`;
 }
 
 // The positive counterpart to roastForStreak — how many COMPLETED weeks in a
@@ -457,6 +465,7 @@ function BucketCard({
   expanded,
   onToggle,
   onSavePlanned,
+  trend,
 }: {
   name: string;
   actual: number;
@@ -464,10 +473,15 @@ function BucketCard({
   expanded: boolean;
   onToggle: () => void;
   onSavePlanned?: (amount: number) => void;
+  /** Optional 8-week over/under variance strip (spend − planned per week). */
+  trend?: TrendPoint[];
 }) {
   const variance = actual - planned;
   const over = variance > 0;
   const ratio = planned > 0 ? actual / planned : 0;
+  const status = planned > 0 ? spendStatus(ratio) : "neutral";
+  const statusLabel =
+    planned <= 0 ? "No target" : over ? "Over" : ratio >= 0.85 ? "On track" : "Under";
   const slug = name.split(" ")[0].toLowerCase();
   const [editOpen, setEditOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -490,24 +504,28 @@ function BucketCard({
           data-testid={`allowance-card-${slug}`}
           aria-expanded={expanded}
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
               {name}
             </span>
-            <ChevronDown
-              className={cn(
-                "h-4 w-4 text-muted-foreground transition-transform",
-                expanded ? "" : "-rotate-90",
-              )}
-            />
+            <div className="flex items-center gap-2">
+              {planned > 0 && <StatusPill status={status}>{statusLabel}</StatusPill>}
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 text-muted-foreground transition-transform",
+                  expanded ? "" : "-rotate-90",
+                )}
+              />
+            </div>
           </div>
           <div className="mt-2 flex items-center gap-3">
-            <RingStat
-              value={ratio}
-              size={56}
-              stroke={6}
-              color={over ? "hsl(var(--negative))" : "hsl(var(--positive))"}
-              centerSub="used"
+            <RingMeter
+              ratio={ratio}
+              status={status}
+              size={64}
+              stroke={7}
+              centerTop={`${Math.round(ratio * 100)}%`}
+              centerBottom="used"
             />
             <div className="text-3xl font-bold tracking-tight tabular-nums">
               {formatCurrency(actual)}
@@ -574,25 +592,28 @@ function BucketCard({
             </Popover>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          {planned > 0 && (
-            <PillBadge tone={over ? "danger" : "good"}>
-              {over ? "Over" : "Under"}
-            </PillBadge>
+        {planned > 0 && (
+          <FillMeter
+            value={actual}
+            ceiling={planned}
+            status={status}
+            floorLabel="$0"
+            ceilingLabel={formatCurrency(planned)}
+            format={(n) => formatCurrency(n)}
+          />
+        )}
+        <div
+          className={cn(
+            "text-sm font-medium tabular-nums",
+            over ? "text-destructive" : "text-emerald-700",
           )}
-          <div
-            className={cn(
-              "text-sm font-medium tabular-nums",
-              over ? "text-destructive" : "text-emerald-700",
-            )}
-            data-testid={`allowance-variance-${slug}`}
-          >
-            {planned <= 0
-              ? "No allowance set"
-              : over
-                ? `${formatCurrency(variance)} over`
-                : `${formatCurrency(Math.abs(variance))} under`}
-          </div>
+          data-testid={`allowance-variance-${slug}`}
+        >
+          {planned <= 0
+            ? "No allowance set"
+            : over
+              ? `${formatCurrency(variance)} over`
+              : `${formatCurrency(Math.abs(variance))} under`}
         </div>
         {funVerdict(actual, planned) && (
           <div
@@ -602,6 +623,26 @@ function BucketCard({
             {funVerdict(actual, planned)}
           </div>
         )}
+        <WhyExpander>
+          <p className="leading-snug">
+            You&apos;ve spent{" "}
+            <span className="font-medium text-foreground">{formatCurrency(actual)}</span>{" "}
+            of your {formatCurrency(planned)} {name.toLowerCase()} —{" "}
+            {planned <= 0
+              ? "set a target to start tracking."
+              : over
+                ? `${formatCurrency(variance)} over plan.`
+                : `${formatCurrency(Math.abs(variance))} still in the tank.`}
+          </p>
+          {trend && trend.length > 0 && (
+            <div className="mt-3">
+              <div className="text-[10px] uppercase tracking-widest mb-1.5">
+                Last {trend.length} weeks · over / under
+              </div>
+              <TrendSparkline data={trend} height={32} />
+            </div>
+          )}
+        </WhyExpander>
       </CardContent>
     </Card>
   );
@@ -1197,6 +1238,15 @@ export default function AllowancesPage() {
             expanded={expanded.has(b.key)}
             onToggle={() => toggle(b.key)}
             onSavePlanned={(amount) => savePlanned(b.key, amount)}
+            // The 8-week over/under history exists for the weekly allowance.
+            trend={
+              b.key === "weekly"
+                ? varianceSeries.map((s) => ({
+                    value: s.variance,
+                    label: formatWeekRange(s.weekSun),
+                  }))
+                : undefined
+            }
           />
         ))}
       </div>

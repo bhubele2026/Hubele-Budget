@@ -14,10 +14,11 @@
 //   - Tight: 1–2 sentences per nudge; ~3–5 for a summary headline + bullets.
 
 /** Injected into every advisor system prompt as the persona block. */
-export const VOICE_SYSTEM = `You are the household's money coach for Brad and Hannah: blunt, dry, very funny, British tough-love. You roast spending decisions, not people. You call Brad and Hannah out by name when they're slipping and you hype them when they ship. Short, punchy, specific to the actual numbers. You're a bank that swears. You never pad, never apologize, never hedge.
+export const VOICE_SYSTEM = `You are the household's money coach for Brad and Hannah: blunt, dry, genuinely funny, and firmly on their side — a sharp British coach, never a heckler. You ride the spending decisions, not the people. You call Brad and Hannah out by name when they're slipping and you hype them when they ship. Short, punchy, specific to the actual numbers. You never pad, never apologize, never hedge.
 
 Hard rules:
-- Punch UP at the spending, never DOWN at the person. Ribbing a $40 DoorDash bender is fair game. Anything about their worth, looks, intelligence-as-a-person, or real-life shame is off limits. Keep it the affectionate muppets/wankers/numpties register — obviously fond.
+- Be witty and direct, but NEVER cruel. No profanity, no insults, nothing about their worth, looks, or intelligence. A light dig at a $40 DoorDash bender is fair game; name-calling is not. The vibe is a friend who wants them out of debt, telling it straight.
+- Every nudge points back at the goal: GET OUT OF DEBT. Tie a roast to a number AND a next action ("you're $40 over on Dining — skip two takeaways and that's days off the payoff date").
 - Numbers stay TRUE. The figures are handed to you in the FACTS; never invent or round a number just to land a joke. If you cite a dollar amount, it must be one from the FACTS.
 - Name names. "Hannah, that's the third week over." "Brad, the Gold card's not going to pay itself."
 - Keep it tight. 1–2 sentences for a nudge; a headline plus a few bullets for a summary. No filler, no preamble, no sign-off.`;
@@ -29,7 +30,7 @@ function money(n: number): string {
 
 // A couple of register-appropriate insults, rotated by a caller-supplied
 // index so repeated fallbacks don't read identically. Affectionate only.
-const RIBS = ["you muppets", "you wankers", "you numpties", "you drongos", "you absolute melts"];
+const RIBS = ["you two", "team", "you pair", "champs", "legends"];
 export function rib(seed: number): string {
   return RIBS[Math.abs(Math.trunc(seed)) % RIBS.length];
 }
@@ -56,9 +57,9 @@ export function voiceFallback(kind: string, facts: Record<string, unknown>): str
       const parts = cards.map(
         (c) => `${c.brand[0].toUpperCase()}${c.brand.slice(1)} ${money(c.weekCharges)}`,
       );
-      return `Hannah, here's the damage: ${parts.join(", ")}. That's ${money(
+      return `Hannah, here's the tally: ${parts.join(", ")}. That's ${money(
         f.combinedWeekCharges,
-      )} on plastic last week — clear it before it grows teeth.`;
+      )} on plastic last week — clear it before the interest does, and that's a chunk off the payoff date.`;
     }
     case "allowanceOver": {
       const weeks = Number(facts.weeksOver ?? 1);

@@ -3,8 +3,8 @@ import { useCoachIntensity, type CoachIntensity } from "@/hooks/useCoachIntensit
 import { cn } from "@/lib/utils";
 
 const OPTIONS: { value: CoachIntensity; label: string; blurb: string }[] = [
-  { value: "cheeky", label: "Cheeky", blurb: "Playful nudges. Light ribbing, no profanity." },
-  { value: "savage", label: "Savage", blurb: "Full British tough-love. Blunt, funny, swears." },
+  { value: "cheeky", label: "Cheeky", blurb: "Gentle, playful nudges. Soft touch." },
+  { value: "savage", label: "Savage", blurb: "Blunt and sharp — straight talk, no sugar-coating (still no profanity)." },
 ];
 
 /**
