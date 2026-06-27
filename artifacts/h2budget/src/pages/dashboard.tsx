@@ -1999,8 +1999,8 @@ export default function DashboardPage() {
   }, [today]);
   const { data, isLoading } = useGetDashboard();
   const { data: debts } = useListDebts();
-  const { data: forecastData } = useGetForecast();
-  const { data: monthTxns } = useListTransactions({ from: monthlyFromISO, limit: 5000 });
+  const { data: forecastData } = useGetForecast({ days: 90 });
+  const { data: monthTxns } = useListTransactions({ from: monthlyFromISO, limit: 100 });
   // Pull all Chase activity so end-of-month balances roll correctly between
   // the bank snapshot's anchor month and any past month displayed in the
   // dashboard's monthly snapshot.
