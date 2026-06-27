@@ -549,7 +549,7 @@ router.get("/amex/weekly-payoff", requireAuth, async (req, res): Promise<void> =
     typeof weekStartRaw === "string" && weekStartRaw.length > 0 ? weekStartRaw : undefined;
   const wantAi = req.query.ai === "true";
 
-  const payoff = await computeWeeklyPayoff(householdId, weekStart);
+  const payoff = await computeWeeklyPayoff(householdId, weekStart, req.householdOwnerId);
 
   let directive: string;
   let directiveSource: "ai" | "fallback";

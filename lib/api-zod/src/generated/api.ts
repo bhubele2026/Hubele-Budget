@@ -2162,6 +2162,18 @@ export const GetSettingsResponse = zod.object({
           .describe(
             'Per-card Amex tier override, keyed by the external Plaid account_id -> \"blue\" | \"silver\" | \"gold\". User-assigned so the Kill Stack \/ per-card UI label each physical card correctly even when Plaid\'s card name doesn\'t contain the tier word. Display metadata only — does not change any financial math.',
           ),
+        amexCardCadence: zod
+          .record(zod.string(), zod.enum(["weekly", "monthly"]))
+          .optional()
+          .describe(
+            'Per-card billing cadence, keyed by external Plaid account_id -> \"weekly\" | \"monthly\" (default weekly). A monthly card\'s charges accumulate over the calendar month and are paid at month-end; weekly cards reset each Sun–Sat week. Grouping metadata only — amounts are still the same server-computed real-charge sums, just over a different window.',
+          ),
+        amexCardNames: zod
+          .record(zod.string(), zod.string())
+          .optional()
+          .describe(
+            'Per-card display name, keyed by external Plaid account_id -> custom name (e.g. \"Sky Card\"). Overrides the tier label on the Kill Stack \/ per-card UI.',
+          ),
       }),
       zod.null(),
     ])
@@ -2207,6 +2219,18 @@ export const UpdateSettingsBody = zod.object({
           .describe(
             'Per-card Amex tier override, keyed by the external Plaid account_id -> \"blue\" | \"silver\" | \"gold\". User-assigned so the Kill Stack \/ per-card UI label each physical card correctly even when Plaid\'s card name doesn\'t contain the tier word. Display metadata only — does not change any financial math.',
           ),
+        amexCardCadence: zod
+          .record(zod.string(), zod.enum(["weekly", "monthly"]))
+          .optional()
+          .describe(
+            'Per-card billing cadence, keyed by external Plaid account_id -> \"weekly\" | \"monthly\" (default weekly). A monthly card\'s charges accumulate over the calendar month and are paid at month-end; weekly cards reset each Sun–Sat week. Grouping metadata only — amounts are still the same server-computed real-charge sums, just over a different window.',
+          ),
+        amexCardNames: zod
+          .record(zod.string(), zod.string())
+          .optional()
+          .describe(
+            'Per-card display name, keyed by external Plaid account_id -> custom name (e.g. \"Sky Card\"). Overrides the tier label on the Kill Stack \/ per-card UI.',
+          ),
       }),
       zod.null(),
     ])
@@ -2251,6 +2275,18 @@ export const UpdateSettingsResponse = zod.object({
           .optional()
           .describe(
             'Per-card Amex tier override, keyed by the external Plaid account_id -> \"blue\" | \"silver\" | \"gold\". User-assigned so the Kill Stack \/ per-card UI label each physical card correctly even when Plaid\'s card name doesn\'t contain the tier word. Display metadata only — does not change any financial math.',
+          ),
+        amexCardCadence: zod
+          .record(zod.string(), zod.enum(["weekly", "monthly"]))
+          .optional()
+          .describe(
+            'Per-card billing cadence, keyed by external Plaid account_id -> \"weekly\" | \"monthly\" (default weekly). A monthly card\'s charges accumulate over the calendar month and are paid at month-end; weekly cards reset each Sun–Sat week. Grouping metadata only — amounts are still the same server-computed real-charge sums, just over a different window.',
+          ),
+        amexCardNames: zod
+          .record(zod.string(), zod.string())
+          .optional()
+          .describe(
+            'Per-card display name, keyed by external Plaid account_id -> custom name (e.g. \"Sky Card\"). Overrides the tier label on the Kill Stack \/ per-card UI.',
           ),
       }),
       zod.null(),
@@ -3199,6 +3235,9 @@ export const GetAmexWeeklyPayoffResponse = zod.object({
       debtId: zod.string().nullable(),
       name: zod.string(),
       brand: zod.enum(["blue", "silver", "gold"]),
+      cadence: zod.enum(["weekly", "monthly"]),
+      periodLabel: zod.string(),
+      displayName: zod.string().nullable(),
       weekCharges: zod.number(),
       chargeCount: zod.number(),
       statementBalance: zod.number(),

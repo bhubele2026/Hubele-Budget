@@ -3652,6 +3652,23 @@ components:
             card name doesn't contain the tier word. Display metadata only — does
             not change any financial math.
           additionalProperties: { type: string, enum: [blue, silver, gold] }
+        amexCardCadence:
+          type: object
+          description: >-
+            Per-card billing cadence, keyed by external Plaid account_id ->
+            "weekly" | "monthly" (default weekly). A monthly card's charges
+            accumulate over the calendar month and are paid at month-end; weekly
+            cards reset each Sun–Sat week. Grouping metadata only — amounts are
+            still the same server-computed real-charge sums, just over a
+            different window.
+          additionalProperties: { type: string, enum: [weekly, monthly] }
+        amexCardNames:
+          type: object
+          description: >-
+            Per-card display name, keyed by external Plaid account_id -> custom
+            name (e.g. "Sky Card"). Overrides the tier label on the Kill Stack /
+            per-card UI.
+          additionalProperties: { type: string }
     UiPreferences:
       type: object
       description: Per-user (not per-household) UI preferences for the signed-in user.
@@ -4535,6 +4552,9 @@ components:
           statementBalance,
           pctOfStatementThisWeek,
           topMerchant,
+          cadence,
+          periodLabel,
+          displayName,
         ]
       properties:
         accountId: { type: string }
@@ -4542,6 +4562,9 @@ components:
         debtId: { type: ["string", "null"] }
         name: { type: string }
         brand: { type: string, enum: [blue, silver, gold] }
+        cadence: { type: string, enum: [weekly, monthly] }
+        periodLabel: { type: string }
+        displayName: { type: ["string", "null"] }
         weekCharges: { type: number }
         chargeCount: { type: integer }
         statementBalance: { type: number }

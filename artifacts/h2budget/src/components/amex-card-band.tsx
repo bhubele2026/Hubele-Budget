@@ -1,8 +1,10 @@
+import { useState } from "react";
 import {
   useGetAmexWeeklyPayoff,
   useGetSettings,
   useUpdateSettings,
   getGetSettingsQueryKey,
+  getGetAmexWeeklyPayoffQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { RingStat, MoneyText } from "@/components/viz";
@@ -15,6 +17,57 @@ import {
   type AmexTier,
 } from "@/lib/amexBrand";
 import { cn } from "@/lib/utils";
+
+type Cadence = "weekly" | "monthly";
+
+/** Per-card config row: custom name (saved on blur) + weekly/monthly toggle. */
+function CardConfig({
+  name,
+  cadence,
+  placeholder,
+  onName,
+  onCadence,
+}: {
+  name: string;
+  cadence: Cadence;
+  placeholder: string;
+  onName: (v: string) => void;
+  onCadence: (v: Cadence) => void;
+}) {
+  const [draft, setDraft] = useState(name);
+  return (
+    <div className="space-y-1.5">
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => draft.trim() !== name && onName(draft.trim())}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        placeholder={placeholder}
+        aria-label="Card name"
+        className="w-full rounded-md border border-card-border bg-background px-2 py-1 text-xs"
+      />
+      <div className="inline-flex items-center rounded-md border border-card-border p-0.5 text-[10px] font-medium">
+        {(["weekly", "monthly"] as Cadence[]).map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onCadence(c)}
+            aria-pressed={cadence === c}
+            data-testid={`amex-cadence-${c}`}
+            className={cn(
+              "rounded px-2 py-0.5 uppercase tracking-wide transition-colors",
+              cadence === c ? "bg-primary text-primary-foreground" : "text-muted-foreground",
+            )}
+          >
+            {c === "weekly" ? "Weekly" : "Monthly"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** Three small swatches to assign a card's tier. Sits below the select tile. */
 function TierPicker({
@@ -72,16 +125,22 @@ export function AmexCardBand({
   const updateSettings = useUpdateSettings();
   const qc = useQueryClient();
   const overrides = cardBrandOverrides(settings);
+  const names = (settings?.preferences?.amexCardNames as Record<string, string>) ?? {};
+  const cadences = (settings?.preferences?.amexCardCadence as Record<string, Cadence>) ?? {};
 
-  const setTier = async (accountId: string, tier: AmexTier) => {
+  const patchPref = async (patch: Record<string, unknown>) => {
     const prev = settings?.preferences ?? {};
-    const nextPrefs = {
-      ...prev,
-      amexCardBrands: { ...(prev.amexCardBrands ?? {}), [accountId]: tier },
-    };
-    await updateSettings.mutateAsync({ data: { preferences: nextPrefs } });
+    await updateSettings.mutateAsync({ data: { preferences: { ...prev, ...patch } } });
     await qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+    // Cadence/name affect the payoff grouping + labels, so refresh it too.
+    await qc.invalidateQueries({ queryKey: getGetAmexWeeklyPayoffQueryKey() });
   };
+  const setTier = (accountId: string, tier: AmexTier) =>
+    patchPref({ amexCardBrands: { ...(settings?.preferences?.amexCardBrands ?? {}), [accountId]: tier } });
+  const setName = (accountId: string, name: string) =>
+    patchPref({ amexCardNames: { ...names, [accountId]: name } });
+  const setCadence = (accountId: string, cadence: Cadence) =>
+    patchPref({ amexCardCadence: { ...cadences, [accountId]: cadence } });
 
   const cards = data?.cards ?? [];
   if (cards.length === 0) return null;
@@ -136,7 +195,7 @@ export function AmexCardBand({
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
                   <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
-                  {BRAND_LABEL[tier] ?? c.name}
+                  {names[c.accountId] || BRAND_LABEL[tier] || c.name}
                 </span>
                 <RingStat value={c.pctOfStatementThisWeek} size={36} stroke={4} color={color} centerText="" />
               </div>
@@ -147,8 +206,15 @@ export function AmexCardBand({
                 <MoneyText amount={c.weekCharges} /> this week
               </div>
             </button>
-            <div className="px-4 pb-3">
+            <div className="px-4 pb-3 space-y-2">
               <TierPicker value={tier} onChange={(t) => void setTier(c.accountId, t)} />
+              <CardConfig
+                name={names[c.accountId] ?? ""}
+                cadence={cadences[c.accountId] === "monthly" ? "monthly" : "weekly"}
+                placeholder={BRAND_LABEL[tier]}
+                onName={(v) => void setName(c.accountId, v)}
+                onCadence={(v) => void setCadence(c.accountId, v)}
+              />
             </div>
           </div>
         );

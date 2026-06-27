@@ -1536,6 +1536,18 @@ export type SettingsPreferencesWeeklyAllowanceOverrides = {
 export type SettingsPreferencesAmexCardBrands = {
     [key: string]: "blue" | "silver" | "gold";
 };
+/**
+ * Per-card billing cadence, keyed by external Plaid account_id -> "weekly" | "monthly" (default weekly). A monthly card's charges accumulate over the calendar month and are paid at month-end; weekly cards reset each Sun–Sat week. Grouping metadata only — amounts are still the same server-computed real-charge sums, just over a different window.
+ */
+export type SettingsPreferencesAmexCardCadence = {
+    [key: string]: "weekly" | "monthly";
+};
+/**
+ * Per-card display name, keyed by external Plaid account_id -> custom name (e.g. "Sky Card"). Overrides the tier label on the Kill Stack / per-card UI.
+ */
+export type SettingsPreferencesAmexCardNames = {
+    [key: string]: string;
+};
 export interface SettingsPreferences {
     weeklyBucketLabels?: WeeklyBucketLabels;
     daysSinceTrackers?: DaysSinceTracker[];
@@ -1543,6 +1555,10 @@ export interface SettingsPreferences {
     weeklyAllowanceOverrides?: SettingsPreferencesWeeklyAllowanceOverrides;
     /** Per-card Amex tier override, keyed by the external Plaid account_id -> "blue" | "silver" | "gold". User-assigned so the Kill Stack / per-card UI label each physical card correctly even when Plaid's card name doesn't contain the tier word. Display metadata only — does not change any financial math. */
     amexCardBrands?: SettingsPreferencesAmexCardBrands;
+    /** Per-card billing cadence, keyed by external Plaid account_id -> "weekly" | "monthly" (default weekly). A monthly card's charges accumulate over the calendar month and are paid at month-end; weekly cards reset each Sun–Sat week. Grouping metadata only — amounts are still the same server-computed real-charge sums, just over a different window. */
+    amexCardCadence?: SettingsPreferencesAmexCardCadence;
+    /** Per-card display name, keyed by external Plaid account_id -> custom name (e.g. "Sky Card"). Overrides the tier label on the Kill Stack / per-card UI. */
+    amexCardNames?: SettingsPreferencesAmexCardNames;
 }
 /**
  * Per-user (not per-household) UI preferences for the signed-in user.
@@ -2257,6 +2273,11 @@ export declare const AmexWeeklyPayoffCardBrand: {
     readonly silver: "silver";
     readonly gold: "gold";
 };
+export type AmexWeeklyPayoffCardCadence = (typeof AmexWeeklyPayoffCardCadence)[keyof typeof AmexWeeklyPayoffCardCadence];
+export declare const AmexWeeklyPayoffCardCadence: {
+    readonly weekly: "weekly";
+    readonly monthly: "monthly";
+};
 export type AmexWeeklyPayoffCardTopMerchant = null | {
     name: string;
     amount: number;
@@ -2269,6 +2290,10 @@ export interface AmexWeeklyPayoffCard {
     debtId: string | null;
     name: string;
     brand: AmexWeeklyPayoffCardBrand;
+    cadence: AmexWeeklyPayoffCardCadence;
+    periodLabel: string;
+    /** @nullable */
+    displayName: string | null;
     weekCharges: number;
     chargeCount: number;
     statementBalance: number;
