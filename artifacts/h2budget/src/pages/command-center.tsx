@@ -494,7 +494,7 @@ export default function CommandCenterPage() {
             <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
               Your road out of debt
             </div>
-            <div className="mt-1 text-2xl md:text-[1.9rem] font-bold tracking-tight leading-tight">
+            <div className="mt-1 text-2xl md:text-[1.9rem] font-bold tracking-tight leading-tight text-sunny">
               {debtFree
                 ? `Debt-free around ${debtFree.label}`
                 : totalDebt != null && totalDebt <= 0
