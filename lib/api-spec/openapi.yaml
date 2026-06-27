@@ -3643,6 +3643,15 @@ components:
             (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both
             partners see the same per-week edit.
           additionalProperties: { type: string }
+        amexCardBrands:
+          type: object
+          description: >-
+            Per-card Amex tier override, keyed by the external Plaid account_id
+            -> "blue" | "silver" | "gold". User-assigned so the Kill Stack /
+            per-card UI label each physical card correctly even when Plaid's
+            card name doesn't contain the tier word. Display metadata only — does
+            not change any financial math.
+          additionalProperties: { type: string, enum: [blue, silver, gold] }
     UiPreferences:
       type: object
       description: Per-user (not per-household) UI preferences for the signed-in user.

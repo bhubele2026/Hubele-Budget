@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DaysSinceTracker } from "./daysSinceTracker";
+import type { SettingsPreferencesAmexCardBrands } from "./settingsPreferencesAmexCardBrands";
 import type { SettingsPreferencesWeeklyAllowanceOverrides } from "./settingsPreferencesWeeklyAllowanceOverrides";
 import type { WeeklyBucketLabels } from "./weeklyBucketLabels";
 export interface SettingsPreferences {
@@ -13,5 +14,7 @@ export interface SettingsPreferences {
     daysSinceTrackers?: DaysSinceTracker[];
     /** Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit. */
     weeklyAllowanceOverrides?: SettingsPreferencesWeeklyAllowanceOverrides;
+    /** Per-card Amex tier override, keyed by the external Plaid account_id -> "blue" | "silver" | "gold". User-assigned so the Kill Stack / per-card UI label each physical card correctly even when Plaid's card name doesn't contain the tier word. Display metadata only — does not change any financial math. */
+    amexCardBrands?: SettingsPreferencesAmexCardBrands;
 }
 //# sourceMappingURL=settingsPreferences.d.ts.map

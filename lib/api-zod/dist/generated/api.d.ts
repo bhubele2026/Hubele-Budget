@@ -4246,6 +4246,7 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }>, "many">>;
         weeklyAllowanceOverrides: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
+        amexCardBrands: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodEnum<["blue", "silver", "gold"]>>>;
     }, "strip", zod.ZodTypeAny, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
@@ -4261,6 +4262,7 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
     }, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
@@ -4276,6 +4278,7 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
     }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     weeklyAllowanceAmount: string;
@@ -4297,6 +4300,7 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
     } | null | undefined;
 }, {
     weeklyAllowanceAmount: string;
@@ -4318,6 +4322,7 @@ export declare const GetSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
     } | null | undefined;
 }>;
 export declare const UpdateSettingsBody: zod.ZodObject<{
@@ -4362,6 +4367,7 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             matchValue: string;
         }>, "many">>;
         weeklyAllowanceOverrides: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
+        amexCardBrands: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodEnum<["blue", "silver", "gold"]>>>;
     }, "strip", zod.ZodTypeAny, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
@@ -4377,6 +4383,7 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
     }, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
@@ -4392,6 +4399,7 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
     }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     weeklyAllowanceAmount?: string | undefined;
@@ -4413,6 +4421,7 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
     } | null | undefined;
 }, {
     weeklyAllowanceAmount?: string | undefined;
@@ -4434,6 +4443,7 @@ export declare const UpdateSettingsBody: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
     } | null | undefined;
 }>;
 export declare const UpdateSettingsResponse: zod.ZodObject<{
@@ -4478,6 +4488,7 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }>, "many">>;
         weeklyAllowanceOverrides: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodString>>;
+        amexCardBrands: zod.ZodOptional<zod.ZodRecord<zod.ZodString, zod.ZodEnum<["blue", "silver", "gold"]>>>;
     }, "strip", zod.ZodTypeAny, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
@@ -4493,6 +4504,7 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
     }, {
         weeklyBucketLabels?: {
             groceries?: string | undefined;
@@ -4508,6 +4520,7 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
     }>, zod.ZodNull]>>;
 }, "strip", zod.ZodTypeAny, {
     weeklyAllowanceAmount: string;
@@ -4529,6 +4542,7 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
     } | null | undefined;
 }, {
     weeklyAllowanceAmount: string;
@@ -4550,6 +4564,7 @@ export declare const UpdateSettingsResponse: zod.ZodObject<{
             matchValue: string;
         }[] | undefined;
         weeklyAllowanceOverrides?: Record<string, string> | undefined;
+        amexCardBrands?: Record<string, "blue" | "silver" | "gold"> | undefined;
     } | null | undefined;
 }>;
 export declare const GetForecastQueryParams: zod.ZodObject<{

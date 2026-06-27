@@ -2156,6 +2156,12 @@ export const GetSettingsResponse = zod.object({
           .describe(
             "Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit.",
           ),
+        amexCardBrands: zod
+          .record(zod.string(), zod.enum(["blue", "silver", "gold"]))
+          .optional()
+          .describe(
+            'Per-card Amex tier override, keyed by the external Plaid account_id -> \"blue\" | \"silver\" | \"gold\". User-assigned so the Kill Stack \/ per-card UI label each physical card correctly even when Plaid\'s card name doesn\'t contain the tier word. Display metadata only — does not change any financial math.',
+          ),
       }),
       zod.null(),
     ])
@@ -2195,6 +2201,12 @@ export const UpdateSettingsBody = zod.object({
           .describe(
             "Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit.",
           ),
+        amexCardBrands: zod
+          .record(zod.string(), zod.enum(["blue", "silver", "gold"]))
+          .optional()
+          .describe(
+            'Per-card Amex tier override, keyed by the external Plaid account_id -> \"blue\" | \"silver\" | \"gold\". User-assigned so the Kill Stack \/ per-card UI label each physical card correctly even when Plaid\'s card name doesn\'t contain the tier word. Display metadata only — does not change any financial math.',
+          ),
       }),
       zod.null(),
     ])
@@ -2233,6 +2245,12 @@ export const UpdateSettingsResponse = zod.object({
           .optional()
           .describe(
             "Per-week weekly-allowance overrides, keyed by the week's Sunday (ISO yyyy-mm-dd) -> planned amount string. Household-scoped so both partners see the same per-week edit.",
+          ),
+        amexCardBrands: zod
+          .record(zod.string(), zod.enum(["blue", "silver", "gold"]))
+          .optional()
+          .describe(
+            'Per-card Amex tier override, keyed by the external Plaid account_id -> \"blue\" | \"silver\" | \"gold\". User-assigned so the Kill Stack \/ per-card UI label each physical card correctly even when Plaid\'s card name doesn\'t contain the tier word. Display metadata only — does not change any financial math.',
           ),
       }),
       zod.null(),

@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetAmexWeeklyPayoff,
+  useGetSettings,
   useListTransactions,
   useUpdateTransaction,
   getListTransactionsQueryKey,
@@ -17,6 +18,13 @@ import { RingStat, MoneyText } from "@/components/viz";
 import { StatusPill, WhyExpander } from "@/components/stat";
 import { RowDateControls } from "@/components/row-date-controls";
 import { useToast } from "@/hooks/use-toast";
+import {
+  BRAND_LABEL,
+  brandColor,
+  cardBrandOverrides,
+  effectiveBrand,
+  type AmexTier,
+} from "@/lib/amexBrand";
 import { cn } from "@/lib/utils";
 
 function pad(n: number): string {
@@ -41,16 +49,6 @@ function fmtTxnDate(iso: string): string {
   return `${Number(m)}/${Number(d)}`;
 }
 
-const BRAND_LABEL: Record<string, string> = {
-  blue: "Blue Cash",
-  silver: "Platinum",
-  gold: "Gold",
-};
-function brandColor(brand: string): string {
-  // brand ∈ blue|silver|gold ↦ the --card-* identity tokens.
-  return `hsl(var(--card-${brand}))`;
-}
-
 function fmtWeekRange(start: string, end: string): string {
   const f = (iso: string) => {
     const [, m, d] = iso.split("-");
@@ -61,14 +59,16 @@ function fmtWeekRange(start: string, end: string): string {
 
 function KillRow({
   card,
+  tier,
   txns,
   onMove,
 }: {
   card: AmexWeeklyPayoffCard;
+  tier: AmexTier;
   txns: Transaction[];
   onMove: (t: Transaction, nextISO: string) => Promise<boolean>;
 }) {
-  const color = brandColor(card.brand);
+  const color = brandColor(tier);
   const hasCharges = card.weekCharges > 0;
   const pctCleared = Math.round((card.pctOfStatementThisWeek || 0) * 100);
   // This card's charges in the week (outflows), biggest first.
@@ -79,7 +79,7 @@ function KillRow({
     <div
       className="rounded-lg border border-card-border bg-card"
       style={{ borderLeftColor: color, borderLeftWidth: 3 }}
-      data-testid={`killstack-row-${card.brand}`}
+      data-testid={`killstack-row-${tier}`}
     >
       <Link
         href={`/amex?accountId=${encodeURIComponent(card.accountId)}`}
@@ -96,7 +96,7 @@ function KillRow({
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
             <span className="text-sm font-semibold">
-              {BRAND_LABEL[card.brand] ?? card.name}
+              {BRAND_LABEL[tier] ?? card.name}
             </span>
           </div>
           <div className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -207,6 +207,10 @@ export function KillStack({
       queryKey: getListTransactionsQueryKey(txnParams),
     },
   });
+  // User-assigned card tiers (override Plaid's regex-guessed brand for label +
+  // color). Display metadata only.
+  const { data: settings } = useGetSettings();
+  const brandOverrides = cardBrandOverrides(settings);
   const txnsByCard = useMemo(() => {
     const m = new Map<string, Transaction[]>();
     for (const t of weekTxns ?? []) {
@@ -245,7 +249,12 @@ export function KillStack({
     }
   };
 
-  const cards = data?.cards ?? [];
+  const TIER_ORDER: Record<AmexTier, number> = { blue: 0, silver: 1, gold: 2 };
+  const cards = [...(data?.cards ?? [])].sort(
+    (a, b) =>
+      TIER_ORDER[effectiveBrand(a.accountId, a.brand, brandOverrides)] -
+      TIER_ORDER[effectiveBrand(b.accountId, b.brand, brandOverrides)],
+  );
   const hasCards = cards.length > 0;
 
   // Week navigation bounds: can't go past the last completed week.
@@ -320,6 +329,7 @@ export function KillStack({
               <KillRow
                 key={c.accountId}
                 card={c}
+                tier={effectiveBrand(c.accountId, c.brand, brandOverrides)}
                 txns={txnsByCard.get(c.accountId) ?? []}
                 onMove={moveTxn}
               />

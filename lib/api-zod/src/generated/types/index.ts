@@ -260,6 +260,7 @@ export * from "./setBankSnapshotInput";
 export * from "./settings";
 export * from "./settingsInput";
 export * from "./settingsPreferences";
+export * from "./settingsPreferencesAmexCardBrands";
 export * from "./settingsPreferencesWeeklyAllowanceOverrides";
 export * from "./spendingFacts";
 export * from "./spendingFactsByCategoryItem";
