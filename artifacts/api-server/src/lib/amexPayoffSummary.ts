@@ -38,13 +38,13 @@ export interface AmexPayoffDirective {
   generatedAt: string;
 }
 
-const TASK_PROMPT = `You write ONE short directive for the household's Amex "pay this for last week" card — the thing Hannah looks at to know exactly what to clear.
+const TASK_PROMPT = `You write ONE short directive for the household's Amex "pay this for last week" card — the thing the household looks at to know exactly what to clear.
 
 Output requirements:
 - Respond with ONLY the directive text. No JSON, no markdown, no quotes, no preamble.
 - ONE or TWO sentences, max ~35 words.
 - Name the per-card amounts from the FACTS (Blue / Silver / Gold) and the combined total. Use ONLY amounts present in the FACTS.
-- Address Hannah by name. Push her to clear it. Affectionate, blunt, funny.
+- Address the household directly (no single first name). Push them to clear it. Affectionate, blunt, funny.
 - If the combined total is $0, make a dry joke about a suspiciously quiet week instead.`;
 
 function formatFacts(payoff: AmexWeeklyPayoff): string {

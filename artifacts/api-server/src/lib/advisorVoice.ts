@@ -57,7 +57,7 @@ export function voiceFallback(kind: string, facts: Record<string, unknown>): str
       const parts = cards.map(
         (c) => `${c.brand[0].toUpperCase()}${c.brand.slice(1)} ${money(c.weekCharges)}`,
       );
-      return `Hannah, here's the tally: ${parts.join(", ")}. That's ${money(
+      return `Right, here's the tally: ${parts.join(", ")}. That's ${money(
         f.combinedWeekCharges,
       )} on plastic last week — clear it before the interest does, and that's a chunk off the payoff date.`;
     }
