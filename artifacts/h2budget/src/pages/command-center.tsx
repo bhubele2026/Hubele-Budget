@@ -361,7 +361,7 @@ export default function CommandCenterPage() {
       return {
         color: "hsl(40 95% 55%)",
         label: "Shaky",
-        blurb: "Wobbling. Tighten the spend before it bites, you muppets.",
+        blurb: "Wobbling. Tighten the spend before it bites — small cuts, big payoff.",
       };
     return {
       color: "hsl(0 75% 60%)",

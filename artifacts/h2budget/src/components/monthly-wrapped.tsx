@@ -33,8 +33,8 @@ function verdict(net: number, income: number): string {
     return "Genuinely crushing it. Who are you two and what did you do with the DoorDash gremlins?";
   if (net > 0) return "In the black — barely — but we'll take it. Date night's funded. 😏";
   if (net > -income * 0.1)
-    return "Basically broke even. Living on the edge, you muppets. Tighten it up.";
-  return "Spent more than you made. Again. This isn't a budget, it's a cry for help. 🙈";
+    return "Basically broke even. Living on the edge — let's build a little cushion next month.";
+  return "Spent more than you made this month. Let's flip it — every dollar back is a dollar off the debt. 🙈";
 }
 
 // A single huge count-up number for a slide.
