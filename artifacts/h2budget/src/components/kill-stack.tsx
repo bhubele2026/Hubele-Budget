@@ -1,14 +1,45 @@
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetAmexWeeklyPayoff,
+  useListTransactions,
+  useUpdateTransaction,
+  getListTransactionsQueryKey,
+  getGetAmexWeeklyPayoffQueryKey,
   type GetAmexWeeklyPayoffParams,
   type AmexWeeklyPayoffCard,
+  type Transaction,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { RingStat, MoneyText } from "@/components/viz";
 import { StatusPill, WhyExpander } from "@/components/stat";
+import { RowDateControls } from "@/components/row-date-controls";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
+}
+function isoOf(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+/** Shift a YYYY-MM-DD by N days (calendar-safe). */
+function shiftISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return isoOf(new Date(y, m - 1, d + days));
+}
+/** Sunday of the last fully-completed Sun–Sat week — the newest selectable. */
+function lastCompletedSunday(): string {
+  const t = new Date();
+  const sun = new Date(t.getFullYear(), t.getMonth(), t.getDate() - t.getDay());
+  return isoOf(new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() - 7));
+}
+function fmtTxnDate(iso: string): string {
+  const [, m, d] = iso.split("-");
+  return `${Number(m)}/${Number(d)}`;
+}
 
 const BRAND_LABEL: Record<string, string> = {
   blue: "Blue Cash",
@@ -28,10 +59,22 @@ function fmtWeekRange(start: string, end: string): string {
   return `${f(start)} – ${f(end)}`;
 }
 
-function KillRow({ card }: { card: AmexWeeklyPayoffCard }) {
+function KillRow({
+  card,
+  txns,
+  onMove,
+}: {
+  card: AmexWeeklyPayoffCard;
+  txns: Transaction[];
+  onMove: (t: Transaction, nextISO: string) => Promise<boolean>;
+}) {
   const color = brandColor(card.brand);
   const hasCharges = card.weekCharges > 0;
   const pctCleared = Math.round((card.pctOfStatementThisWeek || 0) * 100);
+  // This card's charges in the week (outflows), biggest first.
+  const charges = [...txns]
+    .filter((t) => (Number(t.amount) || 0) < 0)
+    .sort((a, b) => (Number(a.amount) || 0) - (Number(b.amount) || 0));
   return (
     <div
       className="rounded-lg border border-card-border bg-card"
@@ -78,28 +121,45 @@ function KillRow({ card }: { card: AmexWeeklyPayoffCard }) {
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
       </Link>
       <div className="px-4 pb-3">
-        <WhyExpander label="Why">
+        <WhyExpander label={hasCharges ? `Transactions (${card.chargeCount})` : "Why"}>
           <p className="leading-snug">
             {hasCharges ? (
               <>
-                You put{" "}
                 <span className="font-medium text-foreground">
                   <MoneyText amount={card.weekCharges} />
                 </span>{" "}
-                on this card across {card.chargeCount} charge
-                {card.chargeCount === 1 ? "" : "s"} this week.{" "}
-                {card.topMerchant
-                  ? `Biggest was ${card.topMerchant.name} (`
-                  : ""}
-                {card.topMerchant ? <MoneyText amount={card.topMerchant.amount} /> : null}
-                {card.topMerchant ? "). " : ""}
-                That&apos;s {pctCleared}% of the {<MoneyText amount={card.statementBalance} />}{" "}
-                statement.
+                across {card.chargeCount} charge{card.chargeCount === 1 ? "" : "s"} —{" "}
+                {pctCleared}% of the {<MoneyText amount={card.statementBalance} />} statement.
               </>
             ) : (
               "Nothing charged on this card this week. Tidy."
             )}
           </p>
+          {charges.length > 0 && (
+            <ul className="mt-2 divide-y divide-border/60">
+              {charges.map((t) => (
+                <li
+                  key={t.id}
+                  className="flex items-center justify-between gap-2 py-1.5"
+                >
+                  <span className="min-w-0 flex-1 truncate text-foreground">
+                    <span className="text-muted-foreground tabular-nums mr-2">
+                      {fmtTxnDate(t.occurredOn)}
+                    </span>
+                    {t.description || "Charge"}
+                  </span>
+                  <MoneyText amount={t.amount} abs className="font-medium tabular-nums shrink-0" />
+                  <RowDateControls tx={t} onMove={(next) => onMove(t, next)} />
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link
+            href={`/amex?accountId=${encodeURIComponent(card.accountId)}`}
+            className="mt-2 inline-flex items-center gap-0.5 font-medium text-primary hover:underline"
+          >
+            Open this card <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
         </WhyExpander>
       </div>
     </div>
@@ -116,7 +176,7 @@ function KillRow({ card }: { card: AmexWeeklyPayoffCard }) {
  * Allowance page (pass `weekStart`).
  */
 export function KillStack({
-  weekStart,
+  weekStart: initialWeekStart,
   emphasize = true,
   className,
 }: {
@@ -126,13 +186,72 @@ export function KillStack({
   emphasize?: boolean;
   className?: string;
 }) {
+  // Selected week (Sunday). undefined = let the server pick the last completed
+  // week; the prev/next controls then pin an explicit week.
+  const [weekStart, setWeekStart] = useState<string | undefined>(initialWeekStart);
   const params: GetAmexWeeklyPayoffParams | undefined = weekStart
     ? { weekStart }
     : undefined;
   const { data, isLoading } = useGetAmexWeeklyPayoff(params);
 
+  // The week's Amex transactions, fetched once and split per card for the
+  // "Transactions" expanders. Read-only; no money recomputed.
+  const txnParams = {
+    from: data?.weekStart ?? "",
+    to: data?.weekEnd ?? "",
+    limit: 500,
+  };
+  const { data: weekTxns } = useListTransactions(txnParams, {
+    query: {
+      enabled: Boolean(data?.weekStart),
+      queryKey: getListTransactionsQueryKey(txnParams),
+    },
+  });
+  const txnsByCard = useMemo(() => {
+    const m = new Map<string, Transaction[]>();
+    for (const t of weekTxns ?? []) {
+      if (!t.plaidAccountId) continue;
+      const arr = m.get(t.plaidAccountId) ?? [];
+      arr.push(t);
+      m.set(t.plaidAccountId, arr);
+    }
+    return m;
+  }, [weekTxns]);
+
+  // Move a charge to a different day — same mechanism as the Amex page. The
+  // weekly payoff buckets on `occurredOn`, so pulling a "paid Saturday, posted
+  // Sunday" charge back a day re-files it into the right Sun–Sat week. The
+  // server flips occurredOnUserOverridden so Plaid won't restamp it.
+  const updateTx = useUpdateTransaction();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const moveTxn = async (t: Transaction, nextISO: string): Promise<boolean> => {
+    const next = (nextISO ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return false;
+    if (next === t.occurredOn.slice(0, 10)) return true;
+    try {
+      await updateTx.mutateAsync({ id: t.id, data: { occurredOn: next } });
+      await qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      await qc.invalidateQueries({ queryKey: getGetAmexWeeklyPayoffQueryKey() });
+      toast({ title: "Date updated" });
+      return true;
+    } catch (e) {
+      toast({
+        title: "Couldn't update date",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   const cards = data?.cards ?? [];
   const hasCards = cards.length > 0;
+
+  // Week navigation bounds: can't go past the last completed week.
+  const latest = lastCompletedSunday();
+  const curWeek = data?.weekStart ?? weekStart ?? latest;
+  const atLatest = curWeek >= latest;
 
   return (
     <Card
@@ -140,17 +259,36 @@ export function KillStack({
       data-testid="kill-stack"
     >
       <CardContent className="p-5 space-y-4">
-        {/* Header: eyebrow + week + combined total */}
+        {/* Header: eyebrow + week nav + combined total */}
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-              Kill Stack · pay this for last week
+              Kill Stack · pay this for the week
             </div>
-            {data && (
-              <div className="text-xs text-muted-foreground mt-0.5">
-                {fmtWeekRange(data.weekStart, data.weekEnd)}
-              </div>
-            )}
+            <div className="mt-1 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setWeekStart(shiftISO(curWeek, -7))}
+                className="rounded-md p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                aria-label="Previous week"
+                data-testid="killstack-prev-week"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-xs tabular-nums text-muted-foreground min-w-[5.5rem] text-center">
+                {data ? fmtWeekRange(data.weekStart, data.weekEnd) : "—"}
+              </span>
+              <button
+                type="button"
+                onClick={() => !atLatest && setWeekStart(shiftISO(curWeek, 7))}
+                disabled={atLatest}
+                className="rounded-md p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+                aria-label="Next week"
+                data-testid="killstack-next-week"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
           <div className="text-right">
             <MoneyText
@@ -163,7 +301,7 @@ export function KillStack({
           </div>
         </div>
 
-        {/* Sassy directive */}
+        {/* Coach directive */}
         {data?.directive && (
           <p className="text-sm font-medium leading-snug text-foreground">
             {data.directive}
@@ -174,12 +312,17 @@ export function KillStack({
         {isLoading ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Tallying the damage…
+            Tallying the week…
           </div>
         ) : hasCards ? (
           <div className="space-y-2">
             {cards.map((c) => (
-              <KillRow key={c.accountId} card={c} />
+              <KillRow
+                key={c.accountId}
+                card={c}
+                txns={txnsByCard.get(c.accountId) ?? []}
+                onMove={moveTxn}
+              />
             ))}
           </div>
         ) : (
