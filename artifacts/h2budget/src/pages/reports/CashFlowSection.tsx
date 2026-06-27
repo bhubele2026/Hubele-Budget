@@ -347,7 +347,7 @@ export function CashFlowSection({
                 />
               ))}
             </Bar>
-            <Line type="monotone" dataKey="running" stroke={H2_PALETTE.violet} strokeWidth={2} dot={false} name="Running net" />
+            <Line type="monotone" dataKey="running" stroke={H2_PALETTE.navy} strokeWidth={2} dot={false} name="Running net" />
             {compareToPrev && (
               <Line
                 type="monotone"
@@ -397,8 +397,8 @@ export function CashFlowSection({
             <AreaChart data={forecastSeries} margin={{ top: 10, right: 16, bottom: 24, left: 0 }}>
               <defs>
                 <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={H2_PALETTE.violet} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={H2_PALETTE.violet} stopOpacity={0} />
+                  <stop offset="0%" stopColor={H2_PALETTE.navy} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={H2_PALETTE.navy} stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
@@ -409,7 +409,7 @@ export function CashFlowSection({
               <Area
                 type="monotone"
                 dataKey="balance"
-                stroke={H2_PALETTE.violet}
+                stroke={H2_PALETTE.navy}
                 strokeWidth={2}
                 fill="url(#forecastGrad)"
                 name="Projected balance"

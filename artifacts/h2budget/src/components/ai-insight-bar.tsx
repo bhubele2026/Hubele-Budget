@@ -38,7 +38,7 @@ export function AiInsightBar({ className }: { className?: string }) {
     nudge.severity === "alert"
       ? "text-[hsl(var(--negative))]"
       : nudge.severity === "warn"
-        ? "text-amber-500"
+        ? "text-warning"
         : "text-foreground";
 
   return (

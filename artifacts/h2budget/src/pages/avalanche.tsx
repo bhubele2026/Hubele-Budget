@@ -159,7 +159,7 @@ function PayoffRing({
           stroke="currentColor"
           strokeWidth={stroke}
           strokeLinecap="round"
-          className="text-emerald-500 dark:text-emerald-400"
+          className="text-positive"
           strokeDasharray={`${dash} ${c}`}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
@@ -170,8 +170,8 @@ function PayoffRing({
 
 function aprToneClass(apr: number): string {
   if (apr >= 0.25) return "text-destructive";
-  if (apr >= 0.15) return "text-amber-600 dark:text-amber-400";
-  if (apr > 0) return "text-emerald-600 dark:text-emerald-400";
+  if (apr >= 0.15) return "text-warning";
+  if (apr > 0) return "text-positive";
   return "text-muted-foreground";
 }
 
@@ -187,7 +187,7 @@ function DebtSourceChip({ debt }: { debt: Debt }) {
     >
       <span
         className={`h-1.5 w-1.5 rounded-full ${
-          linked ? "bg-emerald-500" : "bg-muted-foreground/50"
+          linked ? "bg-positive" : "bg-muted-foreground/50"
         }`}
       />
       {linked ? "Plaid" : "Manual"}
@@ -597,8 +597,8 @@ export default function AvalanchePage() {
     <div className="space-y-6">
       <DebtReauthBanner debts={debts} />
       {killedBanner && (
-        <div className="relative flex items-center gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100 animate-in fade-in slide-in-from-top-2">
-          <PartyPopper className="h-6 w-6 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <div className="relative flex items-center gap-3 rounded-md border border-positive/30 bg-positive/10 p-4 text-positive animate-in fade-in slide-in-from-top-2">
+          <PartyPopper className="h-6 w-6 shrink-0 text-positive" />
           <div className="flex-1">
             <div className="font-semibold">Debt killed! 🎉</div>
             <div className="text-sm opacity-90">
@@ -806,7 +806,7 @@ export default function AvalanchePage() {
                               {fmtMoney(t.extraForTarget)} extra)
                             </span>
                             {t.killedThisMonth ? (
-                              <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                              <span className="text-positive font-medium">
                                 · killed this month
                               </span>
                             ) : killDate ? (
@@ -1113,7 +1113,7 @@ export default function AvalanchePage() {
               ]}
             />
             <div className="text-sm text-muted-foreground flex items-start gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 mt-1 shrink-0" />
+              <Sparkles className="h-3.5 w-3.5 text-positive mt-1 shrink-0" />
               <span>
                 {bothInfinite ? (
                   <>
@@ -1146,7 +1146,7 @@ export default function AvalanchePage() {
                     with{" "}
                     <strong>{fmtMoney(totalExtra)}/mo</strong> extra
                     saves{" "}
-                    <strong className="text-emerald-600 dark:text-emerald-400">
+                    <strong className="text-positive">
                       {fmtMoney(interestSavedVsMin)}
                     </strong>
                     {monthsSavedVsMin > 0 ? (
@@ -1159,7 +1159,7 @@ export default function AvalanchePage() {
                     Sticking with{" "}
                     <strong className="text-foreground capitalize">{strategy}</strong>{" "}
                     saves{" "}
-                    <strong className="text-emerald-600 dark:text-emerald-400">
+                    <strong className="text-positive">
                       {fmtMoney(Math.max(0, interestDelta))}
                     </strong>
                     {monthsDelta > 0 ? (
@@ -1174,7 +1174,7 @@ export default function AvalanchePage() {
                       {strategy === "avalanche" ? "snowball" : "avalanche"}
                     </strong>{" "}
                     would save{" "}
-                    <strong className="text-emerald-600 dark:text-emerald-400">
+                    <strong className="text-positive">
                       {fmtMoney(Math.max(0, -interestDelta))}
                     </strong>
                     {monthsDelta < 0 ? (
@@ -1258,7 +1258,7 @@ export default function AvalanchePage() {
                       </span>
                     </div>
                     {cascadeFreed > 0 && (
-                      <div className="text-xs text-emerald-700 dark:text-emerald-400">
+                      <div className="text-xs text-positive">
                         +{fmtMoney(cascadeFreed)}/mo{" "}
                         {nextDebt ? (
                           <>
@@ -1399,7 +1399,7 @@ export default function AvalanchePage() {
                                     type="button"
                                     onClick={(e) => e.stopPropagation()}
                                     data-testid={`debt-pending-${dbt.id}`}
-                                    className="mt-0.5 text-[11px] text-emerald-700 dark:text-emerald-400 underline decoration-dotted underline-offset-2 cursor-help"
+                                    className="mt-0.5 text-[11px] text-positive underline decoration-dotted underline-offset-2 cursor-help"
                                   >
                                     −{fmtMoney(pendingTotal)} pending
                                   </button>
@@ -1498,7 +1498,7 @@ export default function AvalanchePage() {
                 {whatIf > 0 && whatIfInterestSaved > 0 ? (
                   <>
                     Adding {fmtMoney(whatIf)}/mo saves{" "}
-                    <strong className="text-emerald-600 dark:text-emerald-400">
+                    <strong className="text-positive">
                       {fmtMoney(whatIfInterestSaved)}
                     </strong>
                     {whatIfMonthsSaved > 0 ? (
@@ -1540,7 +1540,7 @@ export default function AvalanchePage() {
                                 key={t.id}
                                 className={
                                   t.killedThisMonth
-                                    ? "text-emerald-600 dark:text-emerald-400 line-through decoration-emerald-600/60 dark:decoration-emerald-400/60"
+                                    ? "text-positive line-through decoration-positive/60"
                                     : ""
                                 }
                                 title={
@@ -1568,7 +1568,7 @@ export default function AvalanchePage() {
                       <td className="px-3 py-2 text-right tabular-nums">
                         {fmtMoney(m.totalBalanceEnd)}
                       </td>
-                      <td className="px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400">
+                      <td className="px-3 py-2 text-xs text-positive">
                         {m.killedThisMonth.map((k) => k.name).join(", ")}
                       </td>
                     </tr>
@@ -1804,7 +1804,7 @@ export default function AvalanchePage() {
                   {drillSchedule.map((r, i) => (
                     <tr
                       key={i}
-                      className={`border-t ${r.paidOff ? "bg-emerald-50 dark:bg-emerald-950/30 font-medium" : ""}`}
+                      className={`border-t ${r.paidOff ? "bg-positive/10 font-medium" : ""}`}
                     >
                       <td className="py-1">{fmtMonth(r.date)}</td>
                       <td className="text-right tabular-nums py-1">
@@ -1963,7 +1963,7 @@ function DebtDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {initial?.plaidAccountId ? (
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+            <p className="text-xs text-warning mt-1">
               This debt is linked to Plaid. Editing balance, APR, or minimum
               payment will switch that field to a manual override and stop
               auto-syncing it.
@@ -2098,9 +2098,9 @@ function renderDueChip(dueDay: number | null) {
   if (days === null) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
-  let cls = "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
-  if (days <= 2) cls = "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300";
-  else if (days <= 13) cls = "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
+  let cls = "bg-positive/10 text-positive";
+  if (days <= 2) cls = "bg-destructive/10 text-destructive";
+  else if (days <= 13) cls = "bg-warning/10 text-warning";
   const label = days < 0 ? "overdue" : days === 0 ? "today" : `${days}d`;
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${cls}`}>

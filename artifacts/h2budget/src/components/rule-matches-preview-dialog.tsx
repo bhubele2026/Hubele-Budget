@@ -102,7 +102,7 @@ export function RuleMatchesPreviewDialog({
                 <span
                   className={cn(
                     "tabular-nums whitespace-nowrap",
-                    parseSigned(s.amount) > 0 && "text-emerald-700",
+                    parseSigned(s.amount) > 0 && "text-positive",
                     parseSigned(s.amount) < 0 && "text-foreground",
                   )}
                 >

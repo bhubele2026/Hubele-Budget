@@ -29,7 +29,7 @@ export function CategoryDropTarget({
         showHover
           ? "bg-primary text-primary-foreground border-primary ring-2 ring-primary/40"
           : isCurrent
-            ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200"
+            ? "bg-positive/10 border-positive/30 text-positive"
             : "bg-muted/40 border-border text-foreground hover:bg-muted"
       }`}
     >

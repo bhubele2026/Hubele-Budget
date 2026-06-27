@@ -182,7 +182,7 @@ export function DebtSection({
                     background: `linear-gradient(to top, ${H2_PALETTE.red}, ${H2_PALETTE.amber}, ${H2_PALETTE.primary})`,
                   }}
                 />
-                <div className="absolute inset-x-0 bottom-2 w-3 h-3 rounded-full bg-red-500 mx-auto shadow" />
+                <div className="absolute inset-x-0 bottom-2 w-3 h-3 rounded-full bg-negative mx-auto shadow" />
               </div>
               <div>
                 <div className="text-4xl font-serif font-bold tabular-nums">
@@ -436,8 +436,8 @@ export function DebtSection({
             <ul className="space-y-3 py-1">
               {killed.map((k) => (
                 <li key={`${k.name}-${k.monthIndex}`} className="relative pl-10">
-                  <div className="absolute left-2 top-1.5 w-5 h-5 rounded-full bg-amber-400 border-4 border-background flex items-center justify-center">
-                    <Trophy className="w-2.5 h-2.5 text-amber-900" />
+                  <div className="absolute left-2 top-1.5 w-5 h-5 rounded-full bg-[hsl(45_95%_50%)] border-4 border-background flex items-center justify-center">
+                    <Trophy className="w-2.5 h-2.5 text-[hsl(202_55%_32%)]" />
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <div>

@@ -119,11 +119,11 @@ export function PlaidReauthBannerView({
 
   return (
     <div
-      className="relative flex items-center gap-3 rounded-lg border border-amber-400/60 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100"
+      className="relative flex items-center gap-3 rounded-lg border border-warning/50 bg-warning/10 px-4 py-3 text-foreground"
       data-testid="banner-plaid-reauth"
       role="alert"
     >
-      <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+      <AlertTriangle className="h-5 w-5 shrink-0 text-warning" />
       <div className="flex-1 min-w-0">
         <div className="font-medium" data-testid="text-plaid-reauth-headline">
           {headline}

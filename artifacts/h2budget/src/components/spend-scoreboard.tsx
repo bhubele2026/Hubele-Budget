@@ -35,7 +35,7 @@ export function SpendScoreboard({ entries }: { entries: MemberSpend[] }) {
                 <div className="flex items-center justify-between text-sm mb-1">
                   <span className="flex items-center gap-1.5 font-medium">
                     {isWinner ? (
-                      <Crown className="w-3.5 h-3.5 text-amber-400" />
+                      <Crown className="w-3.5 h-3.5 text-[hsl(var(--chart-3))]" />
                     ) : null}
                     {m.name}
                   </span>
@@ -47,7 +47,7 @@ export function SpendScoreboard({ entries }: { entries: MemberSpend[] }) {
                   <div
                     className={cn(
                       "h-full rounded-full transition-[width] duration-700 ease-out",
-                      isWinner ? "bg-emerald-500" : "bg-primary",
+                      isWinner ? "bg-positive" : "bg-primary",
                     )}
                     style={{ width: `${Math.round((m.spend / max) * 100)}%` }}
                   />

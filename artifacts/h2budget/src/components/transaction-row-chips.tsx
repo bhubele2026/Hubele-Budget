@@ -23,7 +23,7 @@ import {
 export type TxRowCategory = { id: string; name: string };
 
 // (#868) Single consistent muted-outline chip style shared across the row
-// cluster, replacing the earlier violet/amber/slate/green rainbow. Keeps the
+// cluster, replacing the earlier multi-color rainbow. Keeps the
 // cluster calm and scannable; interactive chips add their own hover/cursor.
 // Exported so the Transactions page can style the source + status chips it
 // renders alongside this cluster with the exact same baseline.
@@ -358,7 +358,7 @@ export function TransactionRowChips({
             <span
               aria-hidden="true"
               data-testid={`badge-transfer-overridden-${tx.id}`}
-              className="text-slate-500 -ml-0.5"
+              className="text-muted-foreground -ml-0.5"
             >
               *
             </span>
@@ -367,7 +367,7 @@ export function TransactionRowChips({
             type="button"
             aria-label="Clear Transfer flag"
             data-testid={`button-clear-transfer-${tx.id}`}
-            className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-slate-200/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+            className="ml-0.5 inline-flex items-center justify-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             onClick={(e) => {
               e.stopPropagation();
               onClearTransfer(tx);

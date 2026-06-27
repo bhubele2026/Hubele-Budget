@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 /**
  * The signature command-center "at a glance" tile (KFI / BH Studio). A card
  * with an icon chip top-left, a chevron top-right, an uppercase muted label, a
- * huge value, and a muted subcaption. The ACTIVE tile wears the blue/violet
+ * huge value, and a muted subcaption. The ACTIVE tile wears the teal
  * hero gradient; inactive tiles are calm card surfaces. Drop a row of these at
  * the top of a page via <StatTileRow>.
  */

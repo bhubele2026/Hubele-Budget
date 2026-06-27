@@ -13,9 +13,9 @@ const POS_KEY = "h2:cancel-floater-pos:v1";
 
 // Hard-coded dark/red palette (not theme-tokened) so it looks equally angry
 // whether the app is in light or matte-black mode.
-const RED = "hsl(0 82% 52%)"; // border / accents
-const RED_BAR = "hsl(0 72% 44%)"; // header + pill fill
-const PANEL = "hsl(240 9% 7%)"; // matte-black body
+const RED = "hsl(var(--destructive))"; // border / accents
+const RED_BAR = "hsl(var(--destructive))"; // header + pill fill
+const PANEL = "hsl(202 88% 13%)"; // matte-navy body
 
 export function CancelFloater() {
   const toCancel = useToCancelList();
@@ -131,7 +131,7 @@ export function CancelFloater() {
               <div className="px-4 py-6 text-center text-sm text-white/55">
                 Nothing flagged yet. See a charge you&apos;d rather not keep
                 paying for? Tap{" "}
-                <span className="font-bold uppercase text-[hsl(0_82%_62%)]">
+                <span className="font-bold uppercase text-destructive">
                   To cancel
                 </span>{" "}
                 on it — let&apos;s trim the fat and free up a little more for{" "}
@@ -149,9 +149,9 @@ export function CancelFloater() {
                       type="button"
                       onClick={() => toCancel.toggleCancelled(i.key)}
                       title="Mark cancelled"
-                      className="group h-5 w-5 shrink-0 rounded border border-white/25 hover:border-[hsl(0_82%_55%)] hover:bg-[hsl(0_70%_45%)]/25 flex items-center justify-center transition-colors"
+                      className="group h-5 w-5 shrink-0 rounded border border-white/25 hover:border-destructive hover:bg-destructive/25 flex items-center justify-center transition-colors"
                     >
-                      <Check className="w-3.5 h-3.5 text-[hsl(0_82%_62%)] opacity-0 group-hover:opacity-100" />
+                      <Check className="w-3.5 h-3.5 text-destructive opacity-0 group-hover:opacity-100" />
                     </button>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold text-white truncate">
@@ -184,7 +184,7 @@ export function CancelFloater() {
             {isEmpty ? (
               <span className="text-white/50">Flag a charge to start 😈</span>
             ) : (
-              <span className="text-[hsl(0_82%_64%)]">
+              <span className="text-destructive">
                 {active.length} to kill · {formatCurrency(totalAnnual)}/yr —
                 that&apos;s more for date night 😉
               </span>
@@ -209,7 +209,7 @@ export function CancelFloater() {
           {active.length > 0 && (
             <span
               className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full text-[10px] font-bold text-white"
-              style={{ background: "hsl(240 9% 7%)", border: `1px solid ${RED}` }}
+              style={{ background: PANEL, border: `1px solid ${RED}` }}
             >
               {active.length}
             </span>

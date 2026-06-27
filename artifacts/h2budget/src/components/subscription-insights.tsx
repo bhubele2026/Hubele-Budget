@@ -71,9 +71,9 @@ const fmtShort = (iso: string) =>
 
 const confidenceClass = (c: DetectedSub["confidence"]): string =>
   c === "high"
-    ? "text-emerald-700 border-emerald-300 bg-emerald-50"
+    ? "text-positive border-positive/30 bg-positive/10"
     : c === "medium"
-      ? "text-amber-700 border-amber-300 bg-amber-50"
+      ? "text-warning border-warning/30 bg-warning/10"
       : "text-muted-foreground";
 
 /**
@@ -178,7 +178,7 @@ export function SubscriptionInsightsSection({
           actually cancelled. Only shown once something has been flagged. */}
       {toCancel.items.length > 0 && (
         <Card
-          className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20"
+          className="border-warning/30 bg-warning/10"
           data-testid="to-cancel-bucket"
         >
           <CardContent className="p-5">
@@ -190,7 +190,7 @@ export function SubscriptionInsightsSection({
                 </p>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold tabular-nums text-amber-700 dark:text-amber-400">
+                <div className="text-2xl font-bold tabular-nums text-warning">
                   {formatCurrency(pendingCancelAnnual)}
                   <span className="text-sm font-normal text-muted-foreground">
                     /yr
@@ -233,7 +233,7 @@ export function SubscriptionInsightsSection({
                   {i.cancelled && (
                     <Badge
                       variant="outline"
-                      className="text-emerald-700 border-emerald-300 bg-emerald-50"
+                      className="text-positive border-positive/30 bg-positive/10"
                     >
                       Cancelled
                     </Badge>
@@ -312,7 +312,7 @@ export function SubscriptionInsightsSection({
                         </span>
                       )}
                       {d.amountVaries && (
-                        <span className="text-amber-700">amount varies</span>
+                        <span className="text-warning">amount varies</span>
                       )}
                     </div>
                   </div>
@@ -399,7 +399,7 @@ export function SubscriptionInsightsSection({
                   {insights.priceIncreases.length > 0 && (
                     <Badge
                       variant="outline"
-                      className="text-amber-700 border-amber-300 bg-amber-50"
+                      className="text-warning border-warning/30 bg-warning/10"
                     >
                       {plural(insights.priceIncreases.length, "price increase")}
                     </Badge>
@@ -429,7 +429,7 @@ export function SubscriptionInsightsSection({
                         {s.priceChange && (
                           <Badge
                             variant="outline"
-                            className="gap-1 text-amber-700 border-amber-300 bg-amber-50"
+                            className="gap-1 text-warning border-warning/30 bg-warning/10"
                             title="The latest charge is higher than before"
                           >
                             <TrendingUp className="w-3 h-3" />

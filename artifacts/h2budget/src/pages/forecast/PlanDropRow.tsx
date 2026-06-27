@@ -106,9 +106,9 @@ export function PlanDropRow({
           : isOverBlocked
             ? "bg-destructive/5 ring-2 ring-destructive/60 ring-inset opacity-60 cursor-not-allowed"
             : isHighlighted
-              ? "bg-sky-50 ring-2 ring-sky-400 ring-inset dark:bg-sky-950/30"
+              ? "bg-primary/10 ring-2 ring-primary ring-inset"
               : showSuggestion
-                ? "bg-amber-50 ring-2 ring-amber-400/70 ring-inset dark:bg-amber-950/20"
+                ? "bg-warning/10 ring-2 ring-warning/70 ring-inset"
                 : showDropAffordance
                   ? "bg-primary/[0.04] ring-1 ring-dashed ring-primary/40 ring-inset"
                   : showDropBlocked
@@ -119,7 +119,7 @@ export function PlanDropRow({
       <div className="flex items-center gap-3 min-w-0">
         <Badge
           variant="outline"
-          className="bg-amber-50 text-amber-900 border-amber-200"
+          className="bg-warning/10 text-warning border-warning/30"
         >
           Plan
         </Badge>
@@ -132,7 +132,7 @@ export function PlanDropRow({
                   <TooltipTrigger asChild>
                     <Badge
                       variant="outline"
-                      className="bg-orange-50 text-orange-900 border-orange-200 dark:bg-orange-950/30 dark:text-orange-200 dark:border-orange-900 text-[10px] gap-1 px-1.5 py-0"
+                      className="bg-warning/10 text-warning border-warning/30 text-[10px] gap-1 px-1.5 py-0"
                     >
                       <Flame className="h-3 w-3" />
                       ends {fmtMonth(payoff.payoffDate)}
@@ -178,7 +178,7 @@ export function PlanDropRow({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-xs text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"
+            className="h-7 px-2 text-xs text-warning hover:text-warning hover:bg-warning/10"
             onClick={(e) => {
               e.stopPropagation();
               onMarkMissed?.(row);

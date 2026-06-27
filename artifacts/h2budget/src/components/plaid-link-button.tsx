@@ -853,9 +853,9 @@ export function PostLinkProgressPanel({
   }
   const variant =
     phase === "error" || itemNeedsReconnect
-      ? "border-amber-500/40 bg-amber-500/5"
+      ? "border-warning/40 bg-warning/10"
       : phase === "ready"
-        ? "border-emerald-500/40 bg-emerald-500/5"
+        ? "border-positive/40 bg-positive/10"
         : "border-border bg-muted/30";
 
   return (
@@ -871,10 +871,10 @@ export function PostLinkProgressPanel({
           {phase === "preparing" || phase === "polling" ? (
             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
           ) : phase === "ready" && !itemNeedsReconnect ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <CheckCircle2 className="w-4 h-4 text-positive" />
           ) : (
             <AlertTriangle
-              className={`w-4 h-4 ${phase === "error" ? "text-destructive" : "text-amber-600"}`}
+              className={`w-4 h-4 ${phase === "error" ? "text-destructive" : "text-warning"}`}
             />
           )}
         </div>
@@ -903,7 +903,7 @@ export function PostLinkProgressPanel({
               <Link
                 href={`${viewTransactionsPath}?month=${mostRecentMonth}`}
                 onClick={onDismiss}
-                className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-background px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-500/10"
+                className="inline-flex items-center gap-1 rounded-md border border-positive/40 bg-background px-2.5 py-1 text-xs font-medium text-positive hover:bg-positive/10"
                 data-testid="link-post-link-view-transactions"
               >
                 View imported transactions

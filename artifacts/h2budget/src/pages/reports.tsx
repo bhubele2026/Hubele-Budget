@@ -4,7 +4,7 @@ import { DrillCard } from "@/components/drill-card";
 import { Sparkline, StackBar, MiniBars, RingStat, MoneyText } from "@/components/viz";
 import { useReportsData, ReportsBalanceTiles } from "./reports/reportsShared";
 
-// Slate/violet chart palette for the spend-mix stack on the index.
+// Summer chart palette for the spend-mix stack on the index.
 const MIX_COLORS = [
   "hsl(var(--chart-1))",
   "hsl(var(--chart-3))",

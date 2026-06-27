@@ -123,13 +123,13 @@ export function SavingsGoal() {
           <div
             className={cn(
               "h-full rounded-full transition-[width] duration-700 ease-out",
-              done ? "bg-emerald-500" : "bg-primary",
+              done ? "bg-positive" : "bg-primary",
             )}
             style={{ width: `${Math.round(pct * 100)}%` }}
           />
         </div>
         {done ? (
-          <p className="mt-2 text-sm font-medium text-emerald-500 flex items-center gap-1.5">
+          <p className="mt-2 text-sm font-medium text-positive flex items-center gap-1.5">
             <PartyPopper className="w-4 h-4" /> Goal smashed. Treat yourselves. 🥂
           </p>
         ) : (

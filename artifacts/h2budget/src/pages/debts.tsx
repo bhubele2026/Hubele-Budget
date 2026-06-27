@@ -258,7 +258,7 @@ export default function DebtsPage() {
             return (
               <Card
                 key={debt.id}
-                className="border-emerald-500/60 bg-emerald-50/40 dark:bg-emerald-950/20"
+                className="border-positive/60 bg-positive/10"
                 data-testid="debt-card-paid-off"
                 data-debt-id={debt.id}
               >
@@ -279,14 +279,14 @@ export default function DebtsPage() {
                       centerText="✓"
                     />
                     <div
-                      className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400"
+                      className="text-2xl font-semibold text-positive"
                       data-testid="debt-card-paid-off-headline"
                     >
                       <span aria-hidden="true">🎉</span> Paid off!
                     </div>
                     {killLabel ? (
                       <div
-                        className="text-sm text-emerald-700 dark:text-emerald-300 tabular-nums"
+                        className="text-sm text-positive tabular-nums"
                         data-testid="debt-card-paid-off-month"
                         data-debt-id={debt.id}
                       >

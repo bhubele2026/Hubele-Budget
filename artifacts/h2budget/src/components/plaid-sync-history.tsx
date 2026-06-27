@@ -322,7 +322,7 @@ export function PlaidSyncHistory({
                           Tidied up
                         </span>
                       ) : a.success ? (
-                        <span className="text-emerald-700 dark:text-emerald-400">
+                        <span className="text-positive">
                           OK
                         </span>
                       ) : (

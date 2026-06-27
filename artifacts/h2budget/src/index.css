@@ -92,72 +92,73 @@
   --elevate-1: rgba(26, 34, 48, .03);
   --elevate-2: rgba(26, 34, 48, .06);
 
-  /* (ObsidianGlass · light) A cohesive cool slate-tinted light mode that
-     echoes the dark hero: white cards on a faintly violet-cool slate canvas,
-     hairline slate borders, and the SAME violet accent (262°) so light mode
-     reads as the same product, just inverted. Dark is still the hero. */
-  --background: 228 24% 96%;
-  --foreground: 224 30% 12%;
-  --border: 226 18% 88%;
+  /* (Refreshing Summer · light) A bright, sunny coastal light mode: white
+     cards floating on an airy sky-blue canvas, soft sky-gray hairlines, deep
+     navy ink, with a teal primary (193°) and warm gold/orange accents. Reads
+     warm, playful and clean — the "fun" daytime counterpart to the dark mode. */
+  --background: 197 58% 96%;
+  --foreground: 202 80% 13%;
+  --border: 197 34% 86%;
 
   --card: 0 0% 100%;
-  --card-foreground: 224 30% 12%;
-  --card-border: 226 18% 89%;
+  --card-foreground: 202 70% 14%;
+  --card-border: 197 34% 87%;
 
   --sidebar: 0 0% 100%;
-  --sidebar-foreground: 224 16% 30%;
-  --sidebar-border: 226 18% 89%;
-  --sidebar-primary: 262 83% 58%;
+  --sidebar-foreground: 202 28% 32%;
+  --sidebar-border: 197 34% 87%;
+  --sidebar-primary: 193 67% 43%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 262 44% 95%;
-  --sidebar-accent-foreground: 262 55% 38%;
-  --sidebar-ring: 262 83% 58%;
+  --sidebar-accent: 193 56% 92%;
+  --sidebar-accent-foreground: 193 72% 28%;
+  --sidebar-ring: 193 67% 43%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 224 30% 12%;
-  --popover-border: 226 18% 89%;
+  --popover-foreground: 202 70% 14%;
+  --popover-border: 197 34% 87%;
 
-  /* (ObsidianGlass · light) Violet primary so buttons / active nav / focus
-     ring match the dark hero's accent. */
-  --primary: 262 83% 58%;
+  /* (Refreshing Summer · light) Teal primary so buttons / active nav / focus
+     ring read as cool sea-glass against the sunny canvas. */
+  --primary: 193 67% 43%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 226 20% 94%;
-  --secondary-foreground: 224 24% 22%;
+  --secondary: 197 48% 92%;
+  --secondary-foreground: 202 50% 20%;
 
-  --muted: 226 20% 93%;
-  --muted-foreground: 222 12% 44%;
+  --muted: 197 40% 93%;
+  --muted-foreground: 202 18% 40%;
 
-  /* Violet-tinted highlight so hovers/active states read as one cohesive
-     accent that matches dark mode. */
-  --accent: 262 44% 95%;
-  --accent-foreground: 262 55% 38%;
+  /* Warm sunny highlight so hovers / active states glow gold — the playful
+     counterpoint to the teal primary. */
+  --accent: 45 92% 91%;
+  --accent-foreground: 33 86% 30%;
 
-  --destructive: 0 60% 42%;
+  --destructive: 4 74% 47%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 226 18% 86%;
-  --ring: 262 83% 58%;
+  --input: 197 34% 84%;
+  --ring: 193 67% 43%;
 
-  --positive: 160 84% 30%;
+  --positive: 152 64% 35%;
   --positive-foreground: 0 0% 100%;
-  --negative: 0 60% 42%;
+  --negative: 4 74% 47%;
   --negative-foreground: 0 0% 100%;
-  --warning: 25 92% 44%;
-  --warning-foreground: 30 25% 12%;
+  --warning: 33 94% 49%;
+  --warning-foreground: 0 0% 100%;
 
-  /* chart-1 = violet balance line; 2 = slate; 3 = emerald; 4 = orange. */
-  --chart-1: 262 70% 54%;
-  --chart-2: 222 14% 50%;
-  --chart-3: 160 70% 36%;
-  --chart-4: 25 90% 48%;
-  --chart-5: 262 45% 60%;
+  /* chart-1 = teal balance line; 2 = sky blue; 3 = golden yellow; 4 = orange;
+     5 = deep navy — the full summer range. */
+  --chart-1: 193 67% 43%;
+  --chart-2: 197 63% 58%;
+  --chart-3: 45 95% 50%;
+  --chart-4: 33 94% 49%;
+  --chart-5: 202 55% 32%;
 
-  /* Amex per-card brand identity. Blue Cash = bright azure, Platinum = cool
-     slate-silver, Gold = warm amber. Used by the Kill Stack + per-card UI. */
-  --card-blue: 217 91% 60%;
-  --card-silver: 220 9% 46%;
-  --card-gold: 38 92% 50%;
+  /* Amex per-card brand identity, summer-keyed. Blue Cash = sky blue,
+     Platinum = cool sea-gray, Gold = golden yellow. Kill Stack + per-card UI. */
+  --card-blue: 197 70% 50%;
+  --card-silver: 200 14% 48%;
+  --card-gold: 45 95% 48%;
 
   --app-font-sans: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --app-font-serif: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
@@ -196,68 +197,70 @@
   --elevate-1: rgba(255,255,255, .035);
   --elevate-2: rgba(255,255,255, .07);
 
-  /* (ObsidianGlass) A frosted-glass fintech canvas. Outer void #07080b, app
-     panel #0e1116, glass cards graduate #13161c → #0e1116 behind a hairline
-     #1e2230 border (raised edges #2d3345). Violet #7c3aed is the single accent
-     — selection, focus glow, primary actions / active nav. +/- money stays
-     emerald / red so the accent never reads as a dollar amount. */
-  --background: 222 22% 7%;     /* #0e1116 app/panel */
-  --foreground: 220 14% 96%;    /* #f3f4f6 headings */
-  --border: 226 22% 15%;        /* #1e2230 hairline */
+  /* (Refreshing Summer · night) A deep teal-navy "ocean at dusk" canvas drawn
+     from the navy #04293F. App panel #08202e, glass cards graduate #0e2433 →
+     #091b28 behind a teal-navy hairline. Teal #2496B5 is the single accent —
+     selection, focus glow, primary actions / active nav — with sunny gold as
+     the warm hover tint. +/- money stays green / red so the accent never reads
+     as a dollar amount. */
+  --background: 202 60% 8%;      /* #08202e app/panel */
+  --foreground: 197 34% 95%;     /* airy sky-white headings */
+  --border: 202 36% 19%;         /* teal-navy hairline */
 
-  --card: 224 18% 9%;           /* #13161c top of glass gradient */
-  --card-foreground: 220 14% 96%;
-  --card-border: 226 22% 15%;   /* #1e2230 */
+  --card: 202 52% 11%;           /* #0e2433 top of glass gradient */
+  --card-foreground: 197 34% 95%;
+  --card-border: 202 36% 19%;
 
-  --sidebar: 222 22% 7%;        /* #0e1116 panel */
-  --sidebar-foreground: 219 9% 60%;   /* #8e95a3 idle nav */
-  --sidebar-border: 226 22% 15%;      /* #1e2230 dividers */
-  --sidebar-primary: 262 83% 58%;     /* #7c3aed violet */
-  --sidebar-primary-foreground: 220 14% 96%;
-  --sidebar-accent: 224 18% 11%;      /* #13161c hover row */
-  --sidebar-accent-foreground: 220 14% 96%;  /* #f3f4f6 active nav */
-  --sidebar-ring: 262 83% 58%;
+  --sidebar: 202 60% 8%;         /* #08202e panel */
+  --sidebar-foreground: 197 16% 64%;  /* idle nav */
+  --sidebar-border: 202 36% 18%;      /* dividers */
+  --sidebar-primary: 193 70% 49%;     /* #2496B5 teal */
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 202 46% 14%;      /* hover row */
+  --sidebar-accent-foreground: 197 60% 82%;  /* sky-bright active nav */
+  --sidebar-ring: 193 70% 49%;
 
-  --popover: 224 18% 9%;        /* #13161c */
-  --popover-foreground: 220 14% 96%;
-  --popover-border: 226 22% 15%;
+  --popover: 202 52% 11%;        /* #0e2433 */
+  --popover-foreground: 197 34% 95%;
+  --popover-border: 202 36% 19%;
 
-  --primary: 262 83% 58%;       /* #7c3aed violet */
-  --primary-foreground: 220 14% 96%;  /* #f3f4f6 */
+  --primary: 193 70% 48%;        /* #2496B5 teal */
+  --primary-foreground: 0 0% 100%;
 
-  --secondary: 226 22% 15%;     /* #1e2230 */
-  --secondary-foreground: 220 14% 96%;
+  --secondary: 202 36% 18%;
+  --secondary-foreground: 197 34% 95%;
 
-  --muted: 224 18% 11%;         /* #13161c */
-  --muted-foreground: 219 9% 60%;     /* #8e95a3 body */
+  --muted: 202 46% 14%;
+  --muted-foreground: 197 16% 64%;    /* body */
 
-  --accent: 224 18% 14%;        /* raised glass row */
-  --accent-foreground: 255 92% 76%;   /* #a78bfa violet tint */
+  --accent: 202 44% 16%;         /* raised glass row */
+  --accent-foreground: 45 95% 64%;    /* sunny gold tint */
 
-  --destructive: 2 80% 58%;
+  --destructive: 4 78% 60%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 226 22% 15%;         /* #1e2230 */
-  --ring: 262 83% 58%;          /* #7c3aed focus glow */
+  --input: 202 36% 19%;
+  --ring: 193 75% 52%;           /* teal focus glow */
 
-  --positive: 160 94% 30%;      /* #059669 emerald */
+  --positive: 152 62% 44%;       /* sea-green */
   --positive-foreground: 0 0% 100%;
-  --negative: 2 82% 61%;
+  --negative: 4 80% 62%;
   --negative-foreground: 0 0% 100%;
-  --warning: 25 95% 53%;        /* #f97316 orange */
-  --warning-foreground: 220 14% 96%;
+  --warning: 33 95% 55%;         /* #F58A07 orange */
+  --warning-foreground: 202 60% 10%;
 
-  /* chart-1 = violet balance line; 2 = body gray; 3 = emerald; 4 = orange. */
-  --chart-1: 262 83% 64%;
-  --chart-2: 219 9% 62%;
-  --chart-3: 160 84% 39%;
-  --chart-4: 25 95% 53%;
-  --chart-5: 255 92% 76%;
+  /* chart-1 = teal balance line; 2 = sky blue; 3 = golden yellow; 4 = orange;
+     5 = light navy — the summer range, brightened for the dark canvas. */
+  --chart-1: 193 72% 55%;
+  --chart-2: 197 65% 68%;
+  --chart-3: 45 95% 60%;
+  --chart-4: 33 95% 58%;
+  --chart-5: 202 46% 52%;
 
-  /* Amex per-card brand identity, brightened for the dark glass canvas. */
-  --card-blue: 217 91% 64%;
-  --card-silver: 220 10% 62%;
-  --card-gold: 38 95% 58%;
+  /* Amex per-card brand identity, brightened for the dark canvas. */
+  --card-blue: 197 75% 62%;
+  --card-silver: 200 14% 62%;
+  --card-gold: 45 95% 60%;
 
   --shadow-2xs: 0px 1px 2px 0px rgba(0,0,0,0.5);
   --shadow-xs: 0px 1px 2px 0px rgba(0,0,0,0.5);
@@ -304,8 +307,8 @@
     font-feature-settings: "tnum" 1, "cv11" 1;
   }
 
-  /* (ObsidianGlass) Slim frosted scrollbar in dark mode so the chrome reads
-     as part of the glass UI rather than the OS default. */
+  /* (Refreshing Summer) Slim teal-navy scrollbar in dark mode so the chrome
+     reads as part of the ocean-dusk UI rather than the OS default. */
   .dark ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -314,11 +317,11 @@
     background: transparent;
   }
   .dark ::-webkit-scrollbar-thumb {
-    background: #1e2230;
+    background: #163a4e;
     border-radius: 3px;
   }
   .dark ::-webkit-scrollbar-thumb:hover {
-    background: #2d3345;
+    background: #235a76;
   }
 }
 
@@ -413,38 +416,35 @@
   .recharts-reference-line line {
     stroke: hsl(var(--border));
   }
-  /* (ObsidianGlass) Frosted-glass surface. The dark mode gradient + hairline
-     border + deep ambient shadow that defines the card look app-wide. In
-     light mode it degrades to a flat white surface so light stays clean. */
-  /* (Juggernaut) Premium command-center surface: soft, low-spread elevation
-     in light mode; a hairline border + faint inner glow over the obsidian
-     gradient in dark. Cards float gently above the tinted canvas. */
+  /* (Refreshing Summer) Sea-glass surface. The dark mode teal-navy gradient +
+     hairline border + deep ambient shadow that defines the card look app-wide.
+     In light mode it degrades to a flat white surface so light stays clean. */
   .glass-surface {
     border: 1px solid hsl(var(--card-border));
     box-shadow:
-      0 1px 2px rgba(26, 34, 48, 0.04),
-      0 10px 24px -14px rgba(26, 34, 48, 0.14);
+      0 1px 2px rgba(4, 41, 63, 0.05),
+      0 10px 24px -14px rgba(4, 41, 63, 0.16);
   }
   .dark .glass-surface {
-    background-image: linear-gradient(180deg, #13161c 0%, #0e1116 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    background-image: linear-gradient(180deg, #0e2433 0%, #091b28 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
-  /* Emphasis ring — a 1px accent border + faint accent halo. */
+  /* Emphasis ring — a 1px teal border + faint teal halo. */
   .focus-glow {
-    border-color: rgba(124, 58, 237, 0.55);
-    box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.18), 0 10px 24px -14px rgba(124, 58, 237, 0.25);
+    border-color: rgba(36, 150, 181, 0.6);
+    box-shadow: 0 0 0 1px rgba(36, 150, 181, 0.2), 0 10px 24px -14px rgba(36, 150, 181, 0.3);
   }
   .dark .focus-glow {
-    border-color: rgba(124, 58, 237, 0.55);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 0 0 1px rgba(124, 58, 237, 0.22);
+    border-color: rgba(36, 150, 181, 0.6);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 0 1px rgba(36, 150, 181, 0.26);
   }
 
-  /* (Juggernaut) The blue/violet hero gradient for the active StatTile —
-     matches the BH Studio command-center hero. Uses the app's existing
-     primary accent so the brand stays consistent. */
+  /* (Refreshing Summer) The teal→navy "ocean" hero gradient for the active
+     StatTile. Uses the app's teal primary so the brand stays consistent, with
+     a deep navy stop that keeps white text crisp. */
   .stat-hero {
-    background-image: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(262 83% 47%) 100%);
+    background-image: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(202 80% 22%) 100%);
     color: #fff;
     border-color: transparent;
   }

@@ -107,9 +107,9 @@ export function BillsHealthCheck({ summary }: { summary: BillsSummary }) {
           aria-expanded={open}
         >
           {clean ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-positive shrink-0" />
           ) : (
-            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+            <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
           )}
           <span className="text-sm font-semibold flex-1">
             Forecast health check
@@ -137,13 +137,13 @@ export function BillsHealthCheck({ summary }: { summary: BillsSummary }) {
               issues.map((iss, i) => (
                 <div
                   key={i}
-                  className="flex items-start gap-2 rounded-md border border-amber-400/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2"
+                  className="flex items-start gap-2 rounded-md border border-warning/50 bg-warning/10 px-3 py-2"
                   data-testid={`health-issue-${iss.kind}`}
                 >
                   {iss.kind === "duplicate" ? (
-                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
                   ) : (
-                    <CalendarX className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <CalendarX className="w-4 h-4 text-warning mt-0.5 shrink-0" />
                   )}
                   <div className="min-w-0">
                     <div className="text-sm font-medium">{iss.title}</div>

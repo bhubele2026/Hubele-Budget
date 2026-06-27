@@ -583,8 +583,8 @@ export default function SettingsPage() {
                 <span
                   className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border ${
                     plaidEnv.env === "production"
-                      ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
-                      : "border-amber-500/40 text-amber-700 dark:text-amber-400"
+                      ? "border-positive/40 text-positive"
+                      : "border-warning/40 text-warning"
                   }`}
                   data-testid="badge-plaid-env"
                   title={`Plaid is running in ${plaidEnv.env} mode`}
@@ -612,7 +612,7 @@ export default function SettingsPage() {
         {import.meta.env.DEV && plaidEnv && plaidEnv.nonProdItemCount > 0 && (
           <CardContent className="pt-0">
             <div
-              className="rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm"
+              className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm"
               data-testid="banner-non-prod-cleanup"
             >
               <div className="font-medium">
@@ -726,7 +726,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <span
-                  className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-700 dark:text-amber-400"
+                  className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-warning/40 text-warning"
                   data-testid="badge-duplicate-transaction-count"
                   title="Approximate number of rows the cleanup would merge into their twins."
                 >
@@ -795,7 +795,7 @@ export default function SettingsPage() {
                         )}
                         {item.stillPreparing && (
                           <span
-                            className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-700 dark:text-amber-400"
+                            className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-warning/40 text-warning"
                             data-testid={`badge-still-preparing-${item.id}`}
                             title="Plaid is still staging the historical batch for this freshly linked bank — try Sync again in a minute."
                           >
@@ -874,7 +874,7 @@ export default function SettingsPage() {
                             </span>
                             {isStale && (
                               <span
-                                className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-700 dark:text-amber-400"
+                                className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-warning/40 text-warning"
                                 data-testid={`badge-consent-refresh-stale-${item.id}`}
                                 title={`The daily check hasn't advanced this timestamp in ${age ?? "several days"}. The disconnect date above may be out of date — click Sync to re-verify with Plaid.`}
                               >
@@ -886,7 +886,7 @@ export default function SettingsPage() {
                       })()}
                       {item.stillPreparing && isPreparingStalled(item.stillPreparingSince, nowTick) && (
                         <div
-                          className="text-xs text-amber-700 dark:text-amber-400 mt-1"
+                          className="text-xs text-warning mt-1"
                           data-testid={`text-preparing-stalled-${item.id}`}
                         >
                           This is taking longer than usual. Try unlinking and
@@ -1147,7 +1147,7 @@ export default function SettingsPage() {
                 />
                 {trackerErrors[t.id] && (
                   <p
-                    className="text-xs text-amber-700 dark:text-amber-400"
+                    className="text-xs text-warning"
                     data-testid={`tracker-value-error-${t.id}`}
                     title={trackerErrors[t.id] ?? undefined}
                   >
@@ -1185,7 +1185,7 @@ export default function SettingsPage() {
             </Button>
             {hasInvalidTracker && (
               <p
-                className="text-xs text-amber-700 dark:text-amber-400"
+                className="text-xs text-warning"
                 data-testid="tracker-save-blocked"
               >
                 Fix the invalid rule before saving.

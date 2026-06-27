@@ -75,11 +75,11 @@ export function SortableRuleRow({
   };
 
   const stateBg = isHighlighted
-    ? "ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-950/30"
+    ? "ring-2 ring-primary/50 bg-primary/10"
     : isWinner
-      ? "bg-emerald-50 dark:bg-emerald-950/30"
+      ? "bg-positive/10"
       : isMatched
-        ? "bg-amber-50 dark:bg-amber-950/20"
+        ? "bg-warning/10"
         : "";
 
   return (
@@ -179,7 +179,7 @@ export function SortableRuleRow({
         {category?.name ?? "Uncategorized"}
       </span>
       {isWinner && (
-        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-[10px]">
+        <Badge className="bg-positive hover:bg-positive text-[10px]">
           Winner
         </Badge>
       )}

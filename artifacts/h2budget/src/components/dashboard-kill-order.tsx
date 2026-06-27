@@ -98,7 +98,7 @@ export function DashboardKillOrder() {
         id="kill-order"
         ref={sectionRef}
         className={`scroll-mt-20 rounded-lg transition-shadow duration-700 ${
-          highlight ? "ring-2 ring-orange-400 ring-offset-2 ring-offset-background" : ""
+          highlight ? "ring-2 ring-warning ring-offset-2 ring-offset-background" : ""
         }`}
       >
         <div className="flex items-end justify-between mb-3 gap-4">
@@ -106,7 +106,7 @@ export function DashboardKillOrder() {
             <button
               type="button"
               onClick={scrollToKillOrder}
-              className="text-xs font-semibold tracking-widest text-orange-600 dark:text-orange-400 uppercase cursor-pointer hover:underline focus:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-orange-400 rounded-sm"
+              className="text-xs font-semibold tracking-widest text-warning uppercase cursor-pointer hover:underline focus:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-warning rounded-sm"
             >
               Avalanche Plan · Kill Order
             </button>
@@ -116,7 +116,7 @@ export function DashboardKillOrder() {
           </div>
           <Link
             href="/avalanche?tab=projection"
-            className="text-xs font-semibold tracking-widest text-orange-600 dark:text-orange-400 uppercase cursor-pointer hover:underline focus:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-orange-400 rounded-sm"
+            className="text-xs font-semibold tracking-widest text-warning uppercase cursor-pointer hover:underline focus:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-warning rounded-sm"
           >
             See full order →
           </Link>
@@ -137,7 +137,7 @@ export function DashboardKillOrder() {
       id="kill-order"
       ref={sectionRef}
       className={`scroll-mt-20 rounded-lg transition-shadow duration-700 ${
-        highlight ? "ring-2 ring-orange-400 ring-offset-2 ring-offset-background" : ""
+        highlight ? "ring-2 ring-warning ring-offset-2 ring-offset-background" : ""
       }`}
     >
       <div className="flex items-end justify-between mb-3 gap-4">
@@ -145,7 +145,7 @@ export function DashboardKillOrder() {
           <button
             type="button"
             onClick={scrollToKillOrder}
-            className="text-xs font-semibold tracking-widest text-orange-600 dark:text-orange-400 uppercase cursor-pointer hover:underline focus:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-orange-400 rounded-sm"
+            className="text-xs font-semibold tracking-widest text-warning uppercase cursor-pointer hover:underline focus:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-warning rounded-sm"
           >
             Avalanche Plan · Kill Order
           </button>
@@ -155,7 +155,7 @@ export function DashboardKillOrder() {
         </div>
         <Link
           href="/avalanche?tab=projection"
-          className="text-xs font-semibold tracking-widest text-orange-600 dark:text-orange-400 uppercase cursor-pointer hover:underline focus:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-orange-400 rounded-sm"
+          className="text-xs font-semibold tracking-widest text-warning uppercase cursor-pointer hover:underline focus:outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-warning rounded-sm"
         >
           See full order →
         </Link>
@@ -201,7 +201,7 @@ export function DashboardKillOrder() {
                 <div className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
                   Frees up
                 </div>
-                <div className="text-3xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                <div className="text-3xl font-bold tabular-nums text-positive">
                   {fmtMoney(m.minFreed)}
                   <span className="text-sm font-normal text-muted-foreground">/mo</span>
                 </div>

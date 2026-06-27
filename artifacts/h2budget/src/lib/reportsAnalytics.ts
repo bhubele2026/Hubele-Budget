@@ -17,15 +17,14 @@ import { simulate, type SimResult, type Strategy, type SimDebt } from "./avalanc
 export const H2_PALETTE = {
   primary: "hsl(var(--chart-1))",
   primarySoft: "hsl(var(--chart-1) / 0.55)",
-  purple: "hsl(var(--chart-5))",
-  purpleSoft: "hsl(var(--chart-5) / 0.55)",
+  navy: "hsl(var(--chart-5))",
+  navySoft: "hsl(var(--chart-5) / 0.55)",
   amber: "hsl(var(--chart-4))",
   amberSoft: "hsl(var(--chart-4) / 0.55)",
   warning: "hsl(var(--warning))",
   red: "hsl(var(--negative))",
   rose: "hsl(var(--negative) / 0.7)",
   sky: "hsl(var(--chart-2))",
-  violet: "hsl(var(--chart-5))",
   emerald: "hsl(var(--positive))",
   slate: "hsl(var(--chart-3))",
 };

@@ -2074,7 +2074,7 @@ export default function TransactionsPage() {
           <Link
             href="/forecast#bucket"
             data-testid="link-bucket-pending-count"
-            className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 text-amber-900 px-2.5 py-0.5 text-xs hover-elevate active-elevate-2"
+            className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 text-warning px-2.5 py-0.5 text-xs hover-elevate active-elevate-2"
             title="Open the Forecast Review Bucket"
           >
             <Inbox className="w-3 h-3" />
@@ -2171,11 +2171,11 @@ export default function TransactionsPage() {
 
       {selected.size > 0 && (
         <div
-          className="sticky z-20 flex items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 shadow-sm"
+          className="sticky z-20 flex items-center gap-3 rounded-md border border-positive/30 bg-positive/10 px-4 py-2 shadow-sm"
           style={{ top: "var(--pinned-pane-h, 0px)" }}
           data-testid="bulk-bar"
         >
-          <span className="text-sm font-medium text-emerald-900">
+          <span className="text-sm font-medium text-positive">
             {selected.size} selected
           </span>
           <Button

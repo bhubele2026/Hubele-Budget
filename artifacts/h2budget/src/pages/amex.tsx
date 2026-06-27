@@ -1796,7 +1796,7 @@ export default function AmexPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-6 px-2 text-[11px] border-border text-foreground bg-white/70 hover:bg-white w-fit"
+                      className="h-6 px-2 text-[11px] border-border text-foreground bg-background/70 hover:bg-background w-fit"
                       data-testid="button-set-amex-balance"
                     >
                       Set Amex balance
@@ -1901,7 +1901,7 @@ export default function AmexPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-6 px-2 text-[11px] border-border text-foreground bg-white/60 hover:bg-white"
+                        className="h-6 px-2 text-[11px] border-border text-foreground bg-background/60 hover:bg-background"
                         data-testid={
                           endingBalance.source === "anchor"
                             ? "button-edit-actual-balance"
@@ -2002,7 +2002,7 @@ export default function AmexPage() {
               monthTxns ? Math.abs(monthTotals.paymentsAndCredits) : null
             }
             loading={!monthTxns}
-            valueClassName="text-emerald-700"
+            valueClassName="text-positive"
             testId="stat-payments-credits"
           />
           <StatChip
@@ -2011,9 +2011,9 @@ export default function AmexPage() {
             loading={!monthTxns}
             valueClassName={
               monthTotals.netChange > 0
-                ? "text-rose-700"
+                ? "text-destructive"
                 : monthTotals.netChange < 0
-                  ? "text-emerald-700"
+                  ? "text-positive"
                   : undefined
             }
             signed
@@ -2147,12 +2147,12 @@ export default function AmexPage() {
           and retry just those, instead of guessing from a toast. */}
       {bulkFailures && (
         <div
-          className="rounded-md border border-red-300 bg-red-50 p-3 space-y-2"
+          className="rounded-md border border-destructive/30 bg-destructive/10 p-3 space-y-2"
           data-testid="panel-bulk-failures"
           role="alert"
         >
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-red-900">
+            <span className="text-sm font-medium text-destructive">
               {bulkFailures.label}
             </span>
             <div className="ml-auto flex items-center gap-1">
@@ -2160,7 +2160,7 @@ export default function AmexPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs border-red-400 text-red-900 bg-white hover:bg-red-100"
+                  className="h-7 text-xs border-destructive/40 text-destructive bg-background hover:bg-destructive/10"
                   onClick={() => void runBulkRetry()}
                   disabled={bulkFailures.retrying}
                   data-testid="button-bulk-retry-failed"
@@ -2173,7 +2173,7 @@ export default function AmexPage() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 text-xs text-red-900 hover:bg-red-100"
+                className="h-7 text-xs text-destructive hover:bg-destructive/10"
                 onClick={dismissBulkFailures}
                 data-testid="button-bulk-dismiss-failures"
               >
@@ -2182,19 +2182,19 @@ export default function AmexPage() {
             </div>
           </div>
           <ul
-            className="max-h-40 overflow-auto text-xs text-red-900 space-y-1"
+            className="max-h-40 overflow-auto text-xs text-destructive space-y-1"
             data-testid="list-bulk-failures"
           >
             {bulkFailures.failures.map((f) => (
               <li
                 key={f.id}
-                className="flex items-baseline gap-2 border-t border-red-200 pt-1 first:border-t-0 first:pt-0"
+                className="flex items-baseline gap-2 border-t border-destructive/20 pt-1 first:border-t-0 first:pt-0"
                 data-testid={`row-bulk-failure-${f.id}`}
               >
                 <span className="font-medium truncate max-w-[40%]" title={f.description}>
                   {f.description}
                 </span>
-                <span className="text-red-700/80 truncate" title={f.error}>
+                <span className="text-destructive/80 truncate" title={f.error}>
                   {f.error}
                 </span>
               </li>

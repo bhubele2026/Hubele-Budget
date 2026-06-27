@@ -126,7 +126,7 @@ export function InboxCardView({
           {categoryName && (
             <Badge
               variant="outline"
-              className="text-[10px] border-violet-200 text-violet-700 bg-violet-50"
+              className="text-[10px] border-primary/20 text-primary bg-primary/10"
             >
               {categoryName}
             </Badge>

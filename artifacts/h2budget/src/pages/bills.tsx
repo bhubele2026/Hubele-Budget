@@ -822,7 +822,7 @@ export default function BillsPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">Net</span>
                   <span
-                    className={`text-lg font-serif font-bold tabular-nums ${net >= 0 ? "text-emerald-700" : "text-destructive"}`}
+                    className={`text-lg font-serif font-bold tabular-nums ${net >= 0 ? "text-positive" : "text-destructive"}`}
                     data-testid="text-net-monthly"
                   >
                     {net >= 0 ? "+" : ""}
@@ -868,7 +868,7 @@ export default function BillsPage() {
               <div className="border-t pt-3 flex items-center justify-between">
                 <span className="text-sm font-semibold">Net</span>
                 <span
-                  className={`text-lg font-serif font-bold tabular-nums ${actualThisMonth.net >= 0 ? "text-emerald-700" : "text-destructive"}`}
+                  className={`text-lg font-serif font-bold tabular-nums ${actualThisMonth.net >= 0 ? "text-positive" : "text-destructive"}`}
                   data-testid="text-actual-net"
                 >
                   {actualThisMonth.net >= 0 ? "+" : ""}
@@ -929,7 +929,7 @@ export default function BillsPage() {
                     categoryId: "",
                   }))
                 }
-                className={`px-3 py-2 rounded-md border text-sm font-medium flex items-center justify-center gap-2 transition-colors ${form.kind === "income" ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-border text-muted-foreground hover:bg-muted"}`}
+                className={`px-3 py-2 rounded-md border text-sm font-medium flex items-center justify-center gap-2 transition-colors ${form.kind === "income" ? "border-positive bg-positive/10 text-positive" : "border-border text-muted-foreground hover:bg-muted"}`}
                 data-testid="toggle-income"
               >
                 <ArrowUpCircle className="w-4 h-4" /> Income
@@ -946,7 +946,7 @@ export default function BillsPage() {
                     categoryId: "",
                   }))
                 }
-                className={`px-3 py-2 rounded-md border text-sm font-medium flex items-center justify-center gap-2 transition-colors ${form.kind === "bill" ? "border-rose-600 bg-rose-50 text-rose-800" : "border-border text-muted-foreground hover:bg-muted"}`}
+                className={`px-3 py-2 rounded-md border text-sm font-medium flex items-center justify-center gap-2 transition-colors ${form.kind === "bill" ? "border-destructive bg-destructive/10 text-destructive" : "border-border text-muted-foreground hover:bg-muted"}`}
                 data-testid="toggle-bill"
               >
                 <ArrowDownCircle className="w-4 h-4" /> Bill
@@ -1194,7 +1194,7 @@ function SummaryRow({
   valueTestId?: string;
 }) {
   const positive = amount >= 0;
-  const colorClass = tone === "income" ? "text-emerald-700" : "text-destructive";
+  const colorClass = tone === "income" ? "text-positive" : "text-destructive";
   const sign = positive && tone === "income" ? "+" : "";
   return (
     <div className="flex items-center justify-between text-sm gap-3">
@@ -1259,8 +1259,8 @@ function BillGroupCard({
     return m;
   }, [debts]);
   const Icon = tone === "income" ? ArrowUpCircle : ArrowDownCircle;
-  const tint = tone === "income" ? "text-emerald-700" : "text-destructive";
-  const tintBg = tone === "income" ? "bg-emerald-50" : "bg-rose-50";
+  const tint = tone === "income" ? "text-positive" : "text-destructive";
+  const tintBg = tone === "income" ? "bg-positive/10" : "bg-destructive/10";
   const sign = tone === "income" ? "+" : "−";
 
   return (
@@ -1415,8 +1415,8 @@ function BillGroupCard({
                       <div
                         className={`text-[11px] tabular-nums flex items-center gap-1 ${
                           status === "paid"
-                            ? "text-emerald-700"
-                            : "text-amber-600"
+                            ? "text-positive"
+                            : "text-warning"
                         }`}
                         data-testid={`text-actual-${item.id}`}
                         title={
@@ -1533,7 +1533,7 @@ function DebtMinimumsCard({
                 >
                   <div className="w-12 shrink-0 text-center">
                     <PartyPopper
-                      className="w-5 h-5 mx-auto text-emerald-500"
+                      className="w-5 h-5 mx-auto text-positive"
                       aria-hidden="true"
                     />
                   </div>
@@ -1541,7 +1541,7 @@ function DebtMinimumsCard({
                     <div className="text-sm font-medium truncate text-muted-foreground line-through">
                       {r.debtName} minimum
                     </div>
-                    <div className="text-xs text-emerald-600 dark:text-emerald-400 truncate font-medium">
+                    <div className="text-xs text-positive truncate font-medium">
                       Stops at payoff · was {formatCurrency(min)}/mo
                     </div>
                   </div>

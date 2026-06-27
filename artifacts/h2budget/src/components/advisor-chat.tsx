@@ -348,7 +348,7 @@ function ToolCallPill({
   if (state.kind === "pending_proposal" || state.kind === "confirming" || state.kind === "cancelling") {
     return (
       <div
-        className="w-full max-w-md p-3 rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100"
+        className="w-full max-w-md p-3 rounded-md border border-warning/30 bg-warning/10 text-foreground"
         data-testid="advisor-proposal-card"
       >
         <div className="text-[11px] uppercase tracking-widest font-semibold mb-1">
@@ -360,7 +360,7 @@ function ToolCallPill({
         <div className="flex gap-2">
           <button
             type="button"
-            className="px-3 py-1 text-xs rounded-md bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-50"
+            className="px-3 py-1 text-xs rounded-md bg-warning text-warning-foreground hover:bg-warning/90 disabled:opacity-50"
             disabled={state.kind !== "pending_proposal"}
             onClick={() => confirmMutation.mutate()}
             data-testid="advisor-proposal-confirm"
@@ -369,7 +369,7 @@ function ToolCallPill({
           </button>
           <button
             type="button"
-            className="px-3 py-1 text-xs rounded-md border border-amber-700 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50"
+            className="px-3 py-1 text-xs rounded-md border border-warning/50 text-foreground hover:bg-warning/10 disabled:opacity-50"
             disabled={state.kind !== "pending_proposal"}
             onClick={() => cancelMutation.mutate()}
             data-testid="advisor-proposal-cancel"
@@ -415,7 +415,7 @@ function ToolCallPill({
         undone
           ? "bg-muted text-muted-foreground border-muted line-through"
           : call.ok
-          ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300"
+          ? "bg-positive/10 border-positive/30 text-positive"
           : "bg-destructive/5 border-destructive/30 text-destructive",
       )}
       title={call.name}
@@ -426,7 +426,7 @@ function ToolCallPill({
       {canUndo && (
         <button
           type="button"
-          className="ml-1 underline underline-offset-2 hover:text-emerald-900 dark:hover:text-emerald-200 disabled:opacity-50"
+          className="ml-1 underline underline-offset-2 hover:text-positive disabled:opacity-50"
           disabled={undoMutation.isPending}
           onClick={() => undoMutation.mutate()}
           data-testid="advisor-tool-undo"

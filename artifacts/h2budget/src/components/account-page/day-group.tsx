@@ -51,16 +51,16 @@ export function DayGroup({
 }) {
   const todayBorder =
     todayAccent === "emerald"
-      ? "border-emerald-300 bg-emerald-50/80"
+      ? "border-positive/30 bg-positive/10"
       : todayAccent === "amber"
-        ? "border-amber-300 bg-amber-50/80"
-        : "border-blue-300 bg-blue-50/80";
+        ? "border-warning/30 bg-warning/10"
+        : "border-primary/30 bg-primary/10";
   const todayBadge =
     todayAccent === "emerald"
-      ? "border-emerald-300 text-emerald-700 bg-emerald-50"
+      ? "border-positive/30 text-positive bg-positive/10"
       : todayAccent === "amber"
-        ? "border-amber-300 text-amber-700 bg-amber-50"
-        : "border-blue-300 text-blue-700 bg-blue-50";
+        ? "border-warning/30 text-warning bg-warning/10"
+        : "border-primary/30 text-primary bg-primary/10";
   return (
     <div ref={containerRef} className="space-y-2">
       <div

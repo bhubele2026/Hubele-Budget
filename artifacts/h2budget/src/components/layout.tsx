@@ -74,7 +74,7 @@ const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
 
 const BRAND = (
   <span className="flex items-center gap-2 select-none">
-    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-[#1e2230] to-[#0e1116] text-[hsl(255_92%_76%)] font-bold text-[11px] tracking-tight border border-[#2d3345]">
+    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-[hsl(202_88%_13%)] to-[hsl(202_88%_9%)] text-[hsl(197_63%_74%)] font-bold text-[11px] tracking-tight border border-[hsl(202_88%_22%)]">
       H2
     </span>
     <span className="font-semibold text-[13.5px] tracking-tight">Budget</span>
@@ -127,7 +127,7 @@ function MobileNav({
                       {badge !== null && (
                         <Badge
                           variant="outline"
-                          className="bg-amber-100 text-amber-900 border-amber-300 text-[10px] px-1.5 py-0 h-5 tabular-nums"
+                          className="bg-warning/10 text-warning border-warning/30 text-[10px] px-1.5 py-0 h-5 tabular-nums"
                         >
                           {badge}
                         </Badge>
@@ -199,7 +199,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-screen overflow-hidden bg-background flex flex-col">
       {/* ── Top bar: brand · plan-&-analyze nav · settings gear ───────────── */}
-      <header className="shrink-0 bg-[#0e1116] text-[#f3f4f6] border-b border-[#1e2230]">
+      <header className="shrink-0 bg-sidebar text-sidebar-foreground border-b border-sidebar-border">
         <div className="flex items-center h-11">
           {/* Brand — desktop: pinned to the rail width (w-52) with matching
               padding so "H2 Budget" sits directly above the left rail and the
@@ -217,7 +217,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-[#f3f4f6] hover:bg-[#13161c]"
+                  className="text-sidebar-foreground hover:bg-sidebar-accent"
                   aria-label="Open navigation menu"
                   data-testid="button-mobile-menu"
                 >
@@ -248,8 +248,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     className={cn(
                       "flex items-center gap-1.5 px-2.5 h-8 rounded-md text-[13px] cursor-pointer transition-colors",
                       active
-                        ? "bg-[#13161c] text-[#f3f4f6] font-semibold ring-1 ring-[#7c3aed]/40"
-                        : "text-[#8e95a3] hover:bg-[#13161c] hover:text-[#f3f4f6]",
+                        ? "bg-sidebar-accent text-sidebar-foreground font-semibold ring-1 ring-primary/40"
+                        : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                     )}
                     data-testid={`topnav-${item.href.slice(1)}`}
                   >
@@ -268,8 +268,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   className={cn(
                     "relative flex items-center gap-1.5 px-2.5 h-8 rounded-md text-[13px] cursor-pointer transition-colors outline-none",
                     moreActive
-                      ? "bg-[#13161c] text-[#f3f4f6] font-semibold ring-1 ring-[#7c3aed]/40"
-                      : "text-[#8e95a3] hover:bg-[#13161c] hover:text-[#f3f4f6]",
+                      ? "bg-sidebar-accent text-sidebar-foreground font-semibold ring-1 ring-primary/40"
+                      : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                   )}
                   data-testid="topnav-more"
                   aria-label="More destinations"
@@ -277,7 +277,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <MoreHorizontal className="w-4 h-4" />
                   More
                   {moreBadgeTotal > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[#7c3aed]" />
+                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
                   )}
                 </button>
               </DropdownMenuTrigger>
@@ -296,7 +296,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         {badge !== null && (
                           <Badge
                             variant="outline"
-                            className="bg-amber-100 text-amber-900 border-amber-300 text-[10px] px-1.5 py-0 h-5 tabular-nums"
+                            className="bg-warning/10 text-warning border-warning/30 text-[10px] px-1.5 py-0 h-5 tabular-nums"
                           >
                             {badge}
                           </Badge>
@@ -314,7 +314,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="md:hidden mr-1 font-semibold truncate max-w-[40vw]">
               {currentTitle}
             </span>
-            <ThemeToggle className="text-[#f3f4f6] hover:bg-[#13161c]" />
+            <ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent" />
             <UserButton />
           </div>
         </div>

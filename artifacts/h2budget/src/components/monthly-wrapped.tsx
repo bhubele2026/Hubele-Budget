@@ -21,10 +21,10 @@ function monthLabel(): string {
 // Soft full-slide color wash per tone — drama without leaving matte.
 function toneWash(t: "good" | "bad" | "neutral"): string {
   if (t === "good")
-    return "radial-gradient(120% 95% at 0% 0%, hsl(150 60% 45% / 0.18), transparent 62%)";
+    return "radial-gradient(120% 95% at 0% 0%, hsl(193 67% 43% / 0.18), transparent 62%)";
   if (t === "bad")
-    return "radial-gradient(120% 95% at 0% 0%, hsl(0 80% 60% / 0.18), transparent 62%)";
-  return "radial-gradient(120% 95% at 0% 0%, hsl(214 82% 62% / 0.18), transparent 62%)";
+    return "radial-gradient(120% 95% at 0% 0%, hsl(33 94% 49% / 0.18), transparent 62%)";
+  return "radial-gradient(120% 95% at 0% 0%, hsl(197 63% 74% / 0.18), transparent 62%)";
 }
 
 function verdict(net: number, income: number): string {
@@ -50,7 +50,7 @@ function HugeMoney({
     <div
       className={cn(
         "text-5xl md:text-6xl font-extrabold tabular-nums tracking-[-0.03em]",
-        tone === "good" && "text-emerald-500",
+        tone === "good" && "text-positive",
         tone === "bad" && "text-[hsl(var(--negative))]",
         tone === "neutral" && "text-foreground",
       )}
@@ -266,7 +266,7 @@ export function MonthlyWrapped({
                     >
                       {copied ? (
                         <>
-                          <Check className="w-3.5 h-3.5 text-emerald-500" /> Copied
+                          <Check className="w-3.5 h-3.5 text-positive" /> Copied
                         </>
                       ) : (
                         "Share"

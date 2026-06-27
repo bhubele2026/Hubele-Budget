@@ -160,7 +160,7 @@ function SourceBadge({ kind }: { kind: SourceKind }) {
         kind === "auto_bills" &&
           "border-border text-muted-foreground dark:border-border dark:text-muted-foreground",
         kind === "auto_debts" &&
-          "border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300",
+          "border-warning/40 text-warning",
       )}
       data-testid={`badge-source-${kind}`}
     >
@@ -1002,7 +1002,7 @@ export default function BudgetPage() {
             delta < 0
               ? "text-destructive"
               : delta > 0
-                ? "text-green-600 dark:text-green-400"
+                ? "text-positive"
                 : "text-muted-foreground";
 
           return (
@@ -1239,7 +1239,7 @@ export default function BudgetPage() {
                   delta < 0
                     ? "text-destructive"
                     : delta > 0
-                      ? "text-green-600 dark:text-green-400"
+                      ? "text-positive"
                       : "text-muted-foreground";
                 return (
                   <div className="hidden md:flex items-center gap-6 text-sm font-mono">
@@ -1564,7 +1564,7 @@ function BillList({ bills }: { bills: LinkedBillEntry[] }) {
 }
 
 // Single uncategorized-transaction row inside the inline-categorize popover.
-// `highlight` adds a subtle violet tint when the row is in the "Suggested"
+// `highlight` adds a subtle teal tint when the row is in the "Suggested"
 // section (matched a rule or category-name substring).
 function UncategorizedRow({
   tx,
@@ -1587,7 +1587,7 @@ function UncategorizedRow({
       onClick={() => onAssign(tx.id, categoryId)}
       className={cn(
         "w-full flex items-start justify-between gap-2 text-left px-2 py-1.5 rounded hover:bg-muted/50 disabled:opacity-50",
-        highlight && "bg-violet-50/60 dark:bg-violet-950/20",
+        highlight && "bg-primary/10",
       )}
       data-testid={`button-assign-${tx.id}-to-${categoryId}`}
     >
@@ -1601,7 +1601,7 @@ function UncategorizedRow({
       <div
         className={cn(
           "text-xs font-mono tabular-nums whitespace-nowrap",
-          amt < 0 ? "text-rose-700" : "text-emerald-700",
+          amt < 0 ? "text-destructive" : "text-positive",
         )}
       >
         {formatCurrency(amt)}
@@ -1819,7 +1819,7 @@ function BudgetLineRow({
     diff < 0
       ? "text-destructive"
       : diff > 0
-        ? "text-green-600 dark:text-green-400"
+        ? "text-positive"
         : "text-muted-foreground";
   const pct = planned > 0 ? Math.round((actual / planned) * 100) : null;
   const sourceKind = line.sourceKind as SourceKind;
@@ -1929,7 +1929,7 @@ function BudgetLineRow({
                   />
                 ) : (
                   <Landmark
-                    className="w-3 h-3 shrink-0 text-emerald-600 dark:text-emerald-300"
+                    className="w-3 h-3 shrink-0 text-positive"
                     aria-hidden="true"
                     data-testid={`icon-drilldown-transactions-${line.categoryId}`}
                   />
@@ -1963,7 +1963,7 @@ function BudgetLineRow({
             </span>
           )}
           {/* #90 / #176 / #417 — inline categorize from Budget. Surfaces
-              the violet "N matches" hint only when one or more
+              the teal "N matches" hint only when one or more
               uncategorized transactions match an existing rule for this
               category or contain the category name. Click to assign in
               one tap. The neutral "+N other" fallback was removed in
@@ -1992,7 +1992,7 @@ function BudgetLineRow({
                 >
                   {suggestedTxns.length > 0 && (
                     <div>
-                      <div className="text-[10px] uppercase tracking-wide text-violet-700 dark:text-violet-300 mb-1">
+                      <div className="text-[10px] uppercase tracking-wide text-primary mb-1">
                         Suggested · matches rule or name
                       </div>
                       <div className="space-y-1">
@@ -2039,7 +2039,7 @@ function BudgetLineRow({
           {isAvalanchePayment ? (
             <Badge
               variant="outline"
-              className="text-[10px] font-normal ml-auto md:ml-0 border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300"
+              className="text-[10px] font-normal ml-auto md:ml-0 border-warning/40 text-warning"
               title="Edit this on the Avalanche page slider — both stay in sync."
             >
               Managed by Avalanche
@@ -2266,7 +2266,7 @@ function BudgetLineRow({
                             <div
                               className={cn(
                                 "text-xs font-mono tabular-nums",
-                                amt < 0 ? "text-rose-700" : "text-emerald-700",
+                                amt < 0 ? "text-destructive" : "text-positive",
                               )}
                             >
                               {formatCurrency(amt)}
@@ -2326,7 +2326,7 @@ function BudgetLineRow({
                 <div className="border-t mt-2 pt-2">
                   <button
                     type="button"
-                    className="text-xs text-violet-700 hover:underline dark:text-violet-300"
+                    className="text-xs text-primary hover:underline"
                     onClick={() => navigate(drillDownHref)}
                     data-testid={`button-view-all-${line.categoryId}`}
                   >
@@ -2410,8 +2410,8 @@ function BudgetLineRow({
             Math.abs(aheadBy) <= 5
               ? "text-muted-foreground"
               : aheadBy > 0
-                ? "text-amber-600 dark:text-amber-400"
-                : "text-emerald-600 dark:text-emerald-400";
+                ? "text-warning"
+                : "text-positive";
           return (
             <span className={paceColor} data-testid={`analysis-pace-${line.categoryId}`}>
               {paceLabel}

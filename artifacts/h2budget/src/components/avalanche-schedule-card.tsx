@@ -28,12 +28,12 @@ const CONFIDENCE_META = {
   high: {
     label: "High",
     className:
-      "border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400",
+      "border-positive/40 text-positive",
   },
   medium: {
     label: "Medium",
     className:
-      "border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-400",
+      "border-warning/40 text-warning",
   },
   low: {
     label: "Low",

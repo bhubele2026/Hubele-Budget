@@ -216,7 +216,7 @@ function CapInline({
       ) : (
         <span className="inline-flex items-baseline gap-1">
           <span
-            className="text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded border border-amber-700/40 text-amber-700"
+            className="text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded border border-warning/40 text-warning"
             title="Override set for this month"
           >
             override
@@ -361,7 +361,7 @@ function WeeklyMonthlySection({
     <section>
       <div className="flex items-end justify-between mb-2">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-amber-700 font-medium">
+          <div className="text-[11px] uppercase tracking-widest text-primary font-medium">
             WEEKLY {formatCurrency(cap)}
           </div>
           <h2 className="text-2xl font-serif font-bold text-foreground">Life spending</h2>
@@ -423,7 +423,7 @@ function WeeklyMonthlySection({
             <div className="flex items-center justify-end gap-2">
               {isClosed ? (
                 <>
-                  <span className="text-[11px] uppercase tracking-widest text-emerald-700 font-medium">
+                  <span className="text-[11px] uppercase tracking-widest text-positive font-medium">
                     Closed out ✓
                   </span>
                   <Button
@@ -469,7 +469,7 @@ function WeeklyMonthlySection({
             {weekTxns.length === 0 ? (
               <div className="text-xs text-muted-foreground py-2">
                 {isCurrentWeek
-                  ? <>All clear — no weekly charges yet this week. Tag them on the <Link href="/amex" className="text-amber-700 underline">Amex page</Link>.</>
+                  ? <>All clear — no weekly charges yet this week. Tag them on the <Link href="/amex" className="text-primary underline">Amex page</Link>.</>
                   : <>No weekly charges in this week.</>}
               </div>
             ) : (
@@ -560,7 +560,7 @@ function MonthlyLikeSection({
     <section>
       <div className="flex items-end justify-between mb-2">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-amber-700 font-medium">
+          <div className="text-[11px] uppercase tracking-widest text-primary font-medium">
             {bucket === "monthly" ? "MONTHLY BUDGET" : "UNPLANNED BUDGET"}
           </div>
           <h2 className="text-2xl font-serif font-bold text-foreground">{title}</h2>
@@ -588,7 +588,7 @@ function MonthlyLikeSection({
             {recent.length === 0 ? (
               <div className="text-sm text-muted-foreground py-2">
                 All clear — no {bucket} charges this month yet. Tag them on the{" "}
-                <Link href="/amex" className="text-amber-700 underline">Amex page</Link>.
+                <Link href="/amex" className="text-primary underline">Amex page</Link>.
               </div>
             ) : (
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
@@ -1028,7 +1028,7 @@ export function ReimbursementsBox({
           </div>
         ) : (
           <div className="space-y-2">
-            <div className="text-4xl font-serif font-bold tabular-nums text-purple-700">
+            <div className="text-4xl font-serif font-bold tabular-nums text-primary">
               {formatCurrency(pendingTotal)}{" "}
               <span className="text-sm font-sans font-normal text-muted-foreground">
                 pending · {pending.length} item
@@ -1201,7 +1201,7 @@ function DashboardHero({ today }: { today: Date }) {
             H2 Budget
           </div>
         </div>
-        <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-4 py-1.5 text-xs font-semibold tracking-widest tabular-nums">
+        <span className="inline-flex items-center rounded-full bg-primary/10 dark:bg-primary/20 text-primary px-4 py-1.5 text-xs font-semibold tracking-widest tabular-nums">
           {dateLabel}
         </span>
       </CardContent>
@@ -1534,15 +1534,15 @@ function MonthVsPlanPanel({ state, today }: { state: MonthlySnapshotState; today
 
   const paceDelta = spentPctRaw - monthElapsedPct;
   let paceLabel: "ON PACE" | "AHEAD" | "BEHIND" = "ON PACE";
-  let paceClass = "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300";
+  let paceClass = "bg-positive/15 text-positive";
   if (paceDelta > 5) {
     paceLabel = "BEHIND";
     paceClass =
-      "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300";
+      "bg-destructive/15 text-destructive";
   } else if (paceDelta < -5) {
     paceLabel = "AHEAD";
     paceClass =
-      "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300";
+      "bg-primary/15 text-primary";
   }
   const overspent = expensesBudget > 0 && expensesActual > expensesBudget;
   const remaining = Math.max(0, expensesBudget - expensesActual);
@@ -1554,7 +1554,7 @@ function MonthVsPlanPanel({ state, today }: { state: MonthlySnapshotState; today
           <CardTitle className="text-base">{shortMonth} vs plan</CardTitle>
           <Link
             href={`/budget?month=${monthStart}`}
-            className="text-xs uppercase tracking-widest text-amber-700 dark:text-amber-400 hover:underline"
+            className="text-xs uppercase tracking-widest text-primary hover:underline"
             data-testid="link-open-budget"
           >
             OPEN BUDGET →
@@ -1809,7 +1809,7 @@ function SourceChip({
       className={
         "text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border transition-colors " +
         (active
-          ? "bg-amber-700 text-white border-amber-700"
+          ? "bg-primary text-primary-foreground border-primary"
           : "bg-transparent text-muted-foreground border-muted-foreground/40 hover:border-muted-foreground")
       }
     >

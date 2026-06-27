@@ -349,24 +349,24 @@ export default function CommandCenterPage() {
     const s = healthScore;
     if (s >= 80)
       return {
-        color: "hsl(150 60% 45%)",
+        color: "hsl(var(--positive))",
         label: "Thriving",
         blurb: "You two are running this like pros. Don't get cocky.",
       };
     if (s >= 60)
       return {
-        color: "hsl(214 82% 62%)",
+        color: "hsl(var(--primary))",
         label: "Solid",
         blurb: "Good shape — a couple tweaks and you're untouchable.",
       };
     if (s >= 40)
       return {
-        color: "hsl(40 95% 55%)",
+        color: "hsl(var(--warning))",
         label: "Shaky",
         blurb: "Wobbling. Tighten the spend before it bites — small cuts, big payoff.",
       };
     return {
-      color: "hsl(0 75% 60%)",
+      color: "hsl(var(--negative))",
       label: "Critical",
       blurb: "Flashing red light. Sort it out before it sorts you.",
     };
@@ -397,7 +397,7 @@ export default function CommandCenterPage() {
     nudge?.severity === "alert"
       ? "text-[hsl(var(--negative))]"
       : nudge?.severity === "warn"
-        ? "text-amber-500"
+        ? "text-warning"
         : "text-primary";
 
   // Daily check-in streak — consecutive days the app was opened.
@@ -817,14 +817,14 @@ export default function CommandCenterPage() {
                 {momCompare.pctChange > 0 ? (
                   <TrendingUp className="w-5 h-5 text-[hsl(var(--negative))]" />
                 ) : (
-                  <TrendingDown className="w-5 h-5 text-emerald-500" />
+                  <TrendingDown className="w-5 h-5 text-positive" />
                 )}
                 <span
                   className={cn(
                     "text-2xl font-bold tabular-nums",
                     momCompare.pctChange > 0
                       ? "text-[hsl(var(--negative))]"
-                      : "text-emerald-500",
+                      : "text-positive",
                   )}
                 >
                   {momCompare.pctChange > 0 ? "+" : ""}
@@ -885,7 +885,7 @@ export default function CommandCenterPage() {
                         signed
                         className={cn(
                           "text-sm font-semibold shrink-0",
-                          a >= 0 ? "text-emerald-500" : "text-foreground",
+                          a >= 0 ? "text-positive" : "text-foreground",
                         )}
                       />
                     </div>
@@ -933,7 +933,7 @@ export default function CommandCenterPage() {
       {/* Badges + Wrapped */}
       <div className="flex flex-wrap items-center gap-2">
         {openStreak >= 2 ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-500">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--chart-3))]/30 bg-[hsl(var(--chart-3))]/10 px-3 py-1.5 text-xs font-bold text-[hsl(var(--chart-3))]">
             <Flame className="w-3.5 h-3.5" />
             {openStreak}-day check-in streak
           </span>
@@ -943,7 +943,7 @@ export default function CommandCenterPage() {
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold border",
               streak.direction === "under"
-                ? "bg-emerald-500/15 text-emerald-500 border-emerald-500/30"
+                ? "bg-positive/15 text-positive border-positive/30"
                 : "bg-[hsl(var(--negative)/0.15)] text-[hsl(var(--negative))] border-[hsl(var(--negative)/0.3)]",
             )}
             data-testid="weekly-streak-chip"

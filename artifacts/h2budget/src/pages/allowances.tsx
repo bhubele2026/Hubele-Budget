@@ -605,7 +605,7 @@ function BucketCard({
         <div
           className={cn(
             "text-sm font-medium tabular-nums",
-            over ? "text-destructive" : "text-emerald-700",
+            over ? "text-destructive" : "text-positive",
           )}
           data-testid={`allowance-variance-${slug}`}
         >
@@ -1116,15 +1116,15 @@ export default function AllowancesPage() {
       {roastForStreak(overStreak) ? (
         <div
           className="rounded-md border-2 px-4 py-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-1 duration-300"
-          style={{ background: "hsl(240 9% 7%)", borderColor: "hsl(0 82% 52%)" }}
+          style={{ background: "hsl(var(--negative) / 0.08)", borderColor: "hsl(var(--negative) / 0.5)" }}
           data-testid="allowance-roast"
         >
-          <Ban className="w-5 h-5 mt-0.5 shrink-0 text-[hsl(0_82%_62%)] animate-pulse" />
+          <Ban className="w-5 h-5 mt-0.5 shrink-0 text-[hsl(var(--negative))] animate-pulse" />
           <div className="min-w-0">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-[hsl(0_82%_64%)]">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-[hsl(var(--negative))]">
               ⚠ Over budget · {overStreak} weeks running
             </div>
-            <div className="text-sm font-bold text-white mt-1 leading-snug">
+            <div className="text-sm font-bold text-foreground mt-1 leading-snug">
               {roastForStreak(overStreak)}
             </div>
           </div>

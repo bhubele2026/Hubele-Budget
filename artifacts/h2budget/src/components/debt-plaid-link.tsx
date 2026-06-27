@@ -78,7 +78,7 @@ export function DebtPlaidIndicator({
   if (source === "plaid") {
     return (
       <span
-        className={`text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-400 ${className}`}
+        className={`text-[10px] uppercase tracking-wide text-positive ${className}`}
         title="Synced from Plaid"
       >
         • plaid
@@ -90,7 +90,7 @@ export function DebtPlaidIndicator({
   if (debt.plaidAccountId) {
     return (
       <span
-        className={`text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-400 ${className}`}
+        className={`text-[10px] uppercase tracking-wide text-warning ${className}`}
         title="Plaid didn't provide this — kept your manual value"
       >
         • manual
@@ -953,11 +953,11 @@ export function DebtReauthBanner({ debts }: { debts: Debt[] | null | undefined }
 
   return (
     <div
-      className="relative flex items-center gap-3 rounded-lg border border-amber-400/60 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100"
+      className="relative flex items-center gap-3 rounded-lg border border-warning/50 bg-warning/10 px-4 py-3 text-foreground"
       data-testid="banner-debt-reauth"
       role="alert"
     >
-      <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+      <AlertTriangle className="h-5 w-5 shrink-0 text-warning" />
       <div className="flex-1 min-w-0">
         <div className="font-medium" data-testid="text-debt-reauth-headline">
           {headline}

@@ -237,7 +237,7 @@ export function KillStack({
 }: {
   /** Sunday of the target week; omit for the last completed week. */
   weekStart?: string;
-  /** Apply the violet focus-glow ring (Home hero treatment). */
+  /** Apply the teal focus-glow ring (Home hero treatment). */
   emphasize?: boolean;
   className?: string;
 }) {

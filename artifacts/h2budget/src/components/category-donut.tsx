@@ -9,12 +9,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 
 const COLORS = [
-  "hsl(214 82% 62%)",
-  "hsl(150 60% 45%)",
-  "hsl(40 95% 55%)",
-  "hsl(0 75% 60%)",
-  "hsl(280 55% 66%)",
-  "hsl(240 6% 55%)",
+  "hsl(193 67% 43%)",
+  "hsl(197 63% 58%)",
+  "hsl(45 95% 50%)",
+  "hsl(33 94% 49%)",
+  "hsl(202 55% 32%)",
+  "hsl(193 50% 62%)",
 ];
 
 /** Donut of the top spend categories this month, with a legend + center total. */

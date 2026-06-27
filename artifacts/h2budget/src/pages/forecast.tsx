@@ -2120,10 +2120,10 @@ export default function ForecastPage({
       {draggingPlans.length > 0 && draggingTargetDate && (
         <Card
           data-testid="card-dragging-plans-summary"
-          className="border-amber-300 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-900"
+          className="border-warning/30 bg-warning/10"
         >
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-amber-900 dark:text-amber-100">
+            <CardTitle className="text-sm flex items-center gap-2 text-warning">
               <AlertCircle className="w-4 h-4" />
               <span>
                 {draggingPlans.length === 1
@@ -2132,7 +2132,7 @@ export default function ForecastPage({
                 {formatDate(draggingTargetDate)}
               </span>
               <span
-                className="ml-auto tabular-nums text-amber-900 dark:text-amber-100"
+                className="ml-auto tabular-nums text-warning"
                 data-testid="dragging-plans-total"
               >
                 {formatCurrency(draggingTotal)}
@@ -2140,13 +2140,13 @@ export default function ForecastPage({
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <p className="text-xs text-amber-900/80 dark:text-amber-100/80 mb-2">
+            <p className="text-xs text-warning/80 mb-2">
               These plans were due earlier but haven't been matched, missed,
               or skipped yet — so the projection keeps them on{" "}
               {formatDate(draggingTargetDate)} until you resolve them.
             </p>
             <ul
-              className="divide-y divide-amber-200 dark:divide-amber-900 rounded-md border border-amber-200 dark:border-amber-900 bg-background"
+              className="divide-y divide-warning/20 rounded-md border border-warning/20 bg-background"
               data-testid="dragging-plans-list"
             >
               {draggingPlans.map((row) => {
@@ -2170,7 +2170,7 @@ export default function ForecastPage({
                       onClick={() =>
                         jumpToPlan(row.itemId, row.originalDate)
                       }
-                      className="flex items-center justify-between gap-3 flex-1 min-w-0 text-left hover:bg-amber-50 dark:hover:bg-amber-950/30 focus-visible:bg-amber-50 dark:focus-visible:bg-amber-950/30 rounded-sm -mx-1 px-1 py-1 outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                      className="flex items-center justify-between gap-3 flex-1 min-w-0 text-left hover:bg-warning/10 focus-visible:bg-warning/10 rounded-sm -mx-1 px-1 py-1 outline-none focus-visible:ring-2 focus-visible:ring-warning"
                       title={`Jump to ${row.label} in the planned-items register`}
                       data-testid={`dragging-plan-jump-${row.itemId}-${row.originalDate}`}
                     >
@@ -2771,16 +2771,16 @@ export default function ForecastPage({
 
       {mode === "overall" && bankInbox.length > 0 && (
         <Card
-          className="border-amber-200 bg-amber-50/60 dark:bg-amber-950/30"
+          className="border-warning/30 bg-warning/10"
           data-testid="banner-review-waiting"
         >
           <CardContent className="p-3 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 text-sm min-w-0">
-              <InboxIcon className="w-4 h-4 text-amber-700 dark:text-amber-300 flex-none" />
-              <span className="font-medium text-amber-900 dark:text-amber-100">
+              <InboxIcon className="w-4 h-4 text-warning flex-none" />
+              <span className="font-medium text-warning">
                 {bankInbox.length} waiting in Review
               </span>
-              <span className="text-xs text-amber-800/80 dark:text-amber-200/80 truncate">
+              <span className="text-xs text-warning/80 truncate">
                 Match Chase activity against your planned items.
               </span>
             </div>
@@ -2851,7 +2851,7 @@ export default function ForecastPage({
                     AND hasn't dismissed the hint yet. */}
                 {!dragHintDismissed && bankInbox.length > 0 && (
                   <div
-                    className="flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100"
+                    className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary"
                     data-testid="drag-to-match-hint"
                     role="note"
                   >
@@ -3251,7 +3251,7 @@ export default function ForecastPage({
                 <Card data-testid="missed-bucket-panel">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 text-amber-600" />
+                      <AlertCircle className="w-4 h-4 text-warning" />
                       Missed in {monthFilter}
                       <Badge variant="outline" className="ml-1 text-[10px]">
                         {missed.length}
@@ -3346,7 +3346,7 @@ export default function ForecastPage({
                 <Card data-testid="rescheduled-bucket-panel">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <CalendarDays className="w-4 h-4 text-violet-600" />
+                      <CalendarDays className="w-4 h-4 text-primary" />
                       Moved from {monthFilter}
                       <Badge variant="outline" className="ml-1 text-[10px]">
                         {moved.length}
@@ -3492,7 +3492,7 @@ export default function ForecastPage({
                 monthSnapshotsMap[monthFilter]?.gap != null && (
                   <Badge
                     variant="outline"
-                    className="bg-amber-50 text-amber-900 border-amber-200"
+                    className="bg-warning/10 text-warning border-warning/30"
                     data-testid="month-gap-at-close"
                   >
                     <AlertCircle className="w-3 h-3 mr-1" />
@@ -3574,7 +3574,7 @@ export default function ForecastPage({
                     data-plan-key={planKey}
                     className={`p-4 flex items-center justify-between gap-3 transition-colors ${
                       isHighlightedBucket
-                        ? "bg-sky-50 ring-2 ring-sky-400 ring-inset dark:bg-sky-950/30"
+                        ? "bg-primary/10 ring-2 ring-primary ring-inset"
                         : ""
                     }`}
                   >

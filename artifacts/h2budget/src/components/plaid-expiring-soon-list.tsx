@@ -144,12 +144,12 @@ export function PlaidExpiringSoonListView({
 
   return (
     <div
-      className="relative rounded-lg border border-amber-400/60 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100"
+      className="relative rounded-lg border border-warning/50 bg-warning/10 px-4 py-3 text-foreground"
       data-testid="alerts-plaid-expiring-soon"
       role="alert"
     >
       <div className="flex items-start gap-3">
-        <CalendarClock className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+        <CalendarClock className="h-5 w-5 shrink-0 text-warning mt-0.5" />
         <div className="flex-1 min-w-0">
           <div
             className="font-medium"

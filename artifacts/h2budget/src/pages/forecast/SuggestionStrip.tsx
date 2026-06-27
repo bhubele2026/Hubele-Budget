@@ -26,7 +26,7 @@ export function SuggestionStrip({
           s.confidence === "high"
             ? "bg-primary/15 text-primary border-primary/30"
             : s.confidence === "medium"
-              ? "bg-amber-50 text-amber-900 border-amber-200"
+              ? "bg-warning/10 text-warning border-warning/30"
               : "bg-muted text-muted-foreground";
         return (
           <Button

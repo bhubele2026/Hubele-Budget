@@ -18,15 +18,15 @@ function dismissKey(): string {
 const SEVERITY_META = {
   info: {
     Icon: Sparkles,
-    accent: "text-sky-600 dark:text-sky-400",
-    bg: "bg-sky-50 dark:bg-sky-950/40",
-    border: "border-sky-200 dark:border-sky-900",
+    accent: "text-primary",
+    bg: "bg-primary/10",
+    border: "border-primary/30",
   },
   warn: {
     Icon: AlertTriangle,
-    accent: "text-amber-600 dark:text-amber-400",
-    bg: "bg-amber-50 dark:bg-amber-950/40",
-    border: "border-amber-200 dark:border-amber-900",
+    accent: "text-warning",
+    bg: "bg-warning/10",
+    border: "border-warning/30",
   },
   alert: {
     Icon: AlertCircle,

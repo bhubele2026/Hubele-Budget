@@ -43,7 +43,7 @@ export function FreedomMeter({
         </div>
         <div className="relative h-3 w-full rounded-full bg-muted overflow-hidden">
           <div
-            className="h-full rounded-full bg-emerald-500 transition-[width] duration-1000 ease-out"
+            className="h-full rounded-full bg-positive transition-[width] duration-1000 ease-out"
             style={{ width: `${Math.round(fill * 100)}%` }}
           />
           {[25, 50, 75].map((m) => (
@@ -56,7 +56,7 @@ export function FreedomMeter({
         </div>
         <div className="mt-2 text-xs text-muted-foreground">
           {debtFree ? (
-            <span className="font-medium text-emerald-500">
+            <span className="font-medium text-positive">
               🎉 Debt-free. Absolute legends.
             </span>
           ) : (

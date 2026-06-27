@@ -1015,7 +1015,7 @@ function FreedForAvalancheBanner({
       className={cn(
         "border-2",
         hasAmmo
-          ? "border-emerald-500/60 bg-zinc-950 text-zinc-50"
+          ? "border-positive/60 bg-zinc-950 text-zinc-50"
           : "border-zinc-700 bg-zinc-950 text-zinc-300",
       )}
       data-testid="freed-for-avalanche"
@@ -1025,7 +1025,7 @@ function FreedForAvalancheBanner({
           <div
             className={cn(
               "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-              hasAmmo ? "bg-emerald-500/20 text-emerald-400" : "bg-zinc-800 text-zinc-500",
+              hasAmmo ? "bg-positive/20 text-positive" : "bg-zinc-800 text-zinc-500",
             )}
           >
             <Sparkles className="h-5 w-5" />
@@ -1045,7 +1045,7 @@ function FreedForAvalancheBanner({
           <div
             className={cn(
               "text-3xl font-bold tabular-nums tracking-tight",
-              hasAmmo ? "text-emerald-400" : "text-zinc-500",
+              hasAmmo ? "text-positive" : "text-zinc-500",
             )}
             data-testid="freed-for-avalanche-amount"
           >
@@ -1079,20 +1079,20 @@ function WeekHeader({ detail }: { detail: WeeklyDebriefDetail }) {
 function StatusBadge({ detail }: { detail: WeeklyDebriefDetail }) {
   if (detail.status === "locked") {
     return (
-      <Badge className="rounded-full bg-emerald-100 text-emerald-900 border-emerald-300" data-testid="badge-status-locked">
+      <Badge className="rounded-full bg-positive/10 text-positive border-positive/30" data-testid="badge-status-locked">
         <Lock className="w-3 h-3 mr-1" /> Locked
       </Badge>
     );
   }
   if (detail.status === "in_progress") {
     return (
-      <Badge variant="outline" className="rounded-full bg-sky-50 text-sky-900 border-sky-300" data-testid="badge-status-inprogress">
+      <Badge variant="outline" className="rounded-full bg-primary/10 text-primary border-primary/30" data-testid="badge-status-inprogress">
         In progress
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="rounded-full bg-amber-100 text-amber-900 border-amber-300" data-testid="badge-status-awaiting">
+    <Badge variant="outline" className="rounded-full bg-warning/10 text-warning border-warning/30" data-testid="badge-status-awaiting">
       <AlertCircle className="w-3 h-3 mr-1" /> Awaiting review
     </Badge>
   );
@@ -1120,10 +1120,10 @@ function WeekChipRow({
           const isActive = w.weekStart === activeWeekStart;
           const statusColor =
             w.status === "locked"
-              ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+              ? "bg-positive/10 text-positive border-positive/30"
               : w.status === "awaiting_review"
-                ? "bg-amber-100 text-amber-900 border-amber-300"
-                : "bg-sky-50 text-sky-900 border-sky-300";
+                ? "bg-warning/10 text-warning border-warning/30"
+                : "bg-primary/10 text-primary border-primary/30";
           return (
             <button
               key={w.weekStart}
@@ -1388,7 +1388,7 @@ function VarianceSummaryCard({
                   <TableCell
                     className={cn(
                       "text-right tabular-nums font-medium",
-                      bad ? "text-red-600" : "text-emerald-700",
+                      bad ? "text-negative" : "text-positive",
                     )}
                     data-testid={`variance-${r.label.toLowerCase()}`}
                   >
@@ -1777,8 +1777,8 @@ function CategoryVarianceTable({
                     const kind = b.categoryId
                       ? (catKindById.get(b.categoryId) ?? "expense")
                       : "expense";
-                    const goodColor = "text-emerald-700";
-                    const badColor = "text-red-600";
+                    const goodColor = "text-positive";
+                    const badColor = "text-negative";
                     const varianceColor =
                       v === 0
                         ? ""
@@ -1904,8 +1904,8 @@ function ActionPanel({
             className={cn(
               "text-[10px] px-1.5 py-0 h-5 tabular-nums",
               openItemsCount > 0
-                ? "bg-amber-100 text-amber-900 border-amber-300"
-                : "bg-emerald-100 text-emerald-900 border-emerald-300",
+                ? "bg-warning/10 text-warning border-warning/30"
+                : "bg-positive/10 text-positive border-positive/30",
             )}
             data-testid="action-panel-open-count"
           >
@@ -1916,7 +1916,7 @@ function ActionPanel({
       <CardContent className="space-y-3">
         {openItemsCount === 0 && (
           <div
-            className="flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+            className="flex items-center gap-2 rounded-md border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive"
             data-testid="action-panel-all-clear"
           >
             <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -2054,7 +2054,7 @@ function SectionShell({
             variant="outline"
             className={cn(
               "text-[10px] px-1.5 py-0 h-5 tabular-nums",
-              count > 0 ? "bg-amber-100 text-amber-900 border-amber-300" : "bg-emerald-100 text-emerald-900 border-emerald-300",
+              count > 0 ? "bg-warning/10 text-warning border-warning/30" : "bg-positive/10 text-positive border-positive/30",
             )}
           >
             {count}
@@ -2576,7 +2576,7 @@ function MonthlySummaryCard({
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
             {monthLabel(month)}
-            <Badge className="bg-emerald-100 text-emerald-900 border-emerald-300">
+            <Badge className="bg-positive/10 text-positive border-positive/30">
               <Lock className="w-3 h-3 mr-1" /> Reconciled
             </Badge>
           </CardTitle>
@@ -2605,7 +2605,7 @@ function MonthlySummaryCard({
               <TableCell
                 className={cn(
                   "text-right tabular-nums font-medium",
-                  varianceNet < 0 ? "text-red-600" : "text-emerald-700",
+                  varianceNet < 0 ? "text-negative" : "text-positive",
                 )}
               >
                 {money(varianceNet, { signed: true })}

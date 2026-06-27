@@ -126,10 +126,10 @@ export function StatChipUnavailable({
 }) {
   return (
     <div
-      className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3.5 text-amber-900 flex flex-col gap-1.5"
+      className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3.5 text-warning flex flex-col gap-1.5"
       data-testid={testId}
     >
-      <div className="text-[11px] font-medium uppercase tracking-[0.1em] text-amber-700 flex items-center gap-1">
+      <div className="text-[11px] font-medium uppercase tracking-[0.1em] text-warning flex items-center gap-1">
         <AlertTriangle className="h-3 w-3" /> {label}
       </div>
       <div className="tabular-nums font-semibold text-lg leading-none">

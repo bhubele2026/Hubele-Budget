@@ -118,7 +118,7 @@ export function PaceGauge({
             !hasIncome
               ? "text-muted-foreground"
               : ahead
-                ? "text-emerald-500"
+                ? "text-positive"
                 : "text-[hsl(var(--negative))]",
           )}
         >

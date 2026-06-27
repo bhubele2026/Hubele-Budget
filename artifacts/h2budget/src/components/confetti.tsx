@@ -11,7 +11,13 @@ type Piece = {
   size: number;
 };
 
-const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#e5e7eb"];
+const COLORS = [
+  "hsl(193 67% 43%)",
+  "hsl(197 63% 58%)",
+  "hsl(45 95% 50%)",
+  "hsl(33 94% 49%)",
+  "hsl(202 55% 40%)",
+];
 
 /**
  * Lightweight, dependency-free confetti burst. Render it and flip `fire` to

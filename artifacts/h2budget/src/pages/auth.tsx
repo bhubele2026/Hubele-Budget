@@ -73,7 +73,7 @@ function PendingInvitationCheck() {
       </form>
       {result.kind === "pending" && (
         <div
-          className="rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 px-3 py-2"
+          className="rounded-md border border-positive/40 bg-positive/10 text-positive px-3 py-2"
           data-testid="text-invite-pending"
         >
           You have a pending invitation for <strong>{result.email}</strong>.

@@ -46,9 +46,9 @@ function formatDate(epoch: number | null | undefined): string {
 function statusBadgeClasses(status: string): string {
   switch (status) {
     case "accepted":
-      return "border-emerald-500/40 text-emerald-700 dark:text-emerald-400";
+      return "border-positive/40 text-positive";
     case "pending":
-      return "border-amber-500/40 text-amber-700 dark:text-amber-400";
+      return "border-warning/40 text-warning";
     case "revoked":
       return "border-muted-foreground/30 text-muted-foreground";
     case "expired":

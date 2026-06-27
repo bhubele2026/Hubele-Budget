@@ -1788,7 +1788,7 @@ export default function MappingRulesPage() {
             addPreview.matchType === matchType &&
             addPreview.candidateCount > 0 && (
               <div
-                className="mt-3 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
+                className="mt-3 flex items-center justify-between gap-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning"
                 data-testid="rule-add-preview"
               >
                 {categoryId ? (
@@ -1909,7 +1909,7 @@ export default function MappingRulesPage() {
                   {testRules.data.winningCategoryId ? (
                     <>
                       Winner:{" "}
-                      <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                      <span className="font-medium text-positive">
                         {catById.get(testRules.data.winningCategoryId)?.name ??
                           "(unknown category)"}
                       </span>
@@ -1929,7 +1929,7 @@ export default function MappingRulesPage() {
 
       {showFocusPill && (
         <div
-          className="flex items-center gap-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
+          className="flex items-center gap-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
           data-testid="focus-pill"
         >
           <span className="flex-1">
@@ -1950,7 +1950,7 @@ export default function MappingRulesPage() {
           <button
             type="button"
             aria-label="Dismiss matched-rules pill"
-            className="text-amber-700 dark:text-amber-300 hover:text-foreground"
+            className="text-warning hover:text-foreground"
             onClick={dismissFocusPill}
             data-testid="focus-pill-dismiss"
           >
@@ -2322,7 +2322,7 @@ export default function MappingRulesPage() {
                                     data-testid={`rule-save-${rule.id}`}
                                     aria-label="Save rule"
                                   >
-                                    <Check className="w-4 h-4 text-emerald-600" />
+                                    <Check className="w-4 h-4 text-positive" />
                                   </Button>
                                   <Button
                                     variant="ghost"
@@ -2339,7 +2339,7 @@ export default function MappingRulesPage() {
                                     editCategoryId &&
                                   editPreview.candidateCount > 0 && (
                                     <div
-                                      className="flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
+                                      className="flex items-center justify-between gap-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning"
                                       data-testid={`rule-edit-preview-${rule.id}`}
                                     >
                                       <span>
