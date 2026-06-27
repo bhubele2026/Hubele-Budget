@@ -18,6 +18,15 @@ import {
   Menu,
   MoreHorizontal,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  getDashboard,
+  getGetDashboardQueryKey,
+  getForecast,
+  getGetForecastQueryKey,
+  getAmexWeeklyPayoff,
+  getGetAmexWeeklyPayoffQueryKey,
+} from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -150,6 +159,26 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const reviewCount = useReviewInboxCount();
   const debriefCount = useDebriefAwaitingCount();
 
+  // (#perf-4) Warm a route's primary, stable-key queries on nav hover/focus so
+  // the page renders from cache on click. Only routes whose query keys are
+  // deterministic (no per-page range/limit params) are prefetched; staleTime
+  // defaults still gate any actual network call.
+  const qc = useQueryClient();
+  const prefetch = (href: string) => {
+    if (href === "/home") {
+      qc.prefetchQuery({ queryKey: getGetDashboardQueryKey(), queryFn: () => getDashboard() });
+      qc.prefetchQuery({
+        queryKey: getGetForecastQueryKey({ days: 90 }),
+        queryFn: () => getForecast({ days: 90 }),
+      });
+    } else if (href === "/amex") {
+      qc.prefetchQuery({
+        queryKey: getGetAmexWeeklyPayoffQueryKey(),
+        queryFn: () => getAmexWeeklyPayoff(),
+      });
+    }
+  };
+
   const railBadge = (href: string): number | null => {
     if (href === "/review" && reviewCount > 0) return reviewCount;
     if (href === "/debrief" && debriefCount > 0) return debriefCount;
@@ -214,6 +243,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               return (
                 <Link key={item.href} href={item.href}>
                   <span
+                    onMouseEnter={() => prefetch(item.href)}
+                    onFocus={() => prefetch(item.href)}
                     className={cn(
                       "flex items-center gap-1.5 px-2.5 h-8 rounded-md text-[13px] cursor-pointer transition-colors",
                       active
