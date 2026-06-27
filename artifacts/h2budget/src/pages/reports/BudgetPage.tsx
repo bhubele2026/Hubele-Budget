@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useReportsData, AdvisorSummaryCard, ReportShell } from "./reportsShared";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { BudgetSection } from "./BudgetSection";
 
 export default function BudgetPage() {
   const [monthOffset, setMonthOffset] = useState("0");
   const d = useReportsData(30, Number(monthOffset));
-  if (d.txnsLoading) return null;
+  if (d.txnsLoading) return <PageSkeleton />;
   return (
     <ReportShell
       crumb="Budget"

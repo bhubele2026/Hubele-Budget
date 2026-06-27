@@ -6,6 +6,7 @@ import {
   ReportsRangeControls,
   daysForMode,
 } from "./reportsShared";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { type RangeMode } from "@/lib/timeRange";
 import { BehaviorSection } from "./BehaviorSection";
 import { SubscriptionInsightsSection } from "@/components/subscription-insights";
@@ -16,7 +17,7 @@ export default function BehaviorPage() {
   const [mode, setMode] = useState<RangeMode>("wk");
   const rangeDays = daysForMode(mode);
   const d = useReportsData(rangeDays, 0);
-  if (d.txnsLoading) return null;
+  if (d.txnsLoading) return <PageSkeleton />;
   return (
     <ReportShell
       crumb="Behavior & Fun"

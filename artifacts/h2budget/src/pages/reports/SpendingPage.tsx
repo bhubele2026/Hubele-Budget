@@ -6,6 +6,7 @@ import {
   ReportsRangeControls,
   daysForMode,
 } from "./reportsShared";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { type RangeMode } from "@/lib/timeRange";
 import { SpendingSection } from "./SpendingSection";
 import { fmtISO } from "@/lib/reportsAnalytics";
@@ -15,7 +16,7 @@ export default function SpendingPage() {
   const [mode, setMode] = useState<RangeMode>("wk");
   const rangeDays = daysForMode(mode);
   const d = useReportsData(rangeDays, 0);
-  if (d.txnsLoading) return null;
+  if (d.txnsLoading) return <PageSkeleton />;
   return (
     <ReportShell
       crumb="Spending"

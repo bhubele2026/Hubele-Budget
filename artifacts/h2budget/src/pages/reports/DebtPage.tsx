@@ -1,9 +1,10 @@
 import { useReportsData, AdvisorSummaryCard, ReportShell } from "./reportsShared";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { DebtSection } from "./DebtSection";
 
 export default function DebtPage() {
   const d = useReportsData(30, 0);
-  if (d.txnsLoading) return null;
+  if (d.txnsLoading) return <PageSkeleton />;
   return (
     <ReportShell
       crumb="Debt Payoff"
