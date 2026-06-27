@@ -1,13 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetAmexWeeklyPayoff,
   useGetSettings,
+  useUpdateSettings,
   useListTransactions,
   useUpdateTransaction,
   getListTransactionsQueryKey,
+  getGetSettingsQueryKey,
   getGetAmexWeeklyPayoffQueryKey,
   type GetAmexWeeklyPayoffParams,
   type AmexWeeklyPayoffCard,
@@ -61,6 +63,8 @@ function fmtWeekRange(start: string, end: string): string {
   };
   return `${f(start)} – ${f(end)}`;
 }
+
+type Cadence = "weekly" | "monthly";
 
 function KillRow({
   card,
@@ -225,6 +229,7 @@ export function KillStack({
   // color). Display metadata only.
   const { data: settings } = useGetSettings();
   const brandOverrides = cardBrandOverrides(settings);
+  const updateSettings = useUpdateSettings();
   const txnsByCard = useMemo(() => {
     const m = new Map<string, Transaction[]>();
     for (const t of weekTxns ?? []) {
@@ -269,6 +274,38 @@ export function KillStack({
       TIER_ORDER[effectiveBrand(a.accountId, a.brand, brandOverrides)] -
       TIER_ORDER[effectiveBrand(b.accountId, b.brand, brandOverrides)],
   );
+
+  // First-run default: with three cards, the MIDDLE one is the monthly "Sky
+  // Card" (top + bottom stay weekly). Seed it once into settings so the backend
+  // windows its charges over the month and it renders in the monthly box below.
+  // Pinned by accountId, so it sticks even if the stack re-sorts. Only fires
+  // when cadence has never been configured — never fights a later manual change.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current) return;
+    if (!settings) return;
+    const prefs = settings.preferences ?? {};
+    if (prefs.amexCardCadence !== undefined) return; // already configured
+    if (allCards.length < 3) return;
+    const middle = allCards[1];
+    if (!middle) return;
+    seededRef.current = true;
+    const prevNames = (prefs.amexCardNames as Record<string, string>) ?? {};
+    void (async () => {
+      await updateSettings.mutateAsync({
+        data: {
+          preferences: {
+            ...prefs,
+            amexCardCadence: { [middle.accountId]: "monthly" },
+            amexCardNames: { ...prevNames, [middle.accountId]: prevNames[middle.accountId] || "Sky Card" },
+          },
+        },
+      });
+      await qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+      await qc.invalidateQueries({ queryKey: getGetAmexWeeklyPayoffQueryKey() });
+    })();
+  }, [settings, allCards, updateSettings, qc]);
+
   // Weekly cards live in the box; monthly cards sit separately beneath it.
   const cards = allCards.filter((c) => c.cadence !== "monthly");
   const monthlyCards = allCards.filter((c) => c.cadence === "monthly");
