@@ -275,6 +275,9 @@ export async function computeWeeklyPayoff(
   // Grouping/display metadata only — never changes a charge amount.
   let cadenceMap: Record<string, string> = {};
   let nameMap: Record<string, string> = {};
+  // Charges the user marked "not mine" (reimbursements) — excluded from the
+  // payoff sum so the per-card "to pay" reflects only household-owed money.
+  let excludedTxnIds = new Set<string>();
   if (ownerUserId) {
     const [s] = await db
       .select({ preferences: settingsTable.preferences })
@@ -283,6 +286,7 @@ export async function computeWeeklyPayoff(
     const prefs = (s?.preferences as Record<string, unknown> | null | undefined) ?? {};
     cadenceMap = (prefs.amexCardCadence as Record<string, string>) ?? {};
     nameMap = (prefs.amexCardNames as Record<string, string>) ?? {};
+    excludedTxnIds = new Set((prefs.amexExcludedTxnIds as string[]) ?? []);
   }
   const cadenceFor = (accountId: string): "weekly" | "monthly" =>
     cadenceMap[accountId] === "monthly" ? "monthly" : "weekly";
@@ -379,6 +383,7 @@ export async function computeWeeklyPayoff(
     externalIds.length > 0
       ? await db
           .select({
+            id: transactionsTable.id,
             plaidAccountId: transactionsTable.plaidAccountId,
             occurredOn: transactionsTable.occurredOn,
             amount: transactionsTable.amount,
@@ -408,6 +413,8 @@ export async function computeWeeklyPayoff(
     // Only count charges inside THIS card's billing window (week or month).
     const win = windowFor(t.plaidAccountId);
     if (t.occurredOn < win.start || t.occurredOn > win.end) continue;
+    // Skip "not mine" charges (reimbursements) — user-excluded from payoff.
+    if (excludedTxnIds.has(t.id)) continue;
     if (!isRealSpend(
       {
         amount: t.amount,

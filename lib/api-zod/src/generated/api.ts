@@ -2174,6 +2174,12 @@ export const GetSettingsResponse = zod.object({
           .describe(
             'Per-card display name, keyed by external Plaid account_id -> custom name (e.g. \"Sky Card\"). Overrides the tier label on the Kill Stack \/ per-card UI.',
           ),
+        amexExcludedTxnIds: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Transaction ids the user has marked \"not mine\" on an Amex card — reimbursements \/ charges paid back by someone else, not out of household funds. The per-card weekly\/monthly payoff total (computeWeeklyPayoff \/ Kill Stack) skips these so the \"to pay\" figure reflects only what the household actually owes. Scoped to the payoff view; does NOT alter the debt anchor (the charge is still on the statement until the credit posts).',
+          ),
       }),
       zod.null(),
     ])
@@ -2231,6 +2237,12 @@ export const UpdateSettingsBody = zod.object({
           .describe(
             'Per-card display name, keyed by external Plaid account_id -> custom name (e.g. \"Sky Card\"). Overrides the tier label on the Kill Stack \/ per-card UI.',
           ),
+        amexExcludedTxnIds: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Transaction ids the user has marked \"not mine\" on an Amex card — reimbursements \/ charges paid back by someone else, not out of household funds. The per-card weekly\/monthly payoff total (computeWeeklyPayoff \/ Kill Stack) skips these so the \"to pay\" figure reflects only what the household actually owes. Scoped to the payoff view; does NOT alter the debt anchor (the charge is still on the statement until the credit posts).',
+          ),
       }),
       zod.null(),
     ])
@@ -2287,6 +2299,12 @@ export const UpdateSettingsResponse = zod.object({
           .optional()
           .describe(
             'Per-card display name, keyed by external Plaid account_id -> custom name (e.g. \"Sky Card\"). Overrides the tier label on the Kill Stack \/ per-card UI.',
+          ),
+        amexExcludedTxnIds: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Transaction ids the user has marked \"not mine\" on an Amex card — reimbursements \/ charges paid back by someone else, not out of household funds. The per-card weekly\/monthly payoff total (computeWeeklyPayoff \/ Kill Stack) skips these so the \"to pay\" figure reflects only what the household actually owes. Scoped to the payoff view; does NOT alter the debt anchor (the charge is still on the statement until the credit posts).',
           ),
       }),
       zod.null(),

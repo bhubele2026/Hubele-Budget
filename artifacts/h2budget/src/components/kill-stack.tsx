@@ -64,8 +64,6 @@ function fmtWeekRange(start: string, end: string): string {
   return `${f(start)} – ${f(end)}`;
 }
 
-type Cadence = "weekly" | "monthly";
-
 function KillRow({
   card,
   tier,
@@ -73,6 +71,8 @@ function KillRow({
   periodStart,
   periodEnd,
   onMove,
+  excludedIds,
+  onToggleExclude,
 }: {
   card: AmexWeeklyPayoffCard;
   tier: AmexTier;
@@ -80,6 +80,8 @@ function KillRow({
   periodStart: string;
   periodEnd: string;
   onMove: (t: Transaction, nextISO: string) => Promise<boolean>;
+  excludedIds: Set<string>;
+  onToggleExclude: (id: string, next: boolean) => void;
 }) {
   const color = brandColor(tier);
   const hasCharges = card.weekCharges > 0;
@@ -154,21 +156,57 @@ function KillRow({
           </p>
           {charges.length > 0 && (
             <ul className="mt-2 divide-y divide-border/60">
-              {charges.map((t) => (
-                <li
-                  key={t.id}
-                  className="flex items-center justify-between gap-2 py-1.5"
-                >
-                  <span className="min-w-0 flex-1 truncate text-foreground">
-                    <span className="text-muted-foreground tabular-nums mr-2">
-                      {fmtTxnDate(t.occurredOn)}
+              {charges.map((t) => {
+                const excluded = excludedIds.has(t.id);
+                return (
+                  <li
+                    key={t.id}
+                    className={cn(
+                      "flex items-center justify-between gap-2 py-1.5",
+                      excluded && "opacity-50",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "min-w-0 flex-1 truncate text-foreground",
+                        excluded && "line-through",
+                      )}
+                    >
+                      <span className="text-muted-foreground tabular-nums mr-2">
+                        {fmtTxnDate(t.occurredOn)}
+                      </span>
+                      {t.description || "Charge"}
                     </span>
-                    {t.description || "Charge"}
-                  </span>
-                  <MoneyText amount={t.amount} abs className="font-medium tabular-nums shrink-0" />
-                  <RowDateControls tx={t} onMove={(next) => onMove(t, next)} />
-                </li>
-              ))}
+                    <MoneyText
+                      amount={t.amount}
+                      abs
+                      className={cn(
+                        "font-medium tabular-nums shrink-0",
+                        excluded && "line-through",
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onToggleExclude(t.id, !excluded)}
+                      title={
+                        excluded
+                          ? "Add this charge back to the payoff"
+                          : "Reimbursement / not paid with our funds — remove from this card's payoff"
+                      }
+                      data-testid={`killstack-exclude-${t.id}`}
+                      className={cn(
+                        "shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition-colors",
+                        excluded
+                          ? "border-primary/40 text-primary hover:bg-primary/10"
+                          : "border-card-border text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      {excluded ? "Add back" : "Not mine"}
+                    </button>
+                    <RowDateControls tx={t} onMove={(next) => onMove(t, next)} />
+                  </li>
+                );
+              })}
             </ul>
           )}
           <Link
@@ -306,6 +344,26 @@ export function KillStack({
     })();
   }, [settings, allCards, updateSettings, qc]);
 
+  // Charges the user flagged "not mine" (reimbursements). Stored in settings;
+  // the backend payoff sum skips them, so toggling here re-drops the card total.
+  const excludedIds = useMemo(
+    () => new Set((settings?.preferences?.amexExcludedTxnIds as string[]) ?? []),
+    [settings],
+  );
+  const toggleExclude = (id: string, next: boolean) => {
+    const prefs = settings?.preferences ?? {};
+    const cur = new Set((prefs.amexExcludedTxnIds as string[]) ?? []);
+    if (next) cur.add(id);
+    else cur.delete(id);
+    void (async () => {
+      await updateSettings.mutateAsync({
+        data: { preferences: { ...prefs, amexExcludedTxnIds: [...cur] } },
+      });
+      await qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+      await qc.invalidateQueries({ queryKey: getGetAmexWeeklyPayoffQueryKey() });
+    })();
+  };
+
   // Weekly cards live in the box; monthly cards sit separately beneath it.
   const cards = allCards.filter((c) => c.cadence !== "monthly");
   const monthlyCards = allCards.filter((c) => c.cadence === "monthly");
@@ -397,6 +455,8 @@ export function KillStack({
                   periodStart={p.start}
                   periodEnd={p.end}
                   onMove={moveTxn}
+                  excludedIds={excludedIds}
+                  onToggleExclude={toggleExclude}
                 />
               );
             })}
@@ -449,6 +509,8 @@ export function KillStack({
                   periodStart={p.start}
                   periodEnd={p.end}
                   onMove={moveTxn}
+                  excludedIds={excludedIds}
+                  onToggleExclude={toggleExclude}
                 />
               );
             })}
