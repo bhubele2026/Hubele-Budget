@@ -5,27 +5,39 @@ import type { Transaction } from "@workspace/api-client-react";
 // server's TRANSFER_PAYMENT_PATTERNS (spendingFilter.ts) plus loan / mortgage /
 // insurance bill words. Tested against the RAW lowercased description.
 const NOISE: ReadonlyArray<string> = [
-  "online transfer",
-  "ach pmt",
-  "ach payment",
+  // generic payment / transfer bank-noise — catches any "… PMT … WEB ID …"
+  " pmt",
+  "pmt ",
+  "payment",
   "web id:",
-  "credit card pmt",
+  "web id ",
+  "ppd id",
+  "transfer",
+  "xfer",
   "autopay",
   "auto pay",
-  "payment thank you",
-  "card pmt",
   "epay",
   "e-payment",
-  "online pmt",
-  "onln pmt",
   "bill pay",
-  "loan servicing",
+  "billpay",
+  "ach ",
+  "ach debit",
+  // debt / loan / mortgage
+  "loan",
+  "servicing",
   "mortgage",
+  "mtg ",
+  // insurance / recurring bill words
   "ins prem",
   "insurance",
   "premium",
+  // common card issuers paying themselves
+  "capital one",
+  "american express",
+  "amex epayment",
   "chase credit",
   "bk of amer",
+  "discover e-payment",
   "wells fargo card",
 ];
 
