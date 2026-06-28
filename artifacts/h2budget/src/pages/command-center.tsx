@@ -28,6 +28,7 @@ import {
   useGetAdvisorNudge,
   useGetSettings,
   useListTransactions,
+  useListRecurringItems,
   useGetAmexWeeklyPayoff,
 } from "@workspace/api-client-react";
 import {
@@ -111,6 +112,14 @@ export default function CommandCenterPage() {
     // it for any realistic household).
     limit: 1000,
   });
+  // Recurring item names feed the Spotlight / Wall of Shame so bills &
+  // subscriptions are excluded — those roast surfaces want random splurges,
+  // not the mortgage.
+  const { data: recurringItemsData } = useListRecurringItems();
+  const recurringNames = useMemo(
+    () => (recurringItemsData ?? []).map((r) => r.name),
+    [recurringItemsData],
+  );
   const [wrappedOpen, setWrappedOpen] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
   const [openStreak, setOpenStreak] = useState(0);
@@ -490,10 +499,10 @@ export default function CommandCenterPage() {
       </StatTileRow>
 
       {/* ── Spender Spotlight: the coach names + roasts the month's top spender ── */}
-      <SpenderSpotlight memberSpend={memberSpend} biggest={biggestSplurge} />
+      <SpenderSpotlight transactions={weeklyTxns ?? []} recurringNames={recurringNames} />
 
       {/* ── Wall of Shame: the month's 3 most reckless charges, ranked + roasted ── */}
-      <WallOfShame transactions={weeklyTxns ?? []} />
+      <WallOfShame transactions={weeklyTxns ?? []} recurringNames={recurringNames} />
 
       {/* ── The loud spine: road out + freedom meter ────────────────────── */}
       <div className="grid lg:grid-cols-2 gap-4 items-start">

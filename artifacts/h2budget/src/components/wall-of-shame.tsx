@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { Transaction } from "@workspace/api-client-react";
+import { isSplurge, makeRecurringMatcher } from "@/lib/discretionarySpend";
 
 const fmt$ = (n: number) => `$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
 
@@ -37,19 +38,20 @@ const PODIUM = [
 
 export function WallOfShame({
   transactions,
+  recurringNames = [],
   className,
 }: {
   transactions: Transaction[];
+  /** Household recurring-item names, so subscriptions/bills are excluded. */
+  recurringNames?: string[];
   className?: string;
 }) {
   const crimes = useMemo<Crime[]>(() => {
     const now = new Date();
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const isRecurring = makeRecurringMatcher(recurringNames);
     return (transactions ?? [])
-      .filter((t) => {
-        const a = Number(t.amount) || 0;
-        return a < 0 && !t.reimbursable && t.occurredOn?.startsWith(ym);
-      })
+      .filter((t) => t.occurredOn?.startsWith(ym) && isSplurge(t, isRecurring))
       .map((t) => ({
         desc: t.description || "Something",
         amt: Number(t.amount) || 0,
@@ -58,7 +60,7 @@ export function WallOfShame({
       }))
       .sort((a, b) => a.amt - b.amt)
       .slice(0, 3);
-  }, [transactions]);
+  }, [transactions, recurringNames]);
 
   if (crimes.length === 0) return null;
 

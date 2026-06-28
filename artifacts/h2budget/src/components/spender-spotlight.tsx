@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { Flame } from "lucide-react";
+import type { Transaction } from "@workspace/api-client-react";
+import { isSplurge, makeRecurringMatcher } from "@/lib/discretionarySpend";
 
 const fmt$ = (n: number) =>
   `$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
@@ -43,24 +45,47 @@ const ROASTS: Array<
 ];
 
 export function SpenderSpotlight({
-  memberSpend,
-  biggest,
+  transactions,
+  recurringNames = [],
   className,
 }: {
-  memberSpend: Member[];
-  biggest: Splurge | null;
+  transactions: Transaction[];
+  /** Household recurring-item names, so subscriptions/bills are excluded. */
+  recurringNames?: string[];
   className?: string;
 }) {
   const data = useMemo(() => {
-    const named = memberSpend.filter(
-      (m) => m.name && m.name.toLowerCase() !== "unassigned" && m.spend > 0,
-    );
+    // Only DISCRETIONARY, non-recurring spend this month — bills, debt
+    // payments, transfers and card payments are not "reckless", they're life.
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const isRecurring = makeRecurringMatcher(recurringNames);
+    const map = new Map<string, number>();
+    let biggest: Splurge | null = null;
+    for (const t of transactions ?? []) {
+      if (!t.occurredOn?.startsWith(ym) || !isSplurge(t, isRecurring)) continue;
+      const amt = Number(t.amount) || 0;
+      const name = (t.member ?? "").trim() || "Unassigned";
+      map.set(name, (map.get(name) ?? 0) + -amt);
+      if (!biggest || amt < biggest.amt) {
+        biggest = {
+          desc: t.description || "Something",
+          amt,
+          member: t.member ?? null,
+          date: t.occurredOn,
+        };
+      }
+    }
+    const named: Member[] = [...map.entries()]
+      .map(([name, spend]) => ({ name, spend }))
+      .filter((m) => m.name.toLowerCase() !== "unassigned" && m.spend > 0)
+      .sort((a, b) => b.spend - a.spend);
     if (named.length === 0) return null;
     const leader = named[0];
     const runner = named[1] ?? null;
     const idx = (Math.floor(leader.spend) + leader.name.length) % ROASTS.length;
     return { leader, runner, line: ROASTS[idx](leader.name, leader.spend, runner, biggest) };
-  }, [memberSpend, biggest]);
+  }, [transactions, recurringNames]);
 
   if (!data) return null;
   const { leader, runner, line } = data;
