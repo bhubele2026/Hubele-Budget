@@ -1,7 +1,12 @@
 import { useMemo } from "react";
 import { Flame } from "lucide-react";
 import type { Transaction } from "@workspace/api-client-react";
-import { isSplurge, makeRecurringMatcher } from "@/lib/discretionarySpend";
+import {
+  isSplurge,
+  makeRecurringMatcher,
+  merchantKey,
+  recurringMerchantsFrom,
+} from "@/lib/discretionarySpend";
 
 const fmt$ = (n: number) =>
   `$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
@@ -60,10 +65,12 @@ export function SpenderSpotlight({
     const now = new Date();
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     const isRecurring = makeRecurringMatcher(recurringNames);
+    const recurringMerchants = recurringMerchantsFrom(transactions);
     const map = new Map<string, number>();
     let biggest: Splurge | null = null;
     for (const t of transactions ?? []) {
       if (!t.occurredOn?.startsWith(ym) || !isSplurge(t, isRecurring)) continue;
+      if (recurringMerchants.has(merchantKey(t.description ?? ""))) continue;
       const amt = Number(t.amount) || 0;
       const name = (t.member ?? "").trim() || "Unassigned";
       map.set(name, (map.get(name) ?? 0) + -amt);

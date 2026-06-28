@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import type { Transaction } from "@workspace/api-client-react";
-import { isSplurge, makeRecurringMatcher } from "@/lib/discretionarySpend";
+import {
+  isSplurge,
+  makeRecurringMatcher,
+  merchantKey,
+  recurringMerchantsFrom,
+} from "@/lib/discretionarySpend";
 
 const fmt$ = (n: number) => `$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
 
@@ -50,8 +55,14 @@ export function WallOfShame({
     const now = new Date();
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     const isRecurring = makeRecurringMatcher(recurringNames);
+    const recurringMerchants = recurringMerchantsFrom(transactions);
     return (transactions ?? [])
-      .filter((t) => t.occurredOn?.startsWith(ym) && isSplurge(t, isRecurring))
+      .filter(
+        (t) =>
+          t.occurredOn?.startsWith(ym) &&
+          isSplurge(t, isRecurring) &&
+          !recurringMerchants.has(merchantKey(t.description ?? "")),
+      )
       .map((t) => ({
         desc: t.description || "Something",
         amt: Number(t.amount) || 0,

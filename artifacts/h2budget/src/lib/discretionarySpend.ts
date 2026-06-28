@@ -74,6 +74,50 @@ export function makeRecurringMatcher(
 }
 
 /**
+ * A stable-ish merchant key from a raw description — lowercased, id/number
+ * tokens dropped, first few words kept. "UPSTART NETWORK 12345" and "Upstart"
+ * collapse to "upstart"; "SHORTSTORY BOX" -> "shortstory box".
+ */
+export function merchantKey(desc: string): string {
+  return (desc ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .split(/\s+/)
+    .filter((w) => w && !/^\d+$/.test(w) && !(w.length >= 5 && /\d/.test(w)))
+    .slice(0, 3)
+    .join(" ")
+    .trim();
+}
+
+/**
+ * Detect recurring/"monthly" merchants straight from the transaction history:
+ * any merchant whose charges land in `minMonths`+ distinct calendar months is
+ * a subscription / loan / bill (Upstart, a box subscription, etc.) — not a
+ * one-off splurge. Built over the full fetched window (~90 days), so it works
+ * even when the merchant was never set up as a recurring item.
+ */
+export function recurringMerchantsFrom(
+  txns: Transaction[],
+  minMonths = 2,
+): Set<string> {
+  const months = new Map<string, Set<string>>();
+  for (const t of txns ?? []) {
+    if (!t.occurredOn) continue;
+    const key = merchantKey(t.description ?? "");
+    if (key.length < 3) continue;
+    let s = months.get(key);
+    if (!s) {
+      s = new Set<string>();
+      months.set(key, s);
+    }
+    s.add(t.occurredOn.slice(0, 7));
+  }
+  const out = new Set<string>();
+  for (const [k, s] of months) if (s.size >= minMonths) out.add(k);
+  return out;
+}
+
+/**
  * A real, discretionary, NON-recurring outflow — the kind actually worth
  * roasting. Excludes income, reimbursements, transfers, external card payments,
  * debt payments, bill/payment bank-noise, and anything matching a known
