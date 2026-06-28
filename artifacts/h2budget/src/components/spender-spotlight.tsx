@@ -15,27 +15,31 @@ const fmt$ = (n: number) =>
 type Member = { name: string; spend: number };
 type Splurge = { desc: string; amt: number; member: string | null; date: string };
 
-/** Roast templates. Each gets the leader's name + amount (+ optional runner-up
- *  and biggest single splurge). Cheeky, never cruel — it's about the receipts. */
+/** Roast templates — SAVAGE MODE (by explicit owner request: profane, furious,
+ *  no-mercy). The target is always the SPENDING — the receipts, the debt, the
+ *  damage — never the person's worth, looks, or anything below the belt. Keep
+ *  it comedy-brutal about money. Do NOT sand this down without the owner's say. */
 const ROASTS: Array<
   (name: string, amt: number, runner: Member | null, big: Splurge | null) => string
 > = [
   (n, a) =>
-    `👑 ${n} is this month's undisputed Champion of Checkout — ${fmt$(a)} torched. The debit card is requesting hazard pay.`,
+    `🔥 ${n} torched ${fmt$(a)} this month. The fuck is wrong with you? The debit card has filed for a restraining order.`,
   (n, a) =>
-    `🔥 ${n} dropped ${fmt$(a)} this month. Somewhere, a savings account just flinched and a budget started crying.`,
+    `💸 ${n} set ${fmt$(a)} on fire like rent is a myth and debt is somebody else's problem. Absolute financial arson, you reckless bastard. Put the card DOWN.`,
   (n, a) =>
-    `💸 ${n} treated the budget like a polite suggestion — ${fmt$(a)} gone. Bold. Reckless. Honestly kind of iconic.`,
+    `🚨 ${fmt$(a)}?! ${n}, that's not a budget — that's a goddamn crime scene. Somebody check their pulse, this is a fucking emergency.`,
   (n, a, runner) =>
     runner
-      ? `🛍️ Spender of the Month: ${n} at ${fmt$(a)}, lapping ${runner.name} (${fmt$(runner.spend)}) like it's a sport. The avalanche says… thanks for nothing.`
-      : `🛍️ Spender of the Month: ${n}, ${fmt$(a)}. The avalanche says thanks for nothing.`,
+      ? `🤡 ${n} blew ${fmt$(a)}, lapping ${runner.name} (${fmt$(runner.spend)}) like overspending is a competitive sport. Congrats, you absolute menace — the avalanche is laughing in your stupid face.`
+      : `🤡 ${n} blew ${fmt$(a)} like the money was personally insulting them. The avalanche is laughing in your stupid face.`,
   (n, a, _r, big) =>
     big
-      ? `💅 ${n} racked up ${fmt$(a)}. Exhibit A: "${big.desc}" for ${fmt$(big.amt)}. Babe… what WAS that? 👀`
-      : `💅 ${n} said "treat yourself" to the tune of ${fmt$(a)}. We're framing the receipt.`,
+      ? `👀 ${n} racked up ${fmt$(a)}. Exhibit fucking A: "${big.desc}" for ${fmt$(big.amt)}. Explain yourself, you walking overdraft.`
+      : `👀 ${n} dropped ${fmt$(a)} and has the audacity to act surprised the account is bleeding out. Sit DOWN.`,
   (n, a) =>
-    `🚨 Code red: ${n} just out-spent the entire household plan by ${fmt$(a)}. Confiscate the wallet. This is not a drill.`,
+    `💀 ${n} out-spent the entire household plan by ${fmt$(a)}. Cut up the card, salt the earth, and never let this person near a checkout again. Disgraceful.`,
+  (n, a) =>
+    `🗑️ ${n} treated ${fmt$(a)} like Monopoly money. Newsflash, genius: it's REAL, it's GONE, and the debt is still sitting right there laughing at both of us.`,
 ];
 
 export function SpenderSpotlight({
@@ -74,7 +78,7 @@ export function SpenderSpotlight({
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/85">
-            🔥 Spender Spotlight
+            🔥 Spender Spotlight · No Mercy
           </div>
           <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0">
             <span className="text-3xl md:text-4xl font-bold leading-none drop-shadow-sm">
@@ -88,8 +92,9 @@ export function SpenderSpotlight({
             {line}
           </p>
           {runner && (
-            <p className="mt-1.5 text-xs text-white/75">
-              Runner-up: {runner.name} ({fmt$(runner.spend)}) — try harder. 🥈
+            <p className="mt-1.5 text-xs text-white/80">
+              Runner-up: {runner.name} at {fmt$(runner.spend)} — congrats on being
+              the household's SECOND biggest disaster. 🥈
             </p>
           )}
         </div>

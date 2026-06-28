@@ -56,8 +56,12 @@ to get the household out of debt; correctness and trust beat everything.
 - **No route may render a blank screen.** Unfinished/loading routes show a
   placeholder or skeleton **inside the shared layout** (`PageSkeleton`), never
   a white page.
-- **Voice:** direct, witty, motivating — **no profanity or insults.** A blunt
-  coach who's on the user's side, every nudge pointed at getting out of debt.
+- **Voice:** savage, profane, brutally funny — **no-mercy, by explicit owner
+  request.** Swearing and hard roasting are encouraged, but aim every shot at
+  the **spending and the debt** (receipts, splurges, payoff date), never at a
+  person's looks, body, intelligence, or worth; no slurs, nothing sexual. A
+  furious coach who's 100% on the household's side, every nudge pointed at
+  getting out of debt. (Single source of truth: `advisorVoice.ts` VOICE_SYSTEM.)
 
 ## 4. Workflow
 
