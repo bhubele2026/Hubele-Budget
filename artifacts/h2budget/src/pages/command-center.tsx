@@ -42,6 +42,7 @@ import { SavingsGoal } from "@/components/savings-goal";
 import { DrillCard } from "@/components/drill-card";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { SpenderSpotlight } from "@/components/spender-spotlight";
+import { WallOfShame } from "@/components/wall-of-shame";
 import { PillBadge } from "@/components/pill-badge";
 import { KillStack } from "@/components/kill-stack";
 import { Sparkline, StackBar, RingStat, HeatStrip, MiniBars, MoneyText } from "@/components/viz";
@@ -490,6 +491,9 @@ export default function CommandCenterPage() {
 
       {/* ── Spender Spotlight: the coach names + roasts the month's top spender ── */}
       <SpenderSpotlight memberSpend={memberSpend} biggest={biggestSplurge} />
+
+      {/* ── Wall of Shame: the month's 3 most reckless charges, ranked + roasted ── */}
+      <WallOfShame transactions={weeklyTxns ?? []} />
 
       {/* ── The loud spine: road out + freedom meter ────────────────────── */}
       <div className="grid lg:grid-cols-2 gap-4 items-start">

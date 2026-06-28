@@ -107,8 +107,11 @@ export function AdvisorChat() {
 
   if (!nudge?.enabled) return null;
 
-  const send = () => {
-    const text = draft.trim();
+  const ROAST_PROMPT =
+    "Roast me. Pull up my worst spending lately and absolutely destroy me about it — no mercy, full savage, tie it to the payoff date. Then tell me the one move to fix it.";
+
+  const send = (explicit?: string) => {
+    const text = (typeof explicit === "string" ? explicit : draft).trim();
     if (!text || mutation.isPending) return;
     // If a context block was staged (Dig deeper from the debrief),
     // prepend it once to the OUTGOING message only. We still show
@@ -202,31 +205,42 @@ export function AdvisorChat() {
             )}
           </div>
 
-          <div className="border-t px-3 py-3 flex items-end gap-2">
-            <Input
-              ref={inputRef}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              placeholder="Ask about your budget…"
-              maxLength={4000}
+          <div className="border-t px-3 pt-2 pb-3 space-y-2">
+            <button
+              type="button"
+              onClick={() => send(ROAST_PROMPT)}
               disabled={mutation.isPending}
-              data-testid="advisor-input"
-            />
-            <Button
-              onClick={send}
-              disabled={!draft.trim() || mutation.isPending}
-              size="icon"
-              aria-label="Send"
-              data-testid="advisor-send"
+              data-testid="advisor-roast-me"
+              className="roast-card relative overflow-hidden w-full rounded-[10px] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white disabled:opacity-50"
             >
-              <Send className="w-4 h-4" />
-            </Button>
+              <span className="relative z-10">🔥 Roast me — no mercy</span>
+            </button>
+            <div className="flex items-end gap-2">
+              <Input
+                ref={inputRef}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                placeholder="Ask about your budget…"
+                maxLength={4000}
+                disabled={mutation.isPending}
+                data-testid="advisor-input"
+              />
+              <Button
+                onClick={() => send()}
+                disabled={!draft.trim() || mutation.isPending}
+                size="icon"
+                aria-label="Send"
+                data-testid="advisor-send"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </Card>
       )}
