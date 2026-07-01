@@ -20,7 +20,7 @@ import {
   shortDate,
 } from "./avalancheScheduler";
 
-const DEFAULT_MODEL = "claude-sonnet-4-5";
+const DEFAULT_MODEL = "claude-opus-4-8";
 const MAX_OUTPUT_TOKENS = 700;
 const ANTHROPIC_TIMEOUT_MS = 12_000;
 

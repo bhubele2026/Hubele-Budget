@@ -1,7 +1,7 @@
 // (Play B) Per-tab Claude narrative for the five Reports tabs.
 //
 // Follows avalancheAdvisorSummary.ts / debriefAdvisorSummary.ts exactly:
-// same Anthropic client setup, same DEFAULT_MODEL ("claude-sonnet-4-5"),
+// same Anthropic client setup, same DEFAULT_MODEL ("claude-opus-4-8"),
 // same 12s AbortController timeout, same 3-layer fallback
 // (AI call -> deterministic template -> minimal single-line summary).
 //
@@ -29,7 +29,7 @@ import { buildSpendingFacts as buildSpendingFactsPipeline } from "./spendingFact
 import { buildBehaviorFacts as buildBehaviorFactsPipeline } from "./behaviorFacts";
 import { buildBudgetFacts as buildBudgetFactsPipeline } from "./budgetFacts";
 
-const DEFAULT_MODEL = "claude-sonnet-4-5";
+const DEFAULT_MODEL = "claude-opus-4-8";
 const MAX_OUTPUT_TOKENS = 600;
 const ANTHROPIC_TIMEOUT_MS = 12_000;
 

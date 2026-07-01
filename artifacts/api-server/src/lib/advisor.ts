@@ -21,7 +21,7 @@ import {
 // Configuration
 // ---------------------------------------------------------------------------
 
-const DEFAULT_MODEL = "claude-sonnet-4-5";
+const DEFAULT_MODEL = "claude-opus-4-8";
 const MAX_HISTORY_TURNS = 12;
 const MAX_OUTPUT_TOKENS_CHAT = 800;
 const MAX_OUTPUT_TOKENS_NUDGE = 200;

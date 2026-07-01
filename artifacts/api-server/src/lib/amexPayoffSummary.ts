@@ -12,7 +12,7 @@ import { logger } from "./logger";
 import { VOICE_SYSTEM, voiceFallback } from "./advisorVoice";
 import type { AmexWeeklyPayoff } from "./amexAnchor";
 
-const DEFAULT_MODEL = "claude-sonnet-4-5";
+const DEFAULT_MODEL = "claude-opus-4-8";
 const MAX_OUTPUT_TOKENS = 200;
 const ANTHROPIC_TIMEOUT_MS = 12_000;
 

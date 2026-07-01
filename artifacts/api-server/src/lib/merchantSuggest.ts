@@ -13,7 +13,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { cleanMerchant, merchantSignature } from "./merchantNameExtract";
 import { logger } from "./logger";
 
-const DEFAULT_MODEL = "claude-sonnet-4-5";
+// High-volume, mechanical name cleanup — runs on Haiku 4.5 (cheap/fast), tuned
+// independently of the advisor/roast reasoning models via CATEGORIZE_MODEL.
+const DEFAULT_MODEL = "claude-haiku-4-5";
 const MAX_OUTPUT_TOKENS = 60;
 const ANTHROPIC_TIMEOUT_MS = 12_000;
 const MAX_NAME_LEN = 60;
@@ -27,7 +29,7 @@ function getClient(): Anthropic | null {
   return _client;
 }
 function getModel(): string {
-  return process.env.ADVISOR_MODEL || DEFAULT_MODEL;
+  return process.env.CATEGORIZE_MODEL || DEFAULT_MODEL;
 }
 
 const SYSTEM_PROMPT = `You clean up messy bank/credit-card transaction descriptions into the short, human-friendly name of the merchant or payee.
