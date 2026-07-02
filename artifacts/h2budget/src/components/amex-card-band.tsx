@@ -66,11 +66,18 @@ export function AmexCardBand({
         <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
           All cards
         </div>
-        <div className="mt-2 text-xl font-bold">
+        <div className="mt-2 text-2xl font-bold leading-none tabular-nums">
           <MoneyText amount={data?.combinedStatementBalance ?? 0} />
         </div>
-        <div className="mt-1 text-xs text-muted-foreground">
-          {<MoneyText amount={data?.combinedWeekCharges ?? 0} />} charged last week
+        <div className="mt-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+          combined balance
+        </div>
+        <div className="mt-3 border-t border-card-border pt-2 text-xs text-muted-foreground">
+          <MoneyText
+            amount={data?.combinedWeekCharges ?? 0}
+            className="font-semibold text-foreground"
+          />{" "}
+          charged this week
         </div>
       </button>
 
@@ -97,27 +104,36 @@ export function AmexCardBand({
               onClick={() => onSelect(c.accountId)}
               className="w-full text-left transition-opacity hover:opacity-90"
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ background: color }}
-                  />
-                  {names[c.accountId] || BRAND_LABEL[tier] || c.name}
-                </span>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ background: color }}
+                    />
+                    <span className="truncate">
+                      {names[c.accountId] || BRAND_LABEL[tier] || c.name}
+                    </span>
+                  </span>
+                  <div className="mt-2 text-2xl font-bold leading-none tabular-nums">
+                    <MoneyText amount={c.statementBalance} />
+                  </div>
+                  <div className="mt-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+                    statement balance
+                  </div>
+                </div>
                 <RingStat
                   value={c.pctOfStatementThisWeek}
-                  size={36}
-                  stroke={4}
+                  size={52}
+                  stroke={5}
                   color={color}
-                  centerText=""
+                  centerText={`${Math.round((c.pctOfStatementThisWeek ?? 0) * 100)}%`}
+                  centerSub="cleared"
                 />
               </div>
-              <div className="mt-2 text-xl font-bold">
-                <MoneyText amount={c.statementBalance} />
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                <MoneyText amount={c.weekCharges} /> this week
+              <div className="mt-3 border-t border-card-border pt-2 text-xs text-muted-foreground">
+                <MoneyText amount={c.weekCharges} className="font-semibold text-foreground" />{" "}
+                charged this week
               </div>
             </button>
             <div className="mt-2">
