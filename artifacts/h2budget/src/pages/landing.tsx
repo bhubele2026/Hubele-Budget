@@ -525,19 +525,15 @@ function AvalancheTile() {
       title="Avalanche"
       blurb="Attack the debt — manage the payoff plan and free-by date."
     >
-      {totalDebt > 0 && (
-        <div className="mt-4 flex items-baseline gap-2 leading-none">
-          <div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
-              Total debt left
-            </div>
-            <MoneyText amount={totalDebt} className="text-lg font-bold tabular-nums" />
+      {/* Never show the amount owed here — payoff PROGRESS only. */}
+      {overallPaid != null && (
+        <div className="mt-4 leading-none">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+            Payoff progress
           </div>
-          {overallPaid != null && (
-            <span className="text-xs font-semibold text-[hsl(var(--positive))]">
-              {Math.round(overallPaid * 100)}% paid
-            </span>
-          )}
+          <span className="text-lg font-bold tabular-nums text-[hsl(var(--positive))]">
+            {Math.round(overallPaid * 100)}% paid
+          </span>
         </div>
       )}
       <div className="mt-4 flex items-end justify-between gap-4">
@@ -595,12 +591,14 @@ export default function LandingPage() {
   const reviewCount = useReviewInboxCount();
 
   return (
-    <div className="relative min-h-full w-full">
+    <div className="relative isolate min-h-full w-full">
       <LandingBackdrop />
 
-      <div className="relative mx-auto w-full max-w-5xl px-2 pb-16 pt-10 sm:px-4 sm:pt-16">
+      {/* Content sits above the backdrop; top padding clears the mesh ribbon so
+          the greeting reads just below it (no dead band). */}
+      <div className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-14 pt-28 sm:px-6 sm:pt-36">
         {/* Greeting + account controls */}
-        <div className="mb-8 flex items-start justify-between gap-4">
+        <div className="mb-7 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Hey, {who}.</h1>
             <p className="mt-1 text-base text-muted-foreground">
@@ -628,7 +626,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <BankingTile />
           <BillsTile />
           <ForecastTile />
