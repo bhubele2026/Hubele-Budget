@@ -101,13 +101,10 @@ function formatTxnDate(iso: string): string {
   });
 }
 
-// Spend convention matches the rest of the app: charges are stored as a
-// negative `amount`; this returns the positive spend magnitude (and 0 for
-// credits/refunds), exactly like the Dashboard's `expenseAmount`.
-function expenseAmount(t: Transaction): number {
-  const a = Number(t.amount) || 0;
-  return a < 0 ? -a : 0;
-}
+// Spend magnitude, shared with the Banking dashboard via lib/bucketSpend so the
+// two surfaces always agree. Source-aware: Amex charges are stored positive,
+// bank/Chase charges negative — both count as spend.
+import { expenseMagnitude as expenseAmount } from "@/lib/bucketSpend";
 
 // How many COMPLETED weeks in a row, ending last week, did they blow the
 // weekly allowance? Walks back week-by-week from the last finished Sun–Sat

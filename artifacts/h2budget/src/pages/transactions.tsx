@@ -1917,17 +1917,41 @@ export default function TransactionsPage() {
     bucket: BucketKey,
     next: boolean,
   ) => {
-    const data: Record<string, boolean> = {};
-    if (bucket === "weekly") data.weeklyAllowance = next;
-    else if (bucket === "monthly") data.monthlyAllowance = next;
-    else if (bucket === "unplanned") data.unplannedAllowance = next;
-    else if (bucket === "reimbursable") data.reimbursable = next;
+    const data: Record<string, boolean | string | null> = {};
+    if (bucket === "reimbursable") {
+      // Reimbursable is an orthogonal flag — leave the spend bucket alone.
+      data.reimbursable = next;
+    } else {
+      // Weekly / Monthly / Unplanned are mutually exclusive: marking one clears
+      // the others so a charge lives in exactly one bucket (or none).
+      data.weeklyAllowance = bucket === "weekly" ? next : false;
+      data.monthlyAllowance = bucket === "monthly" ? next : false;
+      data.unplannedAllowance = bucket === "unplanned" ? next : false;
+      data.weeklyBucket =
+        bucket === "weekly" && next ? (tx.weeklyBucket ?? "misc") : null;
+    }
     updateTx.mutate(
       { id: tx.id, data },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({
             queryKey: getListTransactionsQueryKey(),
+          });
+          // Refresh every surface that sums the buckets so the dashboard,
+          // Allowances and Budget totals move the instant you re-file a charge.
+          queryClient.invalidateQueries({
+            predicate: (q) => {
+              const k = q.queryKey?.[0];
+              return (
+                typeof k === "string" &&
+                (k.includes("/dashboard") ||
+                  k.includes("/budget") ||
+                  k.includes("/amex") ||
+                  k.includes("/allowance") ||
+                  k.includes("/banking") ||
+                  k.includes("/reports"))
+              );
+            },
           });
         },
         // (#642) Surface the server-side "transfer can't be

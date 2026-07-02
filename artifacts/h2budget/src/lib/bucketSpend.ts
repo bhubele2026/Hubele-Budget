@@ -16,6 +16,7 @@ import { effectiveBucket, type AllowanceBucket } from "@/lib/weeklyBuckets";
 export type BucketTxn = {
   occurredOn?: string | null;
   amount?: string | number | null;
+  source?: string | null;
   weeklyAllowance?: boolean | null;
   monthlyAllowance?: boolean | null;
   unplannedAllowance?: boolean | null;
@@ -25,10 +26,17 @@ export type BucketTxn = {
   debtId?: string | null;
 };
 
-/** Positive spend magnitude for an expense; 0 for income/credits. */
+/**
+ * Positive spend magnitude for an expense; 0 for income/credits.
+ * Source-aware: Amex charges are stored POSITIVE (payments negative), bank/Chase
+ * charges are stored NEGATIVE — mirrors the Amex page + server budget actuals so
+ * a weekly/monthly/unplanned bucket counts BOTH Chase and Amex expenses.
+ */
 export function expenseMagnitude(t: BucketTxn): number {
   const a = Number(t.amount) || 0;
-  return a < 0 ? -a : 0;
+  const isAmex =
+    t.source === "amex" || (t.source ?? "").startsWith("plaid:amex");
+  return isAmex ? (a > 0 ? a : 0) : a < 0 ? -a : 0;
 }
 
 /** True unless the row is a transfer / card payment / reimbursable / debt pay. */
