@@ -24,6 +24,7 @@ import {
   ChevronRight,
   CalendarDays,
   CalendarRange,
+  Zap,
 } from "lucide-react";
 import { SyncButton } from "@/components/sync-button";
 import {
@@ -35,8 +36,29 @@ import {
   useListRecurringItems,
   useListCategories,
   useGetBudgetMonth,
+  useUpdateTransaction,
   getGetBudgetMonthQueryKey,
+  getListTransactionsQueryKey,
+  getGetDashboardQueryKey,
+  TransactionWeeklyBucket,
+  type Transaction,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   weeklyBudgetStreak,
   isoDaysAgo,
@@ -111,6 +133,129 @@ function greetingFor(hour: number): string {
   return "Burning the midnight oil";
 }
 
+// ── Drill-panel plumbing ────────────────────────────────────────────────────
+// The three mutually-exclusive allowance buckets a spend can live in. Mirrors
+// /amex's setRowBucket: picking one sets its flag true and clears the other
+// two in the SAME PATCH, so a txn can never sit in two buckets at once.
+type BucketKey = "weekly" | "monthly" | "unplanned";
+const BUCKET_OPTIONS: { key: BucketKey; label: string }[] = [
+  { key: "weekly", label: "Weekly" },
+  { key: "monthly", label: "Monthly" },
+  { key: "unplanned", label: "Unplanned" },
+];
+
+function currentBucket(
+  t: Pick<Transaction, "weeklyAllowance" | "monthlyAllowance" | "unplannedAllowance">,
+): "" | BucketKey {
+  if (t.weeklyAllowance) return "weekly";
+  if (t.monthlyAllowance) return "monthly";
+  if (t.unplannedAllowance) return "unplanned";
+  return "";
+}
+
+// Same category→weekly-sub-bucket default the Amex review flow uses, so a
+// spend moved INTO Weekly from here lands in a sensible sub-bucket instead of
+// always "misc".
+function defaultWeeklyBucketFor(
+  categoryName: string,
+): (typeof TransactionWeeklyBucket)[keyof typeof TransactionWeeklyBucket] {
+  const n = categoryName.toLowerCase();
+  if (n.includes("grocer")) return TransactionWeeklyBucket.groceries;
+  if (n.includes("dining") || n.includes("restaurant") || n.includes("food"))
+    return TransactionWeeklyBucket.dining;
+  if (n.includes("entertain")) return TransactionWeeklyBucket.entertainment;
+  return TransactionWeeklyBucket.misc;
+}
+
+function formatTxnDate(iso: string): string {
+  return new Date(iso + "T00:00:00").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/** One transaction inside the Week / Month / Unplanned drill panel:
+ *  date · merchant · amount, plus the two re-file controls (category picker +
+ *  bucket mover). Reuses the exact Select pattern from /allowances' TxnRow —
+ *  no new control styles. */
+function DrillTxnRow({
+  t,
+  categories,
+  pending,
+  onMoveBucket,
+  onChangeCategory,
+}: {
+  t: Transaction;
+  categories: { id: string; name: string }[];
+  pending: boolean;
+  onMoveBucket: (t: Transaction, bucket: BucketKey) => void;
+  onChangeCategory: (t: Transaction, categoryId: string) => void;
+}) {
+  const bucket = currentBucket(t);
+  return (
+    <div
+      className={cn("py-2.5", pending && "opacity-50 pointer-events-none")}
+      data-testid={`cc-drill-txn-${t.id}`}
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <span className="w-12 shrink-0 text-[10px] uppercase tracking-widest text-muted-foreground tabular-nums">
+            {formatTxnDate(t.occurredOn)}
+          </span>
+          <span className="truncate text-sm font-medium">
+            {t.description || "Mystery charge"}
+          </span>
+        </div>
+        <MoneyText
+          amount={Number(t.amount) || 0}
+          abs
+          className="shrink-0 text-sm font-semibold tabular-nums"
+        />
+      </div>
+      <div className="mt-1.5 flex items-center gap-2 pl-[3.75rem]">
+        <Select
+          value={bucket || undefined}
+          onValueChange={(v) => onMoveBucket(t, v as BucketKey)}
+        >
+          <SelectTrigger
+            className="h-7 w-[118px] text-xs"
+            aria-label="Allowance bucket"
+            data-testid={`cc-drill-bucket-${t.id}`}
+          >
+            <SelectValue placeholder="No bucket" />
+          </SelectTrigger>
+          <SelectContent>
+            {BUCKET_OPTIONS.map((b) => (
+              <SelectItem key={b.key} value={b.key} className="text-xs">
+                {b.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={t.categoryId ?? undefined}
+          onValueChange={(v) => onChangeCategory(t, v)}
+        >
+          <SelectTrigger
+            className="h-7 min-w-[140px] flex-1 text-xs"
+            aria-label="Category"
+            data-testid={`cc-drill-category-${t.id}`}
+          >
+            <SelectValue placeholder="Uncategorized" />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={c.id} className="text-xs">
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
 /** Small ◀ ▶ pager chip used inside a StatTile label — matches the tile's
  *  on-gradient white styling; no new card style. */
 function PeriodPager({
@@ -139,10 +284,15 @@ function PeriodPager({
         {title}
       </span>
       <span className="ml-auto flex items-center gap-1">
+        {/* The tile around this pager is itself clickable (opens the drill),
+            so the steppers stop propagation — ◀ ▶ only move the period. */}
         <button
           type="button"
           className={btn}
-          onClick={onPrev}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrev();
+          }}
           disabled={!canPrev}
           aria-label={`Previous ${title.toLowerCase()}`}
         >
@@ -154,7 +304,10 @@ function PeriodPager({
         <button
           type="button"
           className={btn}
-          onClick={onNext}
+          onClick={(e) => {
+            e.stopPropagation();
+            onNext();
+          }}
           disabled={!canNext}
           aria-label={`Next ${title.toLowerCase()}`}
         >
@@ -213,6 +366,13 @@ export default function CommandCenterPage() {
   // negative = back in time. Forward is capped at 0 (can't spend the future).
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
+  // Which drill panel is open (click a tile / the Unplanned strip), and which
+  // row currently has a PATCH in flight (dimmed while saving).
+  const [drill, setDrill] = useState<null | "week" | "month" | "unplanned">(null);
+  const [pendingTxnId, setPendingTxnId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const updateTx = useUpdateTransaction();
 
   const { user } = useUser();
   const who = user?.firstName?.trim() || "Hubeles";
@@ -245,19 +405,28 @@ export default function CommandCenterPage() {
     () => recurringMerchantsFrom(weeklyTxns ?? []),
     [weeklyTxns],
   );
-  const discretionaryInWindow = useMemo(() => {
-    return (startISO: string, endISO: string) => {
-      let s = 0;
+  // The txns behind the number: the drill panel lists EXACTLY this set, so
+  // its rows always sum to what the tile shows (same filter, same window).
+  const discretionaryTxnsInWindow = useMemo(() => {
+    return (startISO: string, endISO: string): Transaction[] => {
+      const out: Transaction[] = [];
       for (const t of weeklyTxns ?? []) {
         if (!t.occurredOn || t.occurredOn < startISO || t.occurredOn > endISO)
           continue;
         if (!isSplurge(t, isRecurring)) continue;
         if (recurringMerchants.has(merchantKey(t.description ?? ""))) continue;
-        s += -(Number(t.amount) || 0);
+        out.push(t);
       }
-      return s;
+      return out;
     };
   }, [weeklyTxns, isRecurring, recurringMerchants]);
+  const discretionaryInWindow = useMemo(() => {
+    return (startISO: string, endISO: string) =>
+      discretionaryTxnsInWindow(startISO, endISO).reduce(
+        (s, t) => s + -(Number(t.amount) || 0),
+        0,
+      );
+  }, [discretionaryTxnsInWindow]);
 
   // Earliest ISO date we actually have transactions for (query fetched 90 days).
   // Used to disable the ◀ button once a period would fall outside the window.
@@ -283,13 +452,19 @@ export default function CommandCenterPage() {
       override != null
         ? Number(override)
         : Number(settings?.weeklyAllowanceAmount) || 0;
-    const label =
-      weekOffset === 0
-        ? "This week"
-        : `${sun.toLocaleDateString("en-US", { month: "short", day: "numeric" })}–${sat.toLocaleDateString("en-US", { day: "numeric" })}`;
+    // Full "Jul 6–12" range (month repeated across a month boundary) — used
+    // for the drill-panel title even when the short label says "This week".
+    const range = `${sun.toLocaleDateString("en-US", { month: "short", day: "numeric" })}–${sat.toLocaleDateString(
+      "en-US",
+      {
+        month: sun.getMonth() === sat.getMonth() ? undefined : "short",
+        day: "numeric",
+      },
+    )}`;
+    const label = weekOffset === 0 ? "This week" : range;
     // ◀ disabled once the window starts before what we fetched.
     const canPrev = startISO >= earliestFetchedISO;
-    return { spend, cap, label, canPrev };
+    return { spend, cap, label, range, canPrev, startISO, endISO };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekOffset, discretionaryInWindow, settings]);
 
@@ -303,17 +478,35 @@ export default function CommandCenterPage() {
     const end = new Date(m.getFullYear(), m.getMonth() + 1, 0);
     const endISO = iso(end);
     const spend = discretionaryInWindow(startISO, endISO);
-    const label =
-      monthOffset === 0
-        ? "This month"
-        : m.toLocaleDateString("en-US", {
-            month: "long",
-            year: m.getFullYear() === now.getFullYear() ? undefined : "numeric",
-          });
+    const name = m.toLocaleDateString("en-US", {
+      month: "long",
+      year: m.getFullYear() === now.getFullYear() ? undefined : "numeric",
+    });
+    const label = monthOffset === 0 ? "This month" : name;
     const canPrev = endISO >= earliestFetchedISO;
-    return { spend, label, canPrev };
+    return { spend, label, name, canPrev, startISO, endISO };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthOffset, discretionaryInWindow]);
+
+  // ── C) Unplanned-allowance spend, CURRENT month — the bucket that was
+  //      invisible from Banking. Sums the txns flagged `unplannedAllowance`
+  //      (the same flag /allowances uses) against the unplanned cap. ───────
+  const unplannedView = useMemo(() => {
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const txns: Transaction[] = [];
+    let spendSum = 0;
+    for (const t of weeklyTxns ?? []) {
+      if (!t.unplannedAllowance) continue;
+      if (!t.occurredOn?.startsWith(ym)) continue;
+      const a = Number(t.amount) || 0;
+      if (a >= 0) continue;
+      txns.push(t);
+      spendSum += -a;
+    }
+    const cap = Number(settings?.unplannedAllowanceAmount) || 0;
+    return { txns, spend: spendSum, cap };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeklyTxns, settings]);
 
   // Projected checking balance walk — the runway sparkline + forecast area.
   const { series, runwayDays } = useMemo(() => {
@@ -549,6 +742,120 @@ export default function CommandCenterPage() {
   }, [spend, income, dayOfMonth, daysInMonth]);
   const monthName = now.toLocaleDateString("en-US", { month: "long" });
 
+  // ── Drill-panel edits — one PATCH via the generated useUpdateTransaction,
+  //    then invalidate every reader of this data so tiles, list, insights and
+  //    the budget buckets all repaint from the server's truth. ─────────────
+  const invalidateAfterTxnEdit = () => {
+    queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+    queryClient.invalidateQueries({
+      queryKey: getGetBudgetMonthQueryKey(currentMonthStart),
+    });
+  };
+
+  // Move a spend between the Weekly / Monthly / Unplanned buckets. Mirrors
+  // /amex's setRowBucket: the chosen flag goes true and the other two go
+  // false in the SAME PATCH (mutual exclusivity is enforced by the payload),
+  // weeklyBucket is kept/derived when entering Weekly and cleared otherwise,
+  // and picking a bucket counts as reviewing the row (#615).
+  const moveBucket = async (t: Transaction, bucket: BucketKey) => {
+    if (currentBucket(t) === bucket) return;
+    const wb =
+      bucket === "weekly"
+        ? (t.weeklyBucket ??
+          defaultWeeklyBucketFor(catNameById.get(t.categoryId ?? "") ?? ""))
+        : null;
+    setPendingTxnId(t.id);
+    try {
+      await updateTx.mutateAsync({
+        id: t.id,
+        data: {
+          weeklyAllowance: bucket === "weekly",
+          monthlyAllowance: bucket === "monthly",
+          unplannedAllowance: bucket === "unplanned",
+          weeklyBucket: wb,
+          reviewed: true,
+        },
+      });
+      invalidateAfterTxnEdit();
+      toast({
+        title: `Filed under ${BUCKET_OPTIONS.find((b) => b.key === bucket)?.label ?? bucket}`,
+      });
+    } catch (e) {
+      toast({
+        title: "Couldn't move it",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setPendingTxnId(null);
+    }
+  };
+
+  // Recategorize straight from the drill — same PATCH shape as /allowances.
+  const changeCategory = async (t: Transaction, categoryId: string) => {
+    if ((t.categoryId ?? "") === categoryId) return;
+    setPendingTxnId(t.id);
+    try {
+      await updateTx.mutateAsync({ id: t.id, data: { categoryId } });
+      invalidateAfterTxnEdit();
+      toast({ title: "Recategorized" });
+    } catch (e) {
+      toast({
+        title: "Couldn't recategorize",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setPendingTxnId(null);
+    }
+  };
+
+  // What the open drill shows. Week/Month list the EXACT set the tile summed
+  // (discretionaryTxnsInWindow over the same window), so rows always tie to
+  // the tile's number. Unplanned lists the flagged-unplanned txns behind the
+  // strip. Newest first.
+  const drillData = useMemo(() => {
+    if (!drill) return null;
+    const newestFirst = (a: Transaction, b: Transaction) =>
+      b.occurredOn.localeCompare(a.occurredOn);
+    if (drill === "week" || drill === "month") {
+      const v = drill === "week" ? weekView : monthView;
+      const txns = discretionaryTxnsInWindow(v.startISO, v.endISO).sort(newestFirst);
+      const total = txns.reduce((s, t) => s + -(Number(t.amount) || 0), 0);
+      const title =
+        drill === "week"
+          ? weekOffset === 0
+            ? `This week · ${weekView.range}`
+            : `Week of ${weekView.range}`
+          : monthOffset === 0
+            ? `This month · ${monthView.name}`
+            : monthView.name;
+      return {
+        title,
+        txns,
+        total,
+        blurb:
+          "the exact list behind that tile. Re-file the liars — don't just admire them.",
+      };
+    }
+    return {
+      title: `Unplanned · ${monthName}`,
+      txns: [...unplannedView.txns].sort(newestFirst),
+      total: unplannedView.spend,
+      blurb: "the “it's just this once” pile. It's never just once.",
+    };
+  }, [
+    drill,
+    weekView,
+    monthView,
+    unplannedView,
+    discretionaryTxnsInWindow,
+    weekOffset,
+    monthOffset,
+    monthName,
+  ]);
+
   const badges = useMemo(() => {
     const out: { icon: typeof Trophy; label: string }[] = [];
     if (netMonth != null && netMonth > 0)
@@ -624,56 +931,96 @@ export default function CommandCenterPage() {
         {greeting}, {who} — here&rsquo;s the damage
       </div>
       <StatTileRow>
-        {/* A) This week (Sun–Sat) discretionary spend, ◀ ▶ to cycle weeks */}
+        {/* A) This week (Sun–Sat) discretionary spend, ◀ ▶ to cycle weeks.
+            The whole tile is a drill target (opens the txn list behind the
+            number) — a div[role=button] wrapper so the pager's real <button>s
+            stay valid HTML inside it. Tones are set explicitly because the
+            wrapper hides these from StatTileRow's auto-rotation. */}
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="See every transaction behind this week's spend"
+          className="h-full cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => setDrill("week")}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setDrill("week");
+            }
+          }}
+          data-testid="cc-week-tile"
+        >
+          <StatTile
+            active
+            tone={0}
+            label={
+              <PeriodPager
+                icon={<CalendarDays className="w-3.5 h-3.5" />}
+                title="Week"
+                period={weekView.label}
+                onPrev={() => setWeekOffset((o) => o - 1)}
+                onNext={() => setWeekOffset((o) => Math.min(0, o + 1))}
+                canPrev={weekView.canPrev}
+                canNext={weekOffset < 0}
+              />
+            }
+            value={<MoneyText amount={weekView.spend} />}
+            sub={
+              weekView.cap > 0 ? (
+                <span
+                  className={
+                    weekView.spend > weekView.cap
+                      ? "text-[hsl(var(--negative))]"
+                      : "text-[hsl(var(--positive))]"
+                  }
+                >
+                  {weekView.spend > weekView.cap
+                    ? `${formatCurrency(weekView.spend - weekView.cap)} over the ${formatCurrency(weekView.cap)} cap`
+                    : `${formatCurrency(weekView.cap - weekView.spend)} left of ${formatCurrency(weekView.cap)}`}
+                </span>
+              ) : (
+                "spent, no cap set"
+              )
+            }
+          />
+        </div>
+        {/* B) Selected calendar month discretionary spend, ◀ ▶ to cycle months.
+            Same click-to-drill treatment as the week tile. */}
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="See every transaction behind this month's spend"
+          className="h-full cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => setDrill("month")}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setDrill("month");
+            }
+          }}
+          data-testid="cc-month-tile"
+        >
+          <StatTile
+            tone={1}
+            label={
+              <PeriodPager
+                icon={<CalendarRange className="w-3.5 h-3.5" />}
+                title="Month"
+                period={monthView.label}
+                onPrev={() => setMonthOffset((o) => o - 1)}
+                onNext={() => setMonthOffset((o) => Math.min(0, o + 1))}
+                canPrev={monthView.canPrev}
+                canNext={monthOffset < 0}
+              />
+            }
+            value={<MoneyText amount={monthView.spend} />}
+            sub="discretionary spend · tap to drill"
+          />
+        </div>
         <StatTile
-          active
-          label={
-            <PeriodPager
-              icon={<CalendarDays className="w-3.5 h-3.5" />}
-              title="Week"
-              period={weekView.label}
-              onPrev={() => setWeekOffset((o) => o - 1)}
-              onNext={() => setWeekOffset((o) => Math.min(0, o + 1))}
-              canPrev={weekView.canPrev}
-              canNext={weekOffset < 0}
-            />
-          }
-          value={<MoneyText amount={weekView.spend} />}
-          sub={
-            weekView.cap > 0 ? (
-              <span
-                className={
-                  weekView.spend > weekView.cap
-                    ? "text-[hsl(var(--negative))]"
-                    : "text-[hsl(var(--positive))]"
-                }
-              >
-                {weekView.spend > weekView.cap
-                  ? `${formatCurrency(weekView.spend - weekView.cap)} over the ${formatCurrency(weekView.cap)} cap`
-                  : `${formatCurrency(weekView.cap - weekView.spend)} left of ${formatCurrency(weekView.cap)}`}
-              </span>
-            ) : (
-              "spent, no cap set"
-            )
-          }
-        />
-        {/* B) Selected calendar month discretionary spend, ◀ ▶ to cycle months */}
-        <StatTile
-          label={
-            <PeriodPager
-              icon={<CalendarRange className="w-3.5 h-3.5" />}
-              title="Month"
-              period={monthView.label}
-              onPrev={() => setMonthOffset((o) => o - 1)}
-              onNext={() => setMonthOffset((o) => Math.min(0, o + 1))}
-              canPrev={monthView.canPrev}
-              canNext={monthOffset < 0}
-            />
-          }
-          value={<MoneyText amount={monthView.spend} />}
-          sub="discretionary spend"
-        />
-        <StatTile
+          tone={2}
           icon={<PiggyBank className="w-4 h-4" />}
           label="Cash on hand"
           value={cashNow != null ? <MoneyText amount={cashNow} /> : "—"}
@@ -681,6 +1028,7 @@ export default function CommandCenterPage() {
           href="/transactions"
         />
         <StatTile
+          tone={3}
           icon={netMonth != null && netMonth < 0 ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
           label="Net this month"
           value={netMonth != null ? <MoneyText amount={netMonth} colored signed /> : "—"}
@@ -688,6 +1036,50 @@ export default function CommandCenterPage() {
           href="/reports"
         />
       </StatTileRow>
+
+      {/* ── Unplanned, this month — the bucket that used to be invisible from
+             Banking. Slim strip (a 5th tile would crowd the row); same
+             over/under cap styling as the Week tile; click to drill. ─────── */}
+      <button
+        type="button"
+        onClick={() => setDrill("unplanned")}
+        className="block w-full text-left"
+        data-testid="cc-unplanned-strip"
+      >
+        <Card className="transition-colors hover:border-primary/40">
+          <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+              <Zap className="h-3.5 w-3.5 text-warning" />
+              Unplanned · {monthName}
+            </span>
+            <MoneyText
+              amount={unplannedView.spend}
+              className="text-base font-bold tabular-nums"
+            />
+            <span className="text-xs">
+              {unplannedView.cap > 0 ? (
+                <span
+                  className={
+                    unplannedView.spend > unplannedView.cap
+                      ? "text-[hsl(var(--negative))]"
+                      : "text-[hsl(var(--positive))]"
+                  }
+                >
+                  {unplannedView.spend > unplannedView.cap
+                    ? `${formatCurrency(unplannedView.spend - unplannedView.cap)} over the ${formatCurrency(unplannedView.cap)} cap`
+                    : `${formatCurrency(unplannedView.cap - unplannedView.spend)} left of ${formatCurrency(unplannedView.cap)}`}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">spent, no cap set</span>
+              )}
+            </span>
+            <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
+              the &ldquo;just this once&rdquo; pile
+              <ChevronRight className="h-3.5 w-3.5" />
+            </span>
+          </CardContent>
+        </Card>
+      </button>
 
       {/* ── Advisor nudge + sync (kept, debt copy stripped) ─────────────── */}
       <Card className="focus-glow">
@@ -1170,6 +1562,54 @@ export default function CommandCenterPage() {
       </div>
 
       <MonthlyWrapped open={wrappedOpen} onOpenChange={setWrappedOpen} dashboard={dash ?? null} />
+
+      {/* ── The drill panel — every txn behind the clicked tile/strip, with
+             per-row recategorize + bucket-move. The list is the SAME set the
+             tile summed, so the header total always matches the tile. ────── */}
+      <Dialog
+        open={drill != null}
+        onOpenChange={(o) => {
+          if (!o) setDrill(null);
+        }}
+      >
+        <DialogContent className="max-w-2xl" data-testid="cc-drill-dialog">
+          {drillData ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>{drillData.title}</DialogTitle>
+                <DialogDescription>
+                  {drillData.txns.length === 0 ? (
+                    "Nothing in here. Suspiciously well-behaved."
+                  ) : (
+                    <>
+                      <span className="font-semibold text-foreground">
+                        {drillData.txns.length}
+                      </span>{" "}
+                      hit{drillData.txns.length === 1 ? "" : "s"} ·{" "}
+                      <span className="font-semibold text-foreground tabular-nums">
+                        {formatCurrency(drillData.total)}
+                      </span>{" "}
+                      — {drillData.blurb}
+                    </>
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="max-h-[60vh] divide-y divide-border overflow-y-auto pr-1">
+                {drillData.txns.map((t) => (
+                  <DrillTxnRow
+                    key={t.id}
+                    t={t}
+                    categories={categories ?? []}
+                    pending={pendingTxnId === t.id}
+                    onMoveBucket={moveBucket}
+                    onChangeCategory={changeCategory}
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
