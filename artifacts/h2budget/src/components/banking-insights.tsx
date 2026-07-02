@@ -1,13 +1,18 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   ThumbsUp,
   AlertTriangle,
   Ban,
   Ghost,
+  X,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetBankingInsightsSummary,
   getGetBankingInsightsSummaryQueryKey,
+  useGetSettings,
+  useUpdateSettings,
+  getGetSettingsQueryKey,
   type BudgetMonthDetail,
   type DashboardSummaryTopCategoriesItem,
   type Transaction,
@@ -101,13 +106,45 @@ export function BankingInsights({
     [expenseLines],
   );
 
-  // 🚫 Cancel these — the existing detector, straight off the page's txns.
+  // Dismissed detected-subs — the user already cancelled these in real life, so
+  // hide them one at a time. Persisted per household in settings.preferences
+  // (mirrors the amexExcludedTxnIds pattern), keyed by merchant name.
+  const { data: settings } = useGetSettings();
+  const updateSettings = useUpdateSettings();
+  const qc = useQueryClient();
+  const dismissedSubs = useMemo(
+    () =>
+      new Set(
+        (settings?.preferences?.dismissedDetectedSubs as string[] | undefined) ??
+          [],
+      ),
+    [settings],
+  );
+  const dismissSub = useCallback(
+    async (merchant: string) => {
+      const prefs = settings?.preferences ?? {};
+      const cur = new Set(
+        (prefs.dismissedDetectedSubs as string[] | undefined) ?? [],
+      );
+      cur.add(merchant);
+      await updateSettings.mutateAsync({
+        data: { preferences: { ...prefs, dismissedDetectedSubs: [...cur] } },
+      });
+      await qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+    },
+    [settings, updateSettings, qc],
+  );
+
+  // 🚫 Cancel these — the existing detector, straight off the page's txns,
+  // minus anything the user has dismissed.
   const detected = useMemo(
     () =>
       detectSubscriptionsFromTransactions(txns, (id) =>
         id ? catNameById.get(id) ?? null : null,
-      ).filter((d) => d.confidence !== "low"),
-    [txns, catNameById],
+      )
+        .filter((d) => d.confidence !== "low")
+        .filter((d) => !dismissedSubs.has(d.merchant)),
+    [txns, catNameById, dismissedSubs],
   );
   const cancelRows = useMemo<BucketRow[]>(
     () =>
@@ -238,10 +275,12 @@ export function BankingInsights({
           amountSuffix="/yr"
           footer={
             detected.length > 0
-              ? `${detected.length} detected · ${formatCurrency(cancelAnnualTotal)}/yr total — flag them in the list below`
+              ? `${detected.length} detected · ${formatCurrency(cancelAnnualTotal)}/yr total — ✕ any you've already cancelled`
               : undefined
           }
           empty="No subscription leaks found."
+          dismissKeyFor={(r) => r.key}
+          onDismiss={dismissSub}
         />
         <BucketCard
           icon={<Ghost className="h-4 w-4" />}
@@ -257,6 +296,8 @@ export function BankingInsights({
           rows={notInBudgetRows}
           amountClass="text-[hsl(var(--warning))]"
           empty="Everything's accounted for. Rare."
+          dismissKeyFor={(r) => (r.key.startsWith("sub-") ? r.key.slice(4) : null)}
+          onDismiss={dismissSub}
         />
       </div>
     </div>
@@ -276,6 +317,8 @@ function BucketCard({
   chips,
   footer,
   empty,
+  dismissKeyFor,
+  onDismiss,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -289,6 +332,10 @@ function BucketCard({
   chips?: string[];
   footer?: string;
   empty: string;
+  /** Given a row, the merchant key to dismiss — or null if the row isn't
+   *  dismissable (e.g. a budget-category row). Enables the per-row ✕. */
+  dismissKeyFor?: (row: BucketRow) => string | null;
+  onDismiss?: (merchant: string) => void;
 }) {
   const headline = caption?.headline?.trim() || fallbackHeadline;
   const line = caption?.caption?.trim() || fallbackCaption;
@@ -320,7 +367,9 @@ function BucketCard({
           {rows.length === 0 ? (
             <p className="py-1 text-sm text-muted-foreground">{empty}</p>
           ) : (
-            rows.map((r) => (
+            rows.map((r) => {
+              const dismissKey = dismissKeyFor?.(r) ?? null;
+              return (
               <div
                 key={r.key}
                 className="flex items-center justify-between gap-3 py-2"
@@ -334,16 +383,31 @@ function BucketCard({
                     </div>
                   ) : null}
                 </div>
-                <div className={cn("shrink-0 text-sm font-semibold tabular-nums", amountClass)}>
-                  <MoneyText amount={r.amount} abs />
-                  {amountSuffix ? (
-                    <span className="ml-1 text-[10px] font-normal uppercase tracking-wider text-muted-foreground">
-                      {amountSuffix}
-                    </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <div className={cn("text-sm font-semibold tabular-nums", amountClass)}>
+                    <MoneyText amount={r.amount} abs />
+                    {amountSuffix ? (
+                      <span className="ml-1 text-[10px] font-normal uppercase tracking-wider text-muted-foreground">
+                        {amountSuffix}
+                      </span>
+                    ) : null}
+                  </div>
+                  {dismissKey && onDismiss ? (
+                    <button
+                      type="button"
+                      aria-label={`Dismiss ${r.name} — already cancelled`}
+                      title="Already cancelled — remove from this list"
+                      onClick={() => onDismiss(dismissKey)}
+                      className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      data-testid={`bucket-row-dismiss-${r.key}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
                   ) : null}
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
         {footer ? (

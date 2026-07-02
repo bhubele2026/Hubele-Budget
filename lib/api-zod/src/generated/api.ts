@@ -2180,6 +2180,12 @@ export const GetSettingsResponse = zod.object({
           .describe(
             'Transaction ids the user has marked \"not mine\" on an Amex card — reimbursements \/ charges paid back by someone else, not out of household funds. The per-card weekly\/monthly payoff total (computeWeeklyPayoff \/ Kill Stack) skips these so the \"to pay\" figure reflects only what the household actually owes. Scoped to the payoff view; does NOT alter the debt anchor (the charge is still on the statement until the credit posts).',
           ),
+        dismissedDetectedSubs: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Merchant names of auto-detected recurring subscriptions the user has dismissed from the Banking \"Cancel these\" \/ \"Paying for, not in the budget\" lists (they\'ve already cancelled the sub in real life). The banking-insights UI hides these so the hit list stays actionable.',
+          ),
       }),
       zod.null(),
     ])
@@ -2243,6 +2249,12 @@ export const UpdateSettingsBody = zod.object({
           .describe(
             'Transaction ids the user has marked \"not mine\" on an Amex card — reimbursements \/ charges paid back by someone else, not out of household funds. The per-card weekly\/monthly payoff total (computeWeeklyPayoff \/ Kill Stack) skips these so the \"to pay\" figure reflects only what the household actually owes. Scoped to the payoff view; does NOT alter the debt anchor (the charge is still on the statement until the credit posts).',
           ),
+        dismissedDetectedSubs: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Merchant names of auto-detected recurring subscriptions the user has dismissed from the Banking \"Cancel these\" \/ \"Paying for, not in the budget\" lists (they\'ve already cancelled the sub in real life). The banking-insights UI hides these so the hit list stays actionable.',
+          ),
       }),
       zod.null(),
     ])
@@ -2305,6 +2317,12 @@ export const UpdateSettingsResponse = zod.object({
           .optional()
           .describe(
             'Transaction ids the user has marked \"not mine\" on an Amex card — reimbursements \/ charges paid back by someone else, not out of household funds. The per-card weekly\/monthly payoff total (computeWeeklyPayoff \/ Kill Stack) skips these so the \"to pay\" figure reflects only what the household actually owes. Scoped to the payoff view; does NOT alter the debt anchor (the charge is still on the statement until the credit posts).',
+          ),
+        dismissedDetectedSubs: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Merchant names of auto-detected recurring subscriptions the user has dismissed from the Banking \"Cancel these\" \/ \"Paying for, not in the budget\" lists (they\'ve already cancelled the sub in real life). The banking-insights UI hides these so the hit list stays actionable.',
           ),
       }),
       zod.null(),
