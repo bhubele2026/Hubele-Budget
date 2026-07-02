@@ -28,7 +28,7 @@ import {
 import { logger } from "./logger";
 import { VOICE_SYSTEM } from "./advisorVoice";
 
-const DEFAULT_MODEL = "claude-opus-4-8";
+const DEFAULT_MODEL = "claude-fable-5";
 const MAX_OUTPUT_TOKENS = 600;
 const ANTHROPIC_TIMEOUT_MS = 12_000;
 const PRIOR_WEEKS_TO_LOAD = 4;
