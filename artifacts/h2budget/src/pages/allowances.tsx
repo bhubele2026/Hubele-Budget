@@ -1106,8 +1106,12 @@ export default function AllowancesPage() {
         </p>
       </div>
 
-      {/* Hannah-first: exactly what to pay for last week, big and per-card. */}
-      <KillStack emphasize />
+      {/* Exactly what to pay for the VIEWED week (aligned to the ◀▶ week picker),
+          so "how over budget" and "which cards to pay" describe the same week. */}
+      <KillStack
+        emphasize
+        weekStart={mode === "week" ? fmtISO(weekStart) : undefined}
+      />
 
       <AiInsightBar />
 

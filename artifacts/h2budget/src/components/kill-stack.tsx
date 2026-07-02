@@ -244,6 +244,12 @@ export function KillStack({
   // Selected week (Sunday). undefined = let the server pick the last completed
   // week; the prev/next controls then pin an explicit week.
   const [weekStart, setWeekStart] = useState<string | undefined>(initialWeekStart);
+  // When a parent (the Allowances ◀▶ week picker) drives the week, follow it so
+  // "how over budget" and "which cards to pay" always describe the same week.
+  // The internal prev/next controls still work between prop changes.
+  useEffect(() => {
+    setWeekStart(initialWeekStart);
+  }, [initialWeekStart]);
   const params: GetAmexWeeklyPayoffParams | undefined = weekStart
     ? { weekStart }
     : undefined;
