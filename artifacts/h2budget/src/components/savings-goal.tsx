@@ -130,7 +130,7 @@ export function SavingsGoal() {
         </div>
         {done ? (
           <p className="mt-2 text-sm font-medium text-positive flex items-center gap-1.5">
-            <PartyPopper className="w-4 h-4" /> Goal smashed. Treat yourselves. 🥂
+            <PartyPopper className="w-4 h-4" /> Goal reached — excellent work.
           </p>
         ) : (
           <div className="mt-3 flex gap-2">

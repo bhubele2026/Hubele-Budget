@@ -199,10 +199,10 @@ function weeklyUnderStreak(
 function praiseForStreak(n: number): string {
   if (n <= 1) return "";
   if (n === 2)
-    return "Two weeks under budget. Look at you, fiscally responsible adults. 🟢";
+    return "Two weeks under budget in a row — a solid start.";
   if (n <= 4)
-    return `${n} weeks under, back to back. Genuinely brilliant — keep the receipts, you legends.`;
-  return `${n} weeks under budget in a row. Frankly showing off now. Don't you dare slip.`;
+    return `${n} weeks under budget, back to back — excellent work. Keep the momentum going.`;
+  return `${n} weeks under budget in a row — outstanding consistency. Keep it up.`;
 }
 
 // Last N completed Sun–Sat weeks' over/under variance (spend − planned) for
@@ -449,12 +449,12 @@ function CategoryGroupRow({
 function funVerdict(actual: number, planned: number): string | null {
   if (planned <= 0) return null;
   const r = actual / planned;
-  if (r <= 0.4) return "Barely made a dent. Look at you two 😎";
-  if (r <= 0.75) return "Cruising — plenty left for fun 🟢";
-  if (r < 0.95) return "Cutting it close. Eyes on it 👀";
-  if (r <= 1.05) return "Riiight on the line. Hold steady 😅";
-  if (r <= 1.2) return "Over it. Easy there, tiger 😬";
-  return "Whoa. Date night's officially BYO 🙈";
+  if (r <= 0.4) return "Well under budget — plenty of room left.";
+  if (r <= 0.75) return "On track, with room to spare.";
+  if (r < 0.95) return "Getting close to the cap — keep an eye on it.";
+  if (r <= 1.05) return "Right at the cap — hold steady.";
+  if (r <= 1.2) return "Slightly over budget this period.";
+  return "Well over budget — worth tightening up next period.";
 }
 
 function BucketCard({
@@ -1114,7 +1114,7 @@ export default function AllowancesPage() {
           Allowances
         </h1>
         <p className="text-muted-foreground">
-          Where the money actually goes. No judgment… ok, a little. 😏
+          Where your weekly, monthly, and unplanned spending actually goes.
         </p>
       </div>
 

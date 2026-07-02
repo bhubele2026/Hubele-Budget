@@ -885,14 +885,14 @@ export default function CommandCenterPage() {
         txns,
         total,
         blurb:
-          "the exact list behind that tile. Re-file the liars — don't just admire them.",
+          "The exact transactions behind that number. Re-file any that belong in a different bucket.",
       };
     }
     return {
       title: `Unplanned · ${monthName}`,
       txns: [...unplannedView.txns].sort(newestFirst),
       total: unplannedView.spend,
-      blurb: "the “it's just this once” pile. It's never just once.",
+      blurb: "Unplanned spending this month — worth reviewing so it doesn't become a habit.",
     };
   }, [
     drill,
@@ -978,7 +978,7 @@ export default function CommandCenterPage() {
       {/* ── At-a-glance StatTile row — the "how are we spending, right now"
              focal readouts (week + month, navigable) plus cash & net. ─────── */}
       <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-        {greeting}, {who} — here&rsquo;s the damage
+        {greeting}, {who} — here&rsquo;s where things stand
       </div>
       <StatTileRow>
         {/* A) This week (Sun–Sat) discretionary spend, ◀ ▶ to cycle weeks.
@@ -1304,7 +1304,7 @@ export default function CommandCenterPage() {
                   className="font-bold"
                 />
                 <span className="text-muted-foreground">
-                  {projectedNet >= 0 ? " — keep it up. 😏" : " — pump the brakes. 🛑"}
+                  {projectedNet >= 0 ? " — on track." : " — worth easing off."}
                 </span>
               </div>
             ) : null}

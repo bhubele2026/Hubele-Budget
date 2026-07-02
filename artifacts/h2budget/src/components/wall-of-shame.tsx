@@ -20,24 +20,24 @@ type Crime = { desc: string; amt: number; member: string | null; date: string };
 
 const PODIUM = [
   {
-    medal: "🥇",
-    title: "Crime of the Month",
+    medal: "1",
+    title: "Largest charge",
     grad: "tile-grad-5",
     quip: (m: string | null) =>
-      m ? `${m} did this. On purpose. With a straight face.` : "Absolutely unhinged behavior.",
+      m ? `${m}'s biggest single purchase this month.` : "The month's biggest single purchase.",
   },
   {
-    medal: "🥈",
-    title: "Silver in Self-Sabotage",
+    medal: "2",
+    title: "Second largest",
     grad: "tile-grad-3",
     quip: (m: string | null) =>
-      m ? `${m}, you were SO close to not doing this.` : "Second place, first-class regret.",
+      m ? `${m}'s second-biggest purchase this month.` : "The second-biggest purchase this month.",
   },
   {
-    medal: "🥉",
-    title: "Bronze, Still Embarrassing",
+    medal: "3",
+    title: "Third largest",
     grad: "tile-grad-1",
-    quip: () => "Not the worst. Not remotely good either.",
+    quip: () => "The third-biggest purchase this month.",
   },
 ];
 
@@ -78,9 +78,9 @@ export function WallOfShame({
   return (
     <div className={className}>
       <div className="mb-2 flex items-baseline gap-2">
-        <h2 className="text-lg font-bold">🚨 Wall of Shame</h2>
+        <h2 className="text-lg font-bold">Biggest charges this month</h2>
         <span className="text-xs text-muted-foreground">
-          the month's most reckless charges, ranked
+          your largest single purchases, ranked
         </span>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
