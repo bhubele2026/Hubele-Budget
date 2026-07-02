@@ -17,6 +17,7 @@ import {
   Settings as SettingsIcon,
   Menu,
   MoreHorizontal,
+  LayoutDashboard,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -40,7 +41,6 @@ import {
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { useDebriefAwaitingCount } from "@/hooks/useDebriefAwaitingCount";
 import { AdvisorChat } from "@/components/advisor-chat";
-import { CancelFloater } from "@/components/cancel-floater";
 import { CommandPalette } from "@/components/command-palette";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -71,9 +71,12 @@ const MORE_NAV: NavItem[] = [
   { name: "Settings", href: "/settings", icon: SettingsIcon },
 ];
 
-// Inside the Banking area, the top ribbon becomes Banking's own sub-nav instead
-// of the global area tabs (the area pages you'd otherwise reach via More).
+// Inside the Banking area, the top ribbon becomes Banking's own sub-nav — and
+// ONLY that. No "More" here: while you're in Banking you stay in Banking; the
+// way out is the brand/logo → the /home landing. First tab is Overview, back to
+// the Banking dashboard itself.
 const BANKING_SUBNAV: NavItem[] = [
+  { name: "Overview", href: "/banking", icon: LayoutDashboard },
   { name: "Chase", href: "/transactions", icon: Receipt },
   { name: "Amex", href: "/amex", icon: CreditCard },
   { name: "Budget", href: "/budget", icon: PieChart },
@@ -282,7 +285,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               );
             })}
 
-            {/* More overflow — secondary destinations, one click away. */}
+            {/* More overflow — secondary destinations, one click away. Hidden
+                inside the Banking area: there the ribbon is Banking-only, and
+                you leave via the brand/logo → Home. */}
+            {!inBanking && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -329,6 +335,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 })}
               </DropdownMenuContent>
             </DropdownMenu>
+            )}
           </nav>
 
           <div className="ml-auto flex items-center gap-0.5 pr-3 md:pr-5">
@@ -353,7 +360,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
       <AdvisorChat />
-      <CancelFloater />
       <CommandPalette />
     </div>
   );
