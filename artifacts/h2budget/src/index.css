@@ -164,6 +164,25 @@
   --card-silver: 210 10% 55%;
   --card-gold: 210 10% 55%;
 
+  /* Frosted-fintech launcher (/home) — soft, low-saturation pastel tiles for the
+     card icons + chips, and the cool page ground. Muted on purpose. */
+  --frost-page: 205 30% 97%;          /* cool off-white page ground */
+  --frost-ink: 215 25% 32%;           /* muted slate ink for icons/text */
+  --frost-blue: 205 60% 92%;          /* icy blue tile */
+  --frost-blue-ink: 205 55% 42%;
+  --frost-slate: 210 24% 92%;         /* pale slate tile */
+  --frost-slate-ink: 210 20% 42%;
+  --frost-indigo: 224 45% 93%;        /* pale blue-gray tile */
+  --frost-indigo-ink: 226 40% 52%;
+  --frost-amber: 28 60% 92%;          /* pale warm tile (soft flame) */
+  --frost-amber-ink: 26 55% 48%;
+  --frost-green: 152 40% 90%;         /* soft green pill */
+  --frost-green-ink: 155 40% 32%;
+  --frost-lav: 244 45% 94%;           /* soft lavender pill */
+  --frost-lav-ink: 244 35% 50%;
+  --frost-rose: 350 55% 94%;          /* soft rose pill */
+  --frost-rose-ink: 350 45% 46%;
+
   --app-font-sans: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --app-font-serif: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --app-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -275,6 +294,25 @@
   --card-blue: 200 65% 60%;
   --card-silver: 210 10% 62%;
   --card-gold: 210 10% 62%;
+
+  /* Frosted-fintech launcher — muted dark equivalents (low-lightness tinted
+     tiles + readable ink) so /home stays soft, not neon, in dark mode. */
+  --frost-page: 215 28% 10%;
+  --frost-ink: 210 20% 78%;
+  --frost-blue: 205 45% 22%;
+  --frost-blue-ink: 205 60% 75%;
+  --frost-slate: 210 20% 22%;
+  --frost-slate-ink: 210 18% 74%;
+  --frost-indigo: 224 35% 24%;
+  --frost-indigo-ink: 226 55% 78%;
+  --frost-amber: 28 40% 22%;
+  --frost-amber-ink: 30 65% 70%;
+  --frost-green: 152 30% 22%;
+  --frost-green-ink: 152 45% 70%;
+  --frost-lav: 244 30% 26%;
+  --frost-lav-ink: 244 45% 78%;
+  --frost-rose: 350 35% 26%;
+  --frost-rose-ink: 350 55% 78%;
 
   --shadow-2xs: none;
   --shadow-xs: none;

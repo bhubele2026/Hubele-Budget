@@ -66,11 +66,14 @@ function monthShort(month: string): string {
 // ── tile shell + chart-slot states ───────────────────────────────────────────
 
 type Hue = "blue" | "teal" | "indigo" | "amber";
-const HUE_CHIP: Record<Hue, string> = {
-  blue: "from-sky-400 to-blue-600",
-  teal: "from-teal-400 to-cyan-600",
-  indigo: "from-indigo-400 to-violet-600",
-  amber: "from-amber-400 to-orange-500",
+// Soft frosted pastel tiles (not saturated gradients): a pale tint + a muted-ink
+// icon. Banking=icy blue, Bills=pale slate, Forecast=pale blue-gray, Avalanche=
+// pale warm.
+const HUE_TILE: Record<Hue, { tile: string; ink: string }> = {
+  blue: { tile: "bg-[hsl(var(--frost-blue))]", ink: "text-[hsl(var(--frost-blue-ink))]" },
+  teal: { tile: "bg-[hsl(var(--frost-slate))]", ink: "text-[hsl(var(--frost-slate-ink))]" },
+  indigo: { tile: "bg-[hsl(var(--frost-indigo))]", ink: "text-[hsl(var(--frost-indigo-ink))]" },
+  amber: { tile: "bg-[hsl(var(--frost-amber))]", ink: "text-[hsl(var(--frost-amber-ink))]" },
 };
 
 function TileShell({
@@ -90,32 +93,37 @@ function TileShell({
   testid: string;
   children?: React.ReactNode;
 }) {
+  const t = HUE_TILE[hue];
   return (
-    <div
-      className="group relative flex flex-col rounded-3xl border border-white/60 bg-card/90 p-6 shadow-[0_1px_2px_rgba(16,24,40,0.05),0_12px_32px_-14px_rgba(16,24,40,0.22)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_2px_6px_rgba(16,24,40,0.08),0_22px_48px_-16px_rgba(16,24,40,0.30)] dark:border-white/10 sm:p-7"
-      data-testid={`landing-tile-${testid}`}
-    >
-      <Link
-        href={href}
-        className="absolute inset-0 rounded-3xl focus:outline-none focus:ring-2 focus:ring-primary/40"
-        aria-label={title}
+    <div className="group relative" data-testid={`landing-tile-${testid}`}>
+      {/* Stacked-deck: a lighter, narrower, blurred layer peeking below the card. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-5 top-3 bottom-[-6px] rounded-[22px] border border-[hsl(215_20%_92%)] bg-card/50 shadow-[0_10px_26px_rgba(30,41,59,0.06)] blur-[1px] dark:border-white/5 dark:bg-white/5"
       />
-      <div className="flex items-start justify-between gap-3">
-        {/* Glossy gradient icon chip — dimensional, per-area hue. */}
-        <div
-          className={cn(
-            "relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg ring-1 ring-white/40",
-            HUE_CHIP[hue],
-          )}
-        >
-          <span className="pointer-events-none absolute inset-x-1 top-1 h-1/3 rounded-t-xl bg-white/25 blur-[1px]" />
-          {icon}
+      <div className="relative flex flex-col rounded-[22px] border border-[hsl(215_22%_91%)] bg-card/95 p-7 shadow-[0_8px_30px_rgba(30,41,59,0.08)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_40px_rgba(30,41,59,0.13)] dark:border-white/10 sm:p-8">
+        <Link
+          href={href}
+          className="absolute inset-0 rounded-[22px] focus:outline-none focus:ring-2 focus:ring-primary/40"
+          aria-label={title}
+        />
+        <div className="flex items-start justify-between gap-3">
+          {/* Soft frosted pastel icon tile — glassy, muted, per-area tint. */}
+          <div
+            className={cn(
+              "flex h-[52px] w-[52px] items-center justify-center rounded-[14px] ring-1 ring-inset ring-white/50 dark:ring-white/10",
+              t.tile,
+              t.ink,
+            )}
+          >
+            {icon}
+          </div>
+          <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
         </div>
-        <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+        <div className="mt-4 text-xl font-bold tracking-tight">{title}</div>
+        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{blurb}</p>
+        {children}
       </div>
-      <div className="mt-4 text-xl font-bold tracking-tight">{title}</div>
-      <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{blurb}</p>
-      {children}
     </div>
   );
 }
@@ -140,7 +148,7 @@ function ChartEmpty({ label }: { label: string }) {
   );
 }
 
-/** Soft gradient-tinted pill (Banking's Chase/Amex/Allowance). */
+/** Soft pastel pill — filled low-saturation tint, dark-slate text, no border. */
 function GradientPill({
   children,
   className,
@@ -151,7 +159,7 @@ function GradientPill({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full bg-gradient-to-b px-3 py-1 text-xs font-semibold shadow-sm ring-1 transition-transform hover:scale-[1.03]",
+        "inline-flex items-center rounded-full px-3.5 py-1.5 text-xs font-semibold transition-transform hover:scale-[1.03]",
         className,
       )}
     >
@@ -160,7 +168,7 @@ function GradientPill({
   );
 }
 
-/** The outline sub-link pill (nav) — matches the mockup's plain pills. */
+/** Neutral soft-gray pastel nav pill (Forecast/Review/Budget, Debts). */
 function NavPill({
   href,
   label,
@@ -173,7 +181,7 @@ function NavPill({
   return (
     <Link
       href={href}
-      className="rounded-md border border-card-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+      className="rounded-full bg-[hsl(var(--frost-slate))] px-3.5 py-1.5 text-xs font-semibold text-[hsl(var(--frost-slate-ink))] transition-transform hover:scale-[1.03]"
       data-testid={testid}
     >
       {label}
@@ -221,7 +229,7 @@ function BankingTile() {
       testid="banking"
       href="/banking"
       hue="blue"
-      icon={<Landmark className="h-5 w-5" />}
+      icon={<Landmark className="h-6 w-6" strokeWidth={1.75} />}
       title="Banking"
       blurb="How you're spending — this week & month, what to cancel, what to stop buying."
     >
@@ -251,17 +259,17 @@ function BankingTile() {
       <div className="flex items-end justify-between gap-3">
         <div className="relative z-10 flex flex-wrap content-end gap-2">
           <Link href="/transactions" data-testid="landing-link-banking-chase">
-            <GradientPill className="from-emerald-50 to-emerald-100 text-emerald-700 ring-emerald-200/70 dark:from-emerald-500/15 dark:to-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20">
+            <GradientPill className="bg-[hsl(var(--frost-green))] text-[hsl(var(--frost-green-ink))]">
               Chase
             </GradientPill>
           </Link>
           <Link href="/amex" data-testid="landing-link-banking-amex">
-            <GradientPill className="from-sky-50 to-blue-100 text-blue-700 ring-blue-200/70 dark:from-blue-500/15 dark:to-blue-500/10 dark:text-blue-300 dark:ring-blue-400/20">
+            <GradientPill className="bg-[hsl(var(--frost-lav))] text-[hsl(var(--frost-lav-ink))]">
               Amex
             </GradientPill>
           </Link>
           <Link href="/allowances" data-testid="landing-link-banking-allowance">
-            <GradientPill className="from-rose-50 to-red-100 text-red-700 ring-red-200/70 dark:from-red-500/15 dark:to-red-500/10 dark:text-red-300 dark:ring-red-400/20">
+            <GradientPill className="bg-[hsl(var(--frost-rose))] text-[hsl(var(--frost-rose-ink))]">
               Allowance
             </GradientPill>
           </Link>
@@ -277,7 +285,14 @@ function BankingTile() {
                   <span>{kfmt((max + min) / 2)}</span>
                   <span>{kfmt(min)}</span>
                 </div>
-                <Sparkline data={series} variant="area" height={56} className="flex-1" />
+                <Sparkline
+                  data={series}
+                  variant="area"
+                  height={56}
+                  color="hsl(190 42% 55%)"
+                  strokeWidth={2.5}
+                  className="flex-1"
+                />
               </div>
               <div className="mt-1 flex justify-between pl-7 text-[9px] text-muted-foreground/70">
                 <span>{labels[0]}</span>
@@ -329,7 +344,7 @@ function BillsTile() {
       testid="bills"
       href="/bills"
       hue="teal"
-      icon={<Receipt className="h-5 w-5" />}
+      icon={<Receipt className="h-6 w-6" strokeWidth={1.75} />}
       title="Bills"
       blurb="Your recurring bills & subscriptions — with an AI review of what to cut and what's missing."
     >
@@ -347,7 +362,7 @@ function BillsTile() {
             (n) => (
               <span
                 key={n}
-                className="max-w-[7.5rem] truncate rounded-full border border-card-border bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground"
+                className="max-w-[7.5rem] truncate rounded-full bg-[hsl(var(--frost-slate))] px-3.5 py-1.5 text-xs font-semibold text-[hsl(var(--frost-slate-ink))]"
               >
                 {n}
               </span>
@@ -362,7 +377,7 @@ function BillsTile() {
               <MiniBars
                 data={top.map((b) => b.amount)}
                 height={44}
-                accent="hsl(var(--chart-1))"
+                accent="hsl(190 38% 60%)"
               />
               <div className="mt-1 flex justify-between px-0.5 text-muted-foreground/45">
                 {top.map((_, i) => {
@@ -411,7 +426,7 @@ function ForecastTile() {
     const lowIdx = picked.indexOf(Math.min(...picked));
     return picked.map((v, i) => ({
       value: v,
-      color: i === lowIdx ? "hsl(var(--chart-1))" : "hsl(var(--chart-3))",
+      color: i === lowIdx ? "hsl(190 42% 58%)" : "hsl(215 18% 82%)",
     }));
   }, [balances]);
 
@@ -420,7 +435,7 @@ function ForecastTile() {
       testid="forecast"
       href="/forecast"
       hue="indigo"
-      icon={<LineChart className="h-5 w-5" />}
+      icon={<LineChart className="h-6 w-6" strokeWidth={1.75} />}
       title="Forecast"
       blurb="See what's coming, then review and lock it in."
     >
@@ -446,7 +461,14 @@ function ForecastTile() {
                   <MoneyText amount={projected} className="text-sm font-semibold" />
                 )}
               </div>
-              <Sparkline data={balances} variant="area" height={40} className="w-28" />
+              <Sparkline
+                data={balances}
+                variant="area"
+                height={40}
+                color="hsl(215 45% 62%)"
+                strokeWidth={2.5}
+                className="w-28"
+              />
             </>
           ) : (
             <ChartEmpty label="No forecast yet" />
@@ -521,7 +543,7 @@ function AvalancheTile() {
       testid="avalanche"
       href="/avalanche"
       hue="amber"
-      icon={<Flame className="h-5 w-5" />}
+      icon={<Flame className="h-6 w-6" strokeWidth={1.75} />}
       title="Avalanche"
       blurb="Attack the debt — manage the payoff plan and free-by date."
     >
@@ -600,8 +622,13 @@ export default function LandingPage() {
         {/* Greeting + account controls */}
         <div className="mb-7 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Hey, {who}.</h1>
-            <p className="mt-1 text-base text-muted-foreground">
+            <h1
+              className="text-3xl font-bold tracking-[-0.02em] text-[hsl(215_28%_24%)] sm:text-4xl"
+              style={{ fontFamily: "var(--app-font-sans)" }}
+            >
+              Hey, {who}.
+            </h1>
+            <p className="mt-1 text-base text-[hsl(215_16%_47%)]">
               Where do you want to go?
             </p>
           </div>
