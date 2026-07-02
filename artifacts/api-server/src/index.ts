@@ -16,6 +16,7 @@ import { getPlaidEnv } from "./lib/plaid";
 import { runStartupAccountSnapshotsRepair } from "./lib/startupAccountSnapshotsRepair";
 import { runStartupCardPaymentReclassify } from "./lib/startupCardPaymentReclassify";
 import { runStartupPendingNotesBackfill } from "./lib/startupPendingNotesBackfill";
+import { runStartupLinkRevolvingAmexDebts } from "./lib/linkRevolvingAmexDebts";
 import "./lib/advisorReadTools";
 import "./lib/advisorWriteTools";
 import "./lib/advisorDestructiveTools";
@@ -160,6 +161,19 @@ app.listen(port, (err) => {
     })
     .catch((err) => {
       logger.error({ err }, "Startup pending-notes backfill failed");
+    });
+
+  // One-shot per-startup sweep: auto-move revolving Amex credit cards (an APR +
+  // a minimum payment + a materially carried balance, all from Plaid) into
+  // Avalanche debts so they leave the Amex band without the user clicking
+  // anything — the Sky Card being the motivating case. Idempotent: already-
+  // linked cards are skipped. Best-effort: never blocks boot.
+  runStartupLinkRevolvingAmexDebts()
+    .then((summary) => {
+      logger.info(summary, "Startup revolving-Amex auto-link complete");
+    })
+    .catch((err) => {
+      logger.error({ err }, "Startup revolving-Amex auto-link failed");
     });
 
   if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
