@@ -54,7 +54,7 @@ relative to the repo root.
 | M37 | "days since" behavior trackers | ✅ | yes | `artifacts/h2budget/src/lib/daysSinceTrackers.ts`, `artifacts/h2budget/src/pages/reports.tsx` (days-since tiles), `artifacts/h2budget/src/pages/settingsTrackerValidation.test.tsx` |
 | M38 | under/over-budget streak chips | ✅ | yes | `artifacts/h2budget/src/lib/weeklyStreak.ts`, `artifacts/h2budget/src/pages/reports.tsx`, `artifacts/h2budget/src/pages/allowances.tsx` |
 | M39 | AI advisor in-voice that can act | ✅ | partial | `artifacts/api-server/src/lib/advisor.ts` (savage-coach system prompt), `advisorTools.ts` (risk-tiered tools), `artifacts/h2budget/src/components/advisor-chat.tsx` |
-| M40 | advisor audit log + proposals (nothing behind your back) | ✅ | **no** | `artifacts/api-server/src/lib/advisorTools.ts` (`advisorAuditLogTable`/`advisorProposalsTable`), `artifacts/api-server/src/routes/advisorProposals.ts`, `advisorUndo.ts` |
+| M40 | advisor audit log + proposals (nothing behind your back) | ✅ | yes | `artifacts/api-server/src/lib/advisorTools.ts` (`advisorAuditLogTable`/`advisorProposalsTable`), `artifacts/api-server/src/routes/advisorProposals.ts`, `advisorUndo.ts`, **`artifacts/api-server/src/__tests__/advisorAudit.integration.test.ts`** |
 | M41 | household-scoped | ✅ | yes | `artifacts/api-server/src/middlewares/requireAuth.ts` + `req.householdId` in 20/25 routes, `artifacts/api-server/src/__tests__/invitations.integration.test.ts` |
 | M42 | iPhone home glance + quick categorize | ⚠️ | **no** | `artifacts/h2budget-mobile/app/(tabs)/home.tsx`, `artifacts/h2budget-mobile/app/(tabs)/transactions.tsx` |
 | M43 | mobile: same streaks + skeleton-fast loads | ✅ | **no** | `artifacts/h2budget-mobile/app/(tabs)/home.tsx` (`weeklyStreak`, streak chip), `artifacts/h2budget-mobile/components/Skeleton.tsx` |
@@ -66,9 +66,11 @@ relative to the repo root.
 | M49 | each kill feeds the next | ✅ | yes | `lib/avalanche-core/src/index.ts` (freed min → `pool` L199; kill detection L235–249) |
 | M50 | repeat to $0 | ✅ | yes | `lib/avalanche-core/src/index.ts` (main loop to `totalBalanceEnd <= CENTS`), `artifacts/h2budget/src/lib/avalanche.test.ts` |
 
-**Tally:** ✅ 44 · ⚠️ 5 (M5, M28, M42, M45, M47) · ❌ 0. One ✅ point (M40) is
-implemented but has **no** automated test; the standalone Expo mobile app
-(M42–M45) has **no** tests at all.
+**Tally:** ✅ 44 · ⚠️ 5 (M5, M28, M42, M45, M47) · ❌ 0. M40 is implemented
+**and tested** (`advisorAudit.integration.test.ts` exercises the full
+proposal → confirm → audit → undo path across every write tool, plus
+cancel-never-executes and cross-household scoping). The standalone Expo mobile
+app (M42–M45) has **no** tests at all.
 
 ---
 
@@ -129,13 +131,18 @@ implemented but has **no** automated test; the standalone Expo mobile app
   a payoff that landed this week) and test it in
   `weeklyDebrief.integration.test.ts`.
 
-### Test gap (not a feature gap): M40 — advisor audit log + proposals
+### M40 — advisor audit log + proposals ✅ (implemented + tested)
 - **Files:** `artifacts/api-server/src/lib/advisorTools.ts`,
   `artifacts/api-server/src/routes/advisorProposals.ts`,
-  `artifacts/api-server/src/routes/advisorUndo.ts`.
-- **What's missing:** The proposal → confirm → audit-log → undo machinery is
-  fully implemented (destructive tools intercepted, `beforeSnapshot` captured,
-  5-min undo window), but there is **no** advisor audit/proposal/undo
-  integration test in `artifacts/api-server/src/__tests__/`. Per the Phase 8
-  DoD ("assert no write path bypasses the audit log"), add an integration test
-  proving every destructive tool writes a proposal + audit row and is undoable.
+  `artifacts/api-server/src/routes/advisorUndo.ts`,
+  `artifacts/api-server/src/__tests__/advisorAudit.integration.test.ts`.
+- **Coverage:** The proposal → confirm → audit-log → undo machinery is fully
+  implemented (destructive tools intercepted, `beforeSnapshot` captured, 5-min
+  undo window) **and** exercised by `advisorAudit.integration.test.ts`: it
+  registers/classifies the full destructive + reversible tool set, proves each
+  reversible write is audited and undoable, proves each destructive tool creates
+  a pending proposal (no mutation) until confirmed then is undoable, that
+  cancelling never executes, that a confirmed proposal can't be replayed, and
+  that confirmation is household-scoped. Satisfies the Phase 8 DoD ("no write
+  path bypasses the audit log"). *(This entry previously read "no test" — that
+  was stale; the test exists.)*
