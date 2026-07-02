@@ -618,7 +618,7 @@ export default function LandingPage() {
 
       {/* Content sits above the backdrop; top padding clears the mesh ribbon so
           the greeting reads just below it (no dead band). */}
-      <div className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-14 pt-28 sm:px-6 sm:pt-36">
+      <div className="relative z-10 mx-auto w-full max-w-4xl px-4 pb-14 pt-28 sm:px-6 sm:pt-36">
         {/* Greeting + account controls */}
         <div className="mb-7 flex items-start justify-between gap-4">
           <div>
