@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -20,6 +20,10 @@ import {
   Receipt,
   CreditCard,
   BarChart3,
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays,
+  CalendarRange,
 } from "lucide-react";
 import { SyncButton } from "@/components/sync-button";
 import {
@@ -29,7 +33,7 @@ import {
   useGetSettings,
   useListTransactions,
   useListRecurringItems,
-  useGetAmexWeeklyPayoff,
+  useListCategories,
 } from "@workspace/api-client-react";
 import {
   weeklyBudgetStreak,
@@ -37,26 +41,29 @@ import {
   todayISO,
   currentWeekBounds,
 } from "@/lib/weeklyStreak";
+import {
+  isSplurge,
+  makeRecurringMatcher,
+  merchantKey,
+  recurringMerchantsFrom,
+} from "@/lib/discretionarySpend";
 import { CategoryDonut } from "@/components/category-donut";
 import { HealthScore } from "@/components/health-score";
 import { SavingsGoal } from "@/components/savings-goal";
 import { DrillCard } from "@/components/drill-card";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
-import { PrivateAmount } from "@/components/private-amount";
 import { SpenderSpotlight } from "@/components/spender-spotlight";
 import { WallOfShame } from "@/components/wall-of-shame";
+import { SubscriptionInsightsSection } from "@/components/subscription-insights";
 import { PillBadge } from "@/components/pill-badge";
-import { KillStack } from "@/components/kill-stack";
 import { Sparkline, StackBar, RingStat, HeatStrip, MiniBars, MoneyText } from "@/components/viz";
 import { useUser } from "@clerk/react";
-import { useCountUp } from "@/hooks/useCountUp";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { MonthlyWrapped } from "@/components/monthly-wrapped";
 import { Confetti } from "@/components/confetti";
 import { PaceGauge } from "@/components/pace-gauge";
 import { SpendScoreboard } from "@/components/spend-scoreboard";
-import { FreedomMeter } from "@/components/freedom-meter";
 
 const MIX_COLORS = [
   "hsl(var(--chart-1))",
@@ -97,14 +104,66 @@ function greetingFor(hour: number): string {
   return "Burning the midnight oil";
 }
 
+/** Small ◀ ▶ pager chip used inside a StatTile label — matches the tile's
+ *  on-gradient white styling; no new card style. */
+function PeriodPager({
+  icon,
+  title,
+  period,
+  onPrev,
+  onNext,
+  canPrev,
+  canNext,
+}: {
+  icon: ReactNode;
+  title: string;
+  period: string;
+  onPrev: () => void;
+  onNext: () => void;
+  canPrev: boolean;
+  canNext: boolean;
+}) {
+  const btn =
+    "flex h-6 w-6 items-center justify-center rounded-md bg-white/20 text-white transition hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed";
+  return (
+    <span className="flex items-center gap-2 normal-case tracking-normal">
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-white/80">
+        {icon}
+        {title}
+      </span>
+      <span className="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          className={btn}
+          onClick={onPrev}
+          disabled={!canPrev}
+          aria-label={`Previous ${title.toLowerCase()}`}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="min-w-[4.5rem] text-center text-[11px] font-semibold text-white/95">
+          {period}
+        </span>
+        <button
+          type="button"
+          className={btn}
+          onClick={onNext}
+          disabled={!canNext}
+          aria-label={`Next ${title.toLowerCase()}`}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </span>
+    </span>
+  );
+}
+
 export default function CommandCenterPage() {
   const { data: forecast } = useGetForecast({ days: 90 });
-  const { data: dash, isLoading: dLoading } = useGetDashboard();
+  const { data: dash } = useGetDashboard();
   const { data: nudge } = useGetAdvisorNudge();
   const { data: settings } = useGetSettings();
-  // Deduped with <KillStack/> below (same query key) — one fetch, used for the
-  // Amex command box's combined-owed + brand dots.
-  const { data: payoff } = useGetAmexWeeklyPayoff();
+  const { data: categories } = useListCategories();
   const nowRef = new Date();
   const { data: weeklyTxns } = useListTransactions({
     from: isoDaysAgo(nowRef, 90),
@@ -121,9 +180,18 @@ export default function CommandCenterPage() {
     () => (recurringItemsData ?? []).map((r) => r.name),
     [recurringItemsData],
   );
+  const catNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of categories ?? []) m.set(c.id, c.name);
+    return m;
+  }, [categories]);
   const [wrappedOpen, setWrappedOpen] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
   const [openStreak, setOpenStreak] = useState(0);
+  // Period pickers for the two focal spend readouts. 0 = current period;
+  // negative = back in time. Forward is capped at 0 (can't spend the future).
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [monthOffset, setMonthOffset] = useState(0);
 
   const { user } = useUser();
   const who = user?.firstName?.trim() || "Hubeles";
@@ -139,24 +207,92 @@ export default function CommandCenterPage() {
   const netMonth = dash ? Number(dash.netCashflow) : null;
   const income = dash ? Number(dash.monthlyIncome) : 0;
   const spend = dash ? Number(dash.monthlySpend) : 0;
-  const totalDebt = dash ? Number(dash.totalDebt) : null;
   const paidThisMonth = dash ? Number(dash.paidThisMonth) : 0;
-  const paidLifetime = dash ? Number(dash.paidLifetime) : 0;
   const persona = moneyPersona(dash?.topCategories?.[0]?.categoryName);
-  const debtCountUp = useCountUp(dLoading ? null : (totalDebt ?? 0));
 
-  // Debt-free projection at THIS month's paydown pace — honest, from existing
-  // dashboard numbers only (no new fetch, no new money model).
-  const debtFree = useMemo(() => {
-    if (totalDebt == null || totalDebt <= 0 || paidThisMonth <= 0) return null;
-    const months = Math.max(1, Math.ceil(totalDebt / paidThisMonth));
-    const d = new Date(now.getFullYear(), now.getMonth() + months, 1);
-    return {
-      months,
-      label: d.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+  // The one, shared discretionary-spend definition for the focal readouts:
+  // isSplurge() from lib/discretionarySpend — the SAME filter SpenderSpotlight /
+  // WallOfShame use. It drops income, reimbursables, transfers, external card
+  // payments, debt payments, bill/payment bank-noise, and any known recurring
+  // merchant (so no double-counting of transfers/card payments). Returns the
+  // absolute dollars spent for whichever txns pass the filter in a window.
+  const isRecurring = useMemo(
+    () => makeRecurringMatcher(recurringNames),
+    [recurringNames],
+  );
+  const recurringMerchants = useMemo(
+    () => recurringMerchantsFrom(weeklyTxns ?? []),
+    [weeklyTxns],
+  );
+  const discretionaryInWindow = useMemo(() => {
+    return (startISO: string, endISO: string) => {
+      let s = 0;
+      for (const t of weeklyTxns ?? []) {
+        if (!t.occurredOn || t.occurredOn < startISO || t.occurredOn > endISO)
+          continue;
+        if (!isSplurge(t, isRecurring)) continue;
+        if (recurringMerchants.has(merchantKey(t.description ?? ""))) continue;
+        s += -(Number(t.amount) || 0);
+      }
+      return s;
     };
+  }, [weeklyTxns, isRecurring, recurringMerchants]);
+
+  // Earliest ISO date we actually have transactions for (query fetched 90 days).
+  // Used to disable the ◀ button once a period would fall outside the window.
+  const earliestFetchedISO = isoDaysAgo(now, 90);
+
+  // ── A) Selected WEEK (Sun–Sat) discretionary spend ─────────────────────────
+  const weekView = useMemo(() => {
+    const base = currentWeekBounds(now);
+    const baseSun = new Date(`${base.startISO}T00:00:00`);
+    const sun = new Date(baseSun);
+    sun.setDate(sun.getDate() + weekOffset * 7);
+    const sat = new Date(sun);
+    sat.setDate(sat.getDate() + 6);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const startISO = iso(sun);
+    const endISO = iso(sat);
+    const spend = discretionaryInWindow(startISO, endISO);
+    // Weekly cap: per-week override, else the standing weekly allowance.
+    const override = settings?.preferences?.weeklyAllowanceOverrides?.[startISO];
+    const cap =
+      override != null
+        ? Number(override)
+        : Number(settings?.weeklyAllowanceAmount) || 0;
+    const label =
+      weekOffset === 0
+        ? "This week"
+        : `${sun.toLocaleDateString("en-US", { month: "short", day: "numeric" })}–${sat.toLocaleDateString("en-US", { day: "numeric" })}`;
+    // ◀ disabled once the window starts before what we fetched.
+    const canPrev = startISO >= earliestFetchedISO;
+    return { spend, cap, label, canPrev };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalDebt, paidThisMonth]);
+  }, [weekOffset, discretionaryInWindow, settings]);
+
+  // ── B) Selected calendar MONTH discretionary spend ─────────────────────────
+  const monthView = useMemo(() => {
+    const m = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const startISO = iso(m);
+    const end = new Date(m.getFullYear(), m.getMonth() + 1, 0);
+    const endISO = iso(end);
+    const spend = discretionaryInWindow(startISO, endISO);
+    const label =
+      monthOffset === 0
+        ? "This month"
+        : m.toLocaleDateString("en-US", {
+            month: "long",
+            year: m.getFullYear() === now.getFullYear() ? undefined : "numeric",
+          });
+    const canPrev = endISO >= earliestFetchedISO;
+    return { spend, label, canPrev };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthOffset, discretionaryInWindow]);
 
   // Projected checking balance walk — the runway sparkline + forecast area.
   const { series, runwayDays } = useMemo(() => {
@@ -396,13 +532,14 @@ export default function CommandCenterPage() {
     const out: { icon: typeof Trophy; label: string }[] = [];
     if (netMonth != null && netMonth > 0)
       out.push({ icon: TrendingUp, label: "In the black" });
-    if (paidThisMonth > 0) out.push({ icon: Trophy, label: "Debt slayer" });
+    if (weekView.cap > 0 && weekView.spend <= weekView.cap)
+      out.push({ icon: Trophy, label: "Under the weekly cap" });
     if (income > 0 && spend > 0 && spend < income * 0.8)
       out.push({ icon: PiggyBank, label: "Under 80% spend" });
     if (lowPoint != null && lowPoint > 0)
       out.push({ icon: Flame, label: "Stays in the green" });
     return out;
-  }, [netMonth, paidThisMonth, income, spend, lowPoint]);
+  }, [netMonth, income, spend, lowPoint, weekView]);
 
   const nudgeMsg = nudge?.enabled && nudge.message ? nudge.message : null;
   const sevColor =
@@ -453,7 +590,6 @@ export default function CommandCenterPage() {
     return () => window.clearTimeout(t);
   }, [netMonth]);
 
-  const amexOwed = payoff?.combinedStatementBalance ?? null;
   const cashNow =
     forecast?.bankSnapshot?.balance != null ? Number(forecast.bankSnapshot.balance) : null;
 
@@ -461,26 +597,60 @@ export default function CommandCenterPage() {
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <Confetti fire={celebrate} />
 
-      {/* ── At-a-glance StatTile row (active hero = the debt spine) ──────── */}
+      {/* ── At-a-glance StatTile row — the "how are we spending, right now"
+             focal readouts (week + month, navigable) plus cash & net. ─────── */}
+      <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+        {greeting}, {who} — here&rsquo;s the damage
+      </div>
       <StatTileRow>
+        {/* A) This week (Sun–Sat) discretionary spend, ◀ ▶ to cycle weeks */}
         <StatTile
           active
-          icon={<Flame className="w-4 h-4" />}
-          label={`${greeting}, ${who} · debt remaining`}
-          value={
-            dLoading || totalDebt == null ? (
-              "—"
+          label={
+            <PeriodPager
+              icon={<CalendarDays className="w-3.5 h-3.5" />}
+              title="Week"
+              period={weekView.label}
+              onPrev={() => setWeekOffset((o) => o - 1)}
+              onNext={() => setWeekOffset((o) => Math.min(0, o + 1))}
+              canPrev={weekView.canPrev}
+              canNext={weekOffset < 0}
+            />
+          }
+          value={<MoneyText amount={weekView.spend} />}
+          sub={
+            weekView.cap > 0 ? (
+              <span
+                className={
+                  weekView.spend > weekView.cap
+                    ? "text-[hsl(var(--negative))]"
+                    : "text-[hsl(var(--positive))]"
+                }
+              >
+                {weekView.spend > weekView.cap
+                  ? `${formatCurrency(weekView.spend - weekView.cap)} over the ${formatCurrency(weekView.cap)} cap`
+                  : `${formatCurrency(weekView.cap - weekView.spend)} left of ${formatCurrency(weekView.cap)}`}
+              </span>
             ) : (
-              <PrivateAmount>{formatCurrency(debtCountUp)}</PrivateAmount>
+              "spent, no cap set"
             )
           }
-          sub={
-            debtFree
-              ? `Debt-free ~${debtFree.label} at this pace`
-              : totalDebt != null && totalDebt <= 0
-                ? "Debt-free. Absolute legends."
-                : "Set a free-by date — hit the avalanche."
+        />
+        {/* B) Selected calendar month discretionary spend, ◀ ▶ to cycle months */}
+        <StatTile
+          label={
+            <PeriodPager
+              icon={<CalendarRange className="w-3.5 h-3.5" />}
+              title="Month"
+              period={monthView.label}
+              onPrev={() => setMonthOffset((o) => o - 1)}
+              onNext={() => setMonthOffset((o) => Math.min(0, o + 1))}
+              canPrev={monthView.canPrev}
+              canNext={monthOffset < 0}
+            />
           }
+          value={<MoneyText amount={monthView.spend} />}
+          sub="discretionary spend"
         />
         <StatTile
           icon={<PiggyBank className="w-4 h-4" />}
@@ -496,60 +666,33 @@ export default function CommandCenterPage() {
           sub={dash ? `${formatCurrency(income)} in · ${formatCurrency(spend)} out` : undefined}
           href="/reports"
         />
-        <StatTile
-          icon={<Trophy className="w-4 h-4" />}
-          label="Paid to debt"
-          value={<MoneyText amount={paidThisMonth} />}
-          sub="this month"
-          href="/avalanche"
-        />
       </StatTileRow>
 
-      {/* ── Spender Spotlight: the coach names + roasts the month's top spender ── */}
+      {/* ── Advisor nudge + sync (kept, debt copy stripped) ─────────────── */}
+      <Card className="focus-glow">
+        <CardContent className="p-5 md:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-start gap-2 min-w-0 flex-1">
+            <Sparkles className={cn("w-4 h-4 mt-0.5 shrink-0", sevColor)} />
+            <p className={cn("text-sm font-medium leading-snug", sevColor)}>
+              {nudgeMsg ?? "Pull a sync and I'll tell you how you're really doing."}
+            </p>
+          </div>
+          <div className="shrink-0">
+            <SyncButton />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── What to CANCEL — auto-detected recurring subscriptions ───────── */}
+      <SubscriptionInsightsSection
+        recurringItems={recurringItemsData}
+        txns={weeklyTxns}
+        catNameById={catNameById}
+      />
+
+      {/* ── What to STOP BUYING — the roasts ─────────────────────────────── */}
       <SpenderSpotlight transactions={weeklyTxns ?? []} recurringNames={recurringNames} />
-
-      {/* ── Wall of Shame: the month's 3 most reckless charges, ranked + roasted ── */}
       <WallOfShame transactions={weeklyTxns ?? []} recurringNames={recurringNames} />
-
-      {/* ── The loud spine: road out + freedom meter ────────────────────── */}
-      <div className="grid lg:grid-cols-2 gap-4 items-start">
-        <Card className="focus-glow">
-          <CardContent className="p-5 md:p-6 flex flex-col h-full">
-            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-              Your road out of debt
-            </div>
-            <div className="mt-1 text-2xl md:text-[1.9rem] font-bold tracking-tight leading-tight text-sunny">
-              {debtFree
-                ? `Debt-free around ${debtFree.label}`
-                : totalDebt != null && totalDebt <= 0
-                  ? "You're debt-free. Absolute legends. 🎉"
-                  : "Throw money at the avalanche to set your free-by date."}
-            </div>
-            {debtFree && (
-              <div className="mt-1 text-sm text-muted-foreground">
-                ~{debtFree.months} month{debtFree.months === 1 ? "" : "s"} to go ·{" "}
-                {formatCurrency(paidThisMonth)} paid so far this month
-              </div>
-            )}
-            <div className="mt-3 flex items-start gap-2">
-              <Sparkles className={cn("w-4 h-4 mt-0.5 shrink-0", sevColor)} />
-              <p className={cn("text-sm font-medium leading-snug", sevColor)}>
-                {nudgeMsg ?? "Pull a sync and I'll tell you how you're really doing."}
-              </p>
-            </div>
-            <div className="mt-auto pt-4">
-              <SyncButton />
-            </div>
-          </CardContent>
-        </Card>
-        {dash ? (
-          <FreedomMeter
-            totalDebt={Number(dash.totalDebt) || 0}
-            paidLifetime={paidLifetime}
-            paidThisMonth={paidThisMonth}
-          />
-        ) : null}
-      </div>
 
       {/* ── The five command boxes ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-4 stagger-children">
@@ -574,16 +717,8 @@ export default function CommandCenterPage() {
         <DrillCard
           href="/amex"
           eyebrow={<span className="inline-flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5" />Amex</span>}
-          value={
-            amexOwed != null ? (
-              <PrivateAmount>
-                <MoneyText amount={amexOwed} />
-              </PrivateAmount>
-            ) : (
-              "Cards"
-            )
-          }
-          sub="combined owed"
+          value="Cards"
+          sub="statements & spend"
           visual={
             <div className="flex items-center gap-1.5">
               {["blue", "silver"].map((b) => (
@@ -639,9 +774,6 @@ export default function CommandCenterPage() {
           }
         />
       </div>
-
-      {/* ── The Kill Stack — the signature element ─────────────────────── */}
-      <KillStack />
 
       {/* ── Health score ───────────────────────────────────────────────── */}
       <HealthScore
