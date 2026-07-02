@@ -32,6 +32,7 @@ import { MiniBars, type MiniBar } from "@/components/viz/MiniBars";
 import { MoneyText } from "@/components/viz/MoneyText";
 import { FillMeter } from "@/components/stat/fill-meter";
 import { PillBadge } from "@/components/pill-badge";
+import { LandingBackdrop } from "@/components/landing-backdrop";
 
 /**
  * Front door. A flowing wave + constellation header, a faint star-chart
@@ -62,102 +63,19 @@ function monthShort(month: string): string {
   return new Date(y, m - 1, 1).toLocaleString("en-US", { month: "short" });
 }
 
-// ── decorative chrome ────────────────────────────────────────────────────────
-
-/** Rich flowing wave field (left) + constellation network (right). */
-function HeaderBanner() {
-  // A phase-shifted stack of thin waves → the flowing sound-wave/topographic look.
-  const waves = Array.from({ length: 16 }, (_, i) => {
-    const y = 70 + i * 4.5;
-    const amp = 26 + (i % 5) * 6;
-    const d = `M0,${y} C160,${y - amp} 320,${y + amp} 480,${y} C640,${y - amp} 800,${y + amp} 980,${y} C1120,${y - amp * 0.7} 1180,${y + amp * 0.5} 1200,${y}`;
-    return { d, opacity: 0.06 + (i / 16) * 0.34 };
-  });
-  // Constellation nodes on the right third + a few connecting edges.
-  const nodes: [number, number][] = [
-    [880, 60], [960, 120], [1040, 70], [1010, 150], [1110, 110],
-    [1150, 60], [920, 170], [1080, 40], [990, 40], [1140, 160],
-  ];
-  const edges: [number, number][] = [
-    [0, 1], [1, 2], [2, 4], [1, 3], [3, 4], [2, 7], [5, 4], [1, 6], [8, 2], [4, 9],
-  ];
-  return (
-    <div className="relative -mx-3 -mt-3 mb-2 h-36 overflow-hidden bg-gradient-to-b from-primary/12 via-primary/5 to-transparent sm:h-44 md:-mx-5 md:-mt-5">
-      <svg
-        viewBox="0 0 1200 200"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 h-full w-full text-primary"
-      >
-        {waves.map((w, i) => (
-          <path
-            key={i}
-            d={w.d}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={i % 4 === 0 ? 1.4 : 0.9}
-            opacity={w.opacity}
-          />
-        ))}
-        {edges.map(([a, b], i) => (
-          <line
-            key={`e${i}`}
-            x1={nodes[a][0]}
-            y1={nodes[a][1]}
-            x2={nodes[b][0]}
-            y2={nodes[b][1]}
-            stroke="currentColor"
-            strokeWidth="0.7"
-            opacity="0.28"
-          />
-        ))}
-        {nodes.map(([cx, cy], i) => (
-          <circle key={`n${i}`} cx={cx} cy={cy} r={i % 3 === 0 ? 2.6 : 1.8} fill="currentColor" opacity="0.4" />
-        ))}
-      </svg>
-    </div>
-  );
-}
-
-/** Faint star-chart watermark behind the content (dots + thin edges). */
-function ConstellationBg() {
-  const dots: [number, number][] = [
-    [60, 120], [180, 300], [140, 520], [90, 700], [260, 90], [340, 420],
-    [520, 640], [700, 200], [860, 500], [980, 120], [940, 680], [820, 320],
-    [640, 80], [420, 720], [1080, 380], [1160, 200], [1120, 620], [300, 620],
-  ];
-  const edges: [number, number][] = [
-    [0, 4], [1, 3], [2, 3], [5, 11], [6, 13], [7, 12], [8, 11], [9, 15], [10, 16], [14, 15],
-  ];
-  return (
-    <svg
-      viewBox="0 0 1200 760"
-      preserveAspectRatio="xMidYMid slice"
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 -z-10 h-full w-full text-foreground opacity-[0.05]"
-    >
-      {edges.map(([a, b], i) => (
-        <line
-          key={`e${i}`}
-          x1={dots[a][0]}
-          y1={dots[a][1]}
-          x2={dots[b][0]}
-          y2={dots[b][1]}
-          stroke="currentColor"
-          strokeWidth="0.8"
-        />
-      ))}
-      {dots.map(([cx, cy], i) => (
-        <circle key={i} cx={cx} cy={cy} r={i % 4 === 0 ? 2.4 : 1.5} fill="currentColor" />
-      ))}
-    </svg>
-  );
-}
-
 // ── tile shell + chart-slot states ───────────────────────────────────────────
+
+type Hue = "blue" | "teal" | "indigo" | "amber";
+const HUE_CHIP: Record<Hue, string> = {
+  blue: "from-sky-400 to-blue-600",
+  teal: "from-teal-400 to-cyan-600",
+  indigo: "from-indigo-400 to-violet-600",
+  amber: "from-amber-400 to-orange-500",
+};
 
 function TileShell({
   icon,
+  hue,
   title,
   blurb,
   href,
@@ -165,6 +83,7 @@ function TileShell({
   children,
 }: {
   icon: React.ReactNode;
+  hue: Hue;
   title: string;
   blurb: string;
   href: string;
@@ -173,22 +92,29 @@ function TileShell({
 }) {
   return (
     <div
-      className="group relative flex min-h-[240px] flex-col rounded-2xl border border-card-border bg-card p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_10px_28px_-16px_rgba(0,0,0,0.18)] transition-all hover:border-primary/50 hover:shadow-[0_2px_6px_rgba(0,0,0,0.08),0_16px_36px_-16px_rgba(0,0,0,0.24)] sm:p-7"
+      className="group relative flex flex-col rounded-3xl border border-white/60 bg-card/90 p-6 shadow-[0_1px_2px_rgba(16,24,40,0.05),0_12px_32px_-14px_rgba(16,24,40,0.22)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_2px_6px_rgba(16,24,40,0.08),0_22px_48px_-16px_rgba(16,24,40,0.30)] dark:border-white/10 sm:p-7"
       data-testid={`landing-tile-${testid}`}
     >
       <Link
         href={href}
-        className="absolute inset-0 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/40"
+        className="absolute inset-0 rounded-3xl focus:outline-none focus:ring-2 focus:ring-primary/40"
         aria-label={title}
       />
       <div className="flex items-start justify-between gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+        {/* Glossy gradient icon chip — dimensional, per-area hue. */}
+        <div
+          className={cn(
+            "relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg ring-1 ring-white/40",
+            HUE_CHIP[hue],
+          )}
+        >
+          <span className="pointer-events-none absolute inset-x-1 top-1 h-1/3 rounded-t-xl bg-white/25 blur-[1px]" />
           {icon}
         </div>
         <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
       </div>
-      <div className="mt-4 text-xl font-semibold">{title}</div>
-      <p className="mt-1.5 text-sm text-muted-foreground">{blurb}</p>
+      <div className="mt-4 text-xl font-bold tracking-tight">{title}</div>
+      <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{blurb}</p>
       {children}
     </div>
   );
@@ -211,6 +137,26 @@ function ChartEmpty({ label }: { label: string }) {
     <div className="flex h-14 items-center justify-end text-[11px] text-muted-foreground/70">
       {label}
     </div>
+  );
+}
+
+/** Soft gradient-tinted pill (Banking's Chase/Amex/Allowance). */
+function GradientPill({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full bg-gradient-to-b px-3 py-1 text-xs font-semibold shadow-sm ring-1 transition-transform hover:scale-[1.03]",
+        className,
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -274,11 +220,12 @@ function BankingTile() {
     <TileShell
       testid="banking"
       href="/banking"
+      hue="blue"
       icon={<Landmark className="h-5 w-5" />}
       title="Banking"
       blurb="How you're spending — this week & month, what to cancel, what to stop buying."
     >
-      <div className="mt-auto pt-5">
+      <div className="mt-5">
         {curMonthTotal != null && (
           <div className="mb-3 flex items-center gap-2">
             <div className="leading-none">
@@ -304,18 +251,19 @@ function BankingTile() {
       <div className="flex items-end justify-between gap-3">
         <div className="relative z-10 flex flex-wrap content-end gap-2">
           <Link href="/transactions" data-testid="landing-link-banking-chase">
-            <PillBadge tone="info" dot={false}>Chase</PillBadge>
+            <GradientPill className="from-emerald-50 to-emerald-100 text-emerald-700 ring-emerald-200/70 dark:from-emerald-500/15 dark:to-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20">
+              Chase
+            </GradientPill>
           </Link>
           <Link href="/amex" data-testid="landing-link-banking-amex">
-            <PillBadge
-              dot={false}
-              className="bg-[hsl(var(--card-blue)/0.14)] text-[hsl(var(--card-blue))]"
-            >
+            <GradientPill className="from-sky-50 to-blue-100 text-blue-700 ring-blue-200/70 dark:from-blue-500/15 dark:to-blue-500/10 dark:text-blue-300 dark:ring-blue-400/20">
               Amex
-            </PillBadge>
+            </GradientPill>
           </Link>
           <Link href="/allowances" data-testid="landing-link-banking-allowance">
-            <PillBadge tone="danger" dot={false}>Allowance</PillBadge>
+            <GradientPill className="from-rose-50 to-red-100 text-red-700 ring-red-200/70 dark:from-red-500/15 dark:to-red-500/10 dark:text-red-300 dark:ring-red-400/20">
+              Allowance
+            </GradientPill>
           </Link>
         </div>
         <div className="pointer-events-none w-40 shrink-0">
@@ -374,22 +322,32 @@ function BillsTile() {
   const top = bills.slice(0, 5);
   const names = bills.slice(0, 3).map((b) => b.name);
   const hasBars = top.length >= 1 && top.some((b) => b.amount > 0);
+  const monthlyTotal = Number(data?.monthly?.bills ?? 0);
 
   return (
     <TileShell
       testid="bills"
       href="/bills"
+      hue="teal"
       icon={<Receipt className="h-5 w-5" />}
       title="Bills"
       blurb="Your recurring bills & subscriptions — with an AI review of what to cut and what's missing."
     >
-      <div className="mt-auto flex items-end justify-between gap-3 pt-5">
+      {monthlyTotal > 0 && (
+        <div className="mt-4 leading-none">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+            Recurring · this month
+          </div>
+          <MoneyText amount={monthlyTotal} className="text-lg font-bold tabular-nums" />
+        </div>
+      )}
+      <div className="mt-4 flex items-end justify-between gap-3">
         <div className="flex flex-wrap content-end gap-2">
           {(names.length > 0 ? names : ["Subscriptions", "Utilities", "Recurring"]).map(
             (n) => (
               <span
                 key={n}
-                className="max-w-[7.5rem] truncate rounded-md border border-card-border px-2.5 py-1 text-xs font-medium text-muted-foreground"
+                className="max-w-[7.5rem] truncate rounded-full border border-card-border bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground"
               >
                 {n}
               </span>
@@ -437,6 +395,13 @@ function ForecastTile() {
   const balances = daily.map((d) => Number(d.balance) || 0);
   const hasLine = balances.length >= 2;
   const projected = data?.endingBalance ?? data?.lowestProjected ?? null;
+  const lowest = data?.lowestProjected ?? null;
+  const lowestDate = data?.lowestDate
+    ? new Date(data.lowestDate + "T00:00:00").toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      })
+    : null;
 
   // Downsample the daily series to ~7 bars; highlight the lowest point in teal.
   const bars: MiniBar[] = useMemo(() => {
@@ -454,11 +419,20 @@ function ForecastTile() {
     <TileShell
       testid="forecast"
       href="/forecast"
+      hue="indigo"
       icon={<LineChart className="h-5 w-5" />}
       title="Forecast"
       blurb="See what's coming, then review and lock it in."
     >
-      <div className="mt-auto pt-4">
+      {lowest != null && lowestDate && (
+        <div className="mt-4 leading-none">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+            Lowest projected · {lowestDate}
+          </div>
+          <MoneyText amount={lowest} className="text-lg font-bold tabular-nums" />
+        </div>
+      )}
+      <div className="mt-4">
         <div className="pointer-events-none mb-3 flex items-end justify-end gap-2">
           {isLoading ? (
             <ChartSkeleton className="h-10 w-32" />
@@ -504,12 +478,14 @@ function AvalancheTile() {
     },
   });
   const active = (data ?? []).filter((d) => d.status !== "paid_off");
-  const { overallPaid, target } = useMemo(() => {
+  const { overallPaid, target, totalDebt } = useMemo(() => {
     let sumOrig = 0;
     let sumBal = 0;
+    let totalCurrent = 0;
     for (const d of active) {
       const bal = Number(d.balance) || 0;
       const orig = Number(d.originalBalance ?? 0) || 0;
+      totalCurrent += bal;
       if (orig > 0) {
         sumOrig += orig;
         sumBal += Math.min(bal, orig);
@@ -531,7 +507,11 @@ function AvalancheTile() {
           ),
         )
       : null;
-    return { overallPaid: overall, target: t ? { name: t.name, paid: tPaid! } : null };
+    return {
+      overallPaid: overall,
+      target: t ? { name: t.name, paid: tPaid! } : null,
+      totalDebt: totalCurrent,
+    };
   }, [active]);
 
   const hasData = overallPaid != null;
@@ -540,11 +520,27 @@ function AvalancheTile() {
     <TileShell
       testid="avalanche"
       href="/avalanche"
+      hue="amber"
       icon={<Flame className="h-5 w-5" />}
       title="Avalanche"
       blurb="Attack the debt — manage the payoff plan and free-by date."
     >
-      <div className="mt-auto flex items-end justify-between gap-4 pt-5">
+      {totalDebt > 0 && (
+        <div className="mt-4 flex items-baseline gap-2 leading-none">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+              Total debt left
+            </div>
+            <MoneyText amount={totalDebt} className="text-lg font-bold tabular-nums" />
+          </div>
+          {overallPaid != null && (
+            <span className="text-xs font-semibold text-[hsl(var(--positive))]">
+              {Math.round(overallPaid * 100)}% paid
+            </span>
+          )}
+        </div>
+      )}
+      <div className="mt-4 flex items-end justify-between gap-4">
         <div className="relative z-10">
           <NavPill href="/debts" label="Debts" testid="landing-link-avalanche-debts" />
         </div>
@@ -599,12 +595,10 @@ export default function LandingPage() {
   const reviewCount = useReviewInboxCount();
 
   return (
-    <div className="w-full">
-      <HeaderBanner />
+    <div className="relative min-h-full w-full">
+      <LandingBackdrop />
 
-      <div className="relative mx-auto w-full max-w-5xl px-2 pb-12 sm:px-4">
-        <ConstellationBg />
-
+      <div className="relative mx-auto w-full max-w-5xl px-2 pb-16 pt-10 sm:px-4 sm:pt-16">
         {/* Greeting + account controls */}
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
