@@ -693,10 +693,12 @@ export default function TransactionsPage() {
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
     const now = new Date();
-    // Window start: floor at May 2026, else the current month's first day.
+    // Window start: look back ~6 months so the ACTUAL line has history to draw
+    // (otherwise, early in the month, the chart shows only the forecast). Never
+    // go before the tracking-start floor (May 2026).
     const FLOOR = new Date(2026, 4, 1); // 2026-05-01
-    const curMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const windowStart = curMonthStart > FLOOR ? curMonthStart : FLOOR;
+    const lookback = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const windowStart = lookback > FLOOR ? lookback : FLOOR;
     // Window end: 12 months from today.
     const windowEnd = new Date(
       now.getFullYear(),
@@ -704,8 +706,15 @@ export default function TransactionsPage() {
       now.getDate(),
     );
 
-    // Today's actual balance — the common anchor for all three series.
-    const todayBalance = balanceAtEndOfDate(todayISO) ?? 0;
+    // Today's actual balance — the common anchor for all three series. When the
+    // ledger can't compute it (no usable snapshot), fall back to the forecast's
+    // own bank-today figure so the forecast seeds at the REAL balance and ties to
+    // the /forecast page, instead of collapsing to $0.
+    const todayBalance =
+      balanceAtEndOfDate(todayISO) ??
+      (Number.isFinite(Number(cashProjection?.bankToday))
+        ? Number(cashProjection?.bankToday)
+        : 0);
 
     // First week-ending Saturday on/after the window start.
     const firstSat = new Date(windowStart);
