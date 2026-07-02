@@ -35,6 +35,7 @@ import { SignInPage, SignUpPage } from "./pages/auth";
 // chunk, which is cached for subsequent visits. Behavior is unchanged —
 // a brief <Suspense> fallback shows while a route's chunk streams in.
 const CommandCenterPage = lazy(() => import("./pages/command-center"));
+const LandingPage = lazy(() => import("./pages/landing"));
 const ForecastPage = lazy(() => import("./pages/forecast"));
 const ReportsPage = lazy(() => import("./pages/reports"));
 const ReportsDebtPage = lazy(() => import("./pages/reports/DebtPage"));
@@ -255,9 +256,10 @@ function ProtectedShell() {
           <PageErrorBoundary resetKey={location}>
           <Suspense fallback={<RouteFallback />}>
           <Switch>
-            <Route path="/home" component={CommandCenterPage} />
+            <Route path="/home" component={LandingPage} />
+            <Route path="/banking" component={CommandCenterPage} />
             <Route path="/dashboard">
-              <Redirect to="/home" />
+              <Redirect to="/banking" />
             </Route>
             <Route path="/forecast">
               <ForecastPage mode="overall" />

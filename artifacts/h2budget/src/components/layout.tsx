@@ -46,25 +46,26 @@ import { ThemeToggle } from "@/components/theme-toggle";
 
 type NavItem = { name: string; href: string; icon: typeof Receipt };
 
-// One primary row — the five command destinations. "Overview" is the Reports
-// hub; the account pages and forecast sit beside it. Everything else is one
-// click away in the More overflow.
+// One primary row — Home (the 4-tile landing) plus the four areas. Everything
+// else is one click away in the More overflow, so nothing is lost.
 const PRIMARY_NAV: NavItem[] = [
-  { name: "Dashboard", href: "/home", icon: Home },
-  { name: "Overview", href: "/reports", icon: BarChart3 },
-  { name: "Chase", href: "/transactions", icon: Receipt },
-  { name: "Amex", href: "/amex", icon: CreditCard },
-  { name: "Allowance", href: "/allowances", icon: Wallet },
+  { name: "Home", href: "/home", icon: Home },
+  { name: "Banking", href: "/banking", icon: Landmark },
+  { name: "Bills", href: "/bills", icon: CalendarDays },
   { name: "Forecast", href: "/forecast", icon: TrendingUp },
+  { name: "Avalanche", href: "/avalanche", icon: Flame },
 ];
 
 // Secondary destinations, demoted into the More dropdown. Every route stays
-// reachable — just one extra click.
+// reachable — just one extra click. (Chase/Amex/Allowance live inside Banking;
+// Budget inside Forecast; these entries are the direct shortcuts.)
 const MORE_NAV: NavItem[] = [
+  { name: "Chase", href: "/transactions", icon: Receipt },
+  { name: "Amex", href: "/amex", icon: CreditCard },
+  { name: "Allowance", href: "/allowances", icon: Wallet },
   { name: "Budget", href: "/budget", icon: PieChart },
-  { name: "Bills", href: "/bills", icon: CalendarDays },
+  { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Debts", href: "/debts", icon: Landmark },
-  { name: "Avalanche", href: "/avalanche", icon: Flame },
   { name: "Debrief", href: "/debrief", icon: CalendarCheck },
   { name: "Review", href: "/review", icon: Inbox },
   { name: "Settings", href: "/settings", icon: SettingsIcon },
