@@ -6,6 +6,7 @@ import {
   useCreateRecurringItem,
   useUpdateRecurringItem,
   useDeleteRecurringItem,
+  useListRecurringItems,
   useListDebts,
   useListTransactions,
   useListCategories,
@@ -25,6 +26,7 @@ import {
 import { simulate, type SimDebt, type Strategy } from "@/lib/avalanche";
 import { BillsHealthCheck } from "@/components/bills-health-check";
 import { AiInsightBar } from "@/components/ai-insight-bar";
+import { SubscriptionInsightsSection } from "@/components/subscription-insights";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { TrendingUp, Receipt, Landmark, Scale } from "lucide-react";
 import { formatBillRowAmount } from "@/lib/billsRowAmount";
@@ -480,6 +482,15 @@ export default function BillsPage() {
   // #70 — pull all transactions to compute actual income/spend this month.
   const { data: allTxns } = useListTransactions({ limit: 5000 });
 
+  // Recurring items + a category-name lookup feed the subscription review
+  // ("what to cancel / what's missing") surfaced near the top of the page.
+  const { data: recurringItemsList } = useListRecurringItems();
+  const catNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of categories ?? []) m.set(c.id, c.name);
+    return m;
+  }, [categories]);
+
   // #70 — real spend amounts. Compare planned ("Per month") against what
   // actually happened so far this calendar month: sum positive amounts as
   // income and the absolute value of negatives as spend, skipping
@@ -638,6 +649,12 @@ export default function BillsPage() {
       </StatTileRow>
 
       <AiInsightBar />
+
+      <SubscriptionInsightsSection
+        recurringItems={recurringItemsList}
+        txns={allTxns}
+        catNameById={catNameById}
+      />
 
       {/* Weekly-first lead: exactly what's due in the selected window (this
           week by default). The monthly detail lives below. */}
