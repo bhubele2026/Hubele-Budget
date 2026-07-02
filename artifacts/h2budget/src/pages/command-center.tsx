@@ -22,6 +22,7 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   CalendarDays,
   CalendarRange,
   Zap,
@@ -367,6 +368,26 @@ export default function CommandCenterPage() {
   const [wrappedOpen, setWrappedOpen] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
   const [openStreak, setOpenStreak] = useState(0);
+  // "The Damage" — the secondary/fun surfaces live in a collapsible below the
+  // spending-control + act-on-it zones, so the top of the page stays calm.
+  // Remembers its open/closed state across visits.
+  const [damageOpen, setDamageOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("h2:cc-damage-open:v1") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleDamage = () =>
+    setDamageOpen((v) => {
+      const n = !v;
+      try {
+        localStorage.setItem("h2:cc-damage-open:v1", n ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return n;
+    });
   // Period pickers for the two focal spend readouts. 0 = current period;
   // negative = back in time. Forward is capped at 0 (can't spend the future).
   const [weekOffset, setWeekOffset] = useState(0);
@@ -1161,10 +1182,36 @@ export default function CommandCenterPage() {
         catNameById={catNameById}
       />
 
-      {/* ── What to STOP BUYING — the roasts ─────────────────────────────── */}
-      <SpenderSpotlight transactions={weeklyTxns ?? []} recurringNames={recurringNames} />
+      {/* ── What to STOP BUYING — one roast surface (consolidated) ───────── */}
       <WallOfShame transactions={weeklyTxns ?? []} recurringNames={recurringNames} />
 
+      {/* ── "The Damage" — everything secondary/fun, collapsed by default so the
+             spending-control + act-on-it zones above stay the focus. ──────── */}
+      <div className="rounded-2xl border border-card-border bg-card/40">
+        <button
+          type="button"
+          onClick={toggleDamage}
+          aria-expanded={damageOpen}
+          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+          data-testid="cc-damage-toggle"
+        >
+          <span className="flex items-center gap-2">
+            <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+              The Damage
+            </span>
+            <span className="text-xs text-muted-foreground">
+              receipts, roasts, streaks & the deep cuts
+            </span>
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-muted-foreground transition-transform",
+              damageOpen && "rotate-180",
+            )}
+          />
+        </button>
+        {damageOpen && (
+          <div className="space-y-4 px-3 pb-4 sm:px-4">
       {/* ── The five command boxes ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-4 stagger-children">
         <DrillCard
@@ -1604,6 +1651,9 @@ export default function CommandCenterPage() {
         >
           <Sparkles className="w-3.5 h-3.5" /> View this month, Wrapped
         </button>
+      </div>
+          </div>
+        )}
       </div>
 
       <MonthlyWrapped open={wrappedOpen} onOpenChange={setWrappedOpen} dashboard={dash ?? null} />
