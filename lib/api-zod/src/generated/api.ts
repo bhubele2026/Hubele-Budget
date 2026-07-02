@@ -2759,6 +2759,46 @@ export const GetReportsAdvisorSummaryResponse = zod.object({
 });
 
 /**
+ * Returns short Claude-written captions (headline + one-liner) for the
+four Banking insight buckets — going well, could improve, cancel
+these, and paying-for-but-not-budgeted — grounded in deterministic
+facts computed server-side from the household's data. Every dollar
+figure is computed in code; the model only writes language. Cached
+per household on a hash of the facts; pass `refresh=true` to force
+a fresh regeneration.
+
+ * @summary Claude captions for the four Banking insight buckets
+ */
+export const GetBankingInsightsSummaryQueryParams = zod.object({
+  refresh: zod
+    .enum(["true", "1"])
+    .optional()
+    .describe("Force a fresh Claude regeneration, bypassing the cache."),
+});
+
+export const GetBankingInsightsSummaryResponse = zod.object({
+  goingWell: zod.object({
+    headline: zod.string(),
+    caption: zod.string(),
+  }),
+  couldImprove: zod.object({
+    headline: zod.string(),
+    caption: zod.string(),
+  }),
+  cancelThese: zod.object({
+    headline: zod.string(),
+    caption: zod.string(),
+  }),
+  notInBudget: zod.object({
+    headline: zod.string(),
+    caption: zod.string(),
+  }),
+  summarySource: zod.enum(["ai", "fallback"]),
+  generatedAt: zod.string(),
+  source: zod.enum(["cache", "fresh"]),
+});
+
+/**
  * Returns deterministic Spending facts (real spend, excluded buckets,
 uncategorized backlog, by-category, by-merchant, daily, day-of-week,
 monthly trends, reimbursable) for the Reports Spending tab. `from`/`to`

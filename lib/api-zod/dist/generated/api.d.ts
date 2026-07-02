@@ -5736,6 +5736,109 @@ export declare const GetReportsAdvisorSummaryResponse: zod.ZodObject<{
     bullets: string[];
 }>;
 /**
+ * Returns short Claude-written captions (headline + one-liner) for the
+four Banking insight buckets — going well, could improve, cancel
+these, and paying-for-but-not-budgeted — grounded in deterministic
+facts computed server-side from the household's data. Every dollar
+figure is computed in code; the model only writes language. Cached
+per household on a hash of the facts; pass `refresh=true` to force
+a fresh regeneration.
+
+ * @summary Claude captions for the four Banking insight buckets
+ */
+export declare const GetBankingInsightsSummaryQueryParams: zod.ZodObject<{
+    refresh: zod.ZodOptional<zod.ZodEnum<["true", "1"]>>;
+}, "strip", zod.ZodTypeAny, {
+    refresh?: "1" | "true" | undefined;
+}, {
+    refresh?: "1" | "true" | undefined;
+}>;
+export declare const GetBankingInsightsSummaryResponse: zod.ZodObject<{
+    goingWell: zod.ZodObject<{
+        headline: zod.ZodString;
+        caption: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        headline: string;
+        caption: string;
+    }, {
+        headline: string;
+        caption: string;
+    }>;
+    couldImprove: zod.ZodObject<{
+        headline: zod.ZodString;
+        caption: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        headline: string;
+        caption: string;
+    }, {
+        headline: string;
+        caption: string;
+    }>;
+    cancelThese: zod.ZodObject<{
+        headline: zod.ZodString;
+        caption: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        headline: string;
+        caption: string;
+    }, {
+        headline: string;
+        caption: string;
+    }>;
+    notInBudget: zod.ZodObject<{
+        headline: zod.ZodString;
+        caption: zod.ZodString;
+    }, "strip", zod.ZodTypeAny, {
+        headline: string;
+        caption: string;
+    }, {
+        headline: string;
+        caption: string;
+    }>;
+    summarySource: zod.ZodEnum<["ai", "fallback"]>;
+    generatedAt: zod.ZodString;
+    source: zod.ZodEnum<["cache", "fresh"]>;
+}, "strip", zod.ZodTypeAny, {
+    source: "cache" | "fresh";
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+    goingWell: {
+        headline: string;
+        caption: string;
+    };
+    couldImprove: {
+        headline: string;
+        caption: string;
+    };
+    cancelThese: {
+        headline: string;
+        caption: string;
+    };
+    notInBudget: {
+        headline: string;
+        caption: string;
+    };
+}, {
+    source: "cache" | "fresh";
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+    goingWell: {
+        headline: string;
+        caption: string;
+    };
+    couldImprove: {
+        headline: string;
+        caption: string;
+    };
+    cancelThese: {
+        headline: string;
+        caption: string;
+    };
+    notInBudget: {
+        headline: string;
+        caption: string;
+    };
+}>;
+/**
  * Returns deterministic Spending facts (real spend, excluded buckets,
 uncategorized backlog, by-category, by-merchant, daily, day-of-week,
 monthly trends, reimbursable) for the Reports Spending tab. `from`/`to`

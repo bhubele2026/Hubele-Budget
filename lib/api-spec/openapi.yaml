@@ -1235,6 +1235,31 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ReportsAdvisorSummary" }
 
+  /banking/insights-summary:
+    get:
+      operationId: getBankingInsightsSummary
+      tags: [banking]
+      summary: Claude captions for the four Banking insight buckets
+      description: |
+        Returns short Claude-written captions (headline + one-liner) for the
+        four Banking insight buckets — going well, could improve, cancel
+        these, and paying-for-but-not-budgeted — grounded in deterministic
+        facts computed server-side from the household's data. Every dollar
+        figure is computed in code; the model only writes language. Cached
+        per household on a hash of the facts; pass `refresh=true` to force
+        a fresh regeneration.
+      parameters:
+        - in: query
+          name: refresh
+          description: Force a fresh Claude regeneration, bypassing the cache.
+          schema: { type: string, enum: ["true", "1"] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankingInsightsSummary" }
+
   /reports/spending-facts:
     get:
       operationId: getReportsSpendingFacts
@@ -3918,6 +3943,33 @@ components:
         bullets:
           type: array
           items: { type: string }
+        summarySource: { type: string, enum: [ai, fallback] }
+        generatedAt: { type: string }
+        source: { type: string, enum: [cache, fresh] }
+
+    BankingInsightsBucketCaption:
+      type: object
+      required: [headline, caption]
+      properties:
+        headline: { type: string }
+        caption: { type: string }
+    BankingInsightsSummary:
+      type: object
+      required:
+        [
+          goingWell,
+          couldImprove,
+          cancelThese,
+          notInBudget,
+          summarySource,
+          generatedAt,
+          source,
+        ]
+      properties:
+        goingWell: { $ref: "#/components/schemas/BankingInsightsBucketCaption" }
+        couldImprove: { $ref: "#/components/schemas/BankingInsightsBucketCaption" }
+        cancelThese: { $ref: "#/components/schemas/BankingInsightsBucketCaption" }
+        notInBudget: { $ref: "#/components/schemas/BankingInsightsBucketCaption" }
         summarySource: { type: string, enum: [ai, fallback] }
         generatedAt: { type: string }
         source: { type: string, enum: [cache, fresh] }

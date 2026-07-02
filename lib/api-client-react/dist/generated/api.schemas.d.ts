@@ -1807,6 +1807,29 @@ export interface ReportsAdvisorSummary {
     generatedAt: string;
     source: ReportsAdvisorSummarySource;
 }
+export interface BankingInsightsBucketCaption {
+    headline: string;
+    caption: string;
+}
+export type BankingInsightsSummarySummarySource = (typeof BankingInsightsSummarySummarySource)[keyof typeof BankingInsightsSummarySummarySource];
+export declare const BankingInsightsSummarySummarySource: {
+    readonly ai: "ai";
+    readonly fallback: "fallback";
+};
+export type BankingInsightsSummarySource = (typeof BankingInsightsSummarySource)[keyof typeof BankingInsightsSummarySource];
+export declare const BankingInsightsSummarySource: {
+    readonly cache: "cache";
+    readonly fresh: "fresh";
+};
+export interface BankingInsightsSummary {
+    goingWell: BankingInsightsBucketCaption;
+    couldImprove: BankingInsightsBucketCaption;
+    cancelThese: BankingInsightsBucketCaption;
+    notInBudget: BankingInsightsBucketCaption;
+    summarySource: BankingInsightsSummarySummarySource;
+    generatedAt: string;
+    source: BankingInsightsSummarySource;
+}
 export type SpendingFactsRange = {
     start: string;
     end: string;
@@ -3012,6 +3035,17 @@ export declare const GetReportsAdvisorSummaryTab: {
 };
 export type GetReportsAdvisorSummaryRefresh = (typeof GetReportsAdvisorSummaryRefresh)[keyof typeof GetReportsAdvisorSummaryRefresh];
 export declare const GetReportsAdvisorSummaryRefresh: {
+    readonly true: "true";
+    readonly NUMBER_1: "1";
+};
+export type GetBankingInsightsSummaryParams = {
+    /**
+     * Force a fresh Claude regeneration, bypassing the cache.
+     */
+    refresh?: GetBankingInsightsSummaryRefresh;
+};
+export type GetBankingInsightsSummaryRefresh = (typeof GetBankingInsightsSummaryRefresh)[keyof typeof GetBankingInsightsSummaryRefresh];
+export declare const GetBankingInsightsSummaryRefresh: {
     readonly true: "true";
     readonly NUMBER_1: "1";
 };

@@ -2023,6 +2023,37 @@ export interface ReportsAdvisorSummary {
   source: ReportsAdvisorSummarySource;
 }
 
+export interface BankingInsightsBucketCaption {
+  headline: string;
+  caption: string;
+}
+
+export type BankingInsightsSummarySummarySource =
+  (typeof BankingInsightsSummarySummarySource)[keyof typeof BankingInsightsSummarySummarySource];
+
+export const BankingInsightsSummarySummarySource = {
+  ai: "ai",
+  fallback: "fallback",
+} as const;
+
+export type BankingInsightsSummarySource =
+  (typeof BankingInsightsSummarySource)[keyof typeof BankingInsightsSummarySource];
+
+export const BankingInsightsSummarySource = {
+  cache: "cache",
+  fresh: "fresh",
+} as const;
+
+export interface BankingInsightsSummary {
+  goingWell: BankingInsightsBucketCaption;
+  couldImprove: BankingInsightsBucketCaption;
+  cancelThese: BankingInsightsBucketCaption;
+  notInBudget: BankingInsightsBucketCaption;
+  summarySource: BankingInsightsSummarySummarySource;
+  generatedAt: string;
+  source: BankingInsightsSummarySource;
+}
+
 export type SpendingFactsRange = {
   start: string;
   end: string;
@@ -3449,6 +3480,21 @@ export type GetReportsAdvisorSummaryRefresh =
   (typeof GetReportsAdvisorSummaryRefresh)[keyof typeof GetReportsAdvisorSummaryRefresh];
 
 export const GetReportsAdvisorSummaryRefresh = {
+  true: "true",
+  NUMBER_1: "1",
+} as const;
+
+export type GetBankingInsightsSummaryParams = {
+  /**
+   * Force a fresh Claude regeneration, bypassing the cache.
+   */
+  refresh?: GetBankingInsightsSummaryRefresh;
+};
+
+export type GetBankingInsightsSummaryRefresh =
+  (typeof GetBankingInsightsSummaryRefresh)[keyof typeof GetBankingInsightsSummaryRefresh];
+
+export const GetBankingInsightsSummaryRefresh = {
   true: "true",
   NUMBER_1: "1",
 } as const;

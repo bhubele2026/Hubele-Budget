@@ -24,6 +24,7 @@ import {
   ChevronRight,
   CalendarDays,
   CalendarRange,
+  PieChart,
 } from "lucide-react";
 import { SyncButton } from "@/components/sync-button";
 import {
@@ -34,6 +35,8 @@ import {
   useListTransactions,
   useListRecurringItems,
   useListCategories,
+  useGetBudgetMonth,
+  getGetBudgetMonthQueryKey,
 } from "@workspace/api-client-react";
 import {
   weeklyBudgetStreak,
@@ -55,6 +58,7 @@ import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { SpenderSpotlight } from "@/components/spender-spotlight";
 import { WallOfShame } from "@/components/wall-of-shame";
 import { SubscriptionInsightsSection } from "@/components/subscription-insights";
+import { BankingInsights } from "@/components/banking-insights";
 import { PillBadge } from "@/components/pill-badge";
 import { Sparkline, StackBar, RingStat, HeatStrip, MiniBars, MoneyText } from "@/components/viz";
 import { useUser } from "@clerk/react";
@@ -94,6 +98,42 @@ function moneyPersona(cat: string | undefined): { label: string; emoji: string }
     return { label: "The Parents on Duty", emoji: "🍼" };
   if (!c) return { label: "The Mystery Spenders", emoji: "🕵️" };
   return { label: `The ${cat} Devotees`, emoji: "💸" };
+}
+
+// The Banking area's sub-destinations. The global top nav is hidden on the
+// landing, so this ribbon is how Chase / Amex / Budget / Allowance stay one
+// tap away from Banking. Pill style matches the app's badge/pill language —
+// no new card styles.
+const BANKING_RIBBON = [
+  { name: "Chase", href: "/transactions", icon: Receipt },
+  { name: "Amex", href: "/amex", icon: CreditCard },
+  { name: "Budget", href: "/budget", icon: PieChart },
+  { name: "Allowance", href: "/allowances", icon: Wallet },
+] as const;
+
+function BankingRibbon() {
+  return (
+    <nav
+      aria-label="Banking sections"
+      className="flex flex-wrap items-center gap-2"
+      data-testid="banking-ribbon"
+    >
+      <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mr-1">
+        Banking
+      </span>
+      {BANKING_RIBBON.map((item) => (
+        <Link key={item.href} href={item.href}>
+          <span
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/50 hover:text-primary"
+            data-testid={`banking-ribbon-${item.name.toLowerCase()}`}
+          >
+            <item.icon className="h-3.5 w-3.5" />
+            {item.name}
+          </span>
+        </Link>
+      ))}
+    </nav>
+  );
 }
 
 function greetingFor(hour: number): string {
@@ -176,6 +216,20 @@ export default function CommandCenterPage() {
   // subscriptions are excluded — those roast surfaces want random splurges,
   // not the mortgage.
   const { data: recurringItemsData } = useListRecurringItems();
+  // Current month's budget plan-vs-actual — feeds the four insight buckets
+  // (under/over budget + spend-with-no-line). Same generated hook the Budget
+  // page uses; slow-changing, so a generous staleTime.
+  const currentMonthStart = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  }, []);
+  const { data: budgetMonth } = useGetBudgetMonth(currentMonthStart, {
+    query: {
+      queryKey: getGetBudgetMonthQueryKey(currentMonthStart),
+      staleTime: 5 * 60_000,
+      gcTime: 30 * 60_000,
+    },
+  });
   const recurringNames = useMemo(
     () => (recurringItemsData ?? []).map((r) => r.name),
     [recurringItemsData],
@@ -597,6 +651,9 @@ export default function CommandCenterPage() {
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <Confetti fire={celebrate} />
 
+      {/* ── Banking sub-ribbon — the area's own nav row ─────────────────── */}
+      <BankingRibbon />
+
       {/* ── At-a-glance StatTile row — the "how are we spending, right now"
              focal readouts (week + month, navigable) plus cash & net. ─────── */}
       <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
@@ -682,6 +739,19 @@ export default function CommandCenterPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── The four insight buckets — going well / could improve / cancel /
+             paying-for-but-not-budgeted. Numbers computed here from data the
+             page already loads; AI writes only the captions. ─────────────── */}
+      <BankingInsights
+        budgetMonth={budgetMonth}
+        topCategories={dash?.topCategories}
+        txns={weeklyTxns}
+        recurringNames={recurringNames}
+        catNameById={catNameById}
+        momCompare={momCompare}
+        streak={streak}
+      />
 
       {/* ── What to CANCEL — auto-detected recurring subscriptions ───────── */}
       <SubscriptionInsightsSection

@@ -33,6 +33,7 @@ import type {
   AvalancheSettings,
   AvalancheSettingsInput,
   BankSnapshot,
+  BankingInsightsSummary,
   BehaviorFacts,
   BillsSummary,
   BudgetFacts,
@@ -81,6 +82,7 @@ import type {
   ForecastSettings,
   ForecastSettingsInput,
   GetAmexWeeklyPayoffParams,
+  GetBankingInsightsSummaryParams,
   GetBillsSummaryParams,
   GetForecastAvalancheScheduleParams,
   GetForecastCashSignalParams,
@@ -5905,6 +5907,123 @@ export function useGetReportsAdvisorSummary<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetReportsAdvisorSummaryQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns short Claude-written captions (headline + one-liner) for the
+four Banking insight buckets — going well, could improve, cancel
+these, and paying-for-but-not-budgeted — grounded in deterministic
+facts computed server-side from the household's data. Every dollar
+figure is computed in code; the model only writes language. Cached
+per household on a hash of the facts; pass `refresh=true` to force
+a fresh regeneration.
+
+ * @summary Claude captions for the four Banking insight buckets
+ */
+export const getGetBankingInsightsSummaryUrl = (
+  params?: GetBankingInsightsSummaryParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/banking/insights-summary?${stringifiedParams}`
+    : `/api/banking/insights-summary`;
+};
+
+export const getBankingInsightsSummary = async (
+  params?: GetBankingInsightsSummaryParams,
+  options?: RequestInit,
+): Promise<BankingInsightsSummary> => {
+  return customFetch<BankingInsightsSummary>(
+    getGetBankingInsightsSummaryUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetBankingInsightsSummaryQueryKey = (
+  params?: GetBankingInsightsSummaryParams,
+) => {
+  return [
+    `/api/banking/insights-summary`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetBankingInsightsSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBankingInsightsSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetBankingInsightsSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBankingInsightsSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBankingInsightsSummaryQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBankingInsightsSummary>>
+  > = ({ signal }) =>
+    getBankingInsightsSummary(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBankingInsightsSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBankingInsightsSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBankingInsightsSummary>>
+>;
+export type GetBankingInsightsSummaryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Claude captions for the four Banking insight buckets
+ */
+
+export function useGetBankingInsightsSummary<
+  TData = Awaited<ReturnType<typeof getBankingInsightsSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetBankingInsightsSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBankingInsightsSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBankingInsightsSummaryQueryOptions(
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
