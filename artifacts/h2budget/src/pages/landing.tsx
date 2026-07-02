@@ -68,19 +68,19 @@ export default function LandingPage() {
   const who = user?.firstName?.trim() || "Hubeles";
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">Hey, {who}.</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] w-full max-w-5xl flex-col justify-center px-6 py-6">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">Hey, {who}.</h1>
+        <p className="mt-1 text-base text-muted-foreground">
           Where do you want to go?
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         {TILES.map((t) => (
           <div
             key={t.key}
-            className="group relative rounded-xl border border-card-border bg-card p-5 transition-colors hover:border-primary/50"
+            className="group relative flex min-h-[220px] flex-col rounded-xl border border-card-border bg-card p-7 transition-colors hover:border-primary/50"
             data-testid={`landing-tile-${t.key}`}
           >
             <Link
@@ -94,10 +94,10 @@ export default function LandingPage() {
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
             </div>
-            <div className="mt-3 text-lg font-semibold">{t.title}</div>
-            <p className="mt-1 text-sm text-muted-foreground">{t.blurb}</p>
+            <div className="mt-4 text-xl font-semibold">{t.title}</div>
+            <p className="mt-1.5 text-sm text-muted-foreground">{t.blurb}</p>
             {t.links && (
-              <div className="relative z-10 mt-3 flex flex-wrap gap-2">
+              <div className="relative z-10 mt-auto flex flex-wrap gap-2 pt-5">
                 {t.links.map((l) => (
                   <Link
                     key={l.href}

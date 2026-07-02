@@ -199,7 +199,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="h-screen overflow-hidden bg-background flex flex-col">
-      {/* ── Top bar: brand · plan-&-analyze nav · settings gear ───────────── */}
+      {/* ── Top bar: brand · plan-&-analyze nav · settings gear. Hidden on the
+          landing (/home) — there the four tiles ARE the navigation. ────────── */}
+      {location !== "/home" && (
       <header className="shrink-0 bg-sidebar text-sidebar-foreground border-b border-sidebar-border">
         <div className="flex items-center h-11">
           {/* Brand — desktop: pinned to the rail width (w-52) with matching
@@ -320,6 +322,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+      )}
 
       {/* ── Body: single full-width content column (rail collapsed into the
           top bar's primary row + More overflow) ──────────────────────────── */}
