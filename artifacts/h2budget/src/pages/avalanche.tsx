@@ -50,6 +50,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { RingStat, Sparkline, MoneyText } from "@/components/viz";
 import { PillBadge } from "@/components/pill-badge";
+import { AvalancheCardConfig } from "@/components/avalanche-card-config";
 import {
   simulate,
   simulateWithSolvableFallback,
@@ -1276,6 +1277,11 @@ export default function AvalanchePage() {
             })}
           </div>
         )}
+      </div>
+
+      {/* Amex cards → payoff: tier/name config + add-to-avalanche (moved off Amex page) */}
+      <div className="mb-6">
+        <AvalancheCardConfig />
       </div>
 
       {/* Tabs: debts table + projection */}
