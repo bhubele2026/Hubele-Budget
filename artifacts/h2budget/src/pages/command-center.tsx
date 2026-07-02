@@ -85,6 +85,7 @@ import { Sparkline, StackBar, RingStat, HeatStrip, MiniBars, MoneyText } from "@
 import { useUser } from "@clerk/react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { effectiveBucket } from "@/lib/weeklyBuckets";
+import { bucketSpendInWindow, bucketTxnsInWindow } from "@/lib/bucketSpend";
 import { Card, CardContent } from "@/components/ui/card";
 import { MonthlyWrapped } from "@/components/monthly-wrapped";
 import { Confetti } from "@/components/confetti";
@@ -145,12 +146,12 @@ const BUCKET_OPTIONS: { key: BucketKey; label: string }[] = [
   { key: "unplanned", label: "Unplanned" },
 ];
 
-// Weekly is the DEFAULT bucket — an item is weekly unless explicitly moved to
-// Monthly or Unplanned. Shared definition in lib/weeklyBuckets so Banking and
-// the Allowances page agree. (No more "No bucket".)
+// EXPLICIT selection — a txn is weekly/monthly/unplanned only if the user marked
+// it that bucket; otherwise it's unassigned (null). Shared definition in
+// lib/weeklyBuckets so Banking and the Allowances page agree.
 function currentBucket(
   t: Pick<Transaction, "weeklyAllowance" | "monthlyAllowance" | "unplannedAllowance">,
-): BucketKey {
+): BucketKey | null {
   return effectiveBucket(t);
 }
 
@@ -189,10 +190,10 @@ function DrillTxnRow({
   t: Transaction;
   categories: { id: string; name: string }[];
   pending: boolean;
-  onMoveBucket: (t: Transaction, bucket: BucketKey) => void;
+  onMoveBucket: (t: Transaction, bucket: BucketKey | "none") => void;
   onChangeCategory: (t: Transaction, categoryId: string) => void;
 }) {
-  const bucket = currentBucket(t);
+  const bucket = currentBucket(t) ?? "none";
   return (
     <div
       className={cn("py-2.5", pending && "opacity-50 pointer-events-none")}
@@ -216,7 +217,7 @@ function DrillTxnRow({
       <div className="mt-1.5 flex items-center gap-2 pl-[3.75rem]">
         <Select
           value={bucket}
-          onValueChange={(v) => onMoveBucket(t, v as BucketKey)}
+          onValueChange={(v) => onMoveBucket(t, v as BucketKey | "none")}
         >
           <SelectTrigger
             className="h-7 w-[118px] text-xs"
@@ -226,6 +227,9 @@ function DrillTxnRow({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="none" className="text-xs">
+              Not counted
+            </SelectItem>
             {BUCKET_OPTIONS.map((b) => (
               <SelectItem key={b.key} value={b.key} className="text-xs">
                 {b.label}
@@ -428,15 +432,19 @@ export default function CommandCenterPage() {
         0,
       );
   }, [discretionaryTxnsInWindow]);
-  // Weekly-bucket subset (weekly is the default; items moved to Monthly/Unplanned
-  // drop out). The Week tile + its drill use this so re-bucketing visibly lowers
-  // the Week number and the Allowances weekly total agrees.
-  const weeklyBucketTxnsInWindow = useMemo(() => {
-    return (startISO: string, endISO: string): Transaction[] =>
-      discretionaryTxnsInWindow(startISO, endISO).filter(
-        (t) => effectiveBucket(t) === "weekly",
-      );
-  }, [discretionaryTxnsInWindow]);
+  // Explicit-bucket spend (weekly / monthly / unplanned). A txn counts ONLY if
+  // the user marked it that bucket; blank counts nowhere. Shared with
+  // /allowances via lib/bucketSpend so both surfaces show the identical number.
+  // (NOTE: no isSplurge filter here — explicit selection IS the gate now, so a
+  // recurring charge the user marked weekly still counts and can be re-filed.)
+  const bucketSum = useMemo(() => {
+    return (bucket: BucketKey, startISO: string, endISO: string): number =>
+      bucketSpendInWindow(weeklyTxns ?? [], bucket, startISO, endISO);
+  }, [weeklyTxns]);
+  const bucketTxns = useMemo(() => {
+    return (bucket: BucketKey, startISO: string, endISO: string): Transaction[] =>
+      bucketTxnsInWindow(weeklyTxns ?? [], bucket, startISO, endISO);
+  }, [weeklyTxns]);
 
   // Earliest ISO date we actually have transactions for (query fetched 90 days).
   // Used to disable the ◀ button once a period would fall outside the window.
@@ -455,10 +463,7 @@ export default function CommandCenterPage() {
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     const startISO = iso(sun);
     const endISO = iso(sat);
-    const spend = weeklyBucketTxnsInWindow(startISO, endISO).reduce(
-      (s, t) => s + -(Number(t.amount) || 0),
-      0,
-    );
+    const spend = bucketSum("weekly", startISO, endISO);
     // Weekly cap: per-week override, else the standing weekly allowance.
     const override = settings?.preferences?.weeklyAllowanceOverrides?.[startISO];
     const cap =
@@ -479,7 +484,7 @@ export default function CommandCenterPage() {
     const canPrev = startISO >= earliestFetchedISO;
     return { spend, cap, label, range, canPrev, startISO, endISO };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekOffset, discretionaryInWindow, settings]);
+  }, [weekOffset, bucketSum, settings]);
 
   // ── B) Selected calendar MONTH discretionary spend ─────────────────────────
   const monthView = useMemo(() => {
@@ -490,36 +495,35 @@ export default function CommandCenterPage() {
     const startISO = iso(m);
     const end = new Date(m.getFullYear(), m.getMonth() + 1, 0);
     const endISO = iso(end);
-    const spend = discretionaryInWindow(startISO, endISO);
+    const spend = bucketSum("monthly", startISO, endISO);
+    const cap = Number(settings?.monthlyAllowanceAmount) || 0;
     const name = m.toLocaleDateString("en-US", {
       month: "long",
       year: m.getFullYear() === now.getFullYear() ? undefined : "numeric",
     });
     const label = monthOffset === 0 ? "This month" : name;
     const canPrev = endISO >= earliestFetchedISO;
-    return { spend, label, name, canPrev, startISO, endISO };
+    return { spend, cap, label, name, canPrev, startISO, endISO };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthOffset, discretionaryInWindow]);
+  }, [monthOffset, bucketSum, settings]);
 
   // ── C) Unplanned-allowance spend, CURRENT month — the bucket that was
   //      invisible from Banking. Sums the txns flagged `unplannedAllowance`
   //      (the same flag /allowances uses) against the unplanned cap. ───────
   const unplannedView = useMemo(() => {
-    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const txns: Transaction[] = [];
-    let spendSum = 0;
-    for (const t of weeklyTxns ?? []) {
-      if (!t.unplannedAllowance) continue;
-      if (!t.occurredOn?.startsWith(ym)) continue;
-      const a = Number(t.amount) || 0;
-      if (a >= 0) continue;
-      txns.push(t);
-      spendSum += -a;
-    }
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const startISO = iso(first);
+    const endISO = iso(last);
+    const txns = bucketTxns("unplanned", startISO, endISO);
+    const spend = bucketSum("unplanned", startISO, endISO);
     const cap = Number(settings?.unplannedAllowanceAmount) || 0;
-    return { txns, spend: spendSum, cap };
+    return { txns, spend, cap };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyTxns, settings]);
+  }, [bucketTxns, bucketSum, settings]);
 
   // Projected checking balance walk — the runway sparkline + forecast area.
   const { series, runwayDays } = useMemo(() => {
@@ -771,8 +775,8 @@ export default function CommandCenterPage() {
   // false in the SAME PATCH (mutual exclusivity is enforced by the payload),
   // weeklyBucket is kept/derived when entering Weekly and cleared otherwise,
   // and picking a bucket counts as reviewing the row (#615).
-  const moveBucket = async (t: Transaction, bucket: BucketKey) => {
-    if (currentBucket(t) === bucket) return;
+  const moveBucket = async (t: Transaction, bucket: BucketKey | "none") => {
+    if ((currentBucket(t) ?? "none") === bucket) return;
     const wb =
       bucket === "weekly"
         ? (t.weeklyBucket ??
@@ -792,7 +796,10 @@ export default function CommandCenterPage() {
       });
       invalidateAfterTxnEdit();
       toast({
-        title: `Filed under ${BUCKET_OPTIONS.find((b) => b.key === bucket)?.label ?? bucket}`,
+        title:
+          bucket === "none"
+            ? "Left out of the buckets"
+            : `Filed under ${BUCKET_OPTIONS.find((b) => b.key === bucket)?.label ?? bucket}`,
       });
     } catch (e) {
       toast({
@@ -834,12 +841,16 @@ export default function CommandCenterPage() {
       b.occurredOn.localeCompare(a.occurredOn);
     if (drill === "week" || drill === "month") {
       const v = drill === "week" ? weekView : monthView;
-      const txns = (
-        drill === "week"
-          ? weeklyBucketTxnsInWindow(v.startISO, v.endISO)
-          : discretionaryTxnsInWindow(v.startISO, v.endISO)
+      const txns = bucketTxns(
+        drill === "week" ? "weekly" : "monthly",
+        v.startISO,
+        v.endISO,
       ).sort(newestFirst);
-      const total = txns.reduce((s, t) => s + -(Number(t.amount) || 0), 0);
+      const total = bucketSum(
+        drill === "week" ? "weekly" : "monthly",
+        v.startISO,
+        v.endISO,
+      );
       const title =
         drill === "week"
           ? weekOffset === 0
@@ -867,8 +878,8 @@ export default function CommandCenterPage() {
     weekView,
     monthView,
     unplannedView,
-    discretionaryTxnsInWindow,
-    weeklyBucketTxnsInWindow,
+    bucketTxns,
+    bucketSum,
     weekOffset,
     monthOffset,
     monthName,
@@ -1034,7 +1045,23 @@ export default function CommandCenterPage() {
               />
             }
             value={<MoneyText amount={monthView.spend} />}
-            sub="discretionary spend · tap to drill"
+            sub={
+              monthView.cap > 0 ? (
+                <span
+                  className={
+                    monthView.spend > monthView.cap
+                      ? "text-[hsl(var(--negative))]"
+                      : "text-[hsl(var(--positive))]"
+                  }
+                >
+                  {monthView.spend > monthView.cap
+                    ? `${formatCurrency(monthView.spend - monthView.cap)} over the ${formatCurrency(monthView.cap)} cap`
+                    : `${formatCurrency(monthView.cap - monthView.spend)} left of ${formatCurrency(monthView.cap)}`}
+                </span>
+              ) : (
+                "monthly bucket · tap to drill"
+              )
+            }
           />
         </div>
         <StatTile

@@ -12,19 +12,25 @@ export type SubBucket = (typeof SUB_BUCKETS)[number];
 export type AllowanceBucket = "weekly" | "monthly" | "unplanned";
 
 /**
- * A transaction's effective allowance bucket. **Weekly is the default**: an item
- * counts as weekly unless it's been explicitly moved to Monthly or Unplanned.
- * Single source of truth shared by the Banking spending view (command-center)
- * and the Allowances page, so the two always agree.
+ * A transaction's effective allowance bucket by **EXPLICIT SELECTION ONLY**.
+ * The user marks each Chase/Amex expense weekly, monthly, or unplanned via the
+ * bucket bubbles; an unmarked expense is `null` (unassigned) and counts in NONE
+ * of the three totals. There is NO auto-default — blank means blank.
+ *
+ * Single source of truth shared by the Banking spending view (command-center),
+ * the Allowances page, and the shared bucket-spend lib, so every surface agrees.
+ * (This replaces the earlier "weekly is the default" behavior: unmarked expenses
+ * used to fall into weekly, which double-counted uncategorized spend.)
  */
 export function effectiveBucket(t: {
   weeklyAllowance?: boolean | null;
   monthlyAllowance?: boolean | null;
   unplannedAllowance?: boolean | null;
-}): AllowanceBucket {
+}): AllowanceBucket | null {
   if (t.unplannedAllowance) return "unplanned";
   if (t.monthlyAllowance) return "monthly";
-  return "weekly";
+  if (t.weeklyAllowance) return "weekly";
+  return null;
 }
 
 export const DEFAULT_WEEKLY_BUCKET_LABELS: Record<SubBucket, string> = {
