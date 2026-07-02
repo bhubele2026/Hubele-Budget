@@ -1,5 +1,12 @@
-import { useGetAmexWeeklyPayoff, useGetSettings } from "@workspace/api-client-react";
+import {
+  useGetAmexWeeklyPayoff,
+  useGetSettings,
+  getGetAmexWeeklyPayoffQueryKey,
+  getListDebtsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { RingStat, MoneyText } from "@/components/viz";
+import { AddToAvalanche } from "@/components/add-card-to-avalanche";
 import {
   BRAND_LABEL,
   brandColor,
@@ -13,9 +20,11 @@ import { cn } from "@/lib/utils";
  * statement balance, this-week charges, and a "% cleared" ring. Selecting a
  * tile filters the register below (drill); the All tile clears the filter.
  *
- * Display + filtering ONLY. Tier/name editing and the "Add to Avalanche" action
- * moved to the Avalanche page (see components/avalanche-card-config.tsx). Card
- * names/tiers set there flow back here for display via settings preferences.
+ * Each tile also carries an "Add to Avalanche" action (shared component) for
+ * cards not yet tracked as debts — e.g. the Sky Card. Adding one links it to a
+ * debt, after which amexAnchor drops it from this band. Tier/name editing lives
+ * on the Avalanche page (components/avalanche-card-config.tsx); names/tiers set
+ * there flow back here for display via settings preferences.
  */
 export function AmexCardBand({
   selected,
@@ -30,6 +39,13 @@ export function AmexCardBand({
   const overrides = cardBrandOverrides(settings);
   const names =
     (settings?.preferences?.amexCardNames as Record<string, string>) ?? {};
+  const qc = useQueryClient();
+  // After a card is added to Avalanche it gains a debtId and the band refetch
+  // drops it (amexAnchor filters debt-linked cards).
+  const refreshAfterCreate = async () => {
+    await qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
+    await qc.invalidateQueries({ queryKey: getGetAmexWeeklyPayoffQueryKey() });
+  };
 
   const cards = data?.cards ?? [];
   if (cards.length === 0) return null;
@@ -63,13 +79,11 @@ export function AmexCardBand({
         const color = brandColor(tier);
         const active = selected === c.accountId;
         return (
-          <button
+          <div
             key={c.accountId}
-            type="button"
-            onClick={() => onSelect(c.accountId)}
             className={cn(
-              "rounded-2xl border bg-card p-4 text-left transition-colors",
-              active ? "ring-1 ring-inset ring-primary/30" : "hover:bg-accent/30",
+              "rounded-2xl border bg-card p-4",
+              active ? "ring-1 ring-inset ring-primary/30" : "",
             )}
             style={{
               borderColor: active ? color : "hsl(var(--card-border))",
@@ -78,29 +92,38 @@ export function AmexCardBand({
             }}
             data-testid={`amex-tile-${tier}`}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ background: color }}
+            <button
+              type="button"
+              onClick={() => onSelect(c.accountId)}
+              className="w-full text-left transition-opacity hover:opacity-90"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ background: color }}
+                  />
+                  {names[c.accountId] || BRAND_LABEL[tier] || c.name}
+                </span>
+                <RingStat
+                  value={c.pctOfStatementThisWeek}
+                  size={36}
+                  stroke={4}
+                  color={color}
+                  centerText=""
                 />
-                {names[c.accountId] || BRAND_LABEL[tier] || c.name}
-              </span>
-              <RingStat
-                value={c.pctOfStatementThisWeek}
-                size={36}
-                stroke={4}
-                color={color}
-                centerText=""
-              />
+              </div>
+              <div className="mt-2 text-xl font-bold">
+                <MoneyText amount={c.statementBalance} />
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                <MoneyText amount={c.weekCharges} /> this week
+              </div>
+            </button>
+            <div className="mt-2">
+              <AddToAvalanche card={c} onCreated={refreshAfterCreate} />
             </div>
-            <div className="mt-2 text-xl font-bold">
-              <MoneyText amount={c.statementBalance} />
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              <MoneyText amount={c.weekCharges} /> this week
-            </div>
-          </button>
+          </div>
         );
       })}
     </div>
