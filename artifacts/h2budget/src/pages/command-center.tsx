@@ -571,7 +571,7 @@ export default function CommandCenterPage() {
           sub="combined owed"
           visual={
             <div className="flex items-center gap-1.5">
-              {["blue", "silver", "gold"].map((b) => (
+              {["blue", "silver"].map((b) => (
                 <span
                   key={b}
                   className="h-2.5 w-2.5 rounded-full"

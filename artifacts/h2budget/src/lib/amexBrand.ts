@@ -5,13 +5,14 @@ import type { Settings } from "@workspace/api-client-react";
 // when Plaid's name doesn't carry the tier word (e.g. two cards reading
 // "Platinum"). Display metadata only — never affects financial math.
 
-export type AmexTier = "blue" | "silver" | "gold";
-export const AMEX_TIERS: AmexTier[] = ["blue", "silver", "gold"];
+// Two tiers only: Blue and Platinum (internal key "silver"). The Gold tier is
+// retired — any legacy "gold" value normalizes to Platinum below.
+export type AmexTier = "blue" | "silver";
+export const AMEX_TIERS: AmexTier[] = ["blue", "silver"];
 
 export const BRAND_LABEL: Record<AmexTier, string> = {
   blue: "Blue Cash",
   silver: "Platinum",
-  gold: "Gold",
 };
 
 /** The --card-* identity token for a tier. */
@@ -34,8 +35,8 @@ export function effectiveBrand(
   overrides: Record<string, AmexTier>,
 ): AmexTier {
   const o = overrides[accountId];
-  if (o === "blue" || o === "silver" || o === "gold") return o;
-  return (serverBrand === "blue" || serverBrand === "silver" || serverBrand === "gold"
-    ? serverBrand
-    : "silver") as AmexTier;
+  if (o === "blue") return "blue";
+  if (o === "silver" || o === "gold") return "silver"; // legacy Gold → Platinum
+  // Server guess: only Blue stays Blue; everything else (incl. legacy Gold) is Platinum.
+  return serverBrand === "blue" ? "blue" : "silver";
 }

@@ -194,7 +194,7 @@ export async function refreshAmexAnchor(
 // Amex card (Blue / Silver / Gold), for one Sun–Sat week.
 // ---------------------------------------------------------------------------
 
-export type AmexBrand = "blue" | "silver" | "gold";
+export type AmexBrand = "blue" | "silver";
 
 /**
  * Classify a physical Amex card into its brand identity from its display name
@@ -207,10 +207,8 @@ export function classifyAmexBrand(
 ): AmexBrand {
   const s = `${name ?? ""} ${mask ?? ""}`;
   if (/blue/i.test(s)) return "blue";
-  if (/platinum/i.test(s)) return "silver";
-  if (/gold/i.test(s)) return "gold";
-  // NOTE: unmatched Amex cards default to silver (neutral Platinum-style)
-  // rather than dropping out of the stack entirely.
+  // Platinum, Gold (retired tier), and unmatched cards all resolve to silver
+  // (Platinum-style) rather than dropping out of the stack entirely.
   return "silver";
 }
 
@@ -476,8 +474,8 @@ export async function computeWeeklyPayoff(
     };
   });
 
-  // Stable, friendly order: Blue, Silver, Gold.
-  const order: Record<AmexBrand, number> = { blue: 0, silver: 1, gold: 2 };
+  // Stable, friendly order: Blue, then Platinum.
+  const order: Record<AmexBrand, number> = { blue: 0, silver: 1 };
   cards.sort((a, b) => order[a.brand] - order[b.brand]);
 
   // The combined "to pay this week" total is the WEEKLY cards only; monthly

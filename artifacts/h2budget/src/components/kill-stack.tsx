@@ -306,7 +306,7 @@ export function KillStack({
     }
   };
 
-  const TIER_ORDER: Record<AmexTier, number> = { blue: 0, silver: 1, gold: 2 };
+  const TIER_ORDER: Record<AmexTier, number> = { blue: 0, silver: 1 };
   const allCards = [...(data?.cards ?? [])].sort(
     (a, b) =>
       TIER_ORDER[effectiveBrand(a.accountId, a.brand, brandOverrides)] -
