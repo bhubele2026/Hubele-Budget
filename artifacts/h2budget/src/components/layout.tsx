@@ -171,6 +171,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     (r) => location === r || location.startsWith(r + "/"),
   );
   const areaNav = inBanking ? BANKING_SUBNAV : PRIMARY_NAV;
+  // More lists everything NOT already in the current ribbon — no duplicates,
+  // and it carries the other areas so you can jump between them from here too.
+  const ribbonHrefs = new Set(areaNav.map((a) => a.href));
+  const moreNav = ALL_NAV.filter((item) => !ribbonHrefs.has(item.href));
   const [mobileOpen, setMobileOpen] = useState(false);
   const reviewCount = useReviewInboxCount();
   const debriefCount = useDebriefAwaitingCount();
@@ -203,8 +207,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   // Is any secondary (More) destination the current page, and do any of them
   // carry a pending badge — so the collapsed More trigger can signal both.
-  const moreActive = MORE_NAV.some((n) => location.startsWith(n.href));
-  const moreBadgeTotal = MORE_NAV.reduce(
+  const moreActive = moreNav.some((n) => location.startsWith(n.href));
+  const moreBadgeTotal = moreNav.reduce(
     (sum, n) => sum + (railBadge(n.href) ?? 0),
     0,
   );
@@ -300,7 +304,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                {MORE_NAV.map((item) => {
+                {moreNav.map((item) => {
                   const badge = railBadge(item.href);
                   return (
                     <DropdownMenuItem key={item.href} asChild>
