@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearch } from "wouter";
 import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Ban, Split, Flame } from "lucide-react";
 import { SplitTransactionDialog } from "@/components/split-transaction-dialog";
 import { AiInsightBar } from "@/components/ai-insight-bar";
@@ -650,7 +651,14 @@ function BucketCard({
 
 export default function AllowancesPage() {
   const today = useMemo(() => new Date(), []);
-  const [mode, setMode] = useState<Mode>("week");
+  // Preselect Week/Month from the dashboard tile deep-link (?view=week|month|
+  // unplanned). Unplanned is a card within the month scope, so it opens Month.
+  const search = useSearch();
+  const [mode, setMode] = useState<Mode>(() => {
+    const view = new URLSearchParams(search).get("view");
+    if (view === "month" || view === "unplanned") return "month";
+    return "week";
+  });
   const [weekStart, setWeekStart] = useState<Date>(() => sundayOf(new Date()));
   const [monthStart, setMonthStart] = useState<Date>(() =>
     firstOfMonth(new Date()),

@@ -986,19 +986,10 @@ export default function CommandCenterPage() {
             number) — a div[role=button] wrapper so the pager's real <button>s
             stay valid HTML inside it. Tones are set explicitly because the
             wrapper hides these from StatTileRow's auto-rotation. */}
-        <div
-          role="button"
-          tabIndex={0}
-          aria-label="See every transaction behind this week's spend"
-          className="h-full cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => setDrill("week")}
-          onKeyDown={(e) => {
-            if (e.target !== e.currentTarget) return;
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setDrill("week");
-            }
-          }}
+        <Link
+          href="/allowances?view=week"
+          aria-label="Review and edit this week's spend on the Allowances page"
+          className="block h-full cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
           data-testid="cc-week-tile"
         >
           <StatTile
@@ -1034,22 +1025,12 @@ export default function CommandCenterPage() {
               )
             }
           />
-        </div>
-        {/* B) Selected calendar month discretionary spend, ◀ ▶ to cycle months.
-            Same click-to-drill treatment as the week tile. */}
-        <div
-          role="button"
-          tabIndex={0}
-          aria-label="See every transaction behind this month's spend"
-          className="h-full cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => setDrill("month")}
-          onKeyDown={(e) => {
-            if (e.target !== e.currentTarget) return;
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setDrill("month");
-            }
-          }}
+        </Link>
+        {/* B) Selected calendar month spend — links to Allowances to edit. */}
+        <Link
+          href="/allowances?view=month"
+          aria-label="Review and edit this month's spend on the Allowances page"
+          className="block h-full cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
           data-testid="cc-month-tile"
         >
           <StatTile
@@ -1080,11 +1061,11 @@ export default function CommandCenterPage() {
                     : `${formatCurrency(monthView.cap - monthView.spend)} left of ${formatCurrency(monthView.cap)}`}
                 </span>
               ) : (
-                "monthly bucket · tap to drill"
+                "monthly bucket · review on Allowances"
               )
             }
           />
-        </div>
+        </Link>
         <StatTile
           tone={2}
           icon={<PiggyBank className="w-4 h-4" />}
@@ -1106,9 +1087,8 @@ export default function CommandCenterPage() {
       {/* ── Unplanned, this month — the bucket that used to be invisible from
              Banking. Slim strip (a 5th tile would crowd the row); same
              over/under cap styling as the Week tile; click to drill. ─────── */}
-      <button
-        type="button"
-        onClick={() => setDrill("unplanned")}
+      <Link
+        href="/allowances?view=unplanned"
         className="block w-full text-left"
         data-testid="cc-unplanned-strip"
       >
@@ -1140,12 +1120,12 @@ export default function CommandCenterPage() {
               )}
             </span>
             <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
-              the &ldquo;just this once&rdquo; pile
+              Review on Allowances
               <ChevronRight className="h-3.5 w-3.5" />
             </span>
           </CardContent>
         </Card>
-      </button>
+      </Link>
 
       {/* ── Advisor nudge + sync (kept, debt copy stripped) ─────────────── */}
       <Card className="focus-glow">
