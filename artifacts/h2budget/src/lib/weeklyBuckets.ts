@@ -9,6 +9,24 @@ export const SUB_BUCKETS = [
 ] as const;
 export type SubBucket = (typeof SUB_BUCKETS)[number];
 
+export type AllowanceBucket = "weekly" | "monthly" | "unplanned";
+
+/**
+ * A transaction's effective allowance bucket. **Weekly is the default**: an item
+ * counts as weekly unless it's been explicitly moved to Monthly or Unplanned.
+ * Single source of truth shared by the Banking spending view (command-center)
+ * and the Allowances page, so the two always agree.
+ */
+export function effectiveBucket(t: {
+  weeklyAllowance?: boolean | null;
+  monthlyAllowance?: boolean | null;
+  unplannedAllowance?: boolean | null;
+}): AllowanceBucket {
+  if (t.unplannedAllowance) return "unplanned";
+  if (t.monthlyAllowance) return "monthly";
+  return "weekly";
+}
+
 export const DEFAULT_WEEKLY_BUCKET_LABELS: Record<SubBucket, string> = {
   groceries: "Groceries",
   dining: "Dining",

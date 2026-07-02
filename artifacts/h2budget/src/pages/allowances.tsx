@@ -54,6 +54,7 @@ import {
   SUB_BUCKETS,
   type SubBucket,
   useWeeklyBucketLabels,
+  effectiveBucket,
 } from "@/lib/weeklyBuckets";
 
 // ----- date helpers ---------------------------------------------------
@@ -127,7 +128,7 @@ function weeklyOverStreak(
     let spend = 0;
     let any = false;
     for (const t of txns) {
-      if (!t.weeklyAllowance) continue;
+      if (effectiveBucket(t) !== "weekly") continue;
       if (t.occurredOn >= start && t.occurredOn <= end) {
         spend += expenseAmount(t);
         any = true;
@@ -178,7 +179,7 @@ function weeklyUnderStreak(
     let spend = 0;
     let any = false;
     for (const t of txns) {
-      if (!t.weeklyAllowance) continue;
+      if (effectiveBucket(t) !== "weekly") continue;
       if (t.occurredOn >= start && t.occurredOn <= end) {
         spend += expenseAmount(t);
         any = true;
@@ -223,7 +224,7 @@ function weeklyVarianceSeries(
     const end = fmtISO(addDays(ws, 6));
     let spend = 0;
     for (const t of txns) {
-      if (!t.weeklyAllowance) continue;
+      if (effectiveBucket(t) !== "weekly") continue;
       if (t.occurredOn >= start && t.occurredOn <= end) spend += expenseAmount(t);
     }
     const planned = overrides[start] != null ? overrides[start] : weeklyAmt;
@@ -244,7 +245,7 @@ const BUCKETS: { key: BucketKey; name: string; noun: string }[] = [
 ];
 
 function hasBucketFlag(t: Transaction, key: BucketKey): boolean {
-  if (key === "weekly") return !!t.weeklyAllowance;
+  if (key === "weekly") return effectiveBucket(t) === "weekly";
   if (key === "monthly") return !!t.monthlyAllowance;
   return !!t.unplannedAllowance;
 }

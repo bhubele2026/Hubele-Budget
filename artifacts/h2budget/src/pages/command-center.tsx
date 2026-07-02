@@ -84,6 +84,7 @@ import { PillBadge } from "@/components/pill-badge";
 import { Sparkline, StackBar, RingStat, HeatStrip, MiniBars, MoneyText } from "@/components/viz";
 import { useUser } from "@clerk/react";
 import { cn, formatCurrency } from "@/lib/utils";
+import { effectiveBucket } from "@/lib/weeklyBuckets";
 import { Card, CardContent } from "@/components/ui/card";
 import { MonthlyWrapped } from "@/components/monthly-wrapped";
 import { Confetti } from "@/components/confetti";
@@ -144,13 +145,13 @@ const BUCKET_OPTIONS: { key: BucketKey; label: string }[] = [
   { key: "unplanned", label: "Unplanned" },
 ];
 
+// Weekly is the DEFAULT bucket — an item is weekly unless explicitly moved to
+// Monthly or Unplanned. Shared definition in lib/weeklyBuckets so Banking and
+// the Allowances page agree. (No more "No bucket".)
 function currentBucket(
   t: Pick<Transaction, "weeklyAllowance" | "monthlyAllowance" | "unplannedAllowance">,
-): "" | BucketKey {
-  if (t.weeklyAllowance) return "weekly";
-  if (t.monthlyAllowance) return "monthly";
-  if (t.unplannedAllowance) return "unplanned";
-  return "";
+): BucketKey {
+  return effectiveBucket(t);
 }
 
 // Same category→weekly-sub-bucket default the Amex review flow uses, so a
@@ -214,7 +215,7 @@ function DrillTxnRow({
       </div>
       <div className="mt-1.5 flex items-center gap-2 pl-[3.75rem]">
         <Select
-          value={bucket || undefined}
+          value={bucket}
           onValueChange={(v) => onMoveBucket(t, v as BucketKey)}
         >
           <SelectTrigger
@@ -222,7 +223,7 @@ function DrillTxnRow({
             aria-label="Allowance bucket"
             data-testid={`cc-drill-bucket-${t.id}`}
           >
-            <SelectValue placeholder="No bucket" />
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {BUCKET_OPTIONS.map((b) => (
@@ -427,6 +428,15 @@ export default function CommandCenterPage() {
         0,
       );
   }, [discretionaryTxnsInWindow]);
+  // Weekly-bucket subset (weekly is the default; items moved to Monthly/Unplanned
+  // drop out). The Week tile + its drill use this so re-bucketing visibly lowers
+  // the Week number and the Allowances weekly total agrees.
+  const weeklyBucketTxnsInWindow = useMemo(() => {
+    return (startISO: string, endISO: string): Transaction[] =>
+      discretionaryTxnsInWindow(startISO, endISO).filter(
+        (t) => effectiveBucket(t) === "weekly",
+      );
+  }, [discretionaryTxnsInWindow]);
 
   // Earliest ISO date we actually have transactions for (query fetched 90 days).
   // Used to disable the ◀ button once a period would fall outside the window.
@@ -445,7 +455,10 @@ export default function CommandCenterPage() {
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     const startISO = iso(sun);
     const endISO = iso(sat);
-    const spend = discretionaryInWindow(startISO, endISO);
+    const spend = weeklyBucketTxnsInWindow(startISO, endISO).reduce(
+      (s, t) => s + -(Number(t.amount) || 0),
+      0,
+    );
     // Weekly cap: per-week override, else the standing weekly allowance.
     const override = settings?.preferences?.weeklyAllowanceOverrides?.[startISO];
     const cap =
@@ -821,7 +834,11 @@ export default function CommandCenterPage() {
       b.occurredOn.localeCompare(a.occurredOn);
     if (drill === "week" || drill === "month") {
       const v = drill === "week" ? weekView : monthView;
-      const txns = discretionaryTxnsInWindow(v.startISO, v.endISO).sort(newestFirst);
+      const txns = (
+        drill === "week"
+          ? weeklyBucketTxnsInWindow(v.startISO, v.endISO)
+          : discretionaryTxnsInWindow(v.startISO, v.endISO)
+      ).sort(newestFirst);
       const total = txns.reduce((s, t) => s + -(Number(t.amount) || 0), 0);
       const title =
         drill === "week"
@@ -851,6 +868,7 @@ export default function CommandCenterPage() {
     monthView,
     unplannedView,
     discretionaryTxnsInWindow,
+    weeklyBucketTxnsInWindow,
     weekOffset,
     monthOffset,
     monthName,
