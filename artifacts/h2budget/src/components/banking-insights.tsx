@@ -212,9 +212,13 @@ export function BankingInsights({
     [untrackedRecurring, unbudgetedCategories],
   );
 
+  // Honest early-month framing: this compares month-to-date against the same
+  // point last month, so label it "so far" rather than a finished-month verdict.
   const goingWellChips: string[] = [];
   if (momCompare.pctChange != null && momCompare.pctChange < 0)
-    goingWellChips.push(`${Math.abs(Math.round(momCompare.pctChange))}% less than last month`);
+    goingWellChips.push(
+      `${Math.abs(Math.round(momCompare.pctChange))}% less than last month so far`,
+    );
   if (streak.direction === "under" && streak.weeks >= 2)
     goingWellChips.push(`${streak.weeks} weeks under the cap`);
 

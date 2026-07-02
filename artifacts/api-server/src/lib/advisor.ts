@@ -12,6 +12,10 @@ import { computeCashSignal } from "./cashSignal";
 import { logger } from "./logger";
 import { VOICE_SYSTEM } from "./advisorVoice";
 import {
+  buildSituationalContext,
+  formatTimingForPrompt,
+} from "./situationalContext";
+import {
   dispatchTool,
   getAnthropicToolSpecs,
   type ToolContext,
@@ -337,6 +341,8 @@ export async function buildHouseholdContext(
 
 function formatContextForPrompt(ctx: HouseholdContext): string {
   const lines: string[] = [];
+  lines.push(formatTimingForPrompt(buildSituationalContext(new Date())));
+  lines.push("");
   lines.push(`Current month: ${ctx.monthLabel} (day ${ctx.monthToDate.daysIntoMonth} of ${ctx.monthToDate.daysInMonth})`);
   lines.push("");
   lines.push("MONTH-TO-DATE CASHFLOW:");
