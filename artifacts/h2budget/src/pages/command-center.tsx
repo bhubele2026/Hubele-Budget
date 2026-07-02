@@ -24,7 +24,6 @@ import {
   ChevronRight,
   CalendarDays,
   CalendarRange,
-  PieChart,
 } from "lucide-react";
 import { SyncButton } from "@/components/sync-button";
 import {
@@ -104,38 +103,6 @@ function moneyPersona(cat: string | undefined): { label: string; emoji: string }
 // landing, so this ribbon is how Chase / Amex / Budget / Allowance stay one
 // tap away from Banking. Pill style matches the app's badge/pill language —
 // no new card styles.
-const BANKING_RIBBON = [
-  { name: "Chase", href: "/transactions", icon: Receipt },
-  { name: "Amex", href: "/amex", icon: CreditCard },
-  { name: "Budget", href: "/budget", icon: PieChart },
-  { name: "Allowance", href: "/allowances", icon: Wallet },
-] as const;
-
-function BankingRibbon() {
-  return (
-    <nav
-      aria-label="Banking sections"
-      className="flex flex-wrap items-center gap-2"
-      data-testid="banking-ribbon"
-    >
-      <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mr-1">
-        Banking
-      </span>
-      {BANKING_RIBBON.map((item) => (
-        <Link key={item.href} href={item.href}>
-          <span
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/50 hover:text-primary"
-            data-testid={`banking-ribbon-${item.name.toLowerCase()}`}
-          >
-            <item.icon className="h-3.5 w-3.5" />
-            {item.name}
-          </span>
-        </Link>
-      ))}
-    </nav>
-  );
-}
-
 function greetingFor(hour: number): string {
   if (hour < 5) return "Still up";
   if (hour < 12) return "Good morning";
@@ -650,9 +617,6 @@ export default function CommandCenterPage() {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <Confetti fire={celebrate} />
-
-      {/* ── Banking sub-ribbon — the area's own nav row ─────────────────── */}
-      <BankingRibbon />
 
       {/* ── At-a-glance StatTile row — the "how are we spending, right now"
              focal readouts (week + month, navigable) plus cash & net. ─────── */}

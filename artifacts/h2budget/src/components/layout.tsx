@@ -71,6 +71,16 @@ const MORE_NAV: NavItem[] = [
   { name: "Settings", href: "/settings", icon: SettingsIcon },
 ];
 
+// Inside the Banking area, the top ribbon becomes Banking's own sub-nav instead
+// of the global area tabs (the area pages you'd otherwise reach via More).
+const BANKING_SUBNAV: NavItem[] = [
+  { name: "Chase", href: "/transactions", icon: Receipt },
+  { name: "Amex", href: "/amex", icon: CreditCard },
+  { name: "Budget", href: "/budget", icon: PieChart },
+  { name: "Allowance", href: "/allowances", icon: Wallet },
+];
+const BANKING_ROUTES = ["/banking", "/transactions", "/amex", "/budget", "/allowances"];
+
 const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
 
 const BRAND = (
@@ -156,6 +166,11 @@ function MobileNav({
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  // Inside the Banking area, show Banking's sub-nav in the top ribbon.
+  const inBanking = BANKING_ROUTES.some(
+    (r) => location === r || location.startsWith(r + "/"),
+  );
+  const areaNav = inBanking ? BANKING_SUBNAV : PRIMARY_NAV;
   const [mobileOpen, setMobileOpen] = useState(false);
   const reviewCount = useReviewInboxCount();
   const debriefCount = useDebriefAwaitingCount();
@@ -241,7 +256,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <nav className="hidden md:flex items-center gap-0.5">
-            {PRIMARY_NAV.map((item) => {
+            {areaNav.map((item) => {
               const active = location.startsWith(item.href);
               return (
                 <Link key={item.href} href={item.href}>
