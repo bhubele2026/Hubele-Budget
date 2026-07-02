@@ -46,7 +46,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus, GitMerge, ChevronRight } from "lucide-react";
+import { UploadCloud, Download, RefreshCw, Trash2, Building2, Plus, GitMerge, ChevronRight, ShieldCheck } from "lucide-react";
 import { SUB_BUCKETS, DEFAULT_WEEKLY_BUCKET_LABELS, resolveWeeklyBucketLabels } from "@/lib/weeklyBuckets";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { CoachVoiceCard } from "@/components/coach-voice-card";
@@ -1223,6 +1223,50 @@ export default function SettingsPage() {
                 disabled={importWorkbook.isPending}
               />
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            Privacy &amp; security
+          </CardTitle>
+          <CardDescription>How your financial data is handled.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            <span className="font-medium text-foreground">
+              Bank connections run through Plaid.
+            </span>{" "}
+            Your bank login is never seen or stored by this app — Plaid brokers a
+            read-only connection and we receive transactions and balances only.
+          </p>
+          <p>
+            <span className="font-medium text-foreground">
+              Your data stays in your household.
+            </span>{" "}
+            Every record is scoped to your household and visible only to members
+            you invite. Disconnect any bank above, or export/delete your data
+            below, whenever you want.
+          </p>
+          <p>
+            <span className="font-medium text-foreground">
+              The AI coach describes your own numbers.
+            </span>{" "}
+            It never sees your bank credentials, and every figure it shows is
+            computed by the app — not made up by the model. Anything it can change
+            is proposed for your confirmation first and is undoable.
+          </p>
+          <div className="rounded-md border border-card-border bg-muted/40 p-3 text-xs">
+            <span className="font-medium text-foreground">
+              Not financial advice.
+            </span>{" "}
+            H2 Budget is a personal budgeting tool. Its coach comments on your own
+            spending and debt to help you build habits — it does not provide
+            individualized investment, tax, or legal advice. Verify anything
+            important before acting on it.
           </div>
         </CardContent>
       </Card>

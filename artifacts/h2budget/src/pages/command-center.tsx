@@ -42,6 +42,7 @@ import { HealthScore } from "@/components/health-score";
 import { SavingsGoal } from "@/components/savings-goal";
 import { DrillCard } from "@/components/drill-card";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
+import { PrivateAmount } from "@/components/private-amount";
 import { SpenderSpotlight } from "@/components/spender-spotlight";
 import { WallOfShame } from "@/components/wall-of-shame";
 import { PillBadge } from "@/components/pill-badge";
@@ -466,7 +467,13 @@ export default function CommandCenterPage() {
           active
           icon={<Flame className="w-4 h-4" />}
           label={`${greeting}, ${who} · debt remaining`}
-          value={dLoading || totalDebt == null ? "—" : formatCurrency(debtCountUp)}
+          value={
+            dLoading || totalDebt == null ? (
+              "—"
+            ) : (
+              <PrivateAmount>{formatCurrency(debtCountUp)}</PrivateAmount>
+            )
+          }
           sub={
             debtFree
               ? `Debt-free ~${debtFree.label} at this pace`
@@ -567,7 +574,15 @@ export default function CommandCenterPage() {
         <DrillCard
           href="/amex"
           eyebrow={<span className="inline-flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5" />Amex</span>}
-          value={amexOwed != null ? <MoneyText amount={amexOwed} /> : "Cards"}
+          value={
+            amexOwed != null ? (
+              <PrivateAmount>
+                <MoneyText amount={amexOwed} />
+              </PrivateAmount>
+            ) : (
+              "Cards"
+            )
+          }
           sub="combined owed"
           visual={
             <div className="flex items-center gap-1.5">
