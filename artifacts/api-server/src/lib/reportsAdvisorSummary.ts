@@ -514,7 +514,7 @@ async function buildBudgetFacts(
 function budgetSystemPrompt(): string {
   return `${VOICE_SYSTEM}
 
-TASK: Give Brad and Hannah a blunt read on this month's budget. The app has computed deterministic, class-aware FACTS — narrate them, never invent.
+TASK: Give Brad and Hannah a clear read on this month's budget. The app has computed deterministic, class-aware FACTS — narrate them, never invent.
 
 Output requirements:
 - Respond with ONLY a JSON object, no markdown fence, no preamble.
@@ -526,11 +526,11 @@ Critical framing (correctness, not optional):
 - NEVER call income (paychecks) "over budget". A paycheck above estimate is GOOD — "ahead" or "on track", never a problem.
 - NEVER call a paid bill or loan "over budget". A bill at 100% is simply PAID.
 - The ONLY thing that runs "hot" or "over" is day-to-day (flex) spending. If something's hot, name the single hottest flex category and its % of plan.
-- Lead with the good (paychecks in, bills paid), THEN roast the flex pace if it's running hot.
+- Lead with the good (paychecks in, bills paid), then flag the flex-spending pace if it is running hot.
 
 Rules:
 - Whole dollars only (no cents).
-- NEVER invent or guess numbers, names, or percentages — if it isn't in the FACTS, don't say it. Roast the spending, never the people.`;
+- NEVER invent or guess numbers, names, or percentages — if it isn't in the FACTS, don't say it. Be direct about the spending, never critical of the people.`;
 }
 
 // --- Behavior tab ---------------------------------------------------------
@@ -673,7 +673,7 @@ async function buildBehaviorFacts(
 function behaviorSystemPrompt(): string {
   return `${VOICE_SYSTEM}
 
-TASK: Fire off a few blunt, funny observations about Brad and Hannah's spending habits this month. The app has computed deterministic FACTS (splurges, streaks, merchants) — narrate them, never invent.
+TASK: Offer a few clear, useful observations about Brad and Hannah's spending habits this month. The app has computed deterministic FACTS (splurges, streaks, merchants) — narrate them, never invent.
 
 Output requirements:
 - Respond with ONLY a JSON object, no markdown fence, no preamble.
@@ -684,7 +684,7 @@ Output requirements:
 Rules:
 - Name real merchants, real dates, real dollar amounts straight from the FACTS.
 - Whole dollars only (no cents).
-- NEVER invent or guess numbers, dates, names, or categories — FACTS only. Roast the spending, never the people.`;
+- NEVER invent or guess numbers, dates, names, or categories — FACTS only. Be direct about the spending, never critical of the people.`;
 }
 
 export async function buildTabFacts(
@@ -714,7 +714,7 @@ export async function buildTabFacts(
 function systemPrompt(topic: string): string {
   return `${VOICE_SYSTEM}
 
-TASK: Write a short, blunt narrative for one tab of the household budget app's Reports page. This tab is about: ${topic}. The app has already computed deterministic FACTS — narrate them, never compute or invent.
+TASK: Write a short, clear narrative for one tab of the household budget app's Reports page. This tab is about: ${topic}. The app has already computed deterministic FACTS — narrate them, never compute or invent.
 
 Output requirements:
 - Respond with ONLY a JSON object, no markdown fence, no preamble.
@@ -724,7 +724,7 @@ Output requirements:
 
 Rules:
 - Whole dollars only (no cents).
-- NEVER invent numbers, dates, names, or categories — only values present in the FACTS block. The sass is the wrapper; the figures are sacred.`;
+- NEVER invent numbers, dates, names, or categories — only values present in the FACTS block. The figures are provided; never alter them.`;
 }
 
 interface ParsedLLM {

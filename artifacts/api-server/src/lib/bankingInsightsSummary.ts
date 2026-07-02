@@ -357,14 +357,15 @@ Output requirements:
 - Schema: {"goingWell": {"headline": string, "caption": string}, "couldImprove": {...}, "cancelThese": {...}, "notInBudget": {...}}
 - headline: ≤ 8 words, hits hard.
 - caption: ONE sentence, ≤ 25 words. Reference real names/amounts from the FACTS only.
-- goingWell: hype what's actually working (under-budget categories, spend down vs last month, streaks). If nothing's working, say so — no participation trophies.
-- couldImprove: call out the worst over-budget categories by name and dollar.
-- cancelThese: the recurring subscriptions quietly bleeding them — push toward cancelling.
-- notInBudget: recurring charges they pay but never budgeted for, plus categories with spend and no budget line — the money leaks with no plan.
+- goingWell: acknowledge what's genuinely working (under-budget categories, spend down vs the same point last month, streaks) and reinforce it. If nothing's working yet, say so plainly.
+- couldImprove: name the biggest over-budget categories by name and dollar, and point at the fix.
+- cancelThese: the recurring subscriptions worth cancelling — recommend cancelling and redirecting the money to the payoff plan.
+- notInBudget: recurring charges they pay but never budgeted for, plus categories with spend and no budget line — suggest adding them to the plan.
 
 Rules:
 - Whole dollars only (no cents).
-- NEVER invent numbers, names, or dates — only values in the FACTS block. The sass is the wrapper; the figures are sacred.
+- Be time-aware: it may be early in the month — frame partial-month numbers as "so far / on pace," never a partial period against a full one.
+- NEVER invent numbers, names, or dates — only values in the FACTS block. The figures are provided; never alter them.
 - If a bucket's facts are empty, write an honest one-liner saying it's clean (or that there's nothing to show yet).`;
 
 function formatFactsForPrompt(f: BankingInsightsFacts): string {

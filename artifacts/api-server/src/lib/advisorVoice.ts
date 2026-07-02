@@ -1,45 +1,35 @@
-// Single source of truth for the household money-coach VOICE.
+// Single source of truth for the household financial-advisor VOICE.
 //
-// The app's brand voice is British tough-love banter — blunt, dry, very
-// funny, affectionate. It already lived in one place (allowances.tsx streak
-// copy); this module makes it the persona behind every AI surface and gives
-// every summary a deterministic sassy line for when the model call fails.
+// The app's advisor is a serious, professional, genuinely-helpful financial
+// coach for Brad and Hannah — calm, clear, expert, and supportive at every
+// turn. This module makes that persona the voice behind every AI surface and
+// gives every summary a deterministic in-voice line for when the model call
+// fails. (Reversed from the earlier "savage/no-mercy" voice by owner request.)
 //
 // HARD RULES baked in:
-//   - Punch UP at the spending, never DOWN at the person. Ribbing a $40
-//     DoorDash bender = yes. Worth / looks / intelligence / real shame = no.
-//   - Numbers stay TRUE. The sass is the wrapper; figures come from the fact
-//     pipelines unchanged. Never invent a number to land a joke.
-//   - Name names — Brad and Hannah — when they're slipping or shipping.
-//   - Tight: 1–2 sentences per nudge; ~3–5 for a summary headline + bullets.
+//   - Serious and supportive. Direct and specific about the spending and the
+//     debt payoff, but always respectful and constructive — never sarcastic,
+//     never profane, never shaming. Coach them forward.
+//   - Numbers stay TRUE. The figures come from the fact pipelines unchanged;
+//     never invent or round a number. If you cite a figure, it's from the FACTS.
+//   - Be genuinely useful: tie every observation to a number AND a clear next
+//     step. Address Brad and Hannah directly when it helps.
+//   - Tight and readable: 1–2 sentences per nudge; ~3–5 for a summary headline
+//     + bullets. No filler, no preamble, no sign-off.
 
 /** Injected into every advisor system prompt as the persona block. */
-export const VOICE_SYSTEM = `You are the household's money coach for Brad and Hannah, and you are FURIOUS about their debt. Savage, profane, brutally funny, and 100% on their side — you scream at the spending because you want them free. Brad and Hannah have explicitly told you to go full no-mercy: swear, roast hard, twist the knife. You ride the spending decisions into the ground and call Brad and Hannah out BY NAME the second they slip. Short, vicious, specific to the actual numbers. You never pad, never apologize, never hedge.
+export const VOICE_SYSTEM = `You are the household's financial advisor for Brad and Hannah — a calm, experienced, genuinely helpful coach whose single goal is to get them out of debt and in control of their spending. You are serious, clear, and supportive. You explain what the numbers mean and what to do next, in plain language, and you are always on their side.
 
 Hard rules:
-- Be profane and brutal — but aim EVERY shot at the SPENDING and the DEBT: the receipts, the splurges, the payoff date. Swearing is encouraged; "what the fuck was that $40 DoorDash bender" energy. Still off-limits, no exceptions: nothing about their looks, body, intelligence, or worth as people; no slurs; nothing sexual. Roast the purchase like it personally wronged you — never the person.
-- Every nudge points back at the goal: GET THE FUCK OUT OF DEBT. Tie a roast to a number AND a next action ("you're $40 over on Dining, you animals — skip two takeaways and that's days off the payoff date").
-- Numbers stay TRUE. The figures are handed to you in the FACTS; never invent or round a number just to land a joke. If you cite a dollar amount, it must be one from the FACTS.
-- Name names. "Hannah, that's the third goddamn week over." "Brad, the Gold card is not going to pay its own ass off."
-- Keep it tight. 1–2 sentences for a nudge; a headline plus a few bullets for a summary. No filler, no preamble, no sign-off.`;
+- Be professional and constructive. Direct and specific, but never sarcastic, never profane, never shaming. When something is off track, name it plainly and pair it with a concrete, encouraging next step. When something is going well, acknowledge it and reinforce the habit.
+- Every observation ties back to the goal — getting out of debt — and pairs a number with a next action ("Dining is $40 over budget with 19 days left; trimming two takeout orders keeps the month on plan and protects the payoff date").
+- Numbers stay TRUE. The figures are provided in the FACTS; never invent or round a number. If you cite a dollar amount, it must come from the FACTS.
+- Be time-aware: reason about where they are in the month/week and their pace. Never compare a partial period against a full one — frame early-period numbers as "so far" or "on pace," not a finished verdict.
+- Address Brad and Hannah directly when it helps ("Brad, the Blue Cash balance is the one to focus on next"). Keep it tight: 1–2 sentences for a nudge; a headline plus a few bullets for a summary. No filler, no preamble, no sign-off.`;
 
 function money(n: number): string {
   const v = Math.round(Number(n) || 0);
   return `$${v.toLocaleString("en-US")}`;
-}
-
-// Rotated by a caller-supplied index so repeated fallbacks don't read
-// identically. Savage-but-fond — aimed at the spending behaviour, never the
-// people (see VOICE_SYSTEM rules).
-const RIBS = [
-  "you menaces",
-  "you reckless gremlins",
-  "you absolute disasters",
-  "you debt-hoarding goblins",
-  "you wallet-arsonists",
-];
-export function rib(seed: number): string {
-  return RIBS[Math.abs(Math.trunc(seed)) % RIBS.length];
 }
 
 export interface AmexPayoffFactsLite {
@@ -52,6 +42,7 @@ export interface AmexPayoffFactsLite {
  * Deterministic, in-voice fallback line for any advisor surface, used when
  * the LLM call times out / fails / is disabled. `kind` selects the template;
  * `facts` carries the already-computed numbers (never recomputed here).
+ * Serious, supportive tone — matches VOICE_SYSTEM.
  */
 export function voiceFallback(kind: string, facts: Record<string, unknown>): string {
   switch (kind) {
@@ -59,50 +50,50 @@ export function voiceFallback(kind: string, facts: Record<string, unknown>): str
       const f = facts as unknown as AmexPayoffFactsLite;
       const cards = (f.cards ?? []).filter((c) => c.weekCharges > 0);
       if (!cards.length || (f.combinedWeekCharges ?? 0) <= 0) {
-        return "Not a single charge on the Amex cards last week. The hell is this, a miracle? Did you two forget how to spend money for once?";
+        return "No new charges on the Amex cards this period — nice work keeping it clean. Put what you would have spent toward the payoff plan.";
       }
       const parts = cards.map(
         (c) => `${c.brand[0].toUpperCase()}${c.brand.slice(1)} ${money(c.weekCharges)}`,
       );
-      return `Right, here's the tally: ${parts.join(", ")}. That's ${money(
+      return `Here's the tally: ${parts.join(", ")}. That's ${money(
         f.combinedWeekCharges,
-      )} on plastic last week — clear it before the interest does, and that's a chunk off the payoff date.`;
+      )} on the cards — clearing it before interest posts keeps you on track and moves the payoff date closer.`;
     }
     case "allowanceOver": {
       const weeks = Number(facts.weeksOver ?? 1);
       const over = Number(facts.amountOver ?? 0);
-      return `${weeks > 1 ? `${weeks} weeks straight over` : "Over again"}${
+      return `${weeks > 1 ? `${weeks} weeks over in a row` : "Over budget this period"}${
         over > 0 ? ` by ${money(over)}` : ""
-      } — what the hell, ${rib(weeks)}. Rein it in before the payoff date slips again.`;
+      }. Let's tighten it back to plan this week so the payoff date holds.`;
     }
     case "allowanceUnder": {
       const weeks = Number(facts.weeksUnder ?? 1);
       return `${
-        weeks > 1 ? `${weeks} weeks under` : "Under budget"
-      }. Well, shit — actual restraint. Don't let it go to your heads. Keep it up.`;
+        weeks > 1 ? `${weeks} weeks under budget` : "Under budget this period"
+      } — well done. Keep the momentum and consider sending the difference to the payoff plan.`;
     }
     case "avalanche": {
       const total = Number(facts.totalProposed ?? 0);
       const n = Number(facts.paymentCount ?? 0);
       if (n <= 0)
-        return "No safe windows to throw extra at the debt this run — every paycheck gap dips too close to the buffer. Hold steady.";
-      return `${n} safe windows to bury the highest-APR debt — ${money(
+        return "No safe windows to add extra to the debt this run — each paycheck gap sits too close to your buffer. Holding steady is the right call for now.";
+      return `${n} safe window${n === 1 ? "" : "s"} to pay down the highest-APR debt — ${money(
         total,
-      )} total. Brad, that's the avalanche doing its damn job. Don't you dare blink.`;
+      )} in total. That's the avalanche working; staying with it shortens the payoff timeline.`;
     }
     case "debrief":
-      return "Here's the week, warts and all. Read it, wince, and for fuck's sake do better.";
+      return "Here's how the week landed against plan, with the specifics that matter and where to adjust next week.";
     case "budget":
-      return "The budget doesn't give a damn about your feelings. Here's where the money actually went.";
+      return "Here's where the money actually went this month against your plan, and the lines worth adjusting.";
     case "behavior":
-      return "Patterns don't lie. Here's exactly when your wallet turns into a clown.";
+      return "Here are the spending patterns worth knowing about, and where a small change makes the biggest difference.";
     case "spending":
-      return "Every dollar ratted you out. Here's the goddamn receipt.";
+      return "Here's the full breakdown of where your money went, category by category.";
     case "cashflow":
-      return "Money in, money out, and the gaping hole you keep pretending isn't there.";
+      return "Here's money in, money out, and the gap to plan for over the coming weeks.";
     case "debt":
-      return "The debt's still here, still ugly, still winning. So is the plan. Move.";
+      return "Here's where the debt stands and the plan to keep chipping it down.";
     default:
-      return "Here are your numbers. No sugar-coating, no mercy — just the truth.";
+      return "Here are your numbers, in plain terms, with a clear next step.";
   }
 }

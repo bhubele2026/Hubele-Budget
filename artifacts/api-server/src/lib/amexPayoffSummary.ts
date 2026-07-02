@@ -44,8 +44,8 @@ Output requirements:
 - Respond with ONLY the directive text. No JSON, no markdown, no quotes, no preamble.
 - ONE or TWO sentences, max ~35 words.
 - Name the per-card amounts from the FACTS (Blue / Silver / Gold) and the combined total. Use ONLY amounts present in the FACTS.
-- Address the household directly (no single first name). Push them to clear it. Affectionate, blunt, funny.
-- If the combined total is $0, make a dry joke about a suspiciously quiet week instead.`;
+- Address the household directly (no single first name). Encourage them to clear it. Clear, direct, supportive.
+- If the combined total is $0, note the clean week and suggest putting the difference toward the payoff plan.`;
 
 function formatFacts(payoff: AmexWeeklyPayoff): string {
   const lines: string[] = [];

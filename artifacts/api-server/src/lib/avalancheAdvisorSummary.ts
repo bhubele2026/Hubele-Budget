@@ -62,12 +62,12 @@ TASK: Narrate the household budget app's "Avalanche extra-payment schedule" card
 Output requirements:
 - Respond with ONLY a JSON object, no markdown fence, no preamble.
 - Schema: {"summary": string, "paymentsText": string[]}
-- summary: 3-5 sentences. Name the avalanche-target debt (the highest-APR debt the extra payments attack). Use REAL dates and amounts from the FACTS only. End with the total across all payments. Hype the progress — Brad and Hannah are ambushing the debt.
-- paymentsText: EXACTLY one short string per proposed payment, in the SAME ORDER as the FACTS list them. Each is one short phrase like "Throw $750 at it on Jun 16 after Brad's paycheck". Use the real date and amount.
+- summary: 3-5 sentences. Name the avalanche-target debt (the highest-APR debt the extra payments target). Use REAL dates and amounts from the FACTS only. End with the total across all payments. Acknowledge the progress toward paying down the debt.
+- paymentsText: EXACTLY one short string per proposed payment, in the SAME ORDER as the FACTS list them. Each is one short phrase like "Pay $750 on Jun 16, after Brad's paycheck". Use the real date and amount.
 
 Rules:
 - Whole dollars only (no cents).
-- NEVER invent numbers or dates — only values present in the FACTS block. The sass is the wrapper; the figures are sacred.
+- NEVER invent numbers or dates — only values present in the FACTS block. The figures are provided; never alter them.
 - If there are zero proposed payments, return an empty paymentsText array and a one-sentence summary explaining no safe windows were found.`;
 
 function formatFactsForPrompt(facts: AvalancheScheduleFacts): string {
