@@ -261,6 +261,14 @@ function BankingTile() {
   const min = hasChart ? Math.min(...series) : 0;
   const max = hasChart ? Math.max(...series) : 0;
   const labels = trends.map((t) => monthShort(t.month));
+  // Headline: this month's spend (month-to-date) + the change vs last month.
+  const curMonthTotal = trends.length ? trends[trends.length - 1].total : null;
+  const prevMonthTotal =
+    trends.length >= 2 ? trends[trends.length - 2].total : null;
+  const deltaPct =
+    curMonthTotal != null && prevMonthTotal
+      ? Math.round(((curMonthTotal - prevMonthTotal) / prevMonthTotal) * 100)
+      : null;
 
   return (
     <TileShell
@@ -270,7 +278,30 @@ function BankingTile() {
       title="Banking"
       blurb="How you're spending — this week & month, what to cancel, what to stop buying."
     >
-      <div className="mt-auto flex items-end justify-between gap-3 pt-5">
+      <div className="mt-auto pt-5">
+        {curMonthTotal != null && (
+          <div className="mb-3 flex items-center gap-2">
+            <div className="leading-none">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                This month
+              </div>
+              <MoneyText
+                amount={curMonthTotal}
+                className="text-lg font-bold tabular-nums"
+              />
+            </div>
+            {deltaPct != null && deltaPct !== 0 && (
+              <PillBadge
+                tone={deltaPct > 0 ? "danger" : "good"}
+                dot={false}
+                className="self-start"
+              >
+                {deltaPct > 0 ? "▲" : "▼"} {Math.abs(deltaPct)}% vs last mo
+              </PillBadge>
+            )}
+          </div>
+        )}
+      <div className="flex items-end justify-between gap-3">
         <div className="relative z-10 flex flex-wrap content-end gap-2">
           <Link href="/transactions" data-testid="landing-link-banking-chase">
             <PillBadge tone="info" dot={false}>Chase</PillBadge>
@@ -310,6 +341,7 @@ function BankingTile() {
             <ChartEmpty label="No spend yet" />
           )}
         </div>
+      </div>
       </div>
     </TileShell>
   );
