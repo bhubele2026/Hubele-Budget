@@ -97,73 +97,72 @@
   --elevate-1: rgba(26, 34, 48, .03);
   --elevate-2: rgba(26, 34, 48, .06);
 
-  /* (Refreshing Summer · light) A bright, sunny coastal light mode: white
-     cards floating on an airy sky-blue canvas, soft sky-gray hairlines, deep
-     navy ink, with a teal primary (193°) and warm gold/orange accents. Reads
-     warm, playful and clean — the "fun" daytime counterpart to the dark mode. */
-  --background: 192 68% 95%;
-  --foreground: 202 84% 12%;
-  --border: 193 46% 81%;
+  /* (Studio · light) Restrained, premium fintech light mode: near-neutral cool
+     canvas, clean white cards, quiet gray hairlines, near-black ink. Teal is the
+     SINGLE accent (buttons / active nav / focus ring). Everything else is
+     neutral so numbers and the accent carry the eye — no second (gold) accent. */
+  --background: 210 20% 97%;
+  --foreground: 210 24% 12%;
+  --border: 214 20% 88%;
 
-  --card: 45 60% 99%;
-  --card-foreground: 202 74% 13%;
-  --card-border: 192 58% 78%;
+  --card: 0 0% 100%;
+  --card-foreground: 210 24% 13%;
+  --card-border: 214 20% 90%;
 
-  --sidebar: 192 60% 97%;
-  --sidebar-foreground: 202 30% 30%;
-  --sidebar-border: 193 38% 86%;
-  --sidebar-primary: 192 80% 42%;
+  --sidebar: 210 20% 98%;
+  --sidebar-foreground: 210 12% 40%;
+  --sidebar-border: 214 18% 90%;
+  --sidebar-primary: 192 78% 38%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 187 70% 90%;
-  --sidebar-accent-foreground: 193 78% 26%;
-  --sidebar-ring: 192 80% 42%;
+  --sidebar-accent: 210 16% 93%;
+  --sidebar-accent-foreground: 192 72% 30%;
+  --sidebar-ring: 192 78% 40%;
 
-  --popover: 45 60% 99%;
-  --popover-foreground: 202 74% 13%;
-  --popover-border: 193 38% 86%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 210 24% 13%;
+  --popover-border: 214 18% 90%;
 
-  /* (Refreshing Summer · light) Bright teal primary — turned-up saturation so
-     buttons / active nav / focus ring read as vivid sea-glass, not muted. */
-  --primary: 192 82% 42%;
+  /* Teal primary — the one accent. Deepened a touch for AA contrast on white. */
+  --primary: 192 78% 38%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 189 56% 90%;
-  --secondary-foreground: 202 54% 18%;
+  --secondary: 210 16% 93%;
+  --secondary-foreground: 210 30% 20%;
 
-  --muted: 190 46% 91%;
-  --muted-foreground: 202 22% 38%;
+  --muted: 210 16% 94%;
+  --muted-foreground: 210 12% 40%;
 
-  /* Warm sunny highlight so hovers / active states glow gold — the playful
-     counterpoint to the teal primary, punched up for a happier pop. */
-  --accent: 44 96% 86%;
-  --accent-foreground: 30 90% 30%;
+  /* Neutral raised surface for hovers/active states — NOT a second accent.
+     Emphasis comes from the teal primary, never a competing color. */
+  --accent: 210 16% 93%;
+  --accent-foreground: 210 30% 22%;
 
-  --destructive: 4 80% 50%;
+  --destructive: 4 72% 48%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 193 38% 82%;
-  --ring: 192 82% 42%;
+  --input: 214 18% 88%;
+  --ring: 192 78% 40%;
 
-  --positive: 155 70% 36%;
+  --positive: 152 55% 34%;
   --positive-foreground: 0 0% 100%;
-  --negative: 4 80% 50%;
+  --negative: 4 68% 46%;
   --negative-foreground: 0 0% 100%;
-  --warning: 31 96% 50%;
+  --warning: 33 82% 46%;
   --warning-foreground: 0 0% 100%;
 
-  /* The full summer range, saturation cranked: 1 = bright teal; 2 = sky blue;
-     3 = golden yellow; 4 = mango orange; 5 = coral-pink for extra fun. */
-  --chart-1: 192 82% 43%;
-  --chart-2: 198 78% 56%;
-  --chart-3: 45 98% 51%;
-  --chart-4: 31 96% 52%;
-  --chart-5: 344 78% 60%;
+  /* Restrained series: teal-led, mostly neutral, with one warm + one red so
+     categorical charts read cleanly instead of as a rainbow. */
+  --chart-1: 192 78% 40%;
+  --chart-2: 200 40% 55%;
+  --chart-3: 210 12% 62%;
+  --chart-4: 33 70% 50%;
+  --chart-5: 4 60% 55%;
 
-  /* Amex per-card brand identity, summer-keyed. Blue Cash = sky blue,
-     Platinum = cool sea-gray, Gold = golden yellow. Kill Stack + per-card UI. */
-  --card-blue: 198 78% 52%;
-  --card-silver: 200 16% 50%;
-  --card-gold: 45 98% 50%;
+  /* Amex per-card brand identity: Blue Cash = muted blue, Platinum = neutral
+     silver. (Gold retired.) Kill Stack + per-card UI. */
+  --card-blue: 200 60% 48%;
+  --card-silver: 210 10% 55%;
+  --card-gold: 210 10% 55%;
 
   --app-font-sans: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --app-font-serif: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
@@ -217,64 +216,65 @@
      selection, focus glow, primary actions / active nav — with sunny gold as
      the warm hover tint. +/- money stays green / red so the accent never reads
      as a dollar amount. */
-  --background: 201 58% 10%;     /* lively teal-navy panel */
-  --foreground: 190 40% 96%;     /* airy sky-white headings */
-  --border: 198 44% 25%;         /* teal hairline */
+  --background: 220 14% 8%;      /* matte near-black panel */
+  --foreground: 210 16% 95%;     /* near-white headings */
+  --border: 220 10% 20%;         /* quiet neutral hairline */
 
-  --card: 200 50% 13%;           /* top of glass gradient */
-  --card-foreground: 190 40% 96%;
-  --card-border: 196 56% 31%;
+  --card: 220 12% 11%;           /* raised matte card */
+  --card-foreground: 210 16% 95%;
+  --card-border: 220 10% 20%;
 
-  --sidebar: 201 58% 10%;        /* panel */
-  --sidebar-foreground: 195 20% 68%;  /* idle nav */
-  --sidebar-border: 199 40% 20%;      /* dividers */
-  --sidebar-primary: 191 80% 52%;     /* bright teal */
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 200 46% 16%;      /* hover row */
-  --sidebar-accent-foreground: 190 78% 80%;  /* sky-bright active nav */
-  --sidebar-ring: 191 80% 52%;
+  --sidebar: 220 14% 8%;         /* panel */
+  --sidebar-foreground: 214 10% 62%;  /* idle nav */
+  --sidebar-border: 220 10% 18%;      /* dividers */
+  --sidebar-primary: 191 72% 52%;     /* teal accent */
+  --sidebar-primary-foreground: 220 20% 8%;
+  --sidebar-accent: 220 10% 15%;      /* neutral hover row */
+  --sidebar-accent-foreground: 191 60% 72%;  /* teal active nav */
+  --sidebar-ring: 191 72% 54%;
 
-  --popover: 200 50% 13%;
-  --popover-foreground: 190 40% 96%;
-  --popover-border: 199 40% 22%;
+  --popover: 220 12% 11%;
+  --popover-foreground: 210 16% 95%;
+  --popover-border: 220 10% 20%;
 
-  --primary: 191 80% 50%;        /* bright teal */
-  --primary-foreground: 201 70% 8%;
+  --primary: 191 70% 50%;        /* teal — the one accent */
+  --primary-foreground: 220 20% 8%;
 
-  --secondary: 199 40% 20%;
-  --secondary-foreground: 190 40% 96%;
+  --secondary: 220 10% 18%;
+  --secondary-foreground: 210 16% 95%;
 
-  --muted: 200 44% 16%;
-  --muted-foreground: 195 20% 68%;    /* body */
+  --muted: 220 10% 15%;
+  --muted-foreground: 214 10% 62%;    /* body */
 
-  --accent: 200 44% 18%;         /* raised glass row */
-  --accent-foreground: 45 98% 64%;    /* sunny gold tint */
+  --accent: 220 10% 15%;         /* neutral raised row — not a second accent */
+  --accent-foreground: 210 16% 90%;
 
-  --destructive: 4 84% 64%;
+  --destructive: 4 74% 60%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 199 40% 22%;
-  --ring: 191 84% 56%;           /* teal focus glow */
+  --input: 220 10% 20%;
+  --ring: 191 72% 54%;           /* teal focus glow */
 
-  --positive: 154 66% 48%;       /* sea-green */
-  --positive-foreground: 201 70% 8%;
-  --negative: 4 84% 66%;
+  --positive: 152 52% 46%;       /* green */
+  --positive-foreground: 220 20% 8%;
+  --negative: 4 74% 62%;
   --negative-foreground: 0 0% 100%;
-  --warning: 33 98% 58%;         /* mango orange */
-  --warning-foreground: 201 70% 9%;
+  --warning: 33 84% 56%;         /* amber */
+  --warning-foreground: 220 20% 9%;
 
-  /* The summer range, brightened + saturated for the dark canvas: 1 = bright
-     teal; 2 = sky; 3 = golden; 4 = mango; 5 = coral-pink for extra fun. */
-  --chart-1: 191 82% 58%;
-  --chart-2: 198 80% 68%;
-  --chart-3: 45 98% 62%;
-  --chart-4: 31 98% 60%;
-  --chart-5: 344 84% 68%;
+  /* Restrained series on the matte canvas: teal-led, mostly neutral, one warm +
+     one red so categorical charts stay readable rather than a rainbow. */
+  --chart-1: 191 72% 56%;
+  --chart-2: 200 35% 58%;
+  --chart-3: 214 10% 60%;
+  --chart-4: 33 72% 56%;
+  --chart-5: 4 62% 60%;
 
-  /* Amex per-card brand identity, brightened for the dark canvas. */
-  --card-blue: 198 82% 64%;
-  --card-silver: 200 16% 64%;
-  --card-gold: 45 98% 62%;
+  /* Amex per-card brand identity: Blue Cash = muted blue, Platinum = neutral
+     silver. (Gold retired.) */
+  --card-blue: 200 65% 60%;
+  --card-silver: 210 10% 62%;
+  --card-gold: 210 10% 62%;
 
   --shadow-2xs: none;
   --shadow-xs: none;
@@ -304,30 +304,23 @@
     font-feature-settings: "cv11", "ss01", "ss03", "calt";
     line-height: 1.5;
     letter-spacing: -0.005em;
-    /* (Refreshing Summer · light) A bold, multi-color sunshine wash — sky,
-       gold, mint and a kiss of coral — so the whole app feels like a bright
-       summer day. Fixed so it doesn't scroll. */
+    /* (Studio · light) Calm near-neutral canvas with a single faint teal glow
+       in the top-left — restrained and premium; no multi-hue wash. Fixed so it
+       doesn't scroll. */
     background-image:
-      radial-gradient(1100px 560px at 8% -8%, hsl(192 85% 82% / 0.95), transparent 58%),
-      radial-gradient(1000px 560px at 100% -4%, hsl(45 96% 80% / 0.92), transparent 56%),
-      radial-gradient(900px 520px at 96% 100%, hsl(344 90% 86% / 0.7), transparent 56%),
-      radial-gradient(1000px 640px at 30% 116%, hsl(168 72% 82% / 0.78), transparent 60%),
-      radial-gradient(900px 600px at 50% 50%, hsl(198 80% 85% / 0.5), transparent 65%);
+      radial-gradient(1200px 640px at 6% -10%, hsl(192 40% 90% / 0.55), transparent 60%);
     background-attachment: fixed;
   }
-  /* (Refreshing Summer · night) Richer ocean-dusk wash — teal, a coral sunset
-     glow, and a violet-free indigo deep so the dark canvas still has color. */
+  /* (Studio · night) Matte near-black canvas with one faint teal glow — the
+     single-accent discipline carried into the backdrop; no rainbow. */
   .dark body {
     background-image:
-      radial-gradient(1100px 600px at 6% -10%, hsl(191 82% 26% / 0.6), transparent 58%),
-      radial-gradient(950px 560px at 100% -4%, hsl(344 74% 34% / 0.4), transparent 56%),
-      radial-gradient(900px 540px at 96% 102%, hsl(45 80% 36% / 0.26), transparent 56%),
-      radial-gradient(1000px 660px at 32% 118%, hsl(199 76% 24% / 0.55), transparent 60%);
+      radial-gradient(1200px 680px at 6% -12%, hsl(191 60% 20% / 0.35), transparent 60%);
   }
 
-  /* Sunny text selection. */
+  /* Teal-tinted text selection (matches the single accent). */
   ::selection {
-    background: hsl(45 96% 60% / 0.45);
+    background: hsl(192 60% 50% / 0.28);
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -336,18 +329,12 @@
     line-height: 1.15;
     letter-spacing: -0.012em;
   }
-  /* (Refreshing Summer) Page titles ride a teal→sky→cyan gradient — colorful
-     yet legible in both light and dark (no light-on-white gold). */
+  /* (Studio) Page titles are solid near-black/near-white ink — the weight and
+     tracking do the work, not a gradient fill. Cleaner, more premium. */
   h1 {
     letter-spacing: -0.018em;
     font-weight: 700;
-    background-image: linear-gradient(100deg, hsl(192 84% 41%), hsl(199 86% 48%) 48%, hsl(182 78% 40%));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-  .dark h1 {
-    background-image: linear-gradient(100deg, hsl(191 86% 58%), hsl(198 88% 64%) 48%, hsl(176 80% 56%));
+    color: hsl(var(--foreground));
   }
   h2 { letter-spacing: -0.014em; font-weight: 600; }
   h3 { letter-spacing: -0.01em; }
@@ -367,11 +354,11 @@
     background: transparent;
   }
   .dark ::-webkit-scrollbar-thumb {
-    background: #163a4e;
+    background: #2a2f37;
     border-radius: 3px;
   }
   .dark ::-webkit-scrollbar-thumb:hover {
-    background: #235a76;
+    background: #3a414b;
   }
 }
 
@@ -469,17 +456,13 @@
   /* (Refreshing Summer) Sea-glass surface. The dark mode teal-navy gradient +
      hairline border + deep ambient shadow that defines the card look app-wide.
      In light mode it degrades to a flat white surface so light stays clean. */
-  /* (Refreshing Summer · flat + color) A flat card surface — solid fill, no
-     shadow, square corners. Color comes from a bold gradient border (teal →
-     sky → gold → coral) that pops against the sunny canvas. Square corners let
-     border-image render crisply. */
+  /* (Studio) Clean flat card surface — solid fill, quiet neutral hairline, no
+     rainbow border. The single teal accent is reserved for active/emphasis. */
   .glass-surface {
-    border: 1.5px solid transparent;
-    border-image: linear-gradient(120deg, hsl(192 84% 44%), hsl(198 84% 56%) 38%, hsl(45 98% 54%) 70%, hsl(344 86% 62%)) 1;
+    border: 1px solid hsl(var(--card-border));
   }
   .dark .glass-surface {
-    border: 1.5px solid transparent;
-    border-image: linear-gradient(120deg, hsl(191 84% 56%), hsl(198 86% 64%) 38%, hsl(45 98% 60%) 70%, hsl(344 88% 68%)) 1;
+    border: 1px solid hsl(var(--card-border));
   }
 
   /* Emphasis ring — a flat 2px teal accent border (no blur halo). */
@@ -492,10 +475,11 @@
     box-shadow: inset 0 0 0 1px hsl(var(--primary));
   }
 
-  /* (Refreshing Summer · flat + color) A bold flat color block for the active
-     StatTile: vivid teal → sky → coral, square, no shadow. White text. */
+  /* (Studio) Active StatTile: a solid teal accent block, white text. One
+     accent, no multi-hue gradient. */
   .stat-hero {
-    background-image: linear-gradient(120deg, hsl(191 84% 42%) 0%, hsl(198 84% 48%) 50%, hsl(344 80% 56%) 100%);
+    background-image: none;
+    background-color: hsl(var(--primary));
     color: #fff;
     border-color: transparent;
     border-image: none;
@@ -504,9 +488,10 @@
     color: rgba(255, 255, 255, 0.82);
   }
 
-  /* (Refreshing Summer) A reusable bold banner gradient — teal → sky → gold. */
+  /* (Studio) Reusable banner — solid teal accent, no gradient. */
   .sunny-gradient {
-    background-image: linear-gradient(120deg, hsl(191 84% 44%) 0%, hsl(198 84% 56%) 48%, hsl(45 98% 56%) 100%);
+    background-image: none;
+    background-color: hsl(var(--primary));
     border-image: none;
   }
 
@@ -515,23 +500,23 @@
      corners even though the rest of the app is square: these are the hero
      moment of the page. Lift + saturate on hover. */
   .stat-card {
-    border-radius: 1.25rem;
+    border-radius: 0.875rem;
     color: #fff;
     border: none;
-    box-shadow: 0 12px 30px -12px rgba(4, 41, 63, 0.42);
-    transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+    box-shadow: 0 10px 24px -16px rgba(0, 0, 0, 0.38);
+    transition: transform .18s ease, box-shadow .18s ease;
   }
   .stat-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 18px 40px -12px rgba(4, 41, 63, 0.52);
-    filter: saturate(1.08);
+    transform: translateY(-1px);
+    box-shadow: 0 14px 30px -16px rgba(0, 0, 0, 0.46);
   }
   /* Vibrant jewel-tone gradients — saturated mid-tones so white text stays
      crisp across each tile (no washed-out yellow/lime fields). */
-  /* (Refreshing Summer · FUN) Savage roast card — a hot red→coral→pink gradient
-     with a slow white sheen sweeping across. Loud on purpose. */
+  /* Savage roast card — a solid deep-red block (still reads as "danger" for the
+     roast) with a slow white sheen. Flattened from the tri-color pink gradient. */
   .roast-card {
-    background-image: linear-gradient(120deg, hsl(344 84% 54%), hsl(8 90% 56%) 46%, hsl(330 82% 56%) 100%);
+    background-image: none;
+    background-color: hsl(4 62% 44%);
     border: none;
   }
   .roast-card::after {
@@ -563,18 +548,17 @@
     .roast-card::after, .stat-card::after { animation: none; opacity: 0; }
   }
 
-  .tile-grad-0 { background-image: linear-gradient(135deg, hsl(199 86% 54%), hsl(193 84% 44%) 55%, hsl(214 80% 48%)); }
-  .tile-grad-1 { background-image: linear-gradient(135deg, hsl(38 94% 52%), hsl(22 92% 52%) 52%, hsl(348 84% 58%)); }
-  .tile-grad-2 { background-image: linear-gradient(135deg, hsl(160 68% 42%), hsl(180 74% 40%) 52%, hsl(196 84% 48%)); }
-  .tile-grad-3 { background-image: linear-gradient(135deg, hsl(344 86% 60%), hsl(322 78% 56%) 50%, hsl(280 72% 60%)); }
-  .tile-grad-4 { background-image: linear-gradient(135deg, hsl(248 74% 62%), hsl(220 84% 56%) 52%, hsl(190 86% 46%)); }
-  .tile-grad-5 { background-image: linear-gradient(135deg, hsl(14 88% 56%), hsl(348 84% 56%) 52%, hsl(322 76% 56%)); }
-  /* Gradient headline text for a happy, summery accent on big titles/numbers. */
+  /* (Studio) Restrained KPI tile fills — solid teal + slate family (white text
+     stays crisp), with one muted red for negatives. No rainbow. */
+  .tile-grad-0 { background-image: none; background-color: hsl(192 70% 32%); }
+  .tile-grad-1 { background-image: none; background-color: hsl(214 24% 30%); }
+  .tile-grad-2 { background-image: none; background-color: hsl(188 58% 27%); }
+  .tile-grad-3 { background-image: none; background-color: hsl(220 16% 32%); }
+  .tile-grad-4 { background-image: none; background-color: hsl(196 52% 30%); }
+  .tile-grad-5 { background-image: none; background-color: hsl(4 52% 42%); }
+  /* Headline accent on big titles/numbers — solid teal (the one accent). */
   .text-sunny {
-    background-image: linear-gradient(100deg, hsl(192 84% 42%), hsl(198 84% 50%) 45%, hsl(38 96% 50%));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: hsl(var(--primary));
   }
 
   .no-default-hover-elevate {}
