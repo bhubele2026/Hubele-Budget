@@ -688,13 +688,17 @@ export default function AllowancesPage() {
       };
     }, [mode, weekStart, monthStart, currentWeekStart, currentMonthStart]);
 
-  // (#monthly) The Monthly and Unplanned cards always reflect the whole
-  // MONTH that the current window sits in — never a week slice — so the user
-  // can watch the month fill in day by day even while the Weekly card tracks
-  // a single week. Weekly stays week-scoped; only monthly/unplanned use this.
+  // (#monthly) The Monthly and Unplanned cards always reflect the whole MONTH,
+  // never a week slice. In week mode we anchor to the month containing the week's
+  // END (Saturday) so a week that straddles a month boundary (e.g. Jun 28–Jul 4)
+  // resolves to the SAME calendar month the Banking dashboard uses (the current
+  // month) — that's what makes the dashboard Month/Unplanned tie to Allowances.
   const monthScopeStartDate = useMemo(
-    () => firstOfMonth(windowStartDate),
-    [windowStartDate],
+    () =>
+      mode === "week"
+        ? firstOfMonth(addDays(weekStart, 6))
+        : firstOfMonth(windowStartDate),
+    [mode, weekStart, windowStartDate],
   );
   const monthScopeStart = fmtISO(monthScopeStartDate);
   const monthScopeEnd = fmtISO(lastOfMonth(monthScopeStartDate));
