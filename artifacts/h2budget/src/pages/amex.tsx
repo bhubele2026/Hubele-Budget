@@ -7,6 +7,7 @@ import {
   useListCategories,
   useListDebts,
   useListMappingRules,
+  useGetAmexWeeklyPayoff,
   getListTransactionsQueryKey,
   getGetBudgetMonthQueryKey,
   type Transaction,
@@ -382,6 +383,10 @@ export default function AmexPage() {
   const { data: wideTxns } = useListTransactions(trendQueryParams);
   const { data: categories } = useListCategories();
   const { data: debts } = useListDebts();
+  // Combined statement balance across the live Amex cards — used as the
+  // all-cards forward-chart anchor when no debt/anchor is resolved (otherwise
+  // the projection collapses to a flat $0 line).
+  const { data: amexPayoff } = useGetAmexWeeklyPayoff();
   const { data: mappingRules } = useListMappingRules();
   // Server-provided Amex anchor: fallback used when the Amex debt row is
   // missing or renamed.
@@ -532,6 +537,37 @@ export default function AmexPage() {
   // selected month.
   const monthAll = monthTxns ?? [];
   const wideAll = wideTxns ?? monthAll;
+
+  // On first load, never open to an empty ledger when Amex data exists. If the
+  // latest data is in a PAST month, jump the navigator there (past months show
+  // the whole month). If the latest data is the CURRENT month but this week has
+  // no charges, drop the "Wk" scope to "Mo" so the month's charges are visible.
+  const initialAmexJumpDone = useRef(false);
+  useEffect(() => {
+    if (initialAmexJumpDone.current) return;
+    if (wideAll.length === 0) return; // wait for data to arrive
+    initialAmexJumpDone.current = true;
+    let latest: MonthKey | null = null;
+    for (const t of wideAll) {
+      const mk = monthKeyFromISO(t.occurredOn);
+      if (!latest || compareMonth(mk, latest) > 0) latest = mk;
+    }
+    if (!latest) return;
+    if (compareMonth(latest, currentMonth) !== 0) {
+      setSelectedMonth(latest);
+      return;
+    }
+    const wr = currentWeekRange();
+    const thisWeekHasData = wideAll.some((t) => {
+      const k = t.occurredOn.slice(0, 10);
+      return (
+        compareMonth(monthKeyFromISO(t.occurredOn), currentMonth) === 0 &&
+        k >= wr.from &&
+        k <= wr.to
+      );
+    });
+    if (!thisWeekHasData) setRangeMode("mo");
+  }, [wideAll, currentMonth]);
 
   // (#485) When the month query hits the server cap, surface a small hint
   // so users know their filters need to narrow rather than silently
@@ -814,7 +850,21 @@ export default function AmexPage() {
   }, [debts, cardFilter, selectedCardRowId]);
 
   const cardScopedAnchor = useMemo(() => {
-    if (cardFilter === "all") return resolvedAnchor;
+    if (cardFilter === "all") {
+      if (resolvedAnchor.anchor !== null) return resolvedAnchor;
+      // No debt/anchor resolved for the combined view — anchor at the combined
+      // statement balance so the forward chart projects a real line instead of
+      // collapsing to a flat $0. (Nothing invented: it's the cards' own balance.)
+      const combined = Number(amexPayoff?.combinedStatementBalance);
+      if (Number.isFinite(combined) && combined !== 0) {
+        return {
+          anchor: combined,
+          resolvedSource: "computed" as const,
+          asOf: null,
+        };
+      }
+      return resolvedAnchor;
+    }
     // Tier 1: per-card debt row (when the user has linked the card on /debts).
     if (cardScopedDebt) {
       const bal = parseSigned(cardScopedDebt.balance);
@@ -861,7 +911,7 @@ export default function AmexPage() {
       resolvedSource: "computed" as const,
       asOf: null,
     };
-  }, [cardFilter, cardScopedDebt, resolvedAnchor, amexAnchorPerCardResp]);
+  }, [cardFilter, cardScopedDebt, resolvedAnchor, amexAnchorPerCardResp, amexPayoff]);
 
   const wideAllForBalance = useMemo(() => {
     if (cardFilter === "all") return wideAll;
