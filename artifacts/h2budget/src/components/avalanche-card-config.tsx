@@ -59,54 +59,30 @@ function TierPicker({
   );
 }
 
-/** Per-card config row: custom name (saved on blur) + weekly/monthly toggle. */
+/** Per-card custom name (saved on blur). Cadence is no longer toggled here — it
+ *  is derived from the tier (Blue = monthly, Platinum = weekly). */
 function CardConfig({
   name,
-  cadence,
   placeholder,
   onName,
-  onCadence,
 }: {
   name: string;
-  cadence: Cadence;
   placeholder: string;
   onName: (v: string) => void;
-  onCadence: (v: Cadence) => void;
 }) {
   const [draft, setDraft] = useState(name);
   return (
-    <div className="space-y-1.5">
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => draft.trim() !== name && onName(draft.trim())}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-        }}
-        placeholder={placeholder}
-        aria-label="Card name"
-        className="w-full rounded-md border border-card-border bg-background px-2 py-1 text-xs"
-      />
-      <div className="inline-flex items-center rounded-md border border-card-border p-0.5 text-[10px] font-medium">
-        {(["weekly", "monthly"] as Cadence[]).map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => onCadence(c)}
-            aria-pressed={cadence === c}
-            data-testid={`amex-cadence-${c}`}
-            className={cn(
-              "rounded px-2 py-0.5 uppercase tracking-wide transition-colors",
-              cadence === c
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground",
-            )}
-          >
-            {c === "weekly" ? "Weekly" : "Monthly"}
-          </button>
-        ))}
-      </div>
-    </div>
+    <input
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => draft.trim() !== name && onName(draft.trim())}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+      placeholder={placeholder}
+      aria-label="Card name"
+      className="w-full rounded-md border border-card-border bg-background px-2 py-1 text-xs"
+    />
   );
 }
 
@@ -279,17 +255,22 @@ export function AvalancheCardConfig() {
     await qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
     await qc.invalidateQueries({ queryKey: getGetAmexWeeklyPayoffQueryKey() });
   };
+  // Convention: Blue = monthly expenses, Platinum = weekly. The tier DRIVES the
+  // cadence — picking a tier writes the matching cadence into the same setting
+  // the payoff/kill-stack grouping reads, so there's no separate toggle to keep
+  // in sync.
+  const cadenceForTier = (tier: AmexTier): Cadence =>
+    tier === "blue" ? "monthly" : "weekly";
   const setTier = (accountId: string, tier: AmexTier) =>
     patchPref({
       amexCardBrands: {
         ...(settings?.preferences?.amexCardBrands ?? {}),
         [accountId]: tier,
       },
+      amexCardCadence: { ...cadences, [accountId]: cadenceForTier(tier) },
     });
   const setName = (accountId: string, name: string) =>
     patchPref({ amexCardNames: { ...names, [accountId]: name } });
-  const setCadence = (accountId: string, cadence: Cadence) =>
-    patchPref({ amexCardCadence: { ...cadences, [accountId]: cadence } });
 
   const refreshAfterCreate = async () => {
     await qc.invalidateQueries({ queryKey: getListDebtsQueryKey() });
@@ -327,16 +308,22 @@ export function AvalancheCardConfig() {
               </span>
             </div>
             <div className="mt-2 space-y-2">
-              <TierPicker
-                value={tier}
-                onChange={(t) => void setTier(c.accountId, t)}
-              />
+              <div className="flex items-center justify-between gap-2">
+                <TierPicker
+                  value={tier}
+                  onChange={(t) => void setTier(c.accountId, t)}
+                />
+                <span
+                  className="rounded-md border border-card-border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                  title="Cadence is set by the tier: Blue = monthly, Platinum = weekly"
+                >
+                  {tier === "blue" ? "Monthly card" : "Weekly card"}
+                </span>
+              </div>
               <CardConfig
                 name={names[c.accountId] ?? ""}
-                cadence={cadences[c.accountId] === "monthly" ? "monthly" : "weekly"}
                 placeholder={BRAND_LABEL[tier]}
                 onName={(v) => void setName(c.accountId, v)}
-                onCadence={(v) => void setCadence(c.accountId, v)}
               />
               <AddToAvalanche card={c} onCreated={refreshAfterCreate} />
             </div>

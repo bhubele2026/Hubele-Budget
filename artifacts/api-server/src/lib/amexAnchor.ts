@@ -478,16 +478,27 @@ export async function computeWeeklyPayoff(
   const order: Record<AmexBrand, number> = { blue: 0, silver: 1 };
   cards.sort((a, b) => order[a.brand] - order[b.brand]);
 
+  // A card tracked as a debt (has a linked debt row, e.g. the Sky Card — a
+  // revolving balance with interest charges) is managed in Avalanche, not the
+  // weekly/monthly Amex spend band. Drop it here so it doesn't double-appear.
+  const bandCards = cards.filter((c) => c.debtId == null);
+
   // The combined "to pay this week" total is the WEEKLY cards only; monthly
   // cards are surfaced separately (their charges sit until month-end).
   const combinedWeekCharges =
     Math.round(
-      cards
+      bandCards
         .filter((c) => c.cadence === "weekly")
         .reduce((s, c) => s + c.weekCharges, 0) * 100,
     ) / 100;
   const combinedStatementBalance =
-    Math.round(cards.reduce((s, c) => s + c.statementBalance, 0) * 100) / 100;
+    Math.round(bandCards.reduce((s, c) => s + c.statementBalance, 0) * 100) / 100;
 
-  return { weekStart, weekEnd, cards, combinedWeekCharges, combinedStatementBalance };
+  return {
+    weekStart,
+    weekEnd,
+    cards: bandCards,
+    combinedWeekCharges,
+    combinedStatementBalance,
+  };
 }
