@@ -286,8 +286,16 @@ export async function computeWeeklyPayoff(
     nameMap = (prefs.amexCardNames as Record<string, string>) ?? {};
     excludedTxnIds = new Set((prefs.amexExcludedTxnIds as string[]) ?? []);
   }
-  const cadenceFor = (accountId: string): "weekly" | "monthly" =>
-    cadenceMap[accountId] === "monthly" ? "monthly" : "weekly";
+  // Brand per external account_id (filled once cardRows is discovered below).
+  // Drives the DEFAULT cadence when the owner hasn't set one explicitly:
+  // Blue Cash bills monthly, Platinum (silver) bills weekly.
+  const brandByAccountId = new Map<string, AmexBrand>();
+  const cadenceFor = (accountId: string): "weekly" | "monthly" => {
+    const explicit = cadenceMap[accountId];
+    if (explicit === "monthly") return "monthly";
+    if (explicit === "weekly") return "weekly";
+    return brandByAccountId.get(accountId) === "blue" ? "monthly" : "weekly";
+  };
   const windowFor = (accountId: string) =>
     cadenceFor(accountId) === "monthly"
       ? { start: monthStart, end: monthEnd }
@@ -329,6 +337,12 @@ export async function computeWeeklyPayoff(
 
   const externalIds = cardRows.map((c) => c.accountId).filter((v): v is string => !!v);
   const internalIds = cardRows.map((c) => c.internalId);
+
+  // Populate the brand map so cadenceFor()/windowFor() can default Blue→monthly,
+  // Platinum→weekly without the owner having to configure amexCardCadence.
+  for (const c of cardRows) {
+    if (c.accountId) brandByAccountId.set(c.accountId, classifyAmexBrand(c.name, c.mask));
+  }
 
   // --- SpendContext (categories + debt linkage), same shape as the reports
   //     pipeline so isRealSpend behaves identically. ---------------------
