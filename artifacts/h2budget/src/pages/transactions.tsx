@@ -550,6 +550,31 @@ export default function TransactionsPage() {
     setPendingPostImportJump(false);
   }, [pendingPostImportJump, chaseTransactions, selectedMonth]);
 
+  // (#chase-empty) On first load, if the current month has no Chase rows but
+  // earlier months do, jump the navigator to the latest month that actually has
+  // data — so the page never opens to an empty table when data exists elsewhere.
+  // Runs once; respects a `?month=` deep-link and never fights later manual nav.
+  const initialMonthJumpDone = useRef(false);
+  useEffect(() => {
+    if (initialMonthJumpDone.current) return;
+    if (monthPinnedFromUrlRef.current) {
+      initialMonthJumpDone.current = true;
+      return;
+    }
+    if (chaseTransactions.length === 0) return; // wait for data to arrive
+    initialMonthJumpDone.current = true;
+    const currentHasData = chaseTransactions.some(
+      (t) => compareMonth(monthKeyFromISO(t.occurredOn), selectedMonth) === 0,
+    );
+    if (currentHasData) return;
+    let max: MonthKey | null = null;
+    for (const t of chaseTransactions) {
+      const mk = monthKeyFromISO(t.occurredOn);
+      if (!max || compareMonth(mk, max) > 0) max = mk;
+    }
+    if (max) setSelectedMonth(max);
+  }, [chaseTransactions, selectedMonth]);
+
   const monthScoped = useMemo(() => {
     return chaseTransactions.filter((t) => {
       const mk = monthKeyFromISO(t.occurredOn);
@@ -694,10 +719,12 @@ export default function TransactionsPage() {
     ) {
       const satISO = toISO(sat);
       if (satISO >= todayISO) break; // today + future handled below
-      historicalActual.push({
-        date: satISO,
-        balance: balanceAtEndOfDate(satISO) ?? 0,
-      });
+      // Don't fabricate a $0 point when the balance for a date can't be
+      // computed — skip it and let the chart connect real points (connectNulls)
+      // instead of drawing a misleading flat line at zero.
+      const bal = balanceAtEndOfDate(satISO);
+      if (bal == null) continue;
+      historicalActual.push({ date: satISO, balance: bal });
     }
 
     // Projected end-of-day balance per ISO date from the cash signal.
