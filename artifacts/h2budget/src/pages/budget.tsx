@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useSearch, useLocation } from "wouter";
+import { useSearch, useLocation, Link } from "wouter";
 import {
   useGetBudgetMonth,
   useUpsertBudgetLine,
@@ -83,6 +83,10 @@ import { PillBadge } from "@/components/pill-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, cn } from "@/lib/utils";
+import { useGetSettings } from "@workspace/api-client-react";
+import { FillMeter } from "@/components/stat/fill-meter";
+import { spendStatus } from "@/lib/statusThresholds";
+import { bucketSpendInWindow } from "@/lib/bucketSpend";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import {
@@ -424,6 +428,51 @@ export default function BudgetPage() {
     const end = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
     return { start, end };
   }, [currentMonth]);
+
+  // (P8) The weekly/monthly/unplanned allowance buckets as budget lines. Planned
+  // = the caps from Settings (weekly cap × weeks in the month); actual = the SAME
+  // shared bucketSpend numbers the dashboard + Allowances show, so the buckets
+  // read consistently inside the Budget. Discretionary spend the household
+  // explicitly filed — kept as its own group so it doesn't double-count category
+  // envelopes.
+  const { data: budgetSettings } = useGetSettings();
+  const allowanceLines = useMemo(() => {
+    const d = new Date(currentMonth + "T00:00:00");
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const first = `${y}-${pad(m + 1)}-01`;
+    const last = `${y}-${pad(m + 1)}-${pad(lastDay)}`;
+    const weeksInMonth = lastDay / 7;
+    const txns = allTxns ?? [];
+    const wCap = Number(budgetSettings?.weeklyAllowanceAmount) || 0;
+    const mCap = Number(budgetSettings?.monthlyAllowanceAmount) || 0;
+    const uCap = Number(budgetSettings?.unplannedAllowanceAmount) || 0;
+    return [
+      {
+        key: "weekly",
+        label: "Weekly allowance",
+        planned: wCap * weeksInMonth,
+        actual: bucketSpendInWindow(txns, "weekly", first, last),
+      },
+      {
+        key: "monthly",
+        label: "Monthly allowance",
+        planned: mCap,
+        actual: bucketSpendInWindow(txns, "monthly", first, last),
+      },
+      {
+        key: "unplanned",
+        label: "Unplanned",
+        planned: uCap,
+        actual: bucketSpendInWindow(txns, "unplanned", first, last),
+      },
+    ];
+  }, [currentMonth, allTxns, budgetSettings]);
+  const allowanceHasData = allowanceLines.some(
+    (l) => l.planned > 0 || l.actual > 0,
+  );
 
   // #90 — uncategorized transactions in the currently viewed budget month,
   // skipping transfers (they're excluded from budget actuals server-side
@@ -989,6 +1038,66 @@ export default function BudgetPage() {
           </Card>
         );
       })()}
+
+      {allowanceHasData && (
+        <Card data-testid="budget-allowances-group" className="mb-4">
+          <CardContent className="p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
+                  Allowances · this month
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Weekly / Monthly / Unplanned — what you filed on Chase & Amex.
+                </div>
+              </div>
+              <Link
+                href="/allowances"
+                className="shrink-0 text-xs font-medium text-primary hover:underline"
+                data-testid="budget-allowances-manage"
+              >
+                Manage →
+              </Link>
+            </div>
+            <div className="space-y-3">
+              {allowanceLines.map((l) => {
+                const ratio = l.planned > 0 ? l.actual / l.planned : 0;
+                return (
+                  <div key={l.key}>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-sm font-medium">{l.label}</span>
+                      <span className="text-sm tabular-nums text-muted-foreground">
+                        <MoneyText
+                          amount={l.actual}
+                          className="font-semibold text-foreground"
+                        />{" "}
+                        of{" "}
+                        {l.planned > 0 ? (
+                          <MoneyText amount={l.planned} />
+                        ) : (
+                          "no cap"
+                        )}
+                      </span>
+                    </div>
+                    <div className="mt-1">
+                      <FillMeter
+                        value={l.actual}
+                        ceiling={l.planned > 0 ? l.planned : Math.max(l.actual, 1)}
+                        status={l.planned > 0 ? spendStatus(ratio) : "neutral"}
+                        floorLabel="$0"
+                        ceilingLabel={
+                          l.planned > 0 ? formatCurrency(l.planned) : "—"
+                        }
+                        format={(n) => formatCurrency(n)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="space-y-4">
         {groups.map((group) => {

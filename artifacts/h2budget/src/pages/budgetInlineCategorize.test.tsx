@@ -94,6 +94,7 @@ vi.mock("@workspace/api-client-react", () => ({
   usePinBudgetMonth: () => noopMutation,
   usePinBudgetLine: () => noopMutation,
   useListTransactions: () => ({ data: txns }),
+  useGetSettings: () => ({ data: undefined }),
   useListMappingRules: () => ({ data: rules }),
   useUpdateTransaction: () => ({
     mutateAsync: updateTxMock,
