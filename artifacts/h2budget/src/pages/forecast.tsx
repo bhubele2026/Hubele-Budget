@@ -51,6 +51,7 @@ import { DeltaPill, Sparkline, StackBar, RingStat, MoneyText } from "@/component
 import { AiInsightBar } from "@/components/ai-insight-bar";
 import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { PillBadge } from "@/components/pill-badge";
+import { SectionHeader, Callout } from "@/components/stat";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -187,9 +188,8 @@ function fireConfetti() {
 
 type HorizonOpt = { label: string; days: number };
 const HORIZON_OPTS: HorizonOpt[] = [
-  // Weekly-first: the household lives by the week, so the forecast opens on a
-  // 7-day horizon by default; longer horizons stay one click away.
-  { label: "THIS WEEK", days: 7 },
+  // Opens on a 30-day horizon; longer horizons stay one click away. (The old
+  // 7-day "THIS WEEK" tab was removed at the owner's request.)
   { label: "30 DAYS", days: 30 },
   { label: "90 DAYS", days: 90 },
   { label: "120 DAYS", days: 120 },
@@ -232,9 +232,9 @@ export default function ForecastPage({
       const n = v ? Number(v) : NaN;
       return Number.isFinite(n) && HORIZON_OPTS.some((h) => h.days === n)
         ? n
-        : 7;
+        : 30;
     } catch {
-      return 7;
+      return 30;
     }
   });
   // (#650 follow-up) Default the chart to start at TODAY so the
@@ -1853,28 +1853,25 @@ export default function ForecastPage({
     <div className="space-y-6">
       <PlaidReauthBanner />
       <div ref={pageStickyHeaderRef} className="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 -mt-4 md:-mt-8 pt-2 md:pt-3 pb-2 bg-background border-b shadow-sm space-y-2">
-      <div className="flex justify-between items-center gap-3 flex-wrap">
-        <div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium leading-none">
-            Section IV — Forecast
+      <SectionHeader
+        eyebrow="Section IV — Forecast"
+        title="Plan register — you decide every match."
+        action={
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" size="sm" asChild className="h-8">
+              <Link href="/bills" data-testid="link-manage-bills">
+                Manage in Bills
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => openSettings()} className="h-8">
+              <SettingsIcon className="w-3.5 h-3.5 mr-1.5" /> Settings
+            </Button>
           </div>
-          <h1 className="text-lg font-serif font-bold text-foreground tracking-tight mt-0.5 leading-tight">
-            Plan register — you decide every match.
-          </h1>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" asChild className="h-8">
-            <Link href="/bills" data-testid="link-manage-bills">
-              Manage in Bills
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => openSettings()} className="h-8">
-            <SettingsIcon className="w-3.5 h-3.5 mr-1.5" /> Settings
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="flex items-center gap-1.5 flex-wrap" data-testid="horizon-tabs">
+      <div className="flex items-center gap-2 flex-wrap" data-testid="horizon-tabs">
+        <div className="inline-flex flex-wrap items-center gap-0.5 rounded-xl border border-card-border bg-muted/40 p-0.5">
         {HORIZON_OPTS.map((h) => {
           const active = horizonDays === h.days;
           // (#618) The active button shows a subtle spinner while the new
@@ -1885,7 +1882,7 @@ export default function ForecastPage({
           return (
             <Button
               key={h.label}
-              variant={active ? "default" : "outline"}
+              variant={active ? "default" : "ghost"}
               size="sm"
               onClick={() => setHorizonDays(h.days)}
               className="text-xs tracking-wider h-7 px-2.5"
@@ -1904,6 +1901,7 @@ export default function ForecastPage({
             </Button>
           );
         })}
+        </div>
         {/* (#650 follow-up) Look-back toggle. Default chart starts at
             today; clicking this reveals a date picker so the user can
             rewind the chart to a historical start date when needed. */}
@@ -1959,15 +1957,15 @@ export default function ForecastPage({
 
       {mode === "overall" && (
       /* Hero: Current Forecast Balance */
-      <Card data-testid="card-forecast-hero" className="border-2">
-        <CardContent className="p-3">
+      <Card data-testid="card-forecast-hero">
+        <CardContent className="p-4">
           <div className="flex justify-between items-center gap-4 flex-wrap">
             <div className="space-y-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium leading-none">
+              <div className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
                 Current Forecast Balance
               </div>
               <div
-                className={`text-3xl font-bold tabular-nums leading-tight ${
+                className={`text-[2rem] md:text-[2.4rem] font-bold tabular-nums leading-none ${
                   Number.isFinite(endingNum) && endingNum < 0
                     ? "text-destructive"
                     : "text-foreground"
@@ -2118,13 +2116,10 @@ export default function ForecastPage({
 
       {/* (#683) Past-due plans dragging tomorrow — discoverable summary */}
       {draggingPlans.length > 0 && draggingTargetDate && (
-        <Card
-          data-testid="card-dragging-plans-summary"
-          className="border-warning/30 bg-warning/10"
-        >
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-warning">
-              <AlertCircle className="w-4 h-4" />
+        <div data-testid="card-dragging-plans-summary">
+        <Callout tone="warning" icon={<AlertCircle className="h-4 w-4" />}>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-warning">
               <span>
                 {draggingPlans.length === 1
                   ? "1 past-due plan is weighing on"
@@ -2132,15 +2127,13 @@ export default function ForecastPage({
                 {formatDate(draggingTargetDate)}
               </span>
               <span
-                className="ml-auto tabular-nums text-warning"
+                className="ml-auto tabular-nums"
                 data-testid="dragging-plans-total"
               >
                 {formatCurrency(draggingTotal)}
               </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-warning/80 mb-2">
+            </div>
+            <p className="text-xs font-normal text-muted-foreground">
               These plans were due earlier but haven't been matched, missed,
               or skipped yet — so the projection keeps them on{" "}
               {formatDate(draggingTargetDate)} until you resolve them.
@@ -2259,8 +2252,9 @@ export default function ForecastPage({
                 );
               })}
             </ul>
-          </CardContent>
-        </Card>
+          </div>
+        </Callout>
+        </div>
       )}
 
       {/* Projected Balance area chart */}
@@ -2345,24 +2339,15 @@ export default function ForecastPage({
                       ? dayEvents.reduce((s, b) => s + b.amount, 0)
                       : 0;
                     return (
-                      <div
-                        style={{
-                          background: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--card-border))",
-                          color: "hsl(var(--card-foreground))",
-                          borderRadius: 6,
-                          fontSize: 12,
-                          padding: "8px 10px",
-                          minWidth: 160,
-                          boxShadow: "var(--shadow-md)",
-                        }}
-                      >
-                        <div style={{ fontWeight: 600 }}>
+                      <div className="min-w-[168px] rounded-lg border border-card-border bg-card px-3 py-2 text-xs text-card-foreground shadow-md">
+                        <div className="font-semibold">
                           {rawDate ? formatDate(rawDate) : ""}
                         </div>
-                        <div style={{ marginTop: 2 }}>
-                          {hasActual ? "Forecast:" : "Balance:"}{" "}
-                          <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                        <div className="mt-1 flex items-center justify-between gap-4">
+                          <span className="text-muted-foreground">
+                            {hasActual ? "Forecast" : "Balance"}
+                          </span>
+                          <span className="font-medium tabular-nums">
                             {Number.isFinite(balance)
                               ? formatCurrency(balance)
                               : "—"}
@@ -2371,33 +2356,29 @@ export default function ForecastPage({
                         {hasActual && (
                           <>
                             <div
-                              style={{ marginTop: 2 }}
+                              className="mt-1 flex items-center justify-between gap-4"
                               data-testid={`tooltip-actual-${rawDate}`}
                             >
-                              Actual:{" "}
+                              <span className="text-muted-foreground">Actual</span>
                               <span
-                                style={{
-                                  fontVariantNumeric: "tabular-nums",
-                                  color: "hsl(var(--chart-3))",
-                                  fontWeight: 600,
-                                }}
+                                className="font-semibold tabular-nums"
+                                style={{ color: "hsl(var(--chart-3))" }}
                               >
                                 {formatCurrency(actualNum)}
                               </span>
                             </div>
                             <div
-                              style={{ marginTop: 2 }}
+                              className="mt-1 flex items-center justify-between gap-4"
                               data-testid={`tooltip-delta-${rawDate}`}
                             >
-                              Δ:{" "}
+                              <span className="text-muted-foreground">Δ</span>
                               <span
+                                className="font-semibold tabular-nums"
                                 style={{
-                                  fontVariantNumeric: "tabular-nums",
                                   color:
                                     deltaNum >= 0
                                       ? "hsl(var(--chart-3))"
                                       : "hsl(var(--destructive))",
-                                  fontWeight: 600,
                                 }}
                               >
                                 {deltaNum >= 0 ? "+" : ""}
@@ -2434,26 +2415,16 @@ export default function ForecastPage({
                           return sections.map((section, sIdx) => (
                           <div
                             key={section.title}
-                            style={{ marginTop: sIdx === 0 ? 6 : 8 }}
+                            className={
+                              sIdx === 0
+                                ? "mt-2 border-t border-card-border pt-2"
+                                : "mt-2"
+                            }
                           >
-                            <div
-                              style={{
-                                fontSize: 10,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.04em",
-                                color: "hsl(var(--muted-foreground))",
-                                marginBottom: 4,
-                              }}
-                            >
+                            <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                               {section.title}
                             </div>
-                            <div
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 2,
-                              }}
-                            >
+                            <div className="flex flex-col gap-0.5">
                               {section.bills.map((b, idx) => {
                                 const canJump = !!b.itemId;
                                 // (#682) Per-plan "Mark missed" is only
@@ -2467,21 +2438,7 @@ export default function ForecastPage({
                                 return (
                                   <div
                                     key={`${b.itemId ?? "_"}-${idx}`}
-                                    style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 6,
-                                      padding: "2px 4px",
-                                      borderRadius: 4,
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      (e.currentTarget as HTMLElement).style.background =
-                                        "hsl(var(--muted))";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      (e.currentTarget as HTMLElement).style.background =
-                                        "transparent";
-                                    }}
+                                    className="flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted"
                                   >
                                     <button
                                       type="button"
@@ -2491,23 +2448,12 @@ export default function ForecastPage({
                                           jumpToPlan(b.itemId, rawDate);
                                       }}
                                       data-testid={`tooltip-bill-${rawDate}-${b.itemId ?? idx}`}
-                                      style={{
-                                        display: "flex",
-                                        justifyContent: "space-between",
-                                        gap: 12,
-                                        flex: 1,
-                                        minWidth: 0,
-                                        border: "none",
-                                        background: "transparent",
-                                        cursor: canJump ? "pointer" : "default",
-                                        textAlign: "left",
-                                        color: "inherit",
-                                        font: "inherit",
-                                        padding: 0,
-                                      }}
+                                      className={`flex min-w-0 flex-1 items-center justify-between gap-3 border-0 bg-transparent p-0 text-left font-[inherit] text-inherit ${
+                                        canJump ? "cursor-pointer" : "cursor-default"
+                                      }`}
                                     >
-                                      <span style={{ minWidth: 0 }}>{b.label}</span>
-                                      <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                                      <span className="min-w-0 truncate">{b.label}</span>
+                                      <span className="tabular-nums">
                                         {formatCurrency(b.amount)}
                                       </span>
                                     </button>
@@ -2532,20 +2478,7 @@ export default function ForecastPage({
                                         }}
                                         data-testid={`tooltip-mark-missed-${b.itemId}-${b.originalDate}`}
                                         title="Mark this past-due plan as missed so it stops dragging the projection"
-                                        style={{
-                                          fontSize: 10,
-                                          textTransform: "uppercase",
-                                          letterSpacing: "0.04em",
-                                          color: "hsl(var(--destructive))",
-                                          border: "1px solid hsl(var(--destructive) / 0.4)",
-                                          background: "transparent",
-                                          borderRadius: 3,
-                                          padding: "1px 6px",
-                                          cursor: "pointer",
-                                          whiteSpace: "nowrap",
-                                          font: "inherit",
-                                          fontWeight: 600,
-                                        }}
+                                        className="cursor-pointer whitespace-nowrap rounded border border-destructive/40 bg-transparent px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-destructive"
                                       >
                                         Mark missed
                                       </button>
@@ -3248,10 +3181,10 @@ export default function ForecastPage({
               if (missed.length === 0) return null;
               const missedTotal = missed.reduce((s, b) => s + b.amount, 0);
               return (
-                <Card data-testid="missed-bucket-panel">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 text-warning" />
+                <div data-testid="missed-bucket-panel">
+                <Callout tone="warning" icon={<AlertCircle className="h-4 w-4" />}>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
                       Missed in {monthFilter}
                       <Badge variant="outline" className="ml-1 text-[10px]">
                         {missed.length}
@@ -3264,11 +3197,9 @@ export default function ForecastPage({
                       >
                         {formatCurrency(missedTotal)}
                       </span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
+                    </div>
                     <div
-                      className="divide-y divide-border max-h-[20rem] overflow-y-auto"
+                      className="max-h-[20rem] divide-y divide-border overflow-y-auto rounded-lg border border-card-border bg-background"
                       data-testid="missed-bucket-scroll"
                     >
                       {missed.map((b) => (
@@ -3333,8 +3264,9 @@ export default function ForecastPage({
                         </div>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </Callout>
+                </div>
               );
             })()}
 

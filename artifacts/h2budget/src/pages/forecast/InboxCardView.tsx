@@ -94,9 +94,11 @@ export function InboxCardView({
           onMatchPick(oneClickSuggestion);
         }
       }}
-      className={`rounded-md border bg-card p-3 flex items-center gap-3 shadow-sm transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
-        isDragging ? "opacity-30" : ""
-      } ${isOverlay ? "shadow-lg ring-2 ring-primary/40 cursor-grabbing" : ""}`}
+      className={`rounded-md border border-card-border bg-card p-3 flex items-center gap-3 shadow-sm transition-all outline-none hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/40 ${
+        canOneClick ? "ring-1 ring-primary/25" : ""
+      } ${isDragging ? "opacity-30" : ""} ${
+        isOverlay ? "shadow-lg ring-2 ring-primary/40 cursor-grabbing" : ""
+      }`}
     >
       <button
         {...listeners}
@@ -110,7 +112,7 @@ export function InboxCardView({
         <GripVertical className="w-4 h-4" />
       </button>
       <div className="min-w-0 flex-1">
-        <div className="font-medium text-sm truncate">
+        <div className="font-semibold text-sm truncate">
           {card.bank.txn.description}
         </div>
         {showDragHint && (
@@ -139,7 +141,7 @@ export function InboxCardView({
         </div>
       </div>
       <span
-        className={`text-sm font-medium tabular-nums ${
+        className={`text-base font-semibold tabular-nums ${
           card.bank.amount < 0 ? "text-destructive" : "text-primary"
         }`}
       >

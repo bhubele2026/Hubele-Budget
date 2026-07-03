@@ -15,11 +15,11 @@ export function SuggestionStrip({
   if (suggestions.length === 0) return null;
   return (
     <div
-      className="flex flex-wrap items-center gap-1 px-3 pb-2 pt-1"
+      className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-md border border-card-border bg-muted/30 px-2.5 py-1.5"
       data-testid={`bank-suggestions-${txnId}`}
     >
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-1">
-        Suggested:
+      <span className="mr-0.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+        Suggested
       </span>
       {suggestions.map((s) => {
         const cls =

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useLocation, useSearch, Link } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQueries } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
@@ -14,6 +14,10 @@ import {
   Plus,
   Send,
   Loader2,
+  Sparkles,
+  MessageSquare,
+  Flame,
+  ArrowRight,
 } from "lucide-react";
 import {
   useListWeeklyDebriefs,
@@ -28,6 +32,7 @@ import {
   useListTransactions,
   useListCategories,
   getGetWeeklyDebriefQueryKey,
+  getGetWeeklyDebriefQueryOptions,
   getListWeeklyDebriefsQueryKey,
   getGetForecastQueryKey,
   getListTransactionsQueryKey,
@@ -41,24 +46,15 @@ import type {
   WeeklyDebriefPlanItem,
   WeeklyDebriefTxnItem,
   WeeklyDebriefCategoryBucket,
+  WeeklyDebriefSnapshot,
   WeeklyDebriefAdvisorSummary,
 } from "@workspace/api-client-react";
 import { openAdvisorChatWithContext } from "@/lib/advisorChatBridge";
-import { Sparkles, MessageSquare } from "lucide-react";
 import type { RecurringItemInput } from "@workspace/api-zod";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
@@ -76,17 +72,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { CategoryPicker } from "@/components/category-picker";
+import { SectionHeader } from "@/components/stat/section-header";
+import { Callout } from "@/components/stat/callout";
+import { StatTile, StatTileRow } from "@/components/stat-tile";
+import { MiniBars, MoneyText, DeltaPill } from "@/components/viz";
 import { cn } from "@/lib/utils";
 
 // ----- date helpers ---------------------------------------------------
@@ -163,7 +158,7 @@ function money(n: number | string, opts: { signed?: boolean } = {}): string {
 // it from the cash-flow totals (no allowance reserved) when an older
 // snapshot lacks it.
 function freedForAvalanche(
-  totals: NonNullable<WeeklyDebriefDetail["varianceSnapshot"]>["totals"],
+  totals: WeeklyDebriefSnapshot["totals"],
 ): number {
   const raw = (totals as { freedForAvalanche?: string }).freedForAvalanche;
   if (raw != null) return Number(raw) || 0;
@@ -173,7 +168,105 @@ function freedForAvalanche(
   );
 }
 
+// ----- aggregate view model -------------------------------------------
+// One shape the graphics consume for BOTH a single week and a whole month.
+// Every number is summed from the SAME precomputed snapshot(s) — no
+// recompute of any financial figure, just addition across weeks (the
+// byCategory arrays already sum exactly to totals, so a merge keeps the
+// invariant intact).
+
+type AggView = {
+  plannedIncome: number;
+  actualIncome: number;
+  plannedExpenses: number;
+  actualExpenses: number;
+  plannedNet: number;
+  actualNet: number;
+  varianceNet: number;
+  freed: number;
+  byCategory: WeeklyDebriefCategoryBucket[];
+};
+
+function weekAggView(snap: WeeklyDebriefSnapshot): AggView {
+  const t = snap.totals;
+  return {
+    plannedIncome: Number(t.plannedIncome),
+    actualIncome: Number(t.actualIncome),
+    plannedExpenses: Number(t.plannedExpenses),
+    actualExpenses: Number(t.actualExpenses),
+    plannedNet: Number(t.plannedNet),
+    actualNet: Number(t.actualNet),
+    varianceNet: Number(t.varianceNet),
+    freed: freedForAvalanche(t),
+    byCategory: snap.byCategory,
+  };
+}
+
+function mergeByCategory(
+  snaps: WeeklyDebriefSnapshot[],
+): WeeklyDebriefCategoryBucket[] {
+  const map = new Map<string, WeeklyDebriefCategoryBucket>();
+  for (const s of snaps) {
+    for (const b of s.byCategory) {
+      const key = b.categoryId ?? "_uncat";
+      const ex = map.get(key);
+      if (!ex) {
+        map.set(key, {
+          categoryId: b.categoryId ?? null,
+          plannedAmount: b.plannedAmount,
+          actualAmount: b.actualAmount,
+          varianceAmount: b.varianceAmount,
+          plannedItems: [...b.plannedItems],
+          actualTxns: [...b.actualTxns],
+        });
+      } else {
+        ex.plannedAmount = String(
+          Number(ex.plannedAmount) + Number(b.plannedAmount),
+        );
+        ex.actualAmount = String(
+          Number(ex.actualAmount) + Number(b.actualAmount),
+        );
+        ex.varianceAmount = String(
+          Number(ex.varianceAmount) + Number(b.varianceAmount),
+        );
+        ex.plannedItems = [...ex.plannedItems, ...b.plannedItems];
+        ex.actualTxns = [...ex.actualTxns, ...b.actualTxns];
+      }
+    }
+  }
+  return [...map.values()];
+}
+
+function monthAggView(snaps: WeeklyDebriefSnapshot[]): AggView {
+  const acc: AggView = {
+    plannedIncome: 0,
+    actualIncome: 0,
+    plannedExpenses: 0,
+    actualExpenses: 0,
+    plannedNet: 0,
+    actualNet: 0,
+    varianceNet: 0,
+    freed: 0,
+    byCategory: [],
+  };
+  for (const s of snaps) {
+    const t = s.totals;
+    acc.plannedIncome += Number(t.plannedIncome);
+    acc.actualIncome += Number(t.actualIncome);
+    acc.plannedExpenses += Number(t.plannedExpenses);
+    acc.actualExpenses += Number(t.actualExpenses);
+    acc.plannedNet += Number(t.plannedNet);
+    acc.actualNet += Number(t.actualNet);
+    acc.varianceNet += Number(t.varianceNet);
+    acc.freed += freedForAvalanche(t);
+  }
+  acc.byCategory = mergeByCategory(snaps);
+  return acc;
+}
+
 // ----- page -----------------------------------------------------------
+
+type ViewMode = "week" | "month";
 
 export default function DebriefPage() {
   const [location, setLocation] = useLocation();
@@ -192,9 +285,7 @@ export default function DebriefPage() {
   const toISO = useMemo(() => fmtISO(today), [today]);
 
   // (#823) Always-fresh: the weeks list reflects new transactions and
-  // edits the user expects to see without a hard refresh. Refetch on
-  // mount and on window focus. (The list key shares the /api/debrief/weeks
-  // prefix, but we set it per-call here so the intent stays local.)
+  // edits the user expects to see without a hard refresh.
   const weeksQ = useListWeeklyDebriefs(
     { from: fromISO, to: toISO },
     {
@@ -211,17 +302,19 @@ export default function DebriefPage() {
     [weeksQ.data],
   );
 
-  // ----- Active-week selection ----------------------------------------
+  // ----- URL state: active week + view mode ---------------------------
   const queryWeek = useMemo(() => {
     const sp = new URLSearchParams(search);
     return sp.get("week");
+  }, [search]);
+  const viewMode: ViewMode = useMemo(() => {
+    const sp = new URLSearchParams(search);
+    return sp.get("view") === "month" ? "month" : "week";
   }, [search]);
 
   const activeWeekStart = useMemo<string | null>(() => {
     if (queryWeek && /^\d{4}-\d{2}-\d{2}$/.test(queryWeek)) return queryWeek;
     if (!weeks.length) return null;
-    // Prefer the in_progress (current) week, else the most recent
-    // awaiting_review, else the latest week we know about.
     const inProgress = weeks.find((w) => w.status === "in_progress");
     if (inProgress) return inProgress.weekStart;
     const sortedAwaiting = weeks
@@ -252,18 +345,28 @@ export default function DebriefPage() {
     sp.set("week", weekStart);
     setLocation(`/debrief?${sp.toString()}`);
   };
+  const setViewMode = (mode: ViewMode) => {
+    const sp = new URLSearchParams(search);
+    sp.set("view", mode);
+    setLocation(`/debrief?${sp.toString()}`);
+  };
 
   // ----- Empty: no weeks at all --------------------------------------
   if (weeksQ.isSuccess && weeks.length === 0) {
     return (
       <div className="space-y-6" data-testid="page-debrief">
-        <PageHeader />
+        <PageHeader viewMode={viewMode} onSetView={setViewMode} />
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground space-y-3">
             <CalendarIcon className="w-10 h-10 mx-auto opacity-40" />
-            <div>No weekly debriefs yet — once Chase transactions sync in, weeks will appear here for review.</div>
+            <div>
+              No weekly debriefs yet — once Chase transactions sync in, weeks
+              will appear here for review.
+            </div>
             <Link href="/transactions">
-              <Button variant="outline" size="sm">Go to Chase</Button>
+              <Button variant="outline" size="sm">
+                Go to Chase
+              </Button>
             </Link>
           </CardContent>
         </Card>
@@ -274,8 +377,12 @@ export default function DebriefPage() {
   if (!activeWeekStart) {
     return (
       <div className="space-y-6" data-testid="page-debrief">
-        <PageHeader />
-        <Card><CardContent className="py-10 text-center text-muted-foreground text-sm">Loading…</CardContent></Card>
+        <PageHeader viewMode={viewMode} onSetView={setViewMode} />
+        <Card>
+          <CardContent className="py-10 text-center text-muted-foreground text-sm">
+            Loading…
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -283,50 +390,88 @@ export default function DebriefPage() {
   return (
     <DebriefPageActive
       activeWeekStart={activeWeekStart}
+      viewMode={viewMode}
       weeks={weeks}
       onSelectWeek={selectWeek}
+      onSetView={setViewMode}
       qc={qc}
       toast={toast}
     />
   );
 }
 
-function PageHeader() {
+function PageHeader({
+  viewMode,
+  onSetView,
+}: {
+  viewMode: ViewMode;
+  onSetView: (m: ViewMode) => void;
+}) {
   return (
-    <div className="flex items-center justify-between">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Weekly Debrief</h1>
-        <p className="text-sm text-muted-foreground">
-          Walk through each week: match planned items, accept surprises, then
-          lock the week to record a clean monthly variance.
-        </p>
-      </div>
+    <SectionHeader
+      eyebrow="Forecast vs actual"
+      title="Debrief"
+      sub="Your week — and month — against what the forecast said. Drill any bar to see what blew the budget, then move a charge to where it belongs."
+      action={<ViewToggle value={viewMode} onChange={onSetView} />}
+    />
+  );
+}
+
+// Segmented Week / Month control.
+function ViewToggle({
+  value,
+  onChange,
+}: {
+  value: ViewMode;
+  onChange: (m: ViewMode) => void;
+}) {
+  return (
+    <div
+      className="inline-flex items-center rounded-full border border-card-border bg-muted/40 p-0.5"
+      data-testid="debrief-view-toggle"
+    >
+      {(["week", "month"] as ViewMode[]).map((m) => (
+        <button
+          key={m}
+          type="button"
+          onClick={() => onChange(m)}
+          data-testid={`debrief-view-${m}`}
+          className={cn(
+            "rounded-full px-3.5 py-1 text-xs font-semibold capitalize transition-colors",
+            value === m
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {m}
+        </button>
+      ))}
     </div>
   );
 }
 
 // =====================================================================
-// Active-week view
+// Active view (host for all data + mutations)
 // =====================================================================
 
 function DebriefPageActive({
   activeWeekStart,
+  viewMode,
   weeks,
   onSelectWeek,
+  onSetView,
   qc,
   toast,
 }: {
   activeWeekStart: string;
+  viewMode: ViewMode;
   weeks: WeeklyDebriefListItem[];
   onSelectWeek: (w: string) => void;
+  onSetView: (m: ViewMode) => void;
   qc: ReturnType<typeof useQueryClient>;
   toast: ReturnType<typeof useToast>["toast"];
 }) {
-  // (#823) Always-fresh per-week detail. Each week's detail uses a
-  // distinct query key (/api/debrief/weeks/{weekStart}) that the
-  // /api/debrief/weeks prefix default doesn't cover, so opt in here:
-  // refetch on mount and focus so re-opening a week never shows a stale
-  // snapshot after edits/syncs.
+  // (#823) Always-fresh per-week detail (Week view).
   const detailQ = useGetWeeklyDebrief(activeWeekStart, {
     query: {
       queryKey: getGetWeeklyDebriefQueryKey(activeWeekStart),
@@ -337,14 +482,64 @@ function DebriefPageActive({
   });
   const detail: WeeklyDebriefDetail | undefined = detailQ.data;
 
+  // ----- The month's weeks (for Month view + the weeks strip) ---------
+  const month = monthKey(activeWeekStart);
+  const monthWeeks = useMemo(
+    () =>
+      weeks
+        .filter((w) => monthKey(w.weekStart) === month)
+        .sort((a, b) => a.weekStart.localeCompare(b.weekStart)),
+    [weeks, month],
+  );
+  const monthWeekStarts = useMemo(
+    () => monthWeeks.map((w) => w.weekStart),
+    [monthWeeks],
+  );
+
+  // Month view aggregates every week's precomputed snapshot. We only
+  // pull these when Month view is active (enabled guard) so Week view
+  // stays a single fetch. useQueries is one hook call over a dynamic
+  // array — safe across month changes.
+  const monthDetailResults = useQueries({
+    queries: monthWeekStarts.map((ws) =>
+      getGetWeeklyDebriefQueryOptions(ws, {
+        query: {
+          queryKey: getGetWeeklyDebriefQueryKey(ws),
+          staleTime: 60_000,
+          enabled: viewMode === "month",
+        },
+      }),
+    ),
+  });
+  const monthSnaps = useMemo(
+    () =>
+      monthDetailResults
+        .map((r) => r.data?.varianceSnapshot)
+        .filter((s): s is WeeklyDebriefSnapshot => !!s),
+    [monthDetailResults],
+  );
+  const monthLoading =
+    viewMode === "month" &&
+    monthDetailResults.some((r) => r.isLoading) &&
+    monthSnaps.length < monthWeekStarts.length;
+
+  // The weeks whose caches a recategorize should refresh. In Week view
+  // that's just the active week; in Month view it's every week we merged.
+  const relevantWeekStarts = useMemo(
+    () => (viewMode === "month" ? monthWeekStarts : [activeWeekStart]),
+    [viewMode, monthWeekStarts, activeWeekStart],
+  );
+
   // Pull Plaid txns for this week — needed for the "Pending Bank
-  // Transactions" section. We slice client-side to txns whose
-  // sentToReviewAt is null AND that appear in the snapshot's bank-txn
-  // list (so we don't show e.g. credit-card rows; the snapshot is
-  // already constrained to the checking-account source-of-truth).
+  // Transactions" section (Week view only).
   const txnQ = useListTransactions(
     detail
-      ? { from: detail.weekStart, to: detail.weekEnd, source: "plaid", limit: 500 }
+      ? {
+          from: detail.weekStart,
+          to: detail.weekEnd,
+          source: "plaid",
+          limit: 500,
+        }
       : undefined,
     { query: { enabled: !!detail } as any },
   );
@@ -355,11 +550,8 @@ function DebriefPageActive({
     (categories ?? []).forEach((c) => m.set(c.id, c.name));
     return m;
   }, [categories]);
-  // For the Category Variance table's color logic: income variance
-  // colors must flip (more income = good = green, less = red), while
-  // expense variance keeps the default (over = red, under = green).
-  // Buckets whose categoryId isn't in this map (null or orphan) fall
-  // back to expense semantics.
+  // Income variance colors flip (more income = good = green); expense
+  // keeps the default (over = red). Unknown/null → expense semantics.
   const catKindById = useMemo(() => {
     const m = new Map<string, "income" | "expense">();
     (categories ?? []).forEach((c) =>
@@ -377,18 +569,20 @@ function DebriefPageActive({
   const updateTxn = useUpdateTransaction();
 
   const invalidateAfterResolution = () => {
-    qc.invalidateQueries({ queryKey: getGetWeeklyDebriefQueryKey(activeWeekStart) });
+    qc.invalidateQueries({
+      queryKey: getGetWeeklyDebriefQueryKey(activeWeekStart),
+    });
     qc.invalidateQueries({ queryKey: getListWeeklyDebriefsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
   };
 
-  // (#801) Recategorize a single transaction straight from the
-  // Category-variance popover, without leaving /debrief. Mirrors the
-  // /chase + /forecast PATCH: `{ categoryId, rememberPattern? }`. On
-  // success we invalidate the weekly-debrief (so the variance table +
-  // popover repaint with the txn in its new bucket) plus the
-  // transactions list (so the round-trip shows on /chase). The popover
-  // is intentionally NOT closed — the caller lets the user keep editing.
+  // (#801) Recategorize a single transaction from the drill-down, without
+  // leaving /debrief. Mirrors the /chase + /forecast PATCH
+  // `{ categoryId, rememberPattern? }`. On success we invalidate every
+  // relevant week's debrief (so the bars + drill repaint with the txn in
+  // its new bucket — in Month view that can be any week we merged), plus
+  // the transactions list and forecast. The drill stays open so the user
+  // can keep editing.
   const handleChangeTxnCategory = (
     txnId: string,
     newCategoryId: string | null,
@@ -404,7 +598,11 @@ function DebriefPageActive({
       },
       {
         onSuccess: () => {
-          qc.invalidateQueries({ queryKey: getGetWeeklyDebriefQueryKey(activeWeekStart) });
+          for (const ws of relevantWeekStarts) {
+            qc.invalidateQueries({
+              queryKey: getGetWeeklyDebriefQueryKey(ws),
+            });
+          }
           qc.invalidateQueries({ queryKey: getListWeeklyDebriefsQueryKey() });
           qc.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
           qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
@@ -446,7 +644,10 @@ function DebriefPageActive({
     );
   };
 
-  const handleReschedule = (plan: WeeklyDebriefPlanItem, targetSunday: string) => {
+  const handleReschedule = (
+    plan: WeeklyDebriefPlanItem,
+    targetSunday: string,
+  ) => {
     if (!plan.recurringItemId) return;
     upsertResolution.mutate(
       {
@@ -489,7 +690,10 @@ function DebriefPageActive({
         onSuccess: () => {
           invalidateAfterResolution();
           toast({
-            title: status === "missed" ? `Marked "${plan.name}" missed` : `Skipped "${plan.name}"`,
+            title:
+              status === "missed"
+                ? `Marked "${plan.name}" missed`
+                : `Skipped "${plan.name}"`,
           });
         },
         onError: (err) =>
@@ -551,7 +755,8 @@ function DebriefPageActive({
       amount: Math.abs(amt).toFixed(2),
       kind: isIncome ? "income" : "bill",
       frequency: "monthly",
-      dayOfMonth: Number.isFinite(dom) && dom >= 1 && dom <= 31 ? String(dom) : "1",
+      dayOfMonth:
+        Number.isFinite(dom) && dom >= 1 && dom <= 31 ? String(dom) : "1",
       anchorDate: txn.date,
     });
   };
@@ -565,11 +770,17 @@ function DebriefPageActive({
     }
     const amt = parseFloat(addBillSeed.amount);
     if (!Number.isFinite(amt) || amt < 0) {
-      toast({ title: "Amount must be a positive number", variant: "destructive" });
+      toast({
+        title: "Amount must be a positive number",
+        variant: "destructive",
+      });
       return;
     }
     if (addBillSeed.frequency === "onetime" && !addBillSeed.anchorDate) {
-      toast({ title: "Pick a date for the one-time item", variant: "destructive" });
+      toast({
+        title: "Pick a date for the one-time item",
+        variant: "destructive",
+      });
       return;
     }
     const payload: RecurringItemInput = {
@@ -581,7 +792,10 @@ function DebriefPageActive({
       dayOfMonth: null,
       anchorDate: null,
     };
-    if (addBillSeed.frequency === "monthly" || addBillSeed.frequency === "semimonthly") {
+    if (
+      addBillSeed.frequency === "monthly" ||
+      addBillSeed.frequency === "semimonthly"
+    ) {
       const day = parseInt(addBillSeed.dayOfMonth, 10);
       payload.dayOfMonth = Number.isFinite(day) && day >= 1 && day <= 31 ? day : 1;
       payload.anchorDate = addBillSeed.anchorDate || null;
@@ -593,10 +807,6 @@ function DebriefPageActive({
       { data: payload },
       {
         onSuccess: () => {
-          // Also acknowledge the source txn so it drops from open
-          // items in the Debrief (and counts toward
-          // convertedToRecurringCount semantically via the actions
-          // summary fallback).
           upsertResolution.mutate(
             {
               data: {
@@ -606,10 +816,16 @@ function DebriefPageActive({
             },
             {
               onSettled: () => {
-                qc.invalidateQueries({ queryKey: getGetWeeklyDebriefQueryKey(activeWeekStart) });
-                qc.invalidateQueries({ queryKey: getListWeeklyDebriefsQueryKey() });
+                qc.invalidateQueries({
+                  queryKey: getGetWeeklyDebriefQueryKey(activeWeekStart),
+                });
+                qc.invalidateQueries({
+                  queryKey: getListWeeklyDebriefsQueryKey(),
+                });
                 qc.invalidateQueries({ queryKey: getGetForecastQueryKey() });
-                qc.invalidateQueries({ queryKey: getListRecurringItemsQueryKey() });
+                qc.invalidateQueries({
+                  queryKey: getListRecurringItemsQueryKey(),
+                });
                 qc.invalidateQueries({ queryKey: getGetBillsSummaryQueryKey() });
                 qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
               },
@@ -694,18 +910,12 @@ function DebriefPageActive({
     );
   };
 
-  // -- Render ---------------------------------------------------------
-
-  const isLoading = detailQ.isLoading;
+  // -- Derived render state ------------------------------------------
   const snapshot = detail?.varianceSnapshot ?? null;
   const isLocked = detail?.status === "locked";
   const isInProgress = detail?.status === "in_progress";
   const openItemsCount = snapshot?.openItemsCount ?? 0;
 
-  // Pending Chase txns for this week: intersect Plaid txns (this week)
-  // with the snapshot's bank-txn ids. Single-flow restore — the old
-  // sent_to_review gate is gone, so "pending to triage" is just the
-  // week's forecast-flagged bank rows.
   const snapshotTxnIds = useMemo(
     () => new Set((snapshot?.transactions ?? []).map((t) => t.txnId)),
     [snapshot],
@@ -717,68 +927,122 @@ function DebriefPageActive({
     );
   }, [txnQ.data, snapshotTxnIds]);
 
+  // The aggregate view the graphics read.
+  const view: AggView | null = useMemo(() => {
+    if (viewMode === "month") {
+      return monthSnaps.length ? monthAggView(monthSnaps) : null;
+    }
+    return snapshot ? weekAggView(snapshot) : null;
+  }, [viewMode, monthSnaps, snapshot]);
+
+  // Net-trend series: variance per week. Month view shows this month's
+  // weeks; week view shows the whole window for context.
+  const trendWeeks = useMemo(
+    () =>
+      viewMode === "month"
+        ? monthWeeks
+        : [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart)),
+    [viewMode, monthWeeks, weeks],
+  );
+
+  const rangeLabel =
+    viewMode === "month"
+      ? monthLabel(month)
+      : detail
+        ? `Week of ${weekRangeLabel(detail.weekStart, detail.weekEnd)}`
+        : "This week";
+
+  const isLoading = viewMode === "month" ? monthLoading : detailQ.isLoading;
+  const hasData = viewMode === "month" ? monthSnaps.length > 0 : !!snapshot;
+
   return (
     <div className="space-y-6" data-testid="page-debrief">
-      <PageHeader />
+      <PageHeader viewMode={viewMode} onSetView={onSetView} />
 
       <WeekChipRow
         weeks={weeks}
         activeWeekStart={activeWeekStart}
+        activeMonth={month}
+        viewMode={viewMode}
         onSelect={onSelectWeek}
       />
 
-      {isLoading || !detail ? (
+      {isLoading && !hasData ? (
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground text-sm">
-            Loading week…
+            {viewMode === "month"
+              ? "Aggregating this month…"
+              : "Loading week…"}
+          </CardContent>
+        </Card>
+      ) : !hasData || !view ? (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground space-y-3">
+            <CalendarIcon className="w-10 h-10 mx-auto opacity-40" />
+            <div>
+              {viewMode === "month"
+                ? "No locked or reviewed weeks in this month yet — open a week and work through it."
+                : isInProgress
+                  ? "Nothing to review yet for this week — sync Chase and check back."
+                  : "No snapshot for this week."}
+            </div>
+            <Link href="/transactions">
+              <Button variant="outline" size="sm">
+                Go to Chase
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       ) : (
         <>
-          <WeekHeader detail={detail} />
+          {/* Hero: the four numbers that matter, forecast vs actual. */}
+          <HeroTiles view={view} rangeLabel={rangeLabel} viewMode={viewMode} />
 
-          {!snapshot ? (
-            <Card>
-              <CardContent className="py-10 text-center text-sm text-muted-foreground space-y-3">
-                <CalendarIcon className="w-10 h-10 mx-auto opacity-40" />
-                <div>
-                  {isInProgress
-                    ? "Nothing to review yet for this week — sync Chase and check back."
-                    : "No snapshot for this week."}
-                </div>
-                <Link href="/transactions">
-                  <Button variant="outline" size="sm">Go to Chase</Button>
-                </Link>
-              </CardContent>
-            </Card>
+          {/* Net-trend graphic across weeks. */}
+          <NetTrendCard
+            weeks={trendWeeks}
+            activeWeekStart={activeWeekStart}
+            onSelectWeek={(ws) => {
+              onSelectWeek(ws);
+              if (viewMode === "month") onSetView("week");
+            }}
+          />
+
+          {/* The centerpiece: forecast vs actual by category, drillable. */}
+          <CategoryVarianceGraphic
+            buckets={view.byCategory}
+            catNameById={catNameById}
+            catKindById={catKindById}
+            categories={categories ?? []}
+            onChangeTxnCategory={
+              // A locked, single week is a frozen snapshot — recategorizing
+              // wouldn't move its buckets, so keep it read-only. Month view
+              // and any unlocked week stay editable.
+              viewMode === "week" && isLocked
+                ? undefined
+                : handleChangeTxnCategory
+            }
+          />
+
+          {/* Fable 5 — the advisor takeaway. */}
+          {viewMode === "month" ? (
+            <MonthTakeawaysCard
+              monthLabelText={monthLabel(month)}
+              results={monthDetailResults}
+            />
           ) : (
+            (detail!.advisorSummary || isLocked) && (
+              <AdvisorTakeawayCard
+                weekStart={activeWeekStart}
+                summary={detail!.advisorSummary ?? null}
+              />
+            )
+          )}
+
+          {/* Secondary: the lock ritual + open-item resolution (Week view
+              only — locking is inherently per-week). */}
+          {viewMode === "week" && snapshot && (
             <>
-              <FreedForAvalancheBanner snapshot={snapshot} />
-
-              <VarianceSummaryCard
-                snapshot={snapshot}
-                byCategory={snapshot.byCategory}
-                catNameById={catNameById}
-                catKindById={catKindById}
-                categories={categories ?? []}
-                onChangeTxnCategory={isLocked ? undefined : handleChangeTxnCategory}
-              />
-
-              {isLocked && (
-                <AdvisorTakeawayCard
-                  weekStart={activeWeekStart}
-                  summary={detail.advisorSummary ?? null}
-                />
-              )}
-
-              <CategoryVarianceTable
-                buckets={snapshot.byCategory}
-                catNameById={catNameById}
-                catKindById={catKindById}
-                categories={categories ?? []}
-                onChangeTxnCategory={isLocked ? undefined : handleChangeTxnCategory}
-              />
-
               {!isLocked && (
                 <ActionPanel
                   snapshot={snapshot}
@@ -797,14 +1061,14 @@ function DebriefPageActive({
               )}
 
               {isLocked && (
-                <PostLockAdditionsCard additions={detail.postLockAdditions} />
+                <PostLockAdditionsCard additions={detail!.postLockAdditions} />
               )}
 
               <LockFooter
                 isLocked={isLocked}
                 isInProgress={isInProgress}
                 openItemsCount={openItemsCount}
-                detail={detail}
+                detail={detail!}
                 lockPending={lockWeek.isPending}
                 unlockPending={unlockWeek.isPending}
                 onLock={handleLock}
@@ -813,7 +1077,17 @@ function DebriefPageActive({
             </>
           )}
 
-          <MonthlySummaryCard activeWeekStart={activeWeekStart} weeks={weeks} />
+          {/* Month view: a compact status strip so each week's lock stays
+              one click away. */}
+          {viewMode === "month" && (
+            <MonthWeeksStrip
+              monthWeeks={monthWeeks}
+              onOpenWeek={(ws) => {
+                onSelectWeek(ws);
+                onSetView("week");
+              }}
+            />
+          )}
         </>
       )}
 
@@ -850,7 +1124,10 @@ function DebriefPageActive({
           if (!o) setAddBillSeed(null);
         }}
       >
-        <DialogContent className="sm:max-w-md" data-testid="dialog-debrief-add-bill">
+        <DialogContent
+          className="sm:max-w-md"
+          data-testid="dialog-debrief-add-bill"
+        >
           <DialogHeader>
             <DialogTitle>Convert to recurring</DialogTitle>
           </DialogHeader>
@@ -892,7 +1169,9 @@ function DebriefPageActive({
                       })
                     }
                   >
-                    <SelectTrigger aria-label="Type"><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-label="Type">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="bill">Bill (expense)</SelectItem>
                       <SelectItem value="income">Income</SelectItem>
@@ -912,7 +1191,9 @@ function DebriefPageActive({
                       })
                     }
                   >
-                    <SelectTrigger aria-label="Frequency"><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-label="Frequency">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="monthly">Monthly</SelectItem>
                       <SelectItem value="semimonthly">Semi-monthly</SelectItem>
@@ -946,7 +1227,9 @@ function DebriefPageActive({
                   addBillSeed.frequency === "onetime") && (
                   <div>
                     <Label className="text-xs">
-                      {addBillSeed.frequency === "onetime" ? "Date" : "Anchor date"}
+                      {addBillSeed.frequency === "onetime"
+                        ? "Date"
+                        : "Anchor date"}
                     </Label>
                     <Input
                       aria-label={
@@ -968,8 +1251,9 @@ function DebriefPageActive({
               </div>
               <p className="text-xs text-muted-foreground">
                 After saving, the source charge is acknowledged so the week can
-                lock, and the new {addBillSeed.kind === "income" ? "income" : "bill"}{" "}
-                appears in your forecast going forward.
+                lock, and the new{" "}
+                {addBillSeed.kind === "income" ? "income" : "bill"} appears in
+                your forecast going forward.
               </p>
             </div>
           )}
@@ -978,7 +1262,9 @@ function DebriefPageActive({
               variant="outline"
               onClick={() => setAddBillSeed(null)}
               disabled={createRecurring.isPending}
-            >Cancel</Button>
+            >
+              Cancel
+            </Button>
             <Button
               onClick={submitConvertToRecurring}
               disabled={createRecurring.isPending}
@@ -994,130 +1280,435 @@ function DebriefPageActive({
 }
 
 // =====================================================================
-// Subcomponents
+// Graphics — hero, trend, category
 // =====================================================================
 
-// (#M47) "Freed for the avalanche" — the loud, matte-black headline stat
-// telling you exactly how much ammo this week freed up to throw at debt.
-// It's the week's real surplus (actual income − actual expenses) after
-// setting aside the reserved weekly allowance, floored at 0. Computed
-// server-side and read off the snapshot totals so the figure matches the
-// avalanche page's intent without recomputing it here.
-function FreedForAvalancheBanner({
-  snapshot,
+// The four numbers that matter, as command-center StatTiles. Every figure
+// comes straight from the aggregate (which sums the precomputed snapshot).
+function HeroTiles({
+  view,
+  rangeLabel,
+  viewMode,
 }: {
-  snapshot: NonNullable<WeeklyDebriefDetail["varianceSnapshot"]>;
+  view: AggView;
+  rangeLabel: string;
+  viewMode: ViewMode;
 }) {
-  const freed = freedForAvalanche(snapshot.totals);
-  const hasAmmo = freed > 0;
+  const variancePct =
+    view.plannedNet !== 0
+      ? (view.varianceNet / Math.abs(view.plannedNet)) * 100
+      : 0;
+  const netAhead = view.varianceNet >= 0;
+  const freedHot = view.freed > 0;
   return (
-    <Card
-      className={cn(
-        "border-2",
-        hasAmmo
-          ? "border-positive/60 bg-zinc-950 text-zinc-50"
-          : "border-zinc-700 bg-zinc-950 text-zinc-300",
-      )}
-      data-testid="freed-for-avalanche"
-    >
-      <CardContent className="flex items-center justify-between gap-4 py-5">
-        <div className="flex items-center gap-3 min-w-0">
-          <div
-            className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-              hasAmmo ? "bg-positive/20 text-positive" : "bg-zinc-800 text-zinc-500",
-            )}
-          >
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-widest text-zinc-400">
-              Freed for the avalanche this week
-            </div>
-            <div className="text-sm text-zinc-400">
-              {hasAmmo
-                ? "Surplus left after your allowance — go bury a balance."
-                : "Nothing left to throw this week. The avalanche waits."}
-            </div>
+    <div className="space-y-2" data-testid="debrief-hero">
+      <div className="text-xs uppercase tracking-widest text-muted-foreground font-medium">
+        {viewMode === "month" ? "Month" : "Week"} · {rangeLabel}
+      </div>
+      <StatTileRow>
+        <StatTile
+          label="Planned net"
+          value={<MoneyText amount={view.plannedNet} />}
+          sub="what the forecast said"
+          icon={<CalendarIcon />}
+        />
+        <StatTile
+          label="Actual net"
+          value={<MoneyText amount={view.actualNet} colored />}
+          sub={`${money(view.actualIncome)} in · ${money(
+            view.actualExpenses,
+          )} out`}
+          icon={<CheckCircle2 />}
+        />
+        <StatTile
+          label="Variance"
+          value={
+            <MoneyText amount={view.varianceNet} colored signed />
+          }
+          sub={
+            <span className="inline-flex items-center gap-1.5">
+              <DeltaPill value={variancePct} />
+              <span>{netAhead ? "ahead of plan" : "behind plan"}</span>
+            </span>
+          }
+          icon={netAhead ? <CheckCircle2 /> : <AlertCircle />}
+        />
+        <StatTile
+          label="Freed for avalanche"
+          value={
+            <span className={freedHot ? "text-[hsl(var(--positive))]" : ""}>
+              {money(view.freed)}
+            </span>
+          }
+          sub={freedHot ? "ammo to bury a balance" : "no ammo this period"}
+          icon={<Flame />}
+        />
+      </StatTileRow>
+    </div>
+  );
+}
+
+// Variance-per-week bars. Over (net below plan) = red, ahead = green.
+// Click a bar to jump into that week.
+function NetTrendCard({
+  weeks,
+  activeWeekStart,
+  onSelectWeek,
+}: {
+  weeks: WeeklyDebriefListItem[];
+  activeWeekStart: string;
+  onSelectWeek: (ws: string) => void;
+}) {
+  const sorted = weeks; // already ascending
+  const data = sorted.map((w) => {
+    const v = Number(w.netSummary.varianceNet);
+    return {
+      value: v,
+      label: `${shortWeekChipLabel(w.weekStart)}: ${money(v, {
+        signed: true,
+      })}`,
+      color:
+        v >= 0 ? "hsl(var(--positive))" : "hsl(var(--negative))",
+    };
+  });
+  const activeIndex = sorted.findIndex((w) => w.weekStart === activeWeekStart);
+  const total = sorted.reduce(
+    (s, w) => s + Number(w.netSummary.varianceNet),
+    0,
+  );
+  if (sorted.length === 0) return null;
+  return (
+    <Card data-testid="debrief-net-trend">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base">Net vs plan, week by week</CardTitle>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>net variance</span>
+            <MoneyText
+              amount={total}
+              colored
+              signed
+              className="font-semibold"
+            />
           </div>
         </div>
-        <div className="text-right">
-          <div
-            className={cn(
-              "text-3xl font-bold tabular-nums tracking-tight",
-              hasAmmo ? "text-positive" : "text-zinc-500",
-            )}
-            data-testid="freed-for-avalanche-amount"
-          >
-            {money(freed)}
-          </div>
-          <div className="text-[10px] uppercase tracking-widest text-zinc-500">
-            {hasAmmo ? "freed for the kill" : "no ammo"}
-          </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <MiniBars
+          data={data}
+          height={56}
+          signed
+          activeIndex={activeIndex >= 0 ? activeIndex : undefined}
+          onBarClick={(i) => {
+            const w = sorted[i];
+            if (w) onSelectWeek(w.weekStart);
+          }}
+        />
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground tabular-nums">
+          <span>{shortWeekChipLabel(sorted[0].weekStart)}</span>
+          <span className="uppercase tracking-widest">
+            green = ahead · red = over
+          </span>
+          <span>
+            {shortWeekChipLabel(sorted[sorted.length - 1].weekStart)}
+          </span>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function WeekHeader({ detail }: { detail: WeeklyDebriefDetail }) {
+// The centerpiece — forecast vs actual per category, sorted by |variance|.
+// Each row shows a planned-vs-actual bar (OVER in red) and drills open to
+// the actual transactions that made it, each with an inline CategoryPicker
+// to move the charge to another category.
+function CategoryVarianceGraphic({
+  buckets,
+  catNameById,
+  catKindById,
+  categories,
+  onChangeTxnCategory,
+}: {
+  buckets: WeeklyDebriefCategoryBucket[];
+  catNameById: Map<string, string>;
+  catKindById: Map<string, "income" | "expense">;
+  categories: { id: string; name: string }[];
+  onChangeTxnCategory?: (
+    txnId: string,
+    newCategoryId: string | null,
+    rememberPattern?: string | null,
+  ) => void;
+}) {
+  const sorted = useMemo(
+    () =>
+      [...buckets].sort(
+        (a, b) =>
+          Math.abs(Number(b.varianceAmount)) -
+          Math.abs(Number(a.varianceAmount)),
+      ),
+    [buckets],
+  );
+  const [showAll, setShowAll] = useState(false);
+  const OVERSHOW = 8;
+  const visible = showAll ? sorted : sorted.slice(0, OVERSHOW);
+
+  const overCount = sorted.filter((b) => {
+    const kind = b.categoryId
+      ? catKindById.get(b.categoryId) ?? "expense"
+      : "expense";
+    const v = Number(b.varianceAmount);
+    return kind === "income" ? v < 0 : v > 0;
+  }).length;
+
   return (
-    <div className="flex items-center justify-between flex-wrap gap-3">
-      <div>
-        <div className="text-lg font-semibold">
-          Week of {weekRangeLabel(detail.weekStart, detail.weekEnd)}
+    <Card data-testid="debrief-category-graphic">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base">Where the plan met reality</CardTitle>
+          <span className="text-xs text-muted-foreground">
+            {overCount > 0
+              ? `${overCount} categor${overCount === 1 ? "y" : "ies"} over`
+              : "all within plan"}
+          </span>
         </div>
-        <div className="text-xs text-muted-foreground tabular-nums">
-          {detail.weekStart} → {detail.weekEnd}
+      </CardHeader>
+      <CardContent className="space-y-1.5">
+        {sorted.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-4 text-center">
+            No category activity this period.
+          </div>
+        ) : (
+          <>
+            {visible.map((b) => (
+              <CategoryRow
+                key={b.categoryId ?? "_uncat"}
+                bucket={b}
+                catNameById={catNameById}
+                catKindById={catKindById}
+                categories={categories}
+                onChangeTxnCategory={onChangeTxnCategory}
+              />
+            ))}
+            {sorted.length > OVERSHOW && (
+              <div className="pt-2 text-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setShowAll((s) => !s)}
+                  data-testid="debrief-category-showall"
+                >
+                  {showAll
+                    ? "Show fewer"
+                    : `Show all ${sorted.length} categories`}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CategoryRow({
+  bucket,
+  catNameById,
+  catKindById,
+  categories,
+  onChangeTxnCategory,
+}: {
+  bucket: WeeklyDebriefCategoryBucket;
+  catNameById: Map<string, string>;
+  catKindById: Map<string, "income" | "expense">;
+  categories: { id: string; name: string }[];
+  onChangeTxnCategory?: (
+    txnId: string,
+    newCategoryId: string | null,
+    rememberPattern?: string | null,
+  ) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const name = bucket.categoryId
+    ? catNameById.get(bucket.categoryId) ?? "Uncategorized"
+    : "Uncategorized";
+  const kind = bucket.categoryId
+    ? catKindById.get(bucket.categoryId) ?? "expense"
+    : "expense";
+  const planned = Math.abs(Number(bucket.plannedAmount));
+  const actual = Math.abs(Number(bucket.actualAmount));
+  const v = Number(bucket.varianceAmount);
+  // Income: under-earning is bad. Expense: over-spending is bad.
+  const bad = kind === "income" ? v < 0 : v > 0;
+  const neutral = v === 0;
+  const barColor = neutral
+    ? "hsl(var(--muted-foreground))"
+    : bad
+      ? "hsl(var(--negative))"
+      : "hsl(var(--positive))";
+  const max = Math.max(planned, actual, 1);
+  const txns = bucket.actualTxns ?? [];
+  const drillable = txns.length > 0 && !!onChangeTxnCategory;
+
+  return (
+    <div
+      className="rounded-lg border border-card-border bg-card"
+      data-testid={`debrief-cat-${name.replace(/\s+/g, "-").toLowerCase()}`}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
+        aria-expanded={open}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <ChevronRight
+              className={cn(
+                "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                open && "rotate-90",
+              )}
+            />
+            <span className="truncate text-sm font-medium">{name}</span>
+            {kind === "income" && (
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                income
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <MoneyText
+              amount={v}
+              colored={false}
+              signed
+              className={cn(
+                "text-sm font-semibold",
+                neutral
+                  ? "text-muted-foreground"
+                  : bad
+                    ? "text-[hsl(var(--negative))]"
+                    : "text-[hsl(var(--positive))]",
+              )}
+            />
+          </div>
         </div>
-      </div>
-      <StatusBadge detail={detail} />
+        {/* Planned vs actual bars — the taller track is the reference. */}
+        <div className="mt-2 space-y-1 pl-5">
+          <BarLine
+            caption="Planned"
+            amount={planned}
+            pct={(planned / max) * 100}
+            color="hsl(var(--muted-foreground)/0.55)"
+          />
+          <BarLine
+            caption="Actual"
+            amount={actual}
+            pct={(actual / max) * 100}
+            color={barColor}
+          />
+        </div>
+      </button>
+
+      {open && (
+        <div className="border-t border-card-border px-2 py-1.5">
+          {txns.length === 0 ? (
+            <div className="px-2 py-2 text-xs text-muted-foreground">
+              No transactions landed in this category
+              {Number(bucket.plannedAmount) !== 0
+                ? " — it was planned but never spent."
+                : "."}
+            </div>
+          ) : (
+            <>
+              <div className="px-2 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                {txns.length} transaction{txns.length === 1 ? "" : "s"} ·
+                includes Amex, so this can exceed Chase-only cash flow
+              </div>
+              {txns.map((t, i) => (
+                <ActualTxnRow
+                  key={t.txnId + i}
+                  txn={t}
+                  categoryId={bucket.categoryId}
+                  categories={onChangeTxnCategory ? categories : undefined}
+                  onChangeTxnCategory={onChangeTxnCategory}
+                  testIdPrefix="debrief-cat-drill"
+                />
+              ))}
+              {!drillable && onChangeTxnCategory == null && (
+                <div className="px-2 py-1 text-[11px] italic text-muted-foreground">
+                  Locked snapshot — unlock the week to move a charge.
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function StatusBadge({ detail }: { detail: WeeklyDebriefDetail }) {
-  if (detail.status === "locked") {
-    return (
-      <Badge className="rounded-full bg-positive/10 text-positive border-positive/30" data-testid="badge-status-locked">
-        <Lock className="w-3 h-3 mr-1" /> Locked
-      </Badge>
-    );
-  }
-  if (detail.status === "in_progress") {
-    return (
-      <Badge variant="outline" className="rounded-full bg-primary/10 text-primary border-primary/30" data-testid="badge-status-inprogress">
-        In progress
-      </Badge>
-    );
-  }
+// A single labelled progress bar (BudgetSection idiom).
+function BarLine({
+  caption,
+  amount,
+  pct,
+  color,
+}: {
+  caption: string;
+  amount: number;
+  pct: number;
+  color: string;
+}) {
   return (
-    <Badge variant="outline" className="rounded-full bg-warning/10 text-warning border-warning/30" data-testid="badge-status-awaiting">
-      <AlertCircle className="w-3 h-3 mr-1" /> Awaiting review
-    </Badge>
+    <div className="flex items-center gap-2">
+      <span className="w-14 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+        {caption}
+      </span>
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted/50">
+        <div
+          className="h-full rounded-full transition-[width] duration-500"
+          style={{ width: `${Math.max(2, Math.min(100, pct))}%`, background: color }}
+        />
+      </div>
+      <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+        {money(amount)}
+      </span>
+    </div>
   );
 }
+
+// =====================================================================
+// Week selector chip row
+// =====================================================================
 
 function WeekChipRow({
   weeks,
   activeWeekStart,
+  activeMonth,
+  viewMode,
   onSelect,
 }: {
   weeks: WeeklyDebriefListItem[];
   activeWeekStart: string;
+  activeMonth: string;
+  viewMode: ViewMode;
   onSelect: (w: string) => void;
 }) {
-  // Sort oldest → newest, so the most recent week sits on the right
-  // (Amex / Chase navigator convention).
   const sorted = useMemo(
     () => [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart)),
     [weeks],
   );
   return (
-    <div className="border rounded-lg bg-card p-2 overflow-x-auto" data-testid="week-chip-row">
+    <div
+      className="border rounded-lg bg-card p-2 overflow-x-auto"
+      data-testid="week-chip-row"
+    >
       <div className="flex items-center gap-2">
         {sorted.map((w) => {
-          const isActive = w.weekStart === activeWeekStart;
+          const isActive =
+            viewMode === "month"
+              ? monthKey(w.weekStart) === activeMonth
+              : w.weekStart === activeWeekStart;
           const statusColor =
             w.status === "locked"
               ? "bg-positive/10 text-positive border-positive/30"
@@ -1140,7 +1731,9 @@ function WeekChipRow({
                 <span>{shortWeekChipLabel(w.weekStart)}</span>
                 {w.status === "locked" && <Lock className="w-3 h-3" />}
                 {w.status === "awaiting_review" && w.openItemsCount > 0 && (
-                  <span className="text-[10px] opacity-75">·{w.openItemsCount}</span>
+                  <span className="text-[10px] opacity-75">
+                    ·{w.openItemsCount}
+                  </span>
                 )}
               </div>
             </button>
@@ -1151,269 +1744,12 @@ function WeekChipRow({
   );
 }
 
-// (#805) Collapsible per-category section inside the Variance-summary
-// Income/Expenses popover. Header = category name + that bucket's actual
-// total; body = the bucket's actual txns, each with an inline picker
-// (preselected to the bucket's category) when editing is enabled.
-function SummaryCategorySection({
-  bucket,
-  catNameById,
-  categories,
-  onChangeTxnCategory,
-}: {
-  bucket: WeeklyDebriefCategoryBucket;
-  catNameById: Map<string, string>;
-  categories?: { id: string; name: string }[];
-  onChangeTxnCategory?: (
-    txnId: string,
-    newCategoryId: string | null,
-    rememberPattern?: string | null,
-  ) => void;
-}) {
-  const [open, setOpen] = useState(true);
-  const name = bucket.categoryId
-    ? catNameById.get(bucket.categoryId) ?? "Uncategorized"
-    : "Uncategorized";
-  const txns = bucket.actualTxns ?? [];
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <button
-          type="button"
-          className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-sm hover:bg-muted/50 focus:outline-none"
-          data-testid={`summary-section-${name.replace(/\s+/g, "-").toLowerCase()}`}
-        >
-          <span className="flex min-w-0 items-center gap-1 font-medium">
-            {open ? (
-              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-            )}
-            <span className="truncate">{name}</span>
-          </span>
-          <span className="tabular-nums whitespace-nowrap">{money(bucket.actualAmount)}</span>
-        </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        {txns.map((t, i) => (
-          <ActualTxnRow
-            key={t.txnId + i}
-            txn={t}
-            categoryId={bucket.categoryId}
-            categories={categories}
-            onChangeTxnCategory={onChangeTxnCategory}
-            testIdPrefix="debrief-summary-category"
-            className="pl-7"
-          />
-        ))}
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
+// =====================================================================
+// Drill-down row — the actual transaction with an inline recategorize
+// =====================================================================
 
-// (#805) Grouped drill-down popover for the Variance-summary Income /
-// Expenses Actual cell. Content is built client-side from the existing
-// `byCategory` buckets (filtered to this row's kind) — no server change.
-// Falls back to plain text when there is nothing to drill into.
-function SummaryActualPopover({
-  label,
-  amount,
-  buckets,
-  catNameById,
-  categories,
-  onChangeTxnCategory,
-}: {
-  label: string;
-  amount: string;
-  buckets: WeeklyDebriefCategoryBucket[];
-  catNameById: Map<string, string>;
-  categories?: { id: string; name: string }[];
-  onChangeTxnCategory?: (
-    txnId: string,
-    newCategoryId: string | null,
-    rememberPattern?: string | null,
-  ) => void;
-}) {
-  const sections = buckets.filter((b) => (b.actualTxns?.length ?? 0) > 0);
-  const clickable = Number(amount) !== 0 && sections.length > 0;
-  if (!clickable) {
-    return <div className="px-4 py-2 text-right tabular-nums">{money(amount)}</div>;
-  }
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="w-full px-4 py-2 text-right tabular-nums cursor-pointer hover:underline underline-offset-2 focus:outline-none focus:underline"
-          data-testid={`variance-summary-cell-${label.toLowerCase()}`}
-        >
-          {money(amount)}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
-        <div className="border-b px-3 py-2">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Actual</div>
-          <div className="text-sm font-medium">{label}</div>
-        </div>
-        <div className="max-h-64 overflow-y-auto py-1">
-          {sections.map((b) => (
-            <SummaryCategorySection
-              key={b.categoryId ?? "_"}
-              bucket={b}
-              catNameById={catNameById}
-              categories={categories}
-              onChangeTxnCategory={onChangeTxnCategory}
-            />
-          ))}
-        </div>
-        <div className="flex items-center justify-between border-t px-3 py-2 text-sm">
-          <span className="text-muted-foreground">Total</span>
-          <span className="font-medium tabular-nums">{money(amount)}</span>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function VarianceSummaryCard({
-  snapshot,
-  byCategory,
-  catNameById,
-  catKindById,
-  categories,
-  onChangeTxnCategory,
-}: {
-  snapshot: NonNullable<WeeklyDebriefDetail["varianceSnapshot"]>;
-  byCategory: WeeklyDebriefCategoryBucket[];
-  catNameById: Map<string, string>;
-  catKindById: Map<string, "income" | "expense">;
-  categories: { id: string; name: string }[];
-  // (#805) Optional — omitted on a locked week so the Income/Expenses
-  // popovers stay read-only (no inline pickers).
-  onChangeTxnCategory?: (
-    txnId: string,
-    newCategoryId: string | null,
-    rememberPattern?: string | null,
-  ) => void;
-}) {
-  const t = snapshot.totals;
-  // (#805) Split the byCategory buckets by their category kind so the
-  // Income/Expenses popovers list the right transactions. Buckets whose
-  // categoryId is null/unknown fall back to expense semantics — matching
-  // the Category-variance table's coloring logic.
-  const incomeBuckets = useMemo(
-    () =>
-      byCategory.filter(
-        (b) => b.categoryId && catKindById.get(b.categoryId) === "income",
-      ),
-    [byCategory, catKindById],
-  );
-  const expenseBuckets = useMemo(
-    () =>
-      byCategory.filter(
-        (b) => !(b.categoryId && catKindById.get(b.categoryId) === "income"),
-      ),
-    [byCategory, catKindById],
-  );
-  const rows: Array<{
-    label: string;
-    planned: string;
-    actual: string;
-    variance: number;
-    positiveIsBad: boolean;
-    drillBuckets?: WeeklyDebriefCategoryBucket[];
-  }> = [
-    {
-      label: "Income",
-      planned: t.plannedIncome,
-      actual: t.actualIncome,
-      variance: Number(t.actualIncome) - Number(t.plannedIncome),
-      positiveIsBad: false,
-      drillBuckets: incomeBuckets,
-    },
-    {
-      label: "Expenses",
-      planned: t.plannedExpenses,
-      actual: t.actualExpenses,
-      variance: Number(t.actualExpenses) - Number(t.plannedExpenses),
-      positiveIsBad: true,
-      drillBuckets: expenseBuckets,
-    },
-    {
-      label: "Net",
-      planned: t.plannedNet,
-      actual: t.actualNet,
-      variance: Number(t.varianceNet),
-      positiveIsBad: false,
-    },
-  ];
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">Variance summary</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-1/4"></TableHead>
-              <TableHead className="text-right">Planned</TableHead>
-              <TableHead className="text-right">Actual</TableHead>
-              <TableHead className="text-right">Δ</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r) => {
-              const bad = r.positiveIsBad ? r.variance > 0 : r.variance < 0;
-              return (
-                <TableRow key={r.label}>
-                  <TableCell className="font-medium">{r.label}</TableCell>
-                  <TableCell className="text-right tabular-nums">{money(r.planned)}</TableCell>
-                  {/* (#805) Income/Expenses Actual cells drill into a
-                      grouped popover; Net stays plain text. */}
-                  {r.drillBuckets ? (
-                    <TableCell className="text-right tabular-nums p-0">
-                      <SummaryActualPopover
-                        label={r.label}
-                        amount={r.actual}
-                        buckets={r.drillBuckets}
-                        catNameById={catNameById}
-                        categories={categories}
-                        onChangeTxnCategory={onChangeTxnCategory}
-                      />
-                    </TableCell>
-                  ) : (
-                    <TableCell className="text-right tabular-nums">{money(r.actual)}</TableCell>
-                  )}
-                  <TableCell
-                    className={cn(
-                      "text-right tabular-nums font-medium",
-                      bad ? "text-negative" : "text-positive",
-                    )}
-                    data-testid={`variance-${r.label.toLowerCase()}`}
-                  >
-                    {money(r.variance, { signed: true })}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  );
-}
-
-// (#805) Shared row for an actual transaction inside a drill-down
-// popover (used by both the Category-variance popover and the new
-// Variance-summary grouped popovers). Renders the description/date/
-// amount line and, when editing is enabled, an inline CategoryPicker
-// preselected to the bucket's categoryId.
-// (#866) Category actuals blend Chase checking + Amex (task #856), so a
-// category's Actual total can legitimately exceed the Chase-only top-line
-// cash flow. Tag each drill-down row by its card so the blended number is
-// self-explanatory. Mirrors the backend `isAmexRow` predicate: strip a
-// leading `plaid:` and treat "amex" as Amex, everything else as Chase.
+// (#866) Category actuals blend Chase checking + Amex, so tag each row by
+// its card. Mirrors the backend `isAmexRow` predicate.
 function sourceCardLabel(source: string | null | undefined): "Amex" | "Chase" {
   const s = (source ?? "").toLowerCase().replace(/^plaid:/, "");
   return s === "amex" ? "Amex" : "Chase";
@@ -1458,7 +1794,10 @@ function ActualTxnRow({
               );
             })()}
             {!txn.matchedToPlan && (
-              <Badge variant="secondary" className="h-4 px-1 text-[9px] uppercase">
+              <Badge
+                variant="secondary"
+                className="h-4 px-1 text-[9px] uppercase"
+              >
                 unplanned
               </Badge>
             )}
@@ -1468,11 +1807,8 @@ function ActualTxnRow({
           {money(Math.abs(txn.amount), { signed: false })}
         </div>
       </div>
-      {/* (#801/#805) Inline recategorization — same picker as /chase,
-          full category list. Initial value is the bucket's categoryId
-          (shared by every txn here). Pass through rememberPattern so the
-          next matching description auto-categorizes. Popover stays open.
-          Hidden entirely when editing is disabled (e.g. a locked week). */}
+      {/* Inline recategorization — same picker as /chase. Hidden when
+          editing is disabled (e.g. a locked week). */}
       {categories && onChangeTxnCategory && (
         <div className="mt-1">
           <CategoryPicker
@@ -1490,355 +1826,8 @@ function ActualTxnRow({
   );
 }
 
-// (#801) Drill-down popover for a single Planned or Actual cell in the
-// Category Variance table. Click on a non-zero amount opens a list of
-// the line items that compose it. The cell shows zero amounts as
-// plain text (not clickable) — there is nothing to drill into.
-function VarianceCellPopover({
-  kind,
-  categoryName,
-  amount,
-  plannedItems,
-  actualTxns,
-  categoryId,
-  categories,
-  onChangeTxnCategory,
-}: {
-  kind: "planned" | "actual";
-  categoryName: string;
-  amount: string;
-  plannedItems?: NonNullable<WeeklyDebriefCategoryBucket["plannedItems"]>;
-  actualTxns?: NonNullable<WeeklyDebriefCategoryBucket["actualTxns"]>;
-  // (#801) Bucket's categoryId — used as the inline picker's initial
-  // value (all txns in a bucket share the same category). Only the
-  // Actual cell threads these through; the Planned side stays read-only.
-  categoryId?: string | null;
-  categories?: { id: string; name: string }[];
-  onChangeTxnCategory?: (
-    txnId: string,
-    newCategoryId: string | null,
-    rememberPattern?: string | null,
-  ) => void;
-}) {
-  const num = Number(amount);
-  const hasItems =
-    kind === "planned"
-      ? (plannedItems?.length ?? 0) > 0
-      : (actualTxns?.length ?? 0) > 0;
-  const clickable = num !== 0 && hasItems;
-  if (!clickable) {
-    return <div className="px-4 py-2">{money(amount)}</div>;
-  }
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="w-full px-4 py-2 text-right tabular-nums cursor-pointer hover:underline underline-offset-2 focus:outline-none focus:underline"
-          data-testid={`variance-cell-${kind}-${categoryName.replace(/\s+/g, "-").toLowerCase()}`}
-        >
-          {money(amount)}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
-        <div className="border-b px-3 py-2">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">
-            {kind === "planned" ? "Planned" : "Actual"}
-          </div>
-          <div className="text-sm font-medium">{categoryName}</div>
-          {/* (#866) Category actuals blend Amex charges in with Chase
-              checking spend, so this total can exceed the Chase-only
-              top-line cash flow. Tag each row by card so it's clear. */}
-          {kind === "actual" && (
-            <div
-              className="mt-1 text-[11px] leading-snug text-muted-foreground"
-              data-testid="debrief-variance-category-source-note"
-            >
-              Includes Amex charges, so this can be higher than the
-              Chase-only cash-flow totals above.
-            </div>
-          )}
-        </div>
-        <div className="max-h-64 overflow-y-auto py-1">
-          {kind === "planned"
-            ? plannedItems!.map((p, i) => (
-                <div
-                  key={(p.recurringItemId ?? "") + i}
-                  className="flex items-baseline justify-between gap-3 px-3 py-1.5 text-sm"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{p.name}</div>
-                    <div className="text-[11px] text-muted-foreground">{p.forecastDate}</div>
-                  </div>
-                  <div className="tabular-nums whitespace-nowrap">{money(p.amount)}</div>
-                </div>
-              ))
-            : actualTxns!.map((t, i) => (
-                <ActualTxnRow
-                  key={t.txnId + i}
-                  txn={t}
-                  categoryId={categoryId}
-                  categories={categories}
-                  onChangeTxnCategory={onChangeTxnCategory}
-                  testIdPrefix="debrief-variance-category"
-                />
-              ))}
-        </div>
-        <div className="flex items-center justify-between border-t px-3 py-2 text-sm">
-          <span className="text-muted-foreground">Total</span>
-          <span className="font-medium tabular-nums">{money(amount)}</span>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function CategoryVarianceTable({
-  buckets,
-  catNameById,
-  catKindById,
-  categories,
-  onChangeTxnCategory,
-}: {
-  buckets: WeeklyDebriefCategoryBucket[];
-  catNameById: Map<string, string>;
-  catKindById: Map<string, "income" | "expense">;
-  categories: { id: string; name: string }[];
-  // (#801/#805) Optional — omitted when the week is locked. A locked
-  // debrief is a frozen snapshot, so recategorizing wouldn't move the
-  // buckets even though the PATCH would succeed. Leaving it undefined
-  // hides the inline pickers and keeps the popover read-only.
-  onChangeTxnCategory?: (
-    txnId: string,
-    newCategoryId: string | null,
-    rememberPattern?: string | null,
-  ) => void;
-}) {
-  const [open, setOpen] = useState(true);
-  const sorted = useMemo(
-    () =>
-      [...buckets].sort(
-        (a, b) => Math.abs(Number(b.varianceAmount)) - Math.abs(Number(a.varianceAmount)),
-      ),
-    [buckets],
-  );
-
-  // Per-category show/hide filter. The variance table can list 20+ rows
-  // (loans, uncategorized buckets, every income line); most users only
-  // track a handful. `visibleKeys === null` means "show all" (default);
-  // once the user customizes, we persist the explicit set of category
-  // keys to keep on this device. A row's key is its categoryId, or
-  // "_uncat" for the null/unmapped bucket.
-  const STORAGE_KEY = "h2:debrief:visibleCats";
-  const keyOf = (b: WeeklyDebriefCategoryBucket): string =>
-    b.categoryId ?? "_uncat";
-  const [visibleKeys, setVisibleKeys] = useState<Set<string> | null>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? new Set<string>(arr) : null;
-    } catch {
-      return null;
-    }
-  });
-  const persistVisible = (next: Set<string> | null) => {
-    setVisibleKeys(next);
-    try {
-      if (next === null) localStorage.removeItem(STORAGE_KEY);
-      else localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
-    } catch {
-      /* ignore quota / disabled storage */
-    }
-  };
-  const allKeys = useMemo(() => sorted.map(keyOf), [sorted]);
-  const toggleKey = (key: string, checked: boolean) => {
-    const base = visibleKeys ? new Set(visibleKeys) : new Set(allKeys);
-    if (checked) base.add(key);
-    else base.delete(key);
-    // If everything ends up checked, drop the filter back to "show all".
-    persistVisible(allKeys.every((k) => base.has(k)) ? null : base);
-  };
-  const visible = useMemo(
-    () =>
-      visibleKeys
-        ? sorted.filter((b) => visibleKeys.has(keyOf(b)))
-        : sorted,
-    [sorted, visibleKeys],
-  );
-  const filterActive = visibleKeys !== null;
-  return (
-    <Card>
-      <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                Category variance
-              </CardTitle>
-              <span className="text-xs text-muted-foreground">
-                {filterActive
-                  ? `${visible.length} of ${sorted.length} categories`
-                  : `${sorted.length} categories`}
-              </span>
-            </div>
-          </CardHeader>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <CardContent>
-            {sorted.length === 0 ? (
-              <div className="text-sm text-muted-foreground py-4 text-center">No category activity this week.</div>
-            ) : (
-              <>
-              <div className="flex items-center justify-end pb-3">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      data-testid="debrief-category-filter"
-                    >
-                      {filterActive ? `Filtered · ${visible.length}` : "Customize"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-64 p-0">
-                    <div className="flex items-center justify-between px-3 py-2 border-b">
-                      <span className="text-xs font-medium">Show categories</span>
-                      <div className="flex gap-3">
-                        <button
-                          type="button"
-                          className="text-[11px] text-primary hover:underline"
-                          onClick={() => persistVisible(null)}
-                        >
-                          All
-                        </button>
-                        <button
-                          type="button"
-                          className="text-[11px] text-primary hover:underline"
-                          onClick={() => persistVisible(new Set())}
-                        >
-                          None
-                        </button>
-                      </div>
-                    </div>
-                    <div className="max-h-72 overflow-y-auto py-1">
-                      {sorted.map((b) => {
-                        const key = keyOf(b);
-                        const name = b.categoryId
-                          ? (catNameById.get(b.categoryId) ?? "Uncategorized")
-                          : "Uncategorized";
-                        const checked = !visibleKeys || visibleKeys.has(key);
-                        return (
-                          <label
-                            key={key}
-                            className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50"
-                          >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(c) => toggleKey(key, c === true)}
-                            />
-                            <span className="truncate">{name}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Planned</TableHead>
-                    <TableHead className="text-right">Actual</TableHead>
-                    <TableHead className="text-right">Δ</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visible.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={4}
-                        className="text-center text-sm text-muted-foreground py-4"
-                      >
-                        All categories hidden — click Customize to pick what to show.
-                      </TableCell>
-                    </TableRow>
-                  ) : visible.map((b, i) => {
-                    const name = b.categoryId ? (catNameById.get(b.categoryId) ?? "Uncategorized") : "Uncategorized";
-                    const v = Number(b.varianceAmount);
-                    // Income: positive variance (earned more) = green;
-                    // negative (earned less) = red. Expense: keep the
-                    // default — positive (overspent) = red, negative
-                    // (underspent) = green. Unknown/null categoryId
-                    // defaults to expense semantics.
-                    const kind = b.categoryId
-                      ? (catKindById.get(b.categoryId) ?? "expense")
-                      : "expense";
-                    const goodColor = "text-positive";
-                    const badColor = "text-negative";
-                    const varianceColor =
-                      v === 0
-                        ? ""
-                        : kind === "income"
-                          ? v > 0
-                            ? goodColor
-                            : badColor
-                          : v > 0
-                            ? badColor
-                            : goodColor;
-                    return (
-                      <TableRow key={b.categoryId ?? "_uncat"}>
-                        <TableCell className="font-medium">
-                          {name}
-                          {kind === "income" && (
-                            <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
-                              income
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums p-0">
-                          <VarianceCellPopover
-                            kind="planned"
-                            categoryName={name}
-                            amount={b.plannedAmount}
-                            plannedItems={b.plannedItems ?? []}
-                          />
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums p-0">
-                          <VarianceCellPopover
-                            kind="actual"
-                            categoryName={name}
-                            amount={b.actualAmount}
-                            actualTxns={b.actualTxns ?? []}
-                            categoryId={b.categoryId}
-                            categories={categories}
-                            onChangeTxnCategory={onChangeTxnCategory}
-                          />
-                        </TableCell>
-                        <TableCell
-                          className={cn("text-right tabular-nums", varianceColor)}
-                        >
-                          {money(v, { signed: true })}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-              </>
-            )}
-          </CardContent>
-        </CollapsibleContent>
-      </Collapsible>
-    </Card>
-  );
-}
-
 // =====================================================================
-// Action panel — 3 collapsible sections
+// Action panel — open-item resolution (Week view only)
 // =====================================================================
 
 function ActionPanel({
@@ -1855,13 +1844,22 @@ function ActionPanel({
   upsertPending,
   sendPending,
 }: {
-  snapshot: NonNullable<WeeklyDebriefDetail["varianceSnapshot"]>;
-  pendingBankTxns: Array<{ id: string; description: string; amount: string; occurredOn: string; categoryId?: string | null }>;
+  snapshot: WeeklyDebriefSnapshot;
+  pendingBankTxns: Array<{
+    id: string;
+    description: string;
+    amount: string;
+    occurredOn: string;
+    categoryId?: string | null;
+  }>;
   catNameById: Map<string, string>;
   weekStart: string;
   onMatchPlan: (plan: WeeklyDebriefPlanItem, txnId: string) => void;
   onReschedulePlan: (plan: WeeklyDebriefPlanItem, targetSunday: string) => void;
-  onPlanStatus: (plan: WeeklyDebriefPlanItem, status: "missed" | "skipped") => void;
+  onPlanStatus: (
+    plan: WeeklyDebriefPlanItem,
+    status: "missed" | "skipped",
+  ) => void;
   onAcceptUnplanned: (txn: WeeklyDebriefTxnItem) => void;
   onConvertToRecurring: (txn: WeeklyDebriefTxnItem) => void;
   onSendToReview: (txnId: string) => void;
@@ -1869,27 +1867,15 @@ function ActionPanel({
   sendPending: boolean;
 }) {
   const unmatchedPlans = snapshot.unmatchedPlans;
-  // Open unplanned only (acknowledged ones already dropped from open
-  // items but stay visible in the snapshot; we surface those separately
-  // below the open list with a muted note).
-  const openUnplanned = snapshot.unplannedTxns.filter((t) => t.status === "unplanned");
-  const acknowledgedUnplanned = snapshot.unplannedTxns.filter((t) => t.status === "acknowledged_unplanned");
-  // Candidate bank txns for the Match dropdown: only the still-open
-  // unplanned ones (acknowledged or matched txns are already used).
+  const openUnplanned = snapshot.unplannedTxns.filter(
+    (t) => t.status === "unplanned",
+  );
+  const acknowledgedUnplanned = snapshot.unplannedTxns.filter(
+    (t) => t.status === "acknowledged_unplanned",
+  );
   const candidateTxns = openUnplanned;
 
-  // (#M28) The Debrief's action surface defaults to ONLY the open items
-  // that need a decision: unmatched plans to match/skip/mark-missed and
-  // still-open unplanned charges to triage. Everything else — already
-  // resolved plans, already-acknowledged charges, and the full list of
-  // this week's pending bank rows — is secondary and starts collapsed so
-  // the user sees the decisions first, not the whole week. No data is
-  // dropped: collapsed sections stay one click away.
   const openItemsCount = unmatchedPlans.length + openUnplanned.length;
-  // A decision section auto-opens only when it actually has open items;
-  // an empty "all resolved" section starts collapsed so it doesn't
-  // compete with the real work. "Pending bank transactions" is the
-  // whole-week list (not a decision) — always secondary, starts closed.
   const [openPlans, setOpenPlans] = useState(unmatchedPlans.length > 0);
   const [openUnp, setOpenUnp] = useState(openUnplanned.length > 0);
   const [openPending, setOpenPending] = useState(false);
@@ -1920,8 +1906,8 @@ function ActionPanel({
             data-testid="action-panel-all-clear"
           >
             <CheckCircle2 className="h-4 w-4 shrink-0" />
-            Nothing needs a decision — every plan is resolved and every
-            charge triaged. Lock the week.
+            Nothing needs a decision — every plan is resolved and every charge
+            triaged. Lock the week.
           </div>
         )}
         <SectionShell
@@ -1966,7 +1952,8 @@ function ActionPanel({
           {acknowledgedUnplanned.length > 0 && (
             <div className="mt-3 pt-3 border-t">
               <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
-                Acknowledged ({acknowledgedUnplanned.length}) — still counted in variance
+                Acknowledged ({acknowledgedUnplanned.length}) — still counted in
+                variance
               </div>
               <div className="space-y-1">
                 {acknowledgedUnplanned.map((txn) => (
@@ -1976,10 +1963,14 @@ function ActionPanel({
                     data-testid={`row-acknowledged-${txn.txnId}`}
                   >
                     <div className="flex-1 truncate">
-                      <span className="text-muted-foreground tabular-nums text-xs mr-2">{txn.date}</span>
+                      <span className="text-muted-foreground tabular-nums text-xs mr-2">
+                        {txn.date}
+                      </span>
                       {txn.description}
                     </div>
-                    <span className="tabular-nums text-muted-foreground">{money(txn.amount, { signed: true })}</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {money(txn.amount, { signed: true })}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -1987,9 +1978,6 @@ function ActionPanel({
           )}
         </SectionShell>
 
-        {/* (#M28) Secondary: the full week of pending bank rows. Not a
-            decision the lock waits on — starts collapsed so the
-            decisions above stay front and center. */}
         <SectionShell
           title="Pending bank transactions"
           count={pendingBankTxns.length}
@@ -2008,7 +1996,9 @@ function ActionPanel({
                 <div className="text-xs text-muted-foreground tabular-nums">
                   {tx.occurredOn} · {money(tx.amount, { signed: true })}
                   {tx.categoryId && catNameById.get(tx.categoryId) && (
-                    <span className="ml-2">· {catNameById.get(tx.categoryId)}</span>
+                    <span className="ml-2">
+                      · {catNameById.get(tx.categoryId)}
+                    </span>
                   )}
                 </div>
               </div>
@@ -2045,16 +2035,26 @@ function SectionShell({
   children: React.ReactNode;
 }) {
   return (
-    <Collapsible open={open} onOpenChange={onOpenChange} className="border rounded-md">
+    <Collapsible
+      open={open}
+      onOpenChange={onOpenChange}
+      className="border rounded-md"
+    >
       <CollapsibleTrigger className="w-full px-3 py-2 flex items-center justify-between hover:bg-muted/40">
         <div className="flex items-center gap-2 text-sm font-medium">
-          {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          {open ? (
+            <ChevronDown className="w-4 h-4" />
+          ) : (
+            <ChevronRight className="w-4 h-4" />
+          )}
           {title}
           <Badge
             variant="outline"
             className={cn(
               "text-[10px] px-1.5 py-0 h-5 tabular-nums",
-              count > 0 ? "bg-warning/10 text-warning border-warning/30" : "bg-positive/10 text-positive border-positive/30",
+              count > 0
+                ? "bg-warning/10 text-warning border-warning/30"
+                : "bg-positive/10 text-positive border-positive/30",
             )}
           >
             {count}
@@ -2064,7 +2064,9 @@ function SectionShell({
       <CollapsibleContent>
         <div className="px-3 pb-3">
           {count === 0 ? (
-            <div className="text-xs text-muted-foreground py-2 italic">{emptyText}</div>
+            <div className="text-xs text-muted-foreground py-2 italic">
+              {emptyText}
+            </div>
           ) : (
             children
           )}
@@ -2104,30 +2106,60 @@ function UnmatchedPlanRow({
     return candidateTxns.filter((t) => t.description.toLowerCase().includes(q));
   }, [candidateTxns, matchQuery]);
 
-  const catName = plan.categoryId ? (catNameById.get(plan.categoryId) ?? null) : null;
+  const catName = plan.categoryId
+    ? catNameById.get(plan.categoryId) ?? null
+    : null;
   const sign = plan.kind === "income" ? 1 : -1;
 
   return (
-    <div className="py-2 border-b last:border-0 space-y-2" data-testid={`row-plan-${plan.recurringItemId ?? "noid"}-${plan.forecastDate}`}>
+    <div
+      className="py-2 border-b last:border-0 space-y-2"
+      data-testid={`row-plan-${plan.recurringItemId ?? "noid"}-${plan.forecastDate}`}
+    >
       <div className="flex items-center gap-3">
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium truncate">{plan.name}</div>
           <div className="text-xs text-muted-foreground tabular-nums">
-            {plan.forecastDate} · {money(sign * Number(plan.forecastAmount), { signed: true })}
+            {plan.forecastDate} ·{" "}
+            {money(sign * Number(plan.forecastAmount), { signed: true })}
             {catName && <span className="ml-2">· {catName}</span>}
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5 justify-end">
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => setMatchOpen((v) => !v)} data-testid={`button-match-${plan.recurringItemId}`}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => setMatchOpen((v) => !v)}
+            data-testid={`button-match-${plan.recurringItemId}`}
+          >
             <CheckCircle2 className="w-3 h-3 mr-1" /> Match
           </Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => setRescheduleOpen((v) => !v)} data-testid={`button-reschedule-${plan.recurringItemId}`}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => setRescheduleOpen((v) => !v)}
+            data-testid={`button-reschedule-${plan.recurringItemId}`}
+          >
             <RefreshCcw className="w-3 h-3 mr-1" /> Reschedule
           </Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => onStatus(plan, "missed")} data-testid={`button-missed-${plan.recurringItemId}`}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => onStatus(plan, "missed")}
+            data-testid={`button-missed-${plan.recurringItemId}`}
+          >
             <X className="w-3 h-3 mr-1" /> Missed
           </Button>
-          <Button size="sm" variant="ghost" disabled={busy} onClick={() => onStatus(plan, "skipped")} data-testid={`button-skip-${plan.recurringItemId}`}>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => onStatus(plan, "skipped")}
+            data-testid={`button-skip-${plan.recurringItemId}`}
+          >
             Skip
           </Button>
         </div>
@@ -2160,10 +2192,14 @@ function UnmatchedPlanRow({
                   data-testid={`match-candidate-${t.txnId}`}
                 >
                   <span className="flex-1 truncate">
-                    <span className="text-muted-foreground tabular-nums mr-2">{t.date}</span>
+                    <span className="text-muted-foreground tabular-nums mr-2">
+                      {t.date}
+                    </span>
                     {t.description}
                   </span>
-                  <span className="tabular-nums">{money(t.amount, { signed: true })}</span>
+                  <span className="tabular-nums">
+                    {money(t.amount, { signed: true })}
+                  </span>
                 </button>
               ))}
             </div>
@@ -2231,9 +2267,14 @@ function UnplannedTxnRow({
   onConvert: (txn: WeeklyDebriefTxnItem) => void;
   busy: boolean;
 }) {
-  const catName = txn.categoryId ? (catNameById.get(txn.categoryId) ?? null) : null;
+  const catName = txn.categoryId
+    ? catNameById.get(txn.categoryId) ?? null
+    : null;
   return (
-    <div className="flex items-center gap-3 py-2 border-b last:border-0" data-testid={`row-unplanned-${txn.txnId}`}>
+    <div
+      className="flex items-center gap-3 py-2 border-b last:border-0"
+      data-testid={`row-unplanned-${txn.txnId}`}
+    >
       <div className="flex-1 min-w-0">
         <div className="text-sm truncate">{txn.description}</div>
         <div className="text-xs text-muted-foreground tabular-nums">
@@ -2346,7 +2387,9 @@ function PostLockAdditionsCard({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Post-lock additions ({additions.length})</CardTitle>
+        <CardTitle className="text-base">
+          Post-lock additions ({additions.length})
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-1">
@@ -2357,10 +2400,14 @@ function PostLockAdditionsCard({
               data-testid={`row-postlock-${a.txnId}`}
             >
               <div className="flex-1 truncate">
-                <span className="text-muted-foreground tabular-nums text-xs mr-2">{a.date}</span>
+                <span className="text-muted-foreground tabular-nums text-xs mr-2">
+                  {a.date}
+                </span>
                 {a.description}
               </div>
-              <span className="tabular-nums text-muted-foreground">{money(a.amount, { signed: true })}</span>
+              <span className="tabular-nums text-muted-foreground">
+                {money(a.amount, { signed: true })}
+              </span>
             </div>
           ))}
         </div>
@@ -2374,7 +2421,88 @@ function PostLockAdditionsCard({
 }
 
 // =====================================================================
-// (#802 — Phase E) Advisor takeaway card — locked-week-only
+// Month view: weeks status strip
+// =====================================================================
+
+function MonthWeeksStrip({
+  monthWeeks,
+  onOpenWeek,
+}: {
+  monthWeeks: WeeklyDebriefListItem[];
+  onOpenWeek: (ws: string) => void;
+}) {
+  if (monthWeeks.length === 0) return null;
+  const allLocked = monthWeeks.every((w) => w.status === "locked");
+  return (
+    <Card data-testid="debrief-month-weeks">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          Weeks this month
+          {allLocked && (
+            <Badge className="bg-positive/10 text-positive border-positive/30">
+              <Lock className="w-3 h-3 mr-1" /> Reconciled
+            </Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-1.5">
+        {monthWeeks.map((w) => {
+          const v = Number(w.netSummary.varianceNet);
+          const statusLabel =
+            w.status === "locked"
+              ? "Locked"
+              : w.status === "awaiting_review"
+                ? "Awaiting review"
+                : "In progress";
+          const statusColor =
+            w.status === "locked"
+              ? "bg-positive/10 text-positive border-positive/30"
+              : w.status === "awaiting_review"
+                ? "bg-warning/10 text-warning border-warning/30"
+                : "bg-primary/10 text-primary border-primary/30";
+          return (
+            <button
+              key={w.weekStart}
+              type="button"
+              onClick={() => onOpenWeek(w.weekStart)}
+              className="w-full flex items-center justify-between gap-3 rounded-lg border border-card-border bg-card px-3 py-2 text-left transition-colors hover:border-primary/40"
+              data-testid={`month-week-${w.weekStart}`}
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="text-sm font-medium">
+                  {weekRangeLabel(w.weekStart, w.weekEnd)}
+                </span>
+                <Badge
+                  variant="outline"
+                  className={cn("text-[10px] px-1.5 py-0 h-5", statusColor)}
+                >
+                  {statusLabel}
+                </Badge>
+                {w.openItemsCount > 0 && (
+                  <span className="text-[11px] text-muted-foreground tabular-nums">
+                    {w.openItemsCount} open
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <MoneyText
+                  amount={v}
+                  colored
+                  signed
+                  className="text-sm font-semibold"
+                />
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </button>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+// =====================================================================
+// Fable 5 — advisor takeaway (Week view)
 // =====================================================================
 
 function AdvisorTakeawayCard({
@@ -2409,8 +2537,6 @@ function AdvisorTakeawayCard({
   };
 
   const openChat = () => {
-    // Bake the summary into a context block + a starter prompt so the
-    // chat sees the actual numbers without needing a dedicated tool.
     const contextLines = summary
       ? [
           `Locked week of ${weekStart}.`,
@@ -2425,14 +2551,13 @@ function AdvisorTakeawayCard({
     });
   };
 
-  // -- Empty state: older locked week with no summary --
   if (!summary) {
     return (
       <Card data-testid="card-advisor-takeaway">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-primary" />
-            Advisor takeaway
+            Fable 5 takeaway
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -2469,7 +2594,7 @@ function AdvisorTakeawayCard({
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-primary" />
-            Advisor takeaway
+            Fable 5 takeaway
             {isFallback && (
               <Badge variant="outline" className="text-[10px] font-normal">
                 template
@@ -2493,13 +2618,18 @@ function AdvisorTakeawayCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-sm font-semibold leading-snug" data-testid="text-advisor-headline">
+        <p
+          className="text-sm font-semibold leading-snug"
+          data-testid="text-advisor-headline"
+        >
           {summary.headline}
         </p>
         {summary.bullets.length > 0 && (
           <ul className="text-sm space-y-1 list-disc pl-5 text-foreground/90">
             {summary.bullets.map((b, i) => (
-              <li key={i} data-testid={`text-advisor-bullet-${i}`}>{b}</li>
+              <li key={i} data-testid={`text-advisor-bullet-${i}`}>
+                {b}
+              </li>
             ))}
           </ul>
         )}
@@ -2536,83 +2666,61 @@ function AdvisorTakeawayCard({
   );
 }
 
-// =====================================================================
-// Monthly summary — only when every week in the month is locked
-// =====================================================================
-
-function MonthlySummaryCard({
-  activeWeekStart,
-  weeks,
+// Month view: roll up each locked week's advisor headline (existing text,
+// no new numbers) into one Fable 5 panel for the month.
+function MonthTakeawaysCard({
+  monthLabelText,
+  results,
 }: {
-  activeWeekStart: string;
-  weeks: WeeklyDebriefListItem[];
+  monthLabelText: string;
+  results: Array<{ data?: WeeklyDebriefDetail }>;
 }) {
-  const month = monthKey(activeWeekStart);
-  const monthWeeks = useMemo(() => {
-    return weeks.filter((w) => monthKey(w.weekStart) === month);
-  }, [weeks, month]);
+  const items = results
+    .map((r) => r.data)
+    .filter((d): d is WeeklyDebriefDetail => !!d?.advisorSummary)
+    .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
 
-  if (monthWeeks.length === 0) return null;
-  const allLocked = monthWeeks.every((w) => w.status === "locked");
-  if (!allLocked) return null;
-
-  let plannedNet = 0;
-  let actualNet = 0;
-  let varianceNet = 0;
-  let plannedAbsTotal = 0;
-  for (const w of monthWeeks) {
-    plannedNet += Number(w.netSummary.plannedNet);
-    actualNet += Number(w.netSummary.actualNet);
-    varianceNet += Number(w.netSummary.varianceNet);
-    plannedAbsTotal += Math.abs(Number(w.netSummary.plannedNet));
+  if (items.length === 0) {
+    return (
+      <div data-testid="card-month-takeaways-empty">
+        <Callout icon={<Sparkles className="h-4 w-4" />} tone="info">
+          Lock the weeks in {monthLabelText} to bank a Fable 5 takeaway for each
+          — they'll roll up here.
+        </Callout>
+      </div>
+    );
   }
-  const accuracy = plannedAbsTotal === 0
-    ? null
-    : Math.max(0, (1 - Math.abs(varianceNet) / plannedAbsTotal) * 100);
 
   return (
-    <Card data-testid="card-monthly-summary">
+    <Card data-testid="card-month-takeaways">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
-            {monthLabel(month)}
-            <Badge className="bg-positive/10 text-positive border-positive/30">
-              <Lock className="w-3 h-3 mr-1" /> Reconciled
-            </Badge>
-          </CardTitle>
-          {accuracy !== null && (
-            <span className="text-sm font-medium tabular-nums" data-testid="text-variance-accuracy">
-              Variance accuracy: {accuracy.toFixed(1)}%
-            </span>
-          )}
-        </div>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-primary" />
+          Fable 5 · {monthLabelText}
+        </CardTitle>
       </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead></TableHead>
-              <TableHead className="text-right">Planned net</TableHead>
-              <TableHead className="text-right">Actual net</TableHead>
-              <TableHead className="text-right">Δ</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow>
-              <TableCell className="font-medium">{monthWeeks.length} week{monthWeeks.length === 1 ? "" : "s"}</TableCell>
-              <TableCell className="text-right tabular-nums">{money(plannedNet)}</TableCell>
-              <TableCell className="text-right tabular-nums">{money(actualNet)}</TableCell>
-              <TableCell
-                className={cn(
-                  "text-right tabular-nums font-medium",
-                  varianceNet < 0 ? "text-negative" : "text-positive",
-                )}
-              >
-                {money(varianceNet, { signed: true })}
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+      <CardContent className="space-y-3">
+        {items.map((d) => (
+          <div
+            key={d.weekStart}
+            className="border-l-2 border-primary/30 pl-3"
+            data-testid={`month-takeaway-${d.weekStart}`}
+          >
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Week of {shortWeekChipLabel(d.weekStart)}
+            </div>
+            <p className="text-sm font-medium leading-snug">
+              {d.advisorSummary!.headline}
+            </p>
+            {d.advisorSummary!.bullets.length > 0 && (
+              <ul className="mt-1 text-xs space-y-0.5 list-disc pl-4 text-muted-foreground">
+                {d.advisorSummary!.bullets.slice(0, 2).map((b, i) => (
+                  <li key={i}>{b}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
       </CardContent>
     </Card>
   );
