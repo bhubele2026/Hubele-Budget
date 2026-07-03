@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { UserButton } from "@clerk/react";
+import { SectionBackdrop, type SectionHue } from "@/components/section-backdrop";
 import {
   Home,
   Receipt,
@@ -174,6 +175,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     (r) => location === r || location.startsWith(r + "/"),
   );
   const areaNav = inBanking ? BANKING_SUBNAV : PRIMARY_NAV;
+  // Per-section frosted-backdrop hue: Banking area=green, Bills=red, Forecast=orange,
+  // Avalanche=blue. Other routes (settings/reports/etc.) stay neutral (no backdrop).
+  const sectionHue: SectionHue | null = inBanking
+    ? "green"
+    : location === "/bills"
+      ? "red"
+      : location === "/forecast"
+        ? "orange"
+        : location === "/avalanche"
+          ? "blue"
+          : null;
   // More lists everything NOT already in the current ribbon — no duplicates,
   // and it carries the other areas so you can jump between them from here too.
   const ribbonHrefs = new Set(areaNav.map((a) => a.href));
@@ -358,6 +370,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             // Landing renders full-bleed — its frosted mesh must reach every edge.
             // (It centers its own cards via max-w-4xl, so no wrapper needed here.)
             children
+          ) : sectionHue ? (
+            // Section pages wear the frosted mesh, tinted by their section hue.
+            <div className="relative isolate min-h-full">
+              <SectionBackdrop hue={sectionHue} />
+              <div className="relative p-3 md:p-5 max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
+                {children}
+              </div>
+            </div>
           ) : (
             <div className="p-3 md:p-5 max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
               {children}

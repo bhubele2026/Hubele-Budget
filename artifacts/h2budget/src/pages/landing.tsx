@@ -216,19 +216,50 @@ function BankingTile() {
     },
   );
   const trends = data?.monthlyTrends ?? [];
-  const series = trends.map((t) => t.total);
-  const hasChart = series.length >= 2;
-  const min = hasChart ? Math.min(...series) : 0;
-  const max = hasChart ? Math.max(...series) : 0;
-  const labels = trends.map((t) => monthShort(t.month));
-  // Headline: this month's spend (month-to-date) + the change vs last month.
+  // Headline: this month's spend so far (month-to-date).
   const curMonthTotal = trends.length ? trends[trends.length - 1].total : null;
-  const prevMonthTotal =
-    trends.length >= 2 ? trends[trends.length - 2].total : null;
-  const deltaPct =
-    curMonthTotal != null && prevMonthTotal
-      ? Math.round(((curMonthTotal - prevMonthTotal) / prevMonthTotal) * 100)
-      : null;
+
+  // Graphic = THIS WEEK's daily spend (last 7 days). Honest & current — the old
+  // monthly line plotted the partial current month against full past months and
+  // looked like a 96% crash.
+  const DOW = ["S", "M", "T", "W", "T", "F", "S"];
+  const weekDaily = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const b of data?.dailyBuckets ?? []) map.set(b.date, b.total);
+    const now = new Date();
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(now);
+      d.setDate(now.getDate() - (6 - i));
+      return { value: map.get(isoDate(d)) ?? 0, label: DOW[d.getDay()] };
+    });
+  }, [data]);
+  const hasChart = weekDaily.some((d) => d.value > 0);
+
+  // Honest delta: month-to-date vs the SAME day-of-month last month (both partial,
+  // like-for-like), summed from the daily buckets we already load.
+  const deltaPct = useMemo(() => {
+    const buckets = data?.dailyBuckets ?? [];
+    if (!buckets.length) return null;
+    const now = new Date();
+    const throughDay = now.getDate();
+    const sumMTD = (year: number, monthIdx: number) => {
+      let s = 0;
+      for (const b of buckets) {
+        const dt = new Date(b.date + "T00:00:00");
+        if (
+          dt.getFullYear() === year &&
+          dt.getMonth() === monthIdx &&
+          dt.getDate() <= throughDay
+        )
+          s += b.total;
+      }
+      return s;
+    };
+    const cur = sumMTD(now.getFullYear(), now.getMonth());
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const last = sumMTD(prevMonth.getFullYear(), prevMonth.getMonth());
+    return last > 0 ? Math.round(((cur - last) / last) * 100) : null;
+  }, [data]);
 
   return (
     <TileShell
@@ -285,29 +316,22 @@ function BankingTile() {
             <ChartSkeleton className="h-14 w-full" />
           ) : hasChart ? (
             <>
-              <div className="flex gap-1.5">
-                <div className="flex flex-col justify-between py-0.5 text-[9px] tabular-nums text-muted-foreground/70">
-                  <span>{kfmt(max)}</span>
-                  <span>{kfmt((max + min) / 2)}</span>
-                  <span>{kfmt(min)}</span>
-                </div>
-                <Sparkline
-                  data={series}
-                  variant="area"
-                  height={56}
-                  color="hsl(190 42% 55%)"
-                  strokeWidth={2.5}
-                  className="flex-1"
-                />
+              <div className="mb-0.5 text-[9px] uppercase tracking-wider text-muted-foreground/70">
+                This week · daily
               </div>
-              <div className="mt-1 flex justify-between pl-7 text-[9px] text-muted-foreground/70">
-                <span>{labels[0]}</span>
-                {labels.length > 2 && <span>{labels[Math.floor(labels.length / 2)]}</span>}
-                <span>{labels[labels.length - 1]}</span>
+              <MiniBars
+                data={weekDaily.map((d) => d.value)}
+                height={44}
+                accent="hsl(190 42% 55%)"
+              />
+              <div className="mt-1 flex justify-between text-[9px] text-muted-foreground/70">
+                {weekDaily.map((d, i) => (
+                  <span key={i}>{d.label}</span>
+                ))}
               </div>
             </>
           ) : (
-            <ChartEmpty label="No spend yet" />
+            <ChartEmpty label="No spend yet this week" />
           )}
         </div>
       </div>
