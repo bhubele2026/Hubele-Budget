@@ -25,6 +25,7 @@ import { MoneyText } from "@/components/viz";
 import { cn, formatCurrency } from "@/lib/utils";
 import { detectSubscriptionsFromTransactions } from "@/lib/detectedSubscriptions";
 import { makeRecurringMatcher } from "@/lib/discretionarySpend";
+import { expenseMagnitude } from "@/lib/bucketSpend";
 
 /** One row inside a bucket — a name and the dollar figure our code computed. */
 type BucketRow = { key: string; name: string; sub?: string; amount: number };
@@ -74,21 +75,52 @@ export function BankingInsights({
     [budgetMonth],
   );
 
-  // ✅ Going well — categories UNDER budget this month (plan > 0, actual < plan).
-  const underBudget = useMemo<BucketRow[]>(
-    () =>
-      expenseLines
-        .filter((l) => num(l.plannedAmount) > 0 && num(l.actualAmount) < num(l.plannedAmount))
-        .map((l) => ({
-          key: l.categoryId,
-          name: l.categoryName,
-          sub: `${formatCurrency(num(l.actualAmount))} of ${formatCurrency(num(l.plannedAmount))}`,
-          amount: num(l.plannedAmount) - num(l.actualAmount),
-        }))
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 4),
-    [expenseLines],
-  );
+  // ✅ Going well — categories where you're spending LESS this month than at the
+  // SAME point last month (real behavioural wins, e.g. "Dining down $45"). This
+  // deliberately excludes transfers / card payments / debt so it never shows an
+  // unpaid bill (mortgage, loan) as a "win" — those aren't spending you improved.
+  const spentLessRows = useMemo<BucketRow[]>(() => {
+    const list = txns ?? [];
+    const now = new Date();
+    const curM = now.getMonth();
+    const curY = now.getFullYear();
+    const lastRef = new Date(curY, curM - 1, 1);
+    const lastM = lastRef.getMonth();
+    const lastY = lastRef.getFullYear();
+    const throughDay = now.getDate();
+    const cur = new Map<string, number>();
+    const last = new Map<string, number>();
+    for (const t of list) {
+      if (!t.occurredOn) continue;
+      if (t.isTransfer || t.isExternalCardPayment || t.debtId || t.reimbursable)
+        continue;
+      const spend = expenseMagnitude(t);
+      if (spend <= 0) continue;
+      const d = new Date(t.occurredOn + "T00:00:00");
+      if (d.getDate() > throughDay) continue; // month-to-date, like-for-like
+      const cid = t.categoryId ?? "_uncat";
+      if (d.getFullYear() === curY && d.getMonth() === curM)
+        cur.set(cid, (cur.get(cid) ?? 0) + spend);
+      else if (d.getFullYear() === lastY && d.getMonth() === lastM)
+        last.set(cid, (last.get(cid) ?? 0) + spend);
+    }
+    const rows: BucketRow[] = [];
+    for (const [cid, lastAmt] of last) {
+      const curAmt = cur.get(cid) ?? 0;
+      const drop = lastAmt - curAmt;
+      if (drop > 0.5)
+        rows.push({
+          key: cid,
+          name:
+            cid === "_uncat"
+              ? "Uncategorized"
+              : catNameById.get(cid) ?? "Uncategorized",
+          sub: `${formatCurrency(curAmt)} vs ${formatCurrency(lastAmt)} last month`,
+          amount: drop,
+        });
+    }
+    return rows.sort((a, b) => b.amount - a.amount).slice(0, 12);
+  }, [txns, catNameById]);
 
   // ⚠️ Could improve — categories OVER budget, biggest overspends first.
   const overBudget = useMemo<BucketRow[]>(
@@ -102,7 +134,7 @@ export function BankingInsights({
           amount: num(l.actualAmount) - num(l.plannedAmount),
         }))
         .sort((a, b) => b.amount - a.amount)
-        .slice(0, 4),
+        .slice(0, 12),
     [expenseLines],
   );
 
@@ -148,7 +180,7 @@ export function BankingInsights({
   );
   const cancelRows = useMemo<BucketRow[]>(
     () =>
-      detected.slice(0, 4).map((d) => ({
+      detected.slice(0, 12).map((d) => ({
         key: d.merchant,
         name: d.merchant,
         sub: `${formatCurrency(d.typical)} · ${d.cadence}`,
@@ -168,7 +200,7 @@ export function BankingInsights({
     () =>
       detected
         .filter((d) => !isTracked(d.merchant))
-        .slice(0, 3)
+        .slice(0, 8)
         .map((d) => ({
           key: `sub-${d.merchant}`,
           name: d.merchant,
@@ -189,7 +221,7 @@ export function BankingInsights({
         amount: num(l.actualAmount),
       }));
     if (zeroPlanned.length > 0 || !topCategories?.length) {
-      return zeroPlanned.sort((a, b) => b.amount - a.amount).slice(0, 3);
+      return zeroPlanned.sort((a, b) => b.amount - a.amount).slice(0, 8);
     }
     const budgeted = new Set(
       (budgetMonth?.lines ?? [])
@@ -205,10 +237,10 @@ export function BankingInsights({
         amount: num(c.total),
       }))
       .sort((a, b) => b.amount - a.amount)
-      .slice(0, 3);
+      .slice(0, 8);
   }, [expenseLines, budgetMonth, topCategories]);
   const notInBudgetRows = useMemo(
-    () => [...untrackedRecurring, ...unbudgetedCategories].slice(0, 4),
+    () => [...untrackedRecurring, ...unbudgetedCategories].slice(0, 12),
     [untrackedRecurring, unbudgetedCategories],
   );
 
@@ -237,15 +269,15 @@ export function BankingInsights({
           caption={captions?.goingWell}
           fallbackHeadline="The wins"
           fallbackCaption={
-            underBudget.length
-              ? "These categories are still under plan this month."
-              : "No category is under budget yet this month."
+            spentLessRows.length
+              ? "You're spending less in these than at this point last month."
+              : "Nothing down vs last month yet — early days."
           }
-          rows={underBudget}
+          rows={spentLessRows}
           amountClass="text-positive"
-          amountSuffix="left"
+          amountSuffix="less vs last mo"
           chips={goingWellChips}
-          empty="No wins on the board yet."
+          empty="No categories down vs last month yet."
         />
         <BucketCard
           icon={<AlertTriangle className="h-4 w-4" />}
@@ -367,7 +399,7 @@ function BucketCard({
             ))}
           </div>
         ) : null}
-        <div className="mt-3 divide-y divide-border">
+        <div className="mt-3 max-h-64 overflow-y-auto divide-y divide-border pr-1 [scrollbar-width:thin]">
           {rows.length === 0 ? (
             <p className="py-1 text-sm text-muted-foreground">{empty}</p>
           ) : (
