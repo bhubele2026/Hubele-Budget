@@ -163,6 +163,11 @@ export function resolveAmexDebt<T extends AmexDebtLike>(args: {
     const t = (d.type ?? "").toLowerCase();
     if (t === "loan") return false;
     if (AMEX_LOAN_NAME_REGEX.test(d.name)) return false;
+    // Delta SkyMiles is a pay-in-full CHARGE card, not revolving Amex credit —
+    // exclude it from the ending-balance anchor so it doesn't inflate the Amex
+    // chart/tile (~$11.5k). Mirrors reportsBalances' DELTA_RE exclusion. This is
+    // Delta-specific and does NOT touch plain "Amex Gold" / "American Express Gold".
+    if (/delta/i.test(d.name)) return false;
     return true;
   });
   if (creditCardDebts.length === 0) return null;

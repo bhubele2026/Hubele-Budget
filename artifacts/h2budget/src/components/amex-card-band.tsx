@@ -51,7 +51,7 @@ export function AmexCardBand({
   if (cards.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
       <button
         type="button"
         onClick={() => onSelect("all")}
