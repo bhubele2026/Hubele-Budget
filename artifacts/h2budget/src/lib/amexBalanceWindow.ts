@@ -66,11 +66,12 @@ export function buildBalanceWindow(
 
   if (!anchorPresent) return null;
 
-  // Window start = max(May 2026, start of current month). Derived from
-  // `currentMonth` (= today's month) so it advances automatically on
-  // the first of each new month.
+  // Window start = the data horizon (May 2026), so the chart shows the full
+  // accumulated history (May → today) instead of starting at the current month
+  // and hiding earlier months. (Guard: in the impossible case that "today" is
+  // before May 2026, start at today's month so the window isn't all-future.)
   const startMk =
-    compareMonth(currentMonth, MAY_2026) < 0 ? MAY_2026 : currentMonth;
+    compareMonth(currentMonth, MAY_2026) < 0 ? currentMonth : MAY_2026;
   const windowStart = startOfMonth(new Date(startMk.year, startMk.month, 1));
   // 12-month span: window start through (start + 12 months − 1 day).
   const windowEnd = addDays(addMonths(windowStart, 12), -1);
