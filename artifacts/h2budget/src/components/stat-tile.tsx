@@ -3,15 +3,15 @@ import { Link } from "wouter";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const TILE_GRADS = 6;
-
 /**
- * The signature command-center "at a glance" tile (KFI / BH Studio). A juicy
- * gradient card with an icon chip top-left, a chevron top-right, an uppercase
- * label, a huge value, and a subcaption pinned to the bottom. Each tile wears
- * its own vibrant summer gradient — pass `tone` (an index) to pick one, or drop
- * a row of these in <StatTileRow> and the gradients auto-rotate. The whole app
- * is flat/square; these tiles are the deliberate rounded, lifted hero moment.
+ * The command-center "at a glance" tile. Minimal, light, blended with the app's
+ * frosted theme: a clean white card with a soft border, a muted icon chip
+ * top-left, a chevron top-right (when interactive), an uppercase muted label, a
+ * big dark value, and a muted subcaption. No gradients, no white-on-dark, no
+ * sheen — quiet and consistent with every other card.
+ *
+ * `tone` is accepted for backward compatibility (StatTileRow still assigns it)
+ * but no longer changes the fill — every tile reads the same calm way.
  */
 export function StatTile({
   label,
@@ -19,7 +19,6 @@ export function StatTile({
   sub,
   icon,
   active = false,
-  tone = 0,
   href,
   onClick,
   className,
@@ -29,43 +28,41 @@ export function StatTile({
   sub?: React.ReactNode;
   icon?: React.ReactNode;
   active?: boolean;
-  /** Which summer gradient to wear (0–5, wraps). Usually set by StatTileRow. */
+  /** Deprecated — no longer affects styling. Kept so callers/StatTileRow compile. */
   tone?: number;
   href?: string;
   onClick?: () => void;
   className?: string;
 }) {
   const interactive = Boolean(href || onClick);
-  const grad = `tile-grad-${((tone % TILE_GRADS) + TILE_GRADS) % TILE_GRADS}`;
 
   const body = (
     <div
       className={cn(
-        "stat-card group relative flex h-full min-h-[136px] flex-col justify-between gap-5 p-4 text-left",
-        grad,
-        active && "ring-2 ring-white/70",
-        interactive && "cursor-pointer",
+        "group relative flex h-full min-h-[124px] flex-col justify-between gap-4 rounded-2xl border border-card-border bg-card p-4 text-left shadow-sm transition-colors",
+        active && "ring-2 ring-primary/40",
+        interactive && "cursor-pointer hover:border-primary/40",
         className,
       )}
     >
-      <div className="relative z-10 flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-2">
         {icon && (
-          <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-white/20 text-white backdrop-blur-sm [&_svg]:h-5 [&_svg]:w-5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-muted text-muted-foreground [&_svg]:h-5 [&_svg]:w-5">
             {icon}
           </span>
         )}
         {interactive && (
-          <ChevronRight className="h-5 w-5 shrink-0 text-white/80 transition-transform group-hover:translate-x-0.5" />
+          <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
         )}
       </div>
-      <div className="relative z-10">
-        <div className="text-[11px] font-semibold uppercase tracking-widest text-white/80">
+      <div>
+        <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
           {label}
         </div>
-        <div className="mt-1 text-[2rem] md:text-[2.4rem] font-bold tabular-nums leading-none text-white drop-shadow-sm">
+        <div className="mt-1 text-[2rem] md:text-[2.4rem] font-bold tabular-nums leading-none text-foreground">
           {value}
         </div>
-        {sub && <div className="mt-1.5 text-xs text-white/80">{sub}</div>}
+        {sub && <div className="mt-1.5 text-xs text-muted-foreground">{sub}</div>}
       </div>
     </div>
   );
@@ -88,9 +85,7 @@ export function StatTile({
 }
 
 /**
- * Responsive row of StatTiles — the page-top "at a glance" strip. Auto-assigns
- * a rotating gradient `tone` to each child tile (unless the child already set
- * one) so a row reads as four distinct summer gradients out of the box.
+ * Responsive row of StatTiles — the page-top "at a glance" strip.
  */
 export function StatTileRow({
   children,
@@ -99,20 +94,6 @@ export function StatTileRow({
   children: React.ReactNode;
   className?: string;
 }) {
-  let i = 0;
-  const toned = React.Children.map(children, (child) => {
-    if (
-      React.isValidElement(child) &&
-      child.type === StatTile &&
-      (child.props as { tone?: number }).tone === undefined
-    ) {
-      return React.cloneElement(child as React.ReactElement<{ tone?: number }>, {
-        tone: i++,
-      });
-    }
-    return child;
-  });
-
   return (
     <div
       className={cn(
@@ -120,7 +101,7 @@ export function StatTileRow({
         className,
       )}
     >
-      {toned}
+      {children}
     </div>
   );
 }

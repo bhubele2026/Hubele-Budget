@@ -282,10 +282,10 @@ function PeriodPager({
   canNext: boolean;
 }) {
   const btn =
-    "flex h-6 w-6 items-center justify-center rounded-md bg-white/20 text-white transition hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed";
+    "flex h-6 w-6 items-center justify-center rounded-md bg-muted text-muted-foreground transition hover:bg-muted/70 disabled:opacity-30 disabled:cursor-not-allowed";
   return (
     <span className="flex items-center gap-2 normal-case tracking-normal">
-      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-white/80">
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         {icon}
         {title}
       </span>
@@ -304,7 +304,7 @@ function PeriodPager({
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <span className="min-w-[4.5rem] text-center text-[11px] font-semibold text-white/95">
+        <span className="min-w-[4.5rem] text-center text-[11px] font-semibold text-foreground">
           {period}
         </span>
         <button
@@ -1128,11 +1128,11 @@ export default function CommandCenterPage() {
       </Link>
 
       {/* ── Advisor nudge + sync (kept, debt copy stripped) ─────────────── */}
-      <Card className="focus-glow">
-        <CardContent className="p-5 md:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+      <Card>
+        <CardContent className="p-4 flex flex-row items-center gap-3">
           <div className="flex items-start gap-2 min-w-0 flex-1">
             <Sparkles className={cn("w-4 h-4 mt-0.5 shrink-0", sevColor)} />
-            <p className={cn("text-sm font-medium leading-snug", sevColor)}>
+            <p className={cn("text-sm font-medium leading-snug line-clamp-2", sevColor)}>
               {nudgeMsg ?? "Pull a sync and I'll tell you how you're really doing."}
             </p>
           </div>

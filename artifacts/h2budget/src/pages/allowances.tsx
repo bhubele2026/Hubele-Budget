@@ -614,14 +614,6 @@ function BucketCard({
               ? `${formatCurrency(variance)} over`
               : `${formatCurrency(Math.abs(variance))} under`}
         </div>
-        {funVerdict(actual, planned) && (
-          <div
-            className="text-xs italic text-muted-foreground"
-            data-testid={`allowance-verdict-${slug}`}
-          >
-            {funVerdict(actual, planned)}
-          </div>
-        )}
         <WhyExpander>
           <p className="leading-snug">
             You&apos;ve spent{" "}
@@ -1211,37 +1203,6 @@ export default function AllowancesPage() {
           </Button>
         </div>
       </div>
-
-      {/* 8-week over/under drill — click a bar to jump to that week. */}
-      {mode === "week" &&
-        Number(settings?.weeklyAllowanceAmount) > 0 &&
-        varianceSeries.some((s) => s.variance !== 0) && (
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-baseline justify-between mb-3">
-                <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
-                  Last 8 weeks · over / under
-                </span>
-                <span className="text-[11px] text-muted-foreground">
-                  Green = under · red = over · tap to jump
-                </span>
-              </div>
-              <MiniBars
-                height={48}
-                activeIndex={varianceSeries.findIndex((s) => s.weekISO === weekStartISO)}
-                onBarClick={(i) => setWeekStart(varianceSeries[i].weekSun)}
-                data={varianceSeries.map((s) => ({
-                  value: s.variance,
-                  label: `${formatWeekRange(s.weekSun)} · ${s.variance > 0 ? "+" : ""}${formatCurrency(s.variance)}`,
-                  color:
-                    s.variance > 0
-                      ? "hsl(var(--negative))"
-                      : "hsl(var(--positive))",
-                }))}
-              />
-            </CardContent>
-          </Card>
-        )}
 
       {/* Bucket summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 stagger-children">

@@ -227,7 +227,7 @@ export function BankingInsights({
       <SectionHeader
         eyebrow="Section · Insights"
         title="The four buckets"
-        sub="What's working, what's leaking, what to kill. Numbers from your data; the mouth is the advisor's."
+        sub="What's working, what's leaking, and what to cut."
       />
       <div className="grid gap-4 sm:grid-cols-2 stagger-children">
         <BucketCard
@@ -245,7 +245,7 @@ export function BankingInsights({
           amountClass="text-positive"
           amountSuffix="left"
           chips={goingWellChips}
-          empty="No wins on the board yet. Fix that."
+          empty="No wins on the board yet."
         />
         <BucketCard
           icon={<AlertTriangle className="h-4 w-4" />}
@@ -261,7 +261,7 @@ export function BankingInsights({
           rows={overBudget}
           amountClass="text-[hsl(var(--negative))]"
           amountSuffix="over"
-          empty="Nothing over budget. Shockingly."
+          empty="Nothing over budget yet."
         />
         <BucketCard
           icon={<Ban className="h-4 w-4" />}
