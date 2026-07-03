@@ -94,6 +94,13 @@ const BILLS_SUBNAV: NavItem[] = [
   { name: "Bills", href: "/bills/all", icon: CalendarDays },
 ];
 
+// The Avalanche area is a single page — its ribbon is just the one Avalanche
+// tab (owner's ask: "one tab, no other"). Same pattern as Banking/Bills: no
+// "More", the way out is the brand/logo → /home.
+const AVALANCHE_SUBNAV: NavItem[] = [
+  { name: "Avalanche", href: "/avalanche", icon: Flame },
+];
+
 const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
 
 const BRAND = (
@@ -186,11 +193,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // Bills area = /bills (Overview) or /bills/... (the Bills list). Its ribbon is
   // just the two tabs.
   const inBills = location === "/bills" || location.startsWith("/bills/");
+  const inAvalanche =
+    location === "/avalanche" || location.startsWith("/avalanche/");
   const areaNav = inBanking
     ? BANKING_SUBNAV
     : inBills
       ? BILLS_SUBNAV
-      : PRIMARY_NAV;
+      : inAvalanche
+        ? AVALANCHE_SUBNAV
+        : PRIMARY_NAV;
   // Boundary-aware, longest-match active href — so /bills (Overview) and
   // /bills/all (Bills) never both light up (raw startsWith would).
   const activeNavHref =
@@ -204,10 +215,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     ? "green"
     : inBills
       ? "brightBlue"
-      : location === "/forecast"
-        ? "orange"
-        : location === "/avalanche"
-          ? "blue"
+      : inAvalanche
+        ? "snow"
+        : location === "/forecast"
+          ? "orange"
           : null;
   // More lists everything NOT already in the current ribbon — no duplicates,
   // and it carries the other areas so you can jump between them from here too.
@@ -321,9 +332,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             })}
 
             {/* More overflow — secondary destinations, one click away. Hidden
-                inside the Banking AND Bills areas: there the ribbon is that
-                section's tabs only, and you leave via the brand/logo → Home. */}
-            {!inBanking && !inBills && (
+                inside the Banking, Bills AND Avalanche areas: there the ribbon
+                is that section's tabs only, and you leave via the brand → Home. */}
+            {!inBanking && !inBills && !inAvalanche && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button

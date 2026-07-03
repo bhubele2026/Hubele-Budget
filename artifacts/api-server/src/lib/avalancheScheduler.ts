@@ -36,7 +36,12 @@ import {
   addDays,
   nextBusinessDay,
 } from "./cashSignal";
-import { resolveAvalancheTargetDebt } from "./avalancheSim";
+import {
+  resolveAvalancheTargetDebt,
+  computeAvalanchePayoffFacts,
+  type AvalanchePayoffFacts,
+} from "./avalancheSim";
+import type { Strategy } from "@workspace/avalanche-core";
 
 // A window is only treated as a payment slot when it has at least this
 // much projected headroom over the cash buffer at its lowest point.
@@ -86,6 +91,10 @@ export interface AvalancheScheduleFacts {
   bankBalance: number;
   // Convenience for the narrative + footer: the last covered month.
   scheduleThroughDate: string | null;
+  // Deterministic payoff picture (how long until debt-free, interest/months
+  // saved vs minimums-only). Internal narrative inputs only — NOT part of the
+  // API response schema. Computed by the shared avalanche-core engine.
+  payoff: AvalanchePayoffFacts;
 }
 
 function round2(n: number): number {
@@ -139,6 +148,14 @@ export async function buildAvalancheSchedule(
   const monthlyBudget = manualExtra > 0 ? manualExtra : DEFAULT_MONTHLY_BUDGET;
   const cumulativeCap = monthlyBudget * 12;
 
+  // Deterministic payoff facts (how long until debt-free, interest/months
+  // saved vs minimums-only). Uses the SAME debts + strategy + monthly extra
+  // that drive the schedule; runs the shared avalanche-core simulator. Never
+  // throws — unconvergent (underwater) sims yield null months gracefully.
+  const strategy: Strategy =
+    avaSettingsRow?.strategy === "snowball" ? "snowball" : "avalanche";
+  const payoff = computeAvalanchePayoffFacts(debtsList, strategy, monthlyBudget);
+
   const empty: AvalancheScheduleFacts = {
     proposedPayments: [],
     totalProposed: 0,
@@ -148,6 +165,7 @@ export async function buildAvalancheSchedule(
     cashBuffer: round2(cashBuffer),
     bankBalance: round2(bankBalance),
     scheduleThroughDate: null,
+    payoff,
   };
 
   if (daily.length === 0) return empty;
@@ -301,6 +319,7 @@ export async function buildAvalancheSchedule(
     cashBuffer: round2(cashBuffer),
     bankBalance: round2(bankBalance),
     scheduleThroughDate,
+    payoff,
   };
 }
 

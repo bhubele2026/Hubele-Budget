@@ -694,6 +694,9 @@ router.get(
           bankBalance: facts.bankBalance,
           lowestPost: facts.lowestPostScheduleBalance,
           lowestPostDate: facts.lowestPostScheduleDate,
+          // Payoff projection is narrated in the summary, so it must
+          // invalidate the cached narrative when it changes.
+          payoff: facts.payoff,
         }),
       )
       .digest("hex");

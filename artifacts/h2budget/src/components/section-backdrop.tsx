@@ -9,7 +9,13 @@
  * Mounted once in AppLayout behind <main>.
  */
 
-export type SectionHue = "green" | "red" | "orange" | "blue" | "brightBlue";
+export type SectionHue =
+  | "green"
+  | "red"
+  | "orange"
+  | "blue"
+  | "brightBlue"
+  | "snow";
 
 // tint = very light hue wash for the page ground; filter = recolour the gray-blue
 // mesh img toward the hue (sepia primes it, then hue-rotate/saturate). Faint
@@ -22,6 +28,9 @@ const HUE: Record<SectionHue, { tint: string; filter: string }> = {
   // Bills: a BRIGHT, vivid blue (owner's ask) — clearly bluer/more saturated
   // than Avalanche's soft frost-blue, so the section reads unmistakably blue.
   brightBlue: { tint: "212 92% 95%", filter: "sepia(1) saturate(4) hue-rotate(178deg)" },
+  // Avalanche: "fresh snow on a ski hill" — near-white ground with a soft icy
+  // pale-blue mesh. Bright, clean, wintry (owner's pick). Lightest hue.
+  snow: { tint: "205 55% 98.5%", filter: "sepia(0.5) saturate(1.4) hue-rotate(170deg)" },
 };
 
 export function SectionBackdrop({ hue }: { hue: SectionHue }) {

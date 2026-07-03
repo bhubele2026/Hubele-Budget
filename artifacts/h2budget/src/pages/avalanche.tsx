@@ -49,8 +49,11 @@ import {
 } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { RingStat, Sparkline, MoneyText } from "@/components/viz";
+import { SectionHeader, Callout } from "@/components/stat";
+import { StatTile, StatTileRow } from "@/components/stat-tile";
 import { PillBadge } from "@/components/pill-badge";
 import { AvalancheCardConfig } from "@/components/avalanche-card-config";
+import { AvalancheScheduleCard } from "@/components/avalanche-schedule-card";
 import {
   simulate,
   simulateWithSolvableFallback,
@@ -126,11 +129,6 @@ function PayoffRing({
     : 0;
   const paid = orig > 0 ? Math.max(0, Math.min(orig, orig - balance)) : 0;
   const pct = orig > 0 ? (paid / orig) * 100 : 0;
-  const size = 22;
-  const stroke = 3;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const dash = (pct / 100) * c;
   const tip =
     orig > 0
       ? `${Math.round(pct)}% paid down — ${fmtMoney(paid)} of ${fmtMoney(orig)} (now ${fmtMoney(balance)})`
@@ -142,29 +140,13 @@ function PayoffRing({
       aria-label={tip}
       data-testid="payoff-ring"
     >
-      <svg width={size} height={size} className="shrink-0">
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={stroke}
-          className="text-muted/40"
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          className="text-positive"
-          strokeDasharray={`${dash} ${c}`}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-      </svg>
+      <RingStat
+        value={pct / 100}
+        size={22}
+        stroke={3}
+        color="hsl(var(--positive))"
+        centerText=""
+      />
     </span>
   );
 }
@@ -598,41 +580,37 @@ export default function AvalanchePage() {
     <div className="space-y-6">
       <DebtReauthBanner debts={debts} />
       {killedBanner && (
-        <div className="relative flex items-center gap-3 rounded-md border border-positive/30 bg-positive/10 p-4 text-positive animate-in fade-in slide-in-from-top-2">
-          <PartyPopper className="h-6 w-6 shrink-0 text-positive" />
-          <div className="flex-1">
-            <div className="font-semibold">Debt killed! 🎉</div>
-            <div className="text-sm opacity-90">
-              <strong>{killedBanner.name}</strong> is paid in full and moved to
-              Archived. Onto the next one.
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setKilledBanner(null)}
-            aria-label="Dismiss"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
-      {/* Editorial header */}
-      <div>
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <Callout
+          tone="good"
+          icon={<PartyPopper className="h-5 w-5" />}
+          action={
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setKilledBanner(null)}
+              aria-label="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          }
+        >
           <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              Section II
+            <div className="font-semibold">Debt killed! 🎉</div>
+            <div className="text-sm font-normal text-muted-foreground">
+              <strong className="text-foreground">{killedBanner.name}</strong> is
+              paid in full and moved to Archived. Onto the next one.
             </div>
-            <h1 className="text-5xl font-serif font-bold text-foreground mt-1 leading-none">
-              Avalanche
-            </h1>
-            <p className="text-muted-foreground mt-2 italic">
-              Pay the highest interest first. Watch the snowball cascade.
-            </p>
           </div>
-          <div className="flex gap-2 mt-2">
+        </Callout>
+      )}
+      {/* Header */}
+      <SectionHeader
+        eyebrow="Debt · Avalanche"
+        title="Avalanche"
+        sub="Pay the highest interest first. Watch the snowball cascade."
+        action={
+          <div className="flex gap-2 flex-wrap justify-end">
             <Button
               variant="outline"
               className="gap-2 rounded-full"
@@ -658,9 +636,8 @@ export default function AvalanchePage() {
               <Plus className="h-4 w-4" /> Add debt
             </Button>
           </div>
-        </div>
-        <div className="border-t border-border mt-5" />
-      </div>
+        }
+      />
 
       {/* Visual hero — payoff progress ring + the debt-decline runway, with a
           weekly framing of the extra. Leads the section; the stat strip below
@@ -714,12 +691,14 @@ export default function AvalanchePage() {
         </CardContent>
       </Card>
 
+      {/* Fable 5 insight — Claude summary + dated avalanche schedule. */}
+      <AvalancheScheduleCard />
+
       {/* Stat strip — compact data detail beneath the visual hero. */}
-      <div className="space-y-3">
-      <div className="grid grid-cols-2 md:grid-cols-4">
-        <StatStripCell label="Total debt" value={fmtMoneyCompact(totalBalance)} />
-        <StatStripCell
-          label="Months to free"
+      <StatTileRow>
+        <StatTile label="Total debt" value={fmtMoneyCompact(totalBalance)} />
+        <StatTile
+          label="Months to freedom"
           value={sim.ranOutOfTime ? "∞" : String(sim.monthsToFreedom)}
           sub={
             sim.ranOutOfTime
@@ -730,20 +709,16 @@ export default function AvalanchePage() {
                 ? `excludes ${excludedUnderwaterCount} underwater debt${excludedUnderwaterCount === 1 ? "" : "s"}`
                 : `${(sim.monthsToFreedom / 12).toFixed(1)} yrs`
           }
-          valueClassName={sim.ranOutOfTime ? "text-destructive" : undefined}
         />
-        <StatStripCell
+        <StatTile
           label="Debt-free date"
           value={sim.debtFreeDate ? fmtMonth(sim.debtFreeDate) : "—"}
         />
-        <StatStripCell
+        <StatTile
           label="Total interest"
           value={sim.ranOutOfTime ? "∞" : fmtMoneyCompact(sim.totalInterestPaid)}
-          valueClassName="text-destructive"
         />
-      </div>
-
-      </div>
+      </StatTileRow>
 
       {/* This month — full plan amount + target debt(s) + projected kill date. */}
       {(() => {
@@ -1113,9 +1088,8 @@ export default function AvalanchePage() {
                 { value: "snowball", label: "Snowball", sub: "Smallest balance first" },
               ]}
             />
-            <div className="text-sm text-muted-foreground flex items-start gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-positive mt-1 shrink-0" />
-              <span>
+            <Callout tone="info" icon={<Sparkles className="h-4 w-4" />}>
+              <span className="font-normal text-muted-foreground">
                 {bothInfinite ? (
                   <>
                     Neither strategy beats minimums at{" "}
@@ -1189,7 +1163,7 @@ export default function AvalanchePage() {
                   </>
                 )}
               </span>
-            </div>
+            </Callout>
             <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground pt-1">
               Mode
             </div>
@@ -1213,24 +1187,17 @@ export default function AvalanchePage() {
         </Card>
       </div>
 
-      {/* Your next 3 moves / Kill order placeholder */}
-      <div>
-        <div className="flex items-baseline gap-3 mb-3">
-          <h2 className="text-2xl font-serif font-bold text-foreground">
-            Your next 3 moves
-          </h2>
-          <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Kill order
-          </span>
-        </div>
+      {/* Your next 3 moves / Kill order */}
+      <div className="space-y-3">
+        <SectionHeader eyebrow="Kill order" title="Your next 3 moves" />
         {next3.length === 0 ? (
-          <Card className="rounded-lg">
+          <Card>
             <CardContent className="p-6 text-sm text-muted-foreground">
               Add a debt above to see which one gets killed first.
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 lg:grid-cols-3">
             {next3.map((d, i) => {
               const k = killById.get(d.id);
               const killEntry = sim.killedOrder.find((x) => x.id === d.id);
@@ -1832,36 +1799,6 @@ export default function AvalanchePage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function StatStripCell({
-  label,
-  value,
-  sub,
-  valueClassName,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  valueClassName?: string;
-}) {
-  return (
-    <div className="px-5 py-4 border-l border-border first:border-l-0 first:pl-0 md:first:pl-5">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-        {label}
-      </div>
-      <div
-        className={`text-3xl font-serif font-bold tabular-nums mt-2 ${
-          valueClassName ?? ""
-        }`}
-      >
-        {value}
-      </div>
-      {sub && (
-        <div className="text-xs text-muted-foreground mt-1 tabular-nums">{sub}</div>
-      )}
     </div>
   );
 }

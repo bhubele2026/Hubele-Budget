@@ -40,6 +40,16 @@ function money(n: number): string {
   return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
+// "18 months (1 yr 6 mo)" — a readable duration for the payoff facts.
+function monthsPhrase(n: number): string {
+  const years = Math.floor(n / 12);
+  const rem = n % 12;
+  if (n < 12) return `${n} month${n === 1 ? "" : "s"}`;
+  const yPart = `${years} yr${years === 1 ? "" : "s"}`;
+  const mPart = rem > 0 ? ` ${rem} mo` : "";
+  return `${n} months (${yPart}${mPart})`;
+}
+
 // Year-qualified date for the PROMPT facts only. shortDate() (used in the UI
 // fallback) is year-less ("Jun 16"); handing the model year-less dates made it
 // invent a year in prose ("July 2024" inside a 2026 plan). Always give the LLM
@@ -57,18 +67,22 @@ function fullDate(iso: string | null | undefined): string {
 
 const SYSTEM_PROMPT = `${VOICE_SYSTEM}
 
-TASK: Narrate the household budget app's "Avalanche extra-payment schedule" card. The app has already computed a deterministic schedule of extra debt payments over the next ~12 months, each landing in a safe paycheck-to-paycheck window where the projected balance stays above the cash buffer. Narrate these facts — never compute or invent.
+TASK: Narrate the household budget app's "Avalanche extra-payment schedule" card. The app has already computed a deterministic schedule of extra debt payments over the next ~12 months, each landing in a safe paycheck-to-paycheck window where the projected balance stays above the cash buffer. It has ALSO computed a deterministic payoff projection (how long until debt-free, and interest/months saved versus paying only minimums). Narrate these facts — never compute or invent.
 
 Output requirements:
 - Respond with ONLY a JSON object, no markdown fence, no preamble.
 - Schema: {"summary": string, "paymentsText": string[]}
-- summary: 3-5 sentences. Name the avalanche-target debt (the highest-APR debt the extra payments target). Use REAL dates and amounts from the FACTS only. End with the total across all payments. Acknowledge the progress toward paying down the debt.
+- summary: 3-6 sentences that give the household a clear read on their debt payoff. Cover all three of these, using ONLY figures from the FACTS block:
+  1. What's going RIGHT — e.g. attacking the highest-APR debt (name it), committing extra above the minimums, and the projected interest and months saved versus minimums-only.
+  2. What's WRONG or at risk — e.g. an underwater debt (interest outrunning its minimum), the plan running out of runway (no debt-free date), a punishingly high APR, or a thin/low projected balance versus the cash buffer. If nothing is at risk, say the plan is on track — do NOT manufacture a problem.
+  3. HOW LONG until debt-free — state the debt-free date and the months to freedom. If there is no debt-free date (underwater / never converges), say so plainly instead of inventing one.
+  End with the total across all the proposed payments.
 - paymentsText: EXACTLY one short string per proposed payment, in the SAME ORDER as the FACTS list them. Each is one short phrase like "Pay $750 on Jun 16, after Brad's paycheck". Use the real date and amount.
 
 Rules:
 - Whole dollars only (no cents).
-- NEVER invent numbers or dates — only values present in the FACTS block. The figures are provided; never alter them.
-- If there are zero proposed payments, return an empty paymentsText array and a one-sentence summary explaining no safe windows were found.`;
+- NEVER invent numbers or dates — only values present in the FACTS block. The figures are provided; never alter them. Never state a debt-free date or a months-to-freedom figure that isn't in the FACTS.
+- If there are zero proposed payments, return an empty paymentsText array and a one-sentence summary explaining no safe windows were found (still note the debt-free date / months to freedom if the FACTS provide them).`;
 
 function formatFactsForPrompt(facts: AvalancheScheduleFacts): string {
   const lines: string[] = [];
@@ -88,6 +102,39 @@ function formatFactsForPrompt(facts: AvalancheScheduleFacts): string {
   );
   lines.push(`Total across all payments: ${money(facts.totalProposed)}`);
   lines.push(`Number of payments: ${facts.proposedPayments.length}`);
+
+  // PAYOFF PROJECTION — deterministic, from the shared simulator.
+  const po = facts.payoff;
+  lines.push("");
+  lines.push("PAYOFF PROJECTION (deterministic — narrate, never recompute):");
+  lines.push(`  Strategy: ${po.strategy}`);
+  lines.push(`  Total active debt: ${money(po.totalDebt)}`);
+  if (po.monthsToFreedom != null) {
+    lines.push(`  Months until debt-free (with the plan): ${monthsPhrase(po.monthsToFreedom)}`);
+  } else {
+    lines.push(
+      "  Months until debt-free (with the plan): NEVER within horizon — the plan does not fully pay off (a debt is underwater / minimums can't keep up)",
+    );
+  }
+  lines.push(
+    `  Debt-free date: ${po.debtFreeDate ? fullDate(po.debtFreeDate) : "none — plan does not converge"}`,
+  );
+  lines.push(`  Total interest paid under the plan: ${money(po.totalInterestProjected)}`);
+  if (po.minOnlyMonthsToFreedom != null) {
+    lines.push(`  Minimums-only would take: ${monthsPhrase(po.minOnlyMonthsToFreedom)}`);
+  } else {
+    lines.push("  Minimums-only: never pays off within horizon");
+  }
+  if (po.minOnlyTotalInterest != null) {
+    lines.push(`  Minimums-only total interest: ${money(po.minOnlyTotalInterest)}`);
+  }
+  lines.push(`  Interest saved vs minimums-only: ${money(po.interestSavedVsMin)}`);
+  if (po.monthsSavedVsMin != null) {
+    lines.push(`  Months saved vs minimums-only: ${monthsPhrase(po.monthsSavedVsMin)}`);
+  }
+  lines.push(`  Any debt underwater (interest outruns its minimum): ${po.underwater ? "YES" : "no"}`);
+  lines.push(`  Plan runs out of runway before payoff: ${po.ranOutOfTime ? "YES" : "no"}`);
+
   lines.push("");
   lines.push("PROPOSED PAYMENTS (in order):");
   facts.proposedPayments.forEach((p, i) => {
@@ -150,10 +197,23 @@ export function buildFallbackSummary(
   facts: AvalancheScheduleFacts,
 ): AvalancheAdvisorSummary {
   const paymentsText = fallbackPaymentsText(facts);
+  const po = facts.payoff;
+  // Deterministic "how long until debt-free" clause, reused by both branches.
+  const timelineClause =
+    po.monthsToFreedom != null
+      ? `At this pace you're debt-free in ${monthsPhrase(po.monthsToFreedom)}` +
+        (po.debtFreeDate ? ` — around ${shortDate(po.debtFreeDate)}, ${po.debtFreeDate.slice(0, 4)}` : "") +
+        (po.interestSavedVsMin > 0
+          ? `, saving ${money(po.interestSavedVsMin)} in interest versus minimums-only.`
+          : ".")
+      : po.underwater
+        ? "A debt is underwater — its interest outruns its minimum, so minimums alone never clear it; the plan won't fully pay off until that changes."
+        : "The plan doesn't fully pay off within the projection horizon yet.";
   let summary: string;
   if (facts.proposedPayments.length === 0) {
     summary =
-      "No safe paycheck-to-paycheck windows were found over the next 12 months — every window dips too close to your cash buffer to free up an extra payment.";
+      "No safe paycheck-to-paycheck windows were found over the next 12 months — every window dips too close to your cash buffer to free up an extra payment. " +
+      timelineClause;
   } else {
     const target = facts.currentAvalancheTarget;
     const first = facts.proposedPayments[0];
@@ -164,6 +224,7 @@ export function buildFallbackSummary(
       `${facts.proposedPayments.length} safe windows over the next 12 months let you throw extra at ${targetPhrase}. ` +
       `The first sends ${money(first.amount)} on ${shortDate(first.date)} after ${first.paycheckAnchor}. ` +
       `Even after every payment, your projected balance stays at ${money(facts.lowestPostScheduleBalance)} at its lowest. ` +
+      `${timelineClause} ` +
       `Total: ${money(facts.totalProposed)} across ${facts.proposedPayments.length} payments.`;
   }
   return {
