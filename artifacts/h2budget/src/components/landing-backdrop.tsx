@@ -66,7 +66,7 @@ export function LandingBackdrop() {
         }}
       />
       {/* Data-exhaust layer: ultra-faint labels in the outer gutters (lg+). */}
-      <div className="absolute inset-0 hidden select-none font-mono text-[11px] font-medium tracking-tight text-[hsl(var(--frost-ink))] opacity-[0.08] lg:block">
+      <div className="absolute inset-0 hidden select-none font-mono text-[11px] font-medium tracking-tight text-[hsl(var(--frost-ink))] opacity-[0.05] lg:block">
         {AMBIENT.map((l, i) => (
           <span key={i} className={`absolute whitespace-nowrap ${l.pos} ${l.cls ?? ""}`}>
             {l.t}
