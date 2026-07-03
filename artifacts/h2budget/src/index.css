@@ -166,7 +166,7 @@
 
   /* Frosted-fintech launcher (/home) — soft, low-saturation pastel tiles for the
      card icons + chips, and the cool page ground. Muted on purpose. */
-  --frost-page: 205 30% 97%;          /* cool off-white page ground */
+  --frost-page: 205 20% 98.5%;        /* bright frosted page ground (lifted whiter) */
   --frost-ink: 215 25% 32%;           /* muted slate ink for icons/text */
   --frost-blue: 205 60% 92%;          /* icy blue tile */
   --frost-blue-ink: 205 55% 42%;
