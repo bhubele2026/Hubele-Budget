@@ -5916,15 +5916,16 @@ export function useGetReportsAdvisorSummary<
 }
 
 /**
- * Returns short Claude-written captions (headline + one-liner) for the
-four Banking insight buckets — going well, could improve, cancel
-these, and paying-for-but-not-budgeted — grounded in deterministic
-facts computed server-side from the household's data. Every dollar
-figure is computed in code; the model only writes language. Cached
-per household on a hash of the facts; pass `refresh=true` to force
-a fresh regeneration.
+ * Returns the four reworked, MERCHANT-LEVEL Banking buckets — spending
+less, creeping up, recurring to cut (true subscriptions only), and new
+or unusual — each with a Claude-written headline + one-liner AND the
+ranked merchant rows behind it. Every dollar, count, and run-rate is
+computed server-side in code (merchants grouped by a stable signature,
+noise filtered out); the model only classifies merchants and writes the
+language. Cached per household on a hash of the facts; pass
+`refresh=true` to force a fresh regeneration.
 
- * @summary Claude captions for the four Banking insight buckets
+ * @summary Merchant-level insights + captions for the four Banking buckets
  */
 export const getGetBankingInsightsSummaryUrl = (
   params?: GetBankingInsightsSummaryParams,
@@ -6003,7 +6004,7 @@ export type GetBankingInsightsSummaryQueryResult = NonNullable<
 export type GetBankingInsightsSummaryQueryError = ErrorType<unknown>;
 
 /**
- * @summary Claude captions for the four Banking insight buckets
+ * @summary Merchant-level insights + captions for the four Banking buckets
  */
 
 export function useGetBankingInsightsSummary<

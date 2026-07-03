@@ -5751,15 +5751,16 @@ export declare const GetReportsAdvisorSummaryResponse: zod.ZodObject<{
     bullets: string[];
 }>;
 /**
- * Returns short Claude-written captions (headline + one-liner) for the
-four Banking insight buckets — going well, could improve, cancel
-these, and paying-for-but-not-budgeted — grounded in deterministic
-facts computed server-side from the household's data. Every dollar
-figure is computed in code; the model only writes language. Cached
-per household on a hash of the facts; pass `refresh=true` to force
-a fresh regeneration.
+ * Returns the four reworked, MERCHANT-LEVEL Banking buckets — spending
+less, creeping up, recurring to cut (true subscriptions only), and new
+or unusual — each with a Claude-written headline + one-liner AND the
+ranked merchant rows behind it. Every dollar, count, and run-rate is
+computed server-side in code (merchants grouped by a stable signature,
+noise filtered out); the model only classifies merchants and writes the
+language. Cached per household on a hash of the facts; pass
+`refresh=true` to force a fresh regeneration.
 
- * @summary Claude captions for the four Banking insight buckets
+ * @summary Merchant-level insights + captions for the four Banking buckets
  */
 export declare const GetBankingInsightsSummaryQueryParams: zod.ZodObject<{
     refresh: zod.ZodOptional<zod.ZodEnum<["true", "1"]>>;
@@ -5769,45 +5770,177 @@ export declare const GetBankingInsightsSummaryQueryParams: zod.ZodObject<{
     refresh?: "1" | "true" | undefined;
 }>;
 export declare const GetBankingInsightsSummaryResponse: zod.ZodObject<{
-    goingWell: zod.ZodObject<{
+    spendingLess: zod.ZodObject<{
         headline: zod.ZodString;
         caption: zod.ZodString;
+        rows: zod.ZodArray<zod.ZodObject<{
+            display: zod.ZodString;
+            detail: zod.ZodString;
+            amount: zod.ZodNumber;
+            amountLabel: zod.ZodString;
+            tone: zod.ZodEnum<["positive", "negative", "neutral"]>;
+        }, "strip", zod.ZodTypeAny, {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }, {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }>, "many">;
     }, "strip", zod.ZodTypeAny, {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     }, {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     }>;
-    couldImprove: zod.ZodObject<{
+    creepingUp: zod.ZodObject<{
         headline: zod.ZodString;
         caption: zod.ZodString;
+        rows: zod.ZodArray<zod.ZodObject<{
+            display: zod.ZodString;
+            detail: zod.ZodString;
+            amount: zod.ZodNumber;
+            amountLabel: zod.ZodString;
+            tone: zod.ZodEnum<["positive", "negative", "neutral"]>;
+        }, "strip", zod.ZodTypeAny, {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }, {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }>, "many">;
     }, "strip", zod.ZodTypeAny, {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     }, {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     }>;
-    cancelThese: zod.ZodObject<{
+    recurringToCut: zod.ZodObject<{
         headline: zod.ZodString;
         caption: zod.ZodString;
+        rows: zod.ZodArray<zod.ZodObject<{
+            display: zod.ZodString;
+            detail: zod.ZodString;
+            amount: zod.ZodNumber;
+            amountLabel: zod.ZodString;
+            tone: zod.ZodEnum<["positive", "negative", "neutral"]>;
+        }, "strip", zod.ZodTypeAny, {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }, {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }>, "many">;
     }, "strip", zod.ZodTypeAny, {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     }, {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     }>;
-    notInBudget: zod.ZodObject<{
+    newOrUnusual: zod.ZodObject<{
         headline: zod.ZodString;
         caption: zod.ZodString;
+        rows: zod.ZodArray<zod.ZodObject<{
+            display: zod.ZodString;
+            detail: zod.ZodString;
+            amount: zod.ZodNumber;
+            amountLabel: zod.ZodString;
+            tone: zod.ZodEnum<["positive", "negative", "neutral"]>;
+        }, "strip", zod.ZodTypeAny, {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }, {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }>, "many">;
     }, "strip", zod.ZodTypeAny, {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     }, {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     }>;
     summarySource: zod.ZodEnum<["ai", "fallback"]>;
     generatedAt: zod.ZodString;
@@ -5816,41 +5949,97 @@ export declare const GetBankingInsightsSummaryResponse: zod.ZodObject<{
     source: "cache" | "fresh";
     summarySource: "ai" | "fallback";
     generatedAt: string;
-    goingWell: {
+    spendingLess: {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     };
-    couldImprove: {
+    creepingUp: {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     };
-    cancelThese: {
+    recurringToCut: {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     };
-    notInBudget: {
+    newOrUnusual: {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     };
 }, {
     source: "cache" | "fresh";
     summarySource: "ai" | "fallback";
     generatedAt: string;
-    goingWell: {
+    spendingLess: {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     };
-    couldImprove: {
+    creepingUp: {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     };
-    cancelThese: {
+    recurringToCut: {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     };
-    notInBudget: {
+    newOrUnusual: {
         headline: string;
         caption: string;
+        rows: {
+            amount: number;
+            display: string;
+            detail: string;
+            amountLabel: string;
+            tone: "positive" | "negative" | "neutral";
+        }[];
     };
 }>;
 /**
@@ -7380,7 +7569,6 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
             } | null)[];
         }>, "many">;
     }, "strip", zod.ZodTypeAny, {
-        monthKeys: string[];
         rows: {
             categoryId: string;
             name: string;
@@ -7392,8 +7580,8 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
                 pct: number;
             } | null)[];
         }[];
+        monthKeys: string[];
     }, {
-        monthKeys: string[];
         rows: {
             categoryId: string;
             name: string;
@@ -7405,6 +7593,7 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
                 pct: number;
             } | null)[];
         }[];
+        monthKeys: string[];
     }>;
 }, "strip", zod.ZodTypeAny, {
     income: {
@@ -7482,7 +7671,6 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
         totalCount: number;
     };
     streak: {
-        monthKeys: string[];
         rows: {
             categoryId: string;
             name: string;
@@ -7494,6 +7682,7 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
                 pct: number;
             } | null)[];
         }[];
+        monthKeys: string[];
     };
 }, {
     income: {
@@ -7571,7 +7760,6 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
         totalCount: number;
     };
     streak: {
-        monthKeys: string[];
         rows: {
             categoryId: string;
             name: string;
@@ -7583,6 +7771,7 @@ export declare const GetReportsBudgetFactsResponse: zod.ZodObject<{
                 pct: number;
             } | null)[];
         }[];
+        monthKeys: string[];
     };
 }>;
 export declare const CloseForecastMonthBody: zod.ZodObject<{

@@ -5,8 +5,10 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
+import type { BankingInsightsMoverRow } from "./bankingInsightsMoverRow";
 
-export interface BankingInsightsBucketCaption {
+export interface BankingInsightsBucket {
   headline: string;
   caption: string;
+  rows: BankingInsightsMoverRow[];
 }

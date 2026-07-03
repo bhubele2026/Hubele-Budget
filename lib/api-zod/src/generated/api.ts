@@ -2777,15 +2777,16 @@ export const GetReportsAdvisorSummaryResponse = zod.object({
 });
 
 /**
- * Returns short Claude-written captions (headline + one-liner) for the
-four Banking insight buckets — going well, could improve, cancel
-these, and paying-for-but-not-budgeted — grounded in deterministic
-facts computed server-side from the household's data. Every dollar
-figure is computed in code; the model only writes language. Cached
-per household on a hash of the facts; pass `refresh=true` to force
-a fresh regeneration.
+ * Returns the four reworked, MERCHANT-LEVEL Banking buckets — spending
+less, creeping up, recurring to cut (true subscriptions only), and new
+or unusual — each with a Claude-written headline + one-liner AND the
+ranked merchant rows behind it. Every dollar, count, and run-rate is
+computed server-side in code (merchants grouped by a stable signature,
+noise filtered out); the model only classifies merchants and writes the
+language. Cached per household on a hash of the facts; pass
+`refresh=true` to force a fresh regeneration.
 
- * @summary Claude captions for the four Banking insight buckets
+ * @summary Merchant-level insights + captions for the four Banking buckets
  */
 export const GetBankingInsightsSummaryQueryParams = zod.object({
   refresh: zod
@@ -2795,21 +2796,105 @@ export const GetBankingInsightsSummaryQueryParams = zod.object({
 });
 
 export const GetBankingInsightsSummaryResponse = zod.object({
-  goingWell: zod.object({
+  spendingLess: zod.object({
     headline: zod.string(),
     caption: zod.string(),
+    rows: zod.array(
+      zod
+        .object({
+          display: zod.string().describe("Merchant name (normalized)."),
+          detail: zod
+            .string()
+            .describe(
+              "Pre-formatted secondary line, e.g. '$120 vs $138 last mo · 3 fewer visits'.",
+            ),
+          amount: zod.number().describe("Primary figure for the row."),
+          amountLabel: zod
+            .string()
+            .describe(
+              "Unit\/label for the figure, e.g. 'saved', 'more', '\/yr', 'spent'.",
+            ),
+          tone: zod.enum(["positive", "negative", "neutral"]),
+        })
+        .describe(
+          "One merchant-level row inside a bucket. Every figure and the detail\nstring are computed server-side in code; the client renders verbatim.\n",
+        ),
+    ),
   }),
-  couldImprove: zod.object({
+  creepingUp: zod.object({
     headline: zod.string(),
     caption: zod.string(),
+    rows: zod.array(
+      zod
+        .object({
+          display: zod.string().describe("Merchant name (normalized)."),
+          detail: zod
+            .string()
+            .describe(
+              "Pre-formatted secondary line, e.g. '$120 vs $138 last mo · 3 fewer visits'.",
+            ),
+          amount: zod.number().describe("Primary figure for the row."),
+          amountLabel: zod
+            .string()
+            .describe(
+              "Unit\/label for the figure, e.g. 'saved', 'more', '\/yr', 'spent'.",
+            ),
+          tone: zod.enum(["positive", "negative", "neutral"]),
+        })
+        .describe(
+          "One merchant-level row inside a bucket. Every figure and the detail\nstring are computed server-side in code; the client renders verbatim.\n",
+        ),
+    ),
   }),
-  cancelThese: zod.object({
+  recurringToCut: zod.object({
     headline: zod.string(),
     caption: zod.string(),
+    rows: zod.array(
+      zod
+        .object({
+          display: zod.string().describe("Merchant name (normalized)."),
+          detail: zod
+            .string()
+            .describe(
+              "Pre-formatted secondary line, e.g. '$120 vs $138 last mo · 3 fewer visits'.",
+            ),
+          amount: zod.number().describe("Primary figure for the row."),
+          amountLabel: zod
+            .string()
+            .describe(
+              "Unit\/label for the figure, e.g. 'saved', 'more', '\/yr', 'spent'.",
+            ),
+          tone: zod.enum(["positive", "negative", "neutral"]),
+        })
+        .describe(
+          "One merchant-level row inside a bucket. Every figure and the detail\nstring are computed server-side in code; the client renders verbatim.\n",
+        ),
+    ),
   }),
-  notInBudget: zod.object({
+  newOrUnusual: zod.object({
     headline: zod.string(),
     caption: zod.string(),
+    rows: zod.array(
+      zod
+        .object({
+          display: zod.string().describe("Merchant name (normalized)."),
+          detail: zod
+            .string()
+            .describe(
+              "Pre-formatted secondary line, e.g. '$120 vs $138 last mo · 3 fewer visits'.",
+            ),
+          amount: zod.number().describe("Primary figure for the row."),
+          amountLabel: zod
+            .string()
+            .describe(
+              "Unit\/label for the figure, e.g. 'saved', 'more', '\/yr', 'spent'.",
+            ),
+          tone: zod.enum(["positive", "negative", "neutral"]),
+        })
+        .describe(
+          "One merchant-level row inside a bucket. Every figure and the detail\nstring are computed server-side in code; the client renders verbatim.\n",
+        ),
+    ),
   }),
   summarySource: zod.enum(["ai", "fallback"]),
   generatedAt: zod.string(),

@@ -1145,15 +1145,7 @@ export default function CommandCenterPage() {
       {/* ── The four insight buckets — going well / could improve / cancel /
              paying-for-but-not-budgeted. Numbers computed here from data the
              page already loads; AI writes only the captions. ─────────────── */}
-      <BankingInsights
-        budgetMonth={budgetMonth}
-        topCategories={dash?.topCategories}
-        txns={weeklyTxns}
-        recurringNames={recurringNames}
-        catNameById={catNameById}
-        momCompare={momCompare}
-        streak={streak}
-      />
+      <BankingInsights />
 
       {/* ── What to CANCEL — auto-detected recurring subscriptions ───────── */}
       <SubscriptionInsightsSection

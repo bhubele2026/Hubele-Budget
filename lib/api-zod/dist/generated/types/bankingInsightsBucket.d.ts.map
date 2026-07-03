@@ -1,0 +1,1 @@
+{"version":3,"file":"bankingInsightsBucket.d.ts","sourceRoot":"","sources":["../../../src/generated/types/bankingInsightsBucket.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,uBAAuB,EAAE,MAAM,2BAA2B,CAAC;AAEzE,MAAM,WAAW,qBAAqB;IACpC,QAAQ,EAAE,MAAM,CAAC;IACjB,OAAO,EAAE,MAAM,CAAC;IAChB,IAAI,EAAE,uBAAuB,EAAE,CAAC;CACjC"}

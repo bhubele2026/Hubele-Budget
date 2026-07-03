@@ -1239,15 +1239,16 @@ paths:
     get:
       operationId: getBankingInsightsSummary
       tags: [banking]
-      summary: Claude captions for the four Banking insight buckets
+      summary: Merchant-level insights + captions for the four Banking buckets
       description: |
-        Returns short Claude-written captions (headline + one-liner) for the
-        four Banking insight buckets — going well, could improve, cancel
-        these, and paying-for-but-not-budgeted — grounded in deterministic
-        facts computed server-side from the household's data. Every dollar
-        figure is computed in code; the model only writes language. Cached
-        per household on a hash of the facts; pass `refresh=true` to force
-        a fresh regeneration.
+        Returns the four reworked, MERCHANT-LEVEL Banking buckets — spending
+        less, creeping up, recurring to cut (true subscriptions only), and new
+        or unusual — each with a Claude-written headline + one-liner AND the
+        ranked merchant rows behind it. Every dollar, count, and run-rate is
+        computed server-side in code (merchants grouped by a stable signature,
+        noise filtered out); the model only classifies merchants and writes the
+        language. Cached per household on a hash of the facts; pass
+        `refresh=true` to force a fresh regeneration.
       parameters:
         - in: query
           name: refresh
@@ -3955,29 +3956,52 @@ components:
         generatedAt: { type: string }
         source: { type: string, enum: [cache, fresh] }
 
-    BankingInsightsBucketCaption:
+    BankingInsightsMoverRow:
       type: object
-      required: [headline, caption]
+      description: |
+        One merchant-level row inside a bucket. Every figure and the detail
+        string are computed server-side in code; the client renders verbatim.
+      required: [display, detail, amount, amountLabel, tone]
+      properties:
+        display: { type: string, description: Merchant name (normalized). }
+        detail:
+          {
+            type: string,
+            description: "Pre-formatted secondary line, e.g. '$120 vs $138 last mo · 3 fewer visits'.",
+          }
+        amount: { type: number, description: Primary figure for the row. }
+        amountLabel:
+          {
+            type: string,
+            description: "Unit/label for the figure, e.g. 'saved', 'more', '/yr', 'spent'.",
+          }
+        tone: { type: string, enum: [positive, negative, neutral] }
+    BankingInsightsBucket:
+      type: object
+      required: [headline, caption, rows]
       properties:
         headline: { type: string }
         caption: { type: string }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/BankingInsightsMoverRow" }
     BankingInsightsSummary:
       type: object
       required:
         [
-          goingWell,
-          couldImprove,
-          cancelThese,
-          notInBudget,
+          spendingLess,
+          creepingUp,
+          recurringToCut,
+          newOrUnusual,
           summarySource,
           generatedAt,
           source,
         ]
       properties:
-        goingWell: { $ref: "#/components/schemas/BankingInsightsBucketCaption" }
-        couldImprove: { $ref: "#/components/schemas/BankingInsightsBucketCaption" }
-        cancelThese: { $ref: "#/components/schemas/BankingInsightsBucketCaption" }
-        notInBudget: { $ref: "#/components/schemas/BankingInsightsBucketCaption" }
+        spendingLess: { $ref: "#/components/schemas/BankingInsightsBucket" }
+        creepingUp: { $ref: "#/components/schemas/BankingInsightsBucket" }
+        recurringToCut: { $ref: "#/components/schemas/BankingInsightsBucket" }
+        newOrUnusual: { $ref: "#/components/schemas/BankingInsightsBucket" }
         summarySource: { type: string, enum: [ai, fallback] }
         generatedAt: { type: string }
         source: { type: string, enum: [cache, fresh] }

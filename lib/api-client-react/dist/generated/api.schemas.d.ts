@@ -1809,9 +1809,32 @@ export interface ReportsAdvisorSummary {
     generatedAt: string;
     source: ReportsAdvisorSummarySource;
 }
-export interface BankingInsightsBucketCaption {
+export type BankingInsightsMoverRowTone = (typeof BankingInsightsMoverRowTone)[keyof typeof BankingInsightsMoverRowTone];
+export declare const BankingInsightsMoverRowTone: {
+    readonly positive: "positive";
+    readonly negative: "negative";
+    readonly neutral: "neutral";
+};
+/**
+ * One merchant-level row inside a bucket. Every figure and the detail
+string are computed server-side in code; the client renders verbatim.
+
+ */
+export interface BankingInsightsMoverRow {
+    /** Merchant name (normalized). */
+    display: string;
+    /** Pre-formatted secondary line, e.g. '$120 vs $138 last mo · 3 fewer visits'. */
+    detail: string;
+    /** Primary figure for the row. */
+    amount: number;
+    /** Unit/label for the figure, e.g. 'saved', 'more', '/yr', 'spent'. */
+    amountLabel: string;
+    tone: BankingInsightsMoverRowTone;
+}
+export interface BankingInsightsBucket {
     headline: string;
     caption: string;
+    rows: BankingInsightsMoverRow[];
 }
 export type BankingInsightsSummarySummarySource = (typeof BankingInsightsSummarySummarySource)[keyof typeof BankingInsightsSummarySummarySource];
 export declare const BankingInsightsSummarySummarySource: {
@@ -1824,10 +1847,10 @@ export declare const BankingInsightsSummarySource: {
     readonly fresh: "fresh";
 };
 export interface BankingInsightsSummary {
-    goingWell: BankingInsightsBucketCaption;
-    couldImprove: BankingInsightsBucketCaption;
-    cancelThese: BankingInsightsBucketCaption;
-    notInBudget: BankingInsightsBucketCaption;
+    spendingLess: BankingInsightsBucket;
+    creepingUp: BankingInsightsBucket;
+    recurringToCut: BankingInsightsBucket;
+    newOrUnusual: BankingInsightsBucket;
     summarySource: BankingInsightsSummarySummarySource;
     generatedAt: string;
     source: BankingInsightsSummarySource;

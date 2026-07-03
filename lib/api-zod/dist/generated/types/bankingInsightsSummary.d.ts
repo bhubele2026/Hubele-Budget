@@ -5,14 +5,14 @@
  * H2 Family Budget API
  * OpenAPI spec version: 0.1.0
  */
-import type { BankingInsightsBucketCaption } from "./bankingInsightsBucketCaption";
+import type { BankingInsightsBucket } from "./bankingInsightsBucket";
 import type { BankingInsightsSummarySource } from "./bankingInsightsSummarySource";
 import type { BankingInsightsSummarySummarySource } from "./bankingInsightsSummarySummarySource";
 export interface BankingInsightsSummary {
-    goingWell: BankingInsightsBucketCaption;
-    couldImprove: BankingInsightsBucketCaption;
-    cancelThese: BankingInsightsBucketCaption;
-    notInBudget: BankingInsightsBucketCaption;
+    spendingLess: BankingInsightsBucket;
+    creepingUp: BankingInsightsBucket;
+    recurringToCut: BankingInsightsBucket;
+    newOrUnusual: BankingInsightsBucket;
     summarySource: BankingInsightsSummarySummarySource;
     generatedAt: string;
     source: BankingInsightsSummarySource;
