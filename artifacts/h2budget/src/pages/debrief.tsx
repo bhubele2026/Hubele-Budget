@@ -17,7 +17,6 @@ import {
   Sparkles,
   MessageSquare,
   Flame,
-  ArrowRight,
 } from "lucide-react";
 import {
   useListWeeklyDebriefs,
@@ -354,7 +353,7 @@ export default function DebriefPage() {
   // ----- Empty: no weeks at all --------------------------------------
   if (weeksQ.isSuccess && weeks.length === 0) {
     return (
-      <div className="space-y-6" data-testid="page-debrief">
+      <div className="space-y-3" data-testid="page-debrief">
         <PageHeader viewMode={viewMode} onSetView={setViewMode} />
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground space-y-3">
@@ -376,7 +375,7 @@ export default function DebriefPage() {
 
   if (!activeWeekStart) {
     return (
-      <div className="space-y-6" data-testid="page-debrief">
+      <div className="space-y-3" data-testid="page-debrief">
         <PageHeader viewMode={viewMode} onSetView={setViewMode} />
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground text-sm">
@@ -956,16 +955,26 @@ function DebriefPageActive({
   const hasData = viewMode === "month" ? monthSnaps.length > 0 : !!snapshot;
 
   return (
-    <div className="space-y-6" data-testid="page-debrief">
-      <PageHeader viewMode={viewMode} onSetView={onSetView} />
-
-      <WeekChipRow
-        weeks={weeks}
-        activeWeekStart={activeWeekStart}
-        activeMonth={month}
-        viewMode={viewMode}
-        onSelect={onSelectWeek}
+    <div className="space-y-3" data-testid="page-debrief">
+      {/* Compact top band: header + view toggle + week selector, tight. */}
+      <SectionHeader
+        eyebrow="Forecast vs actual"
+        title="Debrief"
+        sub="Your week — and month — against what the forecast said. Drill any category to see what blew the budget, then move a charge to where it belongs."
       />
+
+      <div className="flex items-center gap-3">
+        <ViewToggle value={viewMode} onChange={onSetView} />
+        <div className="min-w-0 flex-1">
+          <WeekChipRow
+            weeks={weeks}
+            activeWeekStart={activeWeekStart}
+            activeMonth={month}
+            viewMode={viewMode}
+            onSelect={onSelectWeek}
+          />
+        </div>
+      </div>
 
       {isLoading && !hasData ? (
         <Card>
@@ -998,46 +1007,56 @@ function DebriefPageActive({
           {/* Hero: the four numbers that matter, forecast vs actual. */}
           <HeroTiles view={view} rangeLabel={rangeLabel} viewMode={viewMode} />
 
-          {/* Net-trend graphic across weeks. */}
-          <NetTrendCard
-            weeks={trendWeeks}
-            activeWeekStart={activeWeekStart}
-            onSelectWeek={(ws) => {
-              onSelectWeek(ws);
-              if (viewMode === "month") onSetView("week");
-            }}
-          />
-
-          {/* The centerpiece: forecast vs actual by category, drillable. */}
-          <CategoryVarianceGraphic
-            buckets={view.byCategory}
-            catNameById={catNameById}
-            catKindById={catKindById}
-            categories={categories ?? []}
-            onChangeTxnCategory={
-              // A locked, single week is a frozen snapshot — recategorizing
-              // wouldn't move its buckets, so keep it read-only. Month view
-              // and any unlocked week stay editable.
-              viewMode === "week" && isLocked
-                ? undefined
-                : handleChangeTxnCategory
-            }
-          />
-
-          {/* Fable 5 — the advisor takeaway. */}
-          {viewMode === "month" ? (
-            <MonthTakeawaysCard
-              monthLabelText={monthLabel(month)}
-              results={monthDetailResults}
-            />
-          ) : (
-            (detail!.advisorSummary || isLocked) && (
-              <AdvisorTakeawayCard
-                weekStart={activeWeekStart}
-                summary={detail!.advisorSummary ?? null}
+          {/* Two-column main grid: the drillable category graphic beside the
+              advisor takeaway, net-trend, and a compact summary — side by
+              side, above the fold. */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            {/* LEFT — the centerpiece: forecast vs actual by category. */}
+            <div className="lg:col-span-2">
+              <CategoryVarianceGraphic
+                buckets={view.byCategory}
+                catNameById={catNameById}
+                catKindById={catKindById}
+                categories={categories ?? []}
+                onChangeTxnCategory={
+                  // A locked, single week is a frozen snapshot —
+                  // recategorizing wouldn't move its buckets, so keep it
+                  // read-only. Month view and any unlocked week stay editable.
+                  viewMode === "week" && isLocked
+                    ? undefined
+                    : handleChangeTxnCategory
+                }
               />
-            )
-          )}
+            </div>
+
+            {/* RIGHT — Fable 5 takeaway, net-trend, and a small summary. */}
+            <div className="space-y-3">
+              {viewMode === "month" ? (
+                <MonthTakeawaysCard
+                  monthLabelText={monthLabel(month)}
+                  results={monthDetailResults}
+                />
+              ) : (
+                (detail!.advisorSummary || isLocked) && (
+                  <AdvisorTakeawayCard
+                    weekStart={activeWeekStart}
+                    summary={detail!.advisorSummary ?? null}
+                  />
+                )
+              )}
+
+              <NetTrendCard
+                weeks={trendWeeks}
+                activeWeekStart={activeWeekStart}
+                onSelectWeek={(ws) => {
+                  onSelectWeek(ws);
+                  if (viewMode === "month") onSetView("week");
+                }}
+              />
+
+              <PeriodSummaryCard view={view} viewMode={viewMode} />
+            </div>
+          </div>
 
           {/* Secondary: the lock ritual + open-item resolution (Week view
               only — locking is inherently per-week). */}
@@ -1348,6 +1367,50 @@ function HeroTiles({
   );
 }
 
+// A compact recap card for the right rail — every figure comes straight from
+// the same aggregate the hero reads (no new math).
+function PeriodSummaryCard({
+  view,
+  viewMode,
+}: {
+  view: AggView;
+  viewMode: ViewMode;
+}) {
+  const rows: { label: string; value: string; muted?: boolean }[] = [
+    { label: "Income in", value: money(view.actualIncome) },
+    { label: "Spent", value: money(view.actualExpenses) },
+    { label: "Planned net", value: money(view.plannedNet, { signed: true }), muted: true },
+    { label: "Actual net", value: money(view.actualNet, { signed: true }) },
+  ];
+  return (
+    <Card data-testid="debrief-period-summary">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">
+          This {viewMode === "month" ? "month" : "week"} in numbers
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-1.5">
+        {rows.map((r) => (
+          <div
+            key={r.label}
+            className="flex items-center justify-between gap-3 text-sm"
+          >
+            <span className="text-muted-foreground">{r.label}</span>
+            <span
+              className={cn(
+                "tabular-nums font-medium",
+                r.muted && "text-muted-foreground",
+              )}
+            >
+              {r.value}
+            </span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 // Variance-per-week bars. Over (net below plan) = red, ahead = green.
 // Click a bar to jump into that week.
 function NetTrendCard({
@@ -1448,10 +1511,6 @@ function CategoryVarianceGraphic({
       ),
     [buckets],
   );
-  const [showAll, setShowAll] = useState(false);
-  const OVERSHOW = 8;
-  const visible = showAll ? sorted : sorted.slice(0, OVERSHOW);
-
   const overCount = sorted.filter((b) => {
     const kind = b.categoryId
       ? catKindById.get(b.categoryId) ?? "expense"
@@ -1465,21 +1524,22 @@ function CategoryVarianceGraphic({
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-base">Where the plan met reality</CardTitle>
-          <span className="text-xs text-muted-foreground">
-            {overCount > 0
-              ? `${overCount} categor${overCount === 1 ? "y" : "ies"} over`
-              : "all within plan"}
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {sorted.length > 0 && `${sorted.length} · `}
+            {overCount > 0 ? `${overCount} over` : "all within plan"}
           </span>
         </div>
       </CardHeader>
-      <CardContent className="space-y-1.5">
+      <CardContent className="p-2">
         {sorted.length === 0 ? (
           <div className="text-sm text-muted-foreground py-4 text-center">
             No category activity this period.
           </div>
         ) : (
-          <>
-            {visible.map((b) => (
+          // Capped, scrollable list — the page height stays FIXED no matter
+          // how many categories landed. Each row opens a drill-down Dialog.
+          <div className="max-h-[420px] space-y-1.5 overflow-y-auto pr-1">
+            {sorted.map((b) => (
               <CategoryRow
                 key={b.categoryId ?? "_uncat"}
                 bucket={b}
@@ -1489,22 +1549,7 @@ function CategoryVarianceGraphic({
                 onChangeTxnCategory={onChangeTxnCategory}
               />
             ))}
-            {sorted.length > OVERSHOW && (
-              <div className="pt-2 text-center">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setShowAll((s) => !s)}
-                  data-testid="debrief-category-showall"
-                >
-                  {showAll
-                    ? "Show fewer"
-                    : `Show all ${sorted.length} categories`}
-                </Button>
-              </div>
-            )}
-          </>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -1546,29 +1591,27 @@ function CategoryRow({
     : bad
       ? "hsl(var(--negative))"
       : "hsl(var(--positive))";
+  const varianceClass = neutral
+    ? "text-muted-foreground"
+    : bad
+      ? "text-[hsl(var(--negative))]"
+      : "text-[hsl(var(--positive))]";
   const max = Math.max(planned, actual, 1);
   const txns = bucket.actualTxns ?? [];
-  const drillable = txns.length > 0 && !!onChangeTxnCategory;
+  const slug = name.replace(/\s+/g, "-").toLowerCase();
 
   return (
-    <div
-      className="rounded-lg border border-card-border bg-card"
-      data-testid={`debrief-cat-${name.replace(/\s+/g, "-").toLowerCase()}`}
-    >
+    <>
+      {/* The row itself — clicking opens a drill Dialog (no inline expand, so
+          the list height never grows). The planned-vs-actual bars stay. */}
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="w-full px-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
-        aria-expanded={open}
+        onClick={() => setOpen(true)}
+        className="w-full rounded-lg border border-card-border bg-card px-3 py-2.5 text-left transition-colors hover:border-primary/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        data-testid={`debrief-cat-${slug}`}
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-1.5">
-            <ChevronRight
-              className={cn(
-                "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
-                open && "rotate-90",
-              )}
-            />
             <span className="truncate text-sm font-medium">{name}</span>
             {kind === "income" && (
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -1581,19 +1624,13 @@ function CategoryRow({
               amount={v}
               colored={false}
               signed
-              className={cn(
-                "text-sm font-semibold",
-                neutral
-                  ? "text-muted-foreground"
-                  : bad
-                    ? "text-[hsl(var(--negative))]"
-                    : "text-[hsl(var(--positive))]",
-              )}
+              className={cn("text-sm font-semibold", varianceClass)}
             />
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           </div>
         </div>
         {/* Planned vs actual bars — the taller track is the reference. */}
-        <div className="mt-2 space-y-1 pl-5">
+        <div className="mt-2 space-y-1">
           <BarLine
             caption="Planned"
             amount={planned}
@@ -1609,41 +1646,57 @@ function CategoryRow({
         </div>
       </button>
 
-      {open && (
-        <div className="border-t border-card-border px-2 py-1.5">
-          {txns.length === 0 ? (
-            <div className="px-2 py-2 text-xs text-muted-foreground">
-              No transactions landed in this category
-              {Number(bucket.plannedAmount) !== 0
-                ? " — it was planned but never spent."
-                : "."}
-            </div>
-          ) : (
-            <>
-              <div className="px-2 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                {txns.length} transaction{txns.length === 1 ? "" : "s"} ·
-                includes Amex, so this can exceed Chase-only cash flow
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent
+          className="sm:max-w-lg"
+          data-testid={`debrief-cat-drill-dialog-${slug}`}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between gap-3 pr-6">
+              <span className="truncate">{name}</span>
+              <MoneyText
+                amount={v}
+                colored={false}
+                signed
+                className={cn("text-sm font-semibold shrink-0", varianceClass)}
+              />
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] space-y-1 overflow-y-auto">
+            {txns.length === 0 ? (
+              <div className="px-2 py-2 text-xs text-muted-foreground">
+                No transactions landed in this category
+                {Number(bucket.plannedAmount) !== 0
+                  ? " — it was planned but never spent."
+                  : "."}
               </div>
-              {txns.map((t, i) => (
-                <ActualTxnRow
-                  key={t.txnId + i}
-                  txn={t}
-                  categoryId={bucket.categoryId}
-                  categories={onChangeTxnCategory ? categories : undefined}
-                  onChangeTxnCategory={onChangeTxnCategory}
-                  testIdPrefix="debrief-cat-drill"
-                />
-              ))}
-              {!drillable && onChangeTxnCategory == null && (
-                <div className="px-2 py-1 text-[11px] italic text-muted-foreground">
-                  Locked snapshot — unlock the week to move a charge.
+            ) : (
+              <>
+                <div className="px-2 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  {txns.length} transaction{txns.length === 1 ? "" : "s"} ·
+                  includes Amex, so this can exceed Chase-only cash flow
                 </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
+                {txns.map((t, i) => (
+                  <ActualTxnRow
+                    key={t.txnId + i}
+                    txn={t}
+                    categoryId={bucket.categoryId}
+                    categories={onChangeTxnCategory ? categories : undefined}
+                    onChangeTxnCategory={onChangeTxnCategory}
+                    testIdPrefix="debrief-cat-drill"
+                  />
+                ))}
+                {onChangeTxnCategory == null && (
+                  <div className="px-2 py-1 text-[11px] italic text-muted-foreground">
+                    Locked snapshot — unlock the week to move a charge.
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -1879,12 +1932,25 @@ function ActionPanel({
   const [openPlans, setOpenPlans] = useState(unmatchedPlans.length > 0);
   const [openUnp, setOpenUnp] = useState(openUnplanned.length > 0);
   const [openPending, setOpenPending] = useState(false);
+  // Not always-open: the whole panel collapses behind a single "N open items"
+  // trigger. It starts open only when there's something to decide.
+  const [panelOpen, setPanelOpen] = useState(openItemsCount > 0);
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center justify-between gap-2">
-          <span>Decisions to make</span>
+      <Collapsible open={panelOpen} onOpenChange={setPanelOpen}>
+        <CollapsibleTrigger
+          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left hover:bg-muted/30"
+          data-testid="action-panel-toggle"
+        >
+          <span className="flex items-center gap-2 text-base font-semibold">
+            {panelOpen ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+            Decisions to make
+          </span>
           <Badge
             variant="outline"
             className={cn(
@@ -1895,126 +1961,134 @@ function ActionPanel({
             )}
             data-testid="action-panel-open-count"
           >
-            {openItemsCount} open
+            {openItemsCount} open item{openItemsCount === 1 ? "" : "s"}
           </Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {openItemsCount === 0 && (
-          <div
-            className="flex items-center gap-2 rounded-md border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive"
-            data-testid="action-panel-all-clear"
-          >
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-            Nothing needs a decision — every plan is resolved and every charge
-            triaged. Lock the week.
-          </div>
-        )}
-        <SectionShell
-          title="Unmatched plans"
-          count={unmatchedPlans.length}
-          open={openPlans}
-          onOpenChange={setOpenPlans}
-          emptyText="All planned items resolved."
-        >
-          {unmatchedPlans.map((plan) => (
-            <UnmatchedPlanRow
-              key={(plan.recurringItemId ?? "_") + plan.forecastDate}
-              plan={plan}
-              candidateTxns={candidateTxns}
-              catNameById={catNameById}
-              weekStart={weekStart}
-              onMatch={onMatchPlan}
-              onReschedule={onReschedulePlan}
-              onStatus={onPlanStatus}
-              busy={upsertPending}
-            />
-          ))}
-        </SectionShell>
-
-        <SectionShell
-          title="Unplanned charges"
-          count={openUnplanned.length}
-          open={openUnp}
-          onOpenChange={setOpenUnp}
-          emptyText="No surprise charges this week."
-        >
-          {openUnplanned.map((txn) => (
-            <UnplannedTxnRow
-              key={txn.txnId}
-              txn={txn}
-              catNameById={catNameById}
-              onAccept={onAcceptUnplanned}
-              onConvert={onConvertToRecurring}
-              busy={upsertPending}
-            />
-          ))}
-          {acknowledgedUnplanned.length > 0 && (
-            <div className="mt-3 pt-3 border-t">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
-                Acknowledged ({acknowledgedUnplanned.length}) — still counted in
-                variance
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="space-y-3 pt-0">
+            {openItemsCount === 0 && (
+              <div
+                className="flex items-center gap-2 rounded-md border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive"
+                data-testid="action-panel-all-clear"
+              >
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                Nothing needs a decision — every plan is resolved and every
+                charge triaged. Lock the week.
               </div>
-              <div className="space-y-1">
-                {acknowledgedUnplanned.map((txn) => (
-                  <div
+            )}
+            <SectionShell
+              title="Unmatched plans"
+              count={unmatchedPlans.length}
+              open={openPlans}
+              onOpenChange={setOpenPlans}
+              emptyText="All planned items resolved."
+            >
+              <div className="max-h-[240px] overflow-y-auto">
+                {unmatchedPlans.map((plan) => (
+                  <UnmatchedPlanRow
+                    key={(plan.recurringItemId ?? "_") + plan.forecastDate}
+                    plan={plan}
+                    candidateTxns={candidateTxns}
+                    catNameById={catNameById}
+                    weekStart={weekStart}
+                    onMatch={onMatchPlan}
+                    onReschedule={onReschedulePlan}
+                    onStatus={onPlanStatus}
+                    busy={upsertPending}
+                  />
+                ))}
+              </div>
+            </SectionShell>
+
+            <SectionShell
+              title="Unplanned charges"
+              count={openUnplanned.length}
+              open={openUnp}
+              onOpenChange={setOpenUnp}
+              emptyText="No surprise charges this week."
+            >
+              <div className="max-h-[240px] overflow-y-auto">
+                {openUnplanned.map((txn) => (
+                  <UnplannedTxnRow
                     key={txn.txnId}
-                    className="flex items-center justify-between gap-3 text-sm py-1 px-2 rounded bg-muted/30"
-                    data-testid={`row-acknowledged-${txn.txnId}`}
-                  >
-                    <div className="flex-1 truncate">
-                      <span className="text-muted-foreground tabular-nums text-xs mr-2">
-                        {txn.date}
-                      </span>
-                      {txn.description}
+                    txn={txn}
+                    catNameById={catNameById}
+                    onAccept={onAcceptUnplanned}
+                    onConvert={onConvertToRecurring}
+                    busy={upsertPending}
+                  />
+                ))}
+                {acknowledgedUnplanned.length > 0 && (
+                  <div className="mt-3 pt-3 border-t">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+                      Acknowledged ({acknowledgedUnplanned.length}) — still
+                      counted in variance
                     </div>
-                    <span className="tabular-nums text-muted-foreground">
-                      {money(txn.amount, { signed: true })}
-                    </span>
+                    <div className="space-y-1">
+                      {acknowledgedUnplanned.map((txn) => (
+                        <div
+                          key={txn.txnId}
+                          className="flex items-center justify-between gap-3 text-sm py-1 px-2 rounded bg-muted/30"
+                          data-testid={`row-acknowledged-${txn.txnId}`}
+                        >
+                          <div className="flex-1 truncate">
+                            <span className="text-muted-foreground tabular-nums text-xs mr-2">
+                              {txn.date}
+                            </span>
+                            {txn.description}
+                          </div>
+                          <span className="tabular-nums text-muted-foreground">
+                            {money(txn.amount, { signed: true })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </SectionShell>
+
+            <SectionShell
+              title="Pending bank transactions"
+              count={pendingBankTxns.length}
+              open={openPending}
+              onOpenChange={setOpenPending}
+              emptyText="All bank transactions for this week have been sent to Review."
+            >
+              <div className="max-h-[240px] overflow-y-auto">
+                {pendingBankTxns.map((tx) => (
+                  <div
+                    key={tx.id}
+                    className="flex items-center gap-3 py-2 border-b last:border-0"
+                    data-testid={`row-pending-${tx.id}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm truncate">{tx.description}</div>
+                      <div className="text-xs text-muted-foreground tabular-nums">
+                        {tx.occurredOn} · {money(tx.amount, { signed: true })}
+                        {tx.categoryId && catNameById.get(tx.categoryId) && (
+                          <span className="ml-2">
+                            · {catNameById.get(tx.categoryId)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onSendToReview(tx.id)}
+                      disabled={sendPending}
+                      data-testid={`button-send-review-${tx.id}`}
+                    >
+                      <Send className="w-3 h-3 mr-1" /> Send to Review
+                    </Button>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-        </SectionShell>
-
-        <SectionShell
-          title="Pending bank transactions"
-          count={pendingBankTxns.length}
-          open={openPending}
-          onOpenChange={setOpenPending}
-          emptyText="All bank transactions for this week have been sent to Review."
-        >
-          {pendingBankTxns.map((tx) => (
-            <div
-              key={tx.id}
-              className="flex items-center gap-3 py-2 border-b last:border-0"
-              data-testid={`row-pending-${tx.id}`}
-            >
-              <div className="flex-1 min-w-0">
-                <div className="text-sm truncate">{tx.description}</div>
-                <div className="text-xs text-muted-foreground tabular-nums">
-                  {tx.occurredOn} · {money(tx.amount, { signed: true })}
-                  {tx.categoryId && catNameById.get(tx.categoryId) && (
-                    <span className="ml-2">
-                      · {catNameById.get(tx.categoryId)}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onSendToReview(tx.id)}
-                disabled={sendPending}
-                data-testid={`button-send-review-${tx.id}`}
-              >
-                <Send className="w-3 h-3 mr-1" /> Send to Review
-              </Button>
-            </div>
-          ))}
-        </SectionShell>
-      </CardContent>
+            </SectionShell>
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
     </Card>
   );
 }
@@ -2331,8 +2405,8 @@ function LockFooter({
 }) {
   if (isLocked) {
     return (
-      <Card>
-        <CardContent className="py-4 flex items-center justify-between flex-wrap gap-2">
+      <Card className="sticky bottom-0 z-20 border-card-border/80 bg-card/95 shadow-lg backdrop-blur">
+        <CardContent className="py-2.5 flex items-center justify-between flex-wrap gap-2">
           <div className="text-sm">
             <span className="font-medium">Locked</span>
             {detail.lockedAt && (
@@ -2356,8 +2430,8 @@ function LockFooter({
 
   const lockable = openItemsCount === 0 && !isInProgress;
   return (
-    <Card>
-      <CardContent className="py-4 flex items-center justify-between flex-wrap gap-2">
+    <Card className="sticky bottom-0 z-20 border-card-border/80 bg-card/95 shadow-lg backdrop-blur">
+      <CardContent className="py-2.5 flex items-center justify-between flex-wrap gap-2">
         <div className="text-sm text-muted-foreground">
           {isInProgress
             ? "This week is still in progress — lock it from Sunday onward."
@@ -2445,57 +2519,47 @@ function MonthWeeksStrip({
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-1.5">
-        {monthWeeks.map((w) => {
-          const v = Number(w.netSummary.varianceNet);
-          const statusLabel =
-            w.status === "locked"
-              ? "Locked"
-              : w.status === "awaiting_review"
-                ? "Awaiting review"
-                : "In progress";
-          const statusColor =
-            w.status === "locked"
-              ? "bg-positive/10 text-positive border-positive/30"
-              : w.status === "awaiting_review"
-                ? "bg-warning/10 text-warning border-warning/30"
-                : "bg-primary/10 text-primary border-primary/30";
-          return (
-            <button
-              key={w.weekStart}
-              type="button"
-              onClick={() => onOpenWeek(w.weekStart)}
-              className="w-full flex items-center justify-between gap-3 rounded-lg border border-card-border bg-card px-3 py-2 text-left transition-colors hover:border-primary/40"
-              data-testid={`month-week-${w.weekStart}`}
-            >
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="text-sm font-medium">
-                  {weekRangeLabel(w.weekStart, w.weekEnd)}
-                </span>
-                <Badge
-                  variant="outline"
-                  className={cn("text-[10px] px-1.5 py-0 h-5", statusColor)}
-                >
-                  {statusLabel}
-                </Badge>
-                {w.openItemsCount > 0 && (
-                  <span className="text-[11px] text-muted-foreground tabular-nums">
-                    {w.openItemsCount} open
-                  </span>
+      <CardContent className="pt-0">
+        {/* Compact chip row — one chip per week, horizontally scrollable. */}
+        <div className="flex items-stretch gap-2 overflow-x-auto pb-1">
+          {monthWeeks.map((w) => {
+            const v = Number(w.netSummary.varianceNet);
+            const statusColor =
+              w.status === "locked"
+                ? "bg-positive/10 text-positive border-positive/30"
+                : w.status === "awaiting_review"
+                  ? "bg-warning/10 text-warning border-warning/30"
+                  : "bg-primary/10 text-primary border-primary/30";
+            return (
+              <button
+                key={w.weekStart}
+                type="button"
+                onClick={() => onOpenWeek(w.weekStart)}
+                className={cn(
+                  "shrink-0 rounded-lg border px-3 py-2 text-left transition-colors hover:border-primary/40",
+                  statusColor,
                 )}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
+                data-testid={`month-week-${w.weekStart}`}
+              >
+                <div className="flex items-center gap-1.5 text-xs font-medium whitespace-nowrap">
+                  <span>{shortWeekChipLabel(w.weekStart)}</span>
+                  {w.status === "locked" && <Lock className="h-3 w-3" />}
+                  {w.openItemsCount > 0 && (
+                    <span className="text-[10px] opacity-75 tabular-nums">
+                      ·{w.openItemsCount}
+                    </span>
+                  )}
+                </div>
                 <MoneyText
                   amount={v}
                   colored
                   signed
-                  className="text-sm font-semibold"
+                  className="text-xs font-semibold tabular-nums"
                 />
-                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </div>
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
       </CardContent>
     </Card>
   );
@@ -2699,29 +2763,54 @@ function MonthTakeawaysCard({
           Fable 5 · {monthLabelText}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-2.5">
         {items.map((d) => (
-          <div
-            key={d.weekStart}
-            className="border-l-2 border-primary/30 pl-3"
-            data-testid={`month-takeaway-${d.weekStart}`}
-          >
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              Week of {shortWeekChipLabel(d.weekStart)}
-            </div>
-            <p className="text-sm font-medium leading-snug">
-              {d.advisorSummary!.headline}
-            </p>
-            {d.advisorSummary!.bullets.length > 0 && (
-              <ul className="mt-1 text-xs space-y-0.5 list-disc pl-4 text-muted-foreground">
-                {d.advisorSummary!.bullets.slice(0, 2).map((b, i) => (
-                  <li key={i}>{b}</li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <MonthTakeawayItem key={d.weekStart} detail={d} />
         ))}
       </CardContent>
     </Card>
+  );
+}
+
+// One week's headline in the month roll-up — the bullets stay tucked behind an
+// expand so the month view reads as a scannable list of headlines.
+function MonthTakeawayItem({ detail }: { detail: WeeklyDebriefDetail }) {
+  const [open, setOpen] = useState(false);
+  const summary = detail.advisorSummary!;
+  const hasBullets = summary.bullets.length > 0;
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="border-l-2 border-primary/30 pl-3"
+      data-testid={`month-takeaway-${detail.weekStart}`}
+    >
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        Week of {shortWeekChipLabel(detail.weekStart)}
+      </div>
+      <CollapsibleTrigger
+        className="flex w-full items-start gap-1.5 text-left disabled:cursor-default"
+        disabled={!hasBullets}
+      >
+        {hasBullets && (
+          <ChevronRight
+            className={cn(
+              "mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+              open && "rotate-90",
+            )}
+          />
+        )}
+        <p className="text-sm font-medium leading-snug">{summary.headline}</p>
+      </CollapsibleTrigger>
+      {hasBullets && (
+        <CollapsibleContent>
+          <ul className="mt-1 text-xs space-y-0.5 list-disc pl-4 text-muted-foreground">
+            {summary.bullets.map((b, i) => (
+              <li key={i}>{b}</li>
+            ))}
+          </ul>
+        </CollapsibleContent>
+      )}
+    </Collapsible>
   );
 }
