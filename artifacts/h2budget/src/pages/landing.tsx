@@ -96,11 +96,6 @@ function TileShell({
   const t = HUE_TILE[hue];
   return (
     <div className="group relative" data-testid={`landing-tile-${testid}`}>
-      {/* Stacked-deck: a lighter, narrower, blurred layer peeking below the card. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-5 top-3 bottom-[-6px] rounded-[22px] border border-[hsl(215_20%_92%)] bg-card/50 shadow-[0_10px_26px_rgba(30,41,59,0.06)] blur-[1px] dark:border-white/5 dark:bg-white/5"
-      />
       <div className="relative flex flex-col rounded-[22px] border border-[hsl(215_22%_91%)] bg-card/95 p-7 shadow-[0_8px_30px_rgba(30,41,59,0.08)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_40px_rgba(30,41,59,0.13)] dark:border-white/10 sm:p-8">
         <Link
           href={href}
@@ -618,7 +613,7 @@ export default function LandingPage() {
 
       {/* Content sits above the backdrop; top padding clears the mesh ribbon so
           the greeting reads just below it (no dead band). */}
-      <div className="relative z-10 mx-auto w-full max-w-4xl px-4 pb-14 pt-12 sm:px-6 sm:pt-16">
+      <div className="relative z-10 mx-auto w-full max-w-4xl px-4 pb-14 pt-24 sm:px-6 sm:pt-28">
         {/* Greeting + account controls */}
         <div className="mb-7 flex items-start justify-between gap-4">
           <div>
