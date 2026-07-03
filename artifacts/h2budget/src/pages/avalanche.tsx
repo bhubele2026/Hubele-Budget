@@ -22,6 +22,7 @@ import {
 } from "@workspace/api-client-react";
 import type { Debt } from "@workspace/api-client-react";
 import { Slider } from "@/components/ui/slider";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -533,8 +534,10 @@ export default function AvalanchePage() {
     [planTargets],
   );
 
-  if (isLoading) {
-    return null;
+  // Stale-while-revalidate: only skeleton on a genuine cold load (no cached
+  // debts yet); once data exists, render it and revalidate in the background.
+  if (isLoading && !debts) {
+    return <PageSkeleton />;
   }
 
   const handleSave = async (id: string, patch: Partial<Debt>) => {

@@ -25,6 +25,7 @@ import {
   getListDebtsQueryKey,
 } from "@workspace/api-client-react";
 import { cn, formatCurrency } from "@/lib/utils";
+import { prefetchRoute } from "@/lib/routePrefetch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useReviewInboxCount } from "@/hooks/useReviewInboxCount";
 import { Sparkline } from "@/components/viz/Sparkline";
@@ -118,6 +119,8 @@ function TileShell({
         />
         <Link
           href={href}
+          onMouseEnter={() => prefetchRoute(href)}
+          onFocus={() => prefetchRoute(href)}
           className="absolute inset-0 rounded-[22px] focus:outline-none focus:ring-2 focus:ring-primary/40"
           aria-label={title}
         />
@@ -195,6 +198,8 @@ function NavPill({
   return (
     <Link
       href={href}
+      onMouseEnter={() => prefetchRoute(href)}
+      onFocus={() => prefetchRoute(href)}
       className="rounded-full bg-[hsl(var(--frost-slate))] px-3.5 py-1.5 text-xs font-semibold text-[hsl(var(--frost-slate-ink))] transition-transform hover:scale-[1.03]"
       data-testid={testid}
     >
@@ -303,17 +308,32 @@ function BankingTile() {
         )}
       <div className="flex items-end justify-between gap-3">
         <div className="relative z-10 flex flex-wrap content-end gap-2">
-          <Link href="/transactions" data-testid="landing-link-banking-chase">
+          <Link
+            href="/transactions"
+            data-testid="landing-link-banking-chase"
+            onMouseEnter={() => prefetchRoute("/transactions")}
+            onFocus={() => prefetchRoute("/transactions")}
+          >
             <GradientPill className="bg-[hsl(var(--frost-green))] text-[hsl(var(--frost-green-ink))]">
               Chase
             </GradientPill>
           </Link>
-          <Link href="/amex" data-testid="landing-link-banking-amex">
+          <Link
+            href="/amex"
+            data-testid="landing-link-banking-amex"
+            onMouseEnter={() => prefetchRoute("/amex")}
+            onFocus={() => prefetchRoute("/amex")}
+          >
             <GradientPill className="bg-[hsl(var(--frost-lav))] text-[hsl(var(--frost-lav-ink))]">
               Amex
             </GradientPill>
           </Link>
-          <Link href="/allowances" data-testid="landing-link-banking-allowance">
+          <Link
+            href="/allowances"
+            data-testid="landing-link-banking-allowance"
+            onMouseEnter={() => prefetchRoute("/allowances")}
+            onFocus={() => prefetchRoute("/allowances")}
+          >
             <GradientPill className="bg-[hsl(var(--frost-rose))] text-[hsl(var(--frost-rose-ink))]">
               Allowance
             </GradientPill>

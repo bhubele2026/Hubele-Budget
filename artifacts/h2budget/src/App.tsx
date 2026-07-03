@@ -22,39 +22,66 @@ import { VersionUpdatePrompt } from "@/components/version-update-prompt";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout";
 import { ThemeProvider } from "@/hooks/use-theme";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PageErrorBoundary } from "@/components/page-error-boundary";
 // Auth pages stay eagerly imported — they're on the unauthenticated
 // critical path (and are small), so code-splitting them would only add
 // a render-blocking chunk fetch before the user can even sign in.
 import { SignInPage, SignUpPage } from "./pages/auth";
+import { PageSkeleton } from "@/components/page-skeleton";
+// (#perf) Route-chunk importers live in one shared module so the hover/idle
+// prefetch map (lib/routePrefetch) and these lazy() calls can never point at
+// different chunks. Consuming the exact same importer functions here is what
+// guarantees a hover warms precisely the chunk the route will render.
+import {
+  importLanding,
+  importCommandCenter,
+  importForecast,
+  importForecastOverview,
+  importReports,
+  importReportsDebt,
+  importReportsCashFlow,
+  importReportsSpending,
+  importReportsBudget,
+  importReportsBehavior,
+  importDebts,
+  importAvalanche,
+  importAmex,
+  importTransactions,
+  importBills,
+  importBillsOverview,
+  importBudget,
+  importAllowances,
+  importMappingRules,
+  importDebrief,
+  importSettings,
+} from "./lib/routePrefetch";
 
 // (#819) Route-level code splitting. Each page is loaded on demand so the
 // initial bundle no longer carries every page (and their heavy deps like
 // recharts) up front. Navigating to a route fetches just that route's
 // chunk, which is cached for subsequent visits. Behavior is unchanged —
 // a brief <Suspense> fallback shows while a route's chunk streams in.
-const CommandCenterPage = lazy(() => import("./pages/command-center"));
-const LandingPage = lazy(() => import("./pages/landing"));
-const ForecastPage = lazy(() => import("./pages/forecast"));
-const ForecastOverviewPage = lazy(() => import("./pages/forecast-overview"));
-const ReportsPage = lazy(() => import("./pages/reports"));
-const ReportsDebtPage = lazy(() => import("./pages/reports/DebtPage"));
-const ReportsCashFlowPage = lazy(() => import("./pages/reports/CashFlowPage"));
-const ReportsSpendingPage = lazy(() => import("./pages/reports/SpendingPage"));
-const ReportsBudgetPage = lazy(() => import("./pages/reports/BudgetPage"));
-const ReportsBehaviorPage = lazy(() => import("./pages/reports/BehaviorPage"));
-const DebtsPage = lazy(() => import("./pages/debts"));
-const AvalanchePage = lazy(() => import("./pages/avalanche"));
-const AmexPage = lazy(() => import("./pages/amex"));
-const TransactionsPage = lazy(() => import("./pages/transactions"));
-const BillsPage = lazy(() => import("./pages/bills"));
-const BillsOverviewPage = lazy(() => import("./pages/bills-overview"));
-const BudgetPage = lazy(() => import("./pages/budget"));
-const AllowancesPage = lazy(() => import("./pages/allowances"));
-const MappingRulesPage = lazy(() => import("./pages/mapping-rules"));
-const DebriefPage = lazy(() => import("./pages/debrief"));
-const SettingsPage = lazy(() => import("./pages/settings"));
+const CommandCenterPage = lazy(importCommandCenter);
+const LandingPage = lazy(importLanding);
+const ForecastPage = lazy(importForecast);
+const ForecastOverviewPage = lazy(importForecastOverview);
+const ReportsPage = lazy(importReports);
+const ReportsDebtPage = lazy(importReportsDebt);
+const ReportsCashFlowPage = lazy(importReportsCashFlow);
+const ReportsSpendingPage = lazy(importReportsSpending);
+const ReportsBudgetPage = lazy(importReportsBudget);
+const ReportsBehaviorPage = lazy(importReportsBehavior);
+const DebtsPage = lazy(importDebts);
+const AvalanchePage = lazy(importAvalanche);
+const AmexPage = lazy(importAmex);
+const TransactionsPage = lazy(importTransactions);
+const BillsPage = lazy(importBills);
+const BillsOverviewPage = lazy(importBillsOverview);
+const BudgetPage = lazy(importBudget);
+const AllowancesPage = lazy(importAllowances);
+const MappingRulesPage = lazy(importMappingRules);
+const DebriefPage = lazy(importDebrief);
+const SettingsPage = lazy(importSettings);
 const PlaidOAuthPage = lazy(() => import("./pages/plaid-oauth"));
 const DevComponentsPage = lazy(() => import("./pages/dev-components"));
 const NotFound = lazy(() => import("./pages/not-found"));
@@ -240,11 +267,13 @@ function HomeRoute() {
   );
 }
 
+// Backstop for a genuine cold chunk load (rare once route-chunk prefetch on
+// hover/idle lands). Renders the shared PageSkeleton so it reads as "the page
+// is loading" in-layout, not a random generic skeleton.
 function RouteFallback() {
   return (
-    <div className="space-y-4 p-2" data-testid="route-loading">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-64 w-full" />
+    <div data-testid="route-loading">
+      <PageSkeleton />
     </div>
   );
 }

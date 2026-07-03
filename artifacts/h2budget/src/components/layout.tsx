@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { UserButton } from "@clerk/react";
 import { SectionBackdrop, type SectionHue } from "@/components/section-backdrop";
@@ -26,9 +26,26 @@ import {
   getGetDashboardQueryKey,
   getForecast,
   getGetForecastQueryKey,
+  getForecastCashSignal,
+  getGetForecastCashSignalQueryKey,
   getAmexWeeklyPayoff,
   getGetAmexWeeklyPayoffQueryKey,
+  getBillsSummary,
+  getGetBillsSummaryQueryKey,
+  getBillsInsightsSummary,
+  getGetBillsInsightsSummaryQueryKey,
+  listDebts,
+  getListDebtsQueryKey,
+  listTransactions,
+  getListTransactionsQueryKey,
+  getBudgetMonth,
+  getGetBudgetMonthQueryKey,
+  listCategories,
+  getListCategoriesQueryKey,
+  listWeeklyDebriefs,
+  getListWeeklyDebriefsQueryKey,
 } from "@workspace/api-client-react";
+import { prefetchRoute } from "@/lib/routePrefetch";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -157,6 +174,8 @@ function MobileNav({
                   <Link key={item.href} href={item.href}>
                     <span
                       onClick={onNavigate}
+                      onMouseEnter={() => prefetchRoute(item.href)}
+                      onFocus={() => prefetchRoute(item.href)}
                       className={cn(
                         "flex items-center gap-3 px-3 py-2 rounded-md text-sm cursor-pointer",
                         active
@@ -255,7 +274,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // defaults still gate any actual network call.
   const qc = useQueryClient();
   const prefetch = (href: string) => {
-    if (href === "/home") {
+    // Also warm the route's JS chunk (lib/routePrefetch) — the query cache is
+    // useless if the page's code hasn't streamed in yet.
+    prefetchRoute(href);
+    // Then warm that route's ONE primary query so the page renders from cache
+    // on click (stale-while-revalidate; staleTime defaults still gate the
+    // actual network call). Params mirror exactly what each page requests so
+    // the warmed key is the key the page reads.
+    if (href === "/home" || href === "/banking") {
       qc.prefetchQuery({ queryKey: getGetDashboardQueryKey(), queryFn: () => getDashboard() });
       qc.prefetchQuery({
         queryKey: getGetForecastQueryKey({ days: 90 }),
@@ -266,8 +292,106 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         queryKey: getGetAmexWeeklyPayoffQueryKey(),
         queryFn: () => getAmexWeeklyPayoff(),
       });
+    } else if (href === "/bills") {
+      qc.prefetchQuery({
+        queryKey: getGetBillsSummaryQueryKey(),
+        queryFn: () => getBillsSummary(),
+      });
+      qc.prefetchQuery({
+        queryKey: getGetBillsInsightsSummaryQueryKey(),
+        queryFn: () => getBillsInsightsSummary(),
+      });
+    } else if (href === "/forecast/overview" || href === "/forecast") {
+      qc.prefetchQuery({
+        queryKey: getGetForecastQueryKey({ days: 90 }),
+        queryFn: () => getForecast({ days: 90 }),
+      });
+      qc.prefetchQuery({
+        queryKey: getGetForecastCashSignalQueryKey({ horizonDays: 90 }),
+        queryFn: () => getForecastCashSignal({ horizonDays: 90 }),
+      });
+    } else if (href === "/avalanche" || href === "/debts") {
+      qc.prefetchQuery({
+        queryKey: getListDebtsQueryKey(),
+        queryFn: () => listDebts(),
+      });
+    } else if (href === "/transactions") {
+      // Same generous window + cap the Chase ledger requests (2y back → 1y ahead).
+      const now = new Date();
+      const iso = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+          d.getDate(),
+        ).padStart(2, "0")}`;
+      const params = {
+        from: iso(new Date(now.getFullYear() - 2, now.getMonth(), 1)),
+        to: iso(new Date(now.getFullYear() + 1, now.getMonth() + 1, 0)),
+        limit: 1000,
+      };
+      qc.prefetchQuery({
+        queryKey: getListTransactionsQueryKey(params),
+        queryFn: () => listTransactions(params),
+      });
+    } else if (href === "/budget") {
+      const now = new Date();
+      const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      qc.prefetchQuery({
+        queryKey: getGetBudgetMonthQueryKey(month),
+        queryFn: () => getBudgetMonth(month),
+      });
+      qc.prefetchQuery({
+        queryKey: getListCategoriesQueryKey(),
+        queryFn: () => listCategories(),
+      });
+    } else if (href === "/reports") {
+      // Reports aggregates a bounded txn window client-side; warm the same key
+      // the landing report reads (useReportsData(30, 0): 95-day floor → today).
+      const today = new Date();
+      const iso = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+          d.getDate(),
+        ).padStart(2, "0")}`;
+      const fetchFrom = new Date(today);
+      fetchFrom.setDate(fetchFrom.getDate() - 95);
+      const params = { from: iso(fetchFrom), to: iso(today), limit: 2000 };
+      qc.prefetchQuery({
+        queryKey: getListTransactionsQueryKey(params),
+        queryFn: () => listTransactions(params),
+      });
+    } else if (href === "/debrief") {
+      const today = new Date();
+      const iso = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+          d.getDate(),
+        ).padStart(2, "0")}`;
+      const from = new Date(today);
+      from.setDate(from.getDate() - 180);
+      const params = { from: iso(from), to: iso(today) };
+      qc.prefetchQuery({
+        queryKey: getListWeeklyDebriefsQueryKey(params),
+        queryFn: () => listWeeklyDebriefs(params),
+      });
     }
   };
+
+  // (#perf) After first paint, warm the primary destinations' chunks on idle so
+  // the very first click into each area is instant even without a prior hover.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const warm = () => {
+      for (const href of ["/banking", "/bills", "/forecast/overview", "/avalanche"]) {
+        prefetchRoute(href);
+      }
+    };
+    const ric = (window as unknown as {
+      requestIdleCallback?: (cb: () => void) => number;
+    }).requestIdleCallback;
+    if (typeof ric === "function") {
+      ric(warm);
+      return;
+    }
+    const t = setTimeout(warm, 1500);
+    return () => clearTimeout(t);
+  }, []);
 
   const railBadge = (href: string): number | null => {
     if (href === "/review" && reviewCount > 0) return reviewCount;
@@ -383,6 +507,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <DropdownMenuItem key={item.href} asChild>
                       <Link
                         href={item.href}
+                        onMouseEnter={() => prefetch(item.href)}
+                        onFocus={() => prefetch(item.href)}
                         className="flex items-center gap-2.5 cursor-pointer"
                         data-testid={`morenav-${item.href.slice(1)}`}
                       >

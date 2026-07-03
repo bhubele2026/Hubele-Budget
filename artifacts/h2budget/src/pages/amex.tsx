@@ -14,6 +14,7 @@ import {
   type RepointedRule,
   type BulkUpdateTransactionsInput,
 } from "@workspace/api-client-react";
+import { AccountPageSkeleton } from "@/components/account-page/account-page-skeleton";
 import { MatchedRuleChip } from "@/components/matched-rule-chip";
 import { RowDateControls } from "@/components/row-date-controls";
 import { MerchantRenamePopover } from "@/components/merchant-rename-popover";
@@ -1766,8 +1767,12 @@ export default function AmexPage() {
     return () => ro.disconnect();
   }, [isLoading]);
 
-  if (isLoading) {
-    return null;
+  // Stale-while-revalidate: only show the account skeleton on a genuine cold
+  // load (no cached rows yet). Once any month's rows exist, keepPreviousData
+  // holds them on screen while the focused-month query revalidates, so the
+  // page never blanks between visits.
+  if (isLoading && !monthTxns) {
+    return <AccountPageSkeleton />;
   }
 
   const todayKey = ymd(new Date());

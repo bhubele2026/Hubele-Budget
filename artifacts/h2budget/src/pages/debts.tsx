@@ -15,6 +15,7 @@ import { RingStat, MoneyText } from "@/components/viz";
 import { PillBadge } from "@/components/pill-badge";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { DebtReauthBanner } from "@/components/debt-plaid-link";
 import {
   simulateWithSolvableFallback,
@@ -180,8 +181,11 @@ export default function DebtsPage() {
     [sim.underwater],
   );
 
-  if (isLoading) {
-    return null;
+  // Stale-while-revalidate: only skeleton on a genuine cold load (no cached
+  // debts yet). Once any data exists, render it and let refetches happen in the
+  // background — never blank the page.
+  if (isLoading && !debts) {
+    return <PageSkeleton />;
   }
 
   // Sort by APR descending (avalanche)

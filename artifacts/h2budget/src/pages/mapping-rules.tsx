@@ -37,6 +37,7 @@ import {
 } from "@/components/rule-matches-preview-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1693,8 +1694,11 @@ export default function MappingRulesPage() {
     return data.matches.find((m) => m.winner)?.rule.id ?? null;
   }, [testRules.data]);
 
-  if (rulesLoading || catsLoading) {
-    return null;
+  // Stale-while-revalidate: only skeleton on a genuine cold load (no cached
+  // rules/categories yet); once data exists, render it and revalidate in the
+  // background rather than blanking the page.
+  if ((rulesLoading || catsLoading) && (!rules || !allCategories)) {
+    return <PageSkeleton />;
   }
 
   // Drag-and-drop reorders the full sorted list, so we must disable it

@@ -28,6 +28,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { buildRuleAttributionSummary } from "@/lib/rule-attribution-summary";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { SectionHeader } from "@/components/stat";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -501,8 +502,10 @@ export default function SettingsPage() {
     });
   };
 
-  if (isLoading) {
-    return null;
+  // Stale-while-revalidate: only skeleton on a genuine cold load (no cached
+  // settings yet); once data exists, render it and revalidate in the background.
+  if (isLoading && !settings) {
+    return <PageSkeleton />;
   }
 
   return (
