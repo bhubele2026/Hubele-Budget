@@ -15,20 +15,26 @@
  * gappy strip), and the fade runs long (to 70%) so there is no visible cut line.
  */
 
-// Ambient telemetry-style tokens in the margins. Domain words / node marks only.
+// Ambient telemetry tokens scattered in the margins — faint "data-exhaust" like
+// the mockup. Deliberately NON-monetary (node ids, coords, deltas, sync marks,
+// versions) so nothing reads as a real balance or %; pure decorative texture.
 const AMBIENT: Array<{ t: string; pos: string; cls?: string }> = [
-  { t: "plaid · synced", pos: "left-[2.5%] top-[24%]", cls: "-rotate-6" },
-  { t: "avalanche", pos: "left-[5%] top-[37%]" },
-  { t: "· · ·", pos: "left-[3.5%] top-[45%] text-[16px]" },
-  { t: "free-by", pos: "left-[2%] top-[57%] rotate-3" },
-  { t: "runway", pos: "left-[6%] top-[70%]" },
-  { t: "north-star · debt", pos: "left-[3%] bottom-[9%] -rotate-3 text-[10px]" },
-  { t: "cadence", pos: "right-[5.5%] top-[22%] rotate-3" },
-  { t: "chase · amex", pos: "right-[2.5%] top-[34%]" },
-  { t: "· · ·", pos: "right-[6%] top-[43%] text-[16px]" },
-  { t: "buckets", pos: "right-[3%] top-[55%] -rotate-6" },
-  { t: "heloc · figure", pos: "right-[4.5%] top-[68%] text-[10px]" },
-  { t: "payoff · locked", pos: "right-[2.5%] bottom-[12%] rotate-2" },
+  { t: "53.05.10", pos: "left-[2.5%] top-[22%]", cls: "-rotate-6" },
+  { t: "node · 54", pos: "left-[5%] top-[33%]" },
+  { t: "· · ·", pos: "left-[3.5%] top-[41%] text-[15px]" },
+  { t: "≈ 61d", pos: "left-[2%] top-[52%] rotate-3" },
+  { t: "0x3f9a", pos: "left-[6%] top-[63%]" },
+  { t: "seq 7 / 12", pos: "left-[3%] top-[74%] -rotate-3 text-[10px]" },
+  { t: "sync · 03:02", pos: "left-[4%] bottom-[9%]" },
+  { t: "Δ 0.42", pos: "right-[5.5%] top-[20%] rotate-3" },
+  { t: "40.71 · -89.6", pos: "right-[2.5%] top-[31%] text-[10px]" },
+  { t: "· · ·", pos: "right-[6%] top-[40%] text-[15px]" },
+  { t: "+0.128", pos: "right-[3%] top-[51%] -rotate-6" },
+  { t: "v2.1.4", pos: "right-[5%] top-[62%]" },
+  { t: "node · 21", pos: "right-[3%] top-[73%] text-[10px]" },
+  { t: "seq 3 / 9", pos: "right-[4%] bottom-[12%] rotate-2" },
+  { t: "· · ·", pos: "left-[46%] bottom-[5%] text-[15px]" },
+  { t: "0x1c4", pos: "right-[42%] bottom-[6%] -rotate-3 text-[10px]" },
 ];
 
 export function LandingBackdrop() {

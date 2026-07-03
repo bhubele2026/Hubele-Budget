@@ -306,6 +306,15 @@ function BankingTile() {
 }
 
 const BILL_GLYPHS = [Tv, Wifi, Zap, CreditCard, ShieldCheck];
+// Per-bar palette so the Bills mini-chart reads multi-color like the mockup —
+// drawn from the frost tile inks (teal / blue / indigo / amber / rose).
+const BILL_BAR_COLORS = [
+  "hsl(190 42% 55%)",
+  "hsl(215 45% 62%)",
+  "hsl(244 40% 66%)",
+  "hsl(28 60% 60%)",
+  "hsl(350 50% 66%)",
+];
 
 function BillsTile() {
   const month = useMemo(() => {
@@ -370,9 +379,11 @@ function BillsTile() {
           ) : hasBars ? (
             <>
               <MiniBars
-                data={top.map((b) => b.amount)}
+                data={top.map((b, i) => ({
+                  value: b.amount,
+                  color: BILL_BAR_COLORS[i % BILL_BAR_COLORS.length],
+                }))}
                 height={44}
-                accent="hsl(190 38% 60%)"
               />
               <div className="mt-1 flex justify-between px-0.5 text-muted-foreground/45">
                 {top.map((_, i) => {
