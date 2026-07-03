@@ -354,9 +354,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           top bar's primary row + More overflow) ──────────────────────────── */}
       <div className="flex-1 min-h-0 flex">
         <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-          <div className="p-3 md:p-5 max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {children}
-          </div>
+          {location === "/home" ? (
+            // Landing renders full-bleed — its frosted mesh must reach every edge.
+            // (It centers its own cards via max-w-4xl, so no wrapper needed here.)
+            children
+          ) : (
+            <div className="p-3 md:p-5 max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
+              {children}
+            </div>
+          )}
         </main>
       </div>
       <AdvisorChat />

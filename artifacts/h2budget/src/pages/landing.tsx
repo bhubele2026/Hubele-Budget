@@ -95,8 +95,19 @@ function TileShell({
 }) {
   const t = HUE_TILE[hue];
   return (
-    <div className="group relative" data-testid={`landing-tile-${testid}`}>
-      <div className="relative flex flex-col rounded-[22px] border border-[hsl(215_22%_91%)] bg-card/95 p-7 shadow-[0_8px_30px_rgba(30,41,59,0.08)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_40px_rgba(30,41,59,0.13)] dark:border-white/10 sm:p-8">
+    <div className="group relative h-full" data-testid={`landing-tile-${testid}`}>
+      {/* Stacked-card depth — two faint layers peeking below so the card reads as
+          a lifted "stack", not a flat panel. Subtle now that the mesh + a real
+          shadow support it (this looked like a doubled card only on a bare bg). */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-6 top-6 bottom-[-13px] rounded-[22px] border border-[hsl(215_20%_92%)] bg-card/40 shadow-[0_12px_26px_-14px_rgba(30,41,59,0.16)] dark:border-white/5 dark:bg-white/[0.03]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-3 top-3 bottom-[-6px] rounded-[22px] border border-[hsl(215_20%_92%)] bg-card/70 shadow-[0_12px_26px_-14px_rgba(30,41,59,0.14)] dark:border-white/5 dark:bg-white/[0.04]"
+      />
+      <div className="relative flex h-full flex-col rounded-[22px] border border-[hsl(215_22%_91%)] bg-card/95 p-7 shadow-[0_2px_6px_rgba(30,41,59,0.05),0_20px_44px_-16px_rgba(30,41,59,0.22)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_10px_rgba(30,41,59,0.06),0_28px_56px_-18px_rgba(30,41,59,0.28)] dark:border-white/10 sm:p-8">
         <Link
           href={href}
           className="absolute inset-0 rounded-[22px] focus:outline-none focus:ring-2 focus:ring-primary/40"
@@ -659,7 +670,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:auto-rows-fr">
           <BankingTile />
           <BillsTile />
           <ForecastTile />

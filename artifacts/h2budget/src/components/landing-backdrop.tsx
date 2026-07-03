@@ -43,6 +43,15 @@ export function LandingBackdrop() {
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 z-0 overflow-hidden bg-gradient-to-b from-[hsl(var(--frost-page))] via-[hsl(var(--frost-page))] to-background"
     >
+      {/* Full-page faint mesh — runs behind and around the cards so the graphic
+          pervades the whole canvas (not just a top band), matching the mockup.
+          Ultra-low opacity so card text stays crisp. */}
+      <img
+        src="/landing-bg.webp"
+        alt=""
+        draggable={false}
+        className="absolute inset-0 h-full w-full select-none object-cover object-center opacity-[0.06]"
+      />
       {/* Hero mesh — full-bleed band, height-capped so wide monitors don't
           balloon it, faded long so there's no seam. */}
       <img
