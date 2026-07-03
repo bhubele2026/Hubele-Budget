@@ -465,6 +465,12 @@ function BucketCard({
   onToggle,
   onSavePlanned,
   trend,
+  periodLabel,
+  periodSub,
+  onPrevPeriod,
+  onNextPeriod,
+  canNextPeriod,
+  locked,
 }: {
   name: string;
   actual: number;
@@ -474,6 +480,13 @@ function BucketCard({
   onSavePlanned?: (amount: number) => void;
   /** Optional 8-week over/under variance strip (spend − planned per week). */
   trend?: TrendPoint[];
+  /** Per-card date cycler (weekly cycles weeks; monthly/unplanned cycle months). */
+  periodLabel?: string;
+  periodSub?: string;
+  onPrevPeriod?: () => void;
+  onNextPeriod?: () => void;
+  canNextPeriod?: boolean;
+  locked?: boolean;
 }) {
   const variance = actual - planned;
   const over = variance > 0;
@@ -494,6 +507,42 @@ function BucketCard({
   return (
     <Card className={cn("transition-colors", expanded && "ring-2 ring-primary/40")}>
       <CardContent className="p-5 space-y-3">
+        {/* Per-card date cycler — kept OUTSIDE the expand button so ◀▶ don't
+            toggle the drill-down. */}
+        {onPrevPeriod && (
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={onPrevPeriod}
+              aria-label="Previous period"
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-card-border text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="min-w-0 text-center leading-tight">
+              <div className="flex items-center justify-center gap-1.5 text-xs font-medium tabular-nums">
+                {periodLabel}
+                {locked && (
+                  <Badge variant="outline" className="h-4 px-1 py-0 text-[9px]">
+                    Locked
+                  </Badge>
+                )}
+              </div>
+              <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
+                {periodSub}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onNextPeriod}
+              disabled={!canNextPeriod}
+              aria-label="Next period"
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-card-border text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
         {/* Header + actual are the expand toggle. The planned line below
             stays outside the button so the edit popover isn't nested in it. */}
         <button
@@ -643,14 +692,8 @@ function BucketCard({
 
 export default function AllowancesPage() {
   const today = useMemo(() => new Date(), []);
-  // Preselect Week/Month from the dashboard tile deep-link (?view=week|month|
-  // unplanned). Unplanned is a card within the month scope, so it opens Month.
-  const search = useSearch();
-  const [mode, setMode] = useState<Mode>(() => {
-    const view = new URLSearchParams(search).get("view");
-    if (view === "month" || view === "unplanned") return "month";
-    return "week";
-  });
+  // Each card owns its own period now (no shared Week/Month mode): the Weekly
+  // card cycles Sun–Sat weeks; Monthly + Unplanned cycle whole calendar months.
   const [weekStart, setWeekStart] = useState<Date>(() => sundayOf(new Date()));
   const [monthStart, setMonthStart] = useState<Date>(() =>
     firstOfMonth(new Date()),
@@ -659,56 +702,31 @@ export default function AllowancesPage() {
   const currentWeekStart = useMemo(() => sundayOf(today), [today]);
   const currentMonthStart = useMemo(() => firstOfMonth(today), [today]);
 
-  // Window for the selected period.
-  const { windowStart, windowEnd, windowDays, windowStartDate, isCurrent } =
-    useMemo(() => {
-      if (mode === "week") {
-        return {
-          windowStart: fmtISO(weekStart),
-          windowEnd: fmtISO(addDays(weekStart, 6)),
-          windowDays: 7,
-          windowStartDate: weekStart,
-          isCurrent: fmtISO(weekStart) === fmtISO(currentWeekStart),
-        };
-      }
-      return {
-        windowStart: fmtISO(firstOfMonth(monthStart)),
-        windowEnd: fmtISO(lastOfMonth(monthStart)),
-        windowDays: daysInMonthOf(monthStart),
-        windowStartDate: firstOfMonth(monthStart),
-        isCurrent: fmtISO(monthStart) === fmtISO(currentMonthStart),
-      };
-    }, [mode, weekStart, monthStart, currentWeekStart, currentMonthStart]);
-
-  // (#monthly) The Monthly and Unplanned cards always reflect the whole MONTH,
-  // never a week slice. In week mode we anchor to the month containing the week's
-  // END (Saturday) so a week that straddles a month boundary (e.g. Jun 28–Jul 4)
-  // resolves to the SAME calendar month the Banking dashboard uses (the current
-  // month) — that's what makes the dashboard Month/Unplanned tie to Allowances.
-  const monthScopeStartDate = useMemo(
-    () =>
-      mode === "week"
-        ? firstOfMonth(addDays(weekStart, 6))
-        : firstOfMonth(windowStartDate),
-    [mode, weekStart, windowStartDate],
-  );
+  // Weekly card window (always the selected Sun–Sat week).
+  const windowStart = fmtISO(weekStart);
+  const windowEnd = fmtISO(addDays(weekStart, 6));
+  const windowDays = 7;
+  // Monthly + Unplanned window (always the selected calendar month). Ties to the
+  // Banking dashboard's Month/Unplanned, which also key off the calendar month.
+  const monthScopeStartDate = firstOfMonth(monthStart);
   const monthScopeStart = fmtISO(monthScopeStartDate);
   const monthScopeEnd = fmtISO(lastOfMonth(monthScopeStartDate));
 
-  const atOrAfterCurrent =
-    mode === "week"
-      ? weekStart >= currentWeekStart
-      : monthStart >= currentMonthStart;
-
-  const goPrev = () => {
-    if (mode === "week") setWeekStart((w) => addDays(w, -7));
-    else setMonthStart((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1));
-  };
-  const goNext = () => {
-    if (atOrAfterCurrent) return;
-    if (mode === "week") setWeekStart((w) => addDays(w, 7));
-    else setMonthStart((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1));
-  };
+  const weekIsCurrent = fmtISO(weekStart) === fmtISO(currentWeekStart);
+  const monthIsCurrent = fmtISO(monthStart) === fmtISO(currentMonthStart);
+  const weekAtCurrent = weekStart >= currentWeekStart;
+  const monthAtCurrent = monthStart >= currentMonthStart;
+  const weekPrev = () => setWeekStart((w) => addDays(w, -7));
+  const weekNext = () =>
+    setWeekStart((w) => (w >= currentWeekStart ? w : addDays(w, 7)));
+  const monthPrev = () =>
+    setMonthStart((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1));
+  const monthNext = () =>
+    setMonthStart((m) =>
+      m >= currentMonthStart
+        ? m
+        : new Date(m.getFullYear(), m.getMonth() + 1, 1),
+    );
 
   const { data: settings } = useGetSettings();
   const { data: categories } = useListCategories();
@@ -788,7 +806,7 @@ export default function AllowancesPage() {
     // Weekly edit while viewing a specific week → override THIS week only,
     // leaving the global weekly default (and every other week) untouched.
     // Persisted to the shared household settings so BOTH partners see it.
-    if (key === "weekly" && mode === "week") {
+    if (key === "weekly") {
       const wk = fmtISO(weekStart);
       const prevOverrides =
         settings?.preferences?.weeklyAllowanceOverrides ?? {};
@@ -809,13 +827,12 @@ export default function AllowancesPage() {
       }
       return;
     }
+    // key is narrowed to "monthly" | "unplanned" here (weekly returned above).
     const val = amount.toFixed(2);
     const data =
-      key === "weekly"
-        ? { weeklyAllowanceAmount: val }
-        : key === "monthly"
-          ? { monthlyAllowanceAmount: val }
-          : { unplannedAllowanceAmount: val };
+      key === "monthly"
+        ? { monthlyAllowanceAmount: val }
+        : { unplannedAllowanceAmount: val };
     try {
       await updateSettings.mutateAsync({ data });
       queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
@@ -909,9 +926,9 @@ export default function AllowancesPage() {
   // in WEEK mode.
   const weekStartISO = fmtISO(weekStart);
   const debriefQ = useGetWeeklyDebrief(weekStartISO, {
-    query: { enabled: mode === "week" } as any,
+    query: { enabled: true } as any,
   });
-  const isLocked = mode === "week" && debriefQ.data?.status === "locked";
+  const isLocked = debriefQ.data?.status === "locked";
 
   const catNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -930,8 +947,7 @@ export default function AllowancesPage() {
   const planned = useMemo<Record<BucketKey, number>>(() => {
     // A per-week override (set while viewing that week) wins over the global
     // weekly default; other weeks keep using the default.
-    const weeklyOverride =
-      mode === "week" ? weeklyOverrides[weekStartISO] : undefined;
+    const weeklyOverride = weeklyOverrides[weekStartISO];
     const weeklyAmt =
       weeklyOverride != null
         ? weeklyOverride
@@ -945,7 +961,7 @@ export default function AllowancesPage() {
       monthly: monthlyAmt,
       unplanned: unplannedAmt,
     };
-  }, [settings, windowDays, mode, weeklyOverrides, weekStartISO]);
+  }, [settings, windowDays, weeklyOverrides, weekStartISO]);
 
   // Window-scoped transactions (drives the week-scoped Weekly card).
   const windowTxns = useMemo(
@@ -1085,19 +1101,12 @@ export default function AllowancesPage() {
       return next;
     });
 
-  const periodLabel =
-    mode === "week"
-      ? isCurrent
-        ? "This week"
-        : `Week of ${formatWeekRange(weekStart)}`
-      : isCurrent
-        ? "This month"
-        : formatMonth(monthStart);
-
-  const rangeLabel =
-    mode === "week"
-      ? `Week of ${formatWeekRange(weekStart)}`
-      : `Month of ${formatMonth(monthStart)}`;
+  const weeklyLabel = weekIsCurrent
+    ? "This week"
+    : `Week of ${formatWeekRange(weekStart)}`;
+  const monthlyLabel = monthIsCurrent ? "This month" : formatMonth(monthStart);
+  const labelFor = (key: BucketKey) =>
+    key === "weekly" ? weeklyLabel : monthlyLabel;
 
   return (
     <div className="space-y-6">
@@ -1112,10 +1121,7 @@ export default function AllowancesPage() {
 
       {/* Exactly what to pay for the VIEWED week (aligned to the ◀▶ week picker),
           so "how over budget" and "which cards to pay" describe the same week. */}
-      <KillStack
-        emphasize
-        weekStart={mode === "week" ? fmtISO(weekStart) : undefined}
-      />
+      <KillStack emphasize weekStart={fmtISO(weekStart)} />
 
       <AiInsightBar />
 
@@ -1152,59 +1158,7 @@ export default function AllowancesPage() {
         </div>
       ) : null}
 
-      {/* Time-range selector */}
-      <div className="flex flex-col items-center gap-3">
-        <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
-          <TabsList>
-            <TabsTrigger value="week" data-testid="tab-week">
-              Week
-            </TabsTrigger>
-            <TabsTrigger value="month" data-testid="tab-month">
-              Month
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <div className="flex items-center justify-center gap-3">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={goPrev}
-            data-testid="button-period-prev"
-            aria-label="Previous period"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="flex flex-col items-center text-center min-w-[12rem]">
-            <div className="text-sm font-medium tabular-nums flex items-center gap-2">
-              {rangeLabel}
-              {isLocked && (
-                <Badge
-                  variant="outline"
-                  className="text-[10px] px-1.5 py-0 h-5"
-                  data-testid="badge-locked"
-                >
-                  Locked
-                </Badge>
-              )}
-            </div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              {isCurrent ? `Current ${mode}` : `Past ${mode}`}
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={goNext}
-            disabled={atOrAfterCurrent}
-            data-testid="button-period-next"
-            aria-label="Next period"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Bucket summary cards */}
+      {/* Bucket summary cards — each carries its own ◀▶ date cycler */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 stagger-children">
         {BUCKETS.map((b) => (
           <BucketCard
@@ -1215,6 +1169,22 @@ export default function AllowancesPage() {
             expanded={expanded.has(b.key)}
             onToggle={() => toggle(b.key)}
             onSavePlanned={(amount) => savePlanned(b.key, amount)}
+            periodLabel={b.key === "weekly" ? weeklyLabel : monthlyLabel}
+            periodSub={
+              b.key === "weekly"
+                ? weekIsCurrent
+                  ? "Current week"
+                  : "Past week"
+                : monthIsCurrent
+                  ? "Current month"
+                  : "Past month"
+            }
+            onPrevPeriod={b.key === "weekly" ? weekPrev : monthPrev}
+            onNextPeriod={b.key === "weekly" ? weekNext : monthNext}
+            canNextPeriod={
+              b.key === "weekly" ? !weekAtCurrent : !monthAtCurrent
+            }
+            locked={b.key === "weekly" ? isLocked : false}
             // The 8-week over/under history exists for the weekly allowance.
             trend={
               b.key === "weekly"
@@ -1269,7 +1239,7 @@ export default function AllowancesPage() {
                     groups.every((g) => g.txns.length === 0) ? (
                       <div className="px-3 py-2 text-xs text-muted-foreground">
                         No {b.noun} transactions in this{" "}
-                        {b.key === "weekly" ? mode : "month"}.
+                        {b.key === "weekly" ? "week" : "month"}.
                       </div>
                     ) : (
                       groups.map((g) => (
@@ -1316,15 +1286,16 @@ export default function AllowancesPage() {
             const a = actual[b.key];
             const p = planned[b.key];
             const variance = a - p;
+            const label = labelFor(b.key);
             let text: string;
             if (p <= 0) {
-              text = `${periodLabel} you spent ${formatCurrency(a)} (no ${b.noun} set).`;
+              text = `${label} you spent ${formatCurrency(a)} (no ${b.noun} set).`;
             } else if (variance === 0) {
-              text = `${periodLabel} you spent exactly your ${formatCurrency(p)} ${b.noun}.`;
+              text = `${label} you spent exactly your ${formatCurrency(p)} ${b.noun}.`;
             } else if (variance < 0) {
-              text = `${periodLabel} you came in ${formatCurrency(Math.abs(variance))} under your ${formatCurrency(p)} ${b.noun}.`;
+              text = `${label} you came in ${formatCurrency(Math.abs(variance))} under your ${formatCurrency(p)} ${b.noun}.`;
             } else {
-              text = `${periodLabel} you went ${formatCurrency(variance)} over your ${formatCurrency(p)} ${b.noun}.`;
+              text = `${label} you went ${formatCurrency(variance)} over your ${formatCurrency(p)} ${b.noun}.`;
             }
             return (
               <p
