@@ -85,6 +85,15 @@ const BANKING_SUBNAV: NavItem[] = [
 ];
 const BANKING_ROUTES = ["/banking", "/transactions", "/amex", "/budget", "/allowances"];
 
+// Inside the Bills area, the top ribbon becomes just two tabs — Overview and
+// Bills — and ONLY those (owner's explicit ask). Same pattern as Banking: no
+// "More" here; the way out is the brand/logo → /home. Overview (/bills) is the
+// default landing; Bills (/bills/all) is the recurring/income line editor.
+const BILLS_SUBNAV: NavItem[] = [
+  { name: "Overview", href: "/bills", icon: LayoutDashboard },
+  { name: "Bills", href: "/bills/all", icon: CalendarDays },
+];
+
 const ALL_NAV = [...PRIMARY_NAV, ...MORE_NAV];
 
 const BRAND = (
@@ -174,13 +183,27 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const inBanking = BANKING_ROUTES.some(
     (r) => location === r || location.startsWith(r + "/"),
   );
-  const areaNav = inBanking ? BANKING_SUBNAV : PRIMARY_NAV;
-  // Per-section frosted-backdrop hue: Banking area=green, Bills=red, Forecast=orange,
-  // Avalanche=blue. Other routes (settings/reports/etc.) stay neutral (no backdrop).
+  // Bills area = /bills (Overview) or /bills/... (the Bills list). Its ribbon is
+  // just the two tabs.
+  const inBills = location === "/bills" || location.startsWith("/bills/");
+  const areaNav = inBanking
+    ? BANKING_SUBNAV
+    : inBills
+      ? BILLS_SUBNAV
+      : PRIMARY_NAV;
+  // Boundary-aware, longest-match active href — so /bills (Overview) and
+  // /bills/all (Bills) never both light up (raw startsWith would).
+  const activeNavHref =
+    areaNav
+      .map((a) => a.href)
+      .filter((h) => location === h || location.startsWith(h + "/"))
+      .sort((a, b) => b.length - a.length)[0] ?? null;
+  // Per-section frosted-backdrop hue: Banking area=green, Bills=bright blue,
+  // Forecast=orange, Avalanche=blue. Other routes stay neutral (no backdrop).
   const sectionHue: SectionHue | null = inBanking
     ? "green"
-    : location === "/bills"
-      ? "red"
+    : inBills
+      ? "brightBlue"
       : location === "/forecast"
         ? "orange"
         : location === "/avalanche"
@@ -276,7 +299,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           <nav className="hidden md:flex items-center gap-0.5">
             {areaNav.map((item) => {
-              const active = location.startsWith(item.href);
+              const active = item.href === activeNavHref;
               return (
                 <Link key={item.href} href={item.href}>
                   <span
@@ -298,9 +321,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             })}
 
             {/* More overflow — secondary destinations, one click away. Hidden
-                inside the Banking area: there the ribbon is Banking-only, and
-                you leave via the brand/logo → Home. */}
-            {!inBanking && (
+                inside the Banking AND Bills areas: there the ribbon is that
+                section's tabs only, and you leave via the brand/logo → Home. */}
+            {!inBanking && !inBills && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button

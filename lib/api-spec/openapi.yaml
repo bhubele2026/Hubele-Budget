@@ -1261,6 +1261,34 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BankingInsightsSummary" }
 
+  /bills/insights-summary:
+    get:
+      operationId: getBillsInsightsSummary
+      tags: [bills]
+      summary: Fable 5 savings analysis for the Bills page
+      description: |
+        Returns a short Fable 5 read on the household's monthly bills — a
+        headline plus 2–4 concrete savings suggestions, each tied to a real
+        bill. Every dollar is computed server-side (recurring items expanded,
+        debt minimums, one-off spend); the model only writes language. Cached
+        per household + month on a hash of the facts; `refresh=true` forces a
+        fresh regeneration.
+      parameters:
+        - in: query
+          name: month
+          description: "Month to analyze as YYYY-MM-01 (defaults to the current month)."
+          schema: { type: string }
+        - in: query
+          name: refresh
+          description: Force a fresh Fable 5 regeneration, bypassing the cache.
+          schema: { type: string, enum: ["true", "1"] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillsInsightsSummary" }
+
   /reports/spending-facts:
     get:
       operationId: getReportsSpendingFacts
@@ -4002,6 +4030,22 @@ components:
         creepingUp: { $ref: "#/components/schemas/BankingInsightsBucket" }
         recurringToCut: { $ref: "#/components/schemas/BankingInsightsBucket" }
         newOrUnusual: { $ref: "#/components/schemas/BankingInsightsBucket" }
+        summarySource: { type: string, enum: [ai, fallback] }
+        generatedAt: { type: string }
+        source: { type: string, enum: [cache, fresh] }
+
+    BillsInsightsSummary:
+      type: object
+      required:
+        [headline, bullets, oneOffTotal, oneOffCount, summarySource, generatedAt, source]
+      properties:
+        headline: { type: string }
+        bullets:
+          type: array
+          items: { type: string }
+        oneOffTotal:
+          { type: number, description: One-off / non-recurring spend this month. }
+        oneOffCount: { type: integer, description: Count of one-off charges. }
         summarySource: { type: string, enum: [ai, fallback] }
         generatedAt: { type: string }
         source: { type: string, enum: [cache, fresh] }

@@ -6043,6 +6043,51 @@ export declare const GetBankingInsightsSummaryResponse: zod.ZodObject<{
     };
 }>;
 /**
+ * Returns a short Fable 5 read on the household's monthly bills — a
+headline plus 2–4 concrete savings suggestions, each tied to a real
+bill. Every dollar is computed server-side (recurring items expanded,
+debt minimums, one-off spend); the model only writes language. Cached
+per household + month on a hash of the facts; `refresh=true` forces a
+fresh regeneration.
+
+ * @summary Fable 5 savings analysis for the Bills page
+ */
+export declare const GetBillsInsightsSummaryQueryParams: zod.ZodObject<{
+    month: zod.ZodOptional<zod.ZodString>;
+    refresh: zod.ZodOptional<zod.ZodEnum<["true", "1"]>>;
+}, "strip", zod.ZodTypeAny, {
+    refresh?: "1" | "true" | undefined;
+    month?: string | undefined;
+}, {
+    refresh?: "1" | "true" | undefined;
+    month?: string | undefined;
+}>;
+export declare const GetBillsInsightsSummaryResponse: zod.ZodObject<{
+    headline: zod.ZodString;
+    bullets: zod.ZodArray<zod.ZodString, "many">;
+    oneOffTotal: zod.ZodNumber;
+    oneOffCount: zod.ZodNumber;
+    summarySource: zod.ZodEnum<["ai", "fallback"]>;
+    generatedAt: zod.ZodString;
+    source: zod.ZodEnum<["cache", "fresh"]>;
+}, "strip", zod.ZodTypeAny, {
+    source: "cache" | "fresh";
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+    headline: string;
+    bullets: string[];
+    oneOffTotal: number;
+    oneOffCount: number;
+}, {
+    source: "cache" | "fresh";
+    summarySource: "ai" | "fallback";
+    generatedAt: string;
+    headline: string;
+    bullets: string[];
+    oneOffTotal: number;
+    oneOffCount: number;
+}>;
+/**
  * Returns deterministic Spending facts (real spend, excluded buckets,
 uncategorized backlog, by-category, by-merchant, daily, day-of-week,
 monthly trends, reimbursable) for the Reports Spending tab. `from`/`to`

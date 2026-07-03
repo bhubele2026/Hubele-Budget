@@ -35,6 +35,7 @@ import type {
   BankSnapshot,
   BankingInsightsSummary,
   BehaviorFacts,
+  BillsInsightsSummary,
   BillsSummary,
   BudgetFacts,
   BudgetLine,
@@ -83,6 +84,7 @@ import type {
   ForecastSettingsInput,
   GetAmexWeeklyPayoffParams,
   GetBankingInsightsSummaryParams,
+  GetBillsInsightsSummaryParams,
   GetBillsSummaryParams,
   GetForecastAvalancheScheduleParams,
   GetForecastCashSignalParams,
@@ -6025,6 +6027,116 @@ export function useGetBankingInsightsSummary<
     params,
     options,
   );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns a short Fable 5 read on the household's monthly bills — a
+headline plus 2–4 concrete savings suggestions, each tied to a real
+bill. Every dollar is computed server-side (recurring items expanded,
+debt minimums, one-off spend); the model only writes language. Cached
+per household + month on a hash of the facts; `refresh=true` forces a
+fresh regeneration.
+
+ * @summary Fable 5 savings analysis for the Bills page
+ */
+export const getGetBillsInsightsSummaryUrl = (
+  params?: GetBillsInsightsSummaryParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/bills/insights-summary?${stringifiedParams}`
+    : `/api/bills/insights-summary`;
+};
+
+export const getBillsInsightsSummary = async (
+  params?: GetBillsInsightsSummaryParams,
+  options?: RequestInit,
+): Promise<BillsInsightsSummary> => {
+  return customFetch<BillsInsightsSummary>(
+    getGetBillsInsightsSummaryUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetBillsInsightsSummaryQueryKey = (
+  params?: GetBillsInsightsSummaryParams,
+) => {
+  return [`/api/bills/insights-summary`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetBillsInsightsSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBillsInsightsSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetBillsInsightsSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBillsInsightsSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBillsInsightsSummaryQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBillsInsightsSummary>>
+  > = ({ signal }) =>
+    getBillsInsightsSummary(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBillsInsightsSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBillsInsightsSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBillsInsightsSummary>>
+>;
+export type GetBillsInsightsSummaryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Fable 5 savings analysis for the Bills page
+ */
+
+export function useGetBillsInsightsSummary<
+  TData = Awaited<ReturnType<typeof getBillsInsightsSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetBillsInsightsSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBillsInsightsSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBillsInsightsSummaryQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

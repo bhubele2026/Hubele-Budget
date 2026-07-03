@@ -48,6 +48,7 @@ const AvalanchePage = lazy(() => import("./pages/avalanche"));
 const AmexPage = lazy(() => import("./pages/amex"));
 const TransactionsPage = lazy(() => import("./pages/transactions"));
 const BillsPage = lazy(() => import("./pages/bills"));
+const BillsOverviewPage = lazy(() => import("./pages/bills-overview"));
 const BudgetPage = lazy(() => import("./pages/budget"));
 const AllowancesPage = lazy(() => import("./pages/allowances"));
 const MappingRulesPage = lazy(() => import("./pages/mapping-rules"));
@@ -279,9 +280,10 @@ function ProtectedShell() {
             <Route path="/amex" component={AmexPage} />
             <Route path="/debts" component={DebtsPage} />
             <Route path="/avalanche" component={AvalanchePage} />
-            <Route path="/bills" component={BillsPage} />
+            <Route path="/bills" component={BillsOverviewPage} />
+            <Route path="/bills/all" component={BillsPage} />
             <Route path="/recurring">
-              <Redirect to="/bills" />
+              <Redirect to="/bills/all" />
             </Route>
             <Route path="/budget" component={BudgetPage} />
             <Route path="/allowances" component={AllowancesPage} />

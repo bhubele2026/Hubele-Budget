@@ -2902,6 +2902,41 @@ export const GetBankingInsightsSummaryResponse = zod.object({
 });
 
 /**
+ * Returns a short Fable 5 read on the household's monthly bills — a
+headline plus 2–4 concrete savings suggestions, each tied to a real
+bill. Every dollar is computed server-side (recurring items expanded,
+debt minimums, one-off spend); the model only writes language. Cached
+per household + month on a hash of the facts; `refresh=true` forces a
+fresh regeneration.
+
+ * @summary Fable 5 savings analysis for the Bills page
+ */
+export const GetBillsInsightsSummaryQueryParams = zod.object({
+  month: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Month to analyze as YYYY-MM-01 (defaults to the current month).",
+    ),
+  refresh: zod
+    .enum(["true", "1"])
+    .optional()
+    .describe("Force a fresh Fable 5 regeneration, bypassing the cache."),
+});
+
+export const GetBillsInsightsSummaryResponse = zod.object({
+  headline: zod.string(),
+  bullets: zod.array(zod.string()),
+  oneOffTotal: zod
+    .number()
+    .describe("One-off \/ non-recurring spend this month."),
+  oneOffCount: zod.number().describe("Count of one-off charges."),
+  summarySource: zod.enum(["ai", "fallback"]),
+  generatedAt: zod.string(),
+  source: zod.enum(["cache", "fresh"]),
+});
+
+/**
  * Returns deterministic Spending facts (real spend, excluded buckets,
 uncategorized backlog, by-category, by-merchant, daily, day-of-week,
 monthly trends, reimbursable) for the Reports Spending tab. `from`/`to`

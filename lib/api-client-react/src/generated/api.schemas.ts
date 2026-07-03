@@ -2083,6 +2083,34 @@ export interface BankingInsightsSummary {
   source: BankingInsightsSummarySource;
 }
 
+export type BillsInsightsSummarySummarySource =
+  (typeof BillsInsightsSummarySummarySource)[keyof typeof BillsInsightsSummarySummarySource];
+
+export const BillsInsightsSummarySummarySource = {
+  ai: "ai",
+  fallback: "fallback",
+} as const;
+
+export type BillsInsightsSummarySource =
+  (typeof BillsInsightsSummarySource)[keyof typeof BillsInsightsSummarySource];
+
+export const BillsInsightsSummarySource = {
+  cache: "cache",
+  fresh: "fresh",
+} as const;
+
+export interface BillsInsightsSummary {
+  headline: string;
+  bullets: string[];
+  /** One-off / non-recurring spend this month. */
+  oneOffTotal: number;
+  /** Count of one-off charges. */
+  oneOffCount: number;
+  summarySource: BillsInsightsSummarySummarySource;
+  generatedAt: string;
+  source: BillsInsightsSummarySource;
+}
+
 export type SpendingFactsRange = {
   start: string;
   end: string;
@@ -3524,6 +3552,25 @@ export type GetBankingInsightsSummaryRefresh =
   (typeof GetBankingInsightsSummaryRefresh)[keyof typeof GetBankingInsightsSummaryRefresh];
 
 export const GetBankingInsightsSummaryRefresh = {
+  true: "true",
+  NUMBER_1: "1",
+} as const;
+
+export type GetBillsInsightsSummaryParams = {
+  /**
+   * Month to analyze as YYYY-MM-01 (defaults to the current month).
+   */
+  month?: string;
+  /**
+   * Force a fresh Fable 5 regeneration, bypassing the cache.
+   */
+  refresh?: GetBillsInsightsSummaryRefresh;
+};
+
+export type GetBillsInsightsSummaryRefresh =
+  (typeof GetBillsInsightsSummaryRefresh)[keyof typeof GetBillsInsightsSummaryRefresh];
+
+export const GetBillsInsightsSummaryRefresh = {
   true: "true",
   NUMBER_1: "1",
 } as const;
