@@ -375,21 +375,31 @@ function BucketCard({
 }) {
   const headline = caption?.headline?.trim() || fallbackHeadline;
   const line = caption?.caption?.trim() || fallbackCaption;
+  const TONE: Record<string, { bg: string; ink: string }> = {
+    good: { bg: "hsl(var(--frost-green))", ink: "hsl(var(--frost-green-ink))" },
+    warning: { bg: "hsl(var(--frost-amber))", ink: "hsl(var(--frost-amber-ink))" },
+    danger: { bg: "hsl(var(--frost-rose))", ink: "hsl(var(--frost-rose-ink))" },
+    neutral: { bg: "hsl(var(--frost-slate))", ink: "hsl(var(--frost-slate-ink))" },
+  };
+  const t = TONE[tone as string] ?? TONE.neutral;
   return (
-    <Card className="h-full">
-      <CardContent className="p-5 flex h-full flex-col">
-        <div className="flex items-center justify-between gap-2">
-          <PillBadge tone={tone}>
-            <span className="inline-flex items-center gap-1.5 normal-case tracking-normal text-[11px]">
-              {icon}
-              {title}
-            </span>
-          </PillBadge>
+    <Card className="h-full overflow-hidden">
+      <CardContent className="flex h-full flex-col p-0">
+        {/* Tone-colored header strip — gives each bucket a distinct, calm identity. */}
+        <div
+          className="flex items-center gap-1.5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide [&_svg]:h-3.5 [&_svg]:w-3.5"
+          style={{ background: t.bg, color: t.ink }}
+        >
+          {icon}
+          {title}
         </div>
-        <div className="mt-2.5 text-base font-bold tracking-tight leading-snug">
+        <div className="flex h-full flex-col p-4">
+        <div className="text-[15px] font-bold tracking-tight leading-snug">
           {headline}
         </div>
-        <p className="mt-0.5 text-sm text-muted-foreground leading-snug">{line}</p>
+        <p className="mt-1 line-clamp-2 text-[13px] text-muted-foreground leading-snug">
+          {line}
+        </p>
         {chips && chips.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {chips.map((c) => (
@@ -399,7 +409,7 @@ function BucketCard({
             ))}
           </div>
         ) : null}
-        <div className="mt-3 max-h-64 overflow-y-auto divide-y divide-border pr-1 [scrollbar-width:thin]">
+        <div className="mt-3 max-h-56 overflow-y-auto divide-y divide-border pr-1 [scrollbar-width:thin]">
           {rows.length === 0 ? (
             <p className="py-1 text-sm text-muted-foreground">{empty}</p>
           ) : (
@@ -447,8 +457,11 @@ function BucketCard({
           )}
         </div>
         {footer ? (
-          <div className="mt-auto pt-3 text-xs text-muted-foreground">{footer}</div>
+          <div className="mt-auto pt-3 text-[11px] text-muted-foreground">
+            {footer}
+          </div>
         ) : null}
+        </div>
       </CardContent>
     </Card>
   );
